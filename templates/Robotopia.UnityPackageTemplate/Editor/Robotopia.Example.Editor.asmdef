@@ -1,0 +1,9 @@
+{
+  "name": "Robotopia.Example.Editor",
+  "rootNamespace": "Robotopia.Example.Editor",
+  "references": ["Robotopia.Example.Runtime"],
+  "includePlatforms": ["Editor"],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "autoReferenced": true
+}
