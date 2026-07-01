@@ -1,0 +1,48 @@
+# .NET build artifacts
+src/**/[Bb]in/
+src/**/[Oo]bj/
+mods/**/[Bb]in/
+mods/**/[Oo]bj/
+tests/**/[Bb]in/
+tests/**/[Oo]bj/
+templates/**/[Bb]in/
+templates/**/[Oo]bj/
+
+# Dart and Flutter generated output
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+apps/**/[Bb]uild/
+packages/**/[Bb]uild/
+/build/
+
+# Generated distributables and local package caches
+/dist/
+/out/
+/.robotopia/packages/
+/.robotopia/cache/
+robotopia.dev.props
+
+# Local game/runtime installs. The bundled third-party runtime under
+# third_party/BepInEx is source-controlled and protected by .gitattributes.
+/BepInEx/
+
+# IDE and user-local state
+.vs/
+.idea/
+*.iml
+*.user
+*.suo
+.vscode/settings.json
+
+# Secrets and local environments
+.env*
+!.env.example
+.venv/
+**/__pycache__/
+
+# Agent/tooling scratch and machine-specific config
+.codex/
+.codex-tmp/
+.claude/skills
+.claude/settings.local.json

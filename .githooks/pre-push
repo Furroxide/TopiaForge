@@ -1,0 +1,4 @@
+#!/bin/sh
+# Forward to git-lfs because this repo uses core.hooksPath=.githooks.
+command -v git-lfs >/dev/null 2>&1 || { printf >&2 "git-lfs not installed; see VERSION_CONTROL.md\n"; exit 2; }
+git lfs pre-push "$@"
