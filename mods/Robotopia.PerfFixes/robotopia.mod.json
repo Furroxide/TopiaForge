@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "robotopia.perffixes",
+  "name": "Robotopia Performance Fixes",
+  "version": "0.1.0",
+  "author": "QuantumWorks",
+  "description": "Behavior-identical root-cause performance fixes (no quality/gameplay change): caches Camera.main per frame, eliminates per-collision GC allocations, and reuses physics collision callbacks. Targets stutter and CPU waste, not graphics settings.",
+  "entryAssembly": "Robotopia.PerfFixes.dll",
+  "entryType": "Robotopia.PerfFixes.PerfFixesMod",
+  "dependencies": [],
+  "optionalDependencies": [],
+  "conflicts": [],
+  "loadAfter": [],
+  "permissions": ["harmony-patch", "physics-settings"],
+  "category": "Performance",
+  "tags": ["performance", "fps", "stutter", "gc", "optimization", "harmony"],
+  "license": "Unspecified"
+}
