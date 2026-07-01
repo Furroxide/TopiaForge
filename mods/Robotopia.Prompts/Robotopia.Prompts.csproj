@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>Robotopia.Prompts</AssemblyName>
+    <RootNamespace>Robotopia.Prompts</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Robotopia.Mods.Abstractions\Robotopia.Mods.Abstractions.csproj" />
+  </ItemGroup>
+</Project>
