@@ -1,0 +1,447 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
+using Robotopia.Mods;
+using UnityEngine;
+
+namespace Robotopia.Worlds
+{
+    /// <summary>
+    /// Clean-room reflection bridge into the game's own scene/level system so modded gamemodes launch
+    /// through the same path the game uses (real HDRP scenes, checkpoints, player spawn) instead of a
+    /// bare arena. All access is reflective and defensive so a missing/renamed game symbol degrades
+    /// gracefully rather than crashing the game.
+    /// </summary>
+    internal sealed class GameLevelBridge
+    {
+        private const BindingFlags PublicStatic = BindingFlags.Public | BindingFlags.Static;
+        private const BindingFlags AnyInstance = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+
+        /// <summary>
+        /// The game's dedicated, story-free play scene (see <c>LoadUgcScene.sceneName</c> / the
+        /// <c>UgcPlayLauncherController</c> default). Loading it brings up a clean scene whose
+        /// <c>UgcImportPlayBootstrap</c> spawns a real, walking player — the base for the Open Sandbox arena.
+        /// </summary>
+        public const string SandboxSceneName = "UgcPlay";
+
+        private readonly IModLogger logger;
+        private readonly Type? globalAssetsMapType;
+        private readonly Type? loadSceneType;
+        private readonly Type? sceneUtilType;
+        private readonly Type? ugcBootstrapType;
+        private readonly Type? ugcLaunchRequestType;
+        private readonly Type? ugcLastRunType;
+        private readonly Type? playerControllerType;
+
+        public GameLevelBridge(IModLogger logger)
+        {
+            this.logger = logger;
+            globalAssetsMapType = Type.GetType("GlobalAssetsMap, GameCode", throwOnError: false);
+            loadSceneType = Type.GetType("LoadSceneOnTriggerEnter, GameCode", throwOnError: false);
+            sceneUtilType = Type.GetType("SceneUtil, GameCode", throwOnError: false);
+            ugcBootstrapType = Type.GetType("UgcImportPlayBootstrap, GameCode", throwOnError: false);
+            ugcLaunchRequestType = Type.GetType("UgcPlayLaunchRequest, GameCode", throwOnError: false);
+            ugcLastRunType = Type.GetType("UgcPlayLauncherLastRun, GameCode", throwOnError: false);
+            playerControllerType = Type.GetType("PlayerController, GameCode", throwOnError: false);
+        }
+
+        /// <summary>Reads the curated level entry points the game shows in its own level-select menu.</summary>
+        public List<GameLevel> GetLevels()
+        {
+            var levels = new List<GameLevel>();
+            try
+            {
+                var entryPoints = globalAssetsMapType?.GetProperty("LevelEntryPoints", PublicStatic)?.GetValue(null);
+                if (entryPoints == null)
+                {
+                    return levels;
+                }
+
+                var entriesField = entryPoints.GetType().GetField("entries", AnyInstance);
+                if (!(entriesField?.GetValue(entryPoints) is Array entries))
+                {
+                    return levels;
+                }
+
+                foreach (var entry in entries)
+                {
+                    if (entry == null)
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        var entryType = entry.GetType();
+                        var checkpointAsset = entryType.GetField("checkpointAsset", AnyInstance)?.GetValue(entry);
+                        if (checkpointAsset == null)
+                        {
+                            continue;
+                        }
+
+                        var sceneName = checkpointAsset.GetType().GetProperty("SceneName", AnyInstance)?.GetValue(checkpointAsset) as string ?? string.Empty;
+                        if (string.IsNullOrWhiteSpace(sceneName))
+                        {
+                            continue;
+                        }
+
+                        var displayName = entryType.GetField("displayName", AnyInstance)?.GetValue(entry) as string ?? sceneName;
+                        var description = entryType.GetField("description", AnyInstance)?.GetValue(entry) as string ?? string.Empty;
+                        levels.Add(new GameLevel(displayName, description, sceneName, checkpointAsset));
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Debug("Worlds skipped a level entry: " + ex.Message);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.Debug("Worlds could not read game level entry points: " + ex.Message);
+            }
+
+            return levels;
+        }
+
+        /// <summary>Launches a real level the same way the game's menu does (correct play state).</summary>
+        public bool LaunchLevel(object checkpointAsset)
+        {
+            try
+            {
+                // Validate the checkpoint up front. NOTE: LoadSceneImpl is `async UniTask`; a fault inside the
+                // awaited scene load surfaces only on the returned UniTask, so a "true" here means "dispatched",
+                // not "scene loaded". We now observe that UniTask (see ObserveAsyncLoad) so a post-await fault is
+                // logged as a failure instead of being silently reported as a successful load.
+                if (checkpointAsset == null)
+                {
+                    return false;
+                }
+
+                var sceneName = checkpointAsset.GetType().GetProperty("SceneName", AnyInstance)?.GetValue(checkpointAsset) as string;
+                if (string.IsNullOrWhiteSpace(sceneName))
+                {
+                    logger.Warn("Worlds cannot launch a level whose checkpoint has no scene name.");
+                    return false;
+                }
+
+                var method = loadSceneType?.GetMethod("LoadSceneImpl", PublicStatic);
+                if (method == null)
+                {
+                    return false;
+                }
+
+                // Capture the returned UniTask. If we discard it, a fault raised AFTER its first await is lost:
+                // UniTask publishes no UnobservedTaskException for a dropped task, so the scene could fail to load
+                // while WorldsService still reports "Loaded ...". Observing it makes that failure visible.
+                var loadTask = method.Invoke(null, new[] { (object)false, checkpointAsset });
+                ObserveAsyncLoad(loadTask, sceneName!);
+
+                logger.Info("Worlds dispatched the game loader for scene '" + sceneName + "'.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                logger.Warn("Worlds failed to launch level via the game loader: " + ex.Message);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Observes the async <c>LoadSceneImpl</c> UniTask so a fault that surfaces AFTER its first await is logged
+        /// instead of being swallowed (UniTask raises no UnobservedTaskException for a discarded task). Best-effort
+        /// and reflective: if the UniTask/Task plumbing cannot be reached we degrade to the dispatch log alone.
+        /// </summary>
+        private void ObserveAsyncLoad(object? loadTask, string sceneName)
+        {
+            if (loadTask == null)
+            {
+                return;
+            }
+
+            try
+            {
+                // Preferred: convert the UniTask to a System.Threading.Tasks.Task (UniTaskExtensions.AsTask) and
+                // attach a plain continuation, keeping the result inspection in ordinary, non-reflective code.
+                if (TryObserveViaTask(loadTask, sceneName))
+                {
+                    return;
+                }
+
+                // Fallback: drive the awaitable contract directly (GetAwaiter/IsCompleted/GetResult/OnCompleted),
+                // which UniTask must implement to be awaitable even if AsTask is renamed/absent in this build.
+                if (TryObserveViaAwaiter(loadTask, sceneName))
+                {
+                    return;
+                }
+
+                logger.Debug("Worlds could not attach a load-result observer for scene '" + sceneName
+                    + "'; a post-dispatch failure will not be logged.");
+            }
+            catch (Exception ex)
+            {
+                logger.Debug("Worlds could not observe the async level load for scene '" + sceneName + "': " + ex.Message);
+            }
+        }
+
+        private bool TryObserveViaTask(object loadTask, string sceneName)
+        {
+            var uniTaskType = loadTask.GetType();
+            var extensionsType = uniTaskType.Assembly.GetType("Cysharp.Threading.Tasks.UniTaskExtensions");
+            var asTask = extensionsType?.GetMethod("AsTask", PublicStatic, null, new[] { uniTaskType }, null);
+            if (!(asTask?.Invoke(null, new[] { loadTask }) is Task task))
+            {
+                return false;
+            }
+
+            // The default scheduler runs the continuation off the main thread; it only logs (thread-safe).
+            task.ContinueWith(completed => ReportLoadOutcome(
+                completed.IsFaulted,
+                completed.IsCanceled,
+                completed.Exception?.GetBaseException()?.Message,
+                sceneName));
+            return true;
+        }
+
+        private bool TryObserveViaAwaiter(object loadTask, string sceneName)
+        {
+            var getAwaiter = loadTask.GetType().GetMethod("GetAwaiter", AnyInstance, null, Type.EmptyTypes, null);
+            var awaiter = getAwaiter?.Invoke(loadTask, null);
+            if (awaiter == null)
+            {
+                return false;
+            }
+
+            var awaiterType = awaiter.GetType();
+            var getResult = awaiterType.GetMethod("GetResult", AnyInstance, null, Type.EmptyTypes, null);
+            if (getResult == null)
+            {
+                return false;
+            }
+
+            // GetResult returns void on success and rethrows the captured fault (reflection wraps it) on failure.
+            Action report = () =>
+            {
+                try
+                {
+                    getResult.Invoke(awaiter, null);
+                    ReportLoadOutcome(false, false, null, sceneName);
+                }
+                catch (TargetInvocationException ex)
+                {
+                    ReportLoadOutcome(true, false, (ex.InnerException ?? ex).Message, sceneName);
+                }
+                catch (Exception ex)
+                {
+                    ReportLoadOutcome(true, false, ex.Message, sceneName);
+                }
+            };
+
+            var isCompleted = awaiterType.GetProperty("IsCompleted", AnyInstance)?.GetValue(awaiter) as bool? ?? false;
+            if (isCompleted)
+            {
+                report();
+                return true;
+            }
+
+            // UniTask continuations resume on the Unity main thread (PlayerLoop); the continuation only logs.
+            var onCompleted = awaiterType.GetMethod("OnCompleted", AnyInstance, null, new[] { typeof(Action) }, null)
+                ?? awaiterType.GetMethod("UnsafeOnCompleted", AnyInstance, null, new[] { typeof(Action) }, null);
+            if (onCompleted == null)
+            {
+                return false;
+            }
+
+            onCompleted.Invoke(awaiter, new object[] { report });
+            return true;
+        }
+
+        private void ReportLoadOutcome(bool faulted, bool canceled, string? error, string sceneName)
+        {
+            if (faulted)
+            {
+                logger.Warn("Worlds level load FAILED after dispatch for scene '" + sceneName + "': "
+                    + (string.IsNullOrEmpty(error) ? "unknown error" : error));
+            }
+            else if (canceled)
+            {
+                logger.Warn("Worlds level load was canceled after dispatch for scene '" + sceneName + "'.");
+            }
+            else
+            {
+                logger.Info("Worlds confirmed the game finished loading scene '" + sceneName + "'.");
+            }
+        }
+
+        /// <summary>Loads a scene by name through the game's async loader when no checkpoint asset is known.</summary>
+        public bool LoadSceneByName(string sceneName)
+        {
+            if (string.IsNullOrWhiteSpace(sceneName))
+            {
+                return false;
+            }
+
+            try
+            {
+                var method = sceneUtilType?.GetMethod("LoadScene", PublicStatic, null, new[] { typeof(string), typeof(CancellationToken) }, null);
+                if (method == null)
+                {
+                    return false;
+                }
+
+                // Capture and observe the returned UniTask so an async load fault is logged, not swallowed.
+                var loadTask = method.Invoke(null, new object[] { sceneName, CancellationToken.None });
+                ObserveAsyncLoad(loadTask, sceneName);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                logger.Debug("Worlds could not use the game scene loader for '" + sceneName + "': " + ex.Message);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Launches the clean, story-free Open Sandbox arena: loads the game's <see cref="SandboxSceneName"/>
+        /// scene (which spawns a real player) with any UGC content import suppressed. Returns true on dispatch;
+        /// the caller layers the arena geometry on once the scene finishes loading.
+        /// </summary>
+        public bool LaunchOpenSandbox()
+        {
+            try
+            {
+                // Suppress the UGC importer first so the play scene comes up empty (no past creation loaded),
+                // then load it. The scene's own bootstrap spawns the player; we only need a clean stage.
+                SuppressUgcImport();
+                return LoadSceneByName(SandboxSceneName);
+            }
+            catch (Exception ex)
+            {
+                logger.Warn("Worlds failed to launch the open sandbox scene: " + ex.Message);
+                return false;
+            }
+        }
+
+        /// <summary>True if the game currently has a spawned player (static <c>PlayerController.FindPlayer()</c>).</summary>
+        public bool IsPlayerPresent()
+        {
+            try
+            {
+                var findPlayer = playerControllerType?.GetMethod("FindPlayer", PublicStatic, null, Type.EmptyTypes, null);
+                return findPlayer?.Invoke(null, null) != null;
+            }
+            catch (Exception ex)
+            {
+                logger.Debug("Worlds could not query the player controller: " + ex.Message);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Reads the player prefab the UGC play bootstrap would spawn, so we can spawn a fallback player if the
+        /// game's bootstrap did not (e.g. its import step faulted). Returns null if the symbol is unavailable.
+        /// </summary>
+        public GameObject? ResolveSandboxPlayerPrefab()
+        {
+            try
+            {
+                var bootstrap = FindSandboxBootstrap();
+                return bootstrap == null
+                    ? null
+                    : ugcBootstrapType?.GetProperty("RuntimePlayerPrefab", AnyInstance)?.GetValue(bootstrap) as GameObject;
+            }
+            catch (Exception ex)
+            {
+                logger.Debug("Worlds could not resolve the sandbox player prefab: " + ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>The position the sandbox bootstrap will spawn the player at (its own transform), or origin.</summary>
+        public Vector3 GetSandboxSpawnPosition()
+        {
+            try
+            {
+                return FindSandboxBootstrap() is Component component ? component.transform.position : Vector3.zero;
+            }
+            catch (Exception ex)
+            {
+                logger.Debug("Worlds could not resolve the sandbox spawn position: " + ex.Message);
+                return Vector3.zero;
+            }
+        }
+
+        /// <summary>Spawns the given player prefab at <paramref name="position"/> (used only as a fallback).</summary>
+        public void SpawnPlayer(GameObject prefab, Vector3 position)
+        {
+            try
+            {
+                UnityEngine.Object.Instantiate(prefab, position, Quaternion.identity);
+            }
+            catch (Exception ex)
+            {
+                logger.Warn("Worlds could not spawn a fallback sandbox player: " + ex.Message);
+            }
+        }
+
+        private UnityEngine.Object? FindSandboxBootstrap()
+        {
+            return ugcBootstrapType == null ? null : UnityEngine.Object.FindAnyObjectByType(ugcBootstrapType);
+        }
+
+        /// <summary>
+        /// Best-effort: hands the game's UGC play bootstrap a launch request pointed at an empty folder so it
+        /// imports no user content into our sandbox. The bootstrap still runs and spawns the player; only the
+        /// content import is neutralized. Degrades silently if the UGC symbols are missing.
+        /// </summary>
+        private void SuppressUgcImport()
+        {
+            try
+            {
+                if (ugcLastRunType == null || ugcLaunchRequestType == null)
+                {
+                    return;
+                }
+
+                var values = Activator.CreateInstance(ugcLastRunType);
+                if (values == null)
+                {
+                    return;
+                }
+
+                // An empty temp folder guarantees the importer discovers no export files, so nothing is imported.
+                var emptyImportFolder = Path.Combine(Path.GetTempPath(), "RobotopiaWorldsSandbox");
+                Directory.CreateDirectory(emptyImportFolder);
+                ugcLastRunType.GetField("Mode")?.SetValue(values, "SelectedFile");
+                ugcLastRunType.GetField("ImportFolderPath")?.SetValue(values, emptyImportFolder);
+                ugcLastRunType.GetField("SelectedExportFilePath")?.SetValue(values, string.Empty);
+
+                var create = ugcLaunchRequestType.GetMethod("Create", PublicStatic, null, new[] { ugcLastRunType }, null);
+                create?.Invoke(null, new[] { values });
+                logger.Debug("Worlds sandbox: queued a no-op UGC launch request to suppress content import.");
+            }
+            catch (Exception ex)
+            {
+                logger.Debug("Worlds sandbox: could not suppress the UGC import (continuing anyway): " + ex.Message);
+            }
+        }
+    }
+
+    internal sealed class GameLevel
+    {
+        public GameLevel(string displayName, string description, string sceneName, object checkpointAsset)
+        {
+            DisplayName = displayName;
+            Description = description;
+            SceneName = sceneName;
+            CheckpointAsset = checkpointAsset;
+        }
+
+        public string DisplayName { get; }
+        public string Description { get; }
+        public string SceneName { get; }
+        public object CheckpointAsset { get; }
+    }
+}

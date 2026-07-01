@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "robotopia.chronos",
+  "name": "Robotopia Chronos",
+  "version": "0.1.0",
+  "author": "QuantumWorks",
+  "description": "Framework SDK service that controls GAME TIME — the single, leak-proof authority over Unity's timeScale/fixedDeltaTime. A reusable foundation for time-bending gamemodes: a hard freeze (turn-based / RPG pause / freeze-to-talk), a continuous or input-driven scale (Superhot 'time moves only when you move', with the player kept full-speed), bounded stepping, and a full turn scheduler. Effects are ref-counted owner-tagged leases force-reset on every teardown, so a held scale can never leak into a menu or the next gamemode.",
+  "entryAssembly": "Robotopia.Chronos.dll",
+  "entryType": "Robotopia.Chronos.ChronosMod",
+  "dependencies": [],
+  "optionalDependencies": [],
+  "conflicts": [],
+  "loadAfter": [],
+  "permissions": ["time", "input", "player-control"],
+  "category": "Framework",
+  "tags": ["time", "timescale", "slow-motion", "superhot", "turn-based", "pause", "framework", "sdk", "chronos"],
+  "license": "Unspecified"
+}
