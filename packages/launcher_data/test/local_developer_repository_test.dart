@@ -1,0 +1,427 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:archive/archive.dart';
+import 'package:crypto/crypto.dart';
+import 'package:launcher_data/launcher_data.dart';
+import 'package:launcher_domain/launcher_domain.dart';
+import 'package:path/path.dart' as p;
+import 'package:test/test.dart';
+
+void main() {
+  late Directory root;
+  late Directory dataRoot;
+  late Directory repoRoot;
+  late Directory gameRoot;
+  late LocalDeveloperRepository repository;
+
+  setUp(() {
+    root = Directory.systemTemp.createTempSync('robotopia-developer-data-');
+    dataRoot = Directory(p.join(root.path, 'data'))..createSync();
+    repoRoot = Directory(p.join(root.path, 'repo'))..createSync();
+    // The built-in local source derives from dist/ packages; with no dist/ here it simply yields an
+    // empty catalog, so these tests drive their own custom package source instead.
+    gameRoot = Directory(p.join(root.path, 'Robotopia'))..createSync();
+    repository = LocalDeveloperRepository(
+      dataRoot: dataRoot.path,
+      repositoryRoot: repoRoot.path,
+    );
+  });
+
+  tearDown(() {
+    if (root.existsSync()) {
+      root.deleteSync(recursive: true);
+    }
+  });
+
+  test('restores developer dependencies and writes C# reference props', () async {
+    final basePackage = _createPackage(
+      root,
+      id: 'base.mod',
+      version: '1.0.0',
+      apiAssemblies: ['ref/Base.Api.dll'],
+    );
+    final featurePackage = _createPackage(
+      root,
+      id: 'feature.mod',
+      version: '1.0.0',
+    );
+    final sourceFile = File(p.join(root.path, 'developer-source.json'))
+      ..writeAsStringSync(
+        jsonEncode({
+          'packages': {
+            'base.mod': {
+              'displayName': 'Base API',
+              'versions': {
+                '1.0.0': {
+                  'manifest': _manifestJson(
+                    'base.mod',
+                    '1.0.0',
+                    apiAssemblies: ['ref/Base.Api.dll'],
+                  ),
+                  'url': basePackage.uri.toString(),
+                  'sha256': sha256Of(basePackage),
+                },
+              },
+            },
+            'feature.mod': {
+              'displayName': 'Feature',
+              'versions': {
+                '1.0.0': {
+                  'manifest': {
+                    ..._manifestJson('feature.mod', '1.0.0'),
+                    'vpmDependencies': {'base.mod': '>=1.0.0'},
+                  },
+                  'url': featurePackage.uri.toString(),
+                  'sha256': sha256Of(featurePackage),
+                },
+              },
+            },
+          },
+        }),
+      );
+
+    final workspace = await repository.createModProject(
+      parentDirectory: root.path,
+      id: 'creator.mod',
+      name: 'Creator Mod',
+      includeUnityCompanion: true,
+    );
+    expect(workspace.project!.packageSources, isEmpty);
+    // The Unity companion is scaffolded with a README + a sample runtime config, and the project records it.
+    expect(workspace.project!.unityCompanion.enabled, isTrue);
+    expect(
+      File(
+        p.join(workspace.projectRoot, 'unity-companion', 'README.md'),
+      ).existsSync(),
+      isTrue,
+    );
+    expect(
+      File(
+        p.join(
+          workspace.projectRoot,
+          'unity-companion',
+          'robotopia.ugc.livesync.sample.json',
+        ),
+      ).existsSync(),
+      isTrue,
+    );
+    await repository.addProjectPackageSource(
+      workspace.projectRoot,
+      PackageSource(
+        id: 'test.source',
+        name: 'Test Source',
+        url: sourceFile.uri.toString(),
+      ),
+    );
+    await repository.addProjectDependency(
+      workspace.projectRoot,
+      ModDependency(id: 'feature.mod', versionRange: VersionRange.parse('1.x')),
+    );
+
+    final restored = await repository.resolveDeveloperProject(
+      workspace.projectRoot,
+    );
+
+    expect(restored.hasProject, isTrue);
+    expect(restored.issues.where((issue) => issue.isBlocking), isEmpty);
+    expect(restored.lock!.packages.map((package) => package.id), [
+      'base.mod',
+      'feature.mod',
+    ]);
+    expect(
+      File(p.join(workspace.projectRoot, 'robotopia.lock.json')).existsSync(),
+      isTrue,
+    );
+    final props = File(
+      p.join(workspace.projectRoot, 'robotopia.dev.props'),
+    ).readAsStringSync();
+    expect(props, contains('Base.Api'));
+    expect(props, contains('<Private>false</Private>'));
+    expect(
+      File(
+        p.join(
+          workspace.projectRoot,
+          '.robotopia',
+          'packages',
+          'base.mod',
+          '1.0.0',
+          'extracted',
+          'ref',
+          'Base.Api.dll',
+        ),
+      ).existsSync(),
+      isTrue,
+    );
+    final gitignore = File(
+      p.join(workspace.projectRoot, '.gitignore'),
+    ).readAsStringSync();
+    expect(gitignore, contains('.robotopia/packages/'));
+    expect(gitignore, contains('robotopia.dev.props'));
+  });
+
+  test('blocks developer restore when package SHA does not match', () async {
+    final package = _createPackage(root, id: 'bad.mod', version: '1.0.0');
+    final sourceFile = File(p.join(root.path, 'bad-source.json'))
+      ..writeAsStringSync(
+        jsonEncode({
+          'packages': {
+            'bad.mod': {
+              'versions': {
+                '1.0.0': {
+                  'manifest': _manifestJson('bad.mod', '1.0.0'),
+                  'url': package.uri.toString(),
+                  'sha256': 'not-the-real-sha',
+                },
+              },
+            },
+          },
+        }),
+      );
+    final workspace = await repository.createModProject(
+      parentDirectory: root.path,
+      id: 'sha.mod',
+      name: 'SHA Mod',
+    );
+    await repository.addProjectPackageSource(
+      workspace.projectRoot,
+      PackageSource(
+        id: 'bad.source',
+        name: 'Bad Source',
+        url: sourceFile.uri.toString(),
+      ),
+    );
+    await repository.addProjectDependency(
+      workspace.projectRoot,
+      const ModDependency(id: 'bad.mod'),
+    );
+
+    expect(
+      () => repository.resolveDeveloperProject(workspace.projectRoot),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('SHA-256 mismatch'),
+        ),
+      ),
+    );
+  });
+
+  test('migrates legacy folders and reports unconvertible entries', () async {
+    final legacyRoot = Directory(p.join(gameRoot.path, 'Mods'))..createSync();
+    final folder = Directory(p.join(legacyRoot.path, 'ManifestLegacy'))
+      ..createSync();
+    File(
+      p.join(folder.path, 'robotopia.mod.json'),
+    ).writeAsStringSync(jsonEncode(_manifestJson('manifest.legacy', '1.0.0')));
+    Directory(p.join(legacyRoot.path, 'NeedsManualWork')).createSync();
+
+    final result = await repository.migrateLegacyMods(
+      gameRoot.path,
+      p.join(root.path, 'migrated'),
+    );
+
+    expect(result.createdProjects, hasLength(1));
+    expect(
+      File(
+        p.join(result.createdProjects.single, 'robotopia.project.json'),
+      ).existsSync(),
+      isTrue,
+    );
+    expect(result.issues.single.message, contains('needs manual migration'));
+  });
+
+  test('doctor checks the UGC companion package and watch folder', () async {
+    final workspace = await repository.createModProject(
+      parentDirectory: root.path,
+      id: 'ugc.creator',
+      name: 'UGC Creator',
+      includeUnityCompanion: true,
+    );
+
+    // Inject a watch folder into the project's unityCompanion.liveSync config.
+    final watch = p.join(root.path, 'watch-out');
+    final projectFile = File(
+      p.join(workspace.projectRoot, 'robotopia.project.json'),
+    );
+    final json =
+        jsonDecode(projectFile.readAsStringSync()) as Map<String, Object?>;
+    json['unityCompanion'] = {
+      'enabled': true,
+      'liveSync': {'watchFolder': watch},
+    };
+    projectFile.writeAsStringSync(jsonEncode(json));
+
+    final report = await repository.runDoctor(
+      projectPath: workspace.projectRoot,
+    );
+
+    // The template is absent in this synthetic repo, so the companion package is reported missing...
+    expect(
+      report.issues.any(
+        (issue) => issue.message.contains('UGC companion package missing'),
+      ),
+      isTrue,
+    );
+    // ...but the configured watch folder is created and reported writable.
+    expect(
+      report.messages.any(
+        (message) => message.contains('UGC watch folder is writable'),
+      ),
+      isTrue,
+    );
+    expect(Directory(watch).existsSync(), isTrue);
+  });
+
+  test('updateUgcLiveSync persists settings into the project', () async {
+    final workspace = await repository.createModProject(
+      parentDirectory: root.path,
+      id: 'ugc.persist',
+      name: 'UGC Persist',
+      includeUnityCompanion: true,
+    );
+
+    final updated = await repository.updateUgcLiveSync(
+      workspace.projectRoot,
+      const UgcLiveSyncSettings(
+        transport: 'automerge',
+        watchFolder: 'shared-out',
+        editorUrl: 'https://h/?project=automerge:doc&scene=main',
+      ),
+    );
+    expect(updated.unityCompanion.enabled, isTrue);
+    expect(updated.unityCompanion.liveSync.transport, 'automerge');
+
+    // Reload from disk to confirm it round-tripped through robotopia.project.json.
+    final reloaded = await repository.loadDeveloperWorkspace(
+      projectPath: workspace.projectRoot,
+    );
+    expect(reloaded.project!.unityCompanion.liveSync.watchFolder, 'shared-out');
+    expect(
+      reloaded.project!.unityCompanion.liveSync.editorUrl,
+      'https://h/?project=automerge:doc&scene=main',
+    );
+  });
+
+  test(
+    'project registry tracks created + added projects and sniffs kind',
+    () async {
+      // Creating a mod project auto-registers it as a modCSharp entry.
+      final workspace = await repository.createModProject(
+        parentDirectory: root.path,
+        id: 'reg.mod',
+        name: 'Registry Mod',
+      );
+      var projects = await repository.listProjects();
+      expect(projects, hasLength(1));
+      expect(projects.single.kind, ProjectKind.modCSharp);
+      expect(projects.single.name, 'Registry Mod');
+      expect(
+        p.canonicalize(projects.single.path),
+        p.canonicalize(workspace.projectRoot),
+      );
+
+      // Adding an existing Unity world project sniffs unityWorld + reads ProjectVersion.txt.
+      final unityDir = Directory(p.join(root.path, 'MyWorld'))..createSync();
+      Directory(p.join(unityDir.path, 'Packages')).createSync();
+      File(
+        p.join(unityDir.path, 'Packages', 'vpm-manifest.json'),
+      ).writeAsStringSync('{"dependencies":{}}');
+      Directory(p.join(unityDir.path, 'ProjectSettings')).createSync();
+      File(
+        p.join(unityDir.path, 'ProjectSettings', 'ProjectVersion.txt'),
+      ).writeAsStringSync('m_EditorVersion: 6000.0.23f1\n');
+
+      projects = await repository.addExistingProject(unityDir.path);
+      expect(projects, hasLength(2));
+      final unity = projects.firstWhere(
+        (pr) => pr.kind == ProjectKind.unityWorld,
+      );
+      expect(unity.unityVersion, '6000.0.23f1');
+
+      // Adding an unrecognized directory throws.
+      final bogus = Directory(p.join(root.path, 'bogus'))..createSync();
+      expect(
+        () => repository.addExistingProject(bogus.path),
+        throwsA(isA<StateError>()),
+      );
+
+      // Re-adding the same path dedupes (no duplicate entry).
+      await repository.addExistingProject(unityDir.path);
+      expect(await repository.listProjects(), hasLength(2));
+
+      // Removing untracks without deleting files.
+      projects = await repository.removeProject(unityDir.path);
+      expect(projects, hasLength(1));
+      expect(unityDir.existsSync(), isTrue);
+
+      // touchProjectOpened stamps lastOpenedUtc.
+      projects = await repository.touchProjectOpened(workspace.projectRoot);
+      expect(projects.single.lastOpenedUtc, isNotEmpty);
+    },
+  );
+
+  test('runSetup performs safe fixes and returns an environment', () async {
+    // A sidecar with deps already present means no real `npm install` runs (hermetic).
+    final sidecarDir = Directory(
+      p.join(repoRoot.path, 'tools', 'ugc-automerge-sidecar'),
+    )..createSync(recursive: true);
+    File(p.join(sidecarDir.path, 'index.mjs')).writeAsStringSync('// sidecar');
+    Directory(p.join(sidecarDir.path, 'node_modules')).createSync();
+
+    final result = await repository.runSetup();
+
+    // checkEnvironment ran (the .NET SDK is always probed) and an action log is produced.
+    expect(result.environment.checks.any((c) => c.name == '.NET SDK'), isTrue);
+    expect(result.actions, isNotEmpty);
+    // The developer data root is ensured.
+    expect(Directory(repository.developerDataRoot).existsSync(), isTrue);
+  });
+}
+
+File _createPackage(
+  Directory root, {
+  required String id,
+  required String version,
+  List<String> apiAssemblies = const [],
+}) {
+  final package = File(p.join(root.path, '$id-$version.robotopiamod'));
+  final archive = Archive()
+    ..addFile(
+      ArchiveFile.string(
+        'robotopia.mod.json',
+        jsonEncode(_manifestJson(id, version, apiAssemblies: apiAssemblies)),
+      ),
+    )
+    ..addFile(ArchiveFile.string('${_assemblyName(id)}.dll', 'dll'));
+  for (final assembly in apiAssemblies) {
+    archive.addFile(ArchiveFile.string(assembly, 'api'));
+  }
+  package.writeAsBytesSync(ZipEncoder().encode(archive));
+  return package;
+}
+
+Map<String, Object?> _manifestJson(
+  String id,
+  String version, {
+  List<String> apiAssemblies = const [],
+}) => {
+  'schemaVersion': 1,
+  'id': id,
+  'name': id,
+  'version': version,
+  'entryAssembly': '${_assemblyName(id)}.dll',
+  'entryType': '$id.Entry',
+  if (apiAssemblies.isNotEmpty) 'apiAssemblies': apiAssemblies,
+};
+
+String sha256Of(File file) => sha256.convert(file.readAsBytesSync()).toString();
+
+String _assemblyName(String id) {
+  return id
+      .split(RegExp(r'[^A-Za-z0-9]+'))
+      .where((part) => part.isNotEmpty)
+      .map((part) => part[0].toUpperCase() + part.substring(1))
+      .join();
+}
