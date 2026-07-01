@@ -1,0 +1,51 @@
+name: launcher_ui
+description: Shared Flutter widgets and theme for the QuantumWorks launcher.
+version: 0.0.1
+publish_to: none
+homepage:
+
+environment:
+  sdk: ^3.11.1
+  flutter: ">=1.17.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_svg: ^2.0.10
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+# For information on the generic Dart part of this file, see the
+# following page: https://dart.dev/tools/pub/pubspec
+
+# The following section is specific to Flutter packages.
+flutter:
+
+  assets:
+    - assets/brand/baby-stitch.webp
+    - assets/brand/robot.webp
+    - assets/brand/quantumworks-city-header.webp
+    - assets/brand/quantumworks-logo.svg
+    - assets/brand/quantumworks-mark.svg
+    - assets/brand/sheriff.webp
+
+  # For details regarding assets in packages, see
+  # https://flutter.dev/to/asset-from-package
+  #
+  # An image asset can refer to one or more resolution-specific "variants", see
+  # https://flutter.dev/to/resolution-aware-images
+
+  fonts:
+    - family: QuantumWorksQuicksand
+      fonts:
+        - asset: fonts/Quicksand-VariableFont_wght.ttf
+    - family: QuantumWorksArista
+      fonts:
+        - asset: fonts/Arista-Pro-Bold.ttf
+          weight: 700
+
+  # For details regarding fonts in packages, see
+  # https://flutter.dev/to/font-from-package
