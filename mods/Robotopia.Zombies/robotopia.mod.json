@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "robotopia.zombies",
+  "name": "Zombies",
+  "version": "0.9.0",
+  "author": "QuantumWorks",
+  "description": "Wave survival, the Robotopia way: don't just shoot the infected robots — JACK IN and talk to one. Aim at a robot and open a channel: the world freezes while you TYPE or SPEAK to it and its own LLM brain answers in its own words and decides — talk it down, scare it off, or genuinely persuade it to switch sides and fight the swarm for you. Freezing costs an uplink charge and the horde keeps massing while you talk, so every conversation is a real gamble against the zapper. Converted allies are a Civ-style relationship: keep them loyal or watch them waver and defect. Q broadcasts a deterministic stand-down for offline/panic crowd control. Plus the v0.6 core: readable archetypes, headshots, a charged piercing alt-fire, and combat juice.",
+  "entryAssembly": "Robotopia.Zombies.dll",
+  "entryType": "Robotopia.Zombies.ZombiesMod",
+  "dependencies": [
+    { "id": "robotopia.worlds", "versionRange": ">=0.1.0" },
+    { "id": "robotopia.robotkit", "versionRange": ">=0.6.0" },
+    { "id": "robotopia.chronos", "versionRange": ">=0.1.0" }
+  ],
+  "optionalDependencies": [],
+  "conflicts": [],
+  "loadAfter": ["robotopia.worlds", "robotopia.robotkit", "robotopia.chronos"],
+  "permissions": ["world-service", "robot-spawning", "input", "physics", "hud", "ai"],
+  "category": "Gameplay",
+  "tags": ["zombies", "gamemode", "wave-survival", "robots", "zapper", "archetypes", "combo", "headshots", "ai", "persuasion", "conversation", "llm", "voice", "diplomacy"],
+  "worldGamemodes": [
+    {
+      "id": "robotopia.zombies.survival",
+      "name": "Zombies",
+      "description": "Survive escalating waves of infected robots with a built-in zapper."
+    }
+  ],
+  "license": "Unspecified"
+}

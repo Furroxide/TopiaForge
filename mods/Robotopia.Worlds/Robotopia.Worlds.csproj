@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>Robotopia.Worlds</AssemblyName>
+    <RootNamespace>Robotopia.Worlds</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Robotopia.Mods.Abstractions\Robotopia.Mods.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="UnityEngine" HintPath="$(RobotopiaManagedDir)\UnityEngine.dll" Private="false" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="Unity.RenderPipelines.Core.Runtime" HintPath="$(RobotopiaManagedDir)\Unity.RenderPipelines.Core.Runtime.dll" Private="false" />
+    <Reference Include="Unity.RenderPipelines.HighDefinition.Runtime" HintPath="$(RobotopiaManagedDir)\Unity.RenderPipelines.HighDefinition.Runtime.dll" Private="false" />
+  </ItemGroup>
+</Project>
