@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <RobotopiaGameDir Condition="'$(RobotopiaGameDir)' == ''">C:\Users\vanst\AppData\Local\Tomato Cake\launcher\Robotopia</RobotopiaGameDir>
+    <RobotopiaManagedDir>$(RobotopiaGameDir)\Robotopia_Data\Managed</RobotopiaManagedDir>
+    <BepInExRoot>$(MSBuildThisFileDirectory)third_party\BepInEx\win_x64_5.4.23.5</BepInExRoot>
+    <BepInExCoreDir>$(BepInExRoot)\BepInEx\core</BepInExCoreDir>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+</Project>
