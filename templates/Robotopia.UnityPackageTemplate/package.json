@@ -1,0 +1,20 @@
+{
+  "name": "com.robotopia.example",
+  "version": "0.1.0",
+  "displayName": "Robotopia Example Package",
+  "description": "A starter QuantumWorks (VPM) Unity package. Replace this with your own package id, code, and samples, then publish it to a listing with `tools/pack-unity-packages.ps1`.",
+  "unity": "2022.3",
+  "keywords": ["robotopia", "quantumworks"],
+  "author": {
+    "name": "Your Name"
+  },
+  "vpmDependencies": {},
+  "legacyFolders": {},
+  "samples": [
+    {
+      "displayName": "Example Sample",
+      "description": "An example sample scene/asset.",
+      "path": "Samples~/Example"
+    }
+  ]
+}
