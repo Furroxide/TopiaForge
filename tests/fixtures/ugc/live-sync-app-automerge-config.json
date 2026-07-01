@@ -1,0 +1,11 @@
+{
+  "transport": "automerge",
+  "watchFolder": "C:\\Robotopia\\ugc-watch",
+  "editorUrl": "",
+  "documentUrl": "automerge:captured-doc",
+  "syncServerUrl": "https://automerge-repo-sync-server-main.onrender.com",
+  "sceneId": "neon-rooftops",
+  "autoConnectOnStart": true,
+  "maxSnapshotBytes": 4194304,
+  "debounceMilliseconds": 350
+}
