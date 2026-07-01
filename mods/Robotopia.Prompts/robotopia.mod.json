@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "robotopia.prompts",
+  "name": "Robotopia Prompts",
+  "version": "0.1.0",
+  "author": "QuantumWorks",
+  "description": "Framework SDK service for prompt override registration, deterministic effective override resolution, owner cleanup, disposable registrations, and conflict diagnostics.",
+  "entryAssembly": "Robotopia.Prompts.dll",
+  "entryType": "Robotopia.Prompts.PromptsMod",
+  "dependencies": [],
+  "optionalDependencies": [],
+  "conflicts": [],
+  "loadAfter": [],
+  "permissions": ["prompt-overrides"],
+  "category": "Framework",
+  "tags": ["prompts", "overrides", "conflicts", "framework", "sdk"],
+  "license": "Unspecified"
+}

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "robotopia.no-feedback-url",
+  "name": "No Feedback URL",
+  "version": "0.1.1",
+  "author": "QuantumWorks",
+  "description": "Allows Robotopia's shutdown feedback page only on the first game launch, then suppresses it.",
+  "entryAssembly": "Robotopia.NoFeedbackUrl.dll",
+  "entryType": "Robotopia.NoFeedbackUrl.NoFeedbackUrlMod",
+  "dependencies": [],
+  "loadAfter": [],
+  "gameVersion": "",
+  "permissions": ["harmony-patch"],
+  "category": "Utility",
+  "tags": ["privacy", "feedback", "shutdown", "browser"],
+  "license": "Unspecified"
+}
