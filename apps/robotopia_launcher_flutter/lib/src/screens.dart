@@ -1,0 +1,42 @@
+import 'dart:io';
+
+import 'package:file_selector/file_selector.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:launcher_domain/launcher_domain.dart';
+import 'package:launcher_ui/launcher_ui.dart';
+
+import 'launcher_bloc.dart';
+import 'launcher_event.dart';
+import 'launcher_section.dart';
+import 'launcher_state.dart';
+
+part 'screens/browse_profiles_screen.dart';
+part 'screens/developer_screen.dart';
+part 'screens/developer_environment_pane.dart';
+part 'screens/developer_packages_pane.dart';
+part 'screens/developer_ugc_pane.dart';
+part 'screens/diagnostics_settings_screen.dart';
+part 'screens/library_screen.dart';
+part 'screens/mods_screen.dart';
+part 'screens/screen_dialog_helpers.dart';
+part 'screens/screen_helpers.dart';
+
+class LauncherBody extends StatelessWidget {
+  const LauncherBody({super.key, required this.state});
+
+  final LauncherState state;
+
+  @override
+  Widget build(BuildContext context) {
+    return switch (state.section) {
+      LauncherSection.library => LibraryScreen(state: state),
+      LauncherSection.mods => ModsScreen(state: state),
+      LauncherSection.browse => BrowseScreen(state: state),
+      LauncherSection.profiles => ProfilesScreen(state: state),
+      LauncherSection.developer => DeveloperScreen(state: state),
+      LauncherSection.diagnostics => DiagnosticsScreen(state: state),
+      LauncherSection.settings => SettingsScreen(state: state),
+    };
+  }
+}
