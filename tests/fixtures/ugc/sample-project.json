@@ -1,0 +1,139 @@
+{
+  "version": "1.0",
+  "name": "Sample UGC Project",
+  "created": "2026-06-29T00:00:00Z",
+  "modified": "2026-06-29T00:00:00Z",
+  "assets": {
+    "@robotopia/tree-model": "https://assets.example.invalid/tree.glb"
+  },
+  "local-assets": {
+    "local:lore/town-history": {
+      "type": "lore",
+      "text": "The town was built by robots."
+    },
+    "local:lore-collection/town": {
+      "type": "lore-collection",
+      "lore": ["local:lore/town-history"]
+    },
+    "local:personality/mayor": {
+      "type": "personality",
+      "knowledge": ["local:lore-collection/town"]
+    }
+  },
+  "scenes": {
+    "main": {
+      "id": "main",
+      "name": "Main Scene",
+      "environment": "day",
+      "created": "2026-06-29T00:00:00Z",
+      "modified": "2026-06-29T00:00:00Z",
+      "entities": {
+        "ent-root": {
+          "id": "ent-root",
+          "name": "Tree",
+          "parent": null,
+          "components": {
+            "transform": {
+              "position": { "x": 1.0, "y": 0.0, "z": 2.0 },
+              "rotation": { "x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0 },
+              "scale": { "x": 1.0, "y": 1.0, "z": 1.0 }
+            },
+            "model-renderer": { "model": "@robotopia/tree-model" }
+          }
+        },
+        "ent-prefab": {
+          "id": "ent-prefab",
+          "name": "Prop",
+          "parent": "ent-root",
+          "components": {
+            "transform": {
+              "position": { "x": 0.0, "y": 1.0, "z": 0.0 },
+              "rotation": { "x": 0.0, "y": 90.0, "z": 0.0 },
+              "scale": { "x": 1.0, "y": 1.0, "z": 1.0 }
+            },
+            "prefab-instance": { "scene": "", "model": "@robotopia/tree-model", "accessory": "" }
+          }
+        },
+        "ent-spawn": {
+          "id": "ent-spawn",
+          "name": "Player Spawn",
+          "parent": null,
+          "components": {
+            "transform": {
+              "position": { "x": 0.0, "y": 0.0, "z": 0.0 },
+              "rotation": { "x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0 },
+              "scale": { "x": 1.0, "y": 1.0, "z": 1.0 }
+            },
+            "spawn-location": {}
+          }
+        },
+        "ent-poi": {
+          "id": "ent-poi",
+          "name": "Statue",
+          "parent": null,
+          "components": {
+            "transform": {
+              "position": { "x": 3.0, "y": 0.0, "z": 0.0 },
+              "rotation": { "x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0 },
+              "scale": { "x": 1.0, "y": 1.0, "z": 1.0 }
+            },
+            "poi": {
+              "about": ["local:lore/town-history"],
+              "visualDescription": "A weathered bronze statue of the first robot.",
+              "hidden": false
+            }
+          }
+        },
+        "ent-aoi": {
+          "id": "ent-aoi",
+          "name": "Plaza",
+          "parent": null,
+          "components": {
+            "transform": {
+              "position": { "x": 0.0, "y": 0.0, "z": 5.0 },
+              "rotation": { "x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0 },
+              "scale": { "x": 1.0, "y": 1.0, "z": 1.0 }
+            },
+            "aoi": {
+              "about": ["local:lore-collection/town"],
+              "visualDescription": "An open plaza at the town center.",
+              "size": { "x": 5.0, "y": 2.0, "z": 5.0 }
+            }
+          }
+        },
+        "ent-agent": {
+          "id": "ent-agent",
+          "name": "Mayor",
+          "parent": null,
+          "components": {
+            "transform": {
+              "position": { "x": -2.0, "y": 0.0, "z": 1.0 },
+              "rotation": { "x": 0.0, "y": 180.0, "z": 0.0 },
+              "scale": { "x": 1.0, "y": 1.0, "z": 1.0 }
+            },
+            "model-renderer": { "model": "@robotopia/tree-model" },
+            "agent": {
+              "about": ["local:lore-collection/town"],
+              "visualDescription": "An old robot wearing a sash.",
+              "personality": "local:personality/mayor"
+            }
+          }
+        },
+        "ent-extra": {
+          "id": "ent-extra",
+          "name": "Future Prop",
+          "parent": null,
+          "components": {
+            "transform": {
+              "position": { "x": 4.0, "y": 0.0, "z": 4.0 },
+              "rotation": { "x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0 },
+              "scale": { "x": 1.0, "y": 1.0, "z": 1.0 }
+            },
+            "model-renderer": { "model": "@robotopia/tree-model" },
+            "robotopia-future-component": { "note": "Unknown component captured by JsonExtensionData; a change here forces a full rebuild." }
+          }
+        }
+      }
+    }
+  }
+}

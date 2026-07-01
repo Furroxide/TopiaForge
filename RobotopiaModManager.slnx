@@ -1,0 +1,29 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Robotopia.GameCompat.Surface/Robotopia.GameCompat.Surface.csproj" />
+    <Project Path="src/Robotopia.GameCompat.Extractor/Robotopia.GameCompat.Extractor.csproj" />
+    <Project Path="src/Robotopia.ModManager.Core/Robotopia.ModManager.Core.csproj" />
+    <Project Path="src/Robotopia.ModManager/Robotopia.ModManager.csproj" />
+    <Project Path="src/Robotopia.Mods.Abstractions/Robotopia.Mods.Abstractions.csproj" />
+    <Project Path="src/Robotopia.Mods.UnityUi/Robotopia.Mods.UnityUi.csproj" />
+  </Folder>
+  <Folder Name="/mods/">
+    <Project Path="mods/Robotopia.Assets/Robotopia.Assets.csproj" />
+    <Project Path="mods/Robotopia.Chronos/Robotopia.Chronos.csproj" />
+    <Project Path="mods/Robotopia.GravityGun/Robotopia.GravityGun.csproj" />
+    <Project Path="mods/Robotopia.NoFeedbackUrl/Robotopia.NoFeedbackUrl.csproj" />
+    <Project Path="mods/Robotopia.Performance/Robotopia.Performance.csproj" />
+    <Project Path="mods/Robotopia.PerfFixes/Robotopia.PerfFixes.csproj" />
+    <Project Path="mods/Robotopia.Prompts/Robotopia.Prompts.csproj" />
+    <Project Path="mods/Robotopia.RobotKit/Robotopia.RobotKit.csproj" />
+    <Project Path="mods/Robotopia.UgcLiveSync/Robotopia.UgcLiveSync.csproj" />
+    <Project Path="mods/Robotopia.Worlds/Robotopia.Worlds.csproj" />
+    <Project Path="mods/Robotopia.Zombies/Robotopia.Zombies.csproj" />
+  </Folder>
+  <Folder Name="/templates/">
+    <Project Path="templates/Robotopia.ModTemplate/Robotopia.ModTemplate.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Robotopia.ModManager.Tests/Robotopia.ModManager.Tests.csproj" />
+  </Folder>
+</Solution>
