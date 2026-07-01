@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "modId": "robotopia.no-feedback-url",
+  "modName": "No Feedback URL",
+  "bindings": [
+    {
+      "id": "nofeedbackurl.openfeedbackurl-type",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "OpenFeedBackURL",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "NoFeedbackUrl: intercept feedback URL launches",
+      "sourceRef": "mods/Robotopia.NoFeedbackUrl/NoFeedbackUrlMod.cs:27"
+    },
+    {
+      "id": "nofeedbackurl.openfeedbacktask",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "OpenFeedBackURL",
+      "member": "OpenFeedbackTask",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "NoFeedbackUrl: intercept feedback URL task",
+      "sourceRef": "mods/Robotopia.NoFeedbackUrl/NoFeedbackUrlMod.cs:27"
+    }
+  ]
+}
