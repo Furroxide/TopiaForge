@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>Robotopia.Mods.Abstractions</AssemblyName>
+    <RootNamespace>Robotopia.Mods</RootNamespace>
+  </PropertyGroup>
+</Project>
