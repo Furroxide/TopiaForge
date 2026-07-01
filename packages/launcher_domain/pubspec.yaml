@@ -1,0 +1,13 @@
+name: launcher_domain
+description: UI-independent QuantumWorks launcher domain models and planning logic.
+version: 1.0.0
+publish_to: none
+
+environment:
+  sdk: ^3.11.1
+
+dependencies:
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.6
