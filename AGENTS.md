@@ -50,6 +50,23 @@ $rows = @(); foreach ($file in rg --files -g "*.dart") { $count = (Get-Content -
 - Include loading, empty, error, warning, destructive confirmation, focus, and no-overflow states.
 - Use Flutter Material icons for common commands.
 
+## In-game SDK UI Quality Bar
+
+- All in-game UI (manager overlay, mod HUDs, mod windows) goes through the QwUi kit in
+  `src/Robotopia.Mods.UnityUi` — never hand-rolled uGUI in consumers. See `docs/UiKit.md`.
+- Paper scheme for full-screen tools/windows/dialogs; HUD scheme for gameplay overlays.
+  Tokens/tones only — no hex literals in consumer code.
+- Per-frame updates use the kit's dirty-checked setters; zero steady-state allocation
+  (cached strings, `SetText(prefix, int)`, pooled spawned elements, `.Dynamic()` around
+  per-frame-churning subtrees).
+- Destructive actions confirm through `Modal.Destructive`; action results surface as
+  toasts; long content always lives in a scroll view or virtualized list.
+- Canvas sorting comes from the kit's band allocator — never set sortingOrder directly.
+- Respect the accessibility contract: high contrast, UI scale, and reduced-motion/motion
+  intensity flow through `QwTheme` (feed mod config into it, like Zombies does).
+- Split UI files by responsibility (~400 lines max); the `mods/Robotopia.UiGallery` dev
+  mod (F8) is the living catalog and manual QA surface.
+
 ## C# Runtime Boundaries
 
 - Preserve `.robotopiamod`, `robotopia.mod.json`, dependency ordering, package inbox, manager logs, enable/disable state, and restart-required behavior.
