@@ -41,6 +41,12 @@ namespace Robotopia.ModManager
             bepinExLogger.LogWarning(message);
         }
 
+        public void Error(string message)
+        {
+            Write("ERROR", "manager", message);
+            bepinExLogger.LogError(message);
+        }
+
         public void Error(Exception exception, string message)
         {
             Write("ERROR", "manager", message + Environment.NewLine + exception);
