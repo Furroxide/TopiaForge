@@ -74,6 +74,13 @@ namespace Robotopia.Mods.UnityUi
             return this;
         }
 
+        /// <summary>Single-line label (HUD counter rows that must never bleed into the next row).</summary>
+        public QwLabel NoWrap()
+        {
+            text.textWrappingMode = TextWrappingModes.NoWrap;
+            return this;
+        }
+
         /// <summary>Dirty-checked text update.</summary>
         public void SetText(string value)
         {

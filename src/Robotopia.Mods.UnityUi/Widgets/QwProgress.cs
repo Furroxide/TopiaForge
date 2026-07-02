@@ -73,6 +73,23 @@ namespace Robotopia.Mods.UnityUi
             return this;
         }
 
+        /// <summary>
+        /// Dirty-checked runtime tone switch (the conversation-timer danger-under-25%
+        /// pattern). Clears any Thresholds() auto-toning.
+        /// </summary>
+        public void SetTone(QwTone value)
+        {
+            if (warnThreshold < 0f && value == tone && value == lastAppliedTone)
+            {
+                return;
+            }
+
+            tone = value;
+            warnThreshold = -1f;
+            critThreshold = -1f;
+            ApplyFillColor(value);
+        }
+
         /// <summary>Dirty-checked fraction update.</summary>
         public void SetFraction(float fraction)
         {
