@@ -85,6 +85,8 @@ namespace Robotopia.Mods.UnityUi
         private readonly TextMeshProUGUI label;
         private float shownAt = -999f;
         private QwTone tone = QwTone.Primary;
+        private bool hasCustomColor;
+        private Color customColor = Color.white;
 
         internal QwBanner(QwContainer parent)
             : base(parent.Host, parent.Scheme, parent.CreateChildGameObject("Banner"))
@@ -119,8 +121,20 @@ namespace Robotopia.Mods.UnityUi
         public QwBanner Tone(QwTone value)
         {
             tone = value;
+            hasCustomColor = false;
             ApplyTheme(Theme);
             return this;
+        }
+
+        /// <summary>
+        /// Custom banner color (the Zombies ShowBanner(text, color) pattern); the fade
+        /// timeline keeps driving alpha. High-contrast emphasis is applied by the theme.
+        /// </summary>
+        public void SetColor(Color value)
+        {
+            hasCustomColor = true;
+            customColor = value;
+            ApplyTheme(Theme);
         }
 
         /// <summary>Shows (or re-punches) the banner.</summary>
@@ -140,7 +154,7 @@ namespace Robotopia.Mods.UnityUi
 
         public void ApplyTheme(QwResolvedTheme theme)
         {
-            var color = theme.ToneColor(tone);
+            var color = hasCustomColor ? theme.Emphasize(customColor) : theme.ToneColor(tone);
             color.a = label.color.a;
             label.color = color;
         }
