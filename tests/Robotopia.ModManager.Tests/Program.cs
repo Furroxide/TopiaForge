@@ -33,6 +33,7 @@ namespace Robotopia.ModManager.Tests
                 ConversationDirectorTests.Run();
                 ChronosTests.Run();
                 GameCompatTests.Run();
+                UiKitCoreTests.Run();
                 Console.WriteLine("All QuantumWorks tests passed.");
                 return 0;
             }

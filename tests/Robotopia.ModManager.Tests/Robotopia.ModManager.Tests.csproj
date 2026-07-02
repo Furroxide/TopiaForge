@@ -54,4 +54,12 @@
   <ItemGroup>
     <Compile Include="..\..\mods\Robotopia.Prompts\PromptOverrideRegistry.cs" />
   </ItemGroup>
+
+  <!-- The QwUi kit's Core/ folder is its Unity-free island (tokens, scheme resolution, contrast math,
+       easing, sprite-coverage math, virtual-list math, window clamp/snap, sorting-band allocation).
+       Compiling it here both unit-tests the logic and mechanically enforces that nothing in Core/
+       ever grows a UnityEngine dependency (this net8.0 build would fail). -->
+  <ItemGroup>
+    <Compile Include="..\..\src\Robotopia.Mods.UnityUi\Core\*.cs" />
+  </ItemGroup>
 </Project>

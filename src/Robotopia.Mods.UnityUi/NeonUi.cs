@@ -5,6 +5,7 @@ using UnityEngine.UI;
 
 namespace Robotopia.Mods.UnityUi
 {
+    [Obsolete("Replaced by the QwUi kit (QwUi.For / UiHost) - see docs/UiKit.md. NeonUi will be removed once all consumers migrate.")]
     public static class NeonUi
     {
         private static Font? cachedFont;

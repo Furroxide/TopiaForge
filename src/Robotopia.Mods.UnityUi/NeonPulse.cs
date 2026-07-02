@@ -1,8 +1,10 @@
+using System;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace Robotopia.Mods.UnityUi
 {
+    [Obsolete("Replaced by QwPulse (motion system) - see docs/UiKit.md. NeonPulse will be removed once all consumers migrate.")]
     public sealed class NeonPulse : MonoBehaviour
     {
         public float Frequency = 2f;

@@ -1,8 +1,10 @@
+using System;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace Robotopia.Mods.UnityUi
 {
+    [Obsolete("Replaced by QwStatBar/QwProgressBar - see docs/UiKit.md. NeonBar will be removed once all consumers migrate.")]
     public sealed class NeonBar : MonoBehaviour
     {
         private Image? fill;

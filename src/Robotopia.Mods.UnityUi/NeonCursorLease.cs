@@ -1,7 +1,9 @@
+using System;
 using UnityEngine;
 
 namespace Robotopia.Mods.UnityUi
 {
+    [Obsolete("Replaced by QwCursorLease (re-asserts the cursor every frame while held) - see docs/UiKit.md. NeonCursorLease will be removed once all consumers migrate.")]
     public sealed class NeonCursorLease
     {
         private static int activeLeases;
