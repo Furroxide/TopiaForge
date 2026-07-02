@@ -18,6 +18,9 @@ namespace Robotopia.SampleHelloMod
             // - Add robotopia.prompts to robotopia.mod.json before calling context.RegisterPromptOverride.
             // Example:
             // var prompt = context.RegisterPromptOverride("robot.greeting", "Replacement prompt text.", priority: 10);
+            //
+            // Want in-game UI (windows, HUD bars, toasts)? Reference Robotopia.Mods.UnityUi.dll and see
+            // docs/UiKit.md — the Robotopia.UiGallery dev mod (F8 in-game) is the living catalog.
 
             context.SceneLoaded += scene => context.Logger.Info("Scene loaded: " + scene);
             context.Update += deltaTime =>

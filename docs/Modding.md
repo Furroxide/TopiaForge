@@ -106,6 +106,27 @@ The SDK also provides Unity-free `Vec3` (x, y, z) and `RobotColor` (r, g, b, a) 
 vector/colour-carrying service contracts so the abstractions assembly stays free of any `UnityEngine`
 reference; convert to/from `UnityEngine.Vector3`/`Color` on your side.
 
+## In-game UI
+
+Build branded in-game UI (windows, HUDs, modals, toasts) with the **QuantumWorks UI kit** —
+a loader-shipped library, not a service: add a reference to `Robotopia.Mods.UnityUi.dll`
+(no manifest dependency needed) and create a host from your context:
+
+```csharp
+var ui = QwUi.For(context);
+var window = ui.Window("settings", "MY MOD");        // draggable, ESC-closes, persists its rect
+window.Content.Toggle("Enable the thing", true, v => { });
+window.Content.Button("DO IT", () => ui.Toast("Done.", QwTone.Success));
+ui.Hotkey(QwKey.F7, window.Toggle);
+// OnUnload: ui.Dispose();
+```
+
+The kit renders the launcher's brand in-game (two schemes: light Paper for tools, dark HUD
+for gameplay overlays), with theming, accessibility (high contrast, UI scale, reduced
+motion), motion presets, virtualized lists, pooled world-anchored labels, and a strict
+zero-steady-state-allocation contract for HUD updates. See [UiKit.md](UiKit.md) and the
+`robotopia.uigallery` dev mod (F8) for the full catalog.
+
 ## UGC Live Content Sync
 
 Author UGC levels in the Unity Editor and hot-reload them into the running game with no restart. The game side

@@ -14,7 +14,8 @@ Robotopia install, repairs the runtime, and lets you browse, install, enable/dis
 
 Validate your machine first with the CLI (`robotopia setup` to auto-fix what it safely can, or `robotopia doctor`
 to audit read-only). Only the .NET SDK is required to build mods; Node/Unity are optional (UGC live-sync). See
-[docs/Modding.md](docs/Modding.md).
+[docs/Modding.md](docs/Modding.md). Build branded in-game UI (windows, HUDs, modals, toasts) with the
+QuantumWorks UI kit — see [docs/UiKit.md](docs/UiKit.md) and the F8 gallery mod.
 
 ## Standalone launcher
 
