@@ -54,7 +54,7 @@ namespace Robotopia.UgcLiveSync
             overlayObject = new GameObject("RobotopiaUgcLiveSync");
             UnityEngine.Object.DontDestroyOnLoad(overlayObject);
             overlay = overlayObject.AddComponent<UgcLiveOverlay>();
-            overlay.Initialize(service, config, context.Logger);
+            overlay.Initialize(service, config, context);
 
             pendingAutoConnect = config.AutoConnectOnStart;
             autoConnectWait = AutoConnectMaxWaitSeconds;

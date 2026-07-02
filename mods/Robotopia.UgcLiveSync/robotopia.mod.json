@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "robotopia.ugc.livesync",
   "name": "Robotopia UGC Live Sync",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "QuantumWorks",
   "description": "Live UGC content sync: hot-reload level content into the running game from a watched export folder (the Unity Editor companion dev loop) or an external editor's live Automerge document. Preview/play only.",
   "entryAssembly": "Robotopia.UgcLiveSync.dll",
