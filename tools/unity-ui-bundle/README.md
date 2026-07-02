@@ -16,27 +16,20 @@ stream (6000.5+, 7000.x) are not safe to load in that player. Use an editor in t
 
 `tools/build-ui-bundle.ps1` auto-detects eligible editors and hard-fails on anything else.
 
-## One-time interactive setup (bake the TMP font assets)
+## Font baking
 
-The TMP font assets are baked interactively once and committed; the batch build only
-labels + builds (scripted atlas generation is the flaky part of TMP, so we avoid it).
+The build script bakes the static SDF TMP font assets itself (idempotent — an existing
+committed `Assets/FontAssets/*.asset` is reused as-is; delete it to re-bake):
 
-1. Open this project in the pinned editor (first open imports TMP from `com.unity.ugui`).
-2. Window → TextMeshPro → Font Asset Creator, then bake and save (Create → Save as…):
-   - `Assets/Fonts/Quicksand-VariableFont_wght.ttf`
-     → `Assets/FontAssets/QuantumWorks-Quicksand SDF.asset`
-     (1024×1024, SDFAA, padding 9, static; charset: ASCII + Latin-1 Supplement + Latin
-     Extended-A + `–—‘’“”…•·%°×✓`)
-   - Same TTF with Bold instance (or faux-bold source)
-     → `Assets/FontAssets/QuantumWorks-Quicksand-Bold SDF.asset` (same settings)
-   - `Assets/Fonts/Arista-Pro-Bold.ttf`
-     → `Assets/FontAssets/QuantumWorks-Arista SDF.asset` (512×512, SDFAA, padding 9,
-     static, ASCII — display headings only)
-3. On `QuantumWorks-Quicksand SDF`, set the Bold typeface in the font-weight table
-   (weight 700 → `QuantumWorks-Quicksand-Bold SDF`).
-4. Leave every font-asset material on the `TextMeshPro/Distance Field` shader — building
-   the bundle pulls the shader in as a dependency, which is the in-game safety net.
-5. Commit the new `.asset` files (+ `.meta`), then run the build (below).
+- `QuantumWorks-Quicksand SDF` — 1024×1024, SDFAA, padding 9, static; ASCII + Latin-1
+  Supplement + Latin Extended-A + typographic punctuation.
+- `QuantumWorks-Arista SDF` — 512×512, same settings (display headings).
+- Bold renders via TMP faux-bold (the variable TTF imports only its default instance),
+  which the kit selects automatically when no dedicated bold asset ships.
+
+Every font-asset material stays on the `TextMeshPro/Distance Field` shader — building
+the bundle pulls the shader in as a dependency, which is the in-game safety net.
+Commit the baked `.asset` files (+ `.meta`) together with the rebuilt bundle.
 
 ## Building the bundle
 
