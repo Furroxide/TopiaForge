@@ -1,7 +1,9 @@
+using System;
 using UnityEngine;
 
 namespace Robotopia.Mods.UnityUi
 {
+    [Obsolete("Replaced by QwPalette/QwSchemes (brand tokens) - see docs/UiKit.md. NeonTheme will be removed once all consumers migrate.")]
     public static class NeonTheme
     {
         public static readonly Color Ink = new Color(0.015f, 0.025f, 0.04f, 0.96f);
