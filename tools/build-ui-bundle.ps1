@@ -70,18 +70,37 @@ if ($versionInfo -and -not (Test-EditorVersion $versionInfo)) {
 }
 
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-Write-Host "Building UI bundle with $UnityExe"
-& $UnityExe -batchmode -nographics -quit `
-    -projectPath $projectPath `
-    -executeMethod Robotopia.UiBundleBuilder.Build `
-    -logFile $logFile
-$exitCode = $LASTEXITCODE
 
-if ($exitCode -ne 0) {
-    Write-Host "--- last 40 log lines ($logFile) ---"
-    Get-Content -LiteralPath $logFile -Tail 40
-    throw "Unity bundle build failed with exit code $exitCode. Full log: $logFile"
+# Unity.exe is a GUI-subsystem binary: '&' would return immediately, so launch via
+# Start-Process and wait for the real exit code. No -nographics: it breaks Shader.Find,
+# which the TMP font baking needs. No -quit: the builder methods exit explicitly (the
+# essentials import is asynchronous and exits from its completion callback).
+function Invoke-UnityMethod {
+    param([string]$Method, [string]$PhaseLog)
+    $unityArgs = @(
+        "-batchmode",
+        "-projectPath", ('"' + $projectPath + '"'),
+        "-executeMethod", $Method,
+        "-logFile", ('"' + $PhaseLog + '"')
+    )
+    $process = Start-Process -FilePath $UnityExe -ArgumentList $unityArgs -Wait -PassThru -NoNewWindow
+    if ($process.ExitCode -ne 0) {
+        if (Test-Path $PhaseLog) {
+            Write-Host "--- last 40 log lines ($PhaseLog) ---"
+            Get-Content -LiteralPath $PhaseLog -Tail 40
+        }
+
+        throw "Unity phase '$Method' failed with exit code $($process.ExitCode). Full log: $PhaseLog"
+    }
 }
+
+if (!(Test-Path (Join-Path $projectPath "Assets\TextMesh Pro"))) {
+    Write-Host "Importing TMP essentials (first run) with $UnityExe"
+    Invoke-UnityMethod -Method "Robotopia.UiBundleBuilder.ImportEssentials" -PhaseLog (Join-Path $logDir "ui-bundle-essentials.log")
+}
+
+Write-Host "Building UI bundle with $UnityExe"
+Invoke-UnityMethod -Method "Robotopia.UiBundleBuilder.Build" -PhaseLog $logFile
 
 if (!(Test-Path $outputBundle)) {
     throw "Unity reported success but $outputBundle was not produced. Check $logFile."

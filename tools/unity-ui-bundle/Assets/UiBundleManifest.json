@@ -1,6 +1,10 @@
 {
   "bundle": "quantumworks-ui",
-  "editorVersion": "unbuilt",
-  "builtUtc": "unbuilt",
-  "assets": []
+  "editorVersion": "6000.0.31f1",
+  "builtUtc": "2026-07-02T12:51:56Z",
+  "assets": [
+    "Assets/FontAssets/QuantumWorks-Quicksand SDF.asset",
+    "Assets/FontAssets/QuantumWorks-Arista SDF.asset",
+    "Assets/UiBundleManifest.json"
+  ]
 }
