@@ -73,10 +73,20 @@ namespace Robotopia.Mods.UnityUi
             WalkThemeAware();
         }
 
-        /// <summary>Dark-scheme, non-interactive gameplay overlay layer.</summary>
-        public QwContainer HudLayer(string name, bool persistent = false)
+        /// <summary>
+        /// Dark-scheme gameplay overlay layer with Scaled/World roots, floater pools,
+        /// and a banner. Raycasting starts off; enable it during gameplay modals.
+        /// </summary>
+        public QwHudLayer HudLayer(string name, bool persistent = false)
         {
-            return Layer(name, QwLayerBand.Hud, QwScheme.Hud, interactive: false, persistent);
+            var canvasRoot = Layer(name, QwLayerBand.Hud, QwScheme.Hud, interactive: false, persistent);
+            return new QwHudLayer(this, canvasRoot);
+        }
+
+        /// <summary>Shows a process-wide toast notification.</summary>
+        public void Toast(string text, QwTone tone = QwTone.Neutral)
+        {
+            QwToasts.Show(text, tone);
         }
 
         /// <summary>

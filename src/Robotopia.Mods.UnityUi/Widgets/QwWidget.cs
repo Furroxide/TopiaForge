@@ -166,5 +166,19 @@ namespace Robotopia.Mods.UnityUi
             QwAnchors.Stretch(widget.Rect, left, top, right, bottom);
             return widget;
         }
+
+        /// <summary>
+        /// Isolates this subtree on a nested canvas so its per-frame geometry churn
+        /// (bars, reticles, floaters) never dirties the parent canvas's static chrome.
+        /// </summary>
+        public static T Dynamic<T>(this T widget) where T : QwWidget
+        {
+            if (widget.Go.GetComponent<Canvas>() == null)
+            {
+                widget.Go.AddComponent<Canvas>();
+            }
+
+            return widget;
+        }
     }
 }
