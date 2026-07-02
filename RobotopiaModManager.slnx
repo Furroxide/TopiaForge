@@ -17,6 +17,7 @@
     <Project Path="mods/Robotopia.Prompts/Robotopia.Prompts.csproj" />
     <Project Path="mods/Robotopia.RobotKit/Robotopia.RobotKit.csproj" />
     <Project Path="mods/Robotopia.UgcLiveSync/Robotopia.UgcLiveSync.csproj" />
+    <Project Path="mods/Robotopia.UiGallery/Robotopia.UiGallery.csproj" />
     <Project Path="mods/Robotopia.Worlds/Robotopia.Worlds.csproj" />
     <Project Path="mods/Robotopia.Zombies/Robotopia.Zombies.csproj" />
   </Folder>

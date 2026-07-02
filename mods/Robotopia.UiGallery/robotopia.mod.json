@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "robotopia.uigallery",
+  "name": "QuantumWorks UI Gallery",
+  "version": "0.1.0",
+  "author": "QuantumWorks",
+  "description": "Developer tool: a living catalog of every QwUi widget in both brand schemes, with live high-contrast, UI-scale, and motion toggles. Toggle with F8. Not shipped in releases.",
+  "entryAssembly": "Robotopia.UiGallery.dll",
+  "entryType": "Robotopia.UiGallery.UiGalleryMod",
+  "dependencies": [],
+  "optionalDependencies": [],
+  "conflicts": [],
+  "loadAfter": [],
+  "permissions": ["hud", "input"],
+  "category": "DevTool",
+  "tags": ["dev-only", "ui", "gallery", "sdk"],
+  "license": "Unspecified"
+}
