@@ -102,6 +102,81 @@ namespace Robotopia.Mods.UnityUi
             return divider;
         }
 
+        public QwToggle Toggle(string label, bool value, System.Action<bool> onChanged)
+        {
+            return new QwToggle(this, label, value, onChanged, asCheckbox: false);
+        }
+
+        public QwToggle Checkbox(string label, bool value, System.Action<bool> onChanged)
+        {
+            return new QwToggle(this, label, value, onChanged, asCheckbox: true);
+        }
+
+        public QwSlider Slider(string label, float min, float max, float value, System.Action<float> onChanged)
+        {
+            return new QwSlider(this, label, min, max, value, onChanged);
+        }
+
+        public QwTabs Tabs(params string[] labels)
+        {
+            return new QwTabs(this, labels, navRail: false);
+        }
+
+        public QwTabs NavRail(params string[] labels)
+        {
+            return new QwTabs(this, labels, navRail: true);
+        }
+
+        public QwInputField Input(string placeholder, string value, System.Action<string> onChanged)
+        {
+            return new QwInputField(this, placeholder, value, onChanged);
+        }
+
+        public QwInputField SearchInput(string placeholder, System.Action<string> onChanged)
+        {
+            return new QwInputField(this, placeholder, string.Empty, onChanged).Search();
+        }
+
+        public QwBadge Badge(string text, QwTone tone = QwTone.Neutral)
+        {
+            return new QwBadge(this, text, tone);
+        }
+
+        public QwScrollView Scroll(QwGap contentGap = QwGap.Sm, QwGap contentPadding = QwGap.None)
+        {
+            return new QwScrollView(this, contentGap, contentPadding);
+        }
+
+        public QwSectionHeader SectionHeader(string title)
+        {
+            return new QwSectionHeader(this, title);
+        }
+
+        public QwKeyValueRow KeyValueRow(string key, string value)
+        {
+            return new QwKeyValueRow(this, key, value);
+        }
+
+        public QwListRow ListRow()
+        {
+            return new QwListRow(this);
+        }
+
+        public QwProgressBar ProgressBar()
+        {
+            return new QwProgressBar(this, "Progress");
+        }
+
+        public QwStatBar StatBar(string title)
+        {
+            return new QwStatBar(this, title);
+        }
+
+        public QwPipRow PipRow()
+        {
+            return new QwPipRow(this);
+        }
+
         internal QwContainer CreateChild(string name)
         {
             var go = new GameObject(name, typeof(RectTransform));
