@@ -3,7 +3,10 @@ param(
     # Where the .robotopiamod packages are written. The launcher's bundled local source reads this
     # directory and derives its catalog from the packages, so refreshing it here is all that is
     # needed to update what Browse offers — there is no separate registry file to keep in sync.
-    [string]$OutputDir = ""
+    [string]$OutputDir = "",
+    # DevTool-category mods (UI gallery etc.) never enter the published catalog unless requested;
+    # install-local.ps1 still stages them for dev installs.
+    [switch]$IncludeDevMods
 )
 
 $ErrorActionPreference = "Stop"
@@ -32,6 +35,10 @@ if (Test-Path (Join-Path $template "robotopia.mod.json")) {
 $packed = @()
 foreach ($dir in $projectDirs) {
     $manifest = Get-Content -LiteralPath (Join-Path $dir "robotopia.mod.json") -Raw | ConvertFrom-Json
+    if (-not $IncludeDevMods -and $manifest.category -eq "DevTool") {
+        Write-Host ("Skipping dev-only mod {0} (pass -IncludeDevMods to pack it)." -f $manifest.id)
+        continue
+    }
     $safeId = ($manifest.id -replace "[^A-Za-z0-9_.-]", "_")
 
     # Drop any previously packed versions of this id so the directory holds exactly one (current)
