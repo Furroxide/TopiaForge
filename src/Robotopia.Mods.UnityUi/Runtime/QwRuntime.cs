@@ -38,6 +38,10 @@ namespace Robotopia.Mods.UnityUi
             // The game re-asserts its own cursor lock every frame, so the lease must
             // fight back every frame while held (proven by the Zombies modal behavior).
             QwCursor.Tick();
+            QwTween.Tick(Time.unscaledDeltaTime);
+            QwDismissStack.TickEscape();
+            QwHotkeys.Tick();
+            QwToasts.Tick(Time.unscaledDeltaTime);
         }
     }
 }

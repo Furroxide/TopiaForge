@@ -16,6 +16,8 @@ namespace Robotopia.Mods.UnityUi
         private readonly List<GameObject> layerRoots = new List<GameObject>();
         private readonly List<CanvasScaler> scalers = new List<CanvasScaler>();
         private readonly List<IQwThemeAware> themeAware = new List<IQwThemeAware>();
+        private readonly List<QwWindow> windows = new List<QwWindow>();
+        private QwModals? modals;
         private QwResolvedTheme? paperTheme;
         private QwResolvedTheme? hudTheme;
         private QwRgba? accent;
@@ -77,6 +79,27 @@ namespace Robotopia.Mods.UnityUi
             return Layer(name, QwLayerBand.Hud, QwScheme.Hud, interactive: false, persistent);
         }
 
+        /// <summary>
+        /// Creates a draggable brand window (hidden until Show()). Height 0 = grows
+        /// with content. Rect persists per owner+id in the state store.
+        /// </summary>
+        public QwWindow Window(string id, string title, float width = 460f, float height = 0f, QwScheme scheme = QwScheme.Paper, bool persistent = false)
+        {
+            var layer = Layer("window:" + id, QwLayerBand.Window, scheme, interactive: true, persistent);
+            var window = new QwWindow(this, layer, id, title, width, height);
+            windows.Add(window);
+            return window;
+        }
+
+        /// <summary>Modal dialog presets (Confirm/Destructive/Custom).</summary>
+        public QwModals Modal => modals ??= new QwModals(this);
+
+        /// <summary>Registers a global hotkey owned by this host (unregistered on Dispose).</summary>
+        public object Hotkey(QwKey key, Action action)
+        {
+            return QwHotkeys.Register(OwnerId, key, action);
+        }
+
         /// <summary>Creates a canvas layer in a sorting band and wraps it as a container.</summary>
         public QwContainer Layer(string name, QwLayerBand band, QwScheme scheme, bool interactive, bool persistent = false)
         {
@@ -107,6 +130,13 @@ namespace Robotopia.Mods.UnityUi
 
             disposed = true;
             QwTheme.Changed -= OnThemeChanged;
+            QwHotkeys.UnregisterOwner(OwnerId);
+            foreach (var window in windows)
+            {
+                window.Teardown();
+            }
+
+            windows.Clear();
             themeAware.Clear();
             foreach (var root in layerRoots)
             {

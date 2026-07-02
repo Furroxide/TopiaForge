@@ -177,6 +177,16 @@ namespace Robotopia.Mods.UnityUi
             return new QwPipRow(this);
         }
 
+        public QwKeybindField Keybind(string label, QwKey value, System.Action<QwKey> onChanged)
+        {
+            return new QwKeybindField(this, label, value, onChanged);
+        }
+
+        public QwDropdown Dropdown(System.Collections.Generic.IReadOnlyList<string> options, int selected, System.Action<int> onChanged)
+        {
+            return new QwDropdown(this, options, selected, onChanged);
+        }
+
         internal QwContainer CreateChild(string name)
         {
             var go = new GameObject(name, typeof(RectTransform));
