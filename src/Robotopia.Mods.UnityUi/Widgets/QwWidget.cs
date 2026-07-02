@@ -80,6 +80,16 @@ namespace Robotopia.Mods.UnityUi
         {
             return Go.GetComponent<LayoutElement>() ?? Go.AddComponent<LayoutElement>();
         }
+
+        internal CanvasGroup EnsureCanvasGroup()
+        {
+            if (visibilityGroup == null)
+            {
+                visibilityGroup = Go.GetComponent<CanvasGroup>() ?? Go.AddComponent<CanvasGroup>();
+            }
+
+            return visibilityGroup;
+        }
     }
 
     /// <summary>
