@@ -15,6 +15,7 @@ namespace Robotopia.ModManager
 
         private readonly ManagerOverlay overlay;
         private readonly ManagerFileLogger logger;
+        private UiHost? host;
         private string sceneName = string.Empty;
         private float nextAttemptTime;
 
@@ -66,9 +67,9 @@ namespace Robotopia.ModManager
                     return;
                 }
 
-                NeonUi.EnsureEventSystem();
-                EnsureButton(canvas.transform, "RobotopiaGamemodesMenuButton", "Gamemodes", () => overlay.ShowGamemodes(), 74f);
-                EnsureButton(canvas.transform, "RobotopiaModManagerMenuButton", "QuantumWorks", () => overlay.Show(), 24f);
+                QwEventSystems.EnsureEventSystem();
+                EnsureButton(canvas, "RobotopiaGamemodesMenuButton", "GAMEMODES", () => overlay.ShowGamemodes(), 74f);
+                EnsureButton(canvas, "RobotopiaModManagerMenuButton", "QUANTUMWORKS", () => overlay.Show(), 24f);
             }
             catch (Exception ex)
             {
@@ -76,15 +77,26 @@ namespace Robotopia.ModManager
             }
         }
 
-        private void EnsureButton(Transform canvas, string name, string label, Action onClick, float bottomOffset)
+        private void EnsureButton(Canvas canvas, string name, string label, Action onClick, float bottomOffset)
         {
-            if (canvas.Find(name) != null)
+            if (canvas.transform.Find(name) != null)
             {
                 return;
             }
 
-            var button = NeonUi.CreateButton(canvas, name, label.ToUpperInvariant(), onClick, new Vector2(190f, 42f), NeonTheme.Panel, NeonTheme.Cyan);
-            var rect = button.GetComponent<RectTransform>();
+            // Kit widgets render fine under the game's own canvas: wrap it in a container.
+            host ??= QwUi.Create(new QwUiOptions
+            {
+                OwnerId = "robotopia.modmanager.menu",
+                LogInfo = logger.Info,
+                LogWarn = logger.Warn,
+                LogError = message => logger.Error(message),
+            });
+            var parent = new QwContainer(host, QwScheme.Paper, canvas.gameObject);
+            var button = parent.Button(label, onClick, QwButtonStyle.Filled);
+            button.Go.name = name;
+
+            var rect = button.Rect;
             rect.anchorMin = new Vector2(0f, 0f);
             rect.anchorMax = new Vector2(0f, 0f);
             rect.pivot = new Vector2(0f, 0f);
