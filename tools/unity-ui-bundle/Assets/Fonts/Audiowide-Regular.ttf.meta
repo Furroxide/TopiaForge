@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 2be044494b7895b48b7bec3b7bef9b8e
+guid: 4e629ce8fa31d904d98510822a2f8a20
 TrueTypeFontImporter:
   externalObjects: {}
   serializedVersion: 4
@@ -9,7 +9,7 @@ TrueTypeFontImporter:
   characterPadding: 1
   includeFontData: 1
   fontNames:
-  - Arista Pro
+  - Audiowide
   fallbackFontReferences: []
   customCharacters: 
   fontRenderingMode: 0

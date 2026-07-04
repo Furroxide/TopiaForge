@@ -13,7 +13,7 @@ namespace Robotopia
 {
     /// <summary>
     /// Builds the QuantumWorks brand AssetBundle consumed by Robotopia.Mods.UnityUi.
-    /// Run headless via tools/build-ui-bundle.ps1, or in-editor via the menu item.
+    /// Run headless via `robotopia unity build-ui-bundle`, or in-editor via the menu item.
     /// The output bundle is copied into src/Robotopia.Mods.UnityUi/Assets/ where the
     /// kit csproj embeds it into the DLL as an EmbeddedResource.
     /// </summary>
@@ -32,12 +32,12 @@ namespace Robotopia
         private static readonly string[] RequiredAssets =
         {
             QuicksandAssetPath,
-            AristaAssetPath,
+            AudiowideAssetPath,
             ManifestAssetPath,
         };
 
         private const string QuicksandAssetPath = "Assets/FontAssets/QuantumWorks-Quicksand SDF.asset";
-        private const string AristaAssetPath = "Assets/FontAssets/QuantumWorks-Arista SDF.asset";
+        private const string AudiowideAssetPath = "Assets/FontAssets/QuantumWorks-Audiowide SDF.asset";
         private const string CharacterSet =
             " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~" +
             " ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ" +
@@ -141,7 +141,7 @@ namespace Robotopia
             EnsureTmpEssentials();
             Directory.CreateDirectory("Assets/FontAssets");
             BakeFontAsset("Assets/Fonts/Quicksand-VariableFont_wght.ttf", QuicksandAssetPath, "QuantumWorks-Quicksand SDF", 1024);
-            BakeFontAsset("Assets/Fonts/Arista-Pro-Bold.ttf", AristaAssetPath, "QuantumWorks-Arista SDF", 512);
+            BakeFontAsset("Assets/Fonts/Audiowide-Regular.ttf", AudiowideAssetPath, "QuantumWorks-Audiowide SDF", 512);
         }
 
         private const string EssentialsPackage = "Packages/com.unity.ugui/Package Resources/TMP Essential Resources.unitypackage";
@@ -190,7 +190,7 @@ namespace Robotopia
             if (!AssetDatabase.IsValidFolder("Assets/TextMesh Pro"))
             {
                 throw new InvalidOperationException(
-                    "TMP essentials are missing - run the ImportEssentials phase first (tools/build-ui-bundle.ps1 does this automatically).");
+                    "TMP essentials are missing - run the ImportEssentials phase first ('robotopia unity build-ui-bundle' does this automatically).");
             }
         }
 

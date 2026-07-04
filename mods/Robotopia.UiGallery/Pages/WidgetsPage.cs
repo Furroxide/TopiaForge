@@ -8,8 +8,8 @@ namespace Robotopia.UiGallery.Pages
         public static void Build(QwContainer page)
         {
             page.SectionHeader("TYPOGRAPHY");
-            page.Label("Display 26 — Arista", QwTextStyle.Display);
-            page.Label("Title 22 — Arista", QwTextStyle.Title);
+            page.Label("Display 26 — Audiowide", QwTextStyle.Display);
+            page.Label("Title 22 — Audiowide", QwTextStyle.Title);
             page.Label("Heading 16 — Quicksand Bold", QwTextStyle.Heading);
             page.Label("Body 14 — Quicksand. The quick brown robot jumps over the lazy zombie.", QwTextStyle.Body);
             page.Label("Caption 12 — muted detail text", QwTextStyle.Caption).Tone(QwTone.Muted);

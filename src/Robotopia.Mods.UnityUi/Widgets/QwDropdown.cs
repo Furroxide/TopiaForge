@@ -122,7 +122,7 @@ namespace Robotopia.Mods.UnityUi
             templateScroll.movementType = ScrollRect.MovementType.Clamped;
             templateGo.SetActive(false);
 
-            dropdown = Go.AddComponent<TMP_Dropdown>();
+            dropdown = Go.AddComponent<QwTmpDropdown>();
             dropdown.targetGraphic = fill;
             dropdown.template = templateRect;
             dropdown.captionText = caption;
@@ -159,6 +159,25 @@ namespace Robotopia.Mods.UnityUi
             dropdown.interactable = enabled;
         }
 
+        /// <summary>
+        /// Replaces the option list (for choices that only arrive later, e.g. once a level has loaded), clamping
+        /// the selection into range. Does not raise the change callback.
+        /// </summary>
+        public void SetOptions(IReadOnlyList<string> options, int selected = 0)
+        {
+            dropdown.options.Clear();
+            if (options != null)
+            {
+                for (var index = 0; index < options.Count; index++)
+                {
+                    dropdown.options.Add(new TMP_Dropdown.OptionData(options[index]));
+                }
+            }
+
+            dropdown.SetValueWithoutNotify(Mathf.Clamp(selected, 0, Mathf.Max(0, dropdown.options.Count - 1)));
+            dropdown.RefreshShownValue();
+        }
+
         public void ApplyTheme(QwResolvedTheme theme)
         {
             fill.color = theme.SurfaceSunken;
@@ -173,8 +192,7 @@ namespace Robotopia.Mods.UnityUi
 
         private TextMeshProUGUI CreateTmp(GameObject go)
         {
-            var tmp = go.AddComponent<TextMeshProUGUI>();
-            tmp.raycastTarget = false;
+            var tmp = QwTmp.Create(go);
             tmp.fontSize = QwTokens.BodySize;
             tmp.alignment = TextAlignmentOptions.Left;
             tmp.textWrappingMode = TextWrappingModes.NoWrap;
@@ -197,6 +215,48 @@ namespace Robotopia.Mods.UnityUi
             image.raycastTarget = raycast;
             QwAnchors.Stretch((RectTransform)go.transform);
             return image;
+        }
+
+        /// <summary>
+        /// TMP_Dropdown.Show() hardcodes the popup list canvas to sortingOrder 30000 and the blocker to
+        /// 29999 — both BELOW every kit band (windows start at <see cref="QwLayerBands.DefaultWindowBase"/>),
+        /// so the opened list rendered invisibly behind its own window and clicks appeared to do nothing.
+        /// Re-band both canvases to just under the toast band: above all windows and modals (so the popup
+        /// is always visible and its blocker eats outside-clicks first), below toasts and the debug overlay.
+        /// CreateBlocker runs at the end of Show(), after the list canvas exists, so it is the one hook
+        /// where both canvases can be corrected.
+        /// </summary>
+        private sealed class QwTmpDropdown : TMP_Dropdown
+        {
+            private const int ListSortingOrder = QwLayerBands.DefaultToastBase - 2;
+
+            private GameObject? list;
+
+            protected override GameObject CreateDropdownList(GameObject template)
+            {
+                list = base.CreateDropdownList(template);
+                return list;
+            }
+
+            protected override GameObject CreateBlocker(Canvas rootCanvas)
+            {
+                var blocker = base.CreateBlocker(rootCanvas);
+                var listCanvas = list != null ? list.GetComponent<Canvas>() : null;
+                if (listCanvas != null)
+                {
+                    listCanvas.overrideSorting = true;
+                    listCanvas.sortingOrder = ListSortingOrder;
+                }
+
+                var blockerCanvas = blocker.GetComponent<Canvas>();
+                if (blockerCanvas != null)
+                {
+                    blockerCanvas.overrideSorting = true;
+                    blockerCanvas.sortingOrder = ListSortingOrder - 1;
+                }
+
+                return blocker;
+            }
         }
     }
 }

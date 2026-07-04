@@ -62,6 +62,13 @@ namespace Robotopia.Mods.UnityUi
             fill.sprite = QwSprites.Fill(QwRadius.Bar);
             fill.type = UImage.Type.Sliced;
             fill.raycastTarget = false;
+            // Slider.UpdateVisuals drives only the fill's anchors ((0,0) → (value,1)); it never resets the
+            // rect. A fresh RectTransform defaults to sizeDelta (100,100), which pads the fill 100px past its
+            // anchored area in both axes — an accent-coloured block bleeding over neighbouring controls.
+            var fillRect = (RectTransform)fillGo.transform;
+            fillRect.anchorMin = Vector2.zero;
+            fillRect.anchorMax = Vector2.one;
+            fillRect.sizeDelta = Vector2.zero;
 
             var handleAreaGo = new GameObject("HandleArea", typeof(RectTransform));
             handleAreaGo.transform.SetParent(sliderGo.transform, false);
@@ -150,8 +157,7 @@ namespace Robotopia.Mods.UnityUi
         {
             var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(Go.transform, false);
-            var tmp = go.AddComponent<TMPro.TextMeshProUGUI>();
-            tmp.raycastTarget = false;
+            var tmp = QwTmp.Create(go);
             tmp.fontSize = size;
             tmp.alignment = TMPro.TextAlignmentOptions.Left;
             tmp.textWrappingMode = TMPro.TextWrappingModes.NoWrap;

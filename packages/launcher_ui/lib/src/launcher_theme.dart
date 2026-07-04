@@ -12,7 +12,7 @@ class QuantumWorksBrandAssets {
 
 class QuantumWorksBrandFonts {
   static const body = 'QuantumWorksQuicksand';
-  static const display = 'QuantumWorksArista';
+  static const display = 'QuantumWorksAudiowide';
 }
 
 class QuantumWorksPalette {
@@ -227,7 +227,6 @@ TextStyle _displayStyle({
     fontFamily: QuantumWorksBrandFonts.display,
     package: QuantumWorksBrandAssets.package,
     fontSize: fontSize,
-    fontWeight: FontWeight.w700,
     color: color,
     height: height,
   );

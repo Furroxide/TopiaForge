@@ -64,6 +64,7 @@ namespace Robotopia.Mods.UnityUi
 
             var handleGo = new GameObject("Handle", typeof(RectTransform));
             handleGo.transform.SetParent(handleAreaGo.transform, false);
+            QwAnchors.Stretch((RectTransform)handleGo.transform);
             scrollbarHandle = handleGo.AddComponent<UImage>();
             scrollbarHandle.sprite = QwSprites.Fill(QwRadius.Bar);
             scrollbarHandle.type = UImage.Type.Sliced;

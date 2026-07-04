@@ -67,6 +67,8 @@ namespace Robotopia.Mods.UnityUi
                 Repaint();
             });
 
+            // A text field is a fill-the-line control: claim the row's free width (columns already force-expand).
+            this.FillWidth();
             this.FixedHeight(QwTokens.ControlHeight);
             ApplyTheme(Theme);
         }
@@ -230,8 +232,7 @@ namespace Robotopia.Mods.UnityUi
         {
             var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(parent, false);
-            var tmp = go.AddComponent<TextMeshProUGUI>();
-            tmp.raycastTarget = false;
+            var tmp = QwTmp.Create(go);
             tmp.fontSize = QwTokens.BodySize;
             tmp.alignment = TextAlignmentOptions.Left;
             tmp.textWrappingMode = TextWrappingModes.NoWrap;

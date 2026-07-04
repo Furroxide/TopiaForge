@@ -187,6 +187,15 @@ namespace Robotopia.Mods.UnityUi
             return new QwDropdown(this, options, selected, onChanged);
         }
 
+        /// <summary>
+        /// Clickable preview card (thumbnail + caption + optional badge) for grids and
+        /// galleries. See QwCard for the grid-pooling SetActive caveat.
+        /// </summary>
+        public QwCard Card(string title, System.Action onClick)
+        {
+            return new QwCard(this, title, onClick);
+        }
+
         public QwListView<T> ListView<T>(float rowHeight = QwTokens.ListRowHeight)
         {
             return new QwListView<T>(this, rowHeight);

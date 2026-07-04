@@ -1,6 +1,6 @@
 namespace Robotopia.Mods.UnityUi
 {
-    /// <summary>Text roles mapped to size + font family (Arista display, Quicksand body).</summary>
+    /// <summary>Text roles mapped to size + font family (Audiowide display, Quicksand body).</summary>
     public enum QwTextStyle
     {
         Display,
@@ -98,7 +98,7 @@ namespace Robotopia.Mods.UnityUi
             };
         }
 
-        /// <summary>True for styles rendered with the Arista display face.</summary>
+        /// <summary>True for styles rendered with the Audiowide display face.</summary>
         public static bool IsDisplay(QwTextStyle style)
         {
             return style == QwTextStyle.Display || style == QwTextStyle.Title || style == QwTextStyle.Banner;

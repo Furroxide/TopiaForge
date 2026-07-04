@@ -8,7 +8,7 @@ namespace Robotopia.Mods.UnityUi
 {
     /// <summary>
     /// Loads the QuantumWorks brand AssetBundle embedded in this DLL (see the csproj
-    /// EmbeddedResource and tools/build-ui-bundle.ps1). Embedding version-locks assets
+    /// EmbeddedResource and `robotopia unity build-ui-bundle`). Embedding version-locks assets
     /// to code, so a missing bundle only ever means "not built yet" — the kit then runs
     /// on the OS-font/procedural-sprite tiers and logs why.
     /// </summary>
@@ -17,7 +17,7 @@ namespace Robotopia.Mods.UnityUi
         private const string ResourceName = "Robotopia.Mods.UnityUi.quantumworks-ui.bundle";
         private const string QuicksandName = "QuantumWorks-Quicksand SDF";
         private const string QuicksandBoldName = "QuantumWorks-Quicksand-Bold SDF";
-        private const string AristaName = "QuantumWorks-Arista SDF";
+        private const string AudiowideName = "QuantumWorks-Audiowide SDF";
 
         private static bool attempted;
         private static AssetBundle? bundle;
@@ -43,7 +43,7 @@ namespace Robotopia.Mods.UnityUi
                 var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(ResourceName);
                 if (stream == null)
                 {
-                    QwLog.Info("Brand bundle not embedded in this build (run tools/build-ui-bundle.ps1); using fallback fonts and procedural sprites.");
+                    QwLog.Info("Brand bundle not embedded in this build (run 'robotopia unity build-ui-bundle'); using fallback fonts and procedural sprites.");
                     return false;
                 }
 
@@ -58,14 +58,14 @@ namespace Robotopia.Mods.UnityUi
 
                 BodyFont = bundle.LoadAsset<TMP_FontAsset>(QuicksandName);
                 BoldFont = bundle.LoadAsset<TMP_FontAsset>(QuicksandBoldName);
-                DisplayFont = bundle.LoadAsset<TMP_FontAsset>(AristaName);
+                DisplayFont = bundle.LoadAsset<TMP_FontAsset>(AudiowideName);
 
                 var provenance = bundle.LoadAsset<TextAsset>("UiBundleManifest");
                 QwLog.Info("Brand bundle loaded" + (provenance != null ? ": " + Condense(provenance.text) : "."));
 
                 if (BodyFont == null || DisplayFont == null)
                 {
-                    QwLog.Warn("Brand bundle is missing expected font assets (" + QuicksandName + ", " + AristaName + "); font fallback tiers will fill the gaps.");
+                    QwLog.Warn("Brand bundle is missing expected font assets (" + QuicksandName + ", " + AudiowideName + "); font fallback tiers will fill the gaps.");
                 }
 
                 return true;
