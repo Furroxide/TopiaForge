@@ -14,6 +14,30 @@ extension LauncherProfileActions on LauncherBloc {
     );
   }
 
+  Future<void> _onProfileLaunchRequested(
+    ProfileLaunchRequested event,
+    Emitter<LauncherState> emit,
+  ) async {
+    final install = state.gameInstall;
+    LauncherProfile? profile;
+    for (final candidate in state.profiles) {
+      if (candidate.id == event.profileId) {
+        profile = candidate;
+        break;
+      }
+    }
+    if (install == null || profile == null) {
+      return;
+    }
+    final selected = profile;
+    await _repository.saveProfiles(state.profiles, event.profileId);
+    emit(state.copyWith(selectedProfileId: event.profileId));
+    await _guard(emit, 'Launched Robotopia.', () async {
+      final result = await _repository.launch(install, selected);
+      emit(_launchResultState(result));
+    });
+  }
+
   Future<void> _onProfileCreated(
     ProfileCreated event,
     Emitter<LauncherState> emit,

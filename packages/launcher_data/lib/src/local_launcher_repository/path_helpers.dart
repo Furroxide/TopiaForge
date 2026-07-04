@@ -63,9 +63,10 @@ extension _PathHelpers on LocalLauncherRepository {
 
   String _redact(String text, String gamePath) {
     var result = text;
-    final userProfile = Platform.environment['USERPROFILE'];
-    if (userProfile != null && userProfile.isNotEmpty) {
-      result = result.replaceAll(userProfile, r'%USERPROFILE%');
+    final userHome =
+        Platform.environment['USERPROFILE'] ?? Platform.environment['HOME'];
+    if (userHome != null && userHome.isNotEmpty) {
+      result = result.replaceAll(userHome, r'%USERHOME%');
     }
     result = result.replaceAll(gamePath, r'%ROBOTOPIA_GAME%');
     return result;
@@ -98,25 +99,101 @@ String _defaultDataRoot() {
 }
 
 String? _defaultKnownGamePath() {
-  final localAppData = Platform.environment['LOCALAPPDATA'];
-  if (localAppData == null || localAppData.isEmpty) {
-    return null;
+  final override = Platform.environment['ROBOTOPIA_GAME_DIR'];
+  if (override != null && override.trim().isNotEmpty) {
+    return override;
   }
 
-  return p.join(localAppData, 'Tomato Cake', 'launcher', 'Robotopia');
+  if (Platform.isWindows) {
+    final localAppData = Platform.environment['LOCALAPPDATA'];
+    if (localAppData == null || localAppData.isEmpty) {
+      return null;
+    }
+    return p.join(localAppData, 'Tomato Cake', 'launcher', 'Robotopia');
+  }
+
+  if (Platform.isMacOS) {
+    final home = Platform.environment['HOME'];
+    if (home == null || home.isEmpty) {
+      return null;
+    }
+    // The Tomato Cake launcher installs Robotopia.app here; the install root
+    // is the directory containing the bundle.
+    return p.join(
+      home,
+      'Library',
+      'Application Support',
+      'Tomato Cake',
+      'launcher',
+    );
+  }
+
+  // Linux runs the Windows build under Proton/Wine — there is no reliable
+  // prefix heuristic, so the user selects the game folder manually.
+  return null;
 }
 
 String _findRepositoryRoot() {
-  var current = Directory.current.absolute;
-  while (true) {
-    if (File(p.join(current.path, 'RobotopiaModManager.slnx')).existsSync()) {
-      return current.path;
-    }
+  return _findQuantumWorksRoot();
+}
 
+String _findQuantumWorksRoot() {
+  for (final seed in _quantumWorksRootSeeds()) {
+    final root = _walkUpForQuantumWorksRoot(seed);
+    if (root != null) {
+      return root.path;
+    }
+  }
+  return Directory.current.absolute.path;
+}
+
+Iterable<Directory> _quantumWorksRootSeeds() sync* {
+  final configured = Platform.environment['ROBOTOPIA_REPOSITORY_ROOT'];
+  if (configured != null && configured.trim().isNotEmpty) {
+    yield Directory(configured).absolute;
+  }
+
+  final executableDir = File(Platform.resolvedExecutable).absolute.parent;
+  yield executableDir;
+
+  final macResources = _macResourcesRoot(executableDir);
+  if (macResources != null) {
+    yield macResources;
+  }
+
+  yield Directory.current.absolute;
+}
+
+Directory? _macResourcesRoot(Directory executableDir) {
+  final contentsDir = executableDir.parent;
+  if (p.basename(executableDir.path) != 'MacOS' ||
+      p.basename(contentsDir.path) != 'Contents') {
+    return null;
+  }
+  return Directory(
+    p.join(contentsDir.path, 'Resources', 'QuantumWorks'),
+  ).absolute;
+}
+
+Directory? _walkUpForQuantumWorksRoot(Directory seed) {
+  var current = seed.absolute;
+  while (true) {
+    if (_isQuantumWorksRoot(current)) {
+      return current;
+    }
     final parent = current.parent;
     if (parent.path == current.path) {
-      return Directory.current.absolute.path;
+      return null;
     }
     current = parent;
   }
+}
+
+bool _isQuantumWorksRoot(Directory directory) {
+  if (File(p.join(directory.path, 'RobotopiaModManager.slnx')).existsSync()) {
+    return true;
+  }
+  return Directory(p.join(directory.path, 'tools')).existsSync() &&
+      Directory(p.join(directory.path, 'templates')).existsSync() &&
+      Directory(p.join(directory.path, 'dist')).existsSync();
 }

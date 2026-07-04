@@ -4,21 +4,22 @@ extension LocalLauncherRuntimeRepair on LocalLauncherRepository {
   Future<RepairReport> _installOrRepairRuntime(GameInstall install) async {
     final actions = <String>[];
     final issues = <LauncherIssue>[];
-    if (!File(install.executablePath).existsSync()) {
+    final layout = GameLayout.resolve(install.path);
+    if (layout == null || !File(layout.executablePath).existsSync()) {
       return RepairReport(
         actions: actions,
         issues: const [
           LauncherIssue(
             severity: IssueSeverity.error,
             message:
-                'Robotopia.exe was not found. Select the game folder first.',
+                'The Robotopia game was not found. Select the game folder first.',
           ),
         ],
       );
     }
 
     try {
-      _repairBepInEx(install, actions, issues);
+      await _repairBepInEx(layout, actions, issues);
       _repairLoader(install, actions, issues);
     } on FileSystemException catch (error) {
       issues.add(
@@ -32,17 +33,17 @@ extension LocalLauncherRuntimeRepair on LocalLauncherRepository {
     return RepairReport(actions: actions, issues: issues);
   }
 
-  void _repairBepInEx(
-    GameInstall install,
+  Future<void> _repairBepInEx(
+    GameLayout layout,
     List<String> actions,
     List<LauncherIssue> issues,
-  ) {
+  ) async {
     final source = Directory(
       p.join(
         _repositoryRoot.path,
         'third_party',
         'BepInEx',
-        'win_x64_${LocalLauncherRepository._bepInExVersion}',
+        layout.bepInExBundleDirName,
       ),
     );
     if (!source.existsSync()) {
@@ -50,16 +51,39 @@ extension LocalLauncherRuntimeRepair on LocalLauncherRepository {
         LauncherIssue(
           severity: IssueSeverity.error,
           message:
-              'Bundled BepInEx ${LocalLauncherRepository._bepInExVersion} was not found.',
+              'Bundled BepInEx ${LocalLauncherRepository._bepInExVersion} '
+              '(${layout.bepInExBundleDirName}) was not found.',
         ),
       );
       return;
     }
 
-    _copyRuntimeDirectory(source, Directory(install.path));
+    _copyRuntimeDirectory(source, Directory(layout.gameRoot));
+    await _restoreExecutableBits(layout);
     actions.add(
       'Installed or repaired BepInEx ${LocalLauncherRepository._bepInExVersion}.',
     );
+    if (layout.kind == GameInstallLayout.linuxProton) {
+      actions.add(
+        'Reminder: run the game under Proton/Wine with '
+        'WINEDLLOVERRIDES="winhttp=n,b" so the mod loader injects.',
+      );
+    }
+  }
+
+  /// Dart's copySync drops Unix permission bits, so re-mark the runtime
+  /// files that must stay executable (macOS bundle only). No-op on hosts
+  /// without chmod.
+  Future<void> _restoreExecutableBits(GameLayout layout) async {
+    if (layout.executableRuntimeFiles.isEmpty || Platform.isWindows) {
+      return;
+    }
+    for (final relative in layout.executableRuntimeFiles) {
+      final target = p.join(layout.gameRoot, relative);
+      if (File(target).existsSync()) {
+        await Process.run('chmod', ['+x', target]);
+      }
+    }
   }
 
   void _repairLoader(
@@ -81,6 +105,7 @@ extension LocalLauncherRuntimeRepair on LocalLauncherRepository {
       'Robotopia.ModManager.dll',
       'Robotopia.ModManager.Core.dll',
       'Robotopia.Mods.Abstractions.dll',
+      'Robotopia.Mods.UnityUi.dll',
     ];
     if (!loaderDlls.every(
       (dll) => File(p.join(loaderSource.path, dll)).existsSync(),
@@ -121,6 +146,8 @@ extension LocalLauncherRuntimeRepair on LocalLauncherRepository {
       return;
     }
 
-    await Process.start('xdg-open', [path], mode: ProcessStartMode.detached);
+    await Process.start(Platform.isMacOS ? 'open' : 'xdg-open', [
+      path,
+    ], mode: ProcessStartMode.detached);
   }
 }

@@ -8,15 +8,14 @@ void main() {
   group('ModManifest', () {
     test('parses extended clean manifest fields', () {
       final manifest = ModManifest.fromJson({
-        'schemaVersion': 1,
-        'id': 'author.spawn_tools',
-        'name': 'Spawn Tools',
+        'schemaVersion': 2,
+        'name': 'author.spawn_tools',
+        'displayName': 'Spawn Tools',
         'version': '1.2.0',
+        'author': {'name': 'Author Name'},
         'entryAssembly': 'SpawnTools.dll',
         'entryType': 'SpawnTools.Entry',
-        'dependencies': [
-          {'id': 'robotopia.core', 'versionRange': '>=1.0.0 <2.0.0'},
-        ],
+        'vpmDependencies': {'robotopia.core': '>=1.0.0 <2.0.0'},
         'optionalDependencies': [
           {'id': 'robotopia.prompts', 'version': '1.0.0'},
         ],
@@ -25,6 +24,7 @@ void main() {
         ],
         'supportedGameVersionRange': '>=0.8.0 <1.0.0',
         'supportedLoaderVersionRange': '>=0.1.0',
+        'supportedSdkVersionRange': '>=0.1.0 <0.2.0',
         'category': 'Tools',
         'tags': ['sdk', 'assetbundle'],
         'license': 'MIT',
@@ -43,20 +43,60 @@ void main() {
       expect(manifest.hashes['sha256'], 'abc');
       expect(manifest.apiAssemblies.single, 'ref/SpawnTools.Api.dll');
       expect(manifest.legacyFiles.keys.single, 'SpawnToolsLegacy.dll');
+      expect(manifest.toJson()['name'], 'author.spawn_tools');
+      expect(manifest.toJson()['displayName'], 'Spawn Tools');
+    });
+
+    test(r'preserves $schema through a fromJson/toJson round-trip', () {
+      final manifest = ModManifest.fromJson({
+        r'$schema': ModManifest.canonicalSchemaUrl,
+        'schemaVersion': 2,
+        'name': 'author.schema_mod',
+        'displayName': 'Schema Mod',
+        'version': '1.0.0',
+        'author': {'name': 'Author Name'},
+        'entryAssembly': 'SchemaMod.dll',
+        'entryType': 'SchemaMod.Entry',
+      });
+
+      final json = manifest.toJson();
+      expect(json[r'$schema'], ModManifest.canonicalSchemaUrl);
+      expect(json.keys.first, r'$schema');
+
+      final withoutSchema = ModManifest.fromJson({
+        'schemaVersion': 2,
+        'name': 'author.schema_mod',
+        'displayName': 'Schema Mod',
+        'version': '1.0.0',
+        'author': {'name': 'Author Name'},
+        'entryAssembly': 'SchemaMod.dll',
+        'entryType': 'SchemaMod.Entry',
+      });
+      expect(withoutSchema.toJson().containsKey(r'$schema'), isFalse);
     });
 
     test('rejects malformed manifests and unsafe entry paths', () {
       final manifest = ModManifest.fromJson({
-        'schemaVersion': 2,
-        'id': '../bad',
-        'name': '',
+        'schemaVersion': 1,
+        'name': '../bad',
+        'displayName': '',
         'version': 'nope',
+        'author': {'name': ''},
         'entryAssembly': '../Bad.dll',
         'entryType': '',
       });
 
       final issues = manifest.validate();
-      expect(issues.where((issue) => issue.isBlocking), hasLength(6));
+      expect(issues.where((issue) => issue.isBlocking), hasLength(7));
+    });
+
+    test('warns but does not block on unknown permissions', () {
+      final manifest = _manifest('permission.mod', permissions: ['new-scope']);
+
+      final issues = manifest.validate();
+
+      expect(issues.where((issue) => issue.isBlocking), isEmpty);
+      expect(issues.single.message, contains('unknown value new-scope'));
     });
 
     test('warns but does not block on non-SPDX-looking licenses', () {
@@ -182,6 +222,17 @@ void main() {
         'creator.mod',
       ]);
     });
+
+    test('blocks remote package actions without SHA-256', () {
+      final plan = const DependencyPlanner().previewInstall(
+        _manifest('remote.mod'),
+        const [],
+        packageUrl: 'https://mods.example.com/remote.robotopiamod',
+      );
+
+      expect(plan.hasBlockingIssues, isTrue);
+      expect(plan.issues.single.message, contains('SHA-256'));
+    });
   });
 
   group('RegistryMod', () {
@@ -198,6 +249,33 @@ void main() {
       expect(mod.isInstalled, isTrue);
       expect(mod.updateAvailable, isTrue);
       expect(current.updateAvailable, isFalse);
+    });
+  });
+
+  group('LauncherUpdateSettings', () {
+    test('round-trips release channel settings', () {
+      const settings = LauncherUpdateSettings(
+        enabled: true,
+        checkAutomatically: false,
+        channel: LauncherUpdateChannel.beta,
+        appArchiveUrl: 'https://updates.example.com/app-archive.json',
+      );
+
+      final restored = LauncherUpdateSettings.fromJson(settings.toJson());
+
+      expect(restored.enabled, isTrue);
+      expect(restored.checkAutomatically, isFalse);
+      expect(restored.channel, LauncherUpdateChannel.beta);
+      expect(restored.appArchiveUrl, settings.appArchiveUrl);
+    });
+
+    test('treats stable as release channel for older settings', () {
+      final settings = LauncherUpdateSettings.fromJson(const {
+        'channel': 'stable',
+      });
+
+      expect(settings.channel, LauncherUpdateChannel.release);
+      expect(settings.toJson()['channel'], 'release');
     });
   });
 
@@ -389,19 +467,22 @@ ModManifest _manifest(
   List<ModConflict> conflicts = const [],
   List<String> loadAfter = const [],
   List<String> apiAssemblies = const [],
+  List<String> permissions = const [],
   String license = '',
 }) {
   return ModManifest(
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: id,
     name: id,
     version: version,
+    author: const ModAuthor(name: 'QuantumWorks'),
     entryAssembly: '$id.dll',
     entryType: '$id.Entry',
     dependencies: dependencies,
     conflicts: conflicts,
     loadAfter: loadAfter,
     apiAssemblies: apiAssemblies,
+    permissions: permissions,
     license: license,
   );
 }

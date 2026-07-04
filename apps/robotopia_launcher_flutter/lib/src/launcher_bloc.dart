@@ -26,6 +26,7 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     on<ModSelected>(_onModSelected);
     on<ModSearchChanged>(_onModSearchChanged);
     on<ProfileSelected>(_onProfileSelected);
+    on<ProfileLaunchRequested>(_onProfileLaunchRequested);
     on<ProfileCreated>(_onProfileCreated);
     on<SelectedProfileDuplicated>(_onSelectedProfileDuplicated);
     on<SelectedProfileDeleted>(_onSelectedProfileDeleted);
@@ -50,6 +51,7 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     on<PackageSourceEnabledChanged>(_onPackageSourceEnabledChanged);
     on<PackageSourceRemoved>(_onPackageSourceRemoved);
     on<PackageSourcesRefreshed>(_onLoad);
+    on<LauncherUpdateSettingsChanged>(_onLauncherUpdateSettingsChanged);
     on<GameFolderOpened>(_onGameFolderOpened);
     on<DataFolderOpened>(_onDataFolderOpened);
     on<DeveloperWorkspaceRefreshed>(_onDeveloperWorkspaceRefreshed);
@@ -152,7 +154,7 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     await _repository.setDeveloperMode(event.enabled);
     // Don't strand the user on a now-hidden tab.
     final section = !event.enabled && state.section == LauncherSection.developer
-        ? LauncherSection.library
+        ? LauncherSection.home
         : state.section;
     emit(
       state.copyWith(
@@ -168,6 +170,25 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
         state.developerEnvironment == null) {
       add(const DeveloperEnvironmentChecked());
     }
+  }
+
+  Future<void> _onLauncherUpdateSettingsChanged(
+    LauncherUpdateSettingsChanged event,
+    Emitter<LauncherState> emit,
+  ) async {
+    final settings = state.launcherUpdates.copyWith(
+      enabled: event.enabled,
+      checkAutomatically: event.checkAutomatically,
+      channel: event.channel,
+    );
+    await _repository.saveLauncherUpdateSettings(settings);
+    emit(
+      state.copyWith(
+        launcherUpdates: settings,
+        statusMessage:
+            'Launcher updates set to ${settings.channel.name} channel.',
+      ),
+    );
   }
 
   void _onModSelected(ModSelected event, Emitter<LauncherState> emit) {
@@ -410,6 +431,7 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
       legacyMods: snapshot.legacyMods,
       recentLog: snapshot.recentLog,
       resolution: _dependencyPlanner.resolveInstalled(snapshot.installedMods),
+      launcherUpdates: snapshot.launcherUpdates,
       selectedModId: selected,
       clearSelectedMod: selected == null,
       developerMode: snapshot.developerMode,

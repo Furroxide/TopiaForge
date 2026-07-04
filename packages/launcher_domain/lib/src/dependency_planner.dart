@@ -139,6 +139,7 @@ class DependencyPlanner {
     List<RegistryMod> availableMods = const [],
     String? gameVersion,
     String? loaderVersion,
+    String? sdkVersion,
   }) {
     final issues = [...candidate.validate()];
     final installed = {
@@ -170,6 +171,19 @@ class DependencyPlanner {
           subjectId: candidate.id,
           message:
               '${candidate.name} supports loader ${candidate.loaderVersionRange}, not $loaderVersion.',
+        ),
+      );
+    }
+
+    if (sdkVersion != null &&
+        !candidate.sdkVersionRange.isAny &&
+        !candidate.sdkVersionRange.allows(sdkVersion)) {
+      issues.add(
+        LauncherIssue(
+          severity: IssueSeverity.error,
+          subjectId: candidate.id,
+          message:
+              '${candidate.name} supports SDK ${candidate.sdkVersionRange}, not $sdkVersion.',
         ),
       );
     }

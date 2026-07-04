@@ -6,9 +6,11 @@ import 'package:crypto/crypto.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 
+part 'local_launcher_repository/game_layout.dart';
 part 'local_launcher_repository/game_runtime_helpers.dart';
 part 'local_launcher_repository/legacy_diagnostics_helpers.dart';
 part 'local_launcher_repository/manager_state_helpers.dart';
+part 'local_launcher_repository/package_installation_helpers.dart';
 part 'local_launcher_repository/package_helpers.dart';
 part 'local_launcher_repository/path_helpers.dart';
 part 'local_launcher_repository/process_helpers.dart';
@@ -32,7 +34,8 @@ class LocalLauncherRepository implements LauncherRepository {
   final DependencyPlanner _dependencyPlanner;
 
   static const _bepInExVersion = '5.4.23.5';
-  static const _loaderVersion = '0.1.0';
+  static const _loaderVersion = RobotopiaRuntimeVersions.loaderVersion;
+  static const _sdkVersion = RobotopiaRuntimeVersions.sdkVersion;
   @override
   String get dataRoot => _dataRoot.path;
 
@@ -59,10 +62,8 @@ class LocalLauncherRepository implements LauncherRepository {
     final installedMods = gameInstall == null
         ? <InstalledMod>[]
         : await _loadInstalledMods(gameInstall);
-
     final packageSources = await _loadPackageSources();
     final registryMods = await _loadRegistryMods(installedMods, packageSources);
-
     return LauncherSnapshot(
       gameInstall: gameInstall,
       profiles: profiles,
@@ -79,6 +80,9 @@ class LocalLauncherRepository implements LauncherRepository {
       recentLog: gameInstall == null
           ? await _readLauncherLog()
           : await readRecentLog(gameInstall),
+      launcherUpdates: LauncherUpdateSettings.fromJson(
+        _objectMap(settings['launcherUpdates']),
+      ),
       developerMode: (settings['developerMode'] as bool?) ?? false,
     );
   }
@@ -91,13 +95,20 @@ class LocalLauncherRepository implements LauncherRepository {
   }
 
   @override
+  Future<void> saveLauncherUpdateSettings(
+    LauncherUpdateSettings settings,
+  ) async {
+    final persisted = await _loadSettings();
+    persisted['launcherUpdates'] = settings.toJson();
+    await _saveSettings(persisted);
+  }
+
+  @override
   Future<GameInstall?> detectKnownInstall() async {
     final knownPath = _knownGamePath ?? _defaultKnownGamePath();
-    if (knownPath == null ||
-        !File(p.join(knownPath, 'Robotopia.exe')).existsSync()) {
+    if (knownPath == null || GameLayout.resolve(knownPath) == null) {
       return null;
     }
-
     return _validateGameDirectory(knownPath);
   }
 
@@ -107,7 +118,6 @@ class LocalLauncherRepository implements LauncherRepository {
     if (install.issues.any((issue) => issue.isBlocking)) {
       throw StateError(install.issues.map((issue) => issue.message).join(' '));
     }
-
     final settings = await _loadSettings();
     settings['gamePath'] = install.path;
     await _saveSettings(settings);
@@ -117,8 +127,15 @@ class LocalLauncherRepository implements LauncherRepository {
 
   @override
   Future<GameCompatStatus> checkGameCompat(GameInstall install) async {
-    // force: true bypasses the SHA cache so the "Recheck Compatibility" action always re-runs the extractor.
-    return _checkGameCompat(Directory(install.path), force: true);
+    final layout = GameLayout.resolve(install.path);
+    if (layout == null) {
+      return GameCompatStatus.skipped();
+    }
+    return _checkGameCompat(
+      Directory(layout.gameRoot),
+      Directory(layout.managedDirPath),
+      force: true,
+    );
   }
 
   @override
@@ -133,22 +150,12 @@ class LocalLauncherRepository implements LauncherRepository {
     String sourceId = '',
     String sourceName = '',
   }) async {
-    final package = await _readPackage(
+    return _previewPackageInstallPlan(
       packagePath,
+      install,
       expectedSha256: expectedSha256,
-    );
-    final installed = await _loadInstalledMods(install);
-    final sources = await _loadPackageSources();
-    final registryMods = await _loadRegistryMods(installed, sources);
-    return _dependencyPlanner.previewInstall(
-      package.manifest,
-      installed,
-      packageSha256: package.sha256Hex,
-      packageUrl: package.reference,
       sourceId: sourceId,
       sourceName: sourceName,
-      availableMods: registryMods,
-      loaderVersion: _loaderVersion,
     );
   }
 
@@ -157,50 +164,7 @@ class LocalLauncherRepository implements LauncherRepository {
     String packagePath,
     GameInstall install, {
     String expectedSha256 = '',
-  }) async {
-    final package = await _readPackage(
-      packagePath,
-      expectedSha256: expectedSha256,
-    );
-    final installed = await _loadInstalledMods(install);
-    final sources = await _loadPackageSources();
-    final registryMods = await _loadRegistryMods(installed, sources);
-    final plan = _dependencyPlanner.previewInstall(
-      package.manifest,
-      installed,
-      packageSha256: package.sha256Hex,
-      packageUrl: package.reference,
-      availableMods: registryMods,
-      loaderVersion: _loaderVersion,
-    );
-    final blocking = plan.issues.where((issue) => issue.isBlocking).toList();
-    if (blocking.isNotEmpty) {
-      throw StateError(blocking.map((issue) => issue.message).join(' '));
-    }
-
-    final state = await _readManagerState(install);
-    for (final action in plan.installActions) {
-      final actionPackage = action.root
-          ? package
-          : await _readPackage(
-              action.packageUrl,
-              expectedSha256: action.packageSha256,
-            );
-      _extractPackageToInstall(actionPackage, install);
-      _upsertState(
-        state,
-        actionPackage.manifest,
-        enabled: true,
-        restartRequired: true,
-        preserveExistingEnabled: true,
-      );
-    }
-    await _saveManagerState(install, state);
-    await _appendLauncherLog(
-      'Installed ${plan.installActions.length} package(s) for ${package.manifest.id} from $packagePath.',
-    );
-    return _loadInstalledMods(install);
-  }
+  }) => _installPackage(packagePath, install, expectedSha256: expectedSha256);
 
   @override
   Future<List<PackageSource>> savePackageSources(
@@ -363,13 +327,6 @@ class LocalLauncherRepository implements LauncherRepository {
     GameInstall install,
     LauncherProfile profile,
   ) async {
-    if (!Platform.isWindows) {
-      return const LaunchResult(
-        started: false,
-        message: 'Restart is only supported by the Windows launcher.',
-      );
-    }
-
     await _writeWorldSelection(install, profile.worldSelection);
     final stopped = await _stopGameIfRunning(install);
     final message = switch ((stopped, profile.launchSettings.safeMode)) {
@@ -392,9 +349,11 @@ class LocalLauncherRepository implements LauncherRepository {
     GameInstall install,
     UgcLiveSyncSettings settings,
   ) async {
-    final file = File(
-      p.join(_managerConfig(install).path, 'robotopia.ugc.livesync.json'),
+    final path = p.join(
+      _managerConfig(install).path,
+      'robotopia.ugc.livesync.json',
     );
+    final file = File(path);
     await file.create(recursive: true);
     await file.writeAsString(_prettyJson(settings.toRuntimeConfig()));
     return file.path;
@@ -404,12 +363,11 @@ class LocalLauncherRepository implements LauncherRepository {
   Future<UgcLiveSyncStatusSnapshot?> readUgcLiveSyncStatus(
     GameInstall install,
   ) async {
-    final file = File(
-      p.join(
-        _managerConfig(install).path,
-        'robotopia.ugc.livesync.status.json',
-      ),
+    final path = p.join(
+      _managerConfig(install).path,
+      'robotopia.ugc.livesync.status.json',
     );
+    final file = File(path);
     if (!file.existsSync()) {
       return null;
     }
@@ -419,7 +377,7 @@ class LocalLauncherRepository implements LauncherRepository {
         return UgcLiveSyncStatusSnapshot.fromJson(decoded);
       }
     } on Object {
-      // A half-written or malformed status file is non-fatal; the cockpit just shows "unknown".
+      /* Ignore malformed or half-written status files. */
     }
     return null;
   }
@@ -459,7 +417,7 @@ class LocalLauncherRepository implements LauncherRepository {
       }
       var text = utf8.decode(bytes, allowMalformed: true);
       if (text.isNotEmpty && text.codeUnitAt(0) == 0xfeff) {
-        text = text.substring(1); // strip BOM
+        text = text.substring(1);
       }
       final decoded = jsonDecode(text);
       if (decoded is! Map<String, Object?>) {

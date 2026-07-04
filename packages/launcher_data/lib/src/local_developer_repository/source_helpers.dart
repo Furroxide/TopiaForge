@@ -208,7 +208,10 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
             manifest: ModManifest.fromJson(manifestSource),
             downloadUrl: _resolvePackageUrl(rawUrl, baseUri),
             packageSha256: sha,
-            changelog: (versionJson['changelog'] as String?) ?? '',
+            changelog:
+                (versionJson['changelog'] as String?) ??
+                (versionJson['changelogUrl'] as String?) ??
+                '',
             sourceId: source.id,
             sourceName: source.name,
           ),
@@ -226,29 +229,16 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
   ) {
     return _normalizeManifestAliases({
       ...versionJson,
-      'schemaVersion': versionJson['schemaVersion'] ?? 1,
-      'id': versionJson['id'] ?? packageId,
-      'name':
-          versionJson['displayName'] ??
-          versionJson['name'] ??
-          packageJson['displayName'] ??
-          packageJson['name'] ??
-          packageId,
+      'schemaVersion': versionJson['schemaVersion'] ?? 2,
+      'name': versionJson['name'] ?? packageId,
+      'displayName':
+          versionJson['displayName'] ?? packageJson['displayName'] ?? packageId,
       'version': versionJson['version'] ?? version,
     });
   }
 
   Map<String, Object?> _normalizeManifestAliases(Map<String, Object?> json) {
-    final vpmDependencies = _objectMap(json['vpmDependencies']);
-    if (vpmDependencies.isEmpty) {
-      return json;
-    }
-    final dependencies = [
-      ...(_objectList(json['dependencies'])),
-      for (final entry in vpmDependencies.entries)
-        {'id': entry.key, 'versionRange': entry.value.toString()},
-    ];
-    return {...json, 'dependencies': dependencies};
+    return json;
   }
 
   Future<DeveloperLock> _restoreLockedPackages(
@@ -423,17 +413,4 @@ Map<String, Object?> _objectMap(Object? value) {
     return const {};
   }
   return value.map((key, mapValue) => MapEntry(key.toString(), mapValue));
-}
-
-List<Map<String, Object?>> _objectList(Object? value) {
-  if (value is! List) {
-    return const [];
-  }
-  return value
-      .whereType<Map>()
-      .map(
-        (item) =>
-            item.map((key, mapValue) => MapEntry(key.toString(), mapValue)),
-      )
-      .toList();
 }

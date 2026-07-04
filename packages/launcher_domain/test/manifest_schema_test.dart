@@ -1,0 +1,62 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:json_schema/json_schema.dart';
+import 'package:launcher_domain/launcher_domain.dart';
+import 'package:test/test.dart';
+
+void main() {
+  test('checked-in manifests satisfy schema v2', () {
+    final root = _repoRoot();
+    final schemaJson =
+        jsonDecode(
+              File(
+                _join(root.path, ['schemas', 'robotopia.mod.schema.json']),
+              ).readAsStringSync(),
+            )
+            as Map<String, Object?>;
+    final schema = JsonSchema.create(schemaJson);
+    final manifestFiles = [
+      ...Directory(_join(root.path, ['mods']))
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((file) => file.path.endsWith('robotopia.mod.json')),
+    ];
+
+    expect(manifestFiles, isNotEmpty);
+    for (final file in manifestFiles) {
+      final json = jsonDecode(file.readAsStringSync()) as Map<String, Object?>;
+      final result = schema.validate(json);
+      expect(
+        result.isValid,
+        isTrue,
+        reason: '${file.path}\n${result.errors.join('\n')}',
+      );
+      final blocking = ModManifest.fromJson(
+        json,
+      ).validate().where((issue) => issue.isBlocking);
+      expect(blocking, isEmpty, reason: file.path);
+    }
+  });
+}
+
+Directory _repoRoot() {
+  var directory = Directory.current.absolute;
+  while (true) {
+    if (File(
+      _join(directory.path, ['RobotopiaModManager.slnx']),
+    ).existsSync()) {
+      return directory;
+    }
+    final parent = directory.parent;
+    if (parent.path == directory.path) {
+      throw StateError('Could not locate RobotopiaModManager.slnx.');
+    }
+    directory = parent;
+  }
+}
+
+String _join(String root, List<String> parts) {
+  final separator = Platform.pathSeparator;
+  return [root, ...parts].join(separator);
+}

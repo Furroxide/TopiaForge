@@ -112,22 +112,7 @@ extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
     _copyDirectory(templateDir, root);
 
     // Install the UGC companion package (the same one createModProject scaffolds) into the project's Packages/.
-    final companion = Directory(
-      p.join(
-        _repositoryRoot.path,
-        'templates',
-        'Robotopia.ModTemplate',
-        'unity-companion',
-        'Packages',
-        'com.robotopia.ugc-companion',
-      ),
-    );
-    if (companion.existsSync()) {
-      _copyDirectory(
-        companion,
-        Directory(p.join(root.path, 'Packages', 'com.robotopia.ugc-companion')),
-      );
-    }
+    await _ensureUgcCompanionPackage(root.path);
 
     // Point the embedded resolver at the local QuantumWorks listing so a cloned copy self-heals offline.
     File(

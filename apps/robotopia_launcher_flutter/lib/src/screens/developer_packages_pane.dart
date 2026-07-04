@@ -83,7 +83,7 @@ class _PackagesPane extends StatelessWidget {
           if (addable.isEmpty)
             const Text(
               'No additional packages available. Subscribe to a repository below, or run '
-              'tools/pack-unity-packages.ps1 to build the local listing.',
+              'robotopia unity pack-packages to build the local listing.',
               style: TextStyle(
                 color: QuantumWorksPalette.mutedText,
                 fontSize: 12,

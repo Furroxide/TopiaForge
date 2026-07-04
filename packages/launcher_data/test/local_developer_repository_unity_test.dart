@@ -56,7 +56,6 @@ void main() {
         p.join(
           repoRoot.path,
           'templates',
-          'Robotopia.ModTemplate',
           'unity-companion',
           'Packages',
           'com.robotopia.ugc-companion',

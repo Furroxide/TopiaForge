@@ -107,10 +107,11 @@ ModManifest _manifest(
   List<String> apiAssemblies = const [],
 }) {
   return ModManifest(
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: id,
     name: id,
     version: version,
+    author: const ModAuthor(name: 'QuantumWorks'),
     entryAssembly: '$id.dll',
     entryType: '$id.Entry',
     dependencies: dependencies,

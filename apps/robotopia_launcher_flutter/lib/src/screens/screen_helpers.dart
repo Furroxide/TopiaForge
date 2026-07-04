@@ -247,6 +247,62 @@ Future<void> _choosePackage(BuildContext context) async {
   }
 }
 
+Future<void> _checkLauncherUpdates(
+  BuildContext context,
+  DesktopUpdaterController controller,
+  LauncherUpdateChannel channel,
+) async {
+  final result = await controller.checkForUpdates();
+  if (!context.mounted) {
+    return;
+  }
+
+  final (title, message) = switch (result) {
+    ManualUpdateCheckUpToDate() => (
+      'Launcher is up to date',
+      'No newer launcher build is available on the ${_updateChannelLabel(channel)} channel.',
+    ),
+    ManualUpdateCheckAvailable(:final descriptor) => (
+      'Launcher update available',
+      '${descriptor.appName} ${descriptor.version} is ready to download.',
+    ),
+    ManualUpdateCheckFreshInstallRequired(:final descriptor) => (
+      'Fresh install required',
+      '${descriptor.appName} ${descriptor.version} is available, but this update must be installed from a fresh download.',
+    ),
+    ManualUpdateCheckBlockedBySupportPolicy(:final descriptor) => (
+      'Launcher update required',
+      '${descriptor.appName} ${descriptor.version} is required before this launcher version can continue receiving support.',
+    ),
+    ManualUpdateCheckFailed(:final error) => (
+      'Could not check for updates',
+      error.toString(),
+    ),
+  };
+
+  await showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(title),
+      content: Text(message),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('OK'),
+        ),
+      ],
+    ),
+  );
+}
+
+String _updateChannelLabel(LauncherUpdateChannel channel) {
+  return switch (channel) {
+    LauncherUpdateChannel.release => 'Release',
+    LauncherUpdateChannel.beta => 'Beta',
+    LauncherUpdateChannel.nightly => 'Nightly',
+  };
+}
+
 Future<void> _exportProfile(BuildContext context) async {
   final profile = context.read<LauncherBloc>().state.selectedProfile;
   if (profile == null) {

@@ -1,3 +1,5 @@
+import 'package:launcher_domain/launcher_domain.dart';
+
 import 'launcher_section.dart';
 
 sealed class LauncherEvent {
@@ -32,6 +34,15 @@ class ModSearchChanged extends LauncherEvent {
 
 class ProfileSelected extends LauncherEvent {
   const ProfileSelected(this.profileId);
+
+  final String profileId;
+}
+
+/// Selects [profileId] and launches the game in one sequential handler.
+/// Firing ProfileSelected + GameLaunchRequested back-to-back would race: the
+/// launch handler can read the old selectedProfile before the selection emits.
+class ProfileLaunchRequested extends LauncherEvent {
+  const ProfileLaunchRequested(this.profileId);
 
   final String profileId;
 }
@@ -169,6 +180,18 @@ class PackageSourceRemoved extends LauncherEvent {
 
 class PackageSourcesRefreshed extends LauncherEvent {
   const PackageSourcesRefreshed();
+}
+
+class LauncherUpdateSettingsChanged extends LauncherEvent {
+  const LauncherUpdateSettingsChanged({
+    this.enabled,
+    this.checkAutomatically,
+    this.channel,
+  });
+
+  final bool? enabled;
+  final bool? checkAutomatically;
+  final LauncherUpdateChannel? channel;
 }
 
 class GameFolderOpened extends LauncherEvent {

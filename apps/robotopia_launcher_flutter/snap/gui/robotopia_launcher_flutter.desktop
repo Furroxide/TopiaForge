@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=QuantumWorks
+Comment=Desktop launcher and mod manager for Robotopia
+Exec=robotopia_launcher_flutter
+Icon=${SNAP}/meta/gui/robotopia_launcher_flutter.png
+Terminal=false
+Type=Application
+Categories=Entertainment;

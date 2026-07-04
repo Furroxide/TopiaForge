@@ -9,4 +9,6 @@ part 'models/json_helpers.dart';
 part 'models/manifest_models.dart';
 part 'models/source_models.dart';
 part 'models/profile_models.dart';
+part 'models/world_authoring_models.dart';
 part 'models/world_models.dart';
+part 'models/update_models.dart';

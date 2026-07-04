@@ -7,6 +7,7 @@ import 'launcher_bloc.dart';
 import 'launcher_event.dart';
 import 'launcher_section.dart';
 import 'launcher_state.dart';
+import 'launcher_update_controller.dart';
 import 'screens.dart';
 
 class RobotopiaLauncherApp extends StatelessWidget {
@@ -47,35 +48,39 @@ class LauncherShell extends StatelessWidget {
       builder: (context, state) {
         final visibleSections = state.visibleSections;
         final selectedIndex = visibleSections.indexOf(state.section);
-        return Scaffold(
-          body: QuantumWorksBackdrop(
-            child: Row(
-              children: [
-                NavigationRail(
-                  minWidth: 86,
-                  labelType: NavigationRailLabelType.all,
-                  selectedIndex: selectedIndex < 0 ? null : selectedIndex,
-                  onDestinationSelected: (index) => context
-                      .read<LauncherBloc>()
-                      .add(LauncherSectionSelected(visibleSections[index])),
-                  destinations: [
-                    for (final section in visibleSections)
-                      _destinationFor(section),
-                  ],
-                ),
-                const VerticalDivider(width: 1),
-                Expanded(
-                  child: Column(
-                    children: [
-                      _TopBar(state: state),
-                      if (state.isBusy)
-                        const LinearProgressIndicator(minHeight: 3),
-                      Expanded(child: LauncherBody(state: state)),
-                      _StatusBar(state: state),
+        return LauncherUpdateControllerHost(
+          settings: state.launcherUpdates,
+          child: Scaffold(
+            body: QuantumWorksBackdrop(
+              child: Row(
+                children: [
+                  NavigationRail(
+                    minWidth: 86,
+                    labelType: NavigationRailLabelType.all,
+                    selectedIndex: selectedIndex < 0 ? null : selectedIndex,
+                    onDestinationSelected: (index) => context
+                        .read<LauncherBloc>()
+                        .add(LauncherSectionSelected(visibleSections[index])),
+                    destinations: [
+                      for (final section in visibleSections)
+                        _destinationFor(section),
                     ],
                   ),
-                ),
-              ],
+                  const VerticalDivider(width: 1),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        _TopBar(state: state),
+                        if (state.isBusy)
+                          const LinearProgressIndicator(minHeight: 3),
+                        const LauncherUpdateBanner(),
+                        Expanded(child: LauncherBody(state: state)),
+                        _StatusBar(state: state),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -86,10 +91,15 @@ class LauncherShell extends StatelessWidget {
 
 NavigationRailDestination _destinationFor(LauncherSection section) {
   return switch (section) {
-    LauncherSection.library => const NavigationRailDestination(
-      icon: Icon(Icons.play_arrow_outlined),
-      selectedIcon: Icon(Icons.play_arrow),
-      label: Text('Library'),
+    LauncherSection.home => const NavigationRailDestination(
+      icon: Icon(Icons.rocket_launch_outlined),
+      selectedIcon: Icon(Icons.rocket_launch),
+      label: Text('Home'),
+    ),
+    LauncherSection.setup => const NavigationRailDestination(
+      icon: Icon(Icons.tune_outlined),
+      selectedIcon: Icon(Icons.tune),
+      label: Text('Setup'),
     ),
     LauncherSection.mods => const NavigationRailDestination(
       icon: Icon(Icons.extension_outlined),

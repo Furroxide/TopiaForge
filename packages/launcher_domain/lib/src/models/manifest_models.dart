@@ -1,5 +1,10 @@
 part of '../models.dart';
 
+class RobotopiaRuntimeVersions {
+  static const loaderVersion = '0.2.0';
+  static const sdkVersion = '0.1.0';
+}
+
 class ModDependency {
   const ModDependency({
     required this.id,
@@ -25,6 +30,35 @@ class ModDependency {
     'id': id,
     'versionRange': versionRange.toString(),
     if (optional) 'optional': true,
+  };
+}
+
+class ModAuthor {
+  const ModAuthor({this.name = '', this.email = '', this.url = ''});
+
+  final String name;
+  final String email;
+  final String url;
+
+  bool get isEmpty =>
+      name.trim().isEmpty && email.trim().isEmpty && url.trim().isEmpty;
+
+  factory ModAuthor.fromJson(Object? value) {
+    if (value is String) {
+      return ModAuthor(name: value);
+    }
+    final json = _objectMap(value);
+    return ModAuthor(
+      name: (json['name'] as String?) ?? '',
+      email: (json['email'] as String?) ?? '',
+      url: (json['url'] as String?) ?? '',
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'name': name,
+    if (email.isNotEmpty) 'email': email,
+    if (url.isNotEmpty) 'url': url,
   };
 }
 
@@ -62,7 +96,8 @@ class ModManifest {
     required this.id,
     required this.name,
     required this.version,
-    this.author = '',
+    this.schemaUrl = '',
+    this.author = const ModAuthor(),
     this.description = '',
     this.entryAssembly = '',
     this.entryType = '',
@@ -72,6 +107,7 @@ class ModManifest {
     this.loadAfter = const [],
     this.gameVersionRange = const VersionRange.any(),
     this.loaderVersionRange = const VersionRange.any(),
+    this.sdkVersionRange = const VersionRange.any(),
     this.category = '',
     this.tags = const [],
     this.icon = '',
@@ -88,11 +124,17 @@ class ModManifest {
     this.legacyPackages = const [],
   });
 
+  /// Canonical URL for the manifest JSON schema, used by editors for
+  /// autocomplete and validation of `robotopia.mod.json`.
+  static const canonicalSchemaUrl =
+      'https://raw.githubusercontent.com/furroxide/quantum-works/main/schemas/robotopia.mod.schema.json';
+
   final int schemaVersion;
+  final String schemaUrl;
   final String id;
   final String name;
   final String version;
-  final String author;
+  final ModAuthor author;
   final String description;
   final String entryAssembly;
   final String entryType;
@@ -102,6 +144,7 @@ class ModManifest {
   final List<String> loadAfter;
   final VersionRange gameVersionRange;
   final VersionRange loaderVersionRange;
+  final VersionRange sdkVersionRange;
   final String category;
   final List<String> tags;
   final String icon;
@@ -123,7 +166,10 @@ class ModManifest {
   ];
 
   factory ModManifest.fromJson(Map<String, Object?> json) {
-    final parsedDependencies = _dependencyList(json['dependencies']);
+    final parsedDependencies = [
+      ..._vpmDependencyList(json['vpmDependencies']),
+      ..._dependencyList(json['dependencies']),
+    ];
     final requiredDependencies = parsedDependencies
         .where((dependency) => !dependency.optional)
         .toList(growable: false);
@@ -134,10 +180,14 @@ class ModManifest {
 
     return ModManifest(
       schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 0,
-      id: (json['id'] as String?) ?? '',
-      name: (json['name'] as String?) ?? '',
+      schemaUrl: (json[r'$schema'] as String?) ?? '',
+      id: (json['name'] as String?) ?? (json['id'] as String?) ?? '',
+      name:
+          (json['displayName'] as String?) ??
+          (json['title'] as String?) ??
+          (json['id'] == null ? '' : (json['name'] as String?) ?? ''),
       version: (json['version'] as String?) ?? '',
-      author: (json['author'] as String?) ?? '',
+      author: ModAuthor.fromJson(json['author']),
       description: (json['description'] as String?) ?? '',
       entryAssembly: (json['entryAssembly'] as String?) ?? '',
       entryType: (json['entryType'] as String?) ?? '',
@@ -153,6 +203,10 @@ class ModManifest {
       loaderVersionRange: VersionRange.parse(
         (json['supportedLoaderVersionRange'] as String?) ??
             (json['loaderVersionRange'] as String?),
+      ),
+      sdkVersionRange: VersionRange.parse(
+        (json['supportedSdkVersionRange'] as String?) ??
+            (json['sdkVersionRange'] as String?),
       ),
       category: (json['category'] as String?) ?? '',
       tags: _stringList(json['tags']),
@@ -174,16 +228,19 @@ class ModManifest {
   }
 
   Map<String, Object?> toJson() => {
+    if (schemaUrl.isNotEmpty) r'$schema': schemaUrl,
     'schemaVersion': schemaVersion,
-    'id': id,
-    'name': name,
+    'name': id,
+    'displayName': name,
     'version': version,
-    if (author.isNotEmpty) 'author': author,
+    if (!author.isEmpty) 'author': author.toJson(),
     if (description.isNotEmpty) 'description': description,
     if (entryAssembly.isNotEmpty) 'entryAssembly': entryAssembly,
     if (entryType.isNotEmpty) 'entryType': entryType,
     if (dependencies.isNotEmpty)
-      'dependencies': dependencies.map((item) => item.toJson()).toList(),
+      'vpmDependencies': {
+        for (final item in dependencies) item.id: item.versionRange.toString(),
+      },
     if (optionalDependencies.isNotEmpty)
       'optionalDependencies': optionalDependencies
           .map((item) => item.toJson())
@@ -195,6 +252,8 @@ class ModManifest {
       'supportedGameVersionRange': gameVersionRange.toString(),
     if (!loaderVersionRange.isAny)
       'supportedLoaderVersionRange': loaderVersionRange.toString(),
+    if (!sdkVersionRange.isAny)
+      'supportedSdkVersionRange': sdkVersionRange.toString(),
     if (category.isNotEmpty) 'category': category,
     if (tags.isNotEmpty) 'tags': tags,
     if (icon.isNotEmpty) 'icon': icon,
@@ -220,16 +279,17 @@ class ModManifest {
     _validateConflicts(issues);
     _validateApiAssemblies(issues);
     _validateMigrationHints(issues);
+    _validatePermissions(issues);
     _validateLicense(issues);
     return issues;
   }
 
   void _validateRequiredFields(List<LauncherIssue> issues, RegExp idPattern) {
-    if (schemaVersion != 1) {
+    if (schemaVersion != 2) {
       issues.add(
         const LauncherIssue(
           severity: IssueSeverity.error,
-          message: 'schemaVersion must be 1.',
+          message: 'schemaVersion must be 2.',
         ),
       );
     }
@@ -238,7 +298,7 @@ class ModManifest {
         const LauncherIssue(
           severity: IssueSeverity.error,
           message:
-              'id must be 2-64 characters and use letters, numbers, underscore, dot, or dash.',
+              'name must be 2-64 characters and use letters, numbers, underscore, dot, or dash.',
         ),
       );
     }
@@ -246,7 +306,15 @@ class ModManifest {
       issues.add(
         const LauncherIssue(
           severity: IssueSeverity.error,
-          message: 'name is required.',
+          message: 'displayName is required.',
+        ),
+      );
+    }
+    if (author.name.trim().isEmpty) {
+      issues.add(
+        const LauncherIssue(
+          severity: IssueSeverity.error,
+          message: 'author.name is required.',
         ),
       );
     }
@@ -370,6 +438,59 @@ class ModManifest {
       );
     }
   }
+
+  void _validatePermissions(List<LauncherIssue> issues) {
+    for (final permission in permissions) {
+      if (!_knownPermissions.contains(permission)) {
+        issues.add(
+          LauncherIssue(
+            severity: IssueSeverity.warning,
+            subjectId: id,
+            message: 'permissions contains unknown value $permission.',
+          ),
+        );
+      }
+    }
+  }
+}
+
+const _knownPermissions = {
+  'ai',
+  'asset-bundles',
+  'filesystem',
+  'filesystem-watch',
+  'harmony-patch',
+  'hud',
+  'input',
+  'navigation',
+  'network',
+  'particles',
+  'physics',
+  'physics-settings',
+  'player-control',
+  'prompt-overrides',
+  'quality-settings',
+  'render-settings',
+  'robot-spawning',
+  'scene-management',
+  'time',
+  'ugc-livesync',
+  'world-service',
+};
+
+List<ModDependency> _vpmDependencyList(Object? value) {
+  if (value is! Map) {
+    return const [];
+  }
+
+  return value.entries
+      .map(
+        (entry) => ModDependency(
+          id: entry.key.toString(),
+          versionRange: VersionRange.parse(entry.value?.toString()),
+        ),
+      )
+      .toList(growable: false);
 }
 
 List<GamemodeDefinition> _gamemodeList(Object? value) {

@@ -1,5 +1,6 @@
 enum LauncherSection {
-  library,
+  home,
+  setup,
   mods,
   browse,
   profiles,

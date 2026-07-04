@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:launcher_domain/launcher_domain.dart';
+import 'package:launcher_ui/launcher_ui.dart';
 import 'package:robotopia_launcher_flutter/src/launcher_app.dart';
 
 part 'widget_test_fakes.dart';
@@ -15,15 +16,162 @@ Finder _devScrollable() => find
     .first;
 
 void main() {
-  testWidgets('renders first-run launcher shell', (tester) async {
+  final binding = TestWidgetsFlutterBinding.ensureInitialized();
+
+  // Home's GlowButton pulses on a repeating AnimationController, which would
+  // deadlock pumpAndSettle. Running the suite with reduced motion keeps every
+  // pumpAndSettle finite and permanently exercises the reduced-motion path.
+  setUp(() {
+    binding.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(disableAnimations: true);
+  });
+  tearDown(() {
+    binding.platformDispatcher.clearAccessibilityFeaturesTestValue();
+  });
+
+  testWidgets('renders first-run welcome hero', (tester) async {
     await tester.pumpWidget(
       RobotopiaLauncherApp(repository: _FakeLauncherRepository()),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Library / Launch'), findsOneWidget);
-    expect(find.text('Select Robotopia'), findsOneWidget);
-    expect(find.text('Detect Install'), findsOneWidget);
+    expect(find.text('Welcome to Robotopia modding'), findsOneWidget);
+    // GlowButton renders its label uppercased.
+    expect(find.text('FIND MY GAME'), findsOneWidget);
+    expect(find.text('Choose the folder myself'), findsOneWidget);
+    expect(find.text('Pick your mods'), findsOneWidget);
+  });
+
+  // Home stacks the hero, profiles, and discover zones vertically; the
+  // default 800x600 test window clips the lower zones, so home tests run in a
+  // taller viewport to keep every target tappable.
+  Future<void> pumpHome(
+    WidgetTester tester,
+    _FakeLauncherRepository repository,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(RobotopiaLauncherApp(repository: repository));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('home launch pad renders ready state and update pill', (
+    tester,
+  ) async {
+    await pumpHome(tester, _FakeLauncherRepository(snapshot: _updateSnapshot()));
+
+    expect(find.text('Ready for liftoff'), findsOneWidget);
+    expect(find.text('Game found'), findsOneWidget);
+    // Home's systems check and the global status bar both report the runtime.
+    expect(find.text('Runtime ready'), findsWidgets);
+    expect(find.text('1 mod enabled'), findsOneWidget);
+
+    // The updates pill deep-links into Browse.
+    await tester.tap(find.text('1 update available'));
+    await tester.pumpAndSettle();
+    expect(find.text('Preview Update'), findsOneWidget);
+  });
+
+  testWidgets('home glow button launches the selected profile', (
+    tester,
+  ) async {
+    final repository = _FakeLauncherRepository(snapshot: _updateSnapshot());
+    await pumpHome(tester, repository);
+
+    await tester.tap(find.text('LAUNCH'));
+    await tester.pumpAndSettle();
+
+    expect(repository.launchedProfileIds, ['default']);
+    expect(find.text('Launched Robotopia.'), findsOneWidget);
+  });
+
+  testWidgets('home shows almost-ready state and one-click runtime fix', (
+    tester,
+  ) async {
+    final repository = _FakeLauncherRepository(
+      snapshot: _readySnapshot(needsRepair: true),
+    );
+    await pumpHome(tester, repository);
+
+    expect(find.text('Almost ready'), findsOneWidget);
+    final glowButton = tester.widget<GlowButton>(find.byType(GlowButton));
+    expect(glowButton.onPressed, isNull);
+
+    await tester.tap(find.text('Runtime needs a quick fix'));
+    await tester.pumpAndSettle();
+    expect(repository.installOrRepairRuntimeCount, 1);
+  });
+
+  testWidgets('home discover rail funnels into Browse when registry is empty', (
+    tester,
+  ) async {
+    await pumpHome(tester, _FakeLauncherRepository(snapshot: _readySnapshot()));
+
+    expect(find.text('Find your first mod'), findsOneWidget);
+
+    await tester.tap(find.text('Open Browse'));
+    await tester.pumpAndSettle();
+    expect(find.text('No local packages'), findsOneWidget);
+  });
+
+  testWidgets('profile card play button launches that profile', (
+    tester,
+  ) async {
+    final repository = _FakeLauncherRepository(
+      snapshot: _readySnapshot(
+        profiles: [
+          LauncherProfile.defaultProfile(),
+          const LauncherProfile(id: 'coop', name: 'Co-op'),
+        ],
+      ),
+    );
+    await pumpHome(tester, repository);
+
+    expect(find.text('Jump back in'), findsOneWidget);
+    expect(find.text('Play'), findsNWidgets(2));
+    // Selected profile is listed first, so the last Play belongs to Co-op.
+    await tester.tap(find.text('Play').last);
+    await tester.pumpAndSettle();
+
+    expect(repository.launchedProfileIds, ['coop']);
+  });
+
+  testWidgets('setup screen keeps launch configuration', (tester) async {
+    await tester.pumpWidget(
+      RobotopiaLauncherApp(
+        repository: _FakeLauncherRepository(snapshot: _updateSnapshot()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Setup'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Load Order'), findsOneWidget);
+    expect(find.text('Repair Runtime'), findsOneWidget);
+    expect(find.text('World'), findsWidgets);
+  });
+
+  testWidgets('glow button pulses when animations are enabled', (
+    tester,
+  ) async {
+    // Override the suite-wide reduced-motion default for this test only.
+    binding.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures();
+
+    await tester.pumpWidget(
+      RobotopiaLauncherApp(
+        repository: _FakeLauncherRepository(snapshot: _updateSnapshot()),
+      ),
+    );
+    // Never pumpAndSettle here: the glow repeats forever. Fixed frames only.
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byType(GlowButton), findsOneWidget);
+    expect(tester.hasRunningAnimations, isTrue);
   });
 
   testWidgets('developer tab is hidden until developer mode is enabled', (

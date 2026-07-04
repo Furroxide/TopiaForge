@@ -464,6 +464,181 @@ class RegisteredProject {
   };
 }
 
+/// A scaffoldable mod template discovered under `templates/mod/<id>/template.json`. [manifestDefaults] is a
+/// partial `robotopia.mod.json` map merged under the author's CLI flag overrides at scaffold time.
+class ModTemplateInfo {
+  const ModTemplateInfo({
+    required this.id,
+    this.label = '',
+    this.description = '',
+    this.includeUnityCompanion = false,
+    this.manifestDefaults = const {},
+  });
+
+  final String id;
+  final String label;
+  final String description;
+
+  /// True when this template scaffolds the Unity authoring companion by default (e.g. asset mods).
+  final bool includeUnityCompanion;
+
+  final Map<String, Object?> manifestDefaults;
+
+  factory ModTemplateInfo.fromJson(Map<String, Object?> json) {
+    return ModTemplateInfo(
+      id: (json['id'] as String?) ?? '',
+      label: (json['label'] as String?) ?? '',
+      description: (json['description'] as String?) ?? '',
+      includeUnityCompanion: (json['includeUnityCompanion'] as bool?) ?? false,
+      manifestDefaults: _objectMap(json['manifestDefaults']),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    if (label.isNotEmpty) 'label': label,
+    if (description.isNotEmpty) 'description': description,
+    if (includeUnityCompanion) 'includeUnityCompanion': true,
+    if (manifestDefaults.isNotEmpty) 'manifestDefaults': manifestDefaults,
+  };
+}
+
+/// Everything `new mod` can customize at scaffold time: the template plus per-field manifest overrides. A null
+/// scalar / empty list means "not specified — keep the template's default". `hashes` (pack-time), `legacy*`
+/// (migration-time), and `schemaVersion` (pinned to 2) are deliberately not scaffoldable.
+class ModScaffoldOptions {
+  const ModScaffoldOptions({
+    this.template = 'minimal',
+    this.description,
+    this.license,
+    this.category,
+    this.authorName,
+    this.authorEmail,
+    this.authorUrl,
+    this.tags = const [],
+    this.permissions = const [],
+    this.screenshots = const [],
+    this.loadAfter = const [],
+    this.apiAssemblies = const [],
+    this.dependencies = const [],
+    this.optionalDependencies = const [],
+    this.conflicts = const [],
+    this.gamemodes = const [],
+    this.entryAssembly,
+    this.entryType,
+    this.gameVersionRange,
+    this.loaderVersionRange,
+    this.sdkVersionRange,
+    this.icon,
+    this.homepage,
+    this.source,
+    this.includeUnityCompanion = false,
+    this.liveSync,
+  });
+
+  final String template;
+  final String? description;
+  final String? license;
+  final String? category;
+  final String? authorName;
+  final String? authorEmail;
+  final String? authorUrl;
+  final List<String> tags;
+  final List<String> permissions;
+  final List<String> screenshots;
+  final List<String> loadAfter;
+  final List<String> apiAssemblies;
+  final List<ModDependency> dependencies;
+  final List<ModDependency> optionalDependencies;
+  final List<ModConflict> conflicts;
+  final List<GamemodeDefinition> gamemodes;
+  final String? entryAssembly;
+  final String? entryType;
+  final VersionRange? gameVersionRange;
+  final VersionRange? loaderVersionRange;
+  final VersionRange? sdkVersionRange;
+  final String? icon;
+  final String? homepage;
+  final String? source;
+  final bool includeUnityCompanion;
+
+  /// When set, the project is scaffolded with UGC live sync preconfigured (implies the Unity companion).
+  final UgcLiveSyncSettings? liveSync;
+
+  /// Applies the specified overrides on top of [manifest] (a template-default or generated manifest map),
+  /// returning the merged `robotopia.mod.json` map. List/map fields replace wholesale when specified.
+  Map<String, Object?> applyTo(Map<String, Object?> manifest) {
+    final merged = Map<String, Object?>.of(manifest);
+    void set(String key, Object? value) {
+      if (value != null) merged[key] = value;
+    }
+
+    set('description', description);
+    set('license', license);
+    set('category', category);
+    set('entryAssembly', entryAssembly);
+    set('entryType', entryType);
+    set('icon', icon);
+    set('homepage', homepage);
+    set('source', source);
+    if (gameVersionRange != null) {
+      merged['supportedGameVersionRange'] = gameVersionRange.toString();
+    }
+    if (loaderVersionRange != null) {
+      merged['supportedLoaderVersionRange'] = loaderVersionRange.toString();
+    }
+    if (sdkVersionRange != null) {
+      merged['supportedSdkVersionRange'] = sdkVersionRange.toString();
+    }
+    if (authorName != null || authorEmail != null || authorUrl != null) {
+      final author = _objectMap(merged['author']);
+      merged['author'] = {
+        'name': authorName ?? author['name'] ?? '',
+        if ((authorEmail ?? author['email'] as String? ?? '').isNotEmpty)
+          'email': authorEmail ?? author['email'],
+        if ((authorUrl ?? author['url'] as String? ?? '').isNotEmpty)
+          'url': authorUrl ?? author['url'],
+      };
+    }
+    if (tags.isNotEmpty) merged['tags'] = tags;
+    if (permissions.isNotEmpty) {
+      merged['permissions'] = {
+        ..._stringList(merged['permissions']),
+        ...permissions,
+      }.toList();
+    }
+    if (screenshots.isNotEmpty) merged['screenshots'] = screenshots;
+    if (loadAfter.isNotEmpty) {
+      merged['loadAfter'] = {
+        ..._stringList(merged['loadAfter']),
+        ...loadAfter,
+      }.toList();
+    }
+    if (apiAssemblies.isNotEmpty) merged['apiAssemblies'] = apiAssemblies;
+    if (dependencies.isNotEmpty) {
+      final existing = _objectMap(merged['vpmDependencies']);
+      merged['vpmDependencies'] = {
+        ...existing,
+        for (final item in dependencies) item.id: item.versionRange.toString(),
+      };
+    }
+    if (optionalDependencies.isNotEmpty) {
+      merged['optionalDependencies'] = optionalDependencies
+          .map((item) => item.toJson())
+          .toList();
+    }
+    if (conflicts.isNotEmpty) {
+      merged['conflicts'] = conflicts.map((item) => item.toJson()).toList();
+    }
+    if (gamemodes.isNotEmpty) {
+      merged['worldGamemodes'] = gamemodes
+          .map((item) => item.toJson())
+          .toList();
+    }
+    return merged;
+  }
+}
+
 /// An installed Unity editor discovered via Unity Hub (detect-only — the launcher never installs Unity).
 class UnityEditor {
   const UnityEditor({required this.version, required this.path});

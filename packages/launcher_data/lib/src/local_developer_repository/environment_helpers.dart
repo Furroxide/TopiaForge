@@ -167,22 +167,44 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
       );
     }
 
-    // Unity — only needed to author UGC content in the companion.
+    // Unity — only needed to author UGC content in the companion or build custom-world bundles.
     final unityEditor = await _findUnityEditor(null);
     final unityHub = await _findUnityHub();
+    // World/UI bundle builds additionally need an editor from the game player's Unity stream
+    // (6000.0.x, patch <= 31): a newer editor's bundles may not load in the shipped player.
+    final editors = await _scanUnityEditors();
+    final hasBundleBuildEditor = editors.any(
+      (editor) => WorldBundleEditorGate.isEligible(editor.version),
+    );
+    final ToolStatus unityStatus;
+    final String unityDetail;
+    final String unityRemediation;
+    if (unityEditor.isEmpty) {
+      unityStatus = ToolStatus.missing;
+      unityDetail = unityHub.isEmpty
+          ? 'Unity not detected (optional).'
+          : 'Hub found, editor not detected: $unityHub';
+      unityRemediation =
+          'Install Unity via Unity Hub only if you author UGC content or custom worlds.';
+    } else if (!hasBundleBuildEditor) {
+      unityStatus = ToolStatus.warning;
+      unityDetail =
+          'Found ${editors.map((editor) => editor.version).join(', ')} — none can build '
+          'world/UI bundles (needs 6000.0.x, patch <= ${WorldBundleEditorGate.maxPatch}; '
+          'the game player is 6000.0.31f1).';
+      unityRemediation = WorldBundleEditorGate.installHint;
+    } else {
+      unityStatus = ToolStatus.ok;
+      unityDetail = unityEditor;
+      unityRemediation = '';
+    }
     checks.add(
       ToolCheck(
         name: 'Unity Editor',
-        status: unityEditor.isEmpty ? ToolStatus.missing : ToolStatus.ok,
+        status: unityStatus,
         purpose: ToolPurpose.ugcUnity,
-        detail: unityEditor.isNotEmpty
-            ? unityEditor
-            : (unityHub.isEmpty
-                  ? 'Unity not detected (optional).'
-                  : 'Hub found, editor not detected: $unityHub'),
-        remediation: unityEditor.isEmpty
-            ? 'Install Unity via Unity Hub only if you author UGC content in the companion.'
-            : '',
+        detail: unityDetail,
+        remediation: unityRemediation,
         url: 'https://unity.com/download',
       ),
     );
