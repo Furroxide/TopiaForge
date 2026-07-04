@@ -1,0 +1,18 @@
+{
+  "id": "world",
+  "label": "Custom world mod",
+  "description": "Ships a Unity world prefab in an AssetBundle and registers it as a playable world (pairs with a `robotopia new unity-world` project).",
+  "includeUnityCompanion": false,
+  "manifestDefaults": {
+    "category": "Content",
+    "description": "Custom world for Robotopia.",
+    "tags": ["world", "content", "custom-world"],
+    "permissions": ["asset-bundles", "world-service"],
+    "vpmDependencies": {
+      "robotopia.assets": ">=0.1.0",
+      "robotopia.worlds": ">=0.5.0"
+    },
+    "loadAfter": ["robotopia.assets", "robotopia.worlds"],
+    "supportedSdkVersionRange": ">=0.1.1 <0.2.0"
+  }
+}

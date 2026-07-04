@@ -1,0 +1,7 @@
+{
+  "name": "Robotopia.WorldCompanion.Editor",
+  "references": [],
+  "includePlatforms": ["Editor"],
+  "excludePlatforms": [],
+  "autoReferenced": true
+}

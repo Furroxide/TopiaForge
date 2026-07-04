@@ -29,3 +29,24 @@ detected) let you open it directly.
 
 See `docs/UgcLiveSync.md` in the QuantumWorks repo for the full contract (handedness, the export JSON shape, and
 the Automerge channel for web-editor parity).
+
+## Custom worlds (fully bespoke geometry — Blender welcome)
+
+The UGC loop above places the game's **built-in** assets. To ship a **completely custom world**
+(your own Blender/Unity geometry) as a playable Robotopia world:
+
+1. Scaffold + pair (once):
+   `robotopia new mod my.world --template world` and
+   `robotopia new unity-world MyWorld --mod ..\my.world`
+   (or pair this project with `robotopia world link --project . --mod <modDir>` — writes
+   `robotopia.world.json`).
+2. Author the world as **one prefab** at `Assets/World/World.prefab` — see `Assets/World/README.md`
+   for the Blender→Unity crib sheet and the prefab contract (a `SpawnPoint` child, colliders, no
+   custom scripts, optional HDRP Volume).
+3. Build the bundle into the mod: **Robotopia → Build World Bundle**, or `robotopia world build`
+   (headless; needs a Unity 6000.0.x editor, patch ≤ 31 — the game player is 6000.0.31f1).
+4. Play: `robotopia world play` builds → packs → installs → launches; the world appears in the
+   in-game GAMEMODES menu.
+
+The `com.robotopia.world-companion` package provides the build/validate menu items. Full walkthrough:
+`docs/CustomWorlds.md` in the QuantumWorks repo.

@@ -73,10 +73,16 @@ extension _RobotopiaEnvironmentCommands on _RobotopiaCli {
     ];
 
     for (final config in ['Release', 'Debug']) {
-      final exe =
-          '$root/src/Robotopia.GameCompat.Extractor/bin/$config/net8.0/Robotopia.GameCompat.Extractor.exe';
-      if (File(exe).existsSync()) {
-        return Process.run(exe, verifyArgs, workingDirectory: root);
+      final binDir =
+          '$root/src/Robotopia.GameCompat.Extractor/bin/$config/net8.0';
+      for (final name in [
+        'Robotopia.GameCompat.Extractor.exe',
+        'Robotopia.GameCompat.Extractor',
+      ]) {
+        final exe = '$binDir/$name';
+        if (File(exe).existsSync()) {
+          return Process.run(exe, verifyArgs, workingDirectory: root);
+        }
       }
     }
 
@@ -173,6 +179,93 @@ extension _RobotopiaEnvironmentCommands on _RobotopiaCli {
         stdout.writeln('         ${check.remediation}$url');
       }
     }
+  }
+
+  /// Native replacement for the retired tools/install-local.ps1: builds the
+  /// loader solution, installs/repairs the BepInEx runtime for the detected
+  /// game layout, and stages the template plus every first-party mod in the
+  /// game's package-inbox.
+  Future<int> _devInstall(List<String> args) async {
+    if (!await _ensureBuildTooling()) {
+      return 1;
+    }
+    final repoRoot = _findRepoRoot();
+    if (repoRoot == null) {
+      throw StateError(
+        'The QuantumWorks repository root was not found from '
+        '${Directory.current.path}.',
+      );
+    }
+    final configuration = _option(args, '--configuration') ?? 'Release';
+
+    if (!args.contains('--skip-build')) {
+      stdout.writeln('Building RobotopiaModManager.slnx ($configuration)...');
+      final build = await Process.run('dotnet', [
+        'build',
+        p.join(repoRoot, 'RobotopiaModManager.slnx'),
+        '-c',
+        configuration,
+      ], workingDirectory: repoRoot);
+      if (build.exitCode != 0) {
+        stderr.writeln('${build.stdout}\n${build.stderr}'.trim());
+        return 1;
+      }
+    }
+
+    final launcher = LocalLauncherRepository(
+      repositoryRoot: repoRoot,
+      knownGamePath: _option(args, '--game-dir'),
+    );
+    final install = await launcher.detectKnownInstall();
+    if (install == null) {
+      throw StateError(
+        'Robotopia install was not detected. Pass --game-dir <path to the '
+        'game folder> (on Linux: the Windows-layout game folder inside your '
+        'Proton prefix).',
+      );
+    }
+
+    final report = await launcher.installOrRepairRuntime(install);
+    for (final action in report.actions) {
+      stdout.writeln('- $action');
+    }
+    _printIssues(report.issues);
+    if (!report.ok) {
+      return 1;
+    }
+
+    final inbox = p.join(
+      install.path,
+      'BepInEx',
+      'RobotopiaModManager',
+      'package-inbox',
+    );
+    Directory(inbox).createSync(recursive: true);
+    Directory(
+      p.join(install.path, 'BepInEx', 'RobotopiaModManager', 'logs'),
+    ).createSync(recursive: true);
+
+    final staged = await _packAllMods(
+      outputDir: inbox,
+      configuration: configuration,
+      // Dev installs stage everything, including DevTool-category mods.
+      includeDevMods: !args.contains('--no-dev-mods'),
+    );
+    stdout.writeln('');
+    stdout.writeln('Installed the QuantumWorks runtime into ${install.path}');
+    stdout.writeln('${staged.length} package(s) staged in the package-inbox.');
+    if (install.layout == GameInstallLayout.linuxProton) {
+      stdout.writeln(
+        'Launch Robotopia under Proton/Wine with '
+        'WINEDLLOVERRIDES="winhttp=n,b" — staged packages install '
+        'automatically at launch.',
+      );
+    } else {
+      stdout.writeln(
+        'Launch Robotopia — staged packages install automatically at launch.',
+      );
+    }
+    return 0;
   }
 
   Future<bool> _ensureBuildTooling() async {

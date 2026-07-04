@@ -1,0 +1,9 @@
+{
+  "id": "minimal",
+  "label": "Minimal mod",
+  "description": "Hello-world mod that logs load, scene, and update events.",
+  "manifestDefaults": {
+    "category": "Utility",
+    "description": "Minimal Robotopia SDK mod."
+  }
+}

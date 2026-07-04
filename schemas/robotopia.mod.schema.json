@@ -1,0 +1,136 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://quantumworks.local/schemas/robotopia.mod.schema.json",
+  "title": "Robotopia Mod Manifest",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schemaVersion",
+    "name",
+    "displayName",
+    "version",
+    "author",
+    "entryAssembly",
+    "entryType"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": 2 },
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$"
+    },
+    "displayName": { "type": "string", "minLength": 1 },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+){0,2}([-+][0-9A-Za-z_.-]+)?$"
+    },
+    "author": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "email": { "type": "string" },
+        "url": { "type": "string" }
+      }
+    },
+    "description": { "type": "string" },
+    "license": { "type": "string" },
+    "entryAssembly": { "type": "string", "minLength": 1 },
+    "entryType": { "type": "string", "minLength": 1 },
+    "vpmDependencies": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "optionalDependencies": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/dependency" }
+    },
+    "conflicts": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/conflict" }
+    },
+    "loadAfter": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "supportedGameVersionRange": { "type": "string" },
+    "supportedLoaderVersionRange": { "type": "string" },
+    "supportedSdkVersionRange": { "type": "string" },
+    "category": { "type": "string" },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "icon": { "type": "string" },
+    "screenshots": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "homepage": { "type": "string" },
+    "source": { "type": "string" },
+    "hashes": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "permissions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "worldGamemodes": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/gamemode" }
+    },
+    "apiAssemblies": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "legacyFolders": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "legacyFiles": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "legacyPackages": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "definitions": {
+    "dependency": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "version": { "type": "string" },
+        "versionRange": { "type": "string" },
+        "optional": { "type": "boolean" }
+      }
+    },
+    "conflict": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "version": { "type": "string" },
+        "versionRange": { "type": "string" },
+        "reason": { "type": "string" }
+      }
+    },
+    "gamemode": {
+      "type": "object",
+      "required": ["id", "name"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" }
+      }
+    }
+  }
+}
