@@ -10,7 +10,7 @@ namespace Robotopia.Mods.UnityUi
 {
     /// <summary>
     /// Draggable brand window: card chrome (radius 26, orange border, hard shadow),
-    /// 42px title bar with an Arista title and close button, ESC-close via the dismiss
+    /// 42px title bar with an Audiowide title and close button, ESC-close via the dismiss
     /// stack, automatic cursor lease while visible, screen clamping + edge snapping,
     /// and rect persistence keyed owner+windowId in the host's state store.
     /// </summary>
@@ -68,8 +68,7 @@ namespace Robotopia.Mods.UnityUi
 
             var titleBar = new QwContainer(Host, Scheme, titleBarGo);
             var titleGo = titleBar.CreateChildGameObject("Title");
-            titleLabel = titleGo.AddComponent<TextMeshProUGUI>();
-            titleLabel.raycastTarget = false;
+            titleLabel = QwTmp.Create(titleGo);
             titleLabel.fontSize = QwTokens.TitleSize;
             titleLabel.alignment = TextAlignmentOptions.Left;
             titleLabel.textWrappingMode = TextWrappingModes.NoWrap;

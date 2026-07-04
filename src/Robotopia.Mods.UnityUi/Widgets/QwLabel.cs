@@ -21,8 +21,7 @@ namespace Robotopia.Mods.UnityUi
             : base(parent.Host, parent.Scheme, parent.CreateChildGameObject("Label"))
         {
             style = textStyle;
-            text = Go.AddComponent<TextMeshProUGUI>();
-            text.raycastTarget = false;
+            text = QwTmp.Create(Go);
             text.fontSize = QwTokens.SizeOf(style);
             text.textWrappingMode = TextWrappingModes.Normal;
             text.overflowMode = TextOverflowModes.Overflow;

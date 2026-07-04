@@ -28,6 +28,8 @@ namespace Robotopia.Mods.UnityUi
     /// </summary>
     public sealed class QwButton : QwWidget, IQwThemeAware
     {
+        private const float LabelInsetX = 14f;
+
         private readonly QwButtonStyle style;
         private readonly Button button;
         private readonly Image? shadow;
@@ -94,8 +96,7 @@ namespace Robotopia.Mods.UnityUi
             {
                 var labelGo = new GameObject("Label", typeof(RectTransform));
                 labelGo.transform.SetParent(body, false);
-                label = labelGo.AddComponent<TextMeshProUGUI>();
-                label.raycastTarget = false;
+                label = QwTmp.Create(labelGo);
                 label.fontSize = QwTokens.LabelSize;
                 label.alignment = TextAlignmentOptions.Center;
                 label.textWrappingMode = TextWrappingModes.NoWrap;
@@ -111,8 +112,9 @@ namespace Robotopia.Mods.UnityUi
                 }
 
                 label.text = lastText;
-                QwAnchors.Stretch((RectTransform)labelGo.transform, 14f, 4f, 14f, 4f);
+                QwAnchors.Stretch((RectTransform)labelGo.transform, LabelInsetX, 4f, LabelInsetX, 4f);
                 this.FixedHeight(QwTokens.ControlHeight);
+                FitLabelWidth();
             }
 
             button = Go.AddComponent<Button>();
@@ -147,6 +149,25 @@ namespace Robotopia.Mods.UnityUi
 
             lastText = value;
             label.text = value;
+            FitLabelWidth();
+        }
+
+        /// <summary>
+        /// Text buttons must report a preferred width: rows size children to preferred
+        /// width (no force-expand), so without this the button collapses to zero and
+        /// the no-wrap label spills over its neighbors. Columns still stretch past it.
+        /// </summary>
+        private void FitLabelWidth()
+        {
+            if (label == null)
+            {
+                return;
+            }
+
+            var width = label.GetPreferredValues(lastText).x + LabelInsetX * 2f;
+            var layout = EnsureLayoutElement();
+            layout.minWidth = width;
+            layout.preferredWidth = width;
         }
 
         /// <summary>Dirty-checked interactability + disabled visuals.</summary>

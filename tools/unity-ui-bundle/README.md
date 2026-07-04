@@ -8,13 +8,27 @@ DLL and loads at runtime. It also doubles as an editor harness for visual QA of 
 
 The Robotopia player is **Unity 6000.0.31f1**. AssetBundles serialized by a newer editor
 stream (6000.5+, 7000.x) are not safe to load in that player. Use an editor in the range
-**6000.0.23f1 – 6000.0.31f1** (this project is pinned to 6000.0.31f1). Headless install:
+**6000.0.23f1 – 6000.0.31f1** (this project is pinned to 6000.0.31f1). Headless install
+via the Unity Hub CLI:
 
-```powershell
+```sh
+# Windows
 & "$env:ProgramFiles\Unity Hub\Unity Hub.exe" -- --headless install --version 6000.0.31f1 --changeset a206c360e2a8
+# macOS / Linux
+unityhub -- --headless install --version 6000.0.31f1 --changeset a206c360e2a8
 ```
 
-`tools/build-ui-bundle.ps1` auto-detects eligible editors and hard-fails on anything else.
+`robotopia unity build-ui-bundle` auto-detects eligible editors and hard-fails on
+anything else.
+
+## Prerequisites on macOS/Linux
+
+- The bundle targets `StandaloneWindows64` (the shipped player is Windows), so the
+  editor needs the **Windows Build Support (Mono)** module installed via Unity Hub.
+- The editor must have an activated Unity license (batchmode fails without one).
+- Headless Linux boxes need a display for the build (no `-nographics` — TMP font baking
+  needs `Shader.Find`); use `xvfb-run` if there is no desktop session.
+- `git lfs` must be installed to check out and commit the bundle.
 
 ## Font baking
 
@@ -23,7 +37,7 @@ committed `Assets/FontAssets/*.asset` is reused as-is; delete it to re-bake):
 
 - `QuantumWorks-Quicksand SDF` — 1024×1024, SDFAA, padding 9, static; ASCII + Latin-1
   Supplement + Latin Extended-A + typographic punctuation.
-- `QuantumWorks-Arista SDF` — 512×512, same settings (display headings).
+- `QuantumWorks-Audiowide SDF` — 512×512, same settings (display headings).
 - Bold renders via TMP faux-bold (the variable TTF imports only its default instance),
   which the kit selects automatically when no dedicated bold asset ships.
 
@@ -33,12 +47,16 @@ Commit the baked `.asset` files (+ `.meta`) together with the rebuilt bundle.
 
 ## Building the bundle
 
-```powershell
-.\tools\build-ui-bundle.ps1            # auto-detects an eligible editor
-.\tools\build-ui-bundle.ps1 -UnityExe "C:\Program Files\Unity\Hub\Editor\6000.0.31f1\Editor\Unity.exe"
+From `apps/robotopia_cli` (or anywhere inside the repo):
+
+```sh
+dart run bin/robotopia.dart unity build-ui-bundle             # auto-detects an eligible editor
+dart run bin/robotopia.dart unity build-ui-bundle --unity "C:\Program Files\Unity\Hub\Editor\6000.0.31f1\Editor\Unity.exe"
+dart run bin/robotopia.dart unity build-ui-bundle --rebuild   # also rebuilds Robotopia.Mods.UnityUi
 ```
 
-Or in-editor: **QuantumWorks → Build UI Bundle**.
+Or in-editor: **QuantumWorks → Build UI Bundle**. (`tools/build-ui-bundle.ps1` remains
+as a deprecated wrapper that forwards to the CLI.)
 
 The build stamps provenance into `Assets/UiBundleManifest.json`, verifies the required
 assets are labeled `quantumworks-ui`, builds LZ4 for StandaloneWindows64, and copies the

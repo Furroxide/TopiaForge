@@ -63,7 +63,7 @@ reads (≥ 4.5:1).
 Containers (`Column`, `Row`, `Stack`, `Grid`, panels, window content) expose factories:
 `Label`, `Button`/`IconButton`, `Toggle`/`Checkbox`, `Slider`, `Tabs`/`NavRail`,
 `Input`/`SearchInput`, `Keybind`, `Dropdown`, `Badge`, `Scroll`, `ListView<T>`
-(virtualized), `ListRow`, `SectionHeader`, `KeyValueRow`, `ProgressBar`/`StatBar`,
+(virtualized), `ListRow`, `Card`, `SectionHeader`, `KeyValueRow`, `ProgressBar`/`StatBar`,
 `PipRow`, `Panel`, `Image`/`FreeImage`, `Divider`, `Spacer`.
 
 Two method families, one convention:
@@ -74,6 +74,31 @@ Two method families, one convention:
 - **Runtime setters** return void and **dirty-check**: `SetText`, `SetFraction`,
   `SetVisible`, `SetEnabled`, `SetColor`, `SetSelected`… Call them every frame; they
   cost nothing while the value is unchanged.
+
+## Cards & grids
+
+`Grid(cellWidth, cellHeight, gap)` wraps: it fits as many fixed-size columns as its
+container is wide and flows the rest onto new lines (Flutter `GridView.extent`
+semantics), re-flowing automatically on resize. Put it inside `Scroll().Content` for a
+scrollable gallery.
+
+`Card(title, onClick)` is the grid's cell widget: a preview area (`SetPreviewTexture`
+accepts any `Texture`; `SetPreviewIcon` picks the placeholder), a caption, and an
+optional corner chip (`SetBadge`). Hover strengthens the ring, press reuses the button
+sticker motion, and `.Tooltip("…")` adds hover details after the standard 450 ms.
+
+```csharp
+var grid = pane.Scroll().Content.Grid(118f, 148f, QwGap.Sm);
+var card = grid.Card("Tree Model", () => Spawn(item))
+               .Tooltip("Tree Model\n@robotopia/tree-model");
+card.SetBadge("UGC", QwTone.Accent);
+card.SetPreviewTexture(thumbnail);      // null shows the placeholder icon
+```
+
+Pool cards when rebinding (filtering, live catalogs): membership in the grid must be
+toggled with `card.Go.SetActive(...)` — `SetVisible` hides via CanvasGroup, so a
+"hidden" card would still occupy its cell. The kit does not own preview textures;
+destroy them when your feature tears down.
 
 ## HUD patterns
 
@@ -154,8 +179,8 @@ and tween/lease/canvas counters.
 
 Text is TextMeshPro. Fonts resolve through a tiered chain, logged at init:
 
-1. **Brand bundle** (Quicksand + Arista SDF assets) — embedded inside
-   `Robotopia.Mods.UnityUi.dll`; built by `tools/build-ui-bundle.ps1` from
+1. **Brand bundle** (Quicksand + Audiowide SDF assets) — embedded inside
+   `Robotopia.Mods.UnityUi.dll`; built by `robotopia unity build-ui-bundle` from
    `tools/unity-ui-bundle` (editor must be Unity 6000.0.x ≤ 31 — see that README).
 2. OS font (Segoe UI) as a dynamic TMP asset.
 3. The game's own TMP default.

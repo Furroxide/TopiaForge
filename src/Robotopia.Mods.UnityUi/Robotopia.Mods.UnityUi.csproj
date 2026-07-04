@@ -35,7 +35,7 @@
   <!--
     The QuantumWorks brand AssetBundle (TMP font assets + brand sprites) rides inside
     the DLL so assets and code version-lock and no packaging path needs to stage a loose
-    file. Built by tools/build-ui-bundle.ps1; the Condition keeps the repo building
+    file. Built by `robotopia unity build-ui-bundle`; the Condition keeps the repo building
     before the bundle's first commit (the kit falls back to OS fonts + procedural
     sprites and logs the tier it resolved).
   -->

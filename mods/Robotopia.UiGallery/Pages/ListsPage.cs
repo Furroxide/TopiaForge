@@ -29,6 +29,27 @@ namespace Robotopia.UiGallery.Pages
             list.OnSelected(index => status.SetText("Selected: " + items[index]));
             list.SetItems(items);
 
+            page.SectionHeader("CARD GRID");
+            page.Label("Cards wrap to the window width. Hover for the ring + tooltip; click to select.", QwTextStyle.Caption).Tone(QwTone.Muted);
+            var cardStatus = page.Label("No card selected", QwTextStyle.Caption).Tone(QwTone.Muted);
+            var grid = page.Grid(118f, 148f, QwGap.Sm);
+            var cards = new QwCard[6];
+            for (var index = 0; index < cards.Length; index++)
+            {
+                var selectedIndex = index;
+                var card = grid.Card("Sample " + (index + 1), () =>
+                {
+                    cardStatus.SetText("Selected: Sample " + (selectedIndex + 1));
+                    for (var other = 0; other < cards.Length; other++)
+                    {
+                        cards[other].SetSelected(other == selectedIndex);
+                    }
+                });
+                card.Tooltip("Sample " + (index + 1) + "\nA QwCard: preview + caption + badge.");
+                card.SetBadge(index % 2 == 0 ? "UGC" : "PRIM", index % 2 == 0 ? QwTone.Accent : QwTone.Neutral);
+                cards[index] = card;
+            }
+
             page.SectionHeader("KEY-VALUE ROWS");
             page.KeyValueRow("Mode", "trusted local packages");
             page.KeyValueRow("Restart required", "NO");

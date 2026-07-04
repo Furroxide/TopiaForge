@@ -8,7 +8,7 @@ focused region comparison evidence: full-view comparison was sufficient because 
 
 **Findings**
 - No actionable P0/P1/P2 issues remain.
-- Fonts and typography: Quicksand and Arista are declared through the shared UI package; headings, labels, and dense body text remain readable in both captured viewports.
+- Fonts and typography: Quicksand and Audiowide are declared through the shared UI package; headings, labels, and dense body text remain readable in both captured viewports.
 - Spacing and layout rhythm: launcher remains a dense desktop utility with the existing rail/top/status structure; large Robotopia radii and offset shadows are applied without blocking controls.
 - Colors and visual tokens: implementation maps the source warm paper, orange, cyan, magenta, purple, and dark text tokens into Material theme and shared widgets.
 - Image quality and asset fidelity: source logo/city/robot assets render from bundled package assets; no placeholder art or code-drawn substitutes are visible.

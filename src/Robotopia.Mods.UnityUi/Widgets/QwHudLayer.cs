@@ -72,7 +72,7 @@ namespace Robotopia.Mods.UnityUi
     }
 
     /// <summary>
-    /// HUD banner ("WAVE 3"): Arista display text that punches in, holds, and fades
+    /// HUD banner ("WAVE 3"): Audiowide display text that punches in, holds, and fades
     /// (ported timings 0.18/0.6/0.4, punch intensity scaled by the motion setting).
     /// Re-triggering resets the timeline.
     /// </summary>
@@ -96,8 +96,7 @@ namespace Robotopia.Mods.UnityUi
             Rect.pivot = new Vector2(0.5f, 0.5f);
             Rect.sizeDelta = new Vector2(900f, 80f);
 
-            label = Go.AddComponent<TextMeshProUGUI>();
-            label.raycastTarget = false;
+            label = QwTmp.Create(Go);
             label.fontSize = QwTokens.BannerSize;
             label.alignment = TextAlignmentOptions.Center;
             label.textWrappingMode = TextWrappingModes.NoWrap;

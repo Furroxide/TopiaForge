@@ -42,10 +42,9 @@ flutter:
     - family: QuantumWorksQuicksand
       fonts:
         - asset: fonts/Quicksand-VariableFont_wght.ttf
-    - family: QuantumWorksArista
+    - family: QuantumWorksAudiowide
       fonts:
-        - asset: fonts/Arista-Pro-Bold.ttf
-          weight: 700
+        - asset: fonts/Audiowide-Regular.ttf
 
   # For details regarding fonts in packages, see
   # https://flutter.dev/to/font-from-package

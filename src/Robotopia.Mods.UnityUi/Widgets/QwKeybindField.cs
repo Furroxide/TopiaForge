@@ -30,8 +30,7 @@ namespace Robotopia.Mods.UnityUi
 
             var nameGo = new GameObject("Name", typeof(RectTransform));
             nameGo.transform.SetParent(Go.transform, false);
-            nameLabel = nameGo.AddComponent<TextMeshProUGUI>();
-            nameLabel.raycastTarget = false;
+            nameLabel = QwTmp.Create(nameGo);
             nameLabel.fontSize = QwTokens.BodySize;
             nameLabel.alignment = TextAlignmentOptions.Left;
             nameLabel.textWrappingMode = TextWrappingModes.NoWrap;
@@ -65,8 +64,7 @@ namespace Robotopia.Mods.UnityUi
 
             var keyGo = new GameObject("Key", typeof(RectTransform));
             keyGo.transform.SetParent(chipGo.transform, false);
-            keyLabel = keyGo.AddComponent<TextMeshProUGUI>();
-            keyLabel.raycastTarget = false;
+            keyLabel = QwTmp.Create(keyGo);
             keyLabel.fontSize = QwTokens.CaptionSize;
             keyLabel.alignment = TextAlignmentOptions.Center;
             keyLabel.textWrappingMode = TextWrappingModes.NoWrap;

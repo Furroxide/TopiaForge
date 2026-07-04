@@ -6,7 +6,7 @@ namespace Robotopia.Mods.UnityUi
 {
     /// <summary>
     /// TMP font resolution with a tiered fallback chain, resolved lazily on first use:
-    ///   1. Brand bundle embedded in the DLL (Quicksand + Arista SDF assets).
+    ///   1. Brand bundle embedded in the DLL (Quicksand + Audiowide SDF assets).
     ///   2. Dynamic TMP asset from an OS font (Segoe UI).
     ///   3. The game's own TMP default font asset.
     ///   4. Null — QwSafeMode surfaces a diagnostic banner; labels render empty.

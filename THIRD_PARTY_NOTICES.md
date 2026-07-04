@@ -25,10 +25,11 @@ Robotopia launcher UI bundles the Quicksand font copied from the Robotopia web b
 - License: Open Font License according to Google Fonts at the time this notice was added.
 - Local changes: none known; filename was normalized for launcher packaging.
 
-Robotopia launcher UI bundles the Arista Pro Bold font copied from the Robotopia web bundle into `packages/launcher_ui/fonts`.
+Robotopia bundles the Audiowide font for display typography in the launcher UI and Unity brand bundle.
 
-- Project: Arista Pro
-- Source file: `https://robotopia.gg/assets/Arista-Pro-Bold-Be2uXyck.ttf`
-- Upstream: https://www.zetafonts.com/arista-2-0
-- License: Arista Pro is a commercial/non-commercial licensed font family upstream. Confirm the Robotopia project license permits redistribution before external release.
-- Local changes: none known; filename was normalized for launcher packaging.
+- Project: Audiowide
+- Source files: `https://github.com/google/fonts/raw/main/ofl/audiowide/Audiowide-Regular.ttf`, `https://github.com/google/fonts/raw/main/ofl/audiowide/OFL.txt`
+- Upstream: https://fonts.google.com/specimen/Audiowide
+- License: SIL Open Font License 1.1
+- Bundled at: `packages/launcher_ui/fonts` and `tools/unity-ui-bundle/Assets/Fonts`
+- Local changes: none known; filename was normalized for launcher and Unity packaging.

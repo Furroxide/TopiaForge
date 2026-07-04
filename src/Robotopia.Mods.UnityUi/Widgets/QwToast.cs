@@ -140,8 +140,7 @@ namespace Robotopia.Mods.UnityUi
 
                 var labelGo = new GameObject("Label", typeof(RectTransform));
                 labelGo.transform.SetParent(root.Go.transform, false);
-                view.Label = labelGo.AddComponent<TextMeshProUGUI>();
-                view.Label.raycastTarget = false;
+                view.Label = QwTmp.Create(labelGo);
                 view.Label.fontSize = QwTokens.LabelSize;
                 view.Label.alignment = TextAlignmentOptions.Left;
                 view.Label.textWrappingMode = TextWrappingModes.NoWrap;
