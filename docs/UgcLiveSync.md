@@ -234,7 +234,7 @@ programmatically via `IUgcLiveSyncService.RegisterAssetOverride`.
 
 1. `dotnet build RobotopiaModManager.slnx -c Release` — the mod compiles with **zero `GameCode`
    references** (clean-room). Run the .NET test harness and `dart test`.
-2. `tools/install-local.ps1`, then launch `Robotopia.exe` (winhttp/doorstop auto-loads BepInEx).
+2. `robotopia dev-install`, then launch `Robotopia.exe` (winhttp/doorstop auto-loads BepInEx).
 3. **Local dev:** F10 → Gamemodes → "UGC Live" (or the in-mod panel); start a local session on a folder;
    in Unity toggle Live Sync and move/add/remove an entity; the scene updates **with no restart, no
    flicker**.
@@ -295,6 +295,45 @@ The QuantumWorks launcher's **UGC Live Sync** pane is a cockpit that removes the
 
 Terminal equivalents: `robotopia ugc status [--watch folder]` (prints the handshake + watch-folder scenes) and
 `robotopia ugc go-live`.
+
+## CLI: `ugc setup` and `ugc dev` (one-command authoring loop)
+
+`robotopia ugc setup` configures live sync without the launcher: it persists the settings into the project's
+`robotopia.project.json` **and** deploys the game runtime config in one shot.
+
+```powershell
+robotopia ugc setup --watch C:\ugc-watch --scene main --auto-connect
+robotopia ugc setup --transport automerge --doc automerge:abc --sync https://my-sync-server
+robotopia ugc setup --watch C:\ugc-watch --no-deploy     # project only (no game install needed)
+```
+
+The watch folder resolves as: `--watch` → the game's advertised default (status handshake) → `<project>/ugc-watch`
+(created automatically). When no game install is detected the deploy step is skipped with a warning, so the
+command works on authoring-only machines.
+
+`robotopia ugc dev` is the dedicated **Unity-side** command: it sets up and launches a live-sync-connected Unity
+Editor instance in one go.
+
+```powershell
+robotopia ugc dev --new my-world            # scaffold a Unity world project, then everything below
+robotopia ugc dev                           # cwd Unity project, or most recently opened registered world
+robotopia ugc dev --project my-world        # a registered project by name (or an explicit path)
+robotopia ugc dev --launch-game             # also deploy + launch the game (full go-live loop)
+robotopia ugc dev --dry-run                 # print the resolved plan (project, editor, folders) — no side effects
+```
+
+It resolves/creates the world project, ensures `Packages/com.robotopia.ugc-companion` (VPM-resolving deps;
+`--update-companion` re-copies it), writes the **companion seed** `ProjectSettings/RobotopiaUgcCompanion.json`
+(watch folder, scene, `liveSync: true`), deploys the game config with auto-connect, and launches the matching
+Unity editor via `-projectPath`. With `--transport automerge` it also starts the publisher sidecar (detached,
+`--session-file`) and injects the captured document URL into the game config.
+
+On project load the companion's `UgcCompanionSeed` bootstrap applies the seed to the `UgcDevDaemon` EditorPrefs
+and opens the **UGC Live Sync** window with Live Sync already ON — set an Export root and save the scene to
+publish the first snapshot. The seed applies once per `seededUtc` stamp (recorded as `appliedUtc`), so it never
+clobbers manual window changes on later domain reloads; re-running `ugc dev` re-arms it. Note that the daemon's
+live store is still machine-global EditorPrefs — when switching between projects on the same machine, go through
+`ugc dev` so the seed re-points the watch folder.
 
 See [CreatorCompanion.md](CreatorCompanion.md) for the surrounding Creator-Companion workflow (projects, Unity
 templates, and VPM packages).

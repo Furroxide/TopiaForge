@@ -98,7 +98,9 @@ public interface IRobotAgent
     bool IsAlive { get; }             // false once despawned/destroyed/killed (a ragdoll-stun stays alive)
     Vec3 Position { get; }            // feet/base
     Vec3 HeadPosition { get; }        // top-of-body anchor (scale-aware): headshots + world-anchored HUD
-    RobotBrainMode BrainMode { get; }
+    RobotBrainMode BrainMode { get; }        // the CURRENT mode (SetBrainMode changes it)
+    void SetBrainMode(RobotBrainMode mode);  // runtime switch: Dormant = suppress the native brain (reprogram/override);
+                                             // Autonomous = clear mod intents + best-effort wake the native brain
 
     bool IsMoving { get; }
     bool HasReachedTarget { get; }
@@ -132,7 +134,23 @@ public readonly struct RobotColor { float R, G, B, A; }
 
 `RobotAgentSpawnRequest(Vec3 position, Vec3? facing = null)` carries the spawn pose plus `BrainMode`
 (default `Dormant`), `Gait` (default `Run`), optional `MoveSpeed`/`TurnSpeed` overrides (0 = keep prefab
-default), `StopDistance`, `Tint`, `Name`, `Scale` (default 1), and `Interaction` (default native talk).
+default), `StopDistance`, `Tint`, `Name`, `Scale` (default 1), `Interaction` (default native talk), and
+`RobotTypeId` (default `null` = the default type).
+
+### Robot types
+
+The current level usually exposes more than one robot prefab. RobotKit catalogs every distinct *walkable*
+robot prefab (robot body + locomotion) it can discover:
+
+```csharp
+IReadOnlyList<RobotTypeDescriptor> RobotTypes { get; }  // ordered default-first; empty until a level's scan runs
+bool IsRobotPrefab(object gameObject);                  // "is this GameObject a robot?" — e.g. to keep robots out of prop catalogs
+
+public sealed class RobotTypeDescriptor { string Id; string DisplayName; }  // "worker-robot" / "Worker Robot"
+```
+
+Offer `RobotTypes` in a spawn UI and pass the chosen `Id` as `RobotAgentSpawnRequest.RobotTypeId`; an
+unknown/stale id logs a warning and falls back to the default type rather than failing the spawn.
 
 ## Player interactions
 
@@ -307,6 +325,42 @@ each turn as authoritative state the robot **cannot be gaslit about** (HP, facti
 the player's line is wrapped as explicitly-untrusted input. Out-of-set / unavailable answers come back empty so you
 fall back to your deterministic outcome.
 
+**Live facts.** For state that changes *during* the conversation (positions, distances, meters), set
+`RobotConversationRequest.LiveFacts` — a `Func<IReadOnlyDictionary<string,string>?>` invoked at the start of every
+submitted turn and merged **over** `GroundTruthFacts` (a live key wins). A null-returning or throwing provider
+degrades to the static facts. The pure `RobotTargetFacts.Describe(...)` helper turns a registered objective target
+into a grounding line like `"another robot, 8 m north-east of you"` — combine it with `IRobotObjectiveService.Targets`
+to let a robot follow, walk to, or *locate* any registered entity by name.
+
+### Extra outputs & the exit-chat pattern (RobotKit 0.7.0+)
+
+A conversation can request **additional structured fields** beyond the built-in reply/decision — set
+`RobotConversationRequest.ExtraOutputs` (a list of `BrainOutputField`s, exactly like a brain query's) and read every
+returned value from `IRobotConversation.LastValues`:
+
+```csharp
+var convo = svc.BeginConversation(new RobotConversationRequest(frame,
+    decisionOptions: new[] { "CHAT", "IDLE", "GO_TO", "FOLLOW", "PATROL" })
+{
+    ExtraOutputs = new[] { new BrainOutputField("target", "What the action applies to; NONE when chatting.",
+        BrainFieldType.String, new[] { "NONE", "PLAYER", "RED MARKER" }) },
+});
+// when convo.TurnReady:
+convo.LastValues.TryGetValue("target", out var target);
+```
+
+Keep the budget small — the backend is a 3-second, single-shot call, and every extra field costs accuracy. Two or
+three fields, closed-set wherever possible, is the sweet spot. Fields named `reply`/`decision` are ignored, and with
+no `ExtraOutputs` the request is byte-identical to the historical two-field shape.
+
+**Exit-chat is structural, not textual.** To let a robot decide *"stop talking and go do it"*, make the decision set
+itself carry the exit: reserve one decision value (e.g. `CHAT`) for *staying in the conversation* and make every
+other value an accepted task. The moment the robot picks a non-`CHAT` decision, the consumer closes the chat and
+executes — pairing the decision with a closed-set `target` extra field (whose options are exactly the registered
+objective-target names, plus `NONE`) gives the full "what to do and to what" program in one turn. Gate it
+deterministically: an action whose target is `NONE`/unknown must degrade back to chat, never program the robot
+against a place the model invented. `Robotopia.Sandbox`'s PROGRAM verb is the reference consumer.
+
 ## Player dialogue input — text + voice (`IPlayerDialogueInputService`)
 
 Captures what the player *says* to a robot the same two ways the **base game** does (verified by decompile): typed
@@ -338,6 +392,58 @@ on-screen button.
 `Robotopia.Zombies`' **JACK IN** verb (v0.8.0) is the reference consumer for all three services: aim at a robot,
 open a channel (the horde freezes), type or speak, and its brain decides whether to convert/stand-down/flee — with
 the deterministic `OverrideDecision` "robot psychology" only seeding the persuasion gate, not authoring the outcome.
+
+## Robot objectives & programs (`IRobotObjectiveService`)
+
+A **standing program** for a robot (RobotKit **0.7.0+**): instead of hand-driving `MoveTo`/`Chase` every frame, set
+an objective once and the service keeps executing it — seek, arrive, re-seek if the target moves, patrol forever —
+on top of the agent's native locomotion. Objectives reference the world through **registered named targets**, a
+session-scoped vocabulary the consumer publishes; those names are also exactly the closed set to offer an LLM (see
+the exit-chat pattern above).
+
+```csharp
+public interface IRobotObjectiveService
+{
+    // Named-target vocabulary (case-insensitive; cleared on scene change)
+    void RegisterTarget(string name, Func<RobotTargetSnapshot?> resolve);   // null = currently missing (kind: Custom)
+    void RegisterTarget(string name, RobotTargetKind kind, Func<RobotTargetSnapshot?> resolve); // with kind metadata
+    void UnregisterTarget(string name);
+    IReadOnlyList<string> TargetNames { get; }
+    IReadOnlyList<RobotTargetInfo> Targets { get; }                          // names + kinds, for LLM ground truth
+    bool TryGetTargetInfo(string name, out RobotTargetInfo info);
+    bool TryResolveTarget(string name, out RobotTargetSnapshot snapshot);
+
+    // RobotTargetKind: Custom | Player | Robot | Prop | Marker — what the target IS, so a conversation can
+    // describe it ("another robot", "a marker pad") instead of offering a bare name.
+
+    // Clean-slate (re)programming — any existing objective on the agent is cancelled and replaced
+    IRobotObjectiveHandle SetObjective(IRobotAgent agent, RobotObjective objective);
+    IRobotObjectiveHandle? GetObjective(IRobotAgent agent);
+    void ClearObjective(IRobotAgent agent);
+}
+
+objectives.RegisterTarget("PLAYER", () => robots.TryGetPlayerObject(out var go) && robots.TryGetPlayerPosition(out var p)
+    ? new RobotTargetSnapshot(p, go) : (RobotTargetSnapshot?)null);
+
+var handle = objectives.SetObjective(agent, RobotObjective.Follow("PLAYER"));
+// handle.State: Idle | Seeking | Arrived | Dwelling | TargetMissing | Cancelled
+```
+
+The program vocabulary: `RobotObjective.Idle()`, `.GoTo(name | Vec3)`, `.Follow(name)`,
+`.Patrol(waypoints)` / `.PatrolTo(name)` (patrols between where the robot stands when programmed and the target,
+dwelling `DwellSeconds` at each end). Per-objective knobs: `ArriveDistance` (applied as the agent's `StopDistance`),
+`Gait`. Execution details worth knowing:
+
+- A **live** target (`RobotTargetSnapshot.GameObject` non-null) is followed with the native `Chase` (one call,
+  native re-pathing); a position-only target is re-resolved every ~1 s and the walk re-issued when it drifts more
+  than `ArriveDistance + 1 m` (a crate carried off by the Gravity Gun gets chased down again).
+- A named target that currently resolves to `null` parks the objective in `TargetMissing` (the robot stops) and
+  retries every ~2 s — despawned/not-yet-loaded targets wait rather than fail.
+- Objectives are **session-only**: the service cancels every runner and clears the target vocabulary on scene
+  change; nothing persists.
+
+`Robotopia.Sandbox` (v0.2.0) is the reference consumer: every spawned prop/robot registers itself as a target, and
+the PROGRAM verb turns an LLM conversation turn into `SetObjective`.
 
 ## Example
 
@@ -383,7 +489,7 @@ public sealed class MyMod : IRobotopiaMod
 Manifest: declare the dependency so RobotKit loads first.
 
 ```json
-"dependencies": [{ "id": "robotopia.robotkit", "versionRange": ">=0.2.0" }],
+"vpmDependencies": { "robotopia.robotkit": ">=0.2.0" },
 "loadAfter": ["robotopia.robotkit"]
 ```
 
@@ -397,7 +503,7 @@ are the game's own.
 
 ## End-to-end verification
 
-Build and deploy (`dotnet build mods/Robotopia.RobotKit/...`, then `tools/install-local.ps1`), launch the game,
+Build and deploy (`dotnet build mods/Robotopia.RobotKit/...`, then `robotopia dev-install`), launch the game,
 and start a gamemode that spawns robots (e.g. pick **Zombies** from the menu). Confirm in
 `…/RobotopiaModManager/logs/manager.log`:
 

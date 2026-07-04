@@ -5,17 +5,22 @@ standalone desktop launcher, and a developer CLI for the Unity Mono build of Rob
 
 ## For players (installing & playing mods)
 
-You need **no developer tools** — no Flutter, Dart, .NET, or Node. Get the launcher from the release package
-(the `launcher/` folder inside `RobotopiaModManager.zip`) and run `robotopia_launcher_flutter.exe`. It detects your
-Robotopia install, repairs the runtime, and lets you browse, install, enable/disable, and launch mods. The
-**Developer** tab is hidden by default — turn it on under **Settings → Developer mode** only if you build mods.
+You need **no developer tools** -- no Flutter, Dart, .NET, or Node. Download the release zip for your OS:
+`QuantumWorks-windows-x64.zip`, `QuantumWorks-macos-universal.zip`, or `QuantumWorks-linux-x64.zip`. Windows and
+Linux packages expose the launcher in `launcher/` and a root `robotopia` CLI executable; macOS packages expose
+`QuantumWorks.app` plus a root `robotopia` shim. The launcher detects your Robotopia install, repairs the Windows
+runtime payload, and lets you browse, install, enable/disable, and launch mods. The **Developer** tab is hidden by
+default -- turn it on under **Settings -> Developer mode** only if you build mods.
 
 ## For mod developers
 
-Validate your machine first with the CLI (`robotopia setup` to auto-fix what it safely can, or `robotopia doctor`
-to audit read-only). Only the .NET SDK is required to build mods; Node/Unity are optional (UGC live-sync). See
-[docs/Modding.md](docs/Modding.md). Build branded in-game UI (windows, HUDs, modals, toasts) with the
-QuantumWorks UI kit — see [docs/UiKit.md](docs/UiKit.md) and the F8 gallery mod.
+Start with the walkthrough: [docs/YourFirstMod.md](docs/YourFirstMod.md). The release zip contains the
+`robotopia` CLI at its root — add it to `PATH` and you're set (see
+[docs/Modding.md → Install the CLI](docs/Modding.md#install-the-cli)). Validate your machine first
+(`robotopia setup` to auto-fix what it safely can, or `robotopia doctor` to audit read-only). Only the .NET SDK
+is required to build mods; Node/Unity are optional (UGC live-sync). See [docs/Modding.md](docs/Modding.md) for
+the full reference. Build branded in-game UI (windows, HUDs, modals, toasts) with the QuantumWorks UI kit — see
+[docs/UiKit.md](docs/UiKit.md) and the F8 gallery mod.
 
 ## Standalone launcher
 
@@ -29,10 +34,10 @@ Run it locally with:
 
 ```powershell
 cd apps\robotopia_launcher_flutter
-flutter run -d windows
+flutter run -d windows   # or -d macos / -d linux
 ```
 
-The launcher uses Flutter with Bloc state management. It detects the known Robotopia install, validates `Robotopia.exe`, repairs bundled BepInEx and the C# loader, manages profiles, previews dependency/conflict plans before package installs, detects legacy `Robotopia\Mods` entries, launches Robotopia, and creates diagnostic bundles.
+The launcher uses Flutter with Bloc state management. It detects the known Robotopia install, validates the game payload (`Robotopia.exe` on Windows/Proton, `Robotopia.app` on macOS), repairs bundled BepInEx and the C# loader, manages profiles, previews dependency/conflict plans before package installs, detects legacy `Robotopia\Mods` entries, launches Robotopia, and creates diagnostic bundles.
 
 Current launcher state management uses `Bloc<LauncherEvent, LauncherState>` rather than Cubit. Non-generated Dart source files are kept at 500 lines or fewer and split by responsibility.
 
@@ -50,15 +55,22 @@ The workflow is inspired by VCC/VPM concepts and remains Robotopia-native: `.rob
 
 ## Local install
 
-```powershell
-.\tools\install-local.ps1
+```sh
+robotopia dev-install                     # add --game-dir <path> to override detection
 ```
 
-This installs BepInEx 5.4.23.5 and the manager plugin into:
+(From a source checkout: `cd apps/robotopia_cli && dart run robotopia dev-install`.
+`tools\install-local.ps1` still works as a deprecated wrapper around the same command.)
 
-```text
-C:\Users\vanst\AppData\Local\Tomato Cake\launcher\Robotopia
-```
+This installs BepInEx 5.4.23.5 and the manager plugin into the detected game install:
+
+| Platform | Default game location |
+| --- | --- |
+| Windows | `%LOCALAPPDATA%\Tomato Cake\launcher\Robotopia` |
+| macOS | `~/Library/Application Support/Tomato Cake/launcher/Robotopia.app` (BepInEx installs beside the app) |
+| Linux | No auto-detect — the game is the Windows build under Proton/Wine; pass `--game-dir` pointing at the game folder inside your prefix |
+
+On Linux, launch the game with `WINEDLLOVERRIDES="winhttp=n,b"` so the mod loader injects. The `ROBOTOPIA_GAME_DIR` environment variable overrides game detection on every platform.
 
 Launch Robotopia, then open the manager from the main-menu **QuantumWorks** button or press `F10`.
 
@@ -66,11 +78,15 @@ Launch Robotopia, then open the manager from the main-menu **QuantumWorks** butt
 
 Mods are `.robotopiamod` zip files with a required `robotopia.mod.json` manifest and a C# assembly that implements `Robotopia.Mods.IRobotopiaMod`.
 
-Use the sample template:
+Scaffold a mod and pack it:
 
-```powershell
-.\tools\pack-mod.ps1 -ProjectDir .\templates\Robotopia.ModTemplate -OutputDir .\dist
+```sh
+robotopia new mod yourname.firstmod --name "First Mod"
+cd yourname.firstmod
+robotopia pack
 ```
+
+`robotopia pack --all` packs every first-party mod under `mods/`, and `robotopia unity pack-packages` regenerates the VPM listing in `dist/vpm/`.
 
 Packages can be installed from the in-game package tab by full path, or by placing them into:
 
@@ -80,7 +96,7 @@ BepInEx\RobotopiaModManager\package-inbox
 
 ## Trust model
 
-V1 uses trusted local packages. Do not install `.robotopiamod` files unless you trust their source; C# mods execute code in the game process.
+Robotopia uses trusted local packages. Do not install `.robotopiamod` files unless you trust their source; C# mods execute code in the game process.
 
 ## Verification
 
@@ -93,3 +109,5 @@ Push-Location apps\robotopia_cli; dart test; dart analyze; Pop-Location
 Push-Location packages\launcher_ui; flutter test; flutter analyze; Pop-Location
 Push-Location apps\robotopia_launcher_flutter; flutter test; flutter analyze; flutter build windows --debug; Pop-Location
 ```
+
+On macOS/Linux the same commands apply with `flutter build macos --debug` / `flutter build linux --debug` in the last step.

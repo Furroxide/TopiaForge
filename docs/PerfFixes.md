@@ -45,7 +45,7 @@ the mod.
 ```
 dotnet build mods/Robotopia.PerfFixes/Robotopia.PerfFixes.csproj -c Release
 ```
-`tools/install-local.ps1` stages it to the game's `package-inbox`; install from the F10 overlay on next
+`robotopia dev-install` stages it to the game's `package-inbox`; install from the F10 overlay on next
 launch.
 
 ## Deferred (vetted but not shipped)
