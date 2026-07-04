@@ -35,6 +35,10 @@ launcher never downloads or installs Unity.
 
 ## Templates
 
+- **Mod templates** (`templates/mod/<id>/`) — six directory templates for C# mods (`minimal`, `gameplay`,
+  `gamemode`, `service`, `ui`, `asset`), each with a `template.json` (metadata + manifest defaults) and
+  `{{TOKEN}}`-substituted sources. Scaffold with `robotopia new mod <id> --template <id>`; list them with
+  `robotopia list templates`. See [Modding.md](Modding.md#scaffolding-and-manifest-management-from-the-cli).
 - **Unity world** (`templates/Robotopia.UnityWorldTemplate/`) — a starter Unity project for authoring UGC levels:
   a sample scene, `Packages/manifest.json` + `Packages/vpm-manifest.json` (UGC companion + the embedded
   resolver), a VCC-style `Packages/.gitignore`, and a pinned Unity 6 version. The `template-world` analog.
@@ -47,7 +51,9 @@ Creating a Unity world project copies the template, installs the `com.robotopia.
 `Packages/`, points the embedded resolver at the local listing (`vpm-resolver-repos.json`), and registers it —
 the same instantiate-then-resolve flow VCC uses.
 
-CLI: `robotopia new unity-world <name> [--dir path]`.
+CLI: `robotopia new unity-world <name> [--dir path] [--live-sync [--watch folder]]`. For the full one-command
+authoring loop (create/resolve the project, seed the companion, deploy the game config, and launch Unity
+connected) use `robotopia ugc dev` — see [UgcLiveSync.md](UgcLiveSync.md#cli-ugc-setup-and-ugc-dev-one-command-authoring-loop).
 
 ## Packages (VPM)
 

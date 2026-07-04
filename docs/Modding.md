@@ -1,5 +1,22 @@
 # QuantumWorks Mod SDK
 
+> New here? Follow the step-by-step walkthrough first: [YourFirstMod.md](YourFirstMod.md). This page is the
+> reference.
+
+## Install the CLI
+
+All commands in these docs use the `robotopia` executable from the release zip:
+
+1. Download the release zip for your OS: `QuantumWorks-windows-x64.zip`, `QuantumWorks-macos-universal.zip`,
+   or `QuantumWorks-linux-x64.zip`.
+2. Extract it. The `robotopia` executable sits at the zip root (`robotopia.exe` on Windows; on macOS a
+   `robotopia` shim sits beside `QuantumWorks.app`).
+3. Add that folder to your `PATH`.
+4. Verify: `robotopia doctor`.
+
+Working from a source checkout instead? Run `dart pub get` once in `apps/robotopia_cli`, then substitute
+`dart run robotopia <command>` (from that directory) wherever these docs say `robotopia <command>`.
+
 ## Getting set up
 
 **Consuming mods needs no developer tools** — install via the launcher, or `robotopia install <package>` then
@@ -15,6 +32,23 @@ To **develop** mods, validate your machine first:
 
 Only the **.NET SDK 8+** is required to build mods. **Node.js 20+** and **Unity** are optional (UGC live-sync
 authoring only). Build/pack commands fail fast with actionable guidance when the toolchain is missing.
+
+## Platform support
+
+The tools (CLI, launcher, loader install) run on Windows, macOS, and Linux:
+
+- **Windows** — native game at `%LOCALAPPDATA%\Tomato Cake\launcher\Robotopia`; BepInEx injects via the
+  `winhttp.dll` doorstop proxy.
+- **macOS** — native game bundle at `~/Library/Application Support/Tomato Cake/launcher/Robotopia.app`;
+  the launcher installs the BepInEx unix build beside the app and launches with the doorstop `DYLD` environment
+  (a `run_bepinex.sh` escape hatch ships too).
+- **Linux** — the game is the Windows build running under Proton/Wine. Select the game folder inside your
+  prefix (no auto-detect), run Repair to install the Windows BepInEx, and launch through your usual launcher
+  with `WINEDLLOVERRIDES="winhttp=n,b"`. Setting `wineCommand` in the launcher settings lets the launcher
+  start the game directly.
+
+Building mods on a machine without a game install: set `ROBOTOPIA_GAME_DIR` (or the `RobotopiaManagedDir`
+MSBuild property) to a folder containing the game's managed reference assemblies.
 
 Implement `Robotopia.Mods.IRobotopiaMod`:
 
@@ -36,20 +70,78 @@ public sealed class MyMod : IRobotopiaMod
 
 Manifest fields:
 
-- `schemaVersion`: must be `1`
-- `id`: stable unique id, for example `author.gravitygun`
-- `name`, `version`, `author`, `description`
+- `$schema`: optional URL of the manifest JSON schema; scaffolded manifests point at
+  `schemas/robotopia.mod.schema.json` on GitHub so editors validate and autocomplete.
+- `schemaVersion`: must be `2`
+- `name`: stable unique package id, for example `author.gravitygun`
+- `displayName`, `version`, `description`
+- `author`: `{ "name": ..., "email": ..., "url": ... }` (a bare string is accepted and treated as the name;
+  only `name` is required)
 - `entryAssembly`: DLL inside the package
 - `entryType`: fully qualified type implementing `IRobotopiaMod`
-- `dependencies`: mods that must be enabled and loaded first
-- `optionalDependencies`: optional integrations
-- `conflicts`: mods that must not be installed/enabled together
+- `vpmDependencies`: mods that must be enabled and loaded first, as `{ "mod.id": "version range" }`
+- `dependencies` / `optionalDependencies`: list form, entries as
+  `{ "id": "mod.id", "versionRange": ">=1.0.0" }` (alias `version`; `dependencies` entries may also set
+  `"optional": true`)
+- `conflicts`: mods that must not be installed/enabled together; entries as
+  `{ "id": "mod.id", "versionRange": ..., "reason": ... }`
 - `loadAfter`: optional soft ordering
-- `supportedGameVersionRange`, `supportedLoaderVersionRange`: launcher-enforced version ranges
+- `supportedGameVersionRange`, `supportedLoaderVersionRange`, `supportedSdkVersionRange`: launcher-enforced version ranges
+- `worldGamemodes`: gamemodes this mod registers, shown in the level-select menu; entries as
+  `{ "id": ..., "name": ..., "description": ... }` (`id` and `name` required)
+- `apiAssemblies`: DLLs (package-relative paths) exported for other mods to compile against; consumers get
+  reference assemblies on `robotopia restore`
 - `category`, `tags`, `icon`, `screenshots`, `homepage`, `source`, `license`, `hashes`: launcher metadata
-- `permissions`: descriptive only in v1
+- `permissions`: descriptive user-facing capability labels
+- `legacyFolders`, `legacyFiles`, `legacyPackages`: written by `robotopia migrate legacy` to map pre-package
+  installs onto this mod; not hand-authored
+
+Accepted key aliases (write the canonical form; `robotopia mod set` and `pack` normalize to it): `id` → `name`,
+`title` → `displayName`, `gameVersionRange`/`gameVersion` → `supportedGameVersionRange`,
+`loaderVersionRange` → `supportedLoaderVersionRange`, `sdkVersionRange` → `supportedSdkVersionRange`,
+`packageHashes` → `hashes`, `gamemodes` → `worldGamemodes`.
 
 Loaded C# assemblies cannot be unloaded from Unity Mono, so enable, disable, update, and uninstall actions are staged and marked restart-required when needed.
+
+## Scaffolding and manifest management from the CLI
+
+`robotopia new mod <id>` scaffolds a ready-to-build project from a template (`robotopia list templates`):
+
+| Template | Modeled on | What you get |
+|---|---|---|
+| `minimal` (default) | the hello sample | Entry class logging load/scene events |
+| `gameplay` | Gravity Gun | Config + per-frame controller split; `input`, `physics`, `hud` permissions |
+| `gamemode` | Zombies | Worlds-service gamemode + menu entry registration; depends on `robotopia.worlds` + `robotopia.robotkit` with `loadAfter`; a `worldGamemodes` entry |
+| `service` | Assets | A published `I<Name>Service` via `IModServiceRegistry`, exposed through `apiAssemblies` |
+| `ui` | UI Gallery | An F8-toggled QwUi window (references `Robotopia.Mods.UnityUi`) |
+| `asset` | asset-companion flow | `IAssetBundleService` load/spawn stub + the Unity companion project scaffolded by default |
+
+Every manifest field is settable at scaffold time — repeatable flags repeat (`--tag a --tag b`):
+
+```powershell
+robotopia new mod author.waves --template gamemode --name "Waves" `
+  --author "You" --license MIT --category Gameplay `
+  --tag waves --permission hud --dependency robotopia.chronos@">=0.1.0" `
+  --gamemode "author.waves.survival:Waves:Survive the waves." `
+  --game-version-range ">=0.1.0 <0.2.0"
+```
+
+`hashes` are computed by `robotopia pack`, `legacy*` fields by `robotopia migrate legacy`, and `schemaVersion`
+is pinned to 2 — those are intentionally not flags. Add `--unity-companion` for the Unity authoring project, or
+`--live-sync [--transport localFolder|automerge] [--watch folder]` to preconfigure UGC live sync (implies the
+companion; see [UgcLiveSync.md](UgcLiveSync.md)).
+
+After creation, manage the manifest without hand-editing JSON — every edit is validated before it is written
+(same rules as `check package`, which accepts both a packed `.robotopiamod` and an unpacked project folder):
+
+```powershell
+robotopia mod show                                 # pretty-print manifest + validation issues
+robotopia mod set version 0.2.0                    # scalar fields (license, category, author, ranges, ...)
+robotopia mod add permission time                  # tags, permissions, load-after, screenshots, api-assemblies
+robotopia mod add dependency robotopia.worlds@">=0.3.0"
+robotopia mod add gamemode "my.mode:My Mode:Description"
+robotopia mod remove tag old-tag
+```
 
 Optional SDK services are available through `context.GetService<T>()`:
 
@@ -83,10 +175,10 @@ Asset and prompt helpers are opt-in framework services. Declare the dependency i
 the convenience extensions:
 
 ```json
-"dependencies": [
-  { "id": "robotopia.assets", "versionRange": ">=0.1.0" },
-  { "id": "robotopia.prompts", "versionRange": ">=0.1.0" }
-],
+"vpmDependencies": {
+  "robotopia.assets": ">=0.1.0",
+  "robotopia.prompts": ">=0.1.0"
+},
 "loadAfter": ["robotopia.assets", "robotopia.prompts"]
 ```
 
@@ -140,6 +232,27 @@ and [UnityVpm.md](UnityVpm.md).
 ```csharp
 var ugc = context.GetService<IUgcLiveSyncService>();
 ugc?.StartLocalSession(new UgcLiveSyncRequest(watchFolder: @"C:\path\to\watch"));
+```
+
+## Custom Worlds
+
+Ship a **fully custom world** — modeled in Blender, assembled in Unity, packed as a prefab in an
+AssetBundle — and register it as a playable world that appears in the game's GAMEMODES menu. The
+runtime seam is `IWorldGamemodeService.RegisterWorld(WorldDefinition, ICustomWorldContent)` (from
+`robotopia.worlds >= 0.5.0`); the one-call convenience is `context.RegisterWorldFromBundle(...)`,
+which wires the bundle prefab + a Sandbox-paired menu entry. The authoring loop is
+`robotopia new mod <id> --template world` + `robotopia new unity-world <Name> --mod <modDir>` +
+`robotopia world build|play`. See [CustomWorlds.md](CustomWorlds.md) for the prefab contract
+(SpawnPoint marker, no custom scripts, colliders, optional HDRP Volume) and the full walkthrough.
+
+```csharp
+var worlds = context.RequireService<IWorldGamemodeService>();
+context.RegisterWorldFromBundle(worlds, new BundleWorldOptions
+{
+    Id = "mymod.worlds.skyisland",
+    Name = "Sky Island",
+    BundleRelativePath = "AssetBundles/sky-island.bundle",
+});
 ```
 
 ## Robots & Standard Agents

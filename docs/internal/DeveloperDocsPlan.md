@@ -35,7 +35,7 @@ Status: Proposed · Date: 2026-06-29 · Owner: docs/platform · Repo: repository
 
 | Priority | Audience | Core need |
 |---|---|---|
-| **1 (primary)** | External C# mod developers | Reference SDK → implement `IRobotopiaMod` → manifest → `pack-mod.ps1` → install → services (assets, prompts, Worlds) → publish. Needs the restart-required/Mono-no-unload model explained. |
+| **1 (primary)** | External C# mod developers | Reference SDK → implement `IRobotopiaMod` → manifest → `robotopia pack` → install → services (assets, prompts, Worlds) → publish. Needs the restart-required/Mono-no-unload model explained. |
 | 2 | End users (launcher) | Install/detect game, install/enable/disable mods, dependency/conflict plans, diagnostics. Mostly *user* docs; overlaps dev docs only at the package-format boundary. |
 | 3 | Internal contributors | Architecture map, `AGENTS.md` rules (Bloc, 500-line Dart cap, clean-room, Core free of Unity), verification matrix, where the manifest schema *actually* lives (Dart `launcher_domain`). |
 
@@ -143,9 +143,9 @@ Section type in brackets (loose Diátaxis check). **Legend:** 🟢 exists today 
 | Page | Type | Source | Status |
 |---|---|---|---|
 | Home / Overview (loader vs launcher, by-audience start) | — | hand | ⚪ |
-| **Getting Started (Modders)** — template → build → `pack-mod.ps1` → install → F10 → logs | Tutorial | hand, snippets from CI-built template | 🟡 (README + Modding.md fragments) |
-| Your First Mod (full walkthrough) | Tutorial | hand + `templates\Robotopia.ModTemplate` | ⚪ |
-| Mod Anatomy (`.robotopiamod` layout, what `pack-mod.ps1` includes/strips) | Reference | hand | ⚪ |
+| **Getting Started (Modders)** — template → build → `robotopia pack` → install → F10 → logs | Tutorial | hand, snippets from CI-built template | 🟡 (README + Modding.md fragments) |
+| Your First Mod (full walkthrough) | Tutorial | hand + `robotopia new mod` scaffold (`templates\mod\*`) | 🟢 (docs/YourFirstMod.md) |
+| Mod Anatomy (`.robotopiamod` layout, what `robotopia pack` includes/strips) | Reference | hand | ⚪ |
 | **Manifest Reference (`robotopia.mod.json`)** | Reference | hand-maintained, **CI-validated** against `ModManifest`/`ModDependency`/`ModConflict` (see §7) | 🟡 (Modding.md lists most fields; missing `worldGamemodes`, dependency version-range object, key aliases) |
 | Mod Lifecycle & Context (`OnLoad/OnUnload`, `IModContext`, restart-required/Mono no-unload) | Explanation+Ref | hand | 🟡 |
 | Configuration (`LoadConfig/SaveConfig`, `[DataContract]`, `ModPaths`, `IModFileService`) | How-to | hand | ⚪ |
@@ -171,15 +171,15 @@ Section type in brackets (loose Diátaxis check). **Legend:** 🟢 exists today 
 > Effort below is split into **generator/CI setup** vs **prose authoring**, because authoring is the real cost. Authoring estimates assume one writer; treat them as the long pole.
 
 ### Phase 0 — Stop the bleed (in-repo Markdown) · setup ~0.5 day · authoring ~0.5–1 day
-- Expand `docs\Modding.md` into a real end-to-end Quickstart (template → build → `pack-mod.ps1` → install → F10).
-- Add `docs\Manifest.md` documenting the **actual** field superset — cross-check against `manifest_models.dart`: include `worldGamemodes` (alias `gamemodes`), the dependency version-range object, and the accepted **key aliases** (`supportedGameVersionRange`|`gameVersionRange`|`gameVersion`; `versionRange`|`version`; `hashes`|`packageHashes`), plus `schemaVersion == 1` and the `id` rule (`^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$`, i.e. 2–64 chars).
+- Expand `docs\Modding.md` into a real end-to-end Quickstart (template → build → `robotopia pack` → install → F10).
+- Add `docs\Manifest.md` documenting the **actual** field superset — cross-check against `manifest_models.dart`: include `worldGamemodes` (alias `gamemodes`), `vpmDependencies`, optional dependency objects, and Robotopia extensions, plus `schemaVersion == 2` and the VPM `name` id rule (`^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$`, i.e. 2–64 chars).
 - Add `CONTRIBUTING.md` with the one-line content-routing rule + PR checklist.
 - **Done when:** a new modder can ship a `.robotopiamod` using only in-repo Markdown.
 
 ### Phase 1 — Portal + core hand-written docs · setup ~1–1.5 days · authoring ~4–6 days
 - Scaffold Starlight under `website/`; wire task-oriented nav.
 - Author the ~9 core pages: Getting Started, Your First Mod, Mod Anatomy, Manifest Reference, Lifecycle/Context, Config, Services Overview, Security & Trust, Troubleshooting. **Budget ~half a day each for good technical prose** — this dominates the phase.
-- Source tutorial code snippets from the **CI-built** `templates\Robotopia.ModTemplate` so they can't drift.
+- Source tutorial code snippets from the **CI-scaffolded** `robotopia new mod` output (the release workflow scaffolds and packs one on every OS) so they can't drift.
 - GitHub Actions: build Starlight → deploy to Pages. Add `markdownlint-cli2` + `lychee` link-check on PRs. (Starlight's Pagefind covers portal search out of the box.)
 - **Done when:** a credible public site is live at the Pages URL with the modder happy-path complete, portal search working, link-check green in CI.
 
@@ -214,7 +214,7 @@ The generated C# API tier is **worthless until comments exist** — this is the 
 
 **Docs-as-code guardrails (Phase 1):**
 - `docs/CONTRIBUTING.md` with the content-routing rule + PR checklist.
-- GitHub Actions job: `markdownlint-cli2` + `lychee` (fail on broken links) + **build the sample mod** (`templates\Robotopia.ModTemplate`) so snippets sourced from it can't drift. (RoboPatch's published sample has the classic `api = api` self-assignment bug — exactly what CI-built snippets prevent.)
+- GitHub Actions job: `markdownlint-cli2` + `lychee` (fail on broken links) + **scaffold and build a sample mod** (`robotopia new mod`, as the release workflow already does) so snippets sourced from it can't drift. (RoboPatch's published sample has the classic `api = api` self-assignment bug — exactly what CI-built snippets prevent.)
 
 **Manifest single-source-of-truth (corrected):** the validator lives in Dart (`launcher_domain`, hand-written classes — **no annotations, no `build_runner`/`json_serializable`, and Dart has no usable AOT runtime reflection**, so there is *no* cheap "reflect over `manifest_models.dart`" path). Two workable options, pick one:
 1. **Hand-maintain the Manifest Reference table + a CI parse test** (recommended now): a small test asserts every documented key (and its aliases) still parses through `ModManifest.fromJson`/`ModDependency`/`ModConflict`, and fails CI if a documented key stops being accepted or a new required field appears.
@@ -251,7 +251,7 @@ The generated C# API tier is **worthless until comments exist** — this is the 
 
 1. **Decide the two forks** (§8): commit to versioning now (→ Docusaurus) or defer (→ Starlight, recommended); and whether to minimize toolchains (DocFX-whole-site / Writerside) or keep best-of-breed (recommended).
 2. **C# prerequisite kickoff:** add `<GenerateDocumentationFile>` to `Robotopia.Mods.Abstractions.csproj` and a CI doc-coverage (CS1591) **report**; start writing `///` summaries in `IRobotopiaMod.cs`, then `Worlds.cs`.
-3. **Phase 0 Markdown:** expand `docs\Modding.md` into a full Quickstart; add `docs\Manifest.md` covering the true field superset incl. key aliases, `schemaVersion == 1`, and the `id` regex (verify against `manifest_models.dart`); add `CONTRIBUTING.md` with the content-routing rule.
+3. **Phase 0 Markdown:** expand `docs\Modding.md` into a full Quickstart; add `docs\Manifest.md` covering the true field superset incl. VPM-shaped `name`/`displayName`, `schemaVersion == 2`, and the package id regex (verify against `manifest_models.dart`); add `CONTRIBUTING.md` with the content-routing rule.
 4. **CI seed:** add a GitHub Actions job with `markdownlint-cli2` + `lychee` link-check **and a manifest-key parse test** (§7) on PRs.
 5. **Scaffold the portal** (chosen generator) under `website/` and wire a deploy-to-Pages workflow with a placeholder home page to lock in hosting/URL early.
 

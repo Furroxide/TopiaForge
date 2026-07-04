@@ -46,7 +46,7 @@ $rows = @(); foreach ($file in rg --files -g "*.dart") { $count = (Get-Content -
 
 - Build a real desktop utility, not a landing page.
 - Prefer a quiet, dense layout: left navigation, profile selector, prominent launch button, status bar, mod list, and detail pane.
-- Required screens are Library/Launch, Mods, Browse, Profiles, Diagnostics, and Settings.
+- Required screens are Home (launch pad + discovery), Setup (runtime/world/load-order config), Mods, Browse, Profiles, Diagnostics, and Settings.
 - Include loading, empty, error, warning, destructive confirmation, focus, and no-overflow states.
 - Use Flutter Material icons for common commands.
 

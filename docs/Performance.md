@@ -77,7 +77,7 @@ mod.
 ```
 dotnet build mods/Robotopia.Performance/Robotopia.Performance.csproj -c Release
 ```
-`tools/install-local.ps1` packs every `mods/*` with a `robotopia.mod.json` into the game's
+`robotopia dev-install` packs every `mods/*` with a `robotopia.mod.json` into the game's
 `package-inbox`; launch the game once and install from the F10 overlay (or the main-menu Mod Manager
 button) to apply.
 

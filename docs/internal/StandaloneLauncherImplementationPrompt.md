@@ -29,7 +29,7 @@ Existing code includes:
 - `src/Robotopia.ModManager.Core`
 - `src/Robotopia.ModManager`
 - `src/Robotopia.Mods.Abstractions`
-- `templates/Robotopia.ModTemplate`
+- `templates/mod/*` (scaffolding templates for `robotopia new mod`)
 - `tools/*.ps1`
 - `docs/Modding.md`
 

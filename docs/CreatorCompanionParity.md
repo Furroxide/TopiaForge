@@ -25,14 +25,16 @@ Generated package caches live under `.robotopia/packages/` and are also ignored.
 The Dart CLI package lives in `apps/robotopia_cli` and exposes the `robotopia`
 executable.
 
-Common commands:
+Common commands (these examples assume the `robotopia` executable from the release zip is on `PATH` — see
+[Modding.md → Install the CLI](Modding.md#install-the-cli); from a source checkout use
+`dart run robotopia <command>` inside `apps/robotopia_cli`):
 
 ```powershell
-dart run apps\robotopia_cli\bin\robotopia.dart new mod author.example --name "Example Mod"
-dart run apps\robotopia_cli\bin\robotopia.dart add package robotopia.worlds@1.x
-dart run apps\robotopia_cli\bin\robotopia.dart restore
-dart run apps\robotopia_cli\bin\robotopia.dart pack
-dart run apps\robotopia_cli\bin\robotopia.dart doctor
+robotopia new mod author.example --name "Example Mod"
+robotopia add package robotopia.worlds@1.x
+robotopia restore
+robotopia pack
+robotopia doctor
 ```
 
 `restore` resolves dependencies from configured package sources, verifies
@@ -41,7 +43,7 @@ generates `robotopia.dev.props` so C# code can compile against exported APIs.
 
 ## Exported C# APIs
 
-Runtime-only dependencies belong in `dependencies` or `optionalDependencies`.
+Runtime-only dependencies belong in `vpmDependencies` or `optionalDependencies`.
 If a package intentionally exposes C# APIs for other mods to compile against,
 list those DLLs in `apiAssemblies`:
 
@@ -57,9 +59,9 @@ load ordering separate from compile-time API contracts.
 ## Package Sources
 
 The launcher and CLI read the existing flat `mods` registry and the
-`packages -> versions` repository shape used by VPM-style indexes. VPM's
-`vpmDependencies` field is accepted as an alias for Robotopia dependency ranges
-when a source can be mapped to `robotopia.mod.json` metadata.
+`packages -> versions` repository shape used by VPM-style indexes. Robotopia
+uses VPM-style `name`, `displayName`, `author`, and `vpmDependencies` fields in
+`robotopia.mod.json` while keeping `.robotopiamod` as the runtime package file.
 
 ## Unity Companion
 

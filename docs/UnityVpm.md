@@ -61,7 +61,7 @@ A listing serves packages keyed by id → version → the package.json plus `url
 ```
 
 The built-in local listing is `dist/vpm/index.json`, **derived from the packed zips** — the same drift-proof
-pattern the `.robotopiamod` catalog uses. Regenerate it with `tools/pack-unity-packages.ps1` (run automatically by
+pattern the `.robotopiamod` catalog uses. Regenerate it with `robotopia unity pack-packages` (run automatically by
 `tools/package-distribution.ps1`): it zips every shipped `com.robotopia.*` package (companion + resolver),
 computes the SHA-256, and rewrites `index.json`. There is no hand-maintained registry.
 
