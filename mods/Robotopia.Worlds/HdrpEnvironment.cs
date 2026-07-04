@@ -31,12 +31,18 @@ namespace Robotopia.Worlds
                 sky.top.value = new Color(0.20f, 0.42f, 0.78f);
                 sky.middle.value = new Color(0.55f, 0.62f, 0.72f);
                 sky.bottom.value = new Color(0.32f, 0.33f, 0.36f);
+                // Lift the sky into physical daylight luminance so it holds its own against the 15k-lux sun;
+                // at the default exposure of 0 the gradient is effectively black next to sunlit geometry.
+                sky.exposure.value = 13.5f;
 
-                // Automatic exposure adapts to whatever brightness the arena ends up at, so the result is
-                // never blown out or black even though we cannot tune a fixed EV against a baked scene.
+                // Fixed daylight exposure. Automatic metering sits between the sunlit ground and the (much
+                // dimmer, pre-lift) sky and settles on a value that blows the ground out while crushing the
+                // sky; with the sun and sky both tuned to real daylight levels a fixed EV is stable.
                 var exposure = profile.Add<Exposure>(overrides: true);
-                exposure.mode.value = ExposureMode.Automatic;
-                exposure.meteringMode.value = MeteringMode.CenterWeighted;
+                exposure.mode.value = ExposureMode.Fixed;
+                // EV 14.5 ≈ bright daylight, matched to the 100k-lux sun so sunlit ground sits above
+                // mid-grey without clipping while sky-lit shadows stay several stops darker.
+                exposure.fixedExposure.value = 14.5f;
 
                 var tonemapping = profile.Add<Tonemapping>(overrides: true);
                 tonemapping.mode.value = TonemappingMode.Neutral;
@@ -100,11 +106,17 @@ namespace Robotopia.Worlds
                 var light = sunObject.AddComponent<Light>();
                 light.type = LightType.Directional;
                 light.color = new Color(1f, 0.96f, 0.9f);
+                // A scripted Light defaults to no shadows; without them (and with sky ambient as strong as
+                // the sun) every face reads identically and the arena looks completely flat.
+                light.shadows = LightShadows.Soft;
+                light.shadowStrength = 1f;
 
                 // Ensure HDRP's per-light data exists, then set a physical intensity. HDRP directional lights
-                // are in lux; the legacy 1.2 was effectively black. Automatic exposure tolerates the exact value.
-                sunObject.AddComponent<HDAdditionalLightData>();
-                light.intensity = 15000f;
+                // are in lux. Real daylight (~100k lux) keeps the sun well above the sky-driven ambient
+                // (~18k lux at the sky's 13.5 EV), so lit vs shadowed surfaces separate instead of merging.
+                var hdData = sunObject.AddComponent<HDAdditionalLightData>();
+                light.intensity = 100000f;
+                hdData.SetShadowResolution(2048);
             }
             catch (Exception ex)
             {

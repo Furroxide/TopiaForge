@@ -56,7 +56,7 @@ namespace Robotopia.RobotKit
                 return VoiceCapture.Unavailable();
             }
 
-            LogAvailabilityOnce();
+            LogAvailabilityOnce(device);
             var capture = new VoiceCapture(client, logger, serviceCts.Token, device, clip);
             active.Add(capture);
             return capture;
@@ -141,7 +141,8 @@ namespace Robotopia.RobotKit
                 }
 
                 if (name.IndexOf("Microsoft Teams", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    name.IndexOf("OBS Virtual", StringComparison.OrdinalIgnoreCase) >= 0)
+                    name.IndexOf("OBS Virtual", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    name.IndexOf("Steam Streaming", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
                     continue;
                 }
@@ -152,7 +153,7 @@ namespace Robotopia.RobotKit
             return devices[0];
         }
 
-        private void LogAvailabilityOnce()
+        private void LogAvailabilityOnce(string? device)
         {
             if (loggedAvailability)
             {
@@ -160,7 +161,8 @@ namespace Robotopia.RobotKit
             }
 
             loggedAvailability = true;
-            logger.Info("RobotKit: voice input enabled — push-to-talk transcribes through /agent/stt (16 kHz mono).");
+            logger.Info("RobotKit: voice input enabled — push-to-talk on '" + (device ?? "<default>")
+                + "' transcribes through /agent/stt (16 kHz mono).");
         }
 
         // One push-to-talk capture: records while held, transcribes on Stop. Microphone reads happen on the main
@@ -340,6 +342,7 @@ namespace Robotopia.RobotKit
 
             private void CompleteEmpty(string reason)
             {
+                logger?.Debug("Voice capture rejected: " + reason);
                 error = reason;
                 complete = true;
             }

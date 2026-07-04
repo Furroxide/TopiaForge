@@ -13,6 +13,7 @@ namespace Robotopia.RobotKit
         private RobotBrainQueryService? brainService;
         private RobotConversationService? conversationService;
         private PlayerDialogueInputService? dialogueInputService;
+        private RobotObjectiveService? objectiveService;
 
         public void OnLoad(IModContext context)
         {
@@ -22,16 +23,18 @@ namespace Robotopia.RobotKit
             brainService = new RobotBrainQueryService(context.Logger);
             conversationService = new RobotConversationService(brainService, context.Logger);
             dialogueInputService = new PlayerDialogueInputService(context.Logger);
+            objectiveService = new RobotObjectiveService(context.Logger);
 
             var registry = context.GetService<IModServiceRegistry>();
             registry?.Register<IRobotAgentService>(context.ModId, service);
             registry?.Register<IRobotBrainQueryService>(context.ModId, brainService);
             registry?.Register<IRobotConversationService>(context.ModId, conversationService);
             registry?.Register<IPlayerDialogueInputService>(context.ModId, dialogueInputService);
+            registry?.Register<IRobotObjectiveService>(context.ModId, objectiveService);
 
             context.Update += OnUpdate;
             context.SceneLoaded += OnSceneLoaded;
-            context.Logger.Info("Robotopia RobotKit loaded; IRobotAgentService + IRobotBrainQueryService + IRobotConversationService + IPlayerDialogueInputService registered (poll IsAvailable once a level is loaded).");
+            context.Logger.Info("Robotopia RobotKit loaded; IRobotAgentService + IRobotBrainQueryService + IRobotConversationService + IPlayerDialogueInputService + IRobotObjectiveService registered (poll IsAvailable once a level is loaded).");
         }
 
         public void OnUnload()
@@ -51,12 +54,16 @@ namespace Robotopia.RobotKit
             conversationService = null;
             dialogueInputService?.Dispose();
             dialogueInputService = null;
+            objectiveService?.Dispose();
+            objectiveService = null;
             context = null;
         }
 
         private void OnUpdate(float deltaTime)
         {
             service?.Tick(deltaTime);
+            // After the agent service, so objectives react to this frame's reached/moving state.
+            objectiveService?.Tick(deltaTime);
             brainService?.Tick(deltaTime);
             // After the brain service, so a conversation turn that completed this frame is observed this frame.
             conversationService?.Tick(deltaTime);
@@ -66,6 +73,7 @@ namespace Robotopia.RobotKit
         private void OnSceneLoaded(string sceneName)
         {
             service?.OnSceneChanged();
+            objectiveService?.OnSceneChanged();
             brainService?.OnSceneChanged();
             conversationService?.OnSceneChanged();
             dialogueInputService?.OnSceneChanged();

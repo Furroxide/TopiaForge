@@ -241,25 +241,25 @@
       "id": "robotkit.property.robotroot.body",
       "kind": "Property",
       "assembly": "GameCode",
-      "declaringType": "RobotBody",
+      "declaringType": "AgentHead",
       "member": "Body",
       "matchMode": "DynamicInstance",
       "criticality": "Optional",
       "feature": "Robot root resolution (Body property)",
       "sourceRef": "mods/Robotopia.RobotKit/GameReflection.cs:224",
-      "returnType": "UnityEngine.Component"
+      "returnType": "RobotBody"
     },
     {
       "id": "robotkit.property.robotroot.maybebody",
       "kind": "Property",
       "assembly": "GameCode",
-      "declaringType": "RobotBody",
+      "declaringType": "AgentHead",
       "member": "MaybeBody",
       "matchMode": "DynamicInstance",
       "criticality": "Optional",
       "feature": "Robot root resolution (MaybeBody fallback)",
       "sourceRef": "mods/Robotopia.RobotKit/GameReflection.cs:225",
-      "returnType": "UnityEngine.Component"
+      "returnType": "RobotBody"
     },
     {
       "id": "robotkit.type.robotbody.rootwalk",
@@ -652,7 +652,7 @@
           "constrained": true
         },
         {
-          "type": "System.Func`2[UnityEngine.Vector3,System.Boolean]",
+          "type": "System.Func<UnityEngine.Vector3, System.Boolean>",
           "constrained": true
         }
       ]
@@ -1021,7 +1021,7 @@
       "criticality": "Optional",
       "feature": "Player FPS control suspension",
       "sourceRef": "mods/Robotopia.RobotKit/PlayerBridge.cs:66",
-      "returnType": "UnityEngine.Behaviour"
+      "returnType": "FirstPersonController"
     },
     {
       "id": "robotkit.type.pooledspawner",

@@ -7,14 +7,14 @@ namespace Robotopia.Worlds
 {
     public sealed class WorldsMod : IRobotopiaMod
     {
-        // The verified main-menu scene. We hold the auto-load until the game has actually reached the menu so
-        // the gamemode's scene load is a clean transition from the menu, not a race against the boot sequence.
-        private const string MenuSceneName = "TestCityStartMenu";
+        // We hold the auto-load until the game has actually reached the menu so the gamemode's scene load is
+        // a clean transition from the menu, not a race against the boot sequence.
         private const float AutoLoadMaxWaitSeconds = 12f;
 
         private IModContext? context;
         private WorldsConfig? config;
         private WorldsService? service;
+        private PauseMenuBridge? pauseBridge;
         private bool pendingAutoLoad;
         private float autoLoadWait;
 
@@ -25,20 +25,23 @@ namespace Robotopia.Worlds
             context.SaveConfig(config);
 
             service = new WorldsService(context.Logger, context.Paths.DataPath);
+            service.EndSessionOnMenuScene = config.EndSessionOnMenuScene;
             service.DiscoverBuiltIns();
-            // Leave the world id blank so the service resolves a real, checkpoint-backed level in correct HDRP
-            // play state. Pinning OpenSandbox here builds an additive arena over whatever scene is active; when
-            // launched/auto-launched from the menu that strands the player on the home screen (the documented
-            // 2026-06-28 regression). The bare arena remains the last-resort fallback inside ResolveWorldId.
+            // The world id stays blank; the sandbox gamemode always routes to LoadOpenSandbox (the clean
+            // UgcPlay scene + generated arena), so no world pin is needed here. The Robotopia.Sandbox mod
+            // layers the actual creator gameplay (spawn menu, tools) onto this session.
             service.RegisterMenuEntry(new GamemodeMenuEntry(
                 "robotopia.worlds.sandbox.menu",
                 "Sandbox",
-                "Freeform creator sandbox in a real level.",
+                "Freeform creator sandbox: an open arena with a spawn menu for props and robots.",
                 WorldsService.SandboxGamemodeId));
             service.WriteCatalog();
 
+            pauseBridge = new PauseMenuBridge(service, context.Logger, config.InterceptPauseMenu);
+
             var registry = context.GetService<IModServiceRegistry>();
             registry?.Register<IWorldGamemodeService>(context.ModId, service);
+            registry?.Register<IWorldPauseMenuService>(context.ModId, pauseBridge);
 
             pendingAutoLoad = config.AutoLoadOnStart;
             autoLoadWait = AutoLoadMaxWaitSeconds;
@@ -54,6 +57,8 @@ namespace Robotopia.Worlds
                 context.GetService<IModServiceRegistry>()?.UnregisterOwner(context.ModId);
             }
 
+            pauseBridge?.Dispose();
+            pauseBridge = null;
             service?.Dispose();
             service = null;
             config = null;
@@ -63,6 +68,8 @@ namespace Robotopia.Worlds
 
         private void OnUpdate(float deltaTime)
         {
+            pauseBridge?.Update(deltaTime);
+
             if (!pendingAutoLoad || service == null || config == null || context == null)
             {
                 return;
@@ -72,7 +79,7 @@ namespace Robotopia.Worlds
             // fallback in case the menu scene is named differently in a future build.
             autoLoadWait -= deltaTime;
             var activeScene = SceneManager.GetActiveScene().name;
-            var atMenu = string.Equals(activeScene, MenuSceneName, StringComparison.OrdinalIgnoreCase);
+            var atMenu = GameScenes.IsMainMenuScene(activeScene);
             if (!atMenu && autoLoadWait > 0f)
             {
                 return;
@@ -83,7 +90,7 @@ namespace Robotopia.Worlds
             // Timed out without reaching the menu (a slow boot, or a renamed menu scene). Only launch into a
             // real gameplay-capable scene; never build an arena over / load a level into a boot/loader/splash
             // scene, which would race the boot sequence the wait exists to avoid.
-            if (!atMenu && WorldsService.IsNonGameplayScene(activeScene))
+            if (!atMenu && GameScenes.IsNonGameplayScene(activeScene))
             {
                 context.Logger.Warn("Auto-launch skipped: menu scene was never reached (active scene '" + activeScene + "').");
                 return;

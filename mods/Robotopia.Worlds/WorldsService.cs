@@ -13,8 +13,10 @@ namespace Robotopia.Worlds
 {
     public sealed class WorldsService : IWorldGamemodeService
     {
-        public const string OpenSandboxWorldId = "robotopia.worlds.open_sandbox";
-        public const string SandboxGamemodeId = "robotopia.worlds.sandbox";
+        // Aliases of the SDK's WellKnownIds so consumers that cannot reference this assembly and this
+        // service always agree on the ids (SdkSurfaceTests pins the WellKnownIds values).
+        public const string OpenSandboxWorldId = WellKnownIds.OpenSandboxWorldId;
+        public const string SandboxGamemodeId = WellKnownIds.SandboxGamemodeId;
 
         private readonly IModLogger logger;
         private readonly string dataPath;
@@ -26,13 +28,17 @@ namespace Robotopia.Worlds
         private readonly ReadOnlyCollection<WorldDefinition> worldsView;
         private readonly ReadOnlyCollection<GamemodeDefinition> gamemodesView;
         private readonly ReadOnlyCollection<GamemodeMenuEntry> menuEntriesView;
+        private readonly Dictionary<string, ICustomWorldContent> customWorldContent =
+            new Dictionary<string, ICustomWorldContent>(StringComparer.OrdinalIgnoreCase);
         private GameObject? arenaRoot;
         private VolumeProfile? arenaProfile;
         private float lastLaunchTime = -10f;
-        // Open Sandbox arena is built once the game's clean play scene finishes loading (async); these track the
+        // Open Sandbox arena is built once the game's clean play scene finishes loading (async); this tracks the
         // one-shot "build the arena on the next sandbox-scene load" handshake set up by LoadOpenSandbox.
         private bool sandboxArenaPending;
-        private bool sandboxSceneHookRegistered;
+        // One-shot payload armed by LoadCustomWorld and consumed on the same sandbox-scene load: the custom
+        // world's pre-created content, waiting for the play scene (and its player spawn) to exist.
+        private PendingCustomWorld? pendingCustomWorld;
 
         public WorldsService(IModLogger logger, string dataPath)
         {
@@ -42,6 +48,11 @@ namespace Robotopia.Worlds
             worldsView = new ReadOnlyCollection<WorldDefinition>(worlds);
             gamemodesView = new ReadOnlyCollection<GamemodeDefinition>(gamemodes);
             menuEntriesView = new ReadOnlyCollection<GamemodeMenuEntry>(menuEntries);
+
+            // Persistent scene hook (removed in Dispose). Registered here — before the manager plugin's own
+            // sceneLoaded dispatch to mods — so the session is already ended by the time per-session handlers
+            // (e.g. a gamemode controller's own sceneLoaded hook) run in the same dispatch.
+            SceneManager.sceneLoaded += OnSceneLoaded;
         }
 
         // Live read-only views over the registries (registries are only mutated on the main thread during load).
@@ -51,6 +62,11 @@ namespace Robotopia.Worlds
         public WorldSession? CurrentSession { get; private set; }
 
         public event Action<WorldSession>? SessionChanged;
+        public event Action<WorldSessionEnd>? SessionEnded;
+
+        // Config gate for the automatic end-on-menu behaviour (WorldsConfig.EndSessionOnMenuScene). Explicit
+        // EndSession calls are never gated.
+        public bool EndSessionOnMenuScene { get; set; } = true;
 
         public void DiscoverBuiltIns()
         {
@@ -102,7 +118,7 @@ namespace Robotopia.Worlds
                 }
 
                 // Skip menu/boot/loader scenes so users cannot "launch" a non-gameplay scene as a world.
-                if (string.Equals(sceneName, activeScene, StringComparison.OrdinalIgnoreCase) || IsNonGameplayScene(sceneName))
+                if (string.Equals(sceneName, activeScene, StringComparison.OrdinalIgnoreCase) || GameScenes.IsNonGameplayScene(sceneName))
                 {
                     continue;
                 }
@@ -118,19 +134,47 @@ namespace Robotopia.Worlds
             }
         }
 
-        public static bool IsNonGameplayScene(string name)
-        {
-            return name.IndexOf("StartMenu", StringComparison.OrdinalIgnoreCase) >= 0
-                || name.IndexOf("MainMenu", StringComparison.OrdinalIgnoreCase) >= 0
-                || name.IndexOf("Boot", StringComparison.OrdinalIgnoreCase) >= 0
-                || name.IndexOf("Loader", StringComparison.OrdinalIgnoreCase) >= 0
-                || name.IndexOf("Splash", StringComparison.OrdinalIgnoreCase) >= 0;
-        }
-
         public void RegisterWorld(WorldDefinition world)
         {
             worlds.RemoveAll(item => string.Equals(item.Id, world.Id, StringComparison.OrdinalIgnoreCase));
             worlds.Add(world);
+            // A plain re-registration means "this id is a normal world again" — drop any stale content link.
+            customWorldContent.Remove(world.Id);
+        }
+
+        public void RegisterWorld(WorldDefinition world, ICustomWorldContent content)
+        {
+            if (world == null)
+            {
+                throw new ArgumentNullException(nameof(world));
+            }
+
+            if (content == null)
+            {
+                throw new ArgumentNullException(nameof(content));
+            }
+
+            RegisterWorld(world);
+            customWorldContent[world.Id] = content;
+        }
+
+        public bool UnregisterWorld(string worldId)
+        {
+            if (string.IsNullOrWhiteSpace(worldId))
+            {
+                return false;
+            }
+
+            var removed = worlds.RemoveAll(item => string.Equals(item.Id, worldId, StringComparison.OrdinalIgnoreCase)) > 0;
+            customWorldContent.Remove(worldId);
+            worldCheckpoints.Remove(worldId);
+            if (removed && CurrentSession != null
+                && string.Equals(CurrentSession.WorldId, worldId, StringComparison.OrdinalIgnoreCase))
+            {
+                EndSession(WorldSessionEndReason.ProviderUnloading);
+            }
+
+            return removed;
         }
 
         public void RegisterGamemode(GamemodeDefinition gamemode)
@@ -192,6 +236,17 @@ namespace Robotopia.Worlds
             }
 
             lastLaunchTime = Time.realtimeSinceStartup;
+
+            // A new launch replaces any live session: end it properly (arena teardown + SessionEnded) so the
+            // outgoing gamemode's controller is disposed before SessionChanged starts the incoming one.
+            EndSession(WorldSessionEndReason.Superseded);
+
+            // Custom-content worlds (mod-shipped prefabs/instances) route first — BEFORE the sandbox-gamemode
+            // routing below — so a custom world is playable both with the Sandbox gamemode and any other.
+            if (customWorldContent.TryGetValue(world.Id, out var content))
+            {
+                return LoadCustomWorld(world, gamemode, content);
+            }
 
             // The Sandbox gamemode (and the Open Sandbox world) is a story-free creator space: launch the clean
             // Open Sandbox arena, never a first-party story level. This reverses the earlier routing where the
@@ -264,6 +319,18 @@ namespace Robotopia.Worlds
             // down (or switching to a different world) must not leave a pending build that fires on a later load.
             sandboxArenaPending = false;
 
+            // Same for a pending custom world; a pre-created scene instance the launch never placed would
+            // otherwise leak as a hidden DontDestroyOnLoad object.
+            if (pendingCustomWorld != null)
+            {
+                if (pendingCustomWorld.IsInstance && pendingCustomWorld.ContentRootOrPrefab != null)
+                {
+                    UnityEngine.Object.Destroy(pendingCustomWorld.ContentRootOrPrefab);
+                }
+
+                pendingCustomWorld = null;
+            }
+
             if (arenaRoot != null)
             {
                 UnityEngine.Object.Destroy(arenaRoot);
@@ -275,16 +342,39 @@ namespace Robotopia.Worlds
             arenaProfile = null;
         }
 
+        /// <summary>
+        /// Ends the current session: clears <see cref="CurrentSession"/> first (so re-entrant calls and
+        /// subscribers observing the service see no active session), tears down the sandbox arena, then fires
+        /// <see cref="SessionEnded"/> exactly once.
+        /// </summary>
+        public void EndSession(WorldSessionEndReason reason)
+        {
+            var session = CurrentSession;
+            if (session == null)
+            {
+                return;
+            }
+
+            CurrentSession = null;
+            UnloadArena();
+            try
+            {
+                SessionEnded?.Invoke(new WorldSessionEnd(session, reason));
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "A SessionEnded subscriber failed.");
+            }
+
+            logger.Info("World session ended (" + reason + "): " + session.GamemodeId + " in " + session.WorldId + ".");
+        }
+
         // Releases the scene-loaded subscription. Called when the mod unloads (C# assemblies never unload under
         // Mono, so a dangling static event handler would otherwise survive and fire against a dead service).
         public void Dispose()
         {
-            if (sandboxSceneHookRegistered)
-            {
-                SceneManager.sceneLoaded -= OnSandboxSceneLoaded;
-                sandboxSceneHookRegistered = false;
-            }
-
+            EndSession(WorldSessionEndReason.ProviderUnloading);
+            SceneManager.sceneLoaded -= OnSceneLoaded;
             UnloadArena();
         }
 
@@ -313,21 +403,99 @@ namespace Robotopia.Worlds
         }
 
         // Arms a one-shot: when the sandbox play scene finishes its async load, build the arena around the player.
+        // The persistent OnSceneLoaded hook (registered in the constructor) picks it up.
         private void ArmSandboxArena()
         {
             sandboxArenaPending = true;
-            if (!sandboxSceneHookRegistered)
+        }
+
+        // Launches a mod-provided custom world: create the content eagerly (so a broken bundle fails the load
+        // synchronously, before any scene is touched), load the clean sandbox play scene (real player spawn),
+        // then place the content at the player spawn once that scene is up.
+        private WorldLoadResult LoadCustomWorld(WorldDefinition world, GamemodeDefinition gamemode, ICustomWorldContent content)
+        {
+            UnloadArena();
+
+            GameObject contentRoot;
+            try
             {
-                SceneManager.sceneLoaded += OnSandboxSceneLoaded;
-                sandboxSceneHookRegistered = true;
+                if (!(content.CreateContentRoot() is GameObject created))
+                {
+                    return WorldLoadResult.Fail(
+                        "Custom world content for '" + world.Name + "' could not be created (see the log for details).");
+                }
+
+                contentRoot = created;
             }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "Custom world content for '" + world.Name + "' threw during creation.");
+                return WorldLoadResult.Fail("Custom world content for '" + world.Name + "' failed: " + ex.Message);
+            }
+
+            // A live scene instance (procedural world) must survive the single-mode scene switch and stay
+            // hidden until placement; a prefab asset is just held and instantiated at placement time.
+            var isInstance = contentRoot.scene.IsValid();
+            if (isInstance)
+            {
+                UnityEngine.Object.DontDestroyOnLoad(contentRoot);
+                contentRoot.SetActive(false);
+            }
+
+            if (!levelBridge.LaunchOpenSandbox())
+            {
+                // Unlike the generic arena, a custom world overlaid on whatever scene is active (usually the
+                // menu) is useless — fail the launch instead.
+                if (isInstance)
+                {
+                    UnityEngine.Object.Destroy(contentRoot);
+                }
+
+                return WorldLoadResult.Fail("The game's sandbox play scene could not be loaded for '" + world.Name + "'.");
+            }
+
+            pendingCustomWorld = new PendingCustomWorld(world, content, contentRoot, isInstance);
+            sandboxArenaPending = false;
+            return StartSession(world, gamemode, "customWorld", GameLevelBridge.SandboxSceneName);
+        }
+
+        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            if (mode != LoadSceneMode.Single)
+            {
+                return;
+            }
+
+            // Reaching a non-gameplay scene (menu/boot/loader) under a live session means the player left the
+            // world — most commonly via the game's own pause-menu exit. End the session so no gamemode stays
+            // active over the menu (HUD overlays, time drivers, spawning). The mode==Single gate above keeps
+            // additively streamed scenes (e.g. "...Loader" content scenes) from falsely ending a session.
+            if (EndSessionOnMenuScene && CurrentSession != null && GameScenes.IsNonGameplayScene(scene.name))
+            {
+                EndSession(WorldSessionEndReason.MenuReached);
+                return;
+            }
+
+            OnSandboxSceneLoaded(scene, mode);
         }
 
         private void OnSandboxSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            if (!sandboxArenaPending
-                || mode != LoadSceneMode.Single
+            if (mode != LoadSceneMode.Single
                 || !string.Equals(scene.name, GameLevelBridge.SandboxSceneName, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            if (pendingCustomWorld != null)
+            {
+                var pending = pendingCustomWorld;
+                pendingCustomWorld = null;
+                PlaceCustomWorld(pending, scene);
+                return;
+            }
+
+            if (!sandboxArenaPending)
             {
                 return;
             }
@@ -347,6 +515,114 @@ namespace Robotopia.Worlds
             }
 
             logger.Info("Worlds open sandbox arena ready in scene '" + scene.name + "'.");
+        }
+
+        // Materializes a pending custom world in the freshly loaded sandbox play scene: instantiate/adopt the
+        // content, align its spawn point to the native player spawn, apply the default environment (unless
+        // the content brings its own global Volume), and attach the player guards.
+        private void PlaceCustomWorld(PendingCustomWorld pending, Scene scene)
+        {
+            var spawnPosition = levelBridge.GetSandboxSpawnPosition();
+            try
+            {
+                arenaRoot = new GameObject("Robotopia Worlds - Custom World: " + pending.World.Id);
+                UnityEngine.Object.DontDestroyOnLoad(arenaRoot);
+
+                GameObject root;
+                if (pending.IsInstance)
+                {
+                    root = pending.ContentRootOrPrefab;
+                    root.SetActive(true);
+                }
+                else
+                {
+                    root = UnityEngine.Object.Instantiate(pending.ContentRootOrPrefab);
+                }
+
+                root.transform.SetParent(arenaRoot.transform, worldPositionStays: true);
+
+                // Move the world to the player: offset the root so its spawn marker coincides with where the
+                // scene's native bootstrap spawns the player — no player teleport, no extra game reflection.
+                var options = pending.Content.Options;
+                var spawnPoint = FindDescendant(root.transform, options.SpawnPointName);
+                if (spawnPoint != null)
+                {
+                    root.transform.position += spawnPosition - spawnPoint.position;
+                }
+                else
+                {
+                    logger.Warn("Custom world '" + pending.World.Name + "' has no '" + options.SpawnPointName
+                        + "' marker; using the content root as the spawn point.");
+                    root.transform.position = spawnPosition;
+                }
+
+                var effectiveSpawn = spawnPoint != null ? spawnPoint.position : root.transform.position;
+
+                // Respect a world that ships its own sky/exposure: any active global Volume suppresses ours.
+                var hasOwnEnvironment = HasGlobalVolume(root);
+                if (options.ApplyDefaultEnvironment && !hasOwnEnvironment)
+                {
+                    arenaProfile = HdrpEnvironment.Apply(arenaRoot, logger);
+                }
+
+                var guard = arenaRoot.AddComponent<SandboxPlayerGuard>();
+                guard.Initialize(levelBridge, levelBridge.ResolveSandboxPlayerPrefab(), effectiveSpawn, logger, 1.5f);
+                if (options.EnableKillPlane)
+                {
+                    var killPlane = arenaRoot.AddComponent<CustomWorldPlayerGuard>();
+                    killPlane.Initialize(levelBridge, effectiveSpawn, effectiveSpawn.y - options.KillPlaneDepth, logger);
+                }
+
+                logger.Info("Custom world '" + pending.World.Name + "' placed in scene '" + scene.name + "'.");
+            }
+            catch (Exception ex)
+            {
+                // Never strand the player on a void: tear down whatever half-placed content exists and fall
+                // back to the generated arena so the session stays playable.
+                logger.Error(ex, "Custom world '" + pending.World.Name + "' failed to place; falling back to the arena.");
+                UnloadArena();
+                BuildArena(spawnPosition);
+            }
+        }
+
+        private static Transform? FindDescendant(Transform root, string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return null;
+            }
+
+            // Breadth-first so a top-level marker wins over an identically named nested one.
+            var queue = new Queue<Transform>();
+            queue.Enqueue(root);
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+                if (current != root && string.Equals(current.name, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    return current;
+                }
+
+                for (var index = 0; index < current.childCount; index++)
+                {
+                    queue.Enqueue(current.GetChild(index));
+                }
+            }
+
+            return null;
+        }
+
+        private static bool HasGlobalVolume(GameObject root)
+        {
+            foreach (var volume in root.GetComponentsInChildren<Volume>(true))
+            {
+                if (volume.isGlobal)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private string ResolveWorldId(string requestedWorldId)
@@ -392,26 +668,7 @@ namespace Robotopia.Worlds
             arenaRoot = new GameObject("Robotopia Worlds - Open Sandbox");
             UnityEngine.Object.DontDestroyOnLoad(arenaRoot);
 
-            var ground = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            ground.name = "Sandbox Ground";
-            ground.transform.SetParent(arenaRoot.transform, false);
-            ground.transform.localScale = new Vector3(120f, 1f, 120f);
-            ground.transform.position = center + new Vector3(0f, -0.5f, 0f);
-
-            for (var index = 0; index < 4; index++)
-            {
-                var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                wall.name = "Sandbox Boundary " + index;
-                wall.transform.SetParent(arenaRoot.transform, false);
-                wall.transform.localScale = index < 2 ? new Vector3(120f, 8f, 1f) : new Vector3(1f, 8f, 120f);
-                wall.transform.position = center + index switch
-                {
-                    0 => new Vector3(0f, 4f, 60f),
-                    1 => new Vector3(0f, 4f, -60f),
-                    2 => new Vector3(60f, 4f, 0f),
-                    _ => new Vector3(-60f, 4f, 0f)
-                };
-            }
+            SandboxArenaBuilder.Build(arenaRoot, center, logger);
 
             // HDRP has no default sky/exposure/tonemapping; without a global Volume the arena looks washed out.
             arenaProfile = HdrpEnvironment.Apply(arenaRoot, logger);
@@ -509,6 +766,25 @@ namespace Robotopia.Worlds
             }
 
             return builder.ToString().Trim('_');
+        }
+
+        private sealed class PendingCustomWorld
+        {
+            public PendingCustomWorld(WorldDefinition world, ICustomWorldContent content, GameObject contentRootOrPrefab, bool isInstance)
+            {
+                World = world;
+                Content = content;
+                ContentRootOrPrefab = contentRootOrPrefab;
+                IsInstance = isInstance;
+            }
+
+            public WorldDefinition World { get; }
+            public ICustomWorldContent Content { get; }
+
+            /// <summary>A live scene instance when <see cref="IsInstance"/>, otherwise a prefab asset.</summary>
+            public GameObject ContentRootOrPrefab { get; }
+
+            public bool IsInstance { get; }
         }
     }
 }

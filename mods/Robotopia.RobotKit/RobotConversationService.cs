@@ -102,6 +102,8 @@ namespace Robotopia.RobotKit
     // consumer (main thread); the only cross-thread state is the underlying brain query's Task. Never throws.
     internal sealed class RobotConversation : IRobotConversation
     {
+        private static readonly IReadOnlyDictionary<string, string> EmptyValues = new Dictionary<string, string>();
+
         private readonly IRobotBrainQueryService brains;
         private readonly RobotConversationRequest config;
         private readonly List<ConversationTurn> history = new List<ConversationTurn>();
@@ -110,6 +112,7 @@ namespace Robotopia.RobotKit
         private string pendingPlayerText = string.Empty;
         private string lastReply = string.Empty;
         private string lastDecision = string.Empty;
+        private IReadOnlyDictionary<string, string> lastValues = EmptyValues;
         private string? lastError;
         private int turnCount;
         private bool turnReady;
@@ -150,6 +153,8 @@ namespace Robotopia.RobotKit
         public string LastReply => lastReply;
 
         public string LastDecision => lastDecision;
+
+        public IReadOnlyDictionary<string, string> LastValues => lastValues;
 
         public string? LastError => lastError;
 
@@ -192,10 +197,18 @@ namespace Robotopia.RobotKit
             {
                 result.TryGet(ConversationPrompt.ReplyField, out reply);
                 result.TryGet(ConversationPrompt.DecisionField, out decision);
+                var values = new Dictionary<string, string>(result.Values.Count);
+                foreach (var pair in result.Values)
+                {
+                    values[pair.Key] = pair.Value;
+                }
+
+                lastValues = values;
                 lastError = null;
             }
             else
             {
+                lastValues = EmptyValues;
                 lastError = result?.Error ?? "unavailable";
             }
 

@@ -21,6 +21,7 @@ namespace Robotopia.ModManager.Tests
             TestAssetAndPromptContextExtensions();
             TestRobotColor();
             TestRobotAgentSpawnRequestDefaults();
+            TestRobotTypeAndBrainSwitchContracts();
             TestRobotInteractionContracts();
             TestReachableSpawnRequestDefaults();
             TestRobotAgentEnums();
@@ -28,7 +29,209 @@ namespace Robotopia.ModManager.Tests
             TestBrainQueryContracts();
             TestConversationContracts();
             TestDialogueInputContracts();
+            TestGameScenesClassifier();
+            TestWorldSessionEndContracts();
+            TestPauseMenuContracts();
+            TestCustomWorldContracts();
             Console.WriteLine("All SDK surface tests passed.");
+        }
+
+        // The shared scene classifier every mod uses to agree on what counts as "the menu" vs gameplay.
+        private static void TestGameScenesClassifier()
+        {
+            Assert(GameScenes.MainMenuSceneName == "TestCityStartMenu", "MainMenuSceneName is pinned to the verified menu scene");
+            Assert(GameScenes.IsMainMenuScene("TestCityStartMenu") && GameScenes.IsMainMenuScene("testcitystartmenu"),
+                "IsMainMenuScene matches the menu scene case-insensitively");
+            Assert(!GameScenes.IsMainMenuScene("TestCity") && !GameScenes.IsMainMenuScene(null!),
+                "IsMainMenuScene rejects other scenes and null");
+
+            foreach (var scene in new[] { "TestCityStartMenu", "MainMenu_X", "BootScene", "LevelLoader", "SplashIntro" })
+            {
+                Assert(GameScenes.IsNonGameplayScene(scene), scene + " should classify as non-gameplay");
+            }
+
+            foreach (var scene in new[] { "UgcPlay", "TestCity", "02 City Streets" })
+            {
+                Assert(!GameScenes.IsNonGameplayScene(scene), scene + " should classify as gameplay");
+            }
+
+            Assert(!GameScenes.IsNonGameplayScene(null!) && !GameScenes.IsNonGameplayScene(string.Empty),
+                "IsNonGameplayScene is null/empty safe");
+        }
+
+        // The session-end lifecycle contract (the fix for gamemodes staying active over the menu).
+        private static void TestWorldSessionEndContracts()
+        {
+            var sessionEnded = typeof(IWorldGamemodeService).GetEvent("SessionEnded");
+            Assert(sessionEnded != null && sessionEnded.EventHandlerType == typeof(Action<WorldSessionEnd>),
+                "IWorldGamemodeService exposes SessionEnded as Action<WorldSessionEnd>");
+            var endSession = typeof(IWorldGamemodeService).GetMethod("EndSession");
+            Assert(endSession != null && endSession.GetParameters().Length == 1
+                && endSession.GetParameters()[0].ParameterType == typeof(WorldSessionEndReason),
+                "IWorldGamemodeService exposes EndSession(WorldSessionEndReason)");
+
+            // Pin the reason set: mods switch on these, so a silent rename/reorder is a breaking change.
+            Assert((int)WorldSessionEndReason.MenuReached == 0 && (int)WorldSessionEndReason.EndedByGamemode == 1
+                && (int)WorldSessionEndReason.Superseded == 2 && (int)WorldSessionEndReason.ProviderUnloading == 3,
+                "WorldSessionEndReason order must be MenuReached, EndedByGamemode, Superseded, ProviderUnloading");
+
+            var session = new WorldSession("world", "gamemode", "gameScene", "Scene", DateTime.UtcNow);
+            var end = new WorldSessionEnd(session, WorldSessionEndReason.MenuReached);
+            Assert(ReferenceEquals(end.Session, session) && end.Reason == WorldSessionEndReason.MenuReached,
+                "WorldSessionEnd carries the ended session and the reason");
+
+            var threw = false;
+            try
+            {
+                _ = new WorldSessionEnd(null!, WorldSessionEndReason.MenuReached);
+            }
+            catch (ArgumentNullException)
+            {
+                threw = true;
+            }
+
+            Assert(threw, "WorldSessionEnd null-guards the session");
+        }
+
+        // The pause-menu customization contract (session-scoped vanilla pause menu integration).
+        private static void TestPauseMenuContracts()
+        {
+            Assert(typeof(IWorldPauseMenuService).GetProperty("IsAvailable") != null,
+                "IWorldPauseMenuService exposes IsAvailable");
+            var register = typeof(IWorldPauseMenuService).GetMethod("RegisterAction");
+            Assert(register != null && register.ReturnType == typeof(IDisposable),
+                "RegisterAction returns an IDisposable handle");
+            Assert(typeof(IWorldPauseMenuService).GetMethod("SetExitInterceptor") != null,
+                "IWorldPauseMenuService exposes SetExitInterceptor");
+
+            var action = new WorldPauseAction("mod.action", "DO THING", () => { });
+            Assert(action.Id == "mod.action" && action.Label == "DO THING", "WorldPauseAction keeps id and label");
+            Assert(action.ClosePauseMenu && action.Order == 0, "WorldPauseAction defaults: close menu, order 0");
+
+            var threw = false;
+            try
+            {
+                _ = new WorldPauseAction("id", "label", null!);
+            }
+            catch (ArgumentNullException)
+            {
+                threw = true;
+            }
+
+            Assert(threw, "WorldPauseAction null-guards the callback");
+
+            foreach (var invalid in new[] { "", " " })
+            {
+                try
+                {
+                    _ = new WorldPauseAction(invalid, "label", () => { });
+                    Assert(false, "WorldPauseAction must reject a blank id");
+                }
+                catch (ArgumentException)
+                {
+                }
+            }
+
+            var session = new WorldSession("world", "gamemode", "gameScene", "Scene", DateTime.UtcNow);
+            Assert(ReferenceEquals(new WorldPauseExitContext(session).Session, session),
+                "WorldPauseExitContext carries the session");
+
+            Assert((int)WorldPauseExitDecision.EndSessionAndExit == 0 && (int)WorldPauseExitDecision.ExitWithoutEnding == 1
+                && (int)WorldPauseExitDecision.Block == 2,
+                "WorldPauseExitDecision order must be EndSessionAndExit, ExitWithoutEnding, Block");
+        }
+
+        // The custom-world contract: mod-shipped content (e.g. a bundle prefab) registered as a playable world.
+        private static void TestCustomWorldContracts()
+        {
+            Assert(WellKnownIds.SandboxGamemodeId == "robotopia.worlds.sandbox"
+                && WellKnownIds.OpenSandboxWorldId == "robotopia.worlds.open_sandbox",
+                "WellKnownIds must pin the published sandbox gamemode/world ids");
+
+            var registerContent = typeof(IWorldGamemodeService).GetMethod(
+                "RegisterWorld", new[] { typeof(WorldDefinition), typeof(ICustomWorldContent) });
+            Assert(registerContent != null, "IWorldGamemodeService exposes RegisterWorld(WorldDefinition, ICustomWorldContent)");
+            var unregister = typeof(IWorldGamemodeService).GetMethod("UnregisterWorld");
+            Assert(unregister != null && unregister.ReturnType == typeof(bool)
+                && unregister.GetParameters().Length == 1 && unregister.GetParameters()[0].ParameterType == typeof(string),
+                "IWorldGamemodeService exposes bool UnregisterWorld(string)");
+
+            var createRoot = typeof(ICustomWorldContent).GetMethod("CreateContentRoot");
+            Assert(createRoot != null && createRoot.ReturnType == typeof(object), "ICustomWorldContent exposes CreateContentRoot(): object?");
+            Assert(typeof(ICustomWorldContent).GetProperty("Options")?.PropertyType == typeof(CustomWorldOptions),
+                "ICustomWorldContent exposes CustomWorldOptions Options");
+
+            var options = CustomWorldOptions.Default;
+            Assert(options.SpawnPointName == "SpawnPoint" && options.ApplyDefaultEnvironment
+                && options.EnableKillPlane && options.KillPlaneDepth == 100f,
+                "CustomWorldOptions defaults: SpawnPoint marker, default env, kill plane at 100m");
+            Assert(!ReferenceEquals(CustomWorldOptions.Default, CustomWorldOptions.Default),
+                "CustomWorldOptions.Default returns fresh instances");
+
+            var bundleOptions = new BundleWorldOptions();
+            Assert(bundleOptions.PrefabAssetName == "" && bundleOptions.RegisterSandboxMenuEntry
+                && bundleOptions.MenuEntryId == "", "BundleWorldOptions defaults: single-prefab bundle, sandbox menu entry");
+
+            // RegisterWorldFromBundle wires definition + content + sandbox menu entry through the service.
+            var context = new FakeContext();
+            var worlds = new FakeWorldService();
+            var definition = context.RegisterWorldFromBundle(worlds, new BundleWorldOptions
+            {
+                Id = "test.worlds.island",
+                Name = "Island",
+                Description = "A test world.",
+                BundleRelativePath = "AssetBundles/island.bundle",
+            });
+            Assert(definition.Id == "test.worlds.island" && ReferenceEquals(worlds.LastWorld, definition),
+                "RegisterWorldFromBundle registers the definition");
+            Assert(worlds.LastContent is BundleWorldContent, "RegisterWorldFromBundle attaches BundleWorldContent");
+            Assert(worlds.LastMenuEntry != null && worlds.LastMenuEntry.Id == "test.worlds.island.menu"
+                && worlds.LastMenuEntry.GamemodeId == WellKnownIds.SandboxGamemodeId
+                && worlds.LastMenuEntry.WorldId == "test.worlds.island",
+                "RegisterWorldFromBundle registers a sandbox-paired menu entry by default");
+
+            worlds.LastMenuEntry = null;
+            context.RegisterWorldFromBundle(worlds, new BundleWorldOptions
+            {
+                Id = "test.worlds.quiet",
+                Name = "Quiet",
+                BundleRelativePath = "AssetBundles/q.bundle",
+                RegisterSandboxMenuEntry = false,
+            });
+            Assert(worlds.LastMenuEntry == null, "RegisterSandboxMenuEntry=false suppresses the menu entry");
+
+            foreach (var invalid in new[]
+            {
+                new BundleWorldOptions { Name = "n", BundleRelativePath = "b" },
+                new BundleWorldOptions { Id = "i", BundleRelativePath = "b" },
+                new BundleWorldOptions { Id = "i", Name = "n" },
+            })
+            {
+                try
+                {
+                    context.RegisterWorldFromBundle(worlds, invalid);
+                    Assert(false, "RegisterWorldFromBundle must reject blank Id/Name/BundleRelativePath");
+                }
+                catch (ArgumentException)
+                {
+                }
+            }
+
+            // BundleWorldContent failure paths degrade to null (never throw): the fake asset service exposes
+            // one asset named "prefab" (no .prefab suffix), so the single-prefab resolution finds nothing.
+            var assetService = new FakeAssetBundleService();
+            context.Services[typeof(IAssetBundleService)] = assetService;
+            var noPrefab = new BundleWorldContent(context, "AssetBundles/x.bundle");
+            Assert(noPrefab.CreateContentRoot() == null, "a bundle with no *.prefab resolves to null content");
+
+            // With a pinned asset name the load succeeds, but this test process has no UnityEngine —
+            // the GameObject type resolution must degrade to a logged null, not a throw.
+            var pinned = new BundleWorldContent(context, "AssetBundles/x.bundle", "assets/world.prefab");
+            Assert(pinned.CreateContentRoot() == null, "content creation degrades to null outside a Unity runtime");
+
+            context.Services.Remove(typeof(IAssetBundleService));
+            var noService = new BundleWorldContent(context, "AssetBundles/x.bundle");
+            Assert(noService.CreateContentRoot() == null, "a missing robotopia.assets service degrades to null content");
         }
 
         // The multi-turn conversation primitive (IRobotConversationService): request defaults + the pollable handle
@@ -45,6 +248,10 @@ namespace Robotopia.ModManager.Tests
 
             var nullRequest = new RobotConversationRequest(null!, null!);
             Assert(nullRequest.SystemFrame == string.Empty && nullRequest.DecisionOptions.Count == 0, "request null-guards frame/options");
+
+            Assert(request.LiveFacts == null, "LiveFacts defaults to null (static facts only)");
+            request.LiveFacts = () => new Dictionary<string, string> { ["k"] = "v" };
+            Assert(request.LiveFacts()!["k"] == "v", "LiveFacts is a settable per-turn provider");
 
             var begin = typeof(IRobotConversationService).GetMethod("BeginConversation");
             Assert(begin != null && begin.ReturnType == typeof(IRobotConversation), "BeginConversation returns IRobotConversation");
@@ -182,6 +389,40 @@ namespace Robotopia.ModManager.Tests
             var facing = new RobotAgentSpawnRequest(Vec3.Zero, new Vec3(0f, 0f, 1f)) { BrainMode = RobotBrainMode.Autonomous };
             Assert(facing.Facing.HasValue && facing.Facing.Value.Equals(new Vec3(0f, 0f, 1f)), "facing should round-trip when provided");
             Assert(facing.BrainMode == RobotBrainMode.Autonomous, "brain mode should be settable to Autonomous");
+
+            Assert(request.RobotTypeId == null, "robot type should default to null (default type)");
+            request.RobotTypeId = "worker-robot";
+            Assert(request.RobotTypeId == "worker-robot", "robot type id should round-trip");
+        }
+
+        // The robot type catalog and runtime brain-switch surface: a spawn UI's contract with RobotKit.
+        private static void TestRobotTypeAndBrainSwitchContracts()
+        {
+            var descriptor = new RobotTypeDescriptor("worker-robot", "Worker Robot");
+            Assert(descriptor.Id == "worker-robot" && descriptor.DisplayName == "Worker Robot",
+                "RobotTypeDescriptor keeps id and display name");
+            Assert(new RobotTypeDescriptor("slug", " ").DisplayName == "slug",
+                "a blank display name falls back to the id");
+
+            var types = typeof(IRobotAgentService).GetProperty("RobotTypes");
+            Assert(types != null && typeof(IReadOnlyList<RobotTypeDescriptor>).IsAssignableFrom(types.PropertyType),
+                "IRobotAgentService exposes the RobotTypes list");
+            Assert(typeof(IRobotAgentService).GetMethod("IsRobotPrefab") != null,
+                "IRobotAgentService exposes IsRobotPrefab");
+
+            var agent = new FakeRobotAgent();
+            Assert(agent.BrainMode == RobotBrainMode.Dormant, "the fake starts dormant");
+            agent.SetBrainMode(RobotBrainMode.Autonomous);
+            Assert(agent.BrainMode == RobotBrainMode.Autonomous, "SetBrainMode switches the reported mode");
+
+            var kinds = (RobotTargetKind[])Enum.GetValues(typeof(RobotTargetKind));
+            Assert(kinds[0] == RobotTargetKind.Custom, "RobotTargetKind.Custom is the default (0)");
+            var info = new RobotTargetInfo("  robot 2 ", RobotTargetKind.Robot, "a red one");
+            Assert(info.Name == "ROBOT 2" && info.Kind == RobotTargetKind.Robot && info.Description == "a red one",
+                "RobotTargetInfo normalises the name and keeps kind/description");
+            Assert(typeof(IRobotObjectiveService).GetProperty("Targets") != null
+                && typeof(IRobotObjectiveService).GetMethod("TryGetTargetInfo") != null,
+                "IRobotObjectiveService exposes the target metadata view");
         }
 
         private static void TestRobotInteractionContracts()
@@ -393,6 +634,67 @@ namespace Robotopia.ModManager.Tests
         {
         }
 
+        private sealed class FakeWorldService : IWorldGamemodeService
+        {
+            public WorldDefinition? LastWorld { get; private set; }
+            public ICustomWorldContent? LastContent { get; private set; }
+            public GamemodeMenuEntry? LastMenuEntry { get; set; }
+
+            public IReadOnlyList<WorldDefinition> Worlds => Array.Empty<WorldDefinition>();
+            public IReadOnlyList<GamemodeDefinition> Gamemodes => Array.Empty<GamemodeDefinition>();
+            public IReadOnlyList<GamemodeMenuEntry> MenuEntries => Array.Empty<GamemodeMenuEntry>();
+            public WorldSession? CurrentSession => null;
+
+            public event Action<WorldSession>? SessionChanged;
+            public event Action<WorldSessionEnd>? SessionEnded;
+
+            public void RegisterWorld(WorldDefinition world)
+            {
+                LastWorld = world;
+            }
+
+            public void RegisterWorld(WorldDefinition world, ICustomWorldContent content)
+            {
+                LastWorld = world;
+                LastContent = content;
+            }
+
+            public bool UnregisterWorld(string worldId)
+            {
+                return false;
+            }
+
+            public void RegisterGamemode(GamemodeDefinition gamemode)
+            {
+            }
+
+            public void RegisterMenuEntry(GamemodeMenuEntry entry)
+            {
+                LastMenuEntry = entry;
+            }
+
+            public WorldLoadResult Load(WorldLoadRequest request)
+            {
+                return WorldLoadResult.Fail("not implemented");
+            }
+
+            public WorldLoadResult LaunchMenuEntry(string entryId)
+            {
+                return WorldLoadResult.Fail("not implemented");
+            }
+
+            public void EndSession(WorldSessionEndReason reason)
+            {
+            }
+
+            // Keep the compiler from warning the events are unused without changing the public surface.
+            public void RaiseForCoverage(WorldSession session)
+            {
+                SessionChanged?.Invoke(session);
+                SessionEnded?.Invoke(new WorldSessionEnd(session, WorldSessionEndReason.MenuReached));
+            }
+        }
+
         private sealed class FakeAssetBundleService : IAssetBundleService
         {
             public FakeAssetBundleHandle Handle { get; } = new FakeAssetBundleHandle();
@@ -508,7 +810,7 @@ namespace Robotopia.ModManager.Tests
             public bool IsAlive => true;
             public Vec3 Position => Vec3.Zero;
             public Vec3 HeadPosition => Vec3.Zero;
-            public RobotBrainMode BrainMode => RobotBrainMode.Dormant;
+            public RobotBrainMode BrainMode { get; private set; } = RobotBrainMode.Dormant;
             public bool IsMoving => false;
             public bool HasReachedTarget => false;
             public float MoveSpeed { get; set; }
@@ -518,6 +820,7 @@ namespace Robotopia.ModManager.Tests
             public void MoveTo(Vec3 position) { }
             public void Chase(object targetGameObject) { }
             public void Stop() { }
+            public void SetBrainMode(RobotBrainMode mode) => BrainMode = mode;
             public void SetTint(RobotColor color) { }
             public void SetEmote(string emojiShortcode) { }
             public void SetName(string name) { }

@@ -317,6 +317,43 @@
       "returnType": "PlayerController"
     },
     {
+      "id": "worlds.field.playerController.instance",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "PlayerController",
+      "member": "_instance",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Resolving the live player for pause-menu interception",
+      "sourceRef": "mods/Robotopia.Worlds/PauseMenuBridge.cs:196",
+      "returnType": "PlayerController"
+    },
+    {
+      "id": "worlds.field.playerController.pauseUI",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "PlayerController",
+      "member": "pauseUI",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Rewiring the vanilla pause menu while a world session is active",
+      "sourceRef": "mods/Robotopia.Worlds/PauseMenuBridge.cs:166",
+      "returnType": ""
+    },
+    {
+      "id": "worlds.method.playerController.exitPause",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "PlayerController",
+      "member": "ExitPause",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Closing the vanilla pause menu after a gamemode pause action runs",
+      "sourceRef": "mods/Robotopia.Worlds/PauseMenuBridge.cs:392",
+      "parameters": [],
+      "returnType": "System.Void"
+    },
+    {
       "id": "worlds.prop.ugcImportPlayBootstrap.runtimePlayerPrefab",
       "kind": "Property",
       "assembly": "GameCode",

@@ -55,6 +55,21 @@ namespace Robotopia.Mods
         IRobotAgent? Spawn(RobotAgentSpawnRequest request);
 
         /// <summary>
+        /// The distinct robot types (prefabs) the current level exposes, ordered default-first — the list to offer
+        /// in a spawn UI. Empty until a gameplay level has loaded and the prefab scan has run (poll alongside
+        /// <see cref="IsAvailable"/>). Pass a descriptor's <see cref="RobotTypeDescriptor.Id"/> as
+        /// <see cref="RobotAgentSpawnRequest.RobotTypeId"/> to spawn that type.
+        /// </summary>
+        IReadOnlyList<RobotTypeDescriptor> RobotTypes { get; }
+
+        /// <summary>
+        /// <c>true</c> when the given <c>UnityEngine.GameObject</c> (prefab or instance, kept as
+        /// <see cref="object"/> to stay Unity-free) is a robot — i.e. it carries the game's robot body. Use it to
+        /// keep robots out of prop catalogs. Cheap, never throws, <c>false</c> for non-GameObjects.
+        /// </summary>
+        bool IsRobotPrefab(object gameObject);
+
+        /// <summary>
         /// Gets the real player's world position. Returns <c>false</c> when there is no resolved
         /// <c>PlayerController</c> (e.g. a camera-only scene); callers that want a camera fallback should handle
         /// that themselves.
@@ -198,8 +213,16 @@ namespace Robotopia.Mods
         /// </summary>
         Vec3 HeadPosition { get; }
 
-        /// <summary>The brain mode this robot was spawned with.</summary>
+        /// <summary>The robot's CURRENT brain mode (initially the spawn request's; changed by <see cref="SetBrainMode"/>).</summary>
         RobotBrainMode BrainMode { get; }
+
+        /// <summary>
+        /// Switches the robot's brain mode at runtime. To <see cref="RobotBrainMode.Dormant"/>: the native
+        /// LLM brain and behaviour tree are suppressed and mod movement intents take over — the way to
+        /// reprogram/override an autonomous robot. To <see cref="RobotBrainMode.Autonomous"/>: mod intents are
+        /// cleared and the native brain is best-effort woken back up. Idempotent; never throws.
+        /// </summary>
+        void SetBrainMode(RobotBrainMode mode);
 
         /// <summary><c>true</c> while the robot is actively walking toward an intent target this frame.</summary>
         bool IsMoving { get; }
@@ -331,6 +354,30 @@ namespace Robotopia.Mods
         /// Player-facing interaction policy for the spawned robot. Defaults to the game's native talk prompt.
         /// </summary>
         public RobotInteractionOptions Interaction { get; set; } = RobotInteractionOptions.NativeTalk();
+
+        /// <summary>
+        /// Which robot type (prefab) to spawn — an <see cref="RobotTypeDescriptor.Id"/> from
+        /// <see cref="IRobotAgentService.RobotTypes"/>. <c>null</c> (default) spawns the default type. An unknown
+        /// id logs a warning and falls back to the default rather than failing the spawn.
+        /// </summary>
+        public string? RobotTypeId { get; set; }
+    }
+
+    /// <summary>One spawnable robot type (a distinct robot prefab the current level exposes).</summary>
+    public sealed class RobotTypeDescriptor
+    {
+        /// <summary>Creates a robot type descriptor.</summary>
+        public RobotTypeDescriptor(string id, string displayName)
+        {
+            Id = id ?? string.Empty;
+            DisplayName = string.IsNullOrWhiteSpace(displayName) ? Id : displayName;
+        }
+
+        /// <summary>Stable slug of the prefab name (e.g. <c>"worker-robot"</c>) — pass as <see cref="RobotAgentSpawnRequest.RobotTypeId"/>.</summary>
+        public string Id { get; }
+
+        /// <summary>Human-readable name for spawn UIs.</summary>
+        public string DisplayName { get; }
     }
 
     /// <summary>How RobotKit should expose the game's native "talk to this robot" interaction.</summary>

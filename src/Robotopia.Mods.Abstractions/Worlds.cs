@@ -12,7 +12,31 @@ namespace Robotopia.Mods
 
         event Action<WorldSession>? SessionChanged;
 
+        /// <summary>
+        /// Raised exactly once per session when it ends — whether the gamemode ended it, a new launch
+        /// superseded it, the player reached a non-gameplay scene (e.g. the vanilla exit-to-menu), or the
+        /// provider is unloading. Fired after <see cref="CurrentSession"/> has been cleared, so subscribers
+        /// observing the service see no active session.
+        /// </summary>
+        event Action<WorldSessionEnd>? SessionEnded;
+
         void RegisterWorld(WorldDefinition world);
+
+        /// <summary>
+        /// Registers a world backed by mod-provided content (e.g. a prefab from a mod-shipped
+        /// AssetBundle — see <see cref="BundleWorldContent"/>). Launching it loads the game's clean play
+        /// stage (a real player spawns natively) and places the content at the player spawn; the content
+        /// is destroyed when the session ends. Re-registering the same world id replaces the content.
+        /// </summary>
+        void RegisterWorld(WorldDefinition world, ICustomWorldContent content);
+
+        /// <summary>
+        /// Removes a registered world (and any content coupling). Ends the current session with
+        /// <see cref="WorldSessionEndReason.ProviderUnloading"/> when that world backs it. Returns
+        /// <c>false</c> when the id is unknown. Call from <c>OnUnload</c> for worlds your mod registered.
+        /// </summary>
+        bool UnregisterWorld(string worldId);
+
         void RegisterGamemode(GamemodeDefinition gamemode);
 
         /// <summary>
@@ -26,6 +50,41 @@ namespace Robotopia.Mods
 
         /// <summary>Launches a previously registered menu entry by id, loading the world in correct play state.</summary>
         WorldLoadResult LaunchMenuEntry(string entryId);
+
+        /// <summary>
+        /// Ends the current session: clears <see cref="CurrentSession"/>, tears down provider-owned session
+        /// state (e.g. the sandbox arena), and fires <see cref="SessionEnded"/>. Idempotent — a no-op when
+        /// no session is active.
+        /// </summary>
+        void EndSession(WorldSessionEndReason reason);
+    }
+
+    /// <summary>Why a world session ended (carried by <see cref="IWorldGamemodeService.SessionEnded"/>).</summary>
+    public enum WorldSessionEndReason
+    {
+        /// <summary>A non-gameplay scene became active under the session (e.g. the vanilla exit-to-menu).</summary>
+        MenuReached,
+
+        /// <summary>The gamemode ended its own session (e.g. a game-over screen's return-to-menu action).</summary>
+        EndedByGamemode,
+
+        /// <summary>A new world/gamemode launch replaced this session.</summary>
+        Superseded,
+
+        /// <summary>The world/gamemode provider mod is unloading.</summary>
+        ProviderUnloading
+    }
+
+    public sealed class WorldSessionEnd
+    {
+        public WorldSessionEnd(WorldSession session, WorldSessionEndReason reason)
+        {
+            Session = session ?? throw new ArgumentNullException(nameof(session));
+            Reason = reason;
+        }
+
+        public WorldSession Session { get; }
+        public WorldSessionEndReason Reason { get; }
     }
 
     public sealed class GamemodeMenuEntry

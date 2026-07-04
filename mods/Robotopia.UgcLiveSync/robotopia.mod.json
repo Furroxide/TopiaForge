@@ -1,18 +1,30 @@
 {
-  "schemaVersion": 1,
-  "id": "robotopia.ugc.livesync",
-  "name": "Robotopia UGC Live Sync",
+  "$schema": "https://raw.githubusercontent.com/furroxide/quantum-works/main/schemas/robotopia.mod.schema.json",
+  "schemaVersion": 2,
+  "name": "robotopia.ugc.livesync",
+  "displayName": "Robotopia UGC Live Sync",
   "version": "0.2.0",
-  "author": "QuantumWorks",
+  "author": {
+    "name": "QuantumWorks"
+  },
   "description": "Live UGC content sync: hot-reload level content into the running game from a watched export folder (the Unity Editor companion dev loop) or an external editor's live Automerge document. Preview/play only.",
   "entryAssembly": "Robotopia.UgcLiveSync.dll",
   "entryType": "Robotopia.UgcLiveSync.UgcLiveSyncMod",
-  "dependencies": [],
-  "optionalDependencies": [],
-  "conflicts": [],
-  "loadAfter": [],
-  "permissions": ["scene-management", "ugc-livesync", "filesystem-watch", "network"],
+  "vpmDependencies": {},
+  "supportedSdkVersionRange": ">=0.1.0 <0.2.0",
   "category": "Framework",
-  "tags": ["ugc", "livesync", "sdk", "creator", "unity"],
-  "license": "Unspecified"
+  "tags": [
+    "ugc",
+    "livesync",
+    "sdk",
+    "creator",
+    "unity"
+  ],
+  "license": "Unspecified",
+  "permissions": [
+    "scene-management",
+    "ugc-livesync",
+    "filesystem-watch",
+    "network"
+  ]
 }

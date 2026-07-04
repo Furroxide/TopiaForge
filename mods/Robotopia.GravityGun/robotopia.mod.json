@@ -1,17 +1,28 @@
 {
-  "schemaVersion": 1,
-  "id": "robotopia.gravitygun",
-  "name": "Gravity Gun",
+  "$schema": "https://raw.githubusercontent.com/furroxide/quantum-works/main/schemas/robotopia.mod.schema.json",
+  "schemaVersion": 2,
+  "name": "robotopia.gravitygun",
+  "displayName": "Gravity Gun",
   "version": "0.1.5",
-  "author": "QuantumWorks",
+  "author": {
+    "name": "QuantumWorks"
+  },
   "description": "Grab, hold, pull, and throw physics objects and robots with a continuous gravity beam.",
   "entryAssembly": "Robotopia.GravityGun.dll",
   "entryType": "Robotopia.GravityGun.GravityGunMod",
-  "dependencies": [],
-  "loadAfter": [],
-  "gameVersion": "",
-  "permissions": ["input", "physics", "particles"],
+  "vpmDependencies": {},
+  "supportedSdkVersionRange": ">=0.1.0 <0.2.0",
   "category": "Gameplay",
-  "tags": ["gravity-gun", "physics", "particles", "robots"],
-  "license": "Unspecified"
+  "tags": [
+    "gravity-gun",
+    "physics",
+    "particles",
+    "robots"
+  ],
+  "license": "Unspecified",
+  "permissions": [
+    "input",
+    "physics",
+    "particles"
+  ]
 }

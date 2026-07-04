@@ -42,6 +42,15 @@
     <Compile Include="..\..\mods\Robotopia.RobotKit\RobotConversationService.cs" />
   </ItemGroup>
 
+  <!-- The objective layer (per-robot program state machine + named-target registry) is Unity-free too — it only
+       drives IRobotAgent intents — so it unit-tests against a fake agent and a fake clock. The sandbox PROGRAM
+       director (request shape + deterministic decision/target parse) rides along, mirroring ConversationDirector. -->
+  <ItemGroup>
+    <Compile Include="..\..\mods\Robotopia.RobotKit\ObjectiveRunner.cs" />
+    <Compile Include="..\..\mods\Robotopia.RobotKit\RobotObjectiveService.cs" />
+    <Compile Include="..\..\mods\Robotopia.Sandbox\RobotProgramDirector.cs" />
+  </ItemGroup>
+
   <!-- Chronos time-control: the lease derivation, fixedDeltaTime math and turn-order are Unity-free, so they
        unit-test the leak-proof derivation + initiative ordering on net8.0 (the SuperhotTimeDriver lives in
        Abstractions and is referenced directly). -->

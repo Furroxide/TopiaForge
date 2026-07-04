@@ -67,6 +67,10 @@ namespace Robotopia.ModManager
                 {
                     row.Badge.Set("RESTART", QwTone.Warning);
                 }
+                else if (context.Plugin.GetLoadFailure(manifest.Id) != null)
+                {
+                    row.Badge.Set("LOAD FAILED", QwTone.Danger);
+                }
                 else
                 {
                     row.Badge.Set(state.Enabled ? "ENABLED" : "DISABLED", state.Enabled ? QwTone.Success : QwTone.Neutral);
@@ -155,6 +159,13 @@ namespace Robotopia.ModManager
             if (context.Plugin.LoadOrder.Errors.TryGetValue(manifest.Id, out var errors))
             {
                 detailPane.Label("Dependency errors: " + string.Join("; ", errors.ToArray()), QwTextStyle.Caption).Tone(QwTone.Danger);
+            }
+
+            var loadFailure = context.Plugin.GetLoadFailure(manifest.Id);
+            if (loadFailure != null)
+            {
+                badges.Badge("LOAD FAILED", QwTone.Danger);
+                detailPane.Label("Load failure: " + loadFailure, QwTextStyle.Caption).Tone(QwTone.Danger);
             }
 
             detailPane.Label("Permissions: " + string.Join(", ", manifest.Permissions.ToArray()), QwTextStyle.Caption).Tone(QwTone.Muted);

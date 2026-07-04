@@ -9,17 +9,17 @@ namespace Robotopia.ModManager.Core
         [DataMember(Name = "schemaVersion", IsRequired = true)]
         public int SchemaVersion { get; set; }
 
-        [DataMember(Name = "id", IsRequired = true)]
+        [DataMember(Name = "name", IsRequired = true)]
         public string Id { get; set; } = string.Empty;
 
-        [DataMember(Name = "name", IsRequired = true)]
+        [DataMember(Name = "displayName", IsRequired = true)]
         public string Name { get; set; } = string.Empty;
 
         [DataMember(Name = "version", IsRequired = true)]
         public string Version { get; set; } = string.Empty;
 
         [DataMember(Name = "author")]
-        public string Author { get; set; } = string.Empty;
+        public ModAuthor Author { get; set; } = new ModAuthor();
 
         [DataMember(Name = "description")]
         public string Description { get; set; } = string.Empty;
@@ -29,6 +29,9 @@ namespace Robotopia.ModManager.Core
 
         [DataMember(Name = "entryType")]
         public string EntryType { get; set; } = string.Empty;
+
+        [DataMember(Name = "vpmDependencies")]
+        public Dictionary<string, string> VpmDependencies { get; set; } = new Dictionary<string, string>();
 
         [DataMember(Name = "dependencies")]
         public List<ModDependency> Dependencies { get; set; } = new List<ModDependency>();
@@ -50,6 +53,9 @@ namespace Robotopia.ModManager.Core
 
         [DataMember(Name = "supportedLoaderVersionRange")]
         public string SupportedLoaderVersionRange { get; set; } = string.Empty;
+
+        [DataMember(Name = "supportedSdkVersionRange")]
+        public string SupportedSdkVersionRange { get; set; } = string.Empty;
 
         [DataMember(Name = "category")]
         public string Category { get; set; } = string.Empty;
@@ -89,6 +95,19 @@ namespace Robotopia.ModManager.Core
 
         [DataMember(Name = "legacyPackages")]
         public List<string> LegacyPackages { get; set; } = new List<string>();
+    }
+
+    [DataContract]
+    public sealed class ModAuthor
+    {
+        [DataMember(Name = "name")]
+        public string Name { get; set; } = string.Empty;
+
+        [DataMember(Name = "email")]
+        public string Email { get; set; } = string.Empty;
+
+        [DataMember(Name = "url")]
+        public string Url { get; set; } = string.Empty;
     }
 
     [DataContract]

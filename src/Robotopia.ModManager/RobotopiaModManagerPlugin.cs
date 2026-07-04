@@ -16,7 +16,7 @@ namespace Robotopia.ModManager
     {
         public const string PluginGuid = "robotopia.modmanager";
         public const string PluginName = "QuantumWorks";
-        public const string PluginVersion = "0.1.0";
+        public const string PluginVersion = RobotopiaVersions.LoaderVersion;
 
         private readonly PackageInstaller packageInstaller = new PackageInstaller();
         private readonly ModRegistry registry = new ModRegistry();
@@ -36,6 +36,9 @@ namespace Robotopia.ModManager
         public IReadOnlyList<ModPackage> Packages => packages;
         public LoadOrderResult LoadOrder => loadOrder;
         public IReadOnlyCollection<string> LoadedModIds => runtime?.LoadedModIds ?? Array.Empty<string>();
+
+        /// <summary>Why a mod failed/was skipped at load time (null when it loaded or wasn't attempted).</summary>
+        public string? GetLoadFailure(string id) => runtime?.GetLoadFailure(id);
 
         private void Awake()
         {
@@ -58,7 +61,11 @@ namespace Robotopia.ModManager
                     managerLogger.Error(ex, "Failed to apply pending uninstalls.");
                 }
 
+                InstallInboxAtStartup();
+                registry.PruneSupersededVersions(paths, state,
+                    pruned => managerLogger.Info("Pruned superseded package version: " + pruned + "."));
                 RefreshPackages(saveState: true);
+                LogExcludedPackages();
                 runtime = new ModRuntime(paths, managerLogger);
                 runtime.Load(loadOrder.OrderedPackages);
                 state.ClearAppliedRestartRequirements();
@@ -118,6 +125,97 @@ namespace Robotopia.ModManager
             menuButtonInjector.ResetForScene(scene.name);
         }
 
+        /// <summary>
+        /// Installs everything waiting in the package-inbox before any mod loads, so a freshly staged
+        /// dev-install (or a file the user dropped in) is live on the very next launch — no F10 install
+        /// step, and no window where an updated loader runs against binary-stale installed packages.
+        /// </summary>
+        private void InstallInboxAtStartup()
+        {
+            try
+            {
+                SweepConsumedInboxFiles();
+
+                // Nothing is loaded yet, so the installs apply to this launch (no restart flag).
+                var results = packageInstaller.InstallInbox(paths, state, restartRequired: false);
+                if (results.Count == 0)
+                {
+                    return;
+                }
+
+                foreach (var result in results)
+                {
+                    var fileName = Path.GetFileName(result.FilePath);
+                    if (result.Superseded)
+                    {
+                        managerLogger.Info("Inbox package " + fileName + " superseded by a newer version in the inbox.");
+                    }
+                    else if (result.Install!.Ok)
+                    {
+                        managerLogger.Info("Installed mod package from inbox: " + result.Install.Manifest!.Id
+                            + " " + result.Install.Manifest.Version + ".");
+                    }
+                    else
+                    {
+                        managerLogger.Warn("Inbox package " + fileName + " failed to install: "
+                            + string.Join("; ", result.Install.Errors) + " (file left in the inbox).");
+                    }
+
+                    if (result.ConsumeError != null)
+                    {
+                        managerLogger.Warn("Inbox file " + fileName + " could not be removed after install: "
+                            + result.ConsumeError);
+                    }
+                }
+
+                SaveState();
+            }
+            catch (Exception ex)
+            {
+                managerLogger.Error(ex, "Startup inbox install failed.");
+            }
+        }
+
+        // *.robotopiamod.installed files are the rename fallback for inbox files that were locked at
+        // consume time; they are dead weight once the lock is gone.
+        private void SweepConsumedInboxFiles()
+        {
+            if (!Directory.Exists(paths.PackageInbox))
+            {
+                return;
+            }
+
+            foreach (var file in Directory.GetFiles(paths.PackageInbox, "*.robotopiamod.installed", SearchOption.TopDirectoryOnly))
+            {
+                try
+                {
+                    File.Delete(file);
+                }
+                catch
+                {
+                    // Still locked; retried next launch.
+                }
+            }
+        }
+
+        private void LogExcludedPackages()
+        {
+            foreach (var package in packages)
+            {
+                if (!package.IsValid)
+                {
+                    var id = package.Manifest?.Id ?? Path.GetFileName(package.PackagePath);
+                    managerLogger.Warn("Package " + id + " (" + package.PackagePath + ") is invalid and will not load: "
+                        + (package.Errors.Count > 0 ? string.Join("; ", package.Errors) : "manifest or state missing"));
+                }
+            }
+
+            foreach (var entry in loadOrder.Errors)
+            {
+                managerLogger.Warn("Package " + entry.Key + " excluded from load order: " + string.Join("; ", entry.Value));
+            }
+        }
+
         public void RefreshPackages(bool saveState)
         {
             packages = registry.Scan(paths, state);
@@ -145,21 +243,36 @@ namespace Robotopia.ModManager
 
         public string InstallInboxPackages()
         {
-            var files = Directory.Exists(paths.PackageInbox)
-                ? Directory.GetFiles(paths.PackageInbox, "*.robotopiamod", SearchOption.TopDirectoryOnly)
-                : Array.Empty<string>();
-
-            if (files.Length == 0)
+            var results = packageInstaller.InstallInbox(paths, state, restartRequired: true);
+            if (results.Count == 0)
             {
                 return "No .robotopiamod files found in package-inbox.";
             }
 
             var messages = new List<string>();
-            foreach (var file in files)
+            foreach (var result in results)
             {
-                messages.Add(Path.GetFileName(file) + ": " + InstallPackage(file));
+                var fileName = Path.GetFileName(result.FilePath);
+                if (result.Superseded)
+                {
+                    messages.Add(fileName + ": superseded by a newer version in the inbox.");
+                }
+                else if (result.Install!.Ok)
+                {
+                    managerLogger.Info("Installed mod package: " + result.Install.Manifest!.Id
+                        + " " + result.Install.Manifest.Version);
+                    messages.Add(fileName + ": Installed " + result.Install.Manifest.Name
+                        + ". Restart Robotopia to load it.");
+                }
+                else
+                {
+                    var message = string.Join("; ", result.Install.Errors);
+                    managerLogger.Warn("Package install failed: " + message);
+                    messages.Add(fileName + ": " + message);
+                }
             }
 
+            RefreshPackages(saveState: true);
             return string.Join(Environment.NewLine, messages.ToArray());
         }
 

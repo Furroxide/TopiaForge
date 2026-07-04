@@ -31,7 +31,8 @@ namespace Robotopia.RobotKit
         private readonly string id;
         private readonly GameObject go;
         private readonly Transform transform;
-        private readonly RobotBrainMode brainMode;
+        private readonly GameReflection.BrainStateSnapshot? nativeBrainSnapshot;
+        private RobotBrainMode brainMode;
         private readonly IModLogger logger;
 
         private object? head;
@@ -70,11 +71,17 @@ namespace Robotopia.RobotKit
         private bool nativeAgentHeadTalkDisabled;
         private RobotInteractionBridge? interactionBridge;
 
-        public RobotAgent(string id, GameObject go, RobotAgentSpawnRequest request, IModLogger logger)
+        public RobotAgent(
+            string id,
+            GameObject go,
+            RobotAgentSpawnRequest request,
+            IModLogger logger,
+            GameReflection.BrainStateSnapshot? nativeBrainSnapshot = null)
         {
             this.id = id;
             this.go = go;
             this.logger = logger;
+            this.nativeBrainSnapshot = nativeBrainSnapshot;
             transform = go.transform;
             brainMode = request.BrainMode;
             moveSpeed = request.MoveSpeed;
@@ -90,6 +97,24 @@ namespace Robotopia.RobotKit
         public Vec3 Position => go != null ? ToVec3(transform.position) : Vec3.Zero;
         public Vec3 HeadPosition => ResolveHeadPosition();
         public RobotBrainMode BrainMode => brainMode;
+
+        // Runtime brain switch. To Dormant: suppress the native brain so mod intents take over (the reprogram
+        // path). To Autonomous: clear mod intents and best-effort wake the native brain back up.
+        public void SetBrainMode(RobotBrainMode mode)
+        {
+            if (mode == brainMode || !IsAlive)
+            {
+                return;
+            }
+
+            if (mode == RobotBrainMode.Autonomous)
+            {
+                Stop();
+            }
+
+            brainMode = mode;
+            GameReflection.ApplyBrainMode(go, mode, nativeBrainSnapshot, logger);
+        }
         public bool IsMoving => isMoving;
         public bool HasReachedTarget => hasReachedTarget;
 

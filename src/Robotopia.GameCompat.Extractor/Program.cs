@@ -341,12 +341,21 @@ then the default launcher install path.");
             if (!string.IsNullOrEmpty(gameDir))
             {
                 yield return Path.Combine(gameDir, "Robotopia_Data", "Managed");
+                // macOS installs are an app bundle; the managed assemblies sit inside Contents/.
+                yield return Path.Combine(gameDir, "Contents", "Resources", "Data", "Managed");
             }
 
             var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             if (!string.IsNullOrEmpty(localAppData))
             {
                 yield return Path.Combine(localAppData, "Tomato Cake", "launcher", "Robotopia", "Robotopia_Data", "Managed");
+            }
+
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (!string.IsNullOrEmpty(home))
+            {
+                yield return Path.Combine(home, "Library", "Application Support", "Tomato Cake", "launcher",
+                    "Robotopia.app", "Contents", "Resources", "Data", "Managed");
             }
         }
 

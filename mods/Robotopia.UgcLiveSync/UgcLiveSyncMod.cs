@@ -13,7 +13,6 @@ namespace Robotopia.UgcLiveSync
     /// </summary>
     public sealed class UgcLiveSyncMod : IRobotopiaMod
     {
-        private const string MenuSceneName = "TestCityStartMenu";
         private const float AutoConnectMaxWaitSeconds = 12f;
 
         private IModContext? context;
@@ -196,7 +195,7 @@ namespace Robotopia.UgcLiveSync
 
             autoConnectWait -= deltaTime;
             var activeScene = SceneManager.GetActiveScene().name;
-            var atMenu = string.Equals(activeScene, MenuSceneName, StringComparison.OrdinalIgnoreCase);
+            var atMenu = GameScenes.IsMainMenuScene(activeScene);
             if (!atMenu && autoConnectWait > 0f)
             {
                 return;

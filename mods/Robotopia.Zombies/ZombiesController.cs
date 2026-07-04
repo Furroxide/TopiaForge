@@ -1112,7 +1112,7 @@ namespace Robotopia.Zombies
 
             context.Logger.Info("Zombies returning to the main menu. Final score: " + score + ".");
             // The menu scene wants a usable pointer; leave the cursor unlocked from the game-over screen.
-            ReflectionUtil.LoadScene("TestCityStartMenu", context.Logger);
+            ReflectionUtil.LoadScene(GameScenes.MainMenuSceneName, context.Logger);
             if (SessionEnded != null)
             {
                 SessionEnded.Invoke();
@@ -1183,6 +1183,25 @@ namespace Robotopia.Zombies
         {
             if (disposed || mode != LoadSceneMode.Single)
             {
+                return;
+            }
+
+            // A non-gameplay scene (menu/boot/loader) means the player left the world — end the session instead
+            // of re-arming the HUD/Superhot over the menu. Normally a no-op: the Worlds service ends the session
+            // earlier in this same sceneLoaded dispatch and this controller is already disposed (guard above).
+            // This is the backstop for a missed provider-side end (e.g. endSessionOnMenuScene turned off).
+            if (GameScenes.IsNonGameplayScene(scene.name))
+            {
+                context.Logger.Info("Zombies ending its session: non-gameplay scene '" + scene.name + "' loaded.");
+                if (SessionEnded != null)
+                {
+                    SessionEnded.Invoke();
+                }
+                else
+                {
+                    Dispose();
+                }
+
                 return;
             }
 

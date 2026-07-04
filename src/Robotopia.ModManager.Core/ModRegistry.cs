@@ -47,11 +47,61 @@ namespace Robotopia.ModManager.Core
                 }
             }
 
+            // Group by the id DIRECTORY name (ids are directory names by construction — see
+            // ManagerPaths.GetPackagePath), not the manifest id: a stale version whose old-schema manifest
+            // no longer parses must fold into its mod's group so the valid current version wins the pick,
+            // instead of surfacing as its own broken "package" and warning on every launch.
             return packages
-                .GroupBy(p => p.Manifest?.Id ?? p.PackagePath, StringComparer.OrdinalIgnoreCase)
+                .GroupBy(
+                    p => Path.GetFileName(Path.GetDirectoryName(p.PackagePath)) ?? p.PackagePath,
+                    StringComparer.OrdinalIgnoreCase)
                 .Select(g => PickCurrentVersion(g.ToList(), state))
                 .OrderBy(p => p.Manifest?.Name ?? p.PackagePath, StringComparer.OrdinalIgnoreCase)
                 .ToList();
+        }
+
+        /// <summary>
+        /// Deletes version directories superseded by the state-selected version of each installed mod.
+        /// Meant for startup (nothing loaded, so no file locks): install-time pruning can be blocked by a
+        /// loaded assembly, and pre-prune installs left old versions behind forever — their aged-out
+        /// manifests then warned on every launch. Ids without a state entry, or whose selected version
+        /// directory is missing, are left untouched (never delete the only candidates a broken selection has).
+        /// </summary>
+        public void PruneSupersededVersions(ManagerPaths paths, ManagerState state, Action<string>? onPruned = null)
+        {
+            if (!Directory.Exists(paths.Packages))
+            {
+                return;
+            }
+
+            foreach (var idDirectory in Directory.GetDirectories(paths.Packages))
+            {
+                var id = Path.GetFileName(idDirectory);
+                var keepVersion = state.Find(id)?.Version;
+                if (string.IsNullOrWhiteSpace(keepVersion)
+                    || !Directory.Exists(Path.Combine(idDirectory, keepVersion)))
+                {
+                    continue;
+                }
+
+                foreach (var versionDirectory in Directory.GetDirectories(idDirectory))
+                {
+                    if (string.Equals(Path.GetFileName(versionDirectory), keepVersion, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        Directory.Delete(versionDirectory, true);
+                        onPruned?.Invoke(id + " " + Path.GetFileName(versionDirectory));
+                    }
+                    catch
+                    {
+                        // Still locked or access-denied; retried on the next launch.
+                    }
+                }
+            }
         }
 
         public void ApplyPendingUninstalls(ManagerPaths paths, ManagerState state)

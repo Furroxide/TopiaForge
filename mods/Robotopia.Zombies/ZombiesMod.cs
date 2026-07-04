@@ -12,6 +12,7 @@ namespace Robotopia.Zombies
         private ZombiesConfig? config;
         private IWorldGamemodeService? worlds;
         private ZombiesController? controller;
+        private IDisposable? restartPauseAction;
 
         public void OnLoad(IModContext context)
         {
@@ -40,6 +41,7 @@ namespace Robotopia.Zombies
             TryWriteCatalog(worlds, context.Logger);
 
             worlds.SessionChanged += OnSessionChanged;
+            worlds.SessionEnded += OnSessionEnded;
             if (worlds.CurrentSession != null)
             {
                 OnSessionChanged(worlds.CurrentSession);
@@ -59,6 +61,7 @@ namespace Robotopia.Zombies
             if (worlds != null)
             {
                 worlds.SessionChanged -= OnSessionChanged;
+                worlds.SessionEnded -= OnSessionEnded;
             }
 
             StopController();
@@ -87,12 +90,36 @@ namespace Robotopia.Zombies
 
             StopController();
             controller = new ZombiesController(context, config);
-            controller.SessionEnded = StopController;
+            // Route the controller's self-terminating exit (game-over "RETURN TO MENU") through the Worlds
+            // session so the provider also clears CurrentSession/arena; its SessionEnded event then reaches
+            // OnSessionEnded below, which stops the controller. The direct StopController after it is the
+            // fallback for a session the provider no longer tracks (EndSession no-ops). Re-entrancy is safe:
+            // EndSession clears the session before firing, and StopController/Dispose are guarded.
+            controller.SessionEnded = () =>
+            {
+                worlds?.EndSession(WorldSessionEndReason.EndedByGamemode);
+                StopController();
+            };
             controller.Start(session);
+
+            // Surface a run restart in the vanilla pause menu while our session runs. The vanilla exit
+            // button needs no interceptor: the default (end the session, then exit) is exactly what we want.
+            var pauseMenu = context.GetService<IWorldPauseMenuService>();
+            restartPauseAction = pauseMenu?.RegisterAction(new WorldPauseAction(
+                "robotopia.zombies.restart",
+                "RESTART RUN",
+                () => controller?.Restart()));
+        }
+
+        private void OnSessionEnded(WorldSessionEnd end)
+        {
+            StopController();
         }
 
         private void StopController()
         {
+            restartPauseAction?.Dispose();
+            restartPauseAction = null;
             controller?.Dispose();
             controller = null;
         }
