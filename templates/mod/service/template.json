@@ -1,0 +1,11 @@
+{
+  "id": "service",
+  "label": "Framework service mod",
+  "description": "Framework mod that publishes a typed service other mods consume via GetService (modeled on the Assets mod).",
+  "manifestDefaults": {
+    "category": "Framework",
+    "description": "Framework SDK service for Robotopia mods.",
+    "tags": ["framework", "sdk"],
+    "apiAssemblies": ["{{ASSEMBLY_NAME}}.dll"]
+  }
+}

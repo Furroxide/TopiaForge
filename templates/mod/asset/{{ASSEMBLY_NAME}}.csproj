@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="robotopia.dev.props" Condition="Exists('robotopia.dev.props')" />
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <AssemblyName>{{ASSEMBLY_NAME}}</AssemblyName>
+    <RootNamespace>{{ASSEMBLY_NAME}}</RootNamespace>
+  </PropertyGroup>
+  <!-- The unity-companion folder is a Unity Editor project (UnityEngine/UnityEditor), compiled by Unity, not by
+       this .NET mod project. Exclude it from the default source glob so the solution build ignores it. -->
+  <ItemGroup>
+    <Compile Remove="unity-companion\**\*.cs" />
+    <None Remove="unity-companion\**\*" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="{{ABSTRACTIONS_PROJECT}}" Private="false" />
+  </ItemGroup>
+</Project>

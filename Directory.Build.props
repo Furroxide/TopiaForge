@@ -1,13 +1,34 @@
 <Project>
   <PropertyGroup>
-    <RobotopiaGameDir Condition="'$(RobotopiaGameDir)' == ''">C:\Users\vanst\AppData\Local\Tomato Cake\launcher\Robotopia</RobotopiaGameDir>
-    <RobotopiaManagedDir>$(RobotopiaGameDir)\Robotopia_Data\Managed</RobotopiaManagedDir>
-    <BepInExRoot>$(MSBuildThisFileDirectory)third_party\BepInEx\win_x64_5.4.23.5</BepInExRoot>
-    <BepInExCoreDir>$(BepInExRoot)\BepInEx\core</BepInExCoreDir>
+    <!-- Explicit override always wins: set ROBOTOPIA_GAME_DIR (or pass -p:RobotopiaGameDir=...) to point at any
+         game install. CI sets RobotopiaManagedDir directly from its reference-assembly archive. On Linux the
+         game runs under Proton, so there is no default — set ROBOTOPIA_GAME_DIR to the Windows-layout game
+         folder inside the prefix. -->
+    <RobotopiaGameDir Condition="'$(RobotopiaGameDir)' == '' and '$(ROBOTOPIA_GAME_DIR)' != ''">$(ROBOTOPIA_GAME_DIR)</RobotopiaGameDir>
+    <RobotopiaGameDir Condition="'$(RobotopiaGameDir)' == '' and '$(OS)' == 'Windows_NT'">$(LOCALAPPDATA)\Tomato Cake\launcher\Robotopia</RobotopiaGameDir>
+    <RobotopiaGameDir Condition="'$(RobotopiaGameDir)' == '' and $([MSBuild]::IsOSPlatform('OSX'))">$(HOME)/Library/Application Support/Tomato Cake/launcher/Robotopia.app</RobotopiaGameDir>
+    <!-- The macOS game is an app bundle, so its managed assemblies sit inside Contents/. -->
+    <RobotopiaManagedDir Condition="'$(RobotopiaManagedDir)' == '' and '$(RobotopiaGameDir)' != '' and $([MSBuild]::IsOSPlatform('OSX'))">$(RobotopiaGameDir)/Contents/Resources/Data/Managed</RobotopiaManagedDir>
+    <RobotopiaManagedDir Condition="'$(RobotopiaManagedDir)' == '' and '$(RobotopiaGameDir)' != ''">$(RobotopiaGameDir)/Robotopia_Data/Managed</RobotopiaManagedDir>
+    <!-- BepInEx core assemblies are pure IL; the win_x64 bundle is a valid compile reference on every OS. -->
+    <BepInExRoot Condition="'$(BepInExRoot)' == ''">$(MSBuildThisFileDirectory)third_party/BepInEx/win_x64_5.4.23.5</BepInExRoot>
+    <BepInExCoreDir Condition="'$(BepInExCoreDir)' == ''">$(BepInExRoot)/BepInEx/core</BepInExCoreDir>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <Deterministic>true</Deterministic>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
   </PropertyGroup>
+
+  <!-- The game's managed assemblies are proprietary and never vendored, so a machine without a game install
+       (or the CI refs archive) fails reference resolution with an opaque CS0006. Fail early with the fix
+       instead. Scoped to game assemblies so unrelated missing HintPaths keep their normal diagnostics. -->
+  <Target Name="EnsureRobotopiaGameRefs" BeforeTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <_MissingRobotopiaGameRef Include="@(Reference)"
+        Condition="'%(Reference.HintPath)' != '' and !Exists('%(Reference.HintPath)') and ($([System.String]::Copy('%(Reference.Identity)').StartsWith('UnityEngine')) or '%(Reference.Identity)' == 'GameCode' or '%(Reference.Identity)' == 'Assembly-CSharp')" />
+    </ItemGroup>
+    <Error Condition="'@(_MissingRobotopiaGameRef)' != ''"
+      Text="Robotopia game reference assemblies were not found (looked for @(_MissingRobotopiaGameRef->'%(HintPath)', ', ')). Install the game, or set ROBOTOPIA_GAME_DIR (or the RobotopiaManagedDir MSBuild property) to a folder containing the game's Managed assemblies." />
+  </Target>
 </Project>

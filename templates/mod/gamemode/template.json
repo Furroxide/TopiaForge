@@ -1,0 +1,23 @@
+{
+  "id": "gamemode",
+  "label": "Gamemode mod",
+  "description": "World gamemode that registers with the Worlds service and appears in the level-select menu (modeled on the Zombies mod).",
+  "manifestDefaults": {
+    "category": "Gameplay",
+    "description": "A world gamemode for Robotopia.",
+    "tags": ["gameplay", "gamemode"],
+    "permissions": ["world-service", "robot-spawning", "hud"],
+    "vpmDependencies": {
+      "robotopia.worlds": ">=0.3.0",
+      "robotopia.robotkit": ">=0.6.0"
+    },
+    "loadAfter": ["robotopia.worlds", "robotopia.robotkit"],
+    "worldGamemodes": [
+      {
+        "id": "{{MOD_ID}}.mode",
+        "name": "{{DISPLAY_NAME}}",
+        "description": "Custom gamemode scaffolded from the gamemode template."
+      }
+    ]
+  }
+}

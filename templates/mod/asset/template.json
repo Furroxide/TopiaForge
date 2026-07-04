@@ -1,0 +1,16 @@
+{
+  "id": "asset",
+  "label": "Asset mod",
+  "description": "Ships Unity AssetBundles built in the scaffolded unity-companion project and loads them via the Assets service.",
+  "includeUnityCompanion": true,
+  "manifestDefaults": {
+    "category": "Content",
+    "description": "Asset content mod for Robotopia.",
+    "tags": ["assets", "content"],
+    "permissions": ["asset-bundles", "filesystem"],
+    "vpmDependencies": {
+      "robotopia.assets": ">=0.1.0"
+    },
+    "loadAfter": ["robotopia.assets"]
+  }
+}

@@ -1,4 +1,4 @@
-name: robotopia_cli
+name: robotopia
 description: Command-line developer tools for QuantumWorks mods.
 version: 0.1.0
 publish_to: none
@@ -7,6 +7,7 @@ environment:
   sdk: ^3.11.1
 
 dependencies:
+  crypto: ^3.0.6
   launcher_data:
     path: ../../packages/launcher_data
   launcher_domain:

@@ -1,10 +1,20 @@
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:launcher_data/launcher_data.dart';
 import 'package:launcher_domain/launcher_domain.dart';
+import 'package:path/path.dart' as p;
+import 'package:robotopia/src/launcher_update_index_builder.dart';
 
 part 'robotopia_environment_commands.dart';
+part 'robotopia_help.dart';
+part 'robotopia_mod_commands.dart';
+part 'robotopia_new_commands.dart';
+part 'robotopia_update_commands.dart';
 part 'robotopia_ugc_unity_commands.dart';
+part 'robotopia_ui_bundle_commands.dart';
+part 'robotopia_world_commands.dart';
 
 Future<void> main(List<String> args) async {
   final cli = _RobotopiaCli(LocalDeveloperRepository());
@@ -31,6 +41,7 @@ class _RobotopiaCli {
     final rest = args.skip(1).toList();
     return switch (command) {
       'new' => _new(rest),
+      'mod' => _mod(rest),
       'check' => _check(rest),
       'add' => _add(rest),
       'remove' => _remove(rest),
@@ -41,59 +52,18 @@ class _RobotopiaCli {
       'install' => _install(rest),
       'launch' => _launch(rest, restart: false),
       'restart' => _launch(rest, restart: true),
+      'dev-install' => _devInstall(rest),
       'doctor' => _doctor(rest),
       'compat' => _compat(rest),
       'setup' => _setup(rest),
       'migrate' => _migrate(rest),
       'ugc' => _ugc(rest),
+      'world' => _world(rest),
       'projects' => _projects(rest),
       'unity' => _unity(rest),
+      'updates' => _updates(rest),
       _ => _unknown(command),
     };
-  }
-
-  Future<int> _new(List<String> args) async {
-    if (args.firstOrNull == 'unity-world') {
-      if (args.length < 2) {
-        throw StateError(
-          'Usage: robotopia new unity-world <name> [--dir Path]',
-        );
-      }
-      final name = args[1];
-      final parent = _option(args, '--dir') ?? Directory.current.path;
-      final projects = await developerRepository.createUnityProject(
-        parentDirectory: parent,
-        name: name,
-      );
-      stdout.writeln(
-        'Created Unity world project "$name" (${projects.length} project(s) tracked). '
-        'Open it in Unity and author UGC markers, then Go Live from the launcher cockpit.',
-      );
-      return 0;
-    }
-    if (args.firstOrNull != 'mod' || args.length < 2) {
-      throw StateError(
-        'Usage: robotopia new mod <id> [--name Name] [--dir Path] [--unity-companion]\n'
-        '       robotopia new unity-world <name> [--dir Path]',
-      );
-    }
-    final id = args[1];
-    final name = _option(args, '--name') ?? id;
-    final parent = _option(args, '--dir') ?? Directory.current.path;
-    final workspace = await developerRepository.createModProject(
-      parentDirectory: parent,
-      id: id,
-      name: name,
-      includeUnityCompanion: args.contains('--unity-companion'),
-    );
-    stdout.writeln('Created ${workspace.projectRoot}');
-    if (args.contains('--unity-companion')) {
-      stdout.writeln(
-        'Unity companion scaffolded in unity-companion/. Open it in Unity and use '
-        'Robotopia → UGC Live Sync to author and live-sync UGC content into the running game.',
-      );
-    }
-    return 0;
   }
 
   Future<int> _check(List<String> args) async {
@@ -201,10 +171,17 @@ class _RobotopiaCli {
       throw StateError('Usage: robotopia list templates|sources');
     }
     if (args.first == 'templates') {
-      stdout.writeln('mod');
-      stdout.writeln('mod --unity-companion');
-      stdout.writeln('asset-companion');
-      stdout.writeln('unity-world');
+      final templates = await developerRepository.listModTemplates();
+      for (final template in templates) {
+        final label = template.label.isEmpty ? template.id : template.label;
+        stdout.writeln(
+          'mod --template ${template.id.padRight(10)} $label'
+          '${template.description.isEmpty ? '' : ' — ${template.description}'}',
+        );
+      }
+      stdout.writeln(
+        'unity-world${' ' * 15} Unity 6 UGC authoring project with the companion package preinstalled',
+      );
       return 0;
     }
     final workspace = await developerRepository.loadDeveloperWorkspace(
@@ -236,13 +213,111 @@ class _RobotopiaCli {
     if (!await _ensureBuildTooling()) {
       return 1;
     }
-    final packagePath = await developerRepository.packProject(
-      _option(args, '--project') ?? Directory.current.path,
-      outputDir: _option(args, '--output') ?? '',
-      configuration: _option(args, '--configuration') ?? 'Release',
-    );
+    if (args.contains('--all')) {
+      final packed = await _packAllMods(
+        outputDir: _option(args, '--output') ?? '',
+        configuration: _option(args, '--configuration') ?? 'Release',
+        includeDevMods: args.contains('--include-dev-mods'),
+      );
+      stdout.writeln('Packed ${packed.length} mod package(s).');
+      return 0;
+    }
+    final projectPath = _option(args, '--project') ?? Directory.current.path;
+    final outputDir = _option(args, '--output') ?? '';
+    final configuration = _option(args, '--configuration') ?? 'Release';
+    // A bare mod directory (manifest without robotopia.project.json) packs
+    // too, matching what the retired pack-mod.ps1 accepted.
+    final hasProjectFile =
+        File(p.join(projectPath, 'robotopia.project.json')).existsSync();
+    final hasManifest =
+        File(p.join(projectPath, 'robotopia.mod.json')).existsSync();
+    final packagePath = !hasProjectFile && hasManifest
+        ? await developerRepository.packModDirectory(
+            projectPath,
+            outputDir: outputDir,
+            configuration: configuration,
+          )
+        : await developerRepository.packProject(
+            projectPath,
+            outputDir: outputDir,
+            configuration: configuration,
+          );
     stdout.writeln(packagePath);
     return 0;
+  }
+
+  /// Packs every first-party mod under `mods/`, keeping exactly one current
+  /// package per mod id in the output directory (the launcher's bundled local
+  /// source derives its catalog from that folder).
+  Future<List<String>> _packAllMods({
+    String outputDir = '',
+    String configuration = 'Release',
+    bool includeDevMods = false,
+  }) async {
+    final repoRoot = _findRepoRoot();
+    if (repoRoot == null) {
+      throw StateError(
+        'The QuantumWorks repository root was not found from '
+        '${Directory.current.path}. Run from inside the QuantumWorks '
+        'repository, or pass --project to pack a single mod.',
+      );
+    }
+    final output = Directory(
+      outputDir.isEmpty ? p.join(repoRoot, 'dist') : outputDir,
+    )..createSync(recursive: true);
+
+    final projectDirs = <String>[];
+    final modsDir = Directory(p.join(repoRoot, 'mods'));
+    if (modsDir.existsSync()) {
+      projectDirs.addAll(
+        modsDir
+            .listSync()
+            .whereType<Directory>()
+            .where(
+              (dir) =>
+                  File(p.join(dir.path, 'robotopia.mod.json')).existsSync(),
+            )
+            .map((dir) => dir.path),
+      );
+    }
+    final packed = <String>[];
+    for (final dir in projectDirs) {
+      final manifest =
+          jsonDecode(
+                File(p.join(dir, 'robotopia.mod.json')).readAsStringSync(),
+              )
+              as Map<String, Object?>;
+      final name = (manifest['name'] as String?) ?? p.basename(dir);
+      if (!includeDevMods && manifest['category'] == 'DevTool') {
+        stdout.writeln(
+          'Skipping dev-only mod $name (pass --include-dev-mods to pack it).',
+        );
+        continue;
+      }
+
+      // Drop any previously packed versions of this id so no superseded
+      // build can be installed by mistake.
+      final safeId = name.replaceAll(RegExp('[^A-Za-z0-9_.-]'), '_');
+      for (final stale in output.listSync().whereType<File>()) {
+        final staleName = p.basename(stale.path);
+        if (staleName.startsWith('$safeId-') &&
+            staleName.endsWith('.robotopiamod')) {
+          stale.deleteSync();
+        }
+      }
+
+      final package = await developerRepository.packModDirectory(
+        dir,
+        outputDir: output.path,
+        configuration: configuration,
+      );
+      final sha = sha256
+          .convert(File(package).readAsBytesSync())
+          .toString();
+      stdout.writeln('Packed $name (${manifest['version']}) sha256=$sha');
+      packed.add(package);
+    }
+    return packed;
   }
 
   Future<int> _install(List<String> args) async {
@@ -257,7 +332,7 @@ class _RobotopiaCli {
     final launcher = LocalLauncherRepository();
     final install = await launcher.detectKnownInstall();
     if (install == null) {
-      throw StateError('Robotopia install was not detected.');
+      throw StateError(_noInstallRemedy);
     }
     await launcher.installPackage(packagePath, install);
     stdout.writeln('Installed $packagePath');
@@ -269,7 +344,7 @@ class _RobotopiaCli {
     final snapshot = await launcher.loadSnapshot();
     final install = snapshot.gameInstall;
     if (install == null) {
-      throw StateError('Robotopia install was not detected.');
+      throw StateError(_noInstallRemedy);
     }
     final profile = snapshot.profiles.firstWhere(
       (item) => item.id == snapshot.selectedProfileId,
@@ -306,7 +381,11 @@ class _RobotopiaCli {
 
   int _unknown(String command) {
     stderr.writeln('Unknown command: $command');
-    _printHelp();
+    final suggestion = _suggestCommand(command);
+    if (suggestion != null) {
+      stderr.writeln('Did you mean: robotopia $suggestion?');
+    }
+    stderr.writeln('Run `robotopia help` for the command list.');
     return 1;
   }
 
@@ -318,47 +397,23 @@ class _RobotopiaCli {
     return args[index + 1];
   }
 
+  /// Collects every value of a repeatable flag (e.g. `--tag a --tag b`).
+  List<String> _options(List<String> args, String name) {
+    final values = <String>[];
+    for (var index = 0; index < args.length - 1; index++) {
+      if (args[index] == name) {
+        values.add(args[index + 1]);
+      }
+    }
+    return values;
+  }
+
   void _printIssues(List<LauncherIssue> issues) {
     for (final issue in issues) {
       stdout.writeln('${issue.severity.name}: ${issue.message}');
     }
   }
 
-  void _printHelp() {
-    stdout.writeln('QuantumWorks CLI');
-    stdout.writeln('Commands:');
-    stdout.writeln(
-      '  robotopia new mod <id> [--name name] [--unity-companion]',
-    );
-    stdout.writeln('  robotopia new unity-world <name> [--dir path]');
-    stdout.writeln('  robotopia check project [path]');
-    stdout.writeln('  robotopia check package <path>');
-    stdout.writeln('  robotopia add source <id> <url>');
-    stdout.writeln('  robotopia list sources|templates');
-    stdout.writeln('  robotopia add package <id[@range]>');
-    stdout.writeln('  robotopia remove package <id>');
-    stdout.writeln('  robotopia resolve [--prerelease]');
-    stdout.writeln('  robotopia restore [--prerelease]');
-    stdout.writeln('  robotopia pack [--output dir]');
-    stdout.writeln('  robotopia install [package]');
-    stdout.writeln('  robotopia launch');
-    stdout.writeln('  robotopia restart');
-    stdout.writeln('  robotopia setup');
-    stdout.writeln('  robotopia doctor [--strict]');
-    stdout.writeln('  robotopia migrate legacy <gamePath> <outputRoot>');
-    stdout.writeln('  robotopia projects list|add|remove|open');
-    stdout.writeln(
-      '  robotopia unity new-package|resolve|add|remove|list|repos|add-repo',
-    );
-    stdout.writeln(
-      '  robotopia ugc publish --file <project.json> [--sync url] [--doc url]',
-    );
-    stdout.writeln(
-      '  robotopia ugc watch <folder> [--sync url] [--doc url] [--scene id]',
-    );
-    stdout.writeln('  robotopia ugc status [--watch folder]');
-    stdout.writeln('  robotopia ugc go-live');
-  }
 }
 
 extension _FirstOrNull<T> on Iterable<T> {

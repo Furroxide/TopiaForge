@@ -46,3 +46,6 @@ robotopia.dev.props
 .codex-tmp/
 .claude/skills
 .claude/settings.local.json
+
+# CI pack-smoke scratch (release.yml scaffolds here)
+.pack-smoke/
