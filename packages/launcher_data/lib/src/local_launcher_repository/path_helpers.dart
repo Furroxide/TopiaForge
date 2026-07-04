@@ -133,21 +133,26 @@ String? _defaultKnownGamePath() {
   return null;
 }
 
-String _findRepositoryRoot() {
-  return _findQuantumWorksRoot();
+String _findRepositoryRoot(String? workingDirectory) {
+  return _findQuantumWorksRoot(workingDirectory);
 }
 
-String _findQuantumWorksRoot() {
-  for (final seed in _quantumWorksRootSeeds()) {
+String _findQuantumWorksRoot(String? workingDirectory) {
+  // Tests inject workingDirectory instead of mutating the process-global
+  // Directory.current, which is shared across concurrent test isolates.
+  final cwd = workingDirectory != null
+      ? Directory(workingDirectory).absolute
+      : Directory.current.absolute;
+  for (final seed in _quantumWorksRootSeeds(cwd)) {
     final root = _walkUpForQuantumWorksRoot(seed);
     if (root != null) {
       return root.path;
     }
   }
-  return Directory.current.absolute.path;
+  return cwd.path;
 }
 
-Iterable<Directory> _quantumWorksRootSeeds() sync* {
+Iterable<Directory> _quantumWorksRootSeeds(Directory workingDirectory) sync* {
   final configured = Platform.environment['ROBOTOPIA_REPOSITORY_ROOT'];
   if (configured != null && configured.trim().isNotEmpty) {
     yield Directory(configured).absolute;
@@ -161,7 +166,7 @@ Iterable<Directory> _quantumWorksRootSeeds() sync* {
     yield macResources;
   }
 
-  yield Directory.current.absolute;
+  yield workingDirectory;
 }
 
 Directory? _macResourcesRoot(Directory executableDir) {

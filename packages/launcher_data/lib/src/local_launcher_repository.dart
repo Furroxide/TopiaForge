@@ -21,10 +21,13 @@ class LocalLauncherRepository implements LauncherRepository {
   LocalLauncherRepository({
     String? dataRoot,
     String? repositoryRoot,
+    String? workingDirectory,
     String? knownGamePath,
     DependencyPlanner dependencyPlanner = const DependencyPlanner(),
   }) : _dataRoot = Directory(dataRoot ?? _defaultDataRoot()),
-       _repositoryRoot = Directory(repositoryRoot ?? _findRepositoryRoot()),
+       _repositoryRoot = Directory(
+         repositoryRoot ?? _findRepositoryRoot(workingDirectory),
+       ),
        _knownGamePath = knownGamePath,
        _dependencyPlanner = dependencyPlanner;
 
