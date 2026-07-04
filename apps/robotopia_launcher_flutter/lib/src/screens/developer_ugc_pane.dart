@@ -175,7 +175,7 @@ class _UgcLiveSyncPaneState extends State<_UgcLiveSyncPane> {
             if (!hasInstall) ...[
               const SizedBox(height: 8),
               const Text(
-                'Detect a Robotopia install (Library tab) to deploy the runtime config and Go Live.',
+                'Detect a Robotopia install (Setup tab) to deploy the runtime config and Go Live.',
                 style: TextStyle(
                   color: QuantumWorksPalette.mutedText,
                   fontSize: 12,

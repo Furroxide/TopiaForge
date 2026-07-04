@@ -69,6 +69,37 @@ void main() {
     expect(stale.needsRepair, isTrue);
   });
 
+  test(
+    'repair deploys the UnityUi kit and detection flags it when missing',
+    () async {
+      final install = await repository.selectGameDirectory(gameRoot.path);
+      final report = await repository.installOrRepairRuntime(install);
+      expect(report.ok, isTrue);
+
+      final unityUi = File(
+        p.join(
+          gameRoot.path,
+          'BepInEx',
+          'plugins',
+          'RobotopiaModManager',
+          'Robotopia.Mods.UnityUi.dll',
+        ),
+      );
+      expect(
+        unityUi.existsSync(),
+        isTrue,
+        reason: 'runtime repair must deploy the QwUi kit beside the loader',
+      );
+
+      // The manager plugin hard-depends on the kit, so losing it alone must drop
+      // the loader pill to partial and flag a repair.
+      unityUi.deleteSync();
+      final degraded = await repository.selectGameDirectory(gameRoot.path);
+      expect(degraded.loaderStatus, ComponentState.partial);
+      expect(degraded.needsRepair, isTrue);
+    },
+  );
+
   test('installs, updates, disables, and uninstalls local packages', () async {
     final install = await repository.selectGameDirectory(gameRoot.path);
     final firstPackage = _createPackage(
@@ -168,7 +199,9 @@ void main() {
     _writeDistPackage(dist, id: 'registry.sample', version: '2.0.0');
     _writeDistPackage(dist, id: 'other.mod', version: '0.3.0');
     // A malformed file must be skipped, not break the whole catalog.
-    File(p.join(dist.path, 'broken.robotopiamod')).writeAsStringSync('not a zip');
+    File(
+      p.join(dist.path, 'broken.robotopiamod'),
+    ).writeAsStringSync('not a zip');
 
     final snapshot = await repository.loadSnapshot();
     final byId = {
@@ -199,9 +232,9 @@ void main() {
               'name': 'Dependency',
               'versions': {
                 '1.0.0': {
-                  'manifest': _manifestJson('dependency.mod', '1.0.0'),
+                  ..._manifestJson('dependency.mod', '1.0.0'),
                   'url': dependencyPackage.uri.toString(),
-                  'sha256': dependencySha,
+                  'zipSHA256': dependencySha,
                 },
               },
             },
@@ -292,6 +325,22 @@ void main() {
     expect(bundle.includedFiles, contains('summary.json'));
     expect(bundle.includedFiles, contains('load-order.json'));
   });
+
+  test('persists launcher update settings', () async {
+    await repository.saveLauncherUpdateSettings(
+      const LauncherUpdateSettings(
+        enabled: true,
+        checkAutomatically: false,
+        channel: LauncherUpdateChannel.nightly,
+      ),
+    );
+
+    final snapshot = await repository.loadSnapshot();
+
+    expect(snapshot.launcherUpdates.enabled, isTrue);
+    expect(snapshot.launcherUpdates.checkAutomatically, isFalse);
+    expect(snapshot.launcherUpdates.channel, LauncherUpdateChannel.nightly);
+  });
 }
 
 void _createGame(Directory gameRoot) {
@@ -331,6 +380,7 @@ void _createRuntimeSources(Directory repoRoot) {
     'Robotopia.ModManager.dll',
     'Robotopia.ModManager.Core.dll',
     'Robotopia.Mods.Abstractions.dll',
+    'Robotopia.Mods.UnityUi.dll',
   ]) {
     File(p.join(loader.path, dll)).writeAsStringSync('');
   }
@@ -422,13 +472,19 @@ Map<String, Object?> _manifestJson(
   List<Map<String, Object?>> worldGamemodes = const [],
   List<String> apiAssemblies = const [],
 }) => {
-  'schemaVersion': 1,
-  'id': id,
+  'schemaVersion': 2,
   'name': id,
+  'displayName': id,
   'version': version,
+  'author': {'name': 'QuantumWorks'},
   'entryAssembly': '${_assemblyName(id)}.dll',
   'entryType': '$id.Entry',
-  if (dependencies.isNotEmpty) 'dependencies': dependencies,
+  if (dependencies.isNotEmpty)
+    'vpmDependencies': {
+      for (final item in dependencies)
+        item['id'] as String: (item['versionRange'] ?? item['version'] ?? '*')
+            .toString(),
+    },
   if (worldGamemodes.isNotEmpty) 'worldGamemodes': worldGamemodes,
   if (apiAssemblies.isNotEmpty) 'apiAssemblies': apiAssemblies,
 };

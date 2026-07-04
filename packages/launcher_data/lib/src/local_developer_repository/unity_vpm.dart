@@ -7,6 +7,95 @@ part of '../local_developer_repository.dart';
 extension LocalDeveloperUnityVpm on LocalDeveloperRepository {
   File get _vpmSourcesFile => File(p.join(_dataRoot.path, 'vpm_sources.json'));
 
+  /// Native Dart port of the retired tools/pack-unity-packages.ps1: zips every
+  /// shipped `com.robotopia.*` Unity package under `templates/` (package.json
+  /// at the zip root) and writes the VPM `index.json` listing beside them.
+  /// Returns human-readable summary lines.
+  Future<List<String>> packUnityPackages({String outputDir = ''}) async {
+    final output = Directory(
+      outputDir.isEmpty
+          ? p.join(_repositoryRoot.path, 'dist', 'vpm')
+          : outputDir,
+    )..createSync(recursive: true);
+    final templatesDir = Directory(p.join(_repositoryRoot.path, 'templates'));
+    final summary = <String>[];
+    final packages = <String, Object?>{};
+
+    if (templatesDir.existsSync()) {
+      final packageJsons = templatesDir
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((file) => p.basename(file.path) == 'package.json')
+          .where(
+            (file) =>
+                !file.path.contains('Samples~') &&
+                !file.path.contains('Robotopia.UnityPackageTemplate'),
+          );
+      for (final packageJson in packageJsons) {
+        final manifest =
+            jsonDecode(packageJson.readAsStringSync()) as Map<String, Object?>;
+        final id = manifest['name'] as String?;
+        if (id == null || !id.startsWith('com.robotopia.')) {
+          continue;
+        }
+        final version = (manifest['version'] as String?) ?? '0.0.0';
+        final packageDir = packageJson.parent;
+        final safeId = id.replaceAll(RegExp('[^A-Za-z0-9_.-]'), '_');
+
+        // Exactly one current zip per id.
+        for (final stale in output.listSync().whereType<File>()) {
+          final name = p.basename(stale.path);
+          if (name.startsWith('$safeId-') && name.endsWith('.zip')) {
+            stale.deleteSync();
+          }
+        }
+
+        final zipFileName = '$safeId-$version.zip';
+        final archive = Archive();
+        for (final file
+            in packageDir.listSync(recursive: true).whereType<File>()) {
+          final relative = p.relative(file.path, from: packageDir.path);
+          archive.addFile(
+            ArchiveFile.bytes(
+              p.posix.joinAll(p.split(relative)),
+              file.readAsBytesSync(),
+            ),
+          );
+        }
+        final zipBytes = ZipEncoder().encode(archive);
+        File(p.join(output.path, zipFileName)).writeAsBytesSync(zipBytes);
+        final sha = sha256.convert(zipBytes).toString();
+
+        // The version entry is the full package.json plus url + zipSHA256
+        // (VPM listing shape).
+        final entry = <String, Object?>{
+          ...manifest,
+          'url': zipFileName,
+          'zipSHA256': sha,
+        };
+        final versions =
+            ((packages[id] ??= <String, Object?>{'versions': <String, Object?>{}})
+                    as Map<String, Object?>)['versions']
+                as Map<String, Object?>;
+        versions[version] = entry;
+        summary.add('Packed $id $version -> ${p.join(output.path, zipFileName)}');
+      }
+    }
+
+    final indexFile = File(p.join(output.path, 'index.json'));
+    indexFile.writeAsStringSync(
+      _prettyJson({
+        'name': 'QuantumWorks Local',
+        'id': 'com.robotopia.repos.local',
+        'author': 'QuantumWorks',
+        'url': 'index.json',
+        'packages': packages,
+      }),
+    );
+    summary.add('Wrote ${indexFile.path} (${packages.length} package(s)).');
+    return summary;
+  }
+
   PackageSource _defaultVpmSource() => PackageSource(
     id: 'robotopia.vpm.local',
     name: 'QuantumWorks (local)',

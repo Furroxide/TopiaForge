@@ -15,10 +15,13 @@ class _FakeLauncherRepository implements LauncherRepository {
              worldCatalog: WorldCatalog.fallback(),
              legacyMods: const [],
              recentLog: '',
+             launcherUpdates: const LauncherUpdateSettings(enabled: false),
              developerMode: developerMode,
            );
   final LauncherSnapshot _snapshot;
   int restartCount = 0;
+  int installOrRepairRuntimeCount = 0;
+  final launchedProfileIds = <String>[];
   @override
   String get dataRoot => '/tmp/robotopia-launcher';
   @override
@@ -32,7 +35,8 @@ class _FakeLauncherRepository implements LauncherRepository {
 
   @override
   Future<RepairReport> installOrRepairRuntime(GameInstall install) async {
-    throw UnimplementedError();
+    installOrRepairRuntimeCount += 1;
+    return const RepairReport(actions: ['Runtime repaired.'], issues: []);
   }
 
   @override
@@ -105,7 +109,8 @@ class _FakeLauncherRepository implements LauncherRepository {
     GameInstall install,
     LauncherProfile profile,
   ) async {
-    throw UnimplementedError();
+    launchedProfileIds.add(profile.id);
+    return const LaunchResult(started: true, message: 'Launched Robotopia.');
   }
 
   @override
@@ -142,6 +147,12 @@ class _FakeLauncherRepository implements LauncherRepository {
   Future<void> openPath(String path) async {}
   @override
   Future<void> setDeveloperMode(bool enabled) async {}
+
+  @override
+  Future<void> saveLauncherUpdateSettings(
+    LauncherUpdateSettings settings,
+  ) async {}
+
   @override
   Future<String> deployUgcLiveSyncConfig(
     GameInstall install,
@@ -177,8 +188,57 @@ class _FakeDeveloperRepository implements DeveloperRepository {
     required String id,
     required String name,
     bool includeUnityCompanion = false,
+    ModScaffoldOptions options = const ModScaffoldOptions(),
   }) {
     return Future.value(_workspace());
+  }
+
+  @override
+  Future<List<ModTemplateInfo>> listModTemplates() {
+    return Future.value(const [ModTemplateInfo(id: 'minimal')]);
+  }
+
+  @override
+  Future<ModManifest> readModManifest(String projectPath) {
+    return Future.value(
+      const ModManifest(
+        schemaVersion: 2,
+        id: 'sample.mod',
+        name: 'Sample Mod',
+        version: '0.1.0',
+      ),
+    );
+  }
+
+  @override
+  Future<List<LauncherIssue>> updateModManifest(
+    String projectPath,
+    ModManifest manifest,
+  ) {
+    return Future.value(const <LauncherIssue>[]);
+  }
+
+  @override
+  Future<bool> ensureUgcCompanionPackage(
+    String projectPath, {
+    bool update = false,
+  }) {
+    return Future.value(true);
+  }
+
+  @override
+  Future<String> writeUgcCompanionSeed(
+    String projectPath, {
+    required String watchFolder,
+    String projectName = '',
+    String sceneId = '',
+    String sceneName = '',
+    String environment = '',
+    bool liveSync = true,
+  }) {
+    return Future.value(
+      '$projectPath/ProjectSettings/RobotopiaUgcCompanion.json',
+    );
   }
 
   @override
@@ -333,6 +393,22 @@ class _FakeDeveloperRepository implements DeveloperRepository {
     required String id,
     String name = '',
   }) async => '';
+  @override
+  Future<WorldAuthoringConfig?> readWorldAuthoringConfig(
+    String unityProjectPath,
+  ) async => null;
+  @override
+  Future<WorldAuthoringConfig> writeWorldAuthoringConfig(
+    String unityProjectPath,
+    WorldAuthoringConfig config,
+  ) async => config;
+  @override
+  Future<WorldBundleBuildResult> buildWorldBundle({
+    required String unityProjectPath,
+    String modPath = '',
+    String bundleName = '',
+    String unityExePath = '',
+  }) async => const WorldBundleBuildResult(success: false);
   DeveloperWorkspace _workspace() {
     return const DeveloperWorkspace(
       projectRoot: '/tmp/creator',
@@ -359,6 +435,35 @@ class _FakeDeveloperRepository implements DeveloperRepository {
       ),
     );
   }
+}
+
+/// A detected, launchable install. [needsRepair] flips the loader to missing
+/// so Home renders its "Almost ready" state.
+LauncherSnapshot _readySnapshot({
+  bool needsRepair = false,
+  List<RegistryMod> registryMods = const [],
+  List<LauncherProfile>? profiles,
+  String selectedProfileId = 'default',
+}) {
+  return LauncherSnapshot(
+    gameInstall: GameInstall(
+      path: 'C:\\Games\\Robotopia',
+      executablePath: 'C:\\Games\\Robotopia\\Robotopia.exe',
+      bepInExStatus: ComponentState.ready,
+      loaderStatus: needsRepair
+          ? ComponentState.missing
+          : ComponentState.ready,
+    ),
+    profiles: profiles ?? [LauncherProfile.defaultProfile()],
+    selectedProfileId: selectedProfileId,
+    installedMods: const [],
+    registryMods: registryMods,
+    packageSources: const [],
+    worldCatalog: WorldCatalog.fallback(),
+    legacyMods: const [],
+    recentLog: '',
+    launcherUpdates: const LauncherUpdateSettings(enabled: false),
+  );
 }
 
 LauncherSnapshot _updateSnapshot() {
@@ -399,15 +504,17 @@ LauncherSnapshot _updateSnapshot() {
     worldCatalog: WorldCatalog.fallback(),
     legacyMods: const [],
     recentLog: '',
+    launcherUpdates: const LauncherUpdateSettings(enabled: false),
   );
 }
 
 ModManifest _manifest(String id, {required String version}) {
   return ModManifest(
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: id,
     name: 'Timer Mod',
     version: version,
+    author: const ModAuthor(name: 'QuantumWorks'),
     entryAssembly: 'Timer.dll',
     entryType: 'Timer.Entry',
   );

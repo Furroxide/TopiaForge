@@ -16,6 +16,7 @@ class LauncherState {
     required this.legacyMods,
     required this.recentLog,
     required this.resolution,
+    required this.launcherUpdates,
     this.gameInstall,
     this.selectedModId,
     this.modSearch = '',
@@ -43,7 +44,7 @@ class LauncherState {
   });
 
   factory LauncherState.initial() => LauncherState(
-    section: LauncherSection.library,
+    section: LauncherSection.home,
     isBusy: true,
     statusMessage: 'Loading launcher state.',
     profiles: const [],
@@ -59,6 +60,7 @@ class LauncherState {
       issues: [],
       graph: {},
     ),
+    launcherUpdates: const LauncherUpdateSettings(),
   );
 
   final LauncherSection section;
@@ -74,6 +76,7 @@ class LauncherState {
   final List<LegacyMod> legacyMods;
   final String recentLog;
   final DependencyResolutionResult resolution;
+  final LauncherUpdateSettings launcherUpdates;
   final String? selectedModId;
   final String modSearch;
   final String? errorMessage;
@@ -189,6 +192,7 @@ class LauncherState {
     List<LegacyMod>? legacyMods,
     String? recentLog,
     DependencyResolutionResult? resolution,
+    LauncherUpdateSettings? launcherUpdates,
     String? selectedModId,
     bool clearSelectedMod = false,
     String? modSearch,
@@ -232,6 +236,7 @@ class LauncherState {
       legacyMods: legacyMods ?? this.legacyMods,
       recentLog: recentLog ?? this.recentLog,
       resolution: resolution ?? this.resolution,
+      launcherUpdates: launcherUpdates ?? this.launcherUpdates,
       selectedModId: clearSelectedMod
           ? null
           : selectedModId ?? this.selectedModId,
@@ -269,7 +274,8 @@ class LauncherState {
 
   /// Sections shown in the nav. The Developer tab is hidden unless developer mode is enabled.
   List<LauncherSection> get visibleSections => [
-    LauncherSection.library,
+    LauncherSection.home,
+    LauncherSection.setup,
     LauncherSection.mods,
     LauncherSection.browse,
     LauncherSection.profiles,

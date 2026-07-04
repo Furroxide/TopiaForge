@@ -8,7 +8,7 @@ class ModsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (state.gameInstall == null) {
-      return _FirstRunPanel(state: state);
+      return _SetupFirstRunPanel(state: state);
     }
 
     final selected = state.selectedMod;
@@ -359,7 +359,7 @@ class _ModDetail extends StatelessWidget {
         if (manifest != null) ...[
           _keyValue(
             'Author',
-            manifest.author.isEmpty ? 'Unknown' : manifest.author,
+            manifest.author.name.isEmpty ? 'Unknown' : manifest.author.name,
           ),
           _keyValue(
             'License',

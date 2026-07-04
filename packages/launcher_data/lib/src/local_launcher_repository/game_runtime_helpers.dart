@@ -3,20 +3,40 @@ part of '../local_launcher_repository.dart';
 extension _GameRuntimeHelpers on LocalLauncherRepository {
   Future<GameInstall> _validateGameDirectory(String path) async {
     final directory = Directory(path).absolute;
-    final executable = File(p.join(directory.path, 'Robotopia.exe'));
-    final managedDir = Directory(
-      p.join(directory.path, 'Robotopia_Data', 'Managed'),
-    );
+    final layout = GameLayout.resolve(directory.path);
     final issues = <LauncherIssue>[];
 
-    if (!executable.existsSync()) {
+    if (layout == null) {
+      final expected = Platform.isMacOS
+          ? 'Robotopia.app or Robotopia.exe'
+          : 'Robotopia.exe';
+      issues.add(
+        LauncherIssue(
+          severity: IssueSeverity.error,
+          message: '$expected was not found in the selected folder.',
+        ),
+      );
+      return GameInstall(
+        path: directory.path,
+        executablePath: p.join(directory.path, 'Robotopia.exe'),
+        bepInExStatus: ComponentState.missing,
+        loaderStatus: ComponentState.missing,
+        issues: issues,
+      );
+    }
+
+    if (layout.kind == GameInstallLayout.linuxProton) {
       issues.add(
         const LauncherIssue(
-          severity: IssueSeverity.error,
-          message: 'Robotopia.exe was not found in the selected folder.',
+          severity: IssueSeverity.info,
+          message:
+              'Windows game build detected on this system. Run it under '
+              'Proton/Wine with WINEDLLOVERRIDES="winhttp=n,b" so mods load.',
         ),
       );
     }
+
+    final managedDir = Directory(layout.managedDirPath);
     if (!managedDir.existsSync() ||
         !File(p.join(managedDir.path, 'UnityEngine.dll')).existsSync()) {
       issues.add(
@@ -28,13 +48,15 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
       );
     }
 
+    final gameRoot = Directory(layout.gameRoot);
     return GameInstall(
-      path: directory.path,
-      executablePath: executable.path,
-      bepInExStatus: _detectBepInEx(directory),
-      loaderStatus: _detectLoader(directory),
+      path: layout.gameRoot,
+      executablePath: layout.executablePath,
+      bepInExStatus: _detectBepInEx(gameRoot, layout),
+      loaderStatus: _detectLoader(gameRoot),
+      layout: layout.kind,
       issues: issues,
-      compatStatus: await _checkGameCompat(directory),
+      compatStatus: await _checkGameCompat(gameRoot, managedDir),
     );
   }
 
@@ -44,12 +66,10 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
   /// process only re-runs when a game update actually changes the DLL (the "auto-trigger on game update"), keeping
   /// ordinary snapshot refreshes cheap.
   Future<GameCompatStatus> _checkGameCompat(
-    Directory gameDir, {
+    Directory gameDir,
+    Directory managedDir, {
     bool force = false,
   }) async {
-    final managedDir = Directory(
-      p.join(gameDir.path, 'Robotopia_Data', 'Managed'),
-    );
     final gameCode = File(p.join(managedDir.path, 'GameCode.dll'));
     if (!managedDir.existsSync() || !gameCode.existsSync()) {
       return GameCompatStatus.skipped();
@@ -146,28 +166,26 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
   }
 
   String? _resolveExtractorExe() {
+    final executableDir = File(Platform.resolvedExecutable).absolute.parent;
     final candidates = <String>[
-      // 1. bundled alongside the launcher executable (consumer install)
-      p.join(
-        File(Platform.resolvedExecutable).parent.path,
-        'Robotopia.GameCompat.Extractor.exe',
+      // 1. bundled in the package payload root (consumer install)
+      ..._extractorCandidates(_repositoryRoot.path),
+      // 2. legacy Windows bundle location beside the launcher executable
+      ..._extractorCandidates(executableDir.path),
+      // 3. dev dist payload
+      ..._extractorCandidates(
+        p.join(_repositoryRoot.path, 'dist', 'RobotopiaModManager'),
       ),
-      // 2. dev dist payload
-      p.join(
-        _repositoryRoot.path,
-        'dist',
-        'RobotopiaModManager',
-        'Robotopia.GameCompat.Extractor.exe',
-      ),
-      // 3. dev source build
-      p.join(
-        _repositoryRoot.path,
-        'src',
-        'Robotopia.GameCompat.Extractor',
-        'bin',
-        'Release',
-        'net8.0',
-        'Robotopia.GameCompat.Extractor.exe',
+      // 4. dev source build
+      ..._extractorCandidates(
+        p.join(
+          _repositoryRoot.path,
+          'src',
+          'Robotopia.GameCompat.Extractor',
+          'bin',
+          'Release',
+          'net8.0',
+        ),
       ),
     ];
     for (final candidate in candidates) {
@@ -178,11 +196,17 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
     return null;
   }
 
-  ComponentState _detectBepInEx(Directory gameDir) {
+  List<String> _extractorCandidates(String directory) {
+    return [
+      p.join(directory, 'Robotopia.GameCompat.Extractor'),
+      p.join(directory, 'Robotopia.GameCompat.Extractor.exe'),
+    ];
+  }
+
+  ComponentState _detectBepInEx(Directory gameDir, GameLayout layout) {
     final required = [
-      File(p.join(gameDir.path, 'winhttp.dll')),
-      File(p.join(gameDir.path, 'doorstop_config.ini')),
-      File(p.join(gameDir.path, 'BepInEx', 'core', 'BepInEx.dll')),
+      for (final marker in layout.bepInExMarkerFiles)
+        File(p.join(gameDir.path, p.joinAll(p.posix.split(marker)))),
     ];
     final present = required.where((file) => file.existsSync()).length;
     if (present == required.length) {
@@ -196,6 +220,7 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
       'Robotopia.ModManager.dll',
       'Robotopia.ModManager.Core.dll',
       'Robotopia.Mods.Abstractions.dll',
+      'Robotopia.Mods.UnityUi.dll',
     ];
     final pluginDir = Directory(
       p.join(gameDir.path, 'BepInEx', 'plugins', 'RobotopiaModManager'),

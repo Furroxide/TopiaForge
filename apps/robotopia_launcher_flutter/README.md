@@ -1,17 +1,21 @@
-# robotopia_launcher_flutter
+# Robotopia Launcher
 
-A new Flutter project.
+Standalone Flutter desktop launcher for QuantumWorks and Robotopia.
 
-## Getting Started
+## Native Desktop Icons
 
-This project is a starting point for a Flutter application.
+Native desktop launcher icons are generated from:
 
-A few resources to get you started if this is your first Flutter project:
+```text
+assets/brand/quantumworks-app-icon.png
+```
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+Use the globally activated Dart package, not a `pubspec.yaml` dev dependency:
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```powershell
+dart pub global activate icons_launcher 3.1.0
+dart pub global run icons_launcher:create --path icons_launcher.yaml
+```
+
+Run the commands from this app directory. The generator updates the Windows
+`.ico`, macOS app icon asset catalog, and Linux Snap icon under `snap/gui`.

@@ -24,7 +24,7 @@ class BrowseScreen extends StatelessWidget {
                       icon: Icons.travel_explore,
                       title: 'No local packages',
                       message:
-                          'Build mod packages into dist/ (tools/pack-mods.ps1) to list them here.',
+                          'Build mod packages into dist/ (robotopia pack --all) to list them here.',
                       brandAsset: QuantumWorksBrandAssets.robot,
                     )
                   : ListView.separated(
@@ -210,8 +210,8 @@ class _ProfileDetail extends StatelessWidget {
     return BorderedPane(
       child: selected == null
           ? const SizedBox.shrink()
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          : ListView(
+              padding: EdgeInsets.zero,
               children: [
                 Text(
                   selected.name,
@@ -238,7 +238,7 @@ class _ProfileDetail extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 _WorldLaunchControls(state: state),
-                const Spacer(),
+                const SizedBox(height: 16),
                 OutlinedButton.icon(
                   onPressed: state.profiles.length <= 1
                       ? null

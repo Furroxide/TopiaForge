@@ -68,6 +68,9 @@ abstract interface class LauncherRepository {
   /// Persists the opt-in developer mode flag (off by default; reveals the launcher's Developer tab).
   Future<void> setDeveloperMode(bool enabled);
 
+  /// Persists launcher self-update settings such as automatic checks and release channel.
+  Future<void> saveLauncherUpdateSettings(LauncherUpdateSettings settings);
+
   /// Writes the UGC live-sync runtime config (`config/robotopia.ugc.livesync.json`) into the install so the
   /// `Robotopia.UgcLiveSync` mod picks it up on next launch. Returns the written file path.
   Future<String> deployUgcLiveSyncConfig(
@@ -94,6 +97,40 @@ abstract interface class DeveloperRepository {
     required String id,
     required String name,
     bool includeUnityCompanion = false,
+    ModScaffoldOptions options = const ModScaffoldOptions(),
+  });
+
+  /// Lists the scaffoldable mod templates (`templates/mod/<id>/template.json` in the repo). Always includes at
+  /// least the built-in `minimal` template, so scaffolding works in synthetic environments without a repo.
+  Future<List<ModTemplateInfo>> listModTemplates();
+
+  /// Reads the project's `robotopia.mod.json`. Throws when the project or manifest is missing.
+  Future<ModManifest> readModManifest(String projectPath);
+
+  /// Overwrites the project's `robotopia.mod.json` with [manifest] and returns its validation issues.
+  Future<List<LauncherIssue>> updateModManifest(
+    String projectPath,
+    ModManifest manifest,
+  );
+
+  /// Ensures `Packages/com.robotopia.ugc-companion` exists in a Unity project, copying it from the repo template
+  /// when missing (or when [update] is true). Returns true when the package is present afterwards.
+  Future<bool> ensureUgcCompanionPackage(
+    String projectPath, {
+    bool update = false,
+  });
+
+  /// Writes `ProjectSettings/RobotopiaUgcCompanion.json` — the seed the companion's editor bootstrap reads to
+  /// configure the UGC Live Sync window (watch folder, scene, live-sync on) on next project load. Returns the
+  /// written file path.
+  Future<String> writeUgcCompanionSeed(
+    String projectPath, {
+    required String watchFolder,
+    String projectName = '',
+    String sceneId = '',
+    String sceneName = '',
+    String environment = '',
+    bool liveSync = true,
   });
 
   Future<DeveloperWorkspace> resolveDeveloperProject(
@@ -213,5 +250,28 @@ abstract interface class DeveloperRepository {
     required String parentDirectory,
     required String id,
     String name,
+  });
+
+  /// Reads the world-authoring pairing config (`robotopia.world.json`) from a Unity project root, or null
+  /// when the project has none.
+  Future<WorldAuthoringConfig?> readWorldAuthoringConfig(
+    String unityProjectPath,
+  );
+
+  /// Writes the world-authoring pairing config into a Unity project root. Returns what was written.
+  Future<WorldAuthoringConfig> writeWorldAuthoringConfig(
+    String unityProjectPath,
+    WorldAuthoringConfig config,
+  );
+
+  /// Builds the paired world prefab into an AssetBundle by running the Unity editor headlessly
+  /// (`-batchmode -executeMethod` against the world-companion package's builder) and verifies the bundle
+  /// landed in the paired mod's `AssetBundles/` folder. [modPath]/[bundleName]/[unityExePath] override the
+  /// config/auto-detected values. Never throws for build failures — inspect the result.
+  Future<WorldBundleBuildResult> buildWorldBundle({
+    required String unityProjectPath,
+    String modPath = '',
+    String bundleName = '',
+    String unityExePath = '',
   });
 }

@@ -154,12 +154,24 @@ IssueSeverity _issueSeverityFrom(String? name) => switch (name) {
   _ => IssueSeverity.info,
 };
 
+/// How the game is laid out on disk, which drives executable/managed paths,
+/// the BepInEx flavour to install, and how launch/restart behave.
+///
+/// - [windowsNative]: Robotopia.exe in the game folder on a Windows host.
+/// - [macAppBundle]: Robotopia.app bundle on macOS (BepInEx unix build,
+///   doorstop injected via DYLD environment variables).
+/// - [linuxProton]: the Windows build selected on a non-Windows host — a
+///   Proton/Wine install. Uses the Windows BepInEx; the game must run with
+///   WINEDLLOVERRIDES="winhttp=n,b".
+enum GameInstallLayout { windowsNative, macAppBundle, linuxProton }
+
 class GameInstall {
   const GameInstall({
     required this.path,
     required this.executablePath,
     required this.bepInExStatus,
     required this.loaderStatus,
+    this.layout = GameInstallLayout.windowsNative,
     this.issues = const [],
     this.compatStatus,
   });
@@ -168,6 +180,7 @@ class GameInstall {
   final String executablePath;
   final ComponentState bepInExStatus;
   final ComponentState loaderStatus;
+  final GameInstallLayout layout;
   final List<LauncherIssue> issues;
 
   /// Informational game-compatibility status. Deliberately separate from [issues] so it can never affect
@@ -184,6 +197,7 @@ class GameInstall {
     executablePath: executablePath,
     bepInExStatus: bepInExStatus,
     loaderStatus: loaderStatus,
+    layout: layout,
     issues: issues,
     compatStatus: compatStatus ?? this.compatStatus,
   );
@@ -281,6 +295,7 @@ class LauncherSnapshot {
     required this.legacyMods,
     required this.recentLog,
     this.gameInstall,
+    this.launcherUpdates = const LauncherUpdateSettings(),
     this.developerMode = false,
   });
 
@@ -293,6 +308,7 @@ class LauncherSnapshot {
   final WorldCatalog worldCatalog;
   final List<LegacyMod> legacyMods;
   final String recentLog;
+  final LauncherUpdateSettings launcherUpdates;
 
   /// Opt-in developer mode. Off by default so the launcher is a clean install-and-play app for the majority of
   /// users, who never build a mod. When on, the Developer tab (project tools, UGC live-sync) is revealed.

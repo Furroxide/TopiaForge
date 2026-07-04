@@ -378,6 +378,22 @@ void main() {
     // The developer data root is ensured.
     expect(Directory(repository.developerDataRoot).existsSync(), isTrue);
   });
+
+  test('Unity Editor check falls back to the Hub install-root scan', () async {
+    // Machine-dependent by nature: the invariant is that editor detection never
+    // throws, and that a Hub-scanned editor implies the check is not "missing"
+    // even when Unity is absent from PATH.
+    final environment = await repository.checkEnvironment();
+    final unityCheck = environment.checks.firstWhere(
+      (check) => check.name == 'Unity Editor',
+    );
+    final editors = await repository.listUnityEditors();
+    if (editors.isNotEmpty) {
+      expect(unityCheck.status, isNot(ToolStatus.missing));
+    } else {
+      expect(unityCheck.status, ToolStatus.missing);
+    }
+  });
 }
 
 File _createPackage(
@@ -407,10 +423,11 @@ Map<String, Object?> _manifestJson(
   String version, {
   List<String> apiAssemblies = const [],
 }) => {
-  'schemaVersion': 1,
-  'id': id,
+  'schemaVersion': 2,
   'name': id,
+  'displayName': id,
   'version': version,
+  'author': {'name': 'QuantumWorks'},
   'entryAssembly': '${_assemblyName(id)}.dll',
   'entryType': '$id.Entry',
   if (apiAssemblies.isNotEmpty) 'apiAssemblies': apiAssemblies,

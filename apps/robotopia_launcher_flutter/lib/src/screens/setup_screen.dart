@@ -1,7 +1,7 @@
 part of '../screens.dart';
 
-class LibraryScreen extends StatelessWidget {
-  const LibraryScreen({super.key, required this.state});
+class SetupScreen extends StatelessWidget {
+  const SetupScreen({super.key, required this.state});
 
   final LauncherState state;
 
@@ -9,24 +9,14 @@ class LibraryScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final install = state.gameInstall;
     if (install == null) {
-      return _FirstRunPanel(state: state);
+      return _SetupFirstRunPanel(state: state);
     }
 
     final profile = state.selectedProfile;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ScreenHeader(
-          title: 'Library / Launch',
-          subtitle: install.path,
-          trailing: FilledButton.icon(
-            onPressed: state.canLaunch && !state.isBusy
-                ? () => _add(context, const GameLaunchRequested())
-                : null,
-            icon: const Icon(Icons.play_arrow),
-            label: const Text('Launch Robotopia'),
-          ),
-        ),
+        ScreenHeader(title: 'Setup', subtitle: install.path),
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
@@ -306,8 +296,8 @@ class _WorldLaunchControls extends StatelessWidget {
   }
 }
 
-class _FirstRunPanel extends StatelessWidget {
-  const _FirstRunPanel({required this.state});
+class _SetupFirstRunPanel extends StatelessWidget {
+  const _SetupFirstRunPanel({required this.state});
 
   final LauncherState state;
 
@@ -316,7 +306,7 @@ class _FirstRunPanel extends StatelessWidget {
     return Column(
       children: [
         const ScreenHeader(
-          title: 'Library / Launch',
+          title: 'Setup',
           subtitle: 'Set up Robotopia, BepInEx, and the runtime loader.',
         ),
         Expanded(
