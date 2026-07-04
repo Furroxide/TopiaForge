@@ -1,18 +1,28 @@
 {
-  "schemaVersion": 1,
-  "id": "robotopia.assets",
-  "name": "Robotopia Assets",
+  "$schema": "https://raw.githubusercontent.com/furroxide/quantum-works/main/schemas/robotopia.mod.schema.json",
+  "schemaVersion": 2,
+  "name": "robotopia.assets",
+  "displayName": "Robotopia Assets",
   "version": "0.1.0",
-  "author": "QuantumWorks",
+  "author": {
+    "name": "QuantumWorks"
+  },
   "description": "Framework SDK service for package-relative AssetBundle loading, typed asset lookup, prefab instantiation, asset-name listing, bundle caching, and per-mod cleanup.",
   "entryAssembly": "Robotopia.Assets.dll",
   "entryType": "Robotopia.Assets.AssetsMod",
-  "dependencies": [],
-  "optionalDependencies": [],
-  "conflicts": [],
-  "loadAfter": [],
-  "permissions": ["asset-bundles", "filesystem"],
+  "vpmDependencies": {},
+  "supportedSdkVersionRange": ">=0.1.0 <0.2.0",
   "category": "Framework",
-  "tags": ["assets", "assetbundle", "prefab", "framework", "sdk"],
-  "license": "Unspecified"
+  "tags": [
+    "assets",
+    "assetbundle",
+    "prefab",
+    "framework",
+    "sdk"
+  ],
+  "license": "Unspecified",
+  "permissions": [
+    "asset-bundles",
+    "filesystem"
+  ]
 }

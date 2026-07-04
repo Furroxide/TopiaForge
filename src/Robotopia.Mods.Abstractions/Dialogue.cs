@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Robotopia.Mods
@@ -94,6 +95,14 @@ namespace Robotopia.Mods
         /// </summary>
         string LastDecision { get; }
 
+        /// <summary>
+        /// Every raw output value from the most recent completed turn — the reply, the decision, and any
+        /// <see cref="RobotConversationRequest.ExtraOutputs"/> fields, keyed by field name. Empty before the first
+        /// turn and when the turn failed. As with the decision, the consumer maps and gates these values; the
+        /// conversation does not.
+        /// </summary>
+        IReadOnlyDictionary<string, string> LastValues { get; }
+
         /// <summary>A short diagnostic for the most recent turn when it did not produce a usable answer; else <c>null</c>.</summary>
         string? LastError { get; }
 
@@ -137,6 +146,14 @@ namespace Robotopia.Mods
         /// </summary>
         public IReadOnlyDictionary<string, string>? GroundTruthFacts { get; set; }
 
+        /// <summary>
+        /// Live facts recomputed at the start of every submitted turn and merged OVER
+        /// <see cref="GroundTruthFacts"/> (a live key wins), so per-turn state such as target positions stays
+        /// fresh across a multi-turn conversation. A <c>null</c> return or a throwing provider degrades to the
+        /// static facts only. Optional.
+        /// </summary>
+        public Func<IReadOnlyDictionary<string, string>?>? LiveFacts { get; set; }
+
         /// <summary>Hard cap on completed turns before the conversation auto-ends. Default 3.</summary>
         public int MaxTurns { get; set; } = 3;
 
@@ -154,6 +171,15 @@ namespace Robotopia.Mods
 
         /// <summary>Hard cap on the robot's spoken line length, in characters. Default 200.</summary>
         public int MaxReplyChars { get; set; } = 200;
+
+        /// <summary>
+        /// Additional structured output fields the robot must fill each turn beyond the built-in reply/decision —
+        /// e.g. a closed-set <c>target</c> field naming what a chosen action applies to. Keep the set small and
+        /// closed-set where possible (each field costs the brain accuracy and latency). Fields named
+        /// <c>reply</c>/<c>decision</c> are ignored. Read the values from
+        /// <see cref="IRobotConversation.LastValues"/>. Optional.
+        /// </summary>
+        public IReadOnlyList<BrainOutputField>? ExtraOutputs { get; set; }
     }
 
     /// <summary>

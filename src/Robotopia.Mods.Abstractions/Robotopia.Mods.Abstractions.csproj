@@ -3,5 +3,8 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>Robotopia.Mods.Abstractions</AssemblyName>
     <RootNamespace>Robotopia.Mods</RootNamespace>
+    <Version>0.1.1</Version>
+    <PackageVersion>0.1.1</PackageVersion>
+    <InformationalVersion>0.1.1</InformationalVersion>
   </PropertyGroup>
 </Project>

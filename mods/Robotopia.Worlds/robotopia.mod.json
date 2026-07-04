@@ -1,18 +1,27 @@
 {
-  "schemaVersion": 1,
-  "id": "robotopia.worlds",
-  "name": "Robotopia Worlds",
-  "version": "0.2.1",
-  "author": "QuantumWorks",
+  "$schema": "https://raw.githubusercontent.com/furroxide/quantum-works/main/schemas/robotopia.mod.schema.json",
+  "schemaVersion": 2,
+  "name": "robotopia.worlds",
+  "displayName": "Robotopia Worlds",
+  "version": "0.5.4",
+  "author": {
+    "name": "QuantumWorks"
+  },
   "description": "World and gamemode runtime service with a simple open-world sandbox and first-party scene loading support.",
   "entryAssembly": "Robotopia.Worlds.dll",
   "entryType": "Robotopia.Worlds.WorldsMod",
-  "dependencies": [],
-  "optionalDependencies": [],
-  "conflicts": [],
-  "loadAfter": [],
-  "permissions": ["scene-management", "world-service"],
+  "vpmDependencies": {},
+  "supportedSdkVersionRange": ">=0.1.0 <0.2.0",
   "category": "Framework",
-  "tags": ["worlds", "gamemodes", "sdk", "sandbox"],
-  "license": "Unspecified"
+  "tags": [
+    "worlds",
+    "gamemodes",
+    "sdk",
+    "sandbox"
+  ],
+  "license": "Unspecified",
+  "permissions": [
+    "scene-management",
+    "world-service"
+  ]
 }

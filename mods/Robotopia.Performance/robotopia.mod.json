@@ -1,18 +1,31 @@
 {
-  "schemaVersion": 1,
-  "id": "robotopia.performance",
-  "name": "Robotopia Performance",
+  "$schema": "https://raw.githubusercontent.com/furroxide/quantum-works/main/schemas/robotopia.mod.schema.json",
+  "schemaVersion": 2,
+  "name": "robotopia.performance",
+  "displayName": "Robotopia Performance",
   "version": "0.2.0",
-  "author": "QuantumWorks",
+  "author": {
+    "name": "QuantumWorks"
+  },
   "description": "Runtime, fully-reversible performance tuning for Robotopia (HDRP). Presets off/balanced/performance/potato plus per-effect overrides: post-FX kills, dynamic resolution, quality/reflection-probe forcing, GPU occlusion culling (GPU Resident Drawer), frame pacing, and telemetry throttling.",
   "entryAssembly": "Robotopia.Performance.dll",
   "entryType": "Robotopia.Performance.PerformanceMod",
-  "dependencies": [],
-  "optionalDependencies": [],
-  "conflicts": [],
-  "loadAfter": [],
-  "permissions": ["render-settings", "quality-settings", "harmony-patch", "physics-settings"],
+  "vpmDependencies": {},
+  "supportedSdkVersionRange": ">=0.1.0 <0.2.0",
   "category": "Performance",
-  "tags": ["performance", "fps", "optimization", "hdrp", "quality", "tweaks"],
-  "license": "Unspecified"
+  "tags": [
+    "performance",
+    "fps",
+    "optimization",
+    "hdrp",
+    "quality",
+    "tweaks"
+  ],
+  "license": "Unspecified",
+  "permissions": [
+    "render-settings",
+    "quality-settings",
+    "harmony-patch",
+    "physics-settings"
+  ]
 }

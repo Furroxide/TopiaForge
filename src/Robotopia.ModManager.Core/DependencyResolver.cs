@@ -16,7 +16,7 @@ namespace Robotopia.ModManager.Core
             foreach (var package in enabled.Values)
             {
                 var manifest = package.Manifest!;
-                foreach (var dependency in RequiredDependencies(manifest))
+                foreach (var dependency in GetRequiredDependencies(manifest))
                 {
                     if (!enabled.TryGetValue(dependency.Id, out var dependencyPackage))
                     {
@@ -52,7 +52,7 @@ namespace Robotopia.ModManager.Core
             foreach (var package in enabled.Values)
             {
                 var id = package.Manifest!.Id;
-                foreach (var dependency in RequiredDependencies(package.Manifest))
+                foreach (var dependency in GetRequiredDependencies(package.Manifest))
                 {
                     if (enabled.TryGetValue(dependency.Id, out var dependencyPackage) &&
                         DependencySatisfied(dependencyPackage.Manifest!.Version, dependency))
@@ -140,9 +140,29 @@ namespace Robotopia.ModManager.Core
             list.Add(error);
         }
 
-        private static IEnumerable<ModDependency> RequiredDependencies(ModManifest manifest)
+        /// <summary>All hard dependencies of a manifest: vpmDependencies plus non-optional dependencies.</summary>
+        public static IEnumerable<ModDependency> GetRequiredDependencies(ModManifest manifest)
         {
-            return (manifest.Dependencies ?? new List<ModDependency>()).Where(dependency => !dependency.Optional);
+            return VpmDependencies(manifest)
+                .Concat((manifest.Dependencies ?? new List<ModDependency>()).Where(dependency => !dependency.Optional));
+        }
+
+        /// <summary>
+        /// The id of the first required dependency that appears in <paramref name="failedModIds"/>, or null.
+        /// Used by the runtime to skip a mod whose dependency passed manifest validation but then failed to
+        /// actually load (e.g. a TypeLoadException from a binary-stale package).
+        /// </summary>
+        public static string? FindFailedRequiredDependency(ModManifest manifest, ICollection<string> failedModIds)
+        {
+            foreach (var dependency in GetRequiredDependencies(manifest))
+            {
+                if (failedModIds.Contains(dependency.Id))
+                {
+                    return dependency.Id;
+                }
+            }
+
+            return null;
         }
 
         private static IEnumerable<ModDependency> OptionalDependencies(ModManifest manifest)
@@ -150,6 +170,18 @@ namespace Robotopia.ModManager.Core
             return (manifest.Dependencies ?? new List<ModDependency>())
                 .Where(dependency => dependency.Optional)
                 .Concat(manifest.OptionalDependencies ?? new List<ModDependency>());
+        }
+
+        private static IEnumerable<ModDependency> VpmDependencies(ModManifest manifest)
+        {
+            foreach (var entry in manifest.VpmDependencies ?? new Dictionary<string, string>())
+            {
+                yield return new ModDependency
+                {
+                    Id = entry.Key,
+                    VersionRange = entry.Value
+                };
+            }
         }
 
         private static bool DependencySatisfied(string actualVersion, ModDependency dependency)

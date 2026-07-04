@@ -292,7 +292,7 @@
       "criticality": "Degraded",
       "feature": "Get asset map from import controller",
       "sourceRef": "mods/Robotopia.UgcLiveSync/UgcGameBridge.cs:381",
-      "returnType": "System.Object"
+      "returnType": "UgcBuiltInAssetMap"
     },
     {
       "id": "ugc.property.importHost.sceneRoot",
@@ -304,7 +304,7 @@
       "criticality": "Critical",
       "feature": "Get scene root for patcher initialization",
       "sourceRef": "mods/Robotopia.UgcLiveSync/UgcGameBridge.cs:386",
-      "returnType": "System.Object"
+      "returnType": "UgcSceneRoot"
     },
     {
       "id": "ugc.property.importHost.environmentPrefabMap",
@@ -316,7 +316,7 @@
       "criticality": "Critical",
       "feature": "Get environment map for patcher initialization",
       "sourceRef": "mods/Robotopia.UgcLiveSync/UgcGameBridge.cs:387",
-      "returnType": "System.Object"
+      "returnType": "UgcEnvironmentPrefabMap"
     },
     {
       "id": "ugc.ctor.ugcScenePatcher",
@@ -523,7 +523,7 @@
       "criticality": "Degraded",
       "feature": "Count entities in scene snapshot",
       "sourceRef": "mods/Robotopia.UgcLiveSync/UgcGameBridge.cs:418",
-      "returnType": "System.Collections.ICollection"
+      "returnType": "System.Collections.Generic.Dictionary<System.String, UgcExportEntity>"
     }
   ]
 }

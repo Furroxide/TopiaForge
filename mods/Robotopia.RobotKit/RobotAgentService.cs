@@ -19,7 +19,8 @@ namespace Robotopia.RobotKit
 
         private GameObject? root;
         private GameObject? incubator;
-        private GameObject? cachedPrefab;
+        private IReadOnlyList<RobotPrefabCandidate>? cachedCatalog;
+        private RobotTypeDescriptor[]? cachedTypes;
         private object? cachedPathFindSettings;
         private float nextPrefabScan;
         private Component? playerController;
@@ -39,6 +40,34 @@ namespace Robotopia.RobotKit
         public bool IsAvailable => !disposed && LocomotionBridge.LocomotionAvailable() && ResolveCachedPrefab() != null;
 
         public bool IsNavigationAvailable => LocomotionBridge.NavAvailable();
+
+        public IReadOnlyList<RobotTypeDescriptor> RobotTypes
+        {
+            get
+            {
+                var catalog = ResolveCachedCatalog();
+                if (catalog == null || catalog.Count == 0)
+                {
+                    return Array.Empty<RobotTypeDescriptor>();
+                }
+
+                if (cachedTypes == null || cachedTypes.Length != catalog.Count)
+                {
+                    cachedTypes = new RobotTypeDescriptor[catalog.Count];
+                    for (var index = 0; index < catalog.Count; index++)
+                    {
+                        cachedTypes[index] = new RobotTypeDescriptor(catalog[index].Id, catalog[index].DisplayName);
+                    }
+                }
+
+                return cachedTypes;
+            }
+        }
+
+        public bool IsRobotPrefab(object gameObject)
+        {
+            return gameObject is GameObject go && GameReflection.HasRobotBody(go);
+        }
 
         public IReadOnlyList<IRobotAgent> ActiveAgents
         {
@@ -62,7 +91,7 @@ namespace Robotopia.RobotKit
                 return null;
             }
 
-            var prefab = ResolveCachedPrefab();
+            var prefab = ResolvePrefabForType(request.RobotTypeId);
             if (prefab == null)
             {
                 return null;
@@ -92,9 +121,12 @@ namespace Robotopia.RobotKit
             clone.SetActive(false);
             clone.name = request.Name ?? "RobotKit Agent";
 
+            // Capture the brain's pristine state before any dormant writes, so a later SetBrainMode(Autonomous)
+            // can restore what the prefab shipped with.
+            var brainSnapshot = GameReflection.CaptureBrainState(clone);
             GameReflection.ConfigureBrain(clone, request.BrainMode, logger);
             EnsureKinematicRoot(clone);
-            var agent = new RobotAgent(NextId(), clone, request, logger);
+            var agent = new RobotAgent(NextId(), clone, request, logger, brainSnapshot);
 
             clone.transform.SetParent(root.transform, true);
             clone.SetActive(true);
@@ -256,7 +288,8 @@ namespace Robotopia.RobotKit
             ClearAgents();
             CancelSearches();
             LocomotionBridge.ResetSceneCache();
-            cachedPrefab = null;
+            cachedCatalog = null;
+            cachedTypes = null;
             cachedPathFindSettings = null;
             nextPrefabScan = 0f;
             playerController = null;
@@ -330,25 +363,63 @@ namespace Robotopia.RobotKit
 
         private GameObject? ResolveCachedPrefab()
         {
-            if (cachedPrefab != null)
+            var catalog = ResolveCachedCatalog();
+            return catalog != null && catalog.Count > 0 ? catalog[0].Prefab : null;
+        }
+
+        // The requested robot type's prefab; an unknown/stale id logs once and falls back to the default type
+        // (index 0) rather than failing the spawn.
+        private GameObject? ResolvePrefabForType(string? robotTypeId)
+        {
+            var catalog = ResolveCachedCatalog();
+            if (catalog == null || catalog.Count == 0)
             {
-                return cachedPrefab;
+                return null;
             }
 
-            // The fallback path of Resolve() does a full Resources scan, which is expensive; throttle re-scans
-            // while nothing is found (e.g. before a gameplay level has loaded any robots). Reset on scene change.
+            if (string.IsNullOrWhiteSpace(robotTypeId))
+            {
+                return catalog[0].Prefab;
+            }
+
+            foreach (var candidate in catalog)
+            {
+                if (string.Equals(candidate.Id, robotTypeId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return candidate.Prefab;
+                }
+            }
+
+            logger.Warn("RobotKit: unknown robot type '" + robotTypeId + "' — spawning the default type instead.");
+            return catalog[0].Prefab;
+        }
+
+        private IReadOnlyList<RobotPrefabCandidate>? ResolveCachedCatalog()
+        {
+            if (cachedCatalog != null && cachedCatalog.Count > 0)
+            {
+                return cachedCatalog;
+            }
+
+            // ResolveAll does full Resources scans, which are expensive; throttle re-scans while nothing is
+            // found (e.g. before a gameplay level has loaded any robots). Reset on scene change.
             if (Time.unscaledTime < nextPrefabScan)
             {
                 return null;
             }
 
-            cachedPrefab = prefabResolver.Resolve();
-            if (cachedPrefab == null)
+            cachedCatalog = prefabResolver.ResolveAll();
+            if (cachedCatalog.Count == 0)
             {
+                cachedCatalog = null;
                 nextPrefabScan = Time.unscaledTime + 2f;
             }
+            else
+            {
+                cachedTypes = null;
+            }
 
-            return cachedPrefab;
+            return cachedCatalog;
         }
 
         private Component? ResolvePlayer()

@@ -13,19 +13,24 @@ namespace Robotopia.ModManager.Core
         {
             var errors = new List<string>();
 
-            if (manifest.SchemaVersion != 1)
+            if (manifest.SchemaVersion != 2)
             {
-                errors.Add("schemaVersion must be 1.");
+                errors.Add("schemaVersion must be 2.");
             }
 
             if (string.IsNullOrWhiteSpace(manifest.Id) || !IdRegex.IsMatch(manifest.Id))
             {
-                errors.Add("id must be 2-64 characters and contain only letters, numbers, underscore, dot, or dash.");
+                errors.Add("name must be 2-64 characters and contain only letters, numbers, underscore, dot, or dash.");
             }
 
             if (string.IsNullOrWhiteSpace(manifest.Name))
             {
-                errors.Add("name is required.");
+                errors.Add("displayName is required.");
+            }
+
+            if (manifest.Author == null || string.IsNullOrWhiteSpace(manifest.Author.Name))
+            {
+                errors.Add("author.name is required.");
             }
 
             if (!VersionUtil.TryParse(manifest.Version, out _))
@@ -48,6 +53,11 @@ namespace Robotopia.ModManager.Core
             }
 
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var dependency in VpmDependencies(manifest))
+            {
+                ValidateDependency(dependency, "vpmDependencies", seen, errors);
+            }
+
             foreach (var dependency in manifest.Dependencies ?? new List<ModDependency>())
             {
                 ValidateDependency(dependency, "dependencies", seen, errors);
@@ -93,8 +103,35 @@ namespace Robotopia.ModManager.Core
             {
                 errors.Add("supportedLoaderVersionRange is invalid.");
             }
+            else if (!string.IsNullOrWhiteSpace(manifest.SupportedLoaderVersionRange) &&
+                     !VersionUtil.AllowsRange(RobotopiaVersions.LoaderVersion, manifest.SupportedLoaderVersionRange))
+            {
+                errors.Add("supportedLoaderVersionRange does not include loader " + RobotopiaVersions.LoaderVersion + ".");
+            }
+
+            if (!string.IsNullOrWhiteSpace(manifest.SupportedSdkVersionRange) && !VersionUtil.TryParseRange(manifest.SupportedSdkVersionRange))
+            {
+                errors.Add("supportedSdkVersionRange is invalid.");
+            }
+            else if (!string.IsNullOrWhiteSpace(manifest.SupportedSdkVersionRange) &&
+                     !VersionUtil.AllowsRange(RobotopiaVersions.SdkVersion, manifest.SupportedSdkVersionRange))
+            {
+                errors.Add("supportedSdkVersionRange does not include SDK " + RobotopiaVersions.SdkVersion + ".");
+            }
 
             return errors;
+        }
+
+        private static IEnumerable<ModDependency> VpmDependencies(ModManifest manifest)
+        {
+            foreach (var entry in manifest.VpmDependencies ?? new Dictionary<string, string>())
+            {
+                yield return new ModDependency
+                {
+                    Id = entry.Key,
+                    VersionRange = entry.Value
+                };
+            }
         }
 
         private static void ValidateDependency(

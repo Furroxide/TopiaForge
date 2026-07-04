@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 
 namespace Robotopia.ModManager.Core
 {
@@ -49,6 +50,7 @@ namespace Robotopia.ModManager.Core
                 CopyDirectory(stagingPath, targetPath);
                 var existing = state.Find(manifest.Id);
                 state.Upsert(manifest, enabled: existing?.Enabled ?? true, restartRequired: restartRequired);
+                PruneOtherVersions(paths, manifest.Id, manifest.Version);
 
                 return PackageInstallResult.Success(manifest, targetPath);
             }
@@ -59,6 +61,180 @@ namespace Robotopia.ModManager.Core
             finally
             {
                 TryDelete(stagingPath);
+            }
+        }
+
+        /// <summary>
+        /// Installs every .robotopiamod file waiting in the package-inbox. When the inbox holds several
+        /// versions of the same mod, only the highest version is installed and the rest are marked
+        /// superseded. Successfully processed files are consumed (deleted, or renamed to *.installed when
+        /// the delete is blocked); failed installs leave their file in place so the user can inspect it.
+        /// </summary>
+        public IReadOnlyList<InboxInstallResult> InstallInbox(ManagerPaths paths, ManagerState state, bool restartRequired)
+        {
+            var results = new List<InboxInstallResult>();
+            if (!Directory.Exists(paths.PackageInbox))
+            {
+                return results;
+            }
+
+            var files = Directory.GetFiles(paths.PackageInbox, "*.robotopiamod", SearchOption.TopDirectoryOnly)
+                .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (files.Count == 0)
+            {
+                return results;
+            }
+
+            // Pick one winner per mod id up front (highest parseable version); everything else for that id
+            // is superseded. Files whose manifest cannot be pre-read stay winners of their own group so the
+            // normal install path can produce the real, actionable error.
+            var winners = new Dictionary<string, (string File, Version Version)>(StringComparer.OrdinalIgnoreCase);
+            var groups = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            var fileToId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var file in files)
+            {
+                var manifest = TryReadPackedManifest(file);
+                var id = manifest != null && !string.IsNullOrWhiteSpace(manifest.Id) ? manifest.Id : file;
+                fileToId[file] = id;
+                if (!groups.TryGetValue(id, out var group))
+                {
+                    group = new List<string>();
+                    groups[id] = group;
+                }
+
+                group.Add(file);
+                VersionUtil.TryParse(manifest?.Version ?? string.Empty, out var version);
+                if (!winners.TryGetValue(id, out var best) || version > best.Version)
+                {
+                    winners[id] = (file, version);
+                }
+            }
+
+            foreach (var file in files)
+            {
+                var groupId = fileToId[file];
+                if (!string.Equals(winners[groupId].File, file, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue; // superseded — handled after its winner installs
+                }
+
+                var install = Install(file, paths, state, restartRequired);
+                var result = new InboxInstallResult(file, install, superseded: false);
+                if (install.Ok)
+                {
+                    Consume(result);
+                }
+
+                results.Add(result);
+
+                foreach (var loser in groups[groupId])
+                {
+                    if (string.Equals(loser, file, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    // Only consume superseded files once the winner actually installed; otherwise leave
+                    // the whole group on disk for inspection.
+                    var supersededResult = new InboxInstallResult(loser, null, superseded: true);
+                    if (install.Ok)
+                    {
+                        Consume(supersededResult);
+                    }
+
+                    results.Add(supersededResult);
+                }
+            }
+
+            return results;
+        }
+
+        // Reads just the manifest out of a packed .robotopiamod zip; null when the file or manifest is
+        // unreadable (the caller then routes the file through the normal install path for a real error).
+        private static ModManifest? TryReadPackedManifest(string packagePath)
+        {
+            try
+            {
+                using (var file = File.OpenRead(packagePath))
+                using (var archive = new ZipArchive(file, ZipArchiveMode.Read))
+                {
+                    var entry = archive.GetEntry("robotopia.mod.json");
+                    if (entry == null)
+                    {
+                        return null;
+                    }
+
+                    using (var stream = entry.Open())
+                    using (var buffer = new MemoryStream())
+                    {
+                        stream.CopyTo(buffer);
+                        buffer.Position = 0;
+                        return JsonUtil.Deserialize<ModManifest>(buffer);
+                    }
+                }
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static void Consume(InboxInstallResult result)
+        {
+            try
+            {
+                File.Delete(result.FilePath);
+                result.Consumed = true;
+            }
+            catch (Exception)
+            {
+                // A locked file (AV scan, Explorer preview) cannot be deleted; renaming it out of the
+                // *.robotopiamod pattern keeps it from being reprocessed while preserving the bytes.
+                try
+                {
+                    var renamed = result.FilePath + ".installed";
+                    if (File.Exists(renamed))
+                    {
+                        File.Delete(renamed);
+                    }
+
+                    File.Move(result.FilePath, renamed);
+                    result.Consumed = true;
+                }
+                catch (Exception ex)
+                {
+                    result.ConsumeError = ex.Message;
+                }
+            }
+        }
+
+        // Superseded sibling versions would otherwise accumulate forever and, once their manifest schema
+        // ages out, produce a startup warning per launch. Deletes are best-effort: a mid-session upgrade
+        // has the old version's DLL loaded/locked, and the startup prune sweeps it next boot.
+        private static void PruneOtherVersions(ManagerPaths paths, string id, string keepVersion)
+        {
+            var idRoot = Path.Combine(paths.Packages, id);
+            if (!Directory.Exists(idRoot))
+            {
+                return;
+            }
+
+            foreach (var versionDirectory in Directory.GetDirectories(idRoot))
+            {
+                if (string.Equals(Path.GetFileName(versionDirectory), keepVersion, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    Directory.Delete(versionDirectory, true);
+                }
+                catch
+                {
+                    // Locked by a loaded assembly; the startup prune retries when nothing is loaded.
+                }
             }
         }
 
@@ -133,6 +309,28 @@ namespace Robotopia.ModManager.Core
                 // Staging cleanup failure should not hide the install result.
             }
         }
+    }
+
+    /// <summary>One inbox file's outcome from <see cref="PackageInstaller.InstallInbox"/>.</summary>
+    public sealed class InboxInstallResult
+    {
+        public InboxInstallResult(string filePath, PackageInstallResult? install, bool superseded)
+        {
+            FilePath = filePath;
+            Install = install;
+            Superseded = superseded;
+        }
+
+        public string FilePath { get; }
+
+        /// <summary>Null when the file was skipped as superseded by a newer version in the same inbox.</summary>
+        public PackageInstallResult? Install { get; }
+
+        public bool Superseded { get; }
+
+        public bool Consumed { get; internal set; }
+
+        public string? ConsumeError { get; internal set; }
     }
 
     public sealed class PackageInstallResult

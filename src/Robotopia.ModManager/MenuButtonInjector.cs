@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using Robotopia.Mods;
 using Robotopia.Mods.UnityUi;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -9,10 +10,8 @@ namespace Robotopia.ModManager
 {
     internal sealed class MenuButtonInjector
     {
-        // The verified main-menu scene. Used as a cheap gate so the component scan and the broad canvas
-        // fallback only run in the menu — never in gameplay (which prevents false injection into HUD canvases).
-        private const string MenuSceneName = "TestCityStartMenu";
-
+        // The main-menu gate keeps the component scan and the broad canvas fallback out of gameplay
+        // (which prevents false injection into HUD canvases).
         private readonly ManagerOverlay overlay;
         private readonly ManagerFileLogger logger;
         private UiHost? host;
@@ -53,8 +52,8 @@ namespace Robotopia.ModManager
 
         private bool IsMenuScene()
         {
-            return string.Equals(sceneName, MenuSceneName, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(SceneManager.GetActiveScene().name, MenuSceneName, StringComparison.OrdinalIgnoreCase);
+            return GameScenes.IsMainMenuScene(sceneName)
+                || GameScenes.IsMainMenuScene(SceneManager.GetActiveScene().name);
         }
 
         private void TryInject()

@@ -14,6 +14,7 @@ namespace Robotopia.ModManager.Tests
         public static void Run()
         {
             TestPromptCarriesFrameFactsAndOptions();
+            TestLiveFactsMergeOverStaticFacts();
             TestSanitizeDefangsDelimiterAndClamps();
             TestDualChannelTurnLatches();
             TestSelfGradedRefusalStillLatches();
@@ -23,6 +24,10 @@ namespace Robotopia.ModManager.Tests
             TestEndIgnoresFurtherSubmits();
             TestTextInputBuffer();
             TestSttResponseParsing();
+            TestExtraOutputsAppendAfterBuiltIns();
+            TestExtraOutputCollisionsAreSkipped();
+            TestNoExtraOutputsKeepsLegacyShape();
+            TestLastValuesLatchAllFields();
             Console.WriteLine("All conversation tests passed.");
         }
 
@@ -83,6 +88,39 @@ namespace Robotopia.ModManager.Tests
             Assert(reply.Name == "reply" && (reply.AllowedStrings == null || reply.AllowedStrings.Count == 0), "reply is a free-text field");
             Assert(decision.Name == "decision" && decision.AllowedStrings != null && decision.AllowedStrings.Count == 3, "decision is constrained to the option set");
             Assert(decision.AllowedStrings![0] == "COMPLY", "decision options are carried in order");
+        }
+
+        // LiveFacts are recomputed for EVERY built turn and merged over the static facts (a live key wins), so a
+        // multi-turn conversation always sees fresh state; a throwing or null provider degrades to static facts.
+        private static void TestLiveFactsMergeOverStaticFacts()
+        {
+            var calls = 0;
+            var config = new RobotConversationRequest("frame", new[] { "COMPLY" })
+            {
+                GroundTruthFacts = new Dictionary<string, string> { ["hp"] = "10/100", ["targets"] = "stale" },
+                LiveFacts = () =>
+                {
+                    calls++;
+                    return new Dictionary<string, string> { ["targets"] = "fresh " + calls };
+                },
+            };
+
+            var first = ConversationPrompt.BuildRequest(config, Array.Empty<ConversationTurn>(), "hi");
+            Assert(first.Prompt.Contains("targets: fresh 1"), "a live fact overrides its static key");
+            Assert(!first.Prompt.Contains("targets: stale"), "the overridden static value is gone");
+            Assert(first.Prompt.Contains("hp: 10/100"), "untouched static facts survive the merge");
+
+            var second = ConversationPrompt.BuildRequest(config, Array.Empty<ConversationTurn>(), "hi again");
+            Assert(second.Prompt.Contains("targets: fresh 2"), "the provider is re-invoked per built turn");
+
+            config.LiveFacts = () => throw new InvalidOperationException("boom");
+            var degraded = ConversationPrompt.BuildRequest(config, Array.Empty<ConversationTurn>(), "hi");
+            Assert(degraded.Prompt.Contains("targets: stale") && degraded.Prompt.Contains("hp: 10/100"),
+                "a throwing provider degrades to the static facts");
+
+            config.LiveFacts = () => null;
+            var nullProvider = ConversationPrompt.BuildRequest(config, Array.Empty<ConversationTurn>(), "hi");
+            Assert(nullProvider.Prompt.Contains("targets: stale"), "a null-returning provider degrades to the static facts");
         }
 
         private static void TestSanitizeDefangsDelimiterAndClamps()
@@ -213,6 +251,90 @@ namespace Robotopia.ModManager.Tests
             convo.Submit("are you there?");
             service.Tick(0.016f);
             Assert(convo.TurnCount == 0 && brains.Requests.Count == 0, "a submit after End is ignored");
+        }
+
+        private static void TestExtraOutputsAppendAfterBuiltIns()
+        {
+            var config = new RobotConversationRequest("frame", new[] { "CHAT", "GO_TO" })
+            {
+                ExtraOutputs = new[]
+                {
+                    new BrainOutputField("target", "what the action applies to", BrainFieldType.String, new[] { "NONE", "PLAYER" }),
+                },
+            };
+
+            var request = ConversationPrompt.BuildRequest(config, Array.Empty<ConversationTurn>(), "follow me");
+            Assert(request.Outputs.Count == 3, "extra outputs append to the built-in two");
+            Assert(request.Outputs[0].Name == "reply" && request.Outputs[1].Name == "decision", "built-ins come first");
+            var target = request.Outputs[2];
+            Assert(target.Name == "target" && target.AllowedStrings != null && target.AllowedStrings.Count == 2,
+                "the extra field keeps its closed set");
+            Assert(request.Prompt.Contains("Also fill in every other requested field."),
+                "the closing instruction mentions the extra fields");
+        }
+
+        private static void TestExtraOutputCollisionsAreSkipped()
+        {
+            var config = new RobotConversationRequest("frame", new[] { "CHAT" })
+            {
+                ExtraOutputs = new[]
+                {
+                    new BrainOutputField("reply", "collides with the built-in reply"),
+                    new BrainOutputField("decision", "collides with the built-in decision"),
+                    new BrainOutputField("target", "kept"),
+                    new BrainOutputField("target", "duplicate of the kept field"),
+                },
+            };
+
+            var request = ConversationPrompt.BuildRequest(config, Array.Empty<ConversationTurn>(), "hi");
+            Assert(request.Outputs.Count == 3, "reply/decision collisions and duplicates are skipped");
+            Assert(request.Outputs[2].Name == "target" && request.Outputs[2].Description == "kept",
+                "the first occurrence of a duplicated extra field wins");
+        }
+
+        private static void TestNoExtraOutputsKeepsLegacyShape()
+        {
+            // Zombies regression guard: with no ExtraOutputs the request must be exactly the historical two-field
+            // shape, with no trace of the extra-fields instruction in the prompt.
+            var config = new RobotConversationRequest("frame", new[] { "COMPLY", "REFUSE" });
+            var request = ConversationPrompt.BuildRequest(config, Array.Empty<ConversationTurn>(), "stand down");
+            Assert(request.Outputs.Count == 2, "no extras -> exactly reply + decision");
+            Assert(!request.Prompt.Contains("Also fill in every other requested field."),
+                "no extras -> the closing instruction is unchanged");
+        }
+
+        private static void TestLastValuesLatchAllFields()
+        {
+            var brains = new FakeBrainService();
+            var service = new RobotConversationService(brains, new NullLogger());
+            var convo = service.BeginConversation(new RobotConversationRequest("frame", new[] { "CHAT", "GO_TO" })
+            {
+                MaxTurns = 3,
+                ExtraOutputs = new[] { new BrainOutputField("target", "target", BrainFieldType.String, new[] { "NONE", "PLAYER" }) },
+            });
+
+            Assert(convo.LastValues.Count == 0, "no values before the first turn");
+
+            var values = new Dictionary<string, string>
+            {
+                ["reply"] = "On my way.",
+                ["decision"] = "GO_TO",
+                ["target"] = "PLAYER",
+            };
+            brains.Enqueue(new BrainQueryResult(true, true, values, null));
+            convo.Submit("go to me");
+            service.Tick(0.016f);
+
+            Assert(convo.TurnReady, "the turn completes");
+            Assert(convo.LastValues.Count == 3, "every returned field latches");
+            Assert(convo.LastValues["target"] == "PLAYER", "the extra field's value is readable");
+            Assert(convo.LastDecision == "GO_TO", "the decision still latches normally");
+
+            // A failed turn clears the latched values rather than leaving stale ones.
+            brains.Enqueue(BrainQueryResult.Unavailable);
+            convo.Submit("still there?");
+            service.Tick(0.016f);
+            Assert(convo.LastValues.Count == 0, "a failed turn empties LastValues");
         }
 
         private static BrainQueryResult Ok(string reply, string decision)

@@ -81,6 +81,64 @@ namespace Robotopia.Mods
             return context.RequireService<IAssetBundleService>().SpawnAsset(prefab);
         }
 
+        /// <summary>
+        /// Registers a custom world whose content is a prefab inside a mod-shipped AssetBundle, plus (by
+        /// default) a menu entry pairing it with the Sandbox gamemode. The bundle is loaded lazily on the
+        /// world's first launch through robotopia.assets — declare that dependency in the manifest.
+        /// Returns the registered definition (useful for a matching <c>UnregisterWorld</c> on unload).
+        /// </summary>
+        public static WorldDefinition RegisterWorldFromBundle(
+            this IModContext context,
+            IWorldGamemodeService worlds,
+            BundleWorldOptions options)
+        {
+            if (context == null)
+            {
+                throw new ArgumentNullException(nameof(context));
+            }
+
+            if (worlds == null)
+            {
+                throw new ArgumentNullException(nameof(worlds));
+            }
+
+            if (options == null)
+            {
+                throw new ArgumentNullException(nameof(options));
+            }
+
+            if (string.IsNullOrWhiteSpace(options.Id))
+            {
+                throw new ArgumentException("BundleWorldOptions.Id is required.", nameof(options));
+            }
+
+            if (string.IsNullOrWhiteSpace(options.Name))
+            {
+                throw new ArgumentException("BundleWorldOptions.Name is required.", nameof(options));
+            }
+
+            if (string.IsNullOrWhiteSpace(options.BundleRelativePath))
+            {
+                throw new ArgumentException("BundleWorldOptions.BundleRelativePath is required.", nameof(options));
+            }
+
+            var definition = new WorldDefinition(options.Id, options.Name, options.Description);
+            worlds.RegisterWorld(definition, new BundleWorldContent(
+                context, options.BundleRelativePath, options.PrefabAssetName, options.Content));
+
+            if (options.RegisterSandboxMenuEntry)
+            {
+                var menuEntryId = string.IsNullOrWhiteSpace(options.MenuEntryId)
+                    ? options.Id + ".menu"
+                    : options.MenuEntryId;
+                worlds.RegisterMenuEntry(new GamemodeMenuEntry(
+                    menuEntryId, options.Name, options.Description,
+                    WellKnownIds.SandboxGamemodeId, options.Id));
+            }
+
+            return definition;
+        }
+
         public static IPromptOverrideHandle RegisterPromptOverride(
             this IModContext context,
             string promptId,

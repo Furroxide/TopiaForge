@@ -111,6 +111,46 @@ namespace Robotopia.RobotKit
             }
         }
 
+        // A robot's native brain state as it was BEFORE any dormant writes, so the brain can be best-effort woken
+        // back up when a mod switches the robot to Autonomous at runtime.
+        internal sealed class BrainStateSnapshot
+        {
+            public readonly System.Collections.Generic.List<(Behaviour Tree, bool Enabled)> BehaviorTrees =
+                new System.Collections.Generic.List<(Behaviour, bool)>();
+
+            public object? InitialState;
+            public object? State;
+            public object? LlmDisabled;
+        }
+
+        // Capture the native brain's pristine state (call BEFORE the dormant writes, while the clone is inactive).
+        public static BrainStateSnapshot? CaptureBrainState(GameObject root)
+        {
+            try
+            {
+                var snapshot = new BrainStateSnapshot();
+                foreach (var component in root.GetComponentsInChildren<Component>(true))
+                {
+                    if (component is Behaviour behaviour && IsNamed(component, "BehaviorTree"))
+                    {
+                        snapshot.BehaviorTrees.Add((behaviour, behaviour.enabled));
+                    }
+                    else if (IsNamed(component, "LLMAgent"))
+                    {
+                        snapshot.InitialState = GetFieldValue(component, "initialState");
+                        snapshot.State = GetFieldValue(component, "state");
+                        snapshot.LlmDisabled = GetFieldValue(component, "llmDisabled");
+                    }
+                }
+
+                return snapshot;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         // Put a freshly-spawned robot's brain into the requested mode WITHOUT removing the LLMAgent (WalkSession
         // needs head.Agent to resolve, and a body whose Agent is null forces the Animator into Standby). Dormant:
         // disable the BehaviorTree (so the native action loop never issues its own walk/say), and set the LLMAgent
@@ -119,8 +159,17 @@ namespace Robotopia.RobotKit
         // still inactive (before Awake/OnEnable), so the settings take effect as the robot comes up.
         public static void ConfigureBrain(GameObject root, RobotBrainMode mode, IModLogger logger)
         {
+            ApplyBrainMode(root, mode, null, logger);
+        }
+
+        // Runtime brain switch. Dormant = the proven spawn-time writes (also correct on a live robot). Autonomous
+        // = best-effort wake-up: restore the captured BehaviorTree flags (enable-all without a snapshot), restore
+        // the LLMAgent state fields, re-enable the LLM, and Reset() so the agent re-enters its native loop.
+        public static void ApplyBrainMode(GameObject root, RobotBrainMode mode, BrainStateSnapshot? original, IModLogger logger)
+        {
             if (mode == RobotBrainMode.Autonomous)
             {
+                WakeBrain(root, original, logger);
                 return;
             }
 
@@ -134,6 +183,119 @@ namespace Robotopia.RobotKit
                 {
                     MakeAgentDormant(component, logger);
                 }
+            }
+        }
+
+        private static void WakeBrain(GameObject root, BrainStateSnapshot? original, IModLogger logger)
+        {
+            try
+            {
+                foreach (var component in root.GetComponentsInChildren<Component>(true))
+                {
+                    if (component is Behaviour behaviour && IsNamed(component, "BehaviorTree"))
+                    {
+                        var enabled = true;
+                        if (original != null)
+                        {
+                            foreach (var (tree, wasEnabled) in original.BehaviorTrees)
+                            {
+                                if (ReferenceEquals(tree, behaviour))
+                                {
+                                    enabled = wasEnabled;
+                                    break;
+                                }
+                            }
+                        }
+
+                        behaviour.enabled = enabled;
+                    }
+                    else if (IsNamed(component, "LLMAgent"))
+                    {
+                        WakeAgent(component, original, logger);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.Debug("RobotKit could not wake the LLM agent: " + ex.Message);
+            }
+        }
+
+        private static void WakeAgent(Component agent, BrainStateSnapshot? original, IModLogger logger)
+        {
+            var type = agent.GetType();
+
+            // Re-enable the LLM first (mirror of the dormant writes), preferring the captured original values.
+            if (!SetFieldIfPresent(type, agent, "llmDisabled", original?.LlmDisabled ?? false))
+            {
+                var enableTestMode = type.GetMethod("EnableTestMode", InstanceFlags);
+                try
+                {
+                    enableTestMode?.Invoke(agent, new object[] { true });
+                }
+                catch (Exception ex)
+                {
+                    logger.Debug("RobotKit could not re-enable the LLM: " + ex.Message);
+                }
+            }
+
+            var initialState = original?.InitialState ?? FirstNonStandbyState();
+            if (initialState != null)
+            {
+                SetFieldIfPresent(type, agent, "initialState", initialState);
+                SetFieldIfPresent(type, agent, "state", original?.State ?? initialState);
+            }
+
+            // Best-effort: Reset() re-runs the agent's initial-state entry so it starts thinking again.
+            Invoke(agent, "Reset", logger);
+        }
+
+        // The native default state to fall back to when no snapshot exists: the enum's first non-Standby value.
+        private static object? FirstNonStandbyState()
+        {
+            if (AgentStateType == null)
+            {
+                return null;
+            }
+
+            try
+            {
+                foreach (var value in Enum.GetValues(AgentStateType))
+                {
+                    if (!string.Equals(value?.ToString(), "Standby", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return value;
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            return null;
+        }
+
+        // Is this object (prefab or live instance) a game robot? Cheap type-based check with a name-walk fallback;
+        // used to keep robots out of prop catalogs.
+        public static bool HasRobotBody(GameObject root)
+        {
+            if (root == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                if (RobotBodyType != null)
+                {
+                    return root.GetComponentInChildren(RobotBodyType, true) != null;
+                }
+
+                return HasComponent(root, "RobotBody");
+            }
+            catch
+            {
+                return false;
             }
         }
 

@@ -339,6 +339,56 @@ namespace Robotopia.Worlds
             }
         }
 
+        /// <summary>The live player's transform via <c>PlayerController.FindPlayer()</c>, or null.</summary>
+        public Transform? GetPlayerTransform()
+        {
+            try
+            {
+                var findPlayer = playerControllerType?.GetMethod("FindPlayer", PublicStatic, null, Type.EmptyTypes, null);
+                return findPlayer?.Invoke(null, null) is Component player ? player.transform : null;
+            }
+            catch (Exception ex)
+            {
+                logger.Debug("Worlds could not resolve the player transform: " + ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Moves the live player to a position (custom-world kill-plane respawn). A CharacterController is
+        /// disabled around the move so it does not fight the teleport, then re-enabled.
+        /// </summary>
+        public bool RepositionPlayer(Vector3 position)
+        {
+            try
+            {
+                var player = GetPlayerTransform();
+                if (player == null)
+                {
+                    return false;
+                }
+
+                var controller = player.GetComponent<CharacterController>();
+                if (controller != null)
+                {
+                    controller.enabled = false;
+                }
+
+                player.position = position;
+                if (controller != null)
+                {
+                    controller.enabled = true;
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                logger.Warn("Worlds could not reposition the player: " + ex.Message);
+                return false;
+            }
+        }
+
         /// <summary>
         /// Reads the player prefab the UGC play bootstrap would spawn, so we can spawn a fallback player if the
         /// game's bootstrap did not (e.g. its import step faulted). Returns null if the symbol is unavailable.

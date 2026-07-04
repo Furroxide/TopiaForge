@@ -21,6 +21,7 @@ namespace Robotopia.ModManager.Tests
             EasingEndpointsAndShape();
             RoundedRectCoverage();
             VirtualListMath();
+            PreviewFramingMath();
             WindowMath();
             LayerBandAllocation();
             Console.WriteLine("UiKitCoreTests passed.");
@@ -274,6 +275,45 @@ namespace Robotopia.ModManager.Tests
                 Lerp(color.G / max, 1f, 0.25f),
                 Lerp(color.B / max, 1f, 0.25f),
                 color.A);
+        }
+
+        private static void PreviewFramingMath()
+        {
+            // The offset is always a unit direction regardless of angle.
+            foreach (var (yaw, pitch) in new[] { (0f, 0f), (45f, 30f), (90f, 60f), (180f, -15f) })
+            {
+                var f = QwPreviewMath.Frame(1f, 1f, 1f, yaw, pitch, 1f);
+                var length = Math.Sqrt((f.OffsetX * f.OffsetX) + (f.OffsetY * f.OffsetY) + (f.OffsetZ * f.OffsetZ));
+                AssertNear((float)length, 1f, "offset unit length at yaw " + yaw + " pitch " + pitch);
+                Assert(f.FarPlane > f.NearPlane, "far beyond near at yaw " + yaw + " pitch " + pitch);
+                Assert(f.NearPlane > 0f, "positive near plane at yaw " + yaw + " pitch " + pitch);
+                Assert(f.Distance > 0f, "positive distance at yaw " + yaw + " pitch " + pitch);
+            }
+
+            // Head-on view of a unit cube (half-extents 1): the view must cover the
+            // full projected face exactly at margin 1.
+            var headOn = QwPreviewMath.Frame(1f, 1f, 1f, 0f, 0f, 1f);
+            AssertNear(headOn.OffsetX, 0f, "head-on offset x");
+            AssertNear(headOn.OffsetY, 0f, "head-on offset y");
+            AssertNear(headOn.OffsetZ, 1f, "head-on offset z");
+            AssertNear(headOn.OrthoHalfSize, 1f, "head-on ortho covers the face");
+
+            // Top-down view of a flat slab: height (y) contributes nothing on screen;
+            // the footprint (x/z) decides the framing.
+            var topDown = QwPreviewMath.Frame(2f, 0.001f, 3f, 0f, 90f, 1f);
+            AssertNear(topDown.OrthoHalfSize, 3f, "top-down framing follows the footprint");
+
+            // The three-quarter default view of a cube must cover at least the cube's
+            // own half-extent and scale linearly with the margin.
+            var threeQuarter = QwPreviewMath.Frame(1f, 1f, 1f, margin: 1f);
+            Assert(threeQuarter.OrthoHalfSize >= 1f, "three-quarter view covers the cube");
+            var withMargin = QwPreviewMath.Frame(1f, 1f, 1f, margin: 1.5f);
+            AssertNear(withMargin.OrthoHalfSize, threeQuarter.OrthoHalfSize * 1.5f, "margin scales the framing");
+
+            // Degenerate bounds (empty prefab) still produce a valid camera.
+            var empty = QwPreviewMath.Frame(0f, 0f, 0f);
+            Assert(empty.OrthoHalfSize >= QwPreviewMath.MinHalfSize, "degenerate bounds clamp to the minimum size");
+            Assert(empty.FarPlane > empty.NearPlane, "degenerate bounds keep a valid frustum");
         }
 
         private static void AssertHex(QwRgba color, byte r, byte g, byte b, string name)

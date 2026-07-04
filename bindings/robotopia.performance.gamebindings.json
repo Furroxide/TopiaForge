@@ -263,7 +263,7 @@
       "feature": "Disable Sentry trace sampling",
       "sourceRef": "mods/Robotopia.Performance/Appliers/PatchApplier.cs:238",
       "parameters": [],
-      "returnType": "System.Double",
+      "returnType": "System.Nullable<System.Double>",
       "contractValue": ""
     },
     {

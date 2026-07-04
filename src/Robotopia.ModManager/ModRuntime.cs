@@ -18,6 +18,7 @@ namespace Robotopia.ModManager
         private readonly string pluginAssemblyPath;
         private readonly HashSet<string> updateFailureLogged = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> sceneFailureLogged = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> failedMods = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         public ModRuntime(ManagerPaths paths, ManagerFileLogger logger)
         {
@@ -29,6 +30,12 @@ namespace Robotopia.ModManager
         }
 
         public IReadOnlyCollection<string> LoadedModIds => loadedMods.Select(m => m.Manifest.Id).ToList();
+
+        /// <summary>Why a mod in the load order did not come up (skip reason or exception), or null.</summary>
+        public string? GetLoadFailure(string id)
+        {
+            return failedMods.TryGetValue(id, out var reason) ? reason : null;
+        }
 
         public void Load(IEnumerable<ModPackage> orderedPackages)
         {
@@ -108,6 +115,7 @@ namespace Robotopia.ModManager
             loadedMods.Clear();
             updateFailureLogged.Clear();
             sceneFailureLogged.Clear();
+            failedMods.Clear();
             AppDomain.CurrentDomain.AssemblyResolve -= ResolveAssembly;
         }
 
@@ -115,15 +123,33 @@ namespace Robotopia.ModManager
         {
             if (!package.IsValid)
             {
+                var id = package.Manifest?.Id ?? Path.GetFileName(package.PackagePath);
+                var reasons = package.Errors.Count > 0 ? string.Join("; ", package.Errors) : "manifest or state missing";
+                failedMods[id] = reasons;
+                logger.Warn("Skipping invalid package " + id + " (" + package.PackagePath + "): " + reasons);
                 return;
             }
 
             var manifest = package.Manifest!;
+
+            // The resolver already validated dependencies at the manifest level, but a dependency can still
+            // fail at load time (e.g. a TypeLoadException from a binary-stale package). Running a dependent
+            // without its dependency's services produces a half-alive mod giving users wrong advice — skip
+            // it with an honest reason instead. Load order is topological, so dependencies are visited first.
+            var failedDependency = DependencyResolver.FindFailedRequiredDependency(manifest, failedMods.Keys);
+            if (failedDependency != null)
+            {
+                failedMods[manifest.Id] = "required dependency " + failedDependency + " failed to load";
+                logger.Warn("Skipping " + manifest.Id + ": required dependency " + failedDependency + " failed to load.");
+                return;
+            }
+
             try
             {
                 var assemblyPath = Path.Combine(package.PackagePath, manifest.EntryAssembly);
                 if (!File.Exists(assemblyPath))
                 {
+                    failedMods[manifest.Id] = "entry assembly not found";
                     logger.Warn("Skipping " + manifest.Id + ": entry assembly not found.");
                     return;
                 }
@@ -133,12 +159,14 @@ namespace Robotopia.ModManager
                 var type = assembly.GetType(manifest.EntryType, throwOnError: false);
                 if (type == null)
                 {
+                    failedMods[manifest.Id] = "entry type not found: " + manifest.EntryType;
                     logger.Warn("Skipping " + manifest.Id + ": entry type not found: " + manifest.EntryType);
                     return;
                 }
 
                 if (!typeof(IRobotopiaMod).IsAssignableFrom(type))
                 {
+                    failedMods[manifest.Id] = "entry type does not implement IRobotopiaMod";
                     logger.Warn("Skipping " + manifest.Id + ": entry type does not implement IRobotopiaMod.");
                     return;
                 }
@@ -151,6 +179,7 @@ namespace Robotopia.ModManager
             }
             catch (Exception ex)
             {
+                failedMods[manifest.Id] = ex.GetType().Name + ": " + ex.Message;
                 logger.Error(ex, "Failed to load mod " + manifest.Id + ".");
             }
         }

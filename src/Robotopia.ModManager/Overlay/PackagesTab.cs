@@ -38,7 +38,7 @@ namespace Robotopia.ModManager
 
             if (inbox.Count == 0)
             {
-                content.Label("The inbox is empty. Drop .robotopiamod files into the package-inbox folder or install by path.", QwTextStyle.Caption).Tone(QwTone.Muted);
+                content.Label("The inbox is empty. Dropped .robotopiamod files install automatically at launch, or install by path.", QwTextStyle.Caption).Tone(QwTone.Muted);
                 return;
             }
 
