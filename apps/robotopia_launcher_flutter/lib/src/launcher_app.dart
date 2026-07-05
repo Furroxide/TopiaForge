@@ -63,7 +63,7 @@ class LauncherShell extends StatelessWidget {
                         .add(LauncherSectionSelected(visibleSections[index])),
                     destinations: [
                       for (final section in visibleSections)
-                        _destinationFor(section),
+                        _destinationFor(section, state.availableModUpdateCount),
                     ],
                   ),
                   const VerticalDivider(width: 1),
@@ -89,7 +89,10 @@ class LauncherShell extends StatelessWidget {
   }
 }
 
-NavigationRailDestination _destinationFor(LauncherSection section) {
+NavigationRailDestination _destinationFor(
+  LauncherSection section,
+  int modUpdateCount,
+) {
   return switch (section) {
     LauncherSection.home => const NavigationRailDestination(
       icon: Icon(Icons.rocket_launch_outlined),
@@ -101,15 +104,15 @@ NavigationRailDestination _destinationFor(LauncherSection section) {
       selectedIcon: Icon(Icons.tune),
       label: Text('Setup'),
     ),
-    LauncherSection.mods => const NavigationRailDestination(
-      icon: Icon(Icons.extension_outlined),
-      selectedIcon: Icon(Icons.extension),
-      label: Text('Mods'),
+    LauncherSection.mods => NavigationRailDestination(
+      icon: _badgedModUpdateIcon(Icons.extension_outlined, modUpdateCount),
+      selectedIcon: _badgedModUpdateIcon(Icons.extension, modUpdateCount),
+      label: const Text('Mods'),
     ),
-    LauncherSection.browse => const NavigationRailDestination(
-      icon: Icon(Icons.travel_explore_outlined),
-      selectedIcon: Icon(Icons.travel_explore),
-      label: Text('Browse'),
+    LauncherSection.browse => NavigationRailDestination(
+      icon: _badgedModUpdateIcon(Icons.travel_explore_outlined, modUpdateCount),
+      selectedIcon: _badgedModUpdateIcon(Icons.travel_explore, modUpdateCount),
+      label: const Text('Browse'),
     ),
     LauncherSection.profiles => const NavigationRailDestination(
       icon: Icon(Icons.layers_outlined),
@@ -132,6 +135,19 @@ NavigationRailDestination _destinationFor(LauncherSection section) {
       label: Text('Settings'),
     ),
   };
+}
+
+Widget _badgedModUpdateIcon(IconData icon, int modUpdateCount) {
+  if (modUpdateCount <= 0) {
+    return Icon(icon);
+  }
+  return Badge.count(
+    count: modUpdateCount,
+    maxCount: 99,
+    backgroundColor: QuantumWorksPalette.warning,
+    textColor: QuantumWorksPalette.white,
+    child: Icon(icon),
+  );
 }
 
 class _TopBar extends StatelessWidget {
@@ -231,7 +247,7 @@ class _TopBar extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               FilledButton.icon(
-                onPressed: state.canLaunch && !state.isBusy
+                onPressed: state.canStartLaunchFlow && !state.isBusy
                     ? () => bloc.add(const GameLaunchRequested())
                     : null,
                 style: FilledButton.styleFrom(
@@ -263,6 +279,45 @@ class _StatusBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final install = state.gameInstall;
+    final bloc = context.read<LauncherBloc>();
+    final noInstall = install == null;
+    final setupBlocked = install != null && !install.canLaunch;
+    final needsRepair = install?.needsRepair == true && !setupBlocked;
+    final label = noInstall
+        ? 'No game selected'
+        : setupBlocked
+        ? 'Setup needed'
+        : needsRepair
+        ? 'Repair needed'
+        : 'Runtime ready';
+    final tone = noInstall
+        ? StatusTone.neutral
+        : setupBlocked
+        ? StatusTone.danger
+        : needsRepair
+        ? StatusTone.warning
+        : StatusTone.good;
+    final icon = noInstall
+        ? Icons.folder_off
+        : setupBlocked
+        ? Icons.error
+        : needsRepair
+        ? Icons.build
+        : Icons.check_circle;
+    final VoidCallback? action = state.isBusy
+        ? null
+        : noInstall || setupBlocked
+        ? () => bloc.add(const LauncherSectionSelected(LauncherSection.setup))
+        : needsRepair
+        ? () => bloc.add(const RuntimeRepaired())
+        : null;
+    final tooltip = noInstall
+        ? 'Open Setup to select a Robotopia install.'
+        : setupBlocked
+        ? 'Open Setup to resolve the game install issue.'
+        : needsRepair
+        ? 'Repair the runtime now.'
+        : null;
     return Container(
       height: 34,
       padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -275,21 +330,11 @@ class _StatusBar extends StatelessWidget {
       child: Row(
         children: [
           StatusPill(
-            label: install == null
-                ? 'No game selected'
-                : install.needsRepair
-                ? 'Repair needed'
-                : 'Runtime ready',
-            tone: install == null
-                ? StatusTone.neutral
-                : install.needsRepair
-                ? StatusTone.warning
-                : StatusTone.good,
-            icon: install == null
-                ? Icons.folder_off
-                : install.needsRepair
-                ? Icons.build
-                : Icons.check_circle,
+            label: label,
+            tone: tone,
+            icon: icon,
+            tooltip: tooltip,
+            onPressed: action,
           ),
           const SizedBox(width: 10),
           Expanded(

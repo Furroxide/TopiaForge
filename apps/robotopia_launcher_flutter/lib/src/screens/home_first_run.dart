@@ -1,5 +1,7 @@
 part of '../screens.dart';
 
+/// The very first thing a new user sees: no game detected yet, so everything
+/// funnels into one friendly action.
 class _HomeFirstRun extends StatelessWidget {
   const _HomeFirstRun({required this.state});
 

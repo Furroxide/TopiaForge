@@ -18,7 +18,7 @@ class _FakeLauncherRepository implements LauncherRepository {
              launcherUpdates: const LauncherUpdateSettings(enabled: false),
              developerMode: developerMode,
            );
-  final LauncherSnapshot _snapshot;
+  LauncherSnapshot _snapshot;
   int restartCount = 0;
   int installOrRepairRuntimeCount = 0;
   final launchedProfileIds = <String>[];
@@ -36,6 +36,21 @@ class _FakeLauncherRepository implements LauncherRepository {
   @override
   Future<RepairReport> installOrRepairRuntime(GameInstall install) async {
     installOrRepairRuntimeCount += 1;
+    final current = _snapshot.gameInstall;
+    if (current != null) {
+      _snapshot = _replaceGameInstall(
+        _snapshot,
+        GameInstall(
+          path: current.path,
+          executablePath: current.executablePath,
+          bepInExStatus: ComponentState.ready,
+          loaderStatus: ComponentState.ready,
+          layout: current.layout,
+          issues: current.issues,
+          compatStatus: current.compatStatus,
+        ),
+      );
+    }
     return const RepairReport(actions: ['Runtime repaired.'], issues: []);
   }
 
@@ -437,85 +452,21 @@ class _FakeDeveloperRepository implements DeveloperRepository {
   }
 }
 
-/// A detected, launchable install. [needsRepair] flips the loader to missing
-/// so Home renders its "Almost ready" state.
-LauncherSnapshot _readySnapshot({
-  bool needsRepair = false,
-  List<RegistryMod> registryMods = const [],
-  List<LauncherProfile>? profiles,
-  String selectedProfileId = 'default',
-}) {
+LauncherSnapshot _replaceGameInstall(
+  LauncherSnapshot snapshot,
+  GameInstall? install,
+) {
   return LauncherSnapshot(
-    gameInstall: GameInstall(
-      path: 'C:\\Games\\Robotopia',
-      executablePath: 'C:\\Games\\Robotopia\\Robotopia.exe',
-      bepInExStatus: ComponentState.ready,
-      loaderStatus: needsRepair
-          ? ComponentState.missing
-          : ComponentState.ready,
-    ),
-    profiles: profiles ?? [LauncherProfile.defaultProfile()],
-    selectedProfileId: selectedProfileId,
-    installedMods: const [],
-    registryMods: registryMods,
-    packageSources: const [],
-    worldCatalog: WorldCatalog.fallback(),
-    legacyMods: const [],
-    recentLog: '',
-    launcherUpdates: const LauncherUpdateSettings(enabled: false),
-  );
-}
-
-LauncherSnapshot _updateSnapshot() {
-  final installedManifest = _manifest('timer.mod', version: '1.0.0');
-  final registryManifest = _manifest('timer.mod', version: '1.1.0');
-  return LauncherSnapshot(
-    gameInstall: const GameInstall(
-      path: 'C:\\Games\\Robotopia',
-      executablePath: 'C:\\Games\\Robotopia\\Robotopia.exe',
-      bepInExStatus: ComponentState.ready,
-      loaderStatus: ComponentState.ready,
-    ),
-    profiles: [LauncherProfile.defaultProfile()],
-    selectedProfileId: 'default',
-    installedMods: [
-      InstalledMod(
-        id: installedManifest.id,
-        name: installedManifest.name,
-        version: installedManifest.version,
-        enabled: true,
-        restartRequired: true,
-        uninstallPending: false,
-        packagePath: 'C:\\Games\\Robotopia\\BepInEx\\RobotopiaModManager',
-        manifest: installedManifest,
-      ),
-    ],
-    registryMods: [
-      RegistryMod(
-        manifest: registryManifest,
-        downloadUrl: Uri.file(
-          'C:\\packages\\timer-1.1.0.robotopiamod',
-          windows: true,
-        ).toString(),
-        installedVersion: installedManifest.version,
-      ),
-    ],
-    packageSources: const [],
-    worldCatalog: WorldCatalog.fallback(),
-    legacyMods: const [],
-    recentLog: '',
-    launcherUpdates: const LauncherUpdateSettings(enabled: false),
-  );
-}
-
-ModManifest _manifest(String id, {required String version}) {
-  return ModManifest(
-    schemaVersion: 2,
-    id: id,
-    name: 'Timer Mod',
-    version: version,
-    author: const ModAuthor(name: 'QuantumWorks'),
-    entryAssembly: 'Timer.dll',
-    entryType: 'Timer.Entry',
+    gameInstall: install,
+    profiles: snapshot.profiles,
+    selectedProfileId: snapshot.selectedProfileId,
+    installedMods: snapshot.installedMods,
+    registryMods: snapshot.registryMods,
+    packageSources: snapshot.packageSources,
+    worldCatalog: snapshot.worldCatalog,
+    legacyMods: snapshot.legacyMods,
+    recentLog: snapshot.recentLog,
+    launcherUpdates: snapshot.launcherUpdates,
+    developerMode: snapshot.developerMode,
   );
 }
