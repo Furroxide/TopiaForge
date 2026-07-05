@@ -87,7 +87,8 @@ robotopia launch
 ```
 
 If the game isn't auto-detected, set the `ROBOTOPIA_GAME_DIR` environment variable to your game folder and
-retry (`robotopia doctor` shows what was detected).
+retry (`robotopia doctor` shows what was detected). [Troubleshooting.md](Troubleshooting.md) covers the
+per-platform paths, shell pitfalls, and `--game-dir`.
 
 ## 5. See it in game
 
@@ -107,6 +108,12 @@ robotopia mod set version 0.2.0
 robotopia mod add tag physics
 robotopia mod add dependency robotopia.worlds@">=0.3.0"
 ```
+
+## 7. Publish it
+
+Worth sharing? Publish it to the official registry so it shows up in everyone's launcher: validate to zero
+findings, pack, host the file, and open a registry PR. The full walkthrough is
+[PublishingYourMod.md](PublishingYourMod.md).
 
 ## Where next
 

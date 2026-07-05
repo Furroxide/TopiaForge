@@ -11,14 +11,33 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
     );
   }
 
-  Future<List<RegistryMod>> _loadRegistryMods(
-    List<PackageSource> sources,
-  ) async {
+  /// Loads every enabled source, degrading a failed source to a non-blocking
+  /// issue instead of failing the whole resolve — an offline machine must
+  /// still resolve against the bundled local packages. Failed built-ins
+  /// (e.g. the official registry before its first deploy, or with no
+  /// network) are info-level; a user-added source that fails is a warning.
+  Future<({List<RegistryMod> mods, List<LauncherIssue> issues})>
+  _loadRegistryModsGuarded(List<PackageSource> sources) async {
     final mods = <RegistryMod>[];
+    final issues = <LauncherIssue>[];
     for (final source in sources.where((item) => item.enabled)) {
-      mods.addAll(await _loadRegistrySource(source));
+      try {
+        mods.addAll(await _loadRegistrySource(source));
+      } on Object catch (error) {
+        issues.add(
+          LauncherIssue(
+            severity: source.builtIn
+                ? IssueSeverity.info
+                : IssueSeverity.warning,
+            subjectId: source.id,
+            message:
+                'Package source ${source.id} is unavailable ($error); '
+                'resolution used the remaining sources.',
+          ),
+        );
+      }
     }
-    return mods;
+    return (mods: mods, issues: issues);
   }
 
   Future<List<RegistryMod>> _loadRegistrySource(PackageSource source) async {
@@ -41,7 +60,10 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
   Directory? _resolveDirectorySource(PackageSource source) {
     final uri = Uri.tryParse(source.url);
     String? path;
-    if (uri != null && uri.scheme == 'file') {
+    if (_isWindowsPathLike(source.url)) {
+      // A drive-letter path parses as URI scheme "c"; treat it as a path.
+      path = source.url;
+    } else if (uri != null && uri.scheme == 'file') {
       path = uri.toFilePath(windows: Platform.isWindows);
     } else if (uri == null || !uri.hasScheme) {
       path = source.url;
@@ -110,7 +132,18 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
     return candidateVersion.compareTo(currentVersion) > 0;
   }
 
+  bool _isWindowsPathLike(String value) {
+    return RegExp(r'^[A-Za-z]:[\\/]').hasMatch(value) ||
+        value.startsWith(r'\\');
+  }
+
   Future<_SourceDocument> _readSourceDocument(PackageSource source) async {
+    if (_isWindowsPathLike(source.url)) {
+      return _SourceDocument(
+        content: await File(source.url).readAsString(),
+        baseUri: Uri.file(p.dirname(source.url)),
+      );
+    }
     final uri = Uri.tryParse(source.url);
     if (uri != null && uri.scheme == 'file') {
       final path = uri.toFilePath(windows: Platform.isWindows);
@@ -120,16 +153,23 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
       );
     }
     if (uri != null && uri.scheme == 'https') {
-      final client = HttpClient();
+      // Bounded so a hung host can never stall resolve/restore — a dead
+      // source degrades to a non-blocking workspace issue instead.
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 15);
       try {
-        final response = await (await client.getUrl(uri)).close();
+        final response = await (await client.getUrl(
+          uri,
+        )).close().timeout(const Duration(seconds: 30));
         if (response.statusCode < 200 || response.statusCode >= 300) {
           throw StateError(
             'HTTP ${response.statusCode} while reading ${source.url}.',
           );
         }
         return _SourceDocument(
-          content: await utf8.decodeStream(response),
+          content: await utf8
+              .decodeStream(response)
+              .timeout(const Duration(seconds: 30)),
           baseUri: uri,
         );
       } finally {

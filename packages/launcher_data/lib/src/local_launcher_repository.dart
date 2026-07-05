@@ -14,6 +14,7 @@ part 'local_launcher_repository/package_installation_helpers.dart';
 part 'local_launcher_repository/package_helpers.dart';
 part 'local_launcher_repository/path_helpers.dart';
 part 'local_launcher_repository/process_helpers.dart';
+part 'local_launcher_repository/registry_source_helpers.dart';
 part 'local_launcher_repository/runtime_repair_helpers.dart';
 part 'local_launcher_repository/storage_helpers.dart';
 
@@ -318,11 +319,16 @@ class LocalLauncherRepository implements LauncherRepository {
     GameInstall install,
     LauncherProfile profile,
   ) async {
-    await _writeWorldSelection(install, profile.worldSelection);
+    final prepared = await _prepareRuntimeForLaunch(install);
+    if (prepared.failure != null) {
+      return prepared.failure!;
+    }
+    final launchInstall = prepared.install!;
+    await _writeWorldSelection(launchInstall, profile.worldSelection);
     final message = profile.launchSettings.safeMode
         ? 'Launched Robotopia in safe mode. All mods were disabled first.'
         : 'Launched Robotopia.';
-    return _startGame(install, profile, message: message);
+    return _startGame(launchInstall, profile, message: message);
   }
 
   @override
@@ -330,8 +336,13 @@ class LocalLauncherRepository implements LauncherRepository {
     GameInstall install,
     LauncherProfile profile,
   ) async {
-    await _writeWorldSelection(install, profile.worldSelection);
     final stopped = await _stopGameIfRunning(install);
+    final prepared = await _prepareRuntimeForLaunch(install);
+    if (prepared.failure != null) {
+      return prepared.failure!;
+    }
+    final launchInstall = prepared.install!;
+    await _writeWorldSelection(launchInstall, profile.worldSelection);
     final message = switch ((stopped, profile.launchSettings.safeMode)) {
       (true, true) =>
         'Restarted Robotopia in safe mode. All mods were disabled first.',
@@ -340,7 +351,7 @@ class LocalLauncherRepository implements LauncherRepository {
         'Started Robotopia in safe mode. No running process was found.',
       (false, false) => 'Started Robotopia. No running process was found.',
     };
-    return _startGame(install, profile, message: message);
+    return _startGame(launchInstall, profile, message: message);
   }
 
   @override

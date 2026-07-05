@@ -297,6 +297,8 @@ class LauncherSnapshot {
     this.gameInstall,
     this.launcherUpdates = const LauncherUpdateSettings(),
     this.developerMode = false,
+    this.sourceStatuses = const [],
+    this.launcherLog = '',
   });
 
   final GameInstall? gameInstall;
@@ -313,4 +315,11 @@ class LauncherSnapshot {
   /// Opt-in developer mode. Off by default so the launcher is a clean install-and-play app for the majority of
   /// users, who never build a mod. When on, the Developer tab (project tools, UGC live-sync) is revealed.
   final bool developerMode;
+
+  /// Per-source load health from the most recent catalog load (enabled
+  /// sources only). Empty until the repository wires it through.
+  final List<PackageSourceStatus> sourceStatuses;
+
+  /// Tail of the launcher's own log, for in-app diagnostics.
+  final String launcherLog;
 }

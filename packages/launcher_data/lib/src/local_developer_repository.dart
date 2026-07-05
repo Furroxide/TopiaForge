@@ -23,8 +23,7 @@ class LocalDeveloperRepository implements DeveloperRepository {
     DeveloperProjectResolver resolver = const DeveloperProjectResolver(),
   }) : _dataRoot = Directory(dataRoot ?? _defaultDeveloperDataRoot()),
        _repositoryRoot = Directory(
-         repositoryRoot ?? _findDeveloperRepoRoot(workingDirectory),
-       ),
+         repositoryRoot ?? _findDeveloperRepoRoot(workingDirectory)),
        _resolver = resolver;
 
   final Directory _dataRoot;
@@ -82,8 +81,7 @@ class LocalDeveloperRepository implements DeveloperRepository {
     if (root.existsSync()) {
       throw StateError('Project already exists: ${root.path}');
     }
-    // Live sync implies the Unity companion — that is where the authoring loop lives. Some templates (asset)
-    // scaffold it by default too.
+    // Live sync implies the Unity companion; some templates scaffold it too.
     final templates = await _listModTemplates();
     final templateInfo = templates.firstWhere(
       (template) => template.id == options.template,
@@ -122,12 +120,11 @@ class LocalDeveloperRepository implements DeveloperRepository {
     await _writeProject(root.path, project);
     await _scaffoldModFromTemplate(root.path, id, name, options, withCompanion);
     await _ensureProjectGitignore(root.path);
-    // Track the new project in the VCC-style registry (best-effort: a registry write failure must not fail the
-    // creation — the project files are valid and can be re-added later).
+    // Registry writes are best-effort; project files stay valid if this fails.
     try {
       await _registerProject(root.path);
     } on Object {
-      // ignore — registration is non-essential to a successfully scaffolded project.
+      // ignore: registration is non-essential.
     }
     return loadDeveloperWorkspace(projectPath: root.path);
   }
@@ -140,13 +137,16 @@ class LocalDeveloperRepository implements DeveloperRepository {
   }) async {
     final root = _requireProjectRoot(projectPath);
     final project = await _readProject(root.path);
+    // Resolve is a build step, so its default source set stays local and
+    // offline-deterministic. The official registry participates when a
+    // project opts in: `robotopia add source official <url>`.
     final sources = project.packageSources.isEmpty
         ? [_localSource()]
         : project.packageSources;
-    final registryMods = await _loadRegistryMods(sources);
+    final loaded = await _loadRegistryModsGuarded(sources);
     final resolution = _resolver.resolve(
       project,
-      registryMods,
+      loaded.mods,
       includePrerelease: includePrerelease,
     );
     var lock = resolution.lock;
@@ -161,7 +161,7 @@ class LocalDeveloperRepository implements DeveloperRepository {
       project: project,
       lock: lock,
       generatedPropsPath: p.join(root.path, 'robotopia.dev.props'),
-      issues: resolution.issues,
+      issues: [...loaded.issues, ...resolution.issues],
     );
   }
 
@@ -220,6 +220,25 @@ class LocalDeveloperRepository implements DeveloperRepository {
       createdProjects: created,
       issues: issues,
     );
+  }
+
+  /// Registry mods from the project's configured package sources (or the
+  /// bundled local source when no project/sources exist). Failed sources are
+  /// skipped, mirroring [resolveDeveloperProject]'s non-blocking behavior.
+  /// Deliberately not on [DeveloperRepository] yet — the CLI consumes the
+  /// concrete type, and widening the interface breaks external fakes.
+  Future<List<RegistryMod>> loadConfiguredRegistryMods({
+    String? projectPath,
+  }) async {
+    final root = _findProjectRoot(projectPath ?? Directory.current.path);
+    var sources = [_localSource()];
+    if (root != null) {
+      final project = await _readProject(root.path);
+      if (project.packageSources.isNotEmpty) {
+        sources = project.packageSources;
+      }
+    }
+    return (await _loadRegistryModsGuarded(sources)).mods;
   }
 
   @override

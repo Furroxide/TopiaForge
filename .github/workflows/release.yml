@@ -205,6 +205,17 @@ jobs:
           path: release-artifacts/${{ matrix.asset }}
           if-no-files-found: error
 
+      # One canonical byte-set for the mod registry: per-platform packs are
+      # byte-different, so only the linux leg's dist/ feeds the release assets
+      # the registry index hashes and links.
+      - name: Upload mod packages artifact
+        if: matrix.platform == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mod-packages
+          path: dist/*.robotopiamod
+          if-no-files-found: error
+
   publish-release:
     name: Publish GitHub Release assets
     needs: build
@@ -236,6 +247,12 @@ jobs:
           pattern: QuantumWorks-*.zip
           merge-multiple: true
 
+      - name: Download mod packages
+        uses: actions/download-artifact@v4
+        with:
+          name: mod-packages
+          path: mod-packages
+
       - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -245,11 +262,19 @@ jobs:
             gh release create "$TAG" --title "$TAG" --notes "QuantumWorks release $TAG"
           fi
           gh release upload "$TAG" release-assets/*.zip --clobber
+          # Standalone mod packages back the registry index's download URLs.
+          gh release upload "$TAG" mod-packages/*.robotopiamod --clobber
 
   deploy-index:
-    name: Deploy launcher update index
+    name: Deploy launcher update + mod registry indexes
     needs: publish-release
     runs-on: ubuntu-latest
+    # A Pages deploy replaces the whole site, so every deploy (here and in
+    # deploy-launcher-updates.yml) must build BOTH indexes, and the two
+    # workflows serialize on the shared "pages" group.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -275,6 +300,17 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LAUNCHER_UPDATE_BASE_URL: ${{ vars.LAUNCHER_UPDATE_BASE_URL }}
         run: dart run robotopia updates index --repository "$GITHUB_REPOSITORY" --output "../../_site"
+
+      - name: Build mod registry index
+        working-directory: apps/robotopia_cli
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          dart run robotopia registry index
+          --repository "$GITHUB_REPOSITORY"
+          --entries ../../registry
+          --changelogs ../../mods
+          --output ../../_site/registry
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
