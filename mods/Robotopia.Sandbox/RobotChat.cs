@@ -31,6 +31,7 @@ namespace Robotopia.Sandbox
         private readonly IRobotConversationService conversations;
         private readonly IRobotObjectiveService objectives;
         private readonly IPlayerDialogueInputService? dialogueInput;
+        private readonly Func<string, IRobotAgent?>? findRobotByTargetName; // for "what is ROBOT 2 doing" facts
 
         private Ui.RobotChatWindow? window;
         private IRobotConversation? conversation;
@@ -42,6 +43,9 @@ namespace Robotopia.Sandbox
         private bool acceptedAutonomous;
         private readonly System.Collections.Generic.List<string> offeredTargets =
             new System.Collections.Generic.List<string>();
+        private readonly System.Collections.Generic.List<string> offeredRobotTargets =
+            new System.Collections.Generic.List<string>();
+        private string selfTargetName = string.Empty;
         private int processedTurns;
         private string reply = string.Empty;
         private string status = string.Empty;
@@ -57,7 +61,8 @@ namespace Robotopia.Sandbox
             IRobotAgentService robots,
             IRobotConversationService conversations,
             IRobotObjectiveService objectives,
-            IPlayerDialogueInputService? dialogueInput)
+            IPlayerDialogueInputService? dialogueInput,
+            Func<string, IRobotAgent?>? findRobotByTargetName = null)
         {
             this.context = context;
             this.config = config;
@@ -66,6 +71,7 @@ namespace Robotopia.Sandbox
             this.conversations = conversations;
             this.objectives = objectives;
             this.dialogueInput = dialogueInput;
+            this.findRobotByTargetName = findRobotByTargetName;
         }
 
         public bool IsOpen => open;
@@ -114,20 +120,31 @@ namespace Robotopia.Sandbox
             objectives.ClearObjective(target);
             target.SetBrainMode(RobotBrainMode.Dormant);
 
-            // The robot must not be offered itself as a target ("follow yourself" is nonsense).
+            // The robot must not be offered itself as a target ("follow yourself" is nonsense); its own name is
+            // handed over separately, resolvable only as a delivered task's target ("tell it to follow you").
             offeredTargets.Clear();
+            offeredRobotTargets.Clear();
             foreach (var name in objectives.TargetNames)
             {
-                if (!string.Equals(name, ownTargetName, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(name, ownTargetName, StringComparison.OrdinalIgnoreCase))
                 {
-                    offeredTargets.Add(name);
+                    continue;
+                }
+
+                offeredTargets.Add(name);
+                if (objectives.TryGetTargetInfo(name, out var info) && info.Kind == RobotTargetKind.Robot)
+                {
+                    offeredRobotTargets.Add(name); // the closed set REPROGRAM recipients come from
                 }
             }
+
+            selfTargetName = ownTargetName ?? string.Empty;
 
             conversation = conversations.BeginConversation(RobotProgramDirector.BuildRequest(
                 robotName,
                 previousProgram?.Describe() ?? string.Empty,
                 offeredTargets,
+                string.IsNullOrWhiteSpace(selfTargetName) ? null : selfTargetName,
                 DescribeOfferedTargets,
                 config.ChatMaxTurns,
                 config.ChatTemperature));
@@ -270,10 +287,28 @@ namespace Robotopia.Sandbox
                 return;
             }
 
+            // The robot's face plays along with its line (best-effort native garnish, CHAT turns included). The
+            // expression is derived from the decision rather than an LLM output field — a fourth structured field
+            // would exceed the backend's 5-output cap and fail the whole turn.
+            var emote = RobotProgramDirector.EmoteForDecision(conversation.LastDecision);
+            if (!string.IsNullOrEmpty(emote))
+            {
+                agent?.SetEmote(emote);
+            }
+
             conversation.LastValues.TryGetValue(RobotProgramDirector.TargetField, out var target);
+            conversation.LastValues.TryGetValue(RobotProgramDirector.ProgramField, out var program);
+            conversation.LastValues.TryGetValue(RobotProgramDirector.ProgramTargetField, out var programTarget);
             // Parse against the OFFERED (own-name-filtered) list — the full registry would let the robot be
-            // programmed to follow itself.
-            var result = RobotProgramDirector.Parse(conversation.LastDecision, target, offeredTargets);
+            // programmed to follow itself; its own name resolves only inside a delivered task.
+            var result = RobotProgramDirector.Parse(
+                conversation.LastDecision,
+                target,
+                program,
+                programTarget,
+                offeredTargets,
+                offeredRobotTargets,
+                string.IsNullOrWhiteSpace(selfTargetName) ? null : selfTargetName);
             if (result.IsChat)
             {
                 status = result.Problem ?? string.Empty;
@@ -381,6 +416,8 @@ namespace Robotopia.Sandbox
             acceptedProgram = null;
             acceptedAutonomous = false;
             offeredTargets.Clear();
+            offeredRobotTargets.Clear();
+            selfTargetName = string.Empty;
             processedTurns = 0;
             open = false;
 
@@ -389,6 +426,8 @@ namespace Robotopia.Sandbox
 
             if (target != null && target.IsAlive)
             {
+                target.SetEmote(string.Empty); // best-effort: drop any chat-time expression
+
                 if (applyProgram && goAutonomous)
                 {
                     // Set free: no mod objective; hand the robot back to its own native brain.
@@ -406,19 +445,25 @@ namespace Robotopia.Sandbox
                 }
                 else if (restorePrevious)
                 {
-                    // LEAVE: put back what the chat suspended — the program and the robot's own brain.
-                    if (restore != null)
+                    // LEAVE: put back what the chat suspended — the program and the robot's own brain. Unless a
+                    // courier delivered a program to THIS robot mid-chat: Begin cleared its objective, so any
+                    // objective present now arrived by delivery, and the delivery beats the stale restore.
+                    if (objectives.GetObjective(target) == null)
                     {
-                        objectives.SetObjective(target, restore);
-                    }
+                        if (restore != null)
+                        {
+                            objectives.SetObjective(target, restore);
+                        }
 
-                    target.SetBrainMode(restoreBrainMode);
+                        target.SetBrainMode(restoreBrainMode);
+                    }
                 }
             }
         }
 
-        // Per-turn "who/what/where" lines for every offered target, from the robot's current position — the
-        // ground truth that lets it follow another robot or answer "where is X?" instead of guessing at names.
+        // Per-turn "who/what/where/doing-what" lines for every offered target, from the robot's current position —
+        // the ground truth that lets it follow another robot, answer "where is X?", or reason about what the rest
+        // of the fleet is up to instead of guessing at names.
         private System.Collections.Generic.IReadOnlyList<string> DescribeOfferedTargets()
         {
             var described = new System.Collections.Generic.List<string>(offeredTargets.Count);
@@ -439,7 +484,19 @@ namespace Robotopia.Sandbox
                 var snapshot = objectives.TryResolveTarget(name, out var resolved)
                     ? resolved
                     : (RobotTargetSnapshot?)null;
-                described.Add(name + ": " + RobotTargetFacts.Describe(info, snapshot, from));
+
+                // Robot targets also carry their current activity ("currently: FOLLOW PLAYER (moving)").
+                string? activity = null;
+                if (info.Kind == RobotTargetKind.Robot)
+                {
+                    var other = findRobotByTargetName?.Invoke(name);
+                    if (other != null && other.IsAlive)
+                    {
+                        activity = RobotProgramDirector.DescribeActivity(other.BrainMode, objectives.GetObjective(other));
+                    }
+                }
+
+                described.Add(name + ": " + RobotTargetFacts.Describe(info, snapshot, from, activity));
             }
 
             return described;

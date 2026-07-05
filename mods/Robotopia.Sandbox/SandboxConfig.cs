@@ -51,6 +51,20 @@ namespace Robotopia.Sandbox
         [DataMember(Name = "reprogramAutonomousRobots")]
         public bool ReprogramAutonomousRobots { get; set; } = true;
 
+        // Idle robots that pass close to each other exchange a quick greeting (emotes + a toast). Free — no
+        // brain tokens involved.
+        [DataMember(Name = "ambientGreetings")]
+        public bool AmbientGreetings { get; set; } = true;
+
+        // Upgrade greetings to a short LLM-generated exchange between the two robots. Each exchange spends one
+        // brain token, so this is opt-in.
+        [DataMember(Name = "ambientBanter")]
+        public bool AmbientBanter { get; set; } = false;
+
+        // Global minimum seconds between LLM banter exchanges (also stamped on failed attempts).
+        [DataMember(Name = "banterCooldownSeconds")]
+        public float BanterCooldownSeconds { get; set; } = 90f;
+
         // DataContractJsonSerializer bypasses the constructor (GetUninitializedObject), so absent members
         // would come up null/zero. Seed real defaults first; present members still override them.
         [OnDeserializing]
@@ -105,6 +119,11 @@ namespace Robotopia.Sandbox
             {
                 VoiceKey = "V";
             }
+
+            if (BanterCooldownSeconds < 30f || float.IsNaN(BanterCooldownSeconds))
+            {
+                BanterCooldownSeconds = 90f;
+            }
         }
 
         private void SeedDefaults()
@@ -120,6 +139,9 @@ namespace Robotopia.Sandbox
             ChatTemperature = 0.6f;
             VoiceKey = "V";
             ReprogramAutonomousRobots = true;
+            AmbientGreetings = true;
+            AmbientBanter = false;
+            BanterCooldownSeconds = 90f;
         }
     }
 }
