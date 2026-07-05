@@ -1,0 +1,275 @@
+name: Release package build
+
+on:
+  workflow_call:
+    inputs:
+      fail_on_missing_refs:
+        description: "Fail when managed-reference secrets are unavailable."
+        required: false
+        type: boolean
+        default: true
+      artifact_retention_days:
+        description: "Number of days to retain package artifacts."
+        required: false
+        type: number
+        default: 14
+    secrets:
+      ROBOTOPIA_REFS_URL:
+        required: false
+      ROBOTOPIA_REFS_SHA256:
+        required: false
+      ROBOTOPIA_REFS_TOKEN:
+        required: false
+      MACOS_CERTIFICATE_P12:
+        required: false
+      MACOS_CERTIFICATE_PASSWORD:
+        required: false
+      MACOS_DEVELOPER_ID_APPLICATION:
+        required: false
+      MACOS_NOTARY_APPLE_ID:
+        required: false
+      MACOS_NOTARY_PASSWORD:
+        required: false
+      MACOS_NOTARY_TEAM_ID:
+        required: false
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  preflight:
+    name: Verify release package inputs
+    runs-on: ubuntu-latest
+    outputs:
+      refs_available: ${{ steps.refs.outputs.available }}
+    steps:
+      - name: Check managed-reference secrets
+        id: refs
+        shell: bash
+        env:
+          ROBOTOPIA_REFS_URL: ${{ secrets.ROBOTOPIA_REFS_URL }}
+          ROBOTOPIA_REFS_SHA256: ${{ secrets.ROBOTOPIA_REFS_SHA256 }}
+        run: |
+          missing=()
+          if [[ -z "${ROBOTOPIA_REFS_URL}" ]]; then
+            missing+=("ROBOTOPIA_REFS_URL")
+          fi
+          if [[ -z "${ROBOTOPIA_REFS_SHA256}" ]]; then
+            missing+=("ROBOTOPIA_REFS_SHA256")
+          fi
+
+          if (( ${#missing[@]} > 0 )); then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            message="Release package builds require repo secrets: ${missing[*]}."
+            if [[ "${{ inputs.fail_on_missing_refs }}" == "true" ]]; then
+              echo "::error::$message"
+              exit 1
+            fi
+            echo "::warning::$message Skipping package dry run until they are configured."
+            exit 0
+          fi
+
+          echo "available=true" >> "$GITHUB_OUTPUT"
+
+  macos-cli-x64:
+    name: Build macOS x64 CLI
+    needs: preflight
+    if: needs.preflight.outputs.refs_available == 'true'
+    runs-on: macos-15-intel
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Build x64 CLI
+        working-directory: apps/robotopia_cli
+        run: |
+          dart pub get
+          dart compile exe bin/robotopia.dart -o "$RUNNER_TEMP/robotopia-macos-x64"
+          chmod +x "$RUNNER_TEMP/robotopia-macos-x64"
+
+      - name: Upload x64 CLI
+        uses: actions/upload-artifact@v4
+        with:
+          name: robotopia-macos-x64
+          path: ${{ runner.temp }}/robotopia-macos-x64
+          if-no-files-found: error
+          retention-days: ${{ inputs.artifact_retention_days }}
+
+  build:
+    name: Build ${{ matrix.platform }} package
+    needs:
+      - preflight
+      - macos-cli-x64
+    if: needs.preflight.outputs.refs_available == 'true'
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            runner: windows-latest
+            asset: QuantumWorks-windows-x64.zip
+          - platform: linux
+            runner: ubuntu-latest
+            asset: QuantumWorks-linux-x64.zip
+          - platform: macos
+            runner: macos-15
+            asset: QuantumWorks-macos-universal.zip
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install Linux desktop dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev zip unzip
+
+      - name: Restore Robotopia managed refs
+        shell: pwsh
+        env:
+          ROBOTOPIA_REFS_URL: ${{ secrets.ROBOTOPIA_REFS_URL }}
+          ROBOTOPIA_REFS_SHA256: ${{ secrets.ROBOTOPIA_REFS_SHA256 }}
+          ROBOTOPIA_REFS_TOKEN: ${{ secrets.ROBOTOPIA_REFS_TOKEN }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:ROBOTOPIA_REFS_URL)) {
+            throw "ROBOTOPIA_REFS_URL secret is required for release package builds."
+          }
+          if ([string]::IsNullOrWhiteSpace($env:ROBOTOPIA_REFS_SHA256)) {
+            throw "ROBOTOPIA_REFS_SHA256 secret is required for release package builds."
+          }
+
+          $archive = Join-Path $env:RUNNER_TEMP "robotopia-managed-refs.zip"
+          $headers = @{}
+          if (![string]::IsNullOrWhiteSpace($env:ROBOTOPIA_REFS_TOKEN)) {
+            $headers["Authorization"] = "Bearer $env:ROBOTOPIA_REFS_TOKEN"
+          }
+          Invoke-WebRequest -Uri $env:ROBOTOPIA_REFS_URL -Headers $headers -OutFile $archive
+
+          $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected = $env:ROBOTOPIA_REFS_SHA256.Trim().ToLowerInvariant()
+          if ($actual -ne $expected) {
+            throw "Robotopia refs SHA-256 mismatch. Expected $expected but got $actual."
+          }
+
+          $extract = Join-Path $env:RUNNER_TEMP "robotopia-managed-refs"
+          Expand-Archive -LiteralPath $archive -DestinationPath $extract -Force
+          $unity = Get-ChildItem -LiteralPath $extract -Recurse -Filter "UnityEngine.dll" -File |
+            Select-Object -First 1
+          if ($null -eq $unity) {
+            throw "Reference archive did not contain UnityEngine.dll."
+          }
+          $managed = Split-Path $unity.FullName -Parent
+          "RobotopiaManagedDir=$managed" >> $env:GITHUB_ENV
+          Write-Host "RobotopiaManagedDir=$managed"
+
+      # Proves the Dart-native scaffold + pack pipeline works on every OS before it feeds the release payload.
+      # Scaffolds inside the checkout (not RUNNER_TEMP) so the generated ProjectReference to
+      # src/Robotopia.Mods.Abstractions stays a same-drive relative path on Windows runners.
+      - name: Smoke test CLI scaffold and pack
+        shell: bash
+        working-directory: apps/robotopia_cli
+        run: |
+          dart pub get
+          dart run bin/robotopia.dart new mod ci.smoke --name "CI Smoke" --dir ../../.pack-smoke
+          dart run bin/robotopia.dart pack --project ../../.pack-smoke/ci.smoke --output "$RUNNER_TEMP/pack-smoke"
+
+      - name: Prepare macOS universal CLI
+        if: matrix.platform == 'macos'
+        uses: actions/download-artifact@v4
+        with:
+          name: robotopia-macos-x64
+          path: ${{ runner.temp }}/macos-x64-cli
+
+      - name: Combine macOS CLI architectures
+        if: matrix.platform == 'macos'
+        shell: bash
+        working-directory: apps/robotopia_cli
+        run: |
+          dart pub get
+          dart compile exe bin/robotopia.dart -o "$RUNNER_TEMP/robotopia-macos-arm64"
+          chmod +x "$RUNNER_TEMP/robotopia-macos-arm64"
+          chmod +x "$RUNNER_TEMP/macos-x64-cli/robotopia-macos-x64"
+          lipo -create \
+            "$RUNNER_TEMP/macos-x64-cli/robotopia-macos-x64" \
+            "$RUNNER_TEMP/robotopia-macos-arm64" \
+            -output "$RUNNER_TEMP/robotopia-macos-universal"
+          chmod +x "$RUNNER_TEMP/robotopia-macos-universal"
+          lipo -archs "$RUNNER_TEMP/robotopia-macos-universal"
+
+      - name: Build release package
+        shell: pwsh
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_DEVELOPER_ID_APPLICATION: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION }}
+          MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+          MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
+          MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+        run: |
+          $args = @(
+            "-Platform", "${{ matrix.platform }}",
+            "-OutputRoot", (Join-Path $env:GITHUB_WORKSPACE "release-artifacts"),
+            "-Configuration", "Release"
+          )
+          if ("${{ matrix.platform }}" -eq "macos") {
+            $args += @("-PrebuiltCli", (Join-Path $env:RUNNER_TEMP "robotopia-macos-universal"))
+          }
+          & ./tools/package-distribution.ps1 @args
+
+      - name: Smoke test release package
+        shell: pwsh
+        run: |
+          $args = @(
+            "-Platform", "${{ matrix.platform }}",
+            "-ZipPath", (Join-Path (Join-Path $env:GITHUB_WORKSPACE "release-artifacts") "${{ matrix.asset }}")
+          )
+          if ("${{ matrix.platform }}" -eq "macos") {
+            $args += "-RequireMacUniversal"
+          }
+          & ./tools/test-release-package.ps1 @args
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: release-artifacts/${{ matrix.asset }}
+          if-no-files-found: error
+          retention-days: ${{ inputs.artifact_retention_days }}
+
+      # One canonical byte-set for the mod registry: per-platform packs are
+      # byte-different, so only the linux leg's dist/ feeds the release assets
+      # the registry index hashes and links.
+      - name: Upload mod packages artifact
+        if: matrix.platform == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mod-packages
+          path: dist/*.robotopiamod
+          if-no-files-found: error
+          retention-days: ${{ inputs.artifact_retention_days }}
