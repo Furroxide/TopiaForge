@@ -44,7 +44,7 @@ jobs:
           fi
 
           if (( ${#missing[@]} > 0 )); then
-            echo "::error::Release publishing requires repo secrets: ${missing[*]}."
+            echo "::error::Release publishing requires managed-reference repo secrets: ${missing[*]}. macOS signing and notarization secrets are optional."
             exit 1
           fi
 
@@ -88,14 +88,15 @@ jobs:
             echo "::error::Could not read apps/robotopia_cli/pubspec.yaml version."
             exit 1
           fi
+          release_base="${release_version%%+*}"
 
           check_version() {
             local file="$1"
             local version
             version="$(read_version "$file")"
             local base="${version%%+*}"
-            if [[ "$base" != "$release_version" ]]; then
-              echo "::error::$file version '$version' does not match release version '$release_version'."
+            if [[ "$base" != "$release_base" ]]; then
+              echo "::error::$file version '$version' does not match release version '$release_base'."
               exit 1
             fi
           }
@@ -105,14 +106,14 @@ jobs:
           check_version packages/launcher_data/pubspec.yaml
           check_version packages/launcher_ui/pubspec.yaml
 
-          if [[ "$EVENT_NAME" == "pull_request" && "$HEAD_REF" != "release/$release_version" ]]; then
-            echo "::error::Merged release PR branch '$HEAD_REF' must be release/$release_version."
+          if [[ "$EVENT_NAME" == "pull_request" && "$HEAD_REF" != "release/$release_base" ]]; then
+            echo "::error::Merged release PR branch '$HEAD_REF' must be release/$release_base."
             exit 1
           fi
 
-          tag="v$release_version"
+          tag="v$release_base"
           target_sha="$(git rev-parse HEAD)"
-          echo "version=$release_version" >> "$GITHUB_OUTPUT"
+          echo "version=$release_base" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "target_sha=$target_sha" >> "$GITHUB_OUTPUT"
           echo "Resolved $tag at $target_sha."
