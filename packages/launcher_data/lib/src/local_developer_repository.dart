@@ -19,9 +19,12 @@ class LocalDeveloperRepository implements DeveloperRepository {
   LocalDeveloperRepository({
     String? dataRoot,
     String? repositoryRoot,
+    String? workingDirectory,
     DeveloperProjectResolver resolver = const DeveloperProjectResolver(),
   }) : _dataRoot = Directory(dataRoot ?? _defaultDeveloperDataRoot()),
-       _repositoryRoot = Directory(repositoryRoot ?? _findDeveloperRepoRoot()),
+       _repositoryRoot = Directory(
+         repositoryRoot ?? _findDeveloperRepoRoot(workingDirectory),
+       ),
        _resolver = resolver;
 
   final Directory _dataRoot;

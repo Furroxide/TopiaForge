@@ -59,7 +59,10 @@ void main() {
   testWidgets('home launch pad renders ready state and update pill', (
     tester,
   ) async {
-    await pumpHome(tester, _FakeLauncherRepository(snapshot: _updateSnapshot()));
+    await pumpHome(
+      tester,
+      _FakeLauncherRepository(snapshot: _updateSnapshot()),
+    );
 
     expect(find.text('Ready for liftoff'), findsOneWidget);
     expect(find.text('Game found'), findsOneWidget);
@@ -73,9 +76,7 @@ void main() {
     expect(find.text('Preview Update'), findsOneWidget);
   });
 
-  testWidgets('home glow button launches the selected profile', (
-    tester,
-  ) async {
+  testWidgets('home glow button launches the selected profile', (tester) async {
     final repository = _FakeLauncherRepository(snapshot: _updateSnapshot());
     await pumpHome(tester, repository);
 
@@ -115,9 +116,68 @@ void main() {
     expect(find.text('No local packages'), findsOneWidget);
   });
 
-  testWidgets('profile card play button launches that profile', (
+  testWidgets('home discovery rail moves framework mods below regular mods', (
     tester,
   ) async {
+    await pumpHome(
+      tester,
+      _FakeLauncherRepository(snapshot: _discoverySnapshot()),
+    );
+
+    expect(find.text('Gameplay Mod'), findsOneWidget);
+    expect(find.text('Framework Mod'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Gameplay Mod')).dx,
+      lessThan(tester.getTopLeft(find.text('Framework Mod')).dx),
+    );
+  });
+
+  testWidgets(
+    'browse moves framework mods below regular mods for non-dev users',
+    (tester) async {
+      await tester.pumpWidget(
+        RobotopiaLauncherApp(
+          repository: _FakeLauncherRepository(snapshot: _discoverySnapshot()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Browse'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Gameplay Mod'), findsOneWidget);
+      expect(find.text('Framework Mod'), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.text('Gameplay Mod')).dy,
+        lessThan(tester.getTopLeft(find.text('Framework Mod')).dy),
+      );
+    },
+  );
+
+  testWidgets('browse preserves registry order for dev-mode users', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      RobotopiaLauncherApp(
+        repository: _FakeLauncherRepository(
+          snapshot: _discoverySnapshot(developerMode: true),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Browse'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Framework Mod'), findsOneWidget);
+    expect(find.text('Gameplay Mod'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Framework Mod')).dy,
+      lessThan(tester.getTopLeft(find.text('Gameplay Mod')).dy),
+    );
+  });
+
+  testWidgets('profile card play button launches that profile', (tester) async {
     final repository = _FakeLauncherRepository(
       snapshot: _readySnapshot(
         profiles: [
@@ -153,9 +213,7 @@ void main() {
     expect(find.text('World'), findsWidgets);
   });
 
-  testWidgets('glow button pulses when animations are enabled', (
-    tester,
-  ) async {
+  testWidgets('glow button pulses when animations are enabled', (tester) async {
     // Override the suite-wide reduced-motion default for this test only.
     binding.platformDispatcher.accessibilityFeaturesTestValue =
         const FakeAccessibilityFeatures();
@@ -344,4 +402,43 @@ void main() {
     expect(repository.restartCount, 1);
     expect(find.text('Restarted Robotopia.'), findsOneWidget);
   });
+}
+
+LauncherSnapshot _discoverySnapshot({bool developerMode = false}) {
+  return LauncherSnapshot(
+    gameInstall: const GameInstall(
+      path: 'C:\\Games\\Robotopia',
+      executablePath: 'C:\\Games\\Robotopia\\Robotopia.exe',
+      bepInExStatus: ComponentState.ready,
+      loaderStatus: ComponentState.ready,
+    ),
+    profiles: [LauncherProfile.defaultProfile()],
+    selectedProfileId: 'default',
+    installedMods: const [],
+    registryMods: [
+      _registryMod('framework.mod', 'Framework Mod', 'Framework'),
+      _registryMod('gameplay.mod', 'Gameplay Mod', 'Gameplay'),
+    ],
+    packageSources: const [],
+    worldCatalog: WorldCatalog.fallback(),
+    legacyMods: const [],
+    recentLog: '',
+    launcherUpdates: const LauncherUpdateSettings(enabled: false),
+    developerMode: developerMode,
+  );
+}
+
+RegistryMod _registryMod(String id, String name, String category) {
+  return RegistryMod(
+    manifest: ModManifest(
+      schemaVersion: 2,
+      id: id,
+      name: name,
+      version: '1.0.0',
+      author: const ModAuthor(name: 'QuantumWorks'),
+      entryAssembly: '$id.dll',
+      entryType: '$id.Entry',
+      category: category,
+    ),
+  );
 }

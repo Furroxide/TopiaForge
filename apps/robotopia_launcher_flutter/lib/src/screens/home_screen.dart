@@ -145,8 +145,9 @@ class _HeroLaunchPane extends StatelessWidget {
                       const SizedBox(height: 8),
                       Text(
                         subline,
-                        style: Theme.of(context).textTheme.bodyMedium!
-                            .copyWith(color: const Color(0xCCFFFFFF)),
+                        style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                          color: const Color(0xCCFFFFFF),
+                        ),
                       ),
                       const SizedBox(height: 24),
                       Wrap(
@@ -292,8 +293,7 @@ class _SystemsCheckStrip extends StatelessWidget {
               label: 'Runtime needs a quick fix',
               tone: runtimeMissing ? StatusTone.danger : StatusTone.warning,
               icon: Icons.build,
-              tooltip:
-                  'One click installs the game runtime pieces for you.',
+              tooltip: 'One click installs the game runtime pieces for you.',
               onPressed: state.isBusy
                   ? null
                   : () => _add(context, const RuntimeRepaired()),
@@ -455,10 +455,8 @@ class _ProfileCard extends StatelessWidget {
                 children: [
                   FilledButton.icon(
                     onPressed: state.canLaunch && !state.isBusy
-                        ? () => _add(
-                            context,
-                            ProfileLaunchRequested(profile.id),
-                          )
+                        ? () =>
+                              _add(context, ProfileLaunchRequested(profile.id))
                         : null,
                     icon: const Icon(Icons.play_arrow, size: 18),
                     label: const Text('Play'),
@@ -495,14 +493,20 @@ class _DiscoverRail extends StatelessWidget {
     final rest = state.registryMods.where(
       (mod) => mod.isInstalled && !mod.updateAvailable,
     );
-    final picks = [...notInstalled, ...withUpdates, ...rest].take(6).toList();
+    final picks = _registryModsForDiscovery(
+      state,
+      mods: [...notInstalled, ...withUpdates, ...rest],
+    ).take(6).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Text('Discover mods', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Discover mods',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const Spacer(),
             TextButton.icon(
               onPressed: () => _add(
@@ -556,7 +560,10 @@ class _DiscoverCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: QuantumWorksPalette.surface,
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: QuantumWorksPalette.surfaceTint, width: 2),
+            border: Border.all(
+              color: QuantumWorksPalette.surfaceTint,
+              width: 2,
+            ),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x14168E96),

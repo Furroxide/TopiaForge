@@ -33,20 +33,18 @@ void main() {
       _skipWhenRepositoryRootEnvIsSet();
       final dist = _createPackagedRoot(repoRoot);
       _createPackage(dist, id: 'packaged.registry', version: '1.0.0');
+      final workingDirectory = Directory(p.join(repoRoot.path, 'launcher'))
+        ..createSync(recursive: true);
 
-      await _withCurrentDirectory(
-        Directory(p.join(repoRoot.path, 'launcher')),
-        () async {
-          final repository = LocalLauncherRepository(
-            dataRoot: dataRoot.path,
-            knownGamePath: gameRoot.path,
-          );
-
-          final snapshot = await repository.loadSnapshot();
-
-          expect(snapshot.registryMods.single.manifest.id, 'packaged.registry');
-        },
+      final repository = LocalLauncherRepository(
+        dataRoot: dataRoot.path,
+        workingDirectory: workingDirectory.path,
+        knownGamePath: gameRoot.path,
       );
+
+      final snapshot = await repository.loadSnapshot();
+
+      expect(snapshot.registryMods.single.manifest.id, 'packaged.registry');
     },
   );
 
@@ -56,29 +54,29 @@ void main() {
       _skipWhenRepositoryRootEnvIsSet();
       final dist = _createPackagedRoot(repoRoot);
       _createPackage(dist, id: 'packaged.api', version: '1.0.0');
+      final workingDirectory = Directory(p.join(repoRoot.path, 'launcher'))
+        ..createSync(recursive: true);
 
-      await _withCurrentDirectory(
-        Directory(p.join(repoRoot.path, 'launcher')),
-        () async {
-          final repository = LocalDeveloperRepository(dataRoot: dataRoot.path);
-          final workspace = await repository.createModProject(
-            parentDirectory: root.path,
-            id: 'packaged.consumer',
-            name: 'Packaged Consumer',
-          );
-
-          await repository.addProjectDependency(
-            workspace.projectRoot,
-            const ModDependency(id: 'packaged.api'),
-          );
-          final restored = await repository.resolveDeveloperProject(
-            workspace.projectRoot,
-          );
-
-          expect(restored.issues.where((issue) => issue.isBlocking), isEmpty);
-          expect(restored.lock!.packages.single.id, 'packaged.api');
-        },
+      final repository = LocalDeveloperRepository(
+        dataRoot: dataRoot.path,
+        workingDirectory: workingDirectory.path,
       );
+      final workspace = await repository.createModProject(
+        parentDirectory: root.path,
+        id: 'packaged.consumer',
+        name: 'Packaged Consumer',
+      );
+
+      await repository.addProjectDependency(
+        workspace.projectRoot,
+        const ModDependency(id: 'packaged.api'),
+      );
+      final restored = await repository.resolveDeveloperProject(
+        workspace.projectRoot,
+      );
+
+      expect(restored.issues.where((issue) => issue.isBlocking), isEmpty);
+      expect(restored.lock!.packages.single.id, 'packaged.api');
     },
   );
 }
@@ -133,20 +131,6 @@ String _assemblyName(String id) {
       .where((part) => part.isNotEmpty)
       .map((part) => part[0].toUpperCase() + part.substring(1))
       .join();
-}
-
-Future<void> _withCurrentDirectory(
-  Directory directory,
-  Future<void> Function() body,
-) async {
-  directory.createSync(recursive: true);
-  final previous = Directory.current;
-  Directory.current = directory;
-  try {
-    await body();
-  } finally {
-    Directory.current = previous;
-  }
 }
 
 void _skipWhenRepositoryRootEnvIsSet() {
