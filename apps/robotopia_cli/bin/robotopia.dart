@@ -12,7 +12,9 @@ part 'robotopia_help.dart';
 part 'robotopia_mod_commands.dart';
 part 'robotopia_new_commands.dart';
 part 'robotopia_update_commands.dart';
+part 'robotopia_ugc_dev_commands.dart';
 part 'robotopia_ugc_unity_commands.dart';
+part 'robotopia_unity_commands.dart';
 part 'robotopia_ui_bundle_commands.dart';
 part 'robotopia_world_commands.dart';
 
@@ -227,10 +229,12 @@ class _RobotopiaCli {
     final configuration = _option(args, '--configuration') ?? 'Release';
     // A bare mod directory (manifest without robotopia.project.json) packs
     // too, matching what the retired pack-mod.ps1 accepted.
-    final hasProjectFile =
-        File(p.join(projectPath, 'robotopia.project.json')).existsSync();
-    final hasManifest =
-        File(p.join(projectPath, 'robotopia.mod.json')).existsSync();
+    final hasProjectFile = File(
+      p.join(projectPath, 'robotopia.project.json'),
+    ).existsSync();
+    final hasManifest = File(
+      p.join(projectPath, 'robotopia.mod.json'),
+    ).existsSync();
     final packagePath = !hasProjectFile && hasManifest
         ? await developerRepository.packModDirectory(
             projectPath,
@@ -283,9 +287,7 @@ class _RobotopiaCli {
     final packed = <String>[];
     for (final dir in projectDirs) {
       final manifest =
-          jsonDecode(
-                File(p.join(dir, 'robotopia.mod.json')).readAsStringSync(),
-              )
+          jsonDecode(File(p.join(dir, 'robotopia.mod.json')).readAsStringSync())
               as Map<String, Object?>;
       final name = (manifest['name'] as String?) ?? p.basename(dir);
       if (!includeDevMods && manifest['category'] == 'DevTool') {
@@ -311,9 +313,7 @@ class _RobotopiaCli {
         outputDir: output.path,
         configuration: configuration,
       );
-      final sha = sha256
-          .convert(File(package).readAsBytesSync())
-          .toString();
+      final sha = sha256.convert(File(package).readAsBytesSync()).toString();
       stdout.writeln('Packed $name (${manifest['version']}) sha256=$sha');
       packed.add(package);
     }
@@ -413,7 +413,6 @@ class _RobotopiaCli {
       stdout.writeln('${issue.severity.name}: ${issue.message}');
     }
   }
-
 }
 
 extension _FirstOrNull<T> on Iterable<T> {
