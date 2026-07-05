@@ -58,7 +58,7 @@ namespace Robotopia.UiGallery
             controls.Toggle("Reduced motion", QwTheme.ReducedMotion, v => QwTheme.ReducedMotion = v);
             controls.Slider("UI scale", 0.75f, 1.5f, QwTheme.UiScale, v => QwTheme.UiScale = v);
 
-            var tabs = column.Tabs("WIDGETS", "LISTS", "OVERLAYS", "HUD", "MOTION");
+            var tabs = column.Tabs("WIDGETS", "LISTS", "SHOP", "OVERLAYS", "HUD", "MOTION");
             var pageHost = column.Scroll(QwGap.Md, QwGap.Sm);
             pageHost.Flex(1f, 1f);
 
@@ -66,6 +66,7 @@ namespace Robotopia.UiGallery
             {
                 Pages.WidgetsPage.Build,
                 Pages.ListsPage.Build,
+                Pages.ShopPage.Build,
                 Pages.OverlaysPage.Build,
                 Pages.HudPage.Build,
                 Pages.MotionPage.Build,

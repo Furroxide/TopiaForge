@@ -43,7 +43,9 @@ namespace Robotopia.ModManager.Tests
                 ObjectiveRunnerTests.Run();
                 RobotTargetFactsTests.Run();
                 SandboxProgramDirectorTests.Run();
+                WorldAutoLoadRouterTests.Run();
                 ChronosTests.Run();
+                ShopTests.Run();
                 GameCompatTests.Run();
                 UiKitCoreTests.Run();
                 UiKitSourceConventionTests.Run();

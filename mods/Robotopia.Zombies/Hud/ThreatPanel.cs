@@ -16,13 +16,16 @@ namespace Robotopia.Zombies
         private readonly QwLabel threat;
         private readonly QwLabel tally;
         private readonly QwLabel state;
+        private readonly QwLabel? credits;
         private readonly QwStatBar integrity;
         private readonly QwStatBar zapper;
 
         public ThreatPanel(HudContext context, QwContainer parent)
         {
             this.context = context;
-            var panel = parent.Panel(QwPanelStyle.HudPanel).Dock(QwCorner.TopLeft, 18f).Size(380f, 232f).Dynamic();
+            // The credits row only exists when the shop does; without it the panel keeps its old height.
+            var shopEnabled = context.Config.ShopEnabled;
+            var panel = parent.Panel(QwPanelStyle.HudPanel).Dock(QwCorner.TopLeft, 18f).Size(380f, shopEnabled ? 258f : 232f).Dynamic();
 
             var title = panel.Label("ZOMBIES // LIVE FIRE", QwTextStyle.Heading).Tone(QwTone.Success);
             HudContext.Place(title, 18f, 14f, 330f, 28f);
@@ -51,6 +54,12 @@ namespace Robotopia.Zombies
 
             state = panel.Label(QwTextStyle.Label).Tone(QwTone.Muted).NoWrap();
             HudContext.Place(state, 18f, 176f, 342f, 28f);
+
+            if (shopEnabled)
+            {
+                credits = panel.Label(QwTextStyle.Label).Tone(QwTone.Warning).NoWrap();
+                HudContext.Place(credits, 18f, 204f, 342f, 24f);
+            }
         }
 
         public void Tick()
@@ -83,6 +92,7 @@ namespace Robotopia.Zombies
 
             zapper.SetFraction(controller.ZapperReadyFraction);
             state.SetText(controller.StateText.ToUpperInvariant());
+            credits?.SetText("CREDITS ", controller.Credits);
         }
     }
 }

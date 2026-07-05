@@ -100,6 +100,39 @@ toggled with `card.Go.SetActive(...)` — `SetVisible` hides via CanvasGroup, so
 "hidden" card would still occupy its cell. The kit does not own preview textures;
 destroy them when your feature tears down.
 
+## Shop pane & window
+
+`QwShopPane` is a ready-made shop: balance readout over a card grid of SDK `ShopItem`s
+(price badges, affordability dimming, per-run purchase caps with MAX badges, toast
+feedback). The pane owns presentation and the purchase *transaction* (through the SDK's
+`ShopTransactions` arbiter, debiting an `IShopWallet`); what a purchase *does* stays in
+your mod — subscribe to `Purchased` and switch on the item id. `QwShopWindow` hosts the
+pane in a standard window (ESC/X close, cursor lease, drag/persist), which makes a
+complete shop about ten lines:
+
+```csharp
+var wallet  = new ShopWallet(500);                     // or implement IShopWallet over your own state
+var catalog = new[]
+{
+    new ShopItem("mymod.heal", "FIELD REPAIR", "+50 integrity.", 400, "HULL"),
+    new ShopItem("mymod.armor", "PLATING", "+25 max integrity.", 900, "HULL", maxPurchases: 2),
+};
+var shop = ui.ShopWindow("shop", "SUPPLY DROP", catalog, wallet);
+shop.Pane.CanPurchase = item => item.Id != "mymod.heal" || hp < maxHp;  // optional host gate
+shop.Pane.Purchased  += item => Apply(item.Id);        // wallet already debited
+shop.Closed          += ResumeRound;                   // fires for ESC and the X alike
+ui.Hotkey(QwKey.F6, shop.Toggle);
+```
+
+Call `shop.Tick()` (or `Pane.Tick()`) per frame while open — it is dirty-checked and
+free at steady state, and re-evaluates `CanPurchase` gates that can flip without a
+wallet event. `Pane.ResetPurchases()` starts a new run (per-run caps re-arm); earn
+credits with `wallet.Earn(...)` and the balance label, dimming, and badges follow the
+wallet's `BalanceChanged` automatically. Pausing gameplay while the shop is open is the
+host's job (a gamemode gates its own timers on `IsOpen`/`Closed`; pair with a Chronos
+`Freeze` lease for a world-hold) — see Zombies' FIELD REQUISITIONS for the reference
+wiring. The gallery's SHOP tab exercises every state.
+
 ## HUD patterns
 
 ```csharp

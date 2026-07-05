@@ -3,11 +3,11 @@
   "schemaVersion": 2,
   "name": "robotopia.zombies",
   "displayName": "Zombies",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "author": {
     "name": "QuantumWorks"
   },
-  "description": "Wave survival, the Robotopia way: don't just shoot the infected robots — JACK IN and talk to one. Aim at a robot and open a channel: the world freezes while you TYPE or SPEAK to it and its own LLM brain answers in its own words and decides — talk it down, scare it off, or genuinely persuade it to switch sides and fight the swarm for you. Freezing costs an uplink charge and the horde keeps massing while you talk, so every conversation is a real gamble against the zapper. Converted allies are a Civ-style relationship: keep them loyal or watch them waver and defect. Q broadcasts a deterministic stand-down for offline/panic crowd control. Plus the v0.6 core: readable archetypes, headshots, a charged piercing alt-fire, and combat juice.",
+  "description": "Wave survival, the Robotopia way: don't just shoot the infected robots — JACK IN and talk to one. Aim at a robot and open a channel: the world freezes while you TYPE or SPEAK to it and its own LLM brain answers in its own words and decides — talk it down, scare it off, or genuinely persuade it to switch sides and fight the swarm for you. Freezing costs an uplink charge and the horde keeps massing while you talk, so every conversation is a real gamble against the zapper. Converted allies are a Civ-style relationship: keep them loyal or watch them waver and defect. Q broadcasts a deterministic stand-down for offline/panic crowd control. Between waves, kills convert to CREDITS you spend at FIELD REQUISITIONS — repairs, plating, zapper and uplink upgrades — and the next-wave countdown holds while you browse. Plus the v0.6 core: readable archetypes, headshots, a charged piercing alt-fire, and combat juice.",
   "entryAssembly": "Robotopia.Zombies.dll",
   "entryType": "Robotopia.Zombies.ZombiesMod",
   "vpmDependencies": {

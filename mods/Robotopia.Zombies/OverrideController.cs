@@ -43,8 +43,11 @@ namespace Robotopia.Zombies
         // --- HUD-facing state (read by the controller, forwarded to the HUD) ----------------------------------
         public bool Enabled => config != null && (config.OverrideEnabled || config.ConversationEnabled);
         public int Charges => charges;
-        public int MaxCharges => config?.OverrideCharges ?? 0;
+        public int MaxCharges => EffectiveMaxCharges;
         public bool AimingHijackable => aimingHijackable;
+
+        // Config batteries plus UPLINK CELLs bought this run (read live; the config is never mutated).
+        private int EffectiveMaxCharges => (config?.OverrideCharges ?? 0) + (controller?.Upgrades.BonusUplinkCharges ?? 0);
 
         // Kept so the HUD/controller pass-throughs still compile; the single-target command radial was replaced by
         // the conversation verb, and the broadcast uses a fixed deterministic stand-down.
@@ -55,7 +58,7 @@ namespace Robotopia.Zombies
         {
             get
             {
-                if (config == null || charges >= config.OverrideCharges || config.OverrideChargeRegenSeconds <= 0f)
+                if (config == null || charges >= EffectiveMaxCharges || config.OverrideChargeRegenSeconds <= 0f)
                 {
                     return 1f;
                 }
@@ -78,13 +81,21 @@ namespace Robotopia.Zombies
             }
         }
 
-        // Reset on (re)start so a new run begins with a full battery and no leftover cooldown.
+        // Reset on (re)start so a new run begins with a full battery and no leftover cooldown. (Run upgrades
+        // are reset before this is called, so the battery re-seeds at the un-upgraded max.)
         public void ResetState()
         {
-            charges = config?.OverrideCharges ?? 0;
+            charges = EffectiveMaxCharges;
             regenTimer = 0f;
             broadcastCooldown = 0f;
             aimingHijackable = false;
+        }
+
+        // Instant full recharge — UPLINK SURGE, and the free fill when an UPLINK CELL is installed.
+        public void RefillCharges()
+        {
+            charges = EffectiveMaxCharges;
+            regenTimer = 0f;
         }
 
         private void Update()
@@ -104,8 +115,9 @@ namespace Robotopia.Zombies
             RegenCharges(Time.deltaTime);
             broadcastCooldown = Mathf.Max(0f, broadcastCooldown - Time.deltaTime);
 
-            // A held conversation owns input; don't read verbs or pay for a raycast while frozen.
-            if (controller.Conversing || InputBlocked())
+            // A held conversation (or the requisitions window) owns input; don't read verbs or pay for a
+            // raycast while frozen.
+            if (controller.Conversing || controller.Shopping || InputBlocked())
             {
                 aimingHijackable = false;
                 return;
@@ -127,7 +139,7 @@ namespace Robotopia.Zombies
 
         private void RegenCharges(float deltaTime)
         {
-            if (config == null || charges >= config.OverrideCharges)
+            if (config == null || charges >= EffectiveMaxCharges)
             {
                 regenTimer = 0f;
                 return;
@@ -137,7 +149,7 @@ namespace Robotopia.Zombies
             if (regenTimer >= config.OverrideChargeRegenSeconds)
             {
                 regenTimer = 0f;
-                charges = Mathf.Min(config.OverrideCharges, charges + 1);
+                charges = Mathf.Min(EffectiveMaxCharges, charges + 1);
             }
         }
 
