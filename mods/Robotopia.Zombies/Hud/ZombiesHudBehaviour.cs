@@ -28,6 +28,7 @@ namespace Robotopia.Zombies
         private QwBanner? banner;
         private ConversationModal? conversation;
         private GameOverModal? gameOver;
+        private ShopModal? shopModal;
 
         public void Initialize(ZombiesController controller, ZombiesConfig config)
         {
@@ -104,11 +105,17 @@ namespace Robotopia.Zombies
 
             var gameOverActive = controller.GameOver;
             var conversing = controller.Conversing;
+            // The live chrome stays visible while the shop is up (its kit window rides its own canvas
+            // with its own cursor lease), so the held countdown/credits stay readable behind it.
             live?.SetVisible(!gameOverActive && !conversing);
             gameOver?.SetVisible(gameOverActive);
             conversation?.SetVisible(conversing && !gameOverActive);
             hud.SetInteractive(gameOverActive || conversing);
             cursorLease.SetActive(gameOverActive || conversing);
+
+            // Runs in every mode: syncs window open/close with Controller.Shopping (incl. forced
+            // closes on game over/restart) and ticks the pane while open.
+            shopModal?.Tick();
 
             // World labels and the banner tick themselves via kit drivers (as the old
             // world-label pass ran in every mode).
@@ -177,6 +184,7 @@ namespace Robotopia.Zombies
             // render and expose clicks.
             conversation = new ConversationModal(context, hud);
             gameOver = new GameOverModal(context, hud);
+            shopModal = new ShopModal(context);
         }
     }
 }

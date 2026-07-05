@@ -64,6 +64,12 @@
     <Compile Include="..\..\mods\Robotopia.Prompts\PromptOverrideRegistry.cs" />
   </ItemGroup>
 
+  <!-- Worlds auto-load routing is pure SDK policy; compile just that helper so the launcher-to-runtime selection
+       contract can be regression-tested without loading UnityEngine or GameCode. -->
+  <ItemGroup>
+    <Compile Include="..\..\mods\Robotopia.Worlds\WorldAutoLoadRouter.cs" />
+  </ItemGroup>
+
   <!-- The QwUi kit's Core/ folder is its Unity-free island (tokens, scheme resolution, contrast math,
        easing, sprite-coverage math, virtual-list math, window clamp/snap, sorting-band allocation).
        Compiling it here both unit-tests the logic and mechanically enforces that nothing in Core/

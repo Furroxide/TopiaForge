@@ -75,6 +75,15 @@ namespace Robotopia.Zombies
         private string lastPlayerLine = string.Empty;
         private float pressure;                    // 0..1 "horde massed while you talked" tax
 
+        // --- SHOP: between-rounds requisitions (holds the prep countdown while open) --------------------------
+        private readonly ShopWallet wallet = new ShopWallet();
+        private readonly ZombiesRunUpgrades upgrades = new ZombiesRunUpgrades();
+        private readonly IReadOnlyList<ShopItem> shopCatalog;
+        private readonly KeyCode shopKey;
+        private bool shopping;
+        private ITimeLease? shopFreeze;            // Chronos world-freeze while browsing (same discipline as JACK-IN)
+        private int runSerial;                     // bumps per run so the HUD can reset per-run purchase counts
+
         // Set by the owning mod so a self-terminating path (Return to Menu) tears the session down through the
         // owner (which nulls its reference) rather than the controller disposing itself behind the owner's back.
         public System.Action? SessionEnded;
@@ -107,6 +116,8 @@ namespace Robotopia.Zombies
                 config.FleeNudge,
                 config.RefuseNudge,
                 config.EnrageDispositionFloor);
+            shopCatalog = ZombiesShopCatalog.Build(config);
+            shopKey = ParseKey(config.ShopKey, KeyCode.B);
         }
 
         public int Wave => wave;
@@ -147,13 +158,13 @@ namespace Robotopia.Zombies
         {
             get
             {
-                if (comboCount <= 0 || config.ComboWindowSeconds <= 0f)
+                if (comboCount <= 0 || EffectiveComboWindowSeconds <= 0f)
                 {
                     return 0f;
                 }
 
                 var elapsed = Time.time - lastComboKillTime;
-                return Mathf.Clamp01(1f - (elapsed / config.ComboWindowSeconds));
+                return Mathf.Clamp01(1f - (elapsed / EffectiveComboWindowSeconds));
             }
         }
 
@@ -424,11 +435,152 @@ namespace Robotopia.Zombies
         // 0..1 background horde pressure built up while frozen (denser spawns on resume).
         public float Pressure => pressure;
 
+        // --- SHOP: between-rounds requisitions -------------------------------------------------------------------
+
+        // The shop window is open: the wave machine (incl. the prep stateTimer), spawning, combo decay and
+        // broadcast polling are all held via the Update early-return — the same seam as Conversing.
+        public bool Shopping => shopping;
+
+        public int Credits => wallet.Balance;
+        public ShopWallet Wallet => wallet;
+        public ZombiesRunUpgrades Upgrades => upgrades;
+        public IReadOnlyList<ShopItem> ShopCatalog => shopCatalog;
+
+        // Bumps once per fresh run; the HUD's shop modal resets its per-run purchase counts when it moves.
+        public int RunSerial => runSerial;
+
+        // The shop can open: enabled, and the round is in a prep phase (never mid-wave, never over a channel).
+        public bool ShopAvailable =>
+            !disposed && config.ShopEnabled && !conversing
+            && (state == ZombiesState.Starting || state == ZombiesState.InterWave);
+
+        // Opens the requisitions window: hold the world through Chronos and suspend the player, exactly like
+        // JACK-IN. The prep countdown is held by the Update gate regardless of whether Chronos is present.
+        public void OpenShop()
+        {
+            if (shopping || !ShopAvailable)
+            {
+                return;
+            }
+
+            shopping = true;
+            shopFreeze = timeControl?.Freeze("zombies-shop");
+            robots?.SetPlayerControlsEnabled(false);
+            hud?.ShowBanner("REQUISITIONS OPEN", new Color(1f, 0.85f, 0.4f, 1f));
+        }
+
+        // The single teardown path (button, ESC, restart, dispose, scene swap). Idempotent; releases the
+        // freeze lease and hands control back unless game-over owns the cursor (mirrors EndConversation).
+        private void CloseShop(bool aborted)
+        {
+            if (!shopping)
+            {
+                return;
+            }
+
+            shopFreeze?.Release();
+            shopFreeze = null;
+            shopping = false;
+
+            if (state != ZombiesState.GameOver)
+            {
+                robots?.SetPlayerControlsEnabled(true);
+                RestorePlayCursor();
+            }
+
+            if (!aborted)
+            {
+                hud?.ShowBanner("REQUISITIONS CLOSED", new Color(0.9f, 0.8f, 0.55f, 1f));
+            }
+        }
+
+        // The HUD wires the shop window's Closed event here, so ESC and the X button resume identically.
+        public void CloseShopFromHud()
+        {
+            CloseShop(aborted: false);
+        }
+
+        // Purchase gate for items that can be redundant; the shop pane consults this per frame (cards dim)
+        // and ShopTransactions re-checks it at click time.
+        public bool CanPurchaseShopItem(ShopItem item)
+        {
+            switch (item.Id)
+            {
+                case ZombiesShopCatalog.RepairId:
+                    return playerIntegrity < MaxPlayerIntegrity - 0.001f;
+                case ZombiesShopCatalog.UplinkSurgeId:
+                    return OverrideCharges < OverrideMaxCharges;
+                default:
+                    return true;
+            }
+        }
+
+        // Applies a purchased item. Upgrades land in the per-run modifier state (never the shared config);
+        // every consumer reads them live, so effects apply from the very next shot/regen/decay check.
+        public void ApplyShopItem(ShopItem item)
+        {
+            if (disposed)
+            {
+                return;
+            }
+
+            switch (item.Id)
+            {
+                case ZombiesShopCatalog.RepairId:
+                    playerIntegrity = Mathf.Min(MaxPlayerIntegrity, playerIntegrity + config.ShopRepairAmount);
+                    break;
+                case ZombiesShopCatalog.PlatingId:
+                    upgrades.BonusMaxIntegrity += config.ShopPlatingBonus;
+                    playerIntegrity = MaxPlayerIntegrity; // new plating ships fully charged
+                    break;
+                case ZombiesShopCatalog.ZapperGainId:
+                    upgrades.ZapperDamageMult *= config.ShopZapperGainMult;
+                    break;
+                case ZombiesShopCatalog.RapidCoilsId:
+                    upgrades.ZapperCooldownMult *= config.ShopRapidCoilsMult;
+                    break;
+                case ZombiesShopCatalog.UplinkCellId:
+                    upgrades.BonusUplinkCharges++;
+                    overrideController?.RefillCharges(); // the fresh cell arrives charged
+                    break;
+                case ZombiesShopCatalog.UplinkSurgeId:
+                    overrideController?.RefillCharges();
+                    break;
+                case ZombiesShopCatalog.ComboStabilizerId:
+                    upgrades.ComboWindowBonusSeconds += config.ShopComboWindowBonusSeconds;
+                    break;
+                default:
+                    context.Logger.Warn("Zombies shop: unknown item '" + item.Id + "' purchased; no effect applied.");
+                    break;
+            }
+
+            context.Logger.Info("Zombies shop: bought " + item.Name + " for " + item.Price + " credits (" + wallet.Balance + " left).");
+        }
+
+        // While the shop holds the round, only defensive teardown runs — the window itself is event-driven.
+        private void UpdateShopping()
+        {
+            if (state == ZombiesState.GameOver)
+            {
+                CloseShop(aborted: true);
+            }
+        }
+
+        // Prep phases poll the shop key. The cursor gate keeps a free-cursor surface (pause menu, another
+        // window) from eating a stray B as an open command — the same guard OverrideController uses.
+        private void PollShopKey()
+        {
+            if (config.ShopEnabled && Cursor.lockState == CursorLockMode.Locked && Input.GetKeyDown(shopKey))
+            {
+                OpenShop();
+            }
+        }
+
         // Open a channel to one infected robot, freezing the horde. Returns false (with a hint) when it can't start.
         // The uplink charge is spent by the caller (OverrideController) only on a true return.
         public bool BeginConversation(ZombieEnemyController target)
         {
-            if (disposed || conversing || state == ZombiesState.GameOver || target == null || !target.IsOverridable)
+            if (disposed || conversing || shopping || state == ZombiesState.GameOver || target == null || !target.IsOverridable)
             {
                 return false;
             }
@@ -866,7 +1018,7 @@ namespace Robotopia.Zombies
         }
 
         public float PlayerIntegrity => playerIntegrity;
-        public float MaxPlayerIntegrity => config.PlayerIntegrity;
+        public float MaxPlayerIntegrity => config.PlayerIntegrity + upgrades.BonusMaxIntegrity;
         public bool GameOver => state == ZombiesState.GameOver;
         public bool IsActive => !disposed && root != null;
         public bool HasRealPlayer => robots != null && robots.TryGetPlayerPosition(out _);
@@ -881,17 +1033,40 @@ namespace Robotopia.Zombies
                     case ZombiesState.WaitingForPrefab:
                         return "Waiting for robots";
                     case ZombiesState.Starting:
-                        return "Wave 1 starts in " + Mathf.CeilToInt(stateTimer);
+                        return shopping
+                            ? "Wave 1 holds while you shop"
+                            : "Wave 1 starts in " + Mathf.CeilToInt(stateTimer) + ShopHint();
                     case ZombiesState.Spawning:
                         return "Wave " + wave;
                     case ZombiesState.InterWave:
-                        return "Next wave in " + Mathf.CeilToInt(stateTimer);
+                        return shopping
+                            ? "Next wave holds while you shop"
+                            : "Next wave in " + Mathf.CeilToInt(stateTimer) + ShopHint();
                     case ZombiesState.GameOver:
                         return "Game over - press R to restart";
                     default:
                         return "Idle";
                 }
             }
+        }
+
+        // Appended to the prep countdown line so the shop is discoverable without a tutorial. Built once —
+        // StateText runs every HUD frame.
+        private string shopHintCache = string.Empty;
+
+        private string ShopHint()
+        {
+            if (!config.ShopEnabled)
+            {
+                return string.Empty;
+            }
+
+            if (shopHintCache.Length == 0)
+            {
+                shopHintCache = "  //  [" + config.ShopKey.ToUpperInvariant() + "] SHOP";
+            }
+
+            return shopHintCache;
         }
 
         // The player position if resolved, else the active camera's (so a camera-only scene can still be played
@@ -980,6 +1155,15 @@ namespace Robotopia.Zombies
                 return;
             }
 
+            // While the requisitions window is open the whole round holds — prep stateTimer, spawning, combo
+            // decay, pressure and broadcast polling. This mod-side gate is what pauses the prep countdown even
+            // when Chronos (and its world-freeze) is absent.
+            if (shopping)
+            {
+                UpdateShopping();
+                return;
+            }
+
             DecayPressure(deltaTime);
             RemoveMissingZombies();
             CheckComboDecay();
@@ -1046,6 +1230,8 @@ namespace Robotopia.Zombies
 
             var awarded = (zombie.Score * comboMultiplier) + (headshot ? config.HeadshotFlatBonusScore : 0);
             score += awarded;
+            // Spendable shop credits accrue beside score, so buying never dents the run stat.
+            wallet.Earn(Mathf.RoundToInt(awarded * config.ShopCreditsPerScore));
 
             var floaterText = comboMultiplier > 1 ? "+" + awarded + " x" + comboMultiplier : "+" + awarded;
             hud?.PushFloater(zombie.HeadAnchorWorld, floaterText, new Color(0.4f, 1f, 0.5f, 1f));
@@ -1131,6 +1317,7 @@ namespace Robotopia.Zombies
             }
 
             EndConversation(ConversationExit.Aborted);
+            CloseShop(aborted: true);
             ResumePlayerControls();
             RestorePlayCursor();
             ClearZombies();
@@ -1158,6 +1345,7 @@ namespace Robotopia.Zombies
 
             disposed = true;
             EndConversation(ConversationExit.Aborted);
+            CloseShop(aborted: true);
             ReleaseSuperhotMode();
             if (sceneHandlerRegistered)
             {
@@ -1209,6 +1397,7 @@ namespace Robotopia.Zombies
             // scene. Reset and re-resolve everything for the new scene. (RobotKit clears its own robots/player
             // resolution on its scene-loaded hook.)
             EndConversation(ConversationExit.Aborted);
+            CloseShop(aborted: true); // Chronos force-resets leases on scene change; drop ours before it goes stale
             ClearZombies();
             hud?.ClearTransient();
             playerIntegrity = config.PlayerIntegrity;
@@ -1265,6 +1454,12 @@ namespace Robotopia.Zombies
 
         private void UpdateStarting(float deltaTime)
         {
+            PollShopKey();
+            if (shopping)
+            {
+                return; // opened this frame — don't consume prep time under the shop
+            }
+
             stateTimer -= deltaTime;
             if (stateTimer <= 0f)
             {
@@ -1342,6 +1537,12 @@ namespace Robotopia.Zombies
 
         private void UpdateInterWave(float deltaTime)
         {
+            PollShopKey();
+            if (shopping)
+            {
+                return; // opened this frame — don't consume prep time under the shop
+            }
+
             stateTimer -= deltaTime;
             if (stateTimer <= 0f)
             {
@@ -1412,6 +1613,11 @@ namespace Robotopia.Zombies
             packRemaining = 0;
             pendingBroadcastQuery = null;
             pressure = 0f;
+            // Wallet and upgrades reset BEFORE the override state so charges re-seed against the
+            // un-upgraded max; runSerial tells the HUD's shop modal to clear its purchase counts.
+            wallet.Reset();
+            upgrades.Reset();
+            runSerial++;
             overrideController?.ResetState();
         }
 
@@ -1445,6 +1651,7 @@ namespace Robotopia.Zombies
         private void BeginGameOver(string reason)
         {
             EndConversation(ConversationExit.Aborted);
+            CloseShop(aborted: true);
             state = ZombiesState.GameOver;
             remainingToSpawn = 0;
             pendingPlacement = null;
@@ -1645,9 +1852,12 @@ namespace Robotopia.Zombies
         }
 
         // Lapse the combo when no kill has landed within the window.
+        // The combo window is config plus whatever COMBO STABILIZER levels the player bought this run.
+        private float EffectiveComboWindowSeconds => config.ComboWindowSeconds + upgrades.ComboWindowBonusSeconds;
+
         private void CheckComboDecay()
         {
-            if (comboCount > 0 && Time.time - lastComboKillTime > config.ComboWindowSeconds)
+            if (comboCount > 0 && Time.time - lastComboKillTime > EffectiveComboWindowSeconds)
             {
                 comboCount = 0;
                 comboMultiplier = 1;

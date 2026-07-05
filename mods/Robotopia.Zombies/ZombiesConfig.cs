@@ -450,6 +450,58 @@ namespace Robotopia.Zombies
         [DataMember(Name = "overrideResistRunt")]
         public float OverrideResistRunt { get; set; }
 
+        // --- Between-rounds shop (FIELD REQUISITIONS) ----------------------------------------------------------
+        // Kills earn spendable credits alongside score; during the Starting/InterWave prep phases the shop key
+        // opens a requisitions window and the prep countdown (and the world, via Chronos) holds while it's open.
+        [DataMember(Name = "shopEnabled")]
+        public bool ShopEnabled { get; set; }
+
+        // Key that opens the shop during prep phases (KeyCode name, parsed leniently).
+        [DataMember(Name = "shopKey")]
+        public string ShopKey { get; set; } = "B";
+
+        // Credits earned per awarded score point (awarded = archetype score x combo + headshot bonus).
+        [DataMember(Name = "shopCreditsPerScore")]
+        public float ShopCreditsPerScore { get; set; }
+
+        [DataMember(Name = "shopRepairPrice")]
+        public int ShopRepairPrice { get; set; }
+
+        [DataMember(Name = "shopRepairAmount")]
+        public float ShopRepairAmount { get; set; }
+
+        [DataMember(Name = "shopPlatingPrice")]
+        public int ShopPlatingPrice { get; set; }
+
+        [DataMember(Name = "shopPlatingBonus")]
+        public float ShopPlatingBonus { get; set; }
+
+        [DataMember(Name = "shopZapperGainPrice")]
+        public int ShopZapperGainPrice { get; set; }
+
+        // Primary + charged damage multiplier applied per ZAPPER GAIN level (compounding).
+        [DataMember(Name = "shopZapperGainMult")]
+        public float ShopZapperGainMult { get; set; }
+
+        [DataMember(Name = "shopRapidCoilsPrice")]
+        public int ShopRapidCoilsPrice { get; set; }
+
+        // Zapper cooldown multiplier applied per RAPID COILS level (compounding; < 1 shoots faster).
+        [DataMember(Name = "shopRapidCoilsMult")]
+        public float ShopRapidCoilsMult { get; set; }
+
+        [DataMember(Name = "shopUplinkCellPrice")]
+        public int ShopUplinkCellPrice { get; set; }
+
+        [DataMember(Name = "shopUplinkSurgePrice")]
+        public int ShopUplinkSurgePrice { get; set; }
+
+        [DataMember(Name = "shopComboStabilizerPrice")]
+        public int ShopComboStabilizerPrice { get; set; }
+
+        [DataMember(Name = "shopComboWindowBonusSeconds")]
+        public float ShopComboWindowBonusSeconds { get; set; }
+
         // DataContractJsonSerializer constructs instances with FormatterServices.GetUninitializedObject,
         // which bypasses both the constructor and C# property initializers. Without this hook any field
         // missing from the JSON would deserialize to 0 and then be clamped to its floor by Normalize()
@@ -603,6 +655,22 @@ namespace Robotopia.Zombies
             LoyaltyPerAssist = 0.05f;
             LoyaltyShotPenalty = 0.18f;
             LoyaltyWaverThreshold = 0.3f;
+
+            ShopEnabled = true;
+            ShopKey = "B";
+            ShopCreditsPerScore = 1f;
+            ShopRepairPrice = 400;
+            ShopRepairAmount = 50f;
+            ShopPlatingPrice = 900;
+            ShopPlatingBonus = 25f;
+            ShopZapperGainPrice = 700;
+            ShopZapperGainMult = 1.25f;
+            ShopRapidCoilsPrice = 700;
+            ShopRapidCoilsMult = 0.85f;
+            ShopUplinkCellPrice = 1000;
+            ShopUplinkSurgePrice = 500;
+            ShopComboStabilizerPrice = 600;
+            ShopComboWindowBonusSeconds = 0.75f;
         }
 
         public void Normalize()
@@ -755,6 +823,25 @@ namespace Robotopia.Zombies
             LoyaltyPerAssist = Clamp(LoyaltyPerAssist, 0f, 1f);
             LoyaltyShotPenalty = Clamp(LoyaltyShotPenalty, 0f, 1f);
             LoyaltyWaverThreshold = Clamp(LoyaltyWaverThreshold, 0f, 0.9f);
+
+            if (string.IsNullOrWhiteSpace(ShopKey))
+            {
+                ShopKey = "B";
+            }
+
+            ShopCreditsPerScore = Clamp(ShopCreditsPerScore, 0f, 10f);
+            ShopRepairPrice = Clamp(ShopRepairPrice, 0, 1000000);
+            ShopRepairAmount = Clamp(ShopRepairAmount, 1f, 10000f);
+            ShopPlatingPrice = Clamp(ShopPlatingPrice, 0, 1000000);
+            ShopPlatingBonus = Clamp(ShopPlatingBonus, 1f, 1000f);
+            ShopZapperGainPrice = Clamp(ShopZapperGainPrice, 0, 1000000);
+            ShopZapperGainMult = Clamp(ShopZapperGainMult, 1f, 5f);
+            ShopRapidCoilsPrice = Clamp(ShopRapidCoilsPrice, 0, 1000000);
+            ShopRapidCoilsMult = Clamp(ShopRapidCoilsMult, 0.5f, 1f);
+            ShopUplinkCellPrice = Clamp(ShopUplinkCellPrice, 0, 1000000);
+            ShopUplinkSurgePrice = Clamp(ShopUplinkSurgePrice, 0, 1000000);
+            ShopComboStabilizerPrice = Clamp(ShopComboStabilizerPrice, 0, 1000000);
+            ShopComboWindowBonusSeconds = Clamp(ShopComboWindowBonusSeconds, 0f, 10f);
         }
 
         private static int Clamp(int value, int min, int max)

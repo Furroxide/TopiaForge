@@ -26,14 +26,21 @@ namespace Robotopia.Zombies
         {
             get
             {
-                if (config == null || config.ZapperCooldownSeconds <= 0f)
+                var cooldownSeconds = CooldownSeconds;
+                if (config == null || cooldownSeconds <= 0f)
                 {
                     return 1f;
                 }
 
-                return Mathf.Clamp01(1f - (cooldown / config.ZapperCooldownSeconds));
+                return Mathf.Clamp01(1f - (cooldown / cooldownSeconds));
             }
         }
+
+        // Shop upgrades scale the zapper live (per-run multipliers, config untouched): RAPID COILS
+        // shortens the cooldown, ZAPPER GAIN boosts primary and charged damage alike.
+        private float CooldownSeconds => (config?.ZapperCooldownSeconds ?? 0f) * (controller?.Upgrades.ZapperCooldownMult ?? 1f);
+        private float PrimaryDamage => (config?.ZapperDamage ?? 0f) * (controller?.Upgrades.ZapperDamageMult ?? 1f);
+        private float ChargedDamage => (config?.ChargeShotDamage ?? 0f) * (controller?.Upgrades.ZapperDamageMult ?? 1f);
 
         public void Initialize(ZombiesController controller, ZombiesConfig config, IModLogger logger)
         {
@@ -46,10 +53,10 @@ namespace Robotopia.Zombies
 
         private void Update()
         {
-            // The zapper is holstered during a JACK-IN freeze (talking is a commitment — you can't also shoot), and
-            // at game-over. The unlocked cursor would already gate firing, but holster explicitly so a held charge
-            // doesn't survive the conversation.
-            if (controller == null || config == null || !controller.IsActive || controller.GameOver || controller.Conversing)
+            // The zapper is holstered during a JACK-IN freeze (talking is a commitment — you can't also shoot),
+            // while the requisitions window is up, and at game-over. The unlocked cursor would already gate
+            // firing, but holster explicitly so a held charge doesn't survive the interruption.
+            if (controller == null || config == null || !controller.IsActive || controller.GameOver || controller.Conversing || controller.Shopping)
             {
                 CancelCharge();
                 return;
@@ -141,7 +148,7 @@ namespace Robotopia.Zombies
                 return;
             }
 
-            cooldown = config.ZapperCooldownSeconds;
+            cooldown = CooldownSeconds;
             var cameraTransform = activeCamera.transform;
             var ray = activeCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
             var cameraPosition = cameraTransform.position;
@@ -154,7 +161,7 @@ namespace Robotopia.Zombies
                 var enemy = hit.collider.GetComponentInParent<ZombieEnemyController>();
                 if (enemy != null)
                 {
-                    enemy.TakeDamage(config.ZapperDamage, hit.point, ray.direction, false);
+                    enemy.TakeDamage(PrimaryDamage, hit.point, ray.direction, false);
                 }
                 else if (hit.rigidbody != null && !hit.rigidbody.isKinematic && !IsGameRobot(hit.collider))
                 {
@@ -187,7 +194,7 @@ namespace Robotopia.Zombies
             }
 
             chargeCooldown = config.ChargeShotCooldownSeconds;
-            cooldown = Mathf.Max(cooldown, config.ZapperCooldownSeconds);
+            cooldown = Mathf.Max(cooldown, CooldownSeconds);
 
             var cameraTransform = activeCamera.transform;
             var ray = activeCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
@@ -203,7 +210,7 @@ namespace Robotopia.Zombies
                 var enemy = current.collider.GetComponentInParent<ZombieEnemyController>();
                 if (enemy != null)
                 {
-                    enemy.TakeDamage(config.ChargeShotDamage, current.point, ray.direction, true);
+                    enemy.TakeDamage(ChargedDamage, current.point, ray.direction, true);
                     if (!config.ChargeShotPierces)
                     {
                         end = current.point;
