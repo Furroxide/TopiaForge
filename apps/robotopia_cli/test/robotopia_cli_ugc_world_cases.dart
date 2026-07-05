@@ -303,6 +303,12 @@ void _ugcAndWorldCliTests(_CliTestHarness Function() currentHarness) {
     },
   );
 
+  test('doctor prints a Recommended actions section', () async {
+    final result = await currentHarness().runCli(['doctor']);
+
+    expect(result.stdout.toString(), contains('Recommended actions:'));
+  });
+
   test('world build without a pairing points at world link', () async {
     final unityProject = Directory(
       p.join(currentHarness().temp.path, 'Unpaired'),

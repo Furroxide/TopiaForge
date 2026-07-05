@@ -8,7 +8,7 @@ extension _RobotopiaUpdateCommands on _RobotopiaCli {
       return 0;
     }
     if (command != 'index') {
-      throw StateError(
+      throw UsageError(
         'Usage: robotopia updates index --repository owner/name --output path',
       );
     }
@@ -24,7 +24,7 @@ extension _RobotopiaUpdateCommands on _RobotopiaCli {
     final repository = _option(args, '--repository');
     final output = _option(args, '--output');
     if (repository == null || output == null) {
-      throw StateError(
+      throw UsageError(
         'Usage: robotopia updates index --repository owner/name --output path',
       );
     }

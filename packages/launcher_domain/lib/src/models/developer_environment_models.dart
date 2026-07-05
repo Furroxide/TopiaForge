@@ -4,6 +4,7 @@ class DeveloperDoctorReport {
   const DeveloperDoctorReport({
     required this.projectRoot,
     required this.messages,
+    this.hasProject = false,
     this.unityHubPath = '',
     this.unityEditorPath = '',
     this.issues = const [],
@@ -11,6 +12,10 @@ class DeveloperDoctorReport {
 
   final String projectRoot;
   final List<String> messages;
+
+  /// Whether a developer project (robotopia.project.json) was found —
+  /// [projectRoot] alone can't tell, it falls back to the requested path.
+  final bool hasProject;
   final String unityHubPath;
   final String unityEditorPath;
   final List<LauncherIssue> issues;

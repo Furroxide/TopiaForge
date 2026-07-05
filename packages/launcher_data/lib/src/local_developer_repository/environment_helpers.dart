@@ -40,6 +40,7 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
     return DeveloperDoctorReport(
       projectRoot: workspace.projectRoot,
       messages: messages,
+      hasProject: workspace.hasProject,
       unityHubPath: unityHub,
       unityEditorPath: unityEditor,
       issues: issues,

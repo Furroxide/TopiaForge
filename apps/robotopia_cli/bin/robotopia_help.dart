@@ -26,6 +26,7 @@ const _commands = [
   'projects',
   'unity',
   'updates',
+  'registry',
 ];
 
 /// Shared remediation message for commands that need a detected game install.
@@ -101,10 +102,13 @@ extension _HelpCommand on _RobotopiaCli {
       '  robotopia mod add|remove <kind> <v>   Add/remove tag, permission, dependency, conflict, gamemode, ...',
     );
     stdout.writeln(
+      '  robotopia mod bump [major|minor|patch]  Increment the manifest version.',
+    );
+    stdout.writeln(
       '  robotopia check project [path]        Validate a developer project.',
     );
     stdout.writeln(
-      '  robotopia check package <path>        Validate a mod folder or .robotopiamod package.',
+      '  robotopia check package <path>        Validate a mod folder or .robotopiamod (--sha256, --entry, --resolve).',
     );
     stdout.writeln(
       '  robotopia migrate legacy <game> <out> Convert legacy Robotopia\\Mods entries into packages.',
@@ -124,10 +128,10 @@ extension _HelpCommand on _RobotopiaCli {
       '  robotopia list sources                List registered package sources.',
     );
     stdout.writeln(
-      '  robotopia resolve [--prerelease]      Compute the dependency plan (no writes).',
+      '  robotopia resolve [--prerelease]      Compute the dependency plan and write robotopia.lock.json.',
     );
     stdout.writeln(
-      '  robotopia restore [--prerelease]      Resolve and write robotopia.lock.json + dev props.',
+      '  robotopia restore [--prerelease]      Resolve, download packages, and write lock + dev props.',
     );
     stdout.writeln('');
     stdout.writeln('Build & run:');
@@ -199,6 +203,17 @@ extension _HelpCommand on _RobotopiaCli {
       '  robotopia projects list|add|remove|open  Manage registered Unity projects.',
     );
     stdout.writeln('');
+    stdout.writeln('Publish & registry:');
+    stdout.writeln(
+      '  robotopia registry add-entry <pkg> --url <url>  Create your registry/<id>.json entry for a PR.',
+    );
+    stdout.writeln(
+      '  robotopia registry index ...          Build a registry index.json (official or self-hosted).',
+    );
+    stdout.writeln(
+      '  robotopia registry validate           Check registry entries the way the official CI does.',
+    );
+    stdout.writeln('');
     stdout.writeln('Maintenance:');
     stdout.writeln(
       '  robotopia updates index --repository owner/name --output path  Build a launcher update index.',
@@ -207,8 +222,10 @@ extension _HelpCommand on _RobotopiaCli {
     stdout.writeln(
       'Run a command with wrong or missing arguments to see its full usage.',
     );
+    stdout.writeln('Exit codes: 0 ok, 1 failure, 2 usage error.');
     stdout.writeln(
-      'Docs: docs/YourFirstMod.md (walkthrough) and docs/Modding.md (reference).',
+      'Docs: docs/YourFirstMod.md (walkthrough), docs/Modding.md (reference), '
+      'docs/PublishingYourMod.md (publish).',
     );
   }
 }

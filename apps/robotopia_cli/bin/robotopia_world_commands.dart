@@ -9,7 +9,7 @@ extension _WorldCommands on _RobotopiaCli {
       'link' => _worldLink(args.skip(1).toList()),
       'build' => _worldBuild(args.skip(1).toList()),
       'play' => _worldPlay(args.skip(1).toList()),
-      _ => throw StateError(
+      _ => throw UsageError(
         'Usage: robotopia world link|build|play ...\n'
         '  robotopia world link --project <unityProj> --mod <modDir> [--bundle name] [--prefab assetPath]\n'
         '  robotopia world build [--project <unityProj|name>] [--mod <modDir>] [--bundle name] [--unity Unity.exe] [--dry-run]\n'
@@ -22,7 +22,7 @@ extension _WorldCommands on _RobotopiaCli {
     final projectArg = _option(args, '--project');
     final modArg = _option(args, '--mod');
     if (projectArg == null || modArg == null) {
-      throw StateError(
+      throw UsageError(
         'Usage: robotopia world link --project <unityProj> --mod <modDir> [--bundle name] [--prefab assetPath]',
       );
     }

@@ -37,6 +37,8 @@ extension _RobotopiaModCommands on _RobotopiaCli {
         return _modShow(args.skip(1).toList());
       case 'set':
         return _modSet(args.skip(1).toList());
+      case 'bump':
+        return _modBump(args.skip(1).toList());
       case 'add':
         return _modEditList(args.skip(1).toList(), add: true);
       case 'remove':
@@ -49,6 +51,9 @@ extension _RobotopiaModCommands on _RobotopiaCli {
           '(fields: ${_scalarFields.keys.join(', ')})',
         );
         stdout.writeln(
+          '  robotopia mod bump [major|minor|patch] [--project path]',
+        );
+        stdout.writeln(
           '  robotopia mod add|remove tag|permission|load-after|screenshot|api-assembly <value> [--project path]',
         );
         stdout.writeln(
@@ -57,8 +62,56 @@ extension _RobotopiaModCommands on _RobotopiaCli {
         stdout.writeln(
           '  robotopia mod add|remove gamemode <id:Name[:description]> [--project path]',
         );
-        return sub == null ? 0 : 1;
+        return sub == null ? 0 : 2;
     }
+  }
+
+  /// Increments the manifest version through the same validated-write path
+  /// as `mod set`, so a broken manifest can never be written.
+  Future<int> _modBump(List<String> args) async {
+    var part = 'patch';
+    for (var index = 0; index < args.length; index++) {
+      if (args[index].startsWith('--')) {
+        index++; // Every bump flag takes one value.
+        continue;
+      }
+      part = args[index];
+      break;
+    }
+    if (!const {'major', 'minor', 'patch'}.contains(part)) {
+      throw UsageError(
+        'Usage: robotopia mod bump [major|minor|patch] [--project path]',
+      );
+    }
+    String? from;
+    String? to;
+    final code = await _mutateManifest(args, (map) {
+      final current = (map['version'] as String?) ?? '';
+      final parsed = SemanticVersion.tryParse(current);
+      if (parsed == null) {
+        throw StateError(
+          'Current version "$current" is not a semantic version — fix it '
+          'with `robotopia mod set version <x.y.z>` first.',
+        );
+      }
+      if (RegExp(r'[-+]').hasMatch(current)) {
+        stdout.writeln(
+          'Note: the pre-release/build suffix of "$current" is dropped.',
+        );
+      }
+      final next = switch (part) {
+        'major' => SemanticVersion(parsed.major + 1, 0, 0),
+        'minor' => SemanticVersion(parsed.major, parsed.minor + 1, 0),
+        _ => SemanticVersion(parsed.major, parsed.minor, parsed.patch + 1),
+      };
+      from = current;
+      to = next.toString();
+      map['version'] = next.toString();
+    });
+    if (code == 0) {
+      stdout.writeln('version: $from -> $to');
+    }
+    return code;
   }
 
   String _modProjectPath(List<String> args) =>
@@ -84,11 +137,10 @@ extension _RobotopiaModCommands on _RobotopiaCli {
     final value = args.length > 1 ? args[1] : null;
     final jsonKey = _scalarFields[field];
     if (field == null || value == null || jsonKey == null) {
-      stderr.writeln(
+      throw UsageError(
         'Usage: robotopia mod set <field> <value> [--project path]\n'
         'Fields: ${_scalarFields.keys.join(', ')}',
       );
-      return 1;
     }
     if (field.endsWith('version-range')) {
       VersionRange.parse(value); // fail loudly on malformed ranges
@@ -112,11 +164,10 @@ extension _RobotopiaModCommands on _RobotopiaCli {
     final kind = args.firstOrNull;
     final value = args.length > 1 ? args[1] : null;
     if (kind == null || value == null) {
-      stderr.writeln(
+      throw UsageError(
         'Usage: robotopia mod ${add ? 'add' : 'remove'} <kind> <value> [--project path]\n'
         'Kinds: ${_listFields.keys.join(', ')}, dependency, optional-dependency, conflict, gamemode',
       );
-      return 1;
     }
 
     final listKey = _listFields[kind];
@@ -202,8 +253,7 @@ extension _RobotopiaModCommands on _RobotopiaCli {
           }
         });
       default:
-        stderr.writeln('Unknown kind: $kind');
-        return 1;
+        throw UsageError('Unknown kind: $kind');
     }
   }
 

@@ -28,6 +28,17 @@ extension _RobotopiaEnvironmentCommands on _RobotopiaCli {
       }
     }
 
+    stdout.writeln('');
+    stdout.writeln('Recommended actions:');
+    final recommendations = await _doctorRecommendations(env, report);
+    if (recommendations.isEmpty) {
+      stdout.writeln('  No action needed.');
+    } else {
+      for (final recommendation in recommendations) {
+        stdout.writeln('  - $recommendation');
+      }
+    }
+
     final strict = args.contains('--strict');
     if (strict && !env.developerReady) {
       stderr.writeln(
@@ -35,6 +46,55 @@ extension _RobotopiaEnvironmentCommands on _RobotopiaCli {
       );
     }
     return report.ok && (!strict || env.developerReady) ? 0 : 1;
+  }
+
+  /// Maps doctor findings to next steps, from structured data only (never
+  /// message-string matching). Empty when everything above is green.
+  Future<List<String>> _doctorRecommendations(
+    EnvironmentReport env,
+    DeveloperDoctorReport report,
+  ) async {
+    final recommendations = <String>[];
+    if (env.blockers.isNotEmpty) {
+      recommendations.add(
+        'Run `robotopia setup` to apply safe fixes, then install anything '
+        'still marked [ X ] above.',
+      );
+    }
+    if (!report.hasProject) {
+      // Not inside a developer project — normal for the repo root, bare mod
+      // dirs, or a player machine; orientation rather than a finding.
+      recommendations.add(
+        'Project checks were skipped: run inside a scaffolded mod project '
+        'or pass --project (create one with `robotopia new mod <id>`).',
+      );
+    } else if (report.issues.any((issue) => issue.isBlocking)) {
+      recommendations.add(
+        'Fix the project errors above, then re-check with '
+        '`robotopia check project` (manifest reference: docs/Modding.md).',
+      );
+    } else if (report.issues.any(
+      (issue) => issue.severity == IssueSeverity.warning,
+    )) {
+      recommendations.add(
+        'Review the project warnings above — publishing to the official '
+        'registry requires zero findings (docs/PublishingYourMod.md).',
+      );
+    }
+    try {
+      final launcher = LocalLauncherRepository(
+        repositoryRoot: _findRepoRoot() ?? Directory.current.path,
+      );
+      if (await launcher.detectKnownInstall() == null) {
+        recommendations.add(
+          'Robotopia install not detected — set ROBOTOPIA_GAME_DIR or pass '
+          '--game-dir (see docs/Troubleshooting.md).',
+        );
+      }
+    } on Object {
+      // Detection is best-effort; never let it fail the doctor run.
+    }
+    return recommendations;
   }
 
   Future<int> _compat(List<String> args) async {

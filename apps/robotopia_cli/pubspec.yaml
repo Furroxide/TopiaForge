@@ -7,6 +7,7 @@ environment:
   sdk: ^3.11.1
 
 dependencies:
+  archive: ^4.0.7
   crypto: ^3.0.6
   launcher_data:
     path: ../../packages/launcher_data

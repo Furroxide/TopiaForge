@@ -6,16 +6,20 @@ import 'package:launcher_data/launcher_data.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 import 'package:robotopia/src/launcher_update_index_builder.dart';
+import 'package:robotopia/src/mod_registry_index_builder.dart';
+import 'package:robotopia/src/registry_entry_builder.dart';
 
+part 'robotopia_check_commands.dart';
 part 'robotopia_environment_commands.dart';
 part 'robotopia_help.dart';
 part 'robotopia_mod_commands.dart';
 part 'robotopia_new_commands.dart';
+part 'robotopia_registry_commands.dart';
 part 'robotopia_update_commands.dart';
 part 'robotopia_ugc_dev_commands.dart';
 part 'robotopia_ugc_unity_commands.dart';
-part 'robotopia_unity_commands.dart';
 part 'robotopia_ui_bundle_commands.dart';
+part 'robotopia_unity_commands.dart';
 part 'robotopia_world_commands.dart';
 
 Future<void> main(List<String> args) async {
@@ -23,10 +27,26 @@ Future<void> main(List<String> args) async {
   try {
     final code = await cli.run(args);
     exitCode = code;
+  } on UsageError catch (error) {
+    stderr.writeln(error.message);
+    exitCode = 2;
   } on Object catch (error) {
-    stderr.writeln(error);
+    // StateError.toString() prefixes "Bad state:", which reads like a crash;
+    // the message alone is the actionable part.
+    stderr.writeln(error is StateError ? error.message : error);
     exitCode = 1;
   }
+}
+
+/// A wrong-invocation error: printed as plain usage text (no "Bad state:"
+/// noise) and distinguished from operation failures via exit code 2.
+class UsageError implements Exception {
+  UsageError(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
 }
 
 class _RobotopiaCli {
@@ -64,56 +84,22 @@ class _RobotopiaCli {
       'projects' => _projects(rest),
       'unity' => _unity(rest),
       'updates' => _updates(rest),
+      'registry' => _registry(rest),
       _ => _unknown(command),
     };
-  }
-
-  Future<int> _check(List<String> args) async {
-    return switch (args.firstOrNull) {
-      'project' => _checkProject(
-        _option(args, '--project') ?? args.skip(1).firstOrNull,
-      ),
-      'package' => _checkPackage(args.skip(1).firstOrNull),
-      _ => throw StateError('Usage: robotopia check project|package [path]'),
-    };
-  }
-
-  Future<int> _checkProject(String? path) async {
-    final workspace = await developerRepository.loadDeveloperWorkspace(
-      projectPath: path,
-    );
-    if (!workspace.hasProject) {
-      stdout.writeln('No Robotopia developer project found.');
-      return 1;
-    }
-    stdout.writeln('${workspace.project!.name} (${workspace.project!.id})');
-    stdout.writeln('Dependencies: ${workspace.project!.dependencies.length}');
-    stdout.writeln('Lock: ${workspace.lock == null ? 'missing' : 'present'}');
-    _printIssues(workspace.issues);
-    return workspace.hasBlockingIssues ? 1 : 0;
-  }
-
-  Future<int> _checkPackage(String? path) async {
-    if (path == null) {
-      throw StateError('Usage: robotopia check package <path>');
-    }
-    final manifest = await developerRepository.checkPackage(path);
-    stdout.writeln('${manifest.name} ${manifest.version} (${manifest.id})');
-    _printIssues(manifest.validate());
-    return manifest.validate().any((issue) => issue.isBlocking) ? 1 : 0;
   }
 
   Future<int> _add(List<String> args) async {
     return switch (args.firstOrNull) {
       'source' => _addSource(args.skip(1).toList()),
       'package' => _addPackage(args.skip(1).toList()),
-      _ => throw StateError('Usage: robotopia add source|package ...'),
+      _ => throw UsageError('Usage: robotopia add source|package ...'),
     };
   }
 
   Future<int> _addSource(List<String> args) async {
     if (args.length < 2) {
-      throw StateError(
+      throw UsageError(
         'Usage: robotopia add source <name> <url> [--id id] [--project path]',
       );
     }
@@ -135,7 +121,7 @@ class _RobotopiaCli {
   Future<int> _addPackage(List<String> args) async {
     final spec = args.firstOrNull;
     if (spec == null) {
-      throw StateError(
+      throw UsageError(
         'Usage: robotopia add package <id[@range]> [--project path]',
       );
     }
@@ -158,7 +144,7 @@ class _RobotopiaCli {
 
   Future<int> _remove(List<String> args) async {
     if (args.firstOrNull != 'package' || args.length < 2) {
-      throw StateError('Usage: robotopia remove package <id> [--project path]');
+      throw UsageError('Usage: robotopia remove package <id> [--project path]');
     }
     final project = await developerRepository.removeProjectDependency(
       _option(args, '--project') ?? Directory.current.path,
@@ -170,7 +156,7 @@ class _RobotopiaCli {
 
   Future<int> _list(List<String> args) async {
     if (args.firstOrNull != 'templates' && args.firstOrNull != 'sources') {
-      throw StateError('Usage: robotopia list templates|sources');
+      throw UsageError('Usage: robotopia list templates|sources');
     }
     if (args.first == 'templates') {
       final templates = await developerRepository.listModTemplates();
@@ -359,12 +345,12 @@ class _RobotopiaCli {
 
   Future<int> _migrate(List<String> args) async {
     if (args.firstOrNull != 'legacy') {
-      throw StateError(
+      throw UsageError(
         'Usage: robotopia migrate legacy <gamePath> <outputRoot>',
       );
     }
     if (args.length < 3) {
-      throw StateError(
+      throw UsageError(
         'Usage: robotopia migrate legacy <gamePath> <outputRoot>',
       );
     }
@@ -386,7 +372,7 @@ class _RobotopiaCli {
       stderr.writeln('Did you mean: robotopia $suggestion?');
     }
     stderr.writeln('Run `robotopia help` for the command list.');
-    return 1;
+    return 2;
   }
 
   String? _option(List<String> args, String name) {

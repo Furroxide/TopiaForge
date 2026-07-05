@@ -1,6 +1,8 @@
 part of 'robotopia.dart';
 
 extension _RobotopiaUnityCommands on _RobotopiaCli {
+  // Unity-side VPM from the terminal: scaffold packages, manage packages, and
+  // manage listings.
   Future<int> _unity(List<String> args) async {
     final sub = args.firstOrNull;
     String pathArg(int index) =>
@@ -20,7 +22,7 @@ extension _RobotopiaUnityCommands on _RobotopiaCli {
           stderr.writeln(
             'Usage: robotopia unity new-package <id> [--name Name] [--dir path]',
           );
-          return 1;
+          return 2;
         }
         final path = await developerRepository.createUnityPackage(
           parentDirectory: _option(args, '--dir') ?? Directory.current.path,
@@ -42,7 +44,7 @@ extension _RobotopiaUnityCommands on _RobotopiaCli {
       case 'add':
         if (args.length < 2) {
           stderr.writeln('Usage: robotopia unity add <id[@range]> [path]');
-          return 1;
+          return 2;
         }
         final spec = args[1];
         final at = spec.indexOf('@');
@@ -60,7 +62,7 @@ extension _RobotopiaUnityCommands on _RobotopiaCli {
       case 'remove':
         if (args.length < 2) {
           stderr.writeln('Usage: robotopia unity remove <id> [path]');
-          return 1;
+          return 2;
         }
         await developerRepository.removeUnityPackage(pathArg(2), args[1]);
         stdout.writeln('Removed ${args[1]}.');
@@ -87,7 +89,7 @@ extension _RobotopiaUnityCommands on _RobotopiaCli {
       case 'add-repo':
         if (args.length < 2) {
           stderr.writeln('Usage: robotopia unity add-repo <index.json url>');
-          return 1;
+          return 2;
         }
         final repos = await developerRepository.addUnityRepo(args[1]);
         stdout.writeln('Subscribed; ${repos.length} repo(s).');
@@ -95,7 +97,7 @@ extension _RobotopiaUnityCommands on _RobotopiaCli {
       case 'remove-repo':
         if (args.length < 2) {
           stderr.writeln('Usage: robotopia unity remove-repo <id>');
-          return 1;
+          return 2;
         }
         final repos = await developerRepository.removeUnityRepo(args[1]);
         stdout.writeln('Unsubscribed; ${repos.length} repo(s).');
@@ -160,7 +162,7 @@ extension _RobotopiaUnityCommands on _RobotopiaCli {
       case 'remove':
         if (args.length < 2) {
           stderr.writeln('Usage: robotopia projects remove <path>');
-          return 1;
+          return 2;
         }
         final projects = await developerRepository.removeProject(args[1]);
         stdout.writeln('Untracked ${args[1]} (${projects.length} remaining).');
@@ -179,6 +181,4 @@ extension _RobotopiaUnityCommands on _RobotopiaCli {
         return sub == null ? 0 : 1;
     }
   }
-
-  // Reads the game's UGC live-sync status handshake and lists watch-folder scenes.
 }
