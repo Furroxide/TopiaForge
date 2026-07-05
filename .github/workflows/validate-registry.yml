@@ -1,0 +1,57 @@
+name: Validate registry entries
+
+# Fork-safe by design: read-only permissions and no secrets, so community
+# registry PRs get full validation (download + sha + manifest checks) without
+# any trust decision.
+on:
+  pull_request:
+    paths:
+      - "registry/**"
+      - "schemas/robotopia.registry-entry.schema.json"
+      - "schemas/robotopia.registry-index.schema.json"
+      - ".github/workflows/validate-registry.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Restore CLI packages
+        working-directory: apps/robotopia_cli
+        run: dart pub get
+
+      # Structural checks run for every entry file; the expensive download +
+      # sha verification runs only for the files this PR changed.
+      - name: Validate registry entries
+        shell: bash
+        working-directory: apps/robotopia_cli
+        run: |
+          args=()
+          if [[ -n "${GITHUB_BASE_REF:-}" ]]; then
+            mapfile -t changed < <(git -C ../.. diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" -- 'registry/*.json')
+            if [[ ${#changed[@]} -eq 0 ]]; then
+              echo "No entry files changed; running structural checks only."
+              args+=(--offline)
+            else
+              for file in "${changed[@]}"; do
+                args+=(--only "$(basename "$file")")
+              done
+            fi
+          fi
+          dart run robotopia registry validate \
+            --entries ../../registry \
+            --mods ../../mods \
+            "${args[@]}"

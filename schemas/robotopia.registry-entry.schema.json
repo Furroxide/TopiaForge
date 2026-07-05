@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/furroxide/quantum-works/main/schemas/robotopia.registry-entry.schema.json",
+  "title": "Robotopia Registry Entry",
+  "description": "A community mod submission in the official QuantumWorks registry: one file per mod at registry/<id>.json (filename must equal the lowercase mod id). Generate with `robotopia registry add-entry`.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["formatVersion", "id", "versions"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "formatVersion": { "const": 1 },
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$",
+      "description": "Stable mod id; must match the manifest name and the file name."
+    },
+    "homepage": { "type": "string" },
+    "versions": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Published versions, newest first. Never overwrite a released version's file — publish a new version instead.",
+      "items": { "$ref": "#/definitions/version" }
+    }
+  },
+  "definitions": {
+    "version": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["version", "downloadUrl", "packageSha256", "manifest"],
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+(\\.[0-9]+){0,2}([-+][0-9A-Za-z_.-]+)?$"
+        },
+        "downloadUrl": {
+          "type": "string",
+          "pattern": "^https://",
+          "description": "Absolute https URL of the hosted .robotopiamod package (e.g. a GitHub Release asset)."
+        },
+        "packageSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Lowercase SHA-256 of the exact hosted package bytes. The launcher refuses mismatching downloads."
+        },
+        "changelog": { "type": "string" },
+        "manifest": {
+          "$ref": "https://raw.githubusercontent.com/furroxide/quantum-works/main/schemas/robotopia.mod.schema.json",
+          "description": "Full robotopia.mod.json of the packaged mod, inlined so index builds never download community packages."
+        }
+      }
+    }
+  }
+}

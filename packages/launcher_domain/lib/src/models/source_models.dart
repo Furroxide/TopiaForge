@@ -44,6 +44,28 @@ class PackageSource {
   }
 }
 
+/// Health of one enabled package source after a catalog load, so the UI can
+/// say "this source is down" instead of silently showing fewer mods.
+class PackageSourceStatus {
+  const PackageSourceStatus({
+    required this.sourceId,
+    required this.sourceName,
+    required this.ok,
+    this.message = '',
+    this.modCount = 0,
+    this.remote = false,
+  });
+
+  final String sourceId;
+  final String sourceName;
+  final bool ok;
+  final String message;
+  final int modCount;
+
+  /// True for https sources — the ones that fail when the player is offline.
+  final bool remote;
+}
+
 class PackageInstallAction {
   const PackageInstallAction({
     required this.modId,

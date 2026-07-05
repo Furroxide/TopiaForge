@@ -86,13 +86,17 @@ Manifest fields:
 - `conflicts`: mods that must not be installed/enabled together; entries as
   `{ "id": "mod.id", "versionRange": ..., "reason": ... }`
 - `loadAfter`: optional soft ordering
-- `supportedGameVersionRange`, `supportedLoaderVersionRange`, `supportedSdkVersionRange`: launcher-enforced version ranges
+- `supportedGameVersionRange`, `supportedLoaderVersionRange`, `supportedSdkVersionRange`: launcher-enforced
+  version ranges (see [Version ranges](#version-ranges))
 - `worldGamemodes`: gamemodes this mod registers, shown in the level-select menu; entries as
   `{ "id": ..., "name": ..., "description": ... }` (`id` and `name` required)
 - `apiAssemblies`: DLLs (package-relative paths) exported for other mods to compile against; consumers get
   reference assemblies on `robotopia restore`
-- `category`, `tags`, `icon`, `screenshots`, `homepage`, `source`, `license`, `hashes`: launcher metadata
-- `permissions`: descriptive user-facing capability labels
+- `category`, `tags`, `icon`, `screenshots`, `homepage`, `source`, `license`: launcher metadata (see
+  [Categories](#categories))
+- `hashes`: reserved integrity metadata — `robotopia pack` does not write it; the package-level sha256
+  travels in the registry entry / lockfile instead (see [ModPackaging.md](ModPackaging.md))
+- `permissions`: descriptive user-facing capability labels (see [Permissions](#permissions))
 - `legacyFolders`, `legacyFiles`, `legacyPackages`: written by `robotopia migrate legacy` to map pre-package
   installs onto this mod; not hand-authored
 
@@ -100,6 +104,44 @@ Accepted key aliases (write the canonical form; `robotopia mod set` and `pack` n
 `title` → `displayName`, `gameVersionRange`/`gameVersion` → `supportedGameVersionRange`,
 `loaderVersionRange` → `supportedLoaderVersionRange`, `sdkVersionRange` → `supportedSdkVersionRange`,
 `packageHashes` → `hashes`, `gamemodes` → `worldGamemodes`.
+
+### Version ranges
+
+All version-range fields (`vpmDependencies` values, dependency/conflict `versionRange`, and the
+`supported*VersionRange` trio) share one grammar:
+
+| Form | Example | Matches |
+|---|---|---|
+| any | `*` (or empty) | every version |
+| exact | `1.2.3` | that version only |
+| wildcard | `1.x`, `1.2.x` | any version in that line |
+| comparators | `>=1.2.0 <2.0.0` | space-separated bounds; `>`, `>=`, `<`, `<=`, `=` |
+
+Pre-release/build suffixes (`1.2.3-beta.1+ci`) parse but are **ignored for ordering** — don't rely on them
+to gate resolution.
+
+### Permissions
+
+`permissions` entries are descriptive, user-facing capability labels shown in the launcher. Known values:
+
+`ai`, `asset-bundles`, `filesystem`, `filesystem-watch`, `harmony-patch`, `hud`, `input`, `navigation`,
+`network`, `particles`, `physics`, `physics-settings`, `player-control`, `prompt-overrides`,
+`quality-settings`, `render-settings`, `robot-spawning`, `scene-management`, `time`, `ugc-livesync`,
+`world-service`
+
+An unknown value is a validation **warning** — and warnings fail the zero-finding publishing bar
+([PublishingYourMod.md](PublishingYourMod.md)).
+
+### Categories
+
+`category` is display metadata. Values in use: `Framework`, `Gameplay`, `Performance`, `Utility`,
+`DevTool`. Exactly two behaviors hang off it:
+
+- `DevTool` mods are excluded from `robotopia pack --all` and from release payloads unless
+  `--include-dev-mods` is passed.
+- `Framework` mods are grouped under a **Libraries & frameworks** section at the end of the launcher's
+  discovery/browse lists for non-developer users — they're usually installed automatically as dependencies
+  rather than browsed for.
 
 Loaded C# assemblies cannot be unloaded from Unity Mono, so enable, disable, update, and uninstall actions are staged and marked restart-required when needed.
 
@@ -115,6 +157,7 @@ Loaded C# assemblies cannot be unloaded from Unity Mono, so enable, disable, upd
 | `service` | Assets | A published `I<Name>Service` via `IModServiceRegistry`, exposed through `apiAssemblies` |
 | `ui` | UI Gallery | An F8-toggled QwUi window (references `Robotopia.Mods.UnityUi`) |
 | `asset` | asset-companion flow | `IAssetBundleService` load/spawn stub + the Unity companion project scaffolded by default |
+| `world` | Sandbox | A bundle-backed world registered via the Worlds service (`RegisterWorldFromBundle`); pairs with `robotopia world link|build|play` (see [CustomWorlds.md](CustomWorlds.md)) |
 
 Every manifest field is settable at scaffold time — repeatable flags repeat (`--tag a --tag b`):
 
@@ -126,8 +169,10 @@ robotopia new mod author.waves --template gamemode --name "Waves" `
   --game-version-range ">=0.1.0 <0.2.0"
 ```
 
-`hashes` are computed by `robotopia pack`, `legacy*` fields by `robotopia migrate legacy`, and `schemaVersion`
-is pinned to 2 — those are intentionally not flags. Add `--unity-companion` for the Unity authoring project, or
+`legacy*` fields are written by `robotopia migrate legacy` and `schemaVersion` is pinned to 2 — those are
+intentionally not flags. (`hashes` is not one either: `robotopia pack` does not write it — the package-level
+sha256 travels in the registry entry / lockfile instead; see [ModPackaging.md](ModPackaging.md).) Add
+`--unity-companion` for the Unity authoring project, or
 `--live-sync [--transport localFolder|automerge] [--watch folder]` to preconfigure UGC live sync (implies the
 companion; see [UgcLiveSync.md](UgcLiveSync.md)).
 
@@ -291,3 +336,11 @@ For **root-cause** fixes that cost no fidelity, the separate `Robotopia.PerfFixe
 allocations (`reuseCollisionCallbacks` + pooled `CollisionEventProxy` dispatch) — so the game does exactly
 the same work, just more cheaply. It is the right choice for "fix the stutter, don't change my graphics".
 See [PerfFixes.md](PerfFixes.md).
+
+## Publishing
+
+Ready to ship? The pipeline is: validate to zero findings (`robotopia check package`) → `robotopia pack` →
+host the `.robotopiamod` at a stable https URL → `robotopia registry add-entry` → PR to the official
+registry. [PublishingYourMod.md](PublishingYourMod.md) is the step-by-step walkthrough;
+[RegistryFormat.md](RegistryFormat.md) covers the source/index/entry formats and self-hosting your own
+package source; [ModPackaging.md](ModPackaging.md) documents exactly what `pack` puts in the package.

@@ -19,6 +19,30 @@ void main() {
     repoRoot = Directory(p.join(root.path, 'package'))..createSync();
     gameRoot = Directory(p.join(root.path, 'Robotopia'))..createSync();
     _createGame(gameRoot);
+    // Keep the official remote source disabled: this suite is about packaged
+    // dist discovery, so a network fetch would only slow the test and add
+    // unrelated failure modes. Reconciliation still rebuilds the local source
+    // URL from the discovered root.
+    File(p.join(dataRoot.path, 'package_sources.json')).writeAsStringSync(
+      jsonEncode({
+        'sources': [
+          {
+            'id': 'robotopia.local',
+            'name': 'Bundled Local Packages',
+            'url': 'file:///reconciled-at-load-time',
+            'enabled': true,
+            'builtIn': true,
+          },
+          {
+            'id': ModRegistryFormat.officialSourceId,
+            'name': ModRegistryFormat.officialSourceName,
+            'url': ModRegistryFormat.officialRegistryUrl,
+            'enabled': false,
+            'builtIn': true,
+          },
+        ],
+      }),
+    );
   });
 
   tearDown(() {
