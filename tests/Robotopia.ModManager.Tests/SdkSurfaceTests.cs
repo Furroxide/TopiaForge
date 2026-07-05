@@ -33,6 +33,8 @@ namespace Robotopia.ModManager.Tests
             TestWorldSessionEndContracts();
             TestPauseMenuContracts();
             TestCustomWorldContracts();
+            TestShopContracts();
+            TestRobotObjectiveProgramContracts();
             Console.WriteLine("All SDK surface tests passed.");
         }
 
@@ -91,6 +93,96 @@ namespace Robotopia.ModManager.Tests
             }
 
             Assert(threw, "WorldSessionEnd null-guards the session");
+        }
+
+        // The wander/flee/reprogram objective additions (RobotKit 0.8.0): appended enum members (mods switch on
+        // these, so a silent reorder is a breaking change), the new factories and their defaults, the courier
+        // payload rules, and the ProgramDelivered event contract.
+        private static void TestRobotObjectiveProgramContracts()
+        {
+            // Pin the enum orders: additions must append.
+            Assert((int)RobotObjectiveKind.Idle == 0 && (int)RobotObjectiveKind.GoTo == 1
+                && (int)RobotObjectiveKind.Follow == 2 && (int)RobotObjectiveKind.Patrol == 3
+                && (int)RobotObjectiveKind.Wander == 4 && (int)RobotObjectiveKind.Flee == 5
+                && (int)RobotObjectiveKind.Reprogram == 6,
+                "RobotObjectiveKind order must be Idle, GoTo, Follow, Patrol, Wander, Flee, Reprogram");
+            Assert((int)RobotObjectiveState.Idle == 0 && (int)RobotObjectiveState.Seeking == 1
+                && (int)RobotObjectiveState.Arrived == 2 && (int)RobotObjectiveState.Dwelling == 3
+                && (int)RobotObjectiveState.TargetMissing == 4 && (int)RobotObjectiveState.Cancelled == 5
+                && (int)RobotObjectiveState.Delivered == 6,
+                "RobotObjectiveState order must end with the appended Delivered");
+
+            // Wander factories: home = nothing (agent position), a named target, or a fixed point.
+            var wanderHere = RobotObjective.Wander();
+            Assert(wanderHere.Kind == RobotObjectiveKind.Wander && wanderHere.TargetName == null
+                && wanderHere.TargetPoint == null && wanderHere.Payload == null,
+                "Wander() roams the set-time position and carries no payload");
+            Assert(Math.Abs(wanderHere.WanderRadius - 8f) < 1e-6f, "WanderRadius defaults to 8 m");
+            wanderHere.WanderRadius = 3f;
+            Assert(Math.Abs(wanderHere.WanderRadius - 3f) < 1e-6f, "WanderRadius is a settable knob");
+            Assert(RobotObjective.Wander("PAD").TargetName == "PAD", "Wander(name) anchors to the named target");
+            Assert(RobotObjective.Wander(new Vec3(1f, 2f, 3f)).TargetPoint != null, "Wander(point) anchors to the point");
+
+            // Flee factory and its distance knob.
+            var flee = RobotObjective.Flee("PLAYER");
+            Assert(flee.Kind == RobotObjectiveKind.Flee && flee.TargetName == "PLAYER" && flee.Payload == null,
+                "Flee(name) targets the threat by name");
+            Assert(Math.Abs(flee.FleeDistance - 8f) < 1e-6f, "FleeDistance defaults to 8 m");
+
+            // Reprogram: courier + payload, by reference, with the no-chain-letters guard.
+            var payload = RobotObjective.Follow("PLAYER");
+            var courier = RobotObjective.Reprogram("ROBOT 2", payload);
+            Assert(courier.Kind == RobotObjectiveKind.Reprogram && courier.TargetName == "ROBOT 2"
+                && ReferenceEquals(courier.Payload, payload),
+                "Reprogram keeps the recipient name and the payload by reference");
+
+            var threwNull = false;
+            try
+            {
+                _ = RobotObjective.Reprogram("ROBOT 2", null!);
+            }
+            catch (ArgumentNullException)
+            {
+                threwNull = true;
+            }
+
+            Assert(threwNull, "Reprogram null-guards the payload");
+
+            var threwNested = false;
+            try
+            {
+                _ = RobotObjective.Reprogram("ROBOT 3", courier);
+            }
+            catch (ArgumentException)
+            {
+                threwNested = true;
+            }
+
+            Assert(threwNested, "a Reprogram payload cannot itself be a Reprogram");
+
+            // Describe() covers the new kinds (HUD badges and ground-truth facts read these).
+            Assert(RobotObjective.Wander().Describe() == "WANDER", "Wander() describes as WANDER");
+            Assert(RobotObjective.Wander("RED MARKER").Describe() == "WANDER NEAR RED MARKER",
+                "a named wander describes its anchor");
+            Assert(flee.Describe() == "FLEE FROM PLAYER", "a flee describes its threat");
+            Assert(courier.Describe() == "REPROGRAM ROBOT 2: FOLLOW PLAYER", "a courier describes recipient and payload");
+
+            // The delivery event contract.
+            var delivered = typeof(IRobotObjectiveService).GetEvent("ProgramDelivered");
+            Assert(delivered != null && delivered.EventHandlerType == typeof(Action<RobotProgramDelivery>),
+                "IRobotObjectiveService exposes ProgramDelivered as Action<RobotProgramDelivery>");
+
+            var threwDelivery = false;
+            try
+            {
+                _ = new RobotProgramDelivery(null!, null!, payload);
+            }
+            catch (ArgumentNullException)
+            {
+                threwDelivery = true;
+            }
+
+            Assert(threwDelivery, "RobotProgramDelivery null-guards its parts");
         }
 
         // The pause-menu customization contract (session-scoped vanilla pause menu integration).
@@ -326,6 +418,36 @@ namespace Robotopia.ModManager.Tests
             Assert(complete != null && complete.PropertyType == typeof(bool), "IRobotBrainQuery should expose a bool IsComplete");
             var result = typeof(IRobotBrainQuery).GetProperty("Result");
             Assert(result != null && result.PropertyType == typeof(BrainQueryResult), "IRobotBrainQuery.Result should be a BrainQueryResult");
+        }
+
+        // The shop contract (catalog item + wallet + purchase arbiter) consumed by the QwUi shop pane.
+        // Behaviour lives in ShopTests; this pins the surface so it cannot regress silently.
+        private static void TestShopContracts()
+        {
+            var item = new ShopItem("mod.item", "ITEM", "desc", 25);
+            Assert(item.Category == string.Empty && item.MaxPurchases == 0,
+                "ShopItem defaults: no category chip, unlimited purchases");
+
+            Assert(typeof(IShopWallet).IsAssignableFrom(typeof(ShopWallet)), "ShopWallet implements IShopWallet");
+            var balanceChanged = typeof(IShopWallet).GetEvent("BalanceChanged");
+            Assert(balanceChanged != null && balanceChanged.EventHandlerType == typeof(Action<int>),
+                "IShopWallet exposes BalanceChanged as Action<int>");
+            var trySpend = typeof(IShopWallet).GetMethod("TrySpend");
+            Assert(trySpend != null && trySpend.ReturnType == typeof(bool)
+                && trySpend.GetParameters().Length == 1 && trySpend.GetParameters()[0].ParameterType == typeof(int),
+                "IShopWallet exposes bool TrySpend(int)");
+            Assert(typeof(IShopWallet).GetProperty("Balance")?.PropertyType == typeof(int),
+                "IShopWallet exposes int Balance");
+
+            // Pin the result set: shop UIs and mods switch on these, so a silent rename/reorder is breaking.
+            Assert((int)ShopPurchaseResult.Purchased == 0 && (int)ShopPurchaseResult.InsufficientFunds == 1
+                && (int)ShopPurchaseResult.SoldOut == 2 && (int)ShopPurchaseResult.Rejected == 3,
+                "ShopPurchaseResult order must be Purchased, InsufficientFunds, SoldOut, Rejected");
+
+            var tryPurchase = typeof(ShopTransactions).GetMethod("TryPurchase");
+            Assert(tryPurchase != null && tryPurchase.ReturnType == typeof(ShopPurchaseResult)
+                && tryPurchase.GetParameters().Length == 4,
+                "ShopTransactions exposes TryPurchase(item, wallet, timesPurchased, canPurchase)");
         }
 
         private static void TestVec3RoundTrip()

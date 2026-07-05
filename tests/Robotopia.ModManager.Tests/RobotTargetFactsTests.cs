@@ -15,6 +15,7 @@ namespace Robotopia.ModManager.Tests
             TestNextToYou();
             TestDistanceRounding();
             TestCompassDirections();
+            TestActivitySuffix();
             Console.WriteLine("All robot target facts tests passed.");
         }
 
@@ -70,6 +71,28 @@ namespace Robotopia.ModManager.Tests
             AssertDirection(-10f, -10f, "south-west");
             AssertDirection(-10f, 0f, "west");
             AssertDirection(-10f, 10f, "north-west");
+        }
+
+        // The 4-arg overload appends what the target is doing right now, so a robot can reason about the
+        // fleet ("another robot, 8 m north of you; currently: FOLLOW PLAYER (moving)").
+        private static void TestActivitySuffix()
+        {
+            var info = new RobotTargetInfo("ROBOT 2", RobotTargetKind.Robot);
+            var north8 = new RobotTargetSnapshot(new Vec3(0f, 0f, 8f));
+
+            Assert(RobotTargetFacts.Describe(info, north8, Vec3.Zero, "currently: FOLLOW PLAYER (moving)")
+                    == "another robot, 8 m north of you; currently: FOLLOW PLAYER (moving)",
+                "a non-blank activity is appended after a semicolon");
+
+            var plain = RobotTargetFacts.Describe(info, north8, Vec3.Zero);
+            Assert(RobotTargetFacts.Describe(info, north8, Vec3.Zero, null) == plain,
+                "a null activity yields exactly the 3-arg line");
+            Assert(RobotTargetFacts.Describe(info, north8, Vec3.Zero, "  ") == plain,
+                "a whitespace activity yields exactly the 3-arg line");
+
+            Assert(RobotTargetFacts.Describe(info, null, Vec3.Zero, "currently: no program")
+                    == "another robot, currently missing; currently: no program",
+                "a missing target still carries the activity suffix");
         }
 
         private static void AssertDirection(float dx, float dz, string expected)

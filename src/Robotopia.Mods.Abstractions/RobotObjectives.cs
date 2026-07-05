@@ -5,8 +5,9 @@ namespace Robotopia.Mods
 {
     /// <summary>
     /// Gives a spawned robot a <b>standing objective</b> — a persistent program ("go to the red marker", "follow the
-    /// player", "patrol between here and the crate") that the service keeps executing frame-to-frame on top of the
-    /// robot's native movement intents, so a mod (or an LLM decision) can program a robot once and walk away instead
+    /// player", "patrol between here and the crate", "wander around the fountain", "keep away from the zombie",
+    /// "walk this program over to ROBOT 2") that the service keeps executing frame-to-frame on top of the robot's
+    /// native movement intents, so a mod (or an LLM decision) can program a robot once and walk away instead
     /// of hand-driving <see cref="IRobotAgent.MoveTo"/> every frame. Objectives reference world things by
     /// <b>registered target names</b> — a session-scoped vocabulary the consumer publishes (the player, marker pads,
     /// spawned props) — which is also exactly the closed set an LLM brain can be asked to choose from.
@@ -68,6 +69,34 @@ namespace Robotopia.Mods
 
         /// <summary>Removes the agent's objective (if any) and stops it, leaving it idling natively.</summary>
         void ClearObjective(IRobotAgent agent);
+
+        /// <summary>
+        /// Raised on the service tick when a <see cref="RobotObjectiveKind.Reprogram"/> courier hands its payload to
+        /// the recipient — the payload has already been applied via <see cref="SetObjective"/> when this fires, so
+        /// subscribers are reacting (toasts, emotes), not deciding. Subscriber exceptions are swallowed and logged.
+        /// </summary>
+        event Action<RobotProgramDelivery>? ProgramDelivered;
+    }
+
+    /// <summary>What a <see cref="IRobotObjectiveService.ProgramDelivered"/> hand-over was: who couriered what to whom.</summary>
+    public sealed class RobotProgramDelivery
+    {
+        /// <summary>Creates a delivery record. All three parts are required.</summary>
+        public RobotProgramDelivery(IRobotAgent sender, IRobotAgent recipient, RobotObjective payload)
+        {
+            Sender = sender ?? throw new ArgumentNullException(nameof(sender));
+            Recipient = recipient ?? throw new ArgumentNullException(nameof(recipient));
+            Payload = payload ?? throw new ArgumentNullException(nameof(payload));
+        }
+
+        /// <summary>The courier robot that walked the program over.</summary>
+        public IRobotAgent Sender { get; }
+
+        /// <summary>The robot that received (and is now running) the payload.</summary>
+        public IRobotAgent Recipient { get; }
+
+        /// <summary>The program that was applied to the recipient.</summary>
+        public RobotObjective Payload { get; }
     }
 
     /// <summary>
@@ -146,7 +175,16 @@ namespace Robotopia.Mods
         Follow,
 
         /// <summary>Loop over a route of waypoints forever, dwelling briefly at each.</summary>
-        Patrol
+        Patrol,
+
+        /// <summary>Roam around a home spot (a point, a named target, or wherever the robot was), dwelling between random legs.</summary>
+        Wander,
+
+        /// <summary>Keep away from a named target, hopping off whenever it comes within <see cref="RobotObjective.FleeDistance"/>.</summary>
+        Flee,
+
+        /// <summary>Courier: walk to a target robot and apply the <see cref="RobotObjective.Payload"/> program to it on arrival.</summary>
+        Reprogram
     }
 
     /// <summary>
@@ -157,12 +195,14 @@ namespace Robotopia.Mods
     /// </summary>
     public sealed class RobotObjective
     {
-        private RobotObjective(RobotObjectiveKind kind, string? targetName, Vec3? targetPoint, IReadOnlyList<Vec3>? waypoints)
+        private RobotObjective(RobotObjectiveKind kind, string? targetName, Vec3? targetPoint, IReadOnlyList<Vec3>? waypoints,
+            RobotObjective? payload = null)
         {
             Kind = kind;
             TargetName = targetName;
             TargetPoint = targetPoint;
             Waypoints = waypoints;
+            Payload = payload;
         }
 
         /// <summary>The behaviour family.</summary>
@@ -177,6 +217,9 @@ namespace Robotopia.Mods
         /// <summary>The patrol route (two or more points), or <c>null</c> for non-patrol objectives.</summary>
         public IReadOnlyList<Vec3>? Waypoints { get; }
 
+        /// <summary>The program a <see cref="RobotObjectiveKind.Reprogram"/> courier delivers, or <c>null</c> for every other kind.</summary>
+        public RobotObjective? Payload { get; }
+
         /// <summary>How close (metres) to the current goal counts as arrived. Applied as the agent's <see cref="IRobotAgent.StopDistance"/>.</summary>
         public float ArriveDistance { get; set; } = 1.5f;
 
@@ -185,6 +228,12 @@ namespace Robotopia.Mods
 
         /// <summary>The native speed tier the robot moves at while executing this objective.</summary>
         public RobotGait Gait { get; set; } = RobotGait.Run;
+
+        /// <summary>How far (metres) a wandering robot roams from its home spot.</summary>
+        public float WanderRadius { get; set; } = 8f;
+
+        /// <summary>How close (metres) a fled-from target may come before the robot hops away again.</summary>
+        public float FleeDistance { get; set; } = 8f;
 
         /// <summary>Stand down and idle.</summary>
         public static RobotObjective Idle()
@@ -225,6 +274,56 @@ namespace Robotopia.Mods
             return new RobotObjective(RobotObjectiveKind.Patrol, targetName ?? string.Empty, null, null);
         }
 
+        /// <summary>Roam around wherever the robot is when the objective is set, dwelling between random legs.</summary>
+        public static RobotObjective Wander()
+        {
+            return new RobotObjective(RobotObjectiveKind.Wander, null, null, null);
+        }
+
+        /// <summary>Roam around the named target — the home drifts with it as it moves (re-resolved like Follow).</summary>
+        public static RobotObjective Wander(string targetName)
+        {
+            return new RobotObjective(RobotObjectiveKind.Wander, targetName ?? string.Empty, null, null);
+        }
+
+        /// <summary>Roam around a fixed world point.</summary>
+        public static RobotObjective Wander(Vec3 home)
+        {
+            return new RobotObjective(RobotObjectiveKind.Wander, null, home, null);
+        }
+
+        /// <summary>
+        /// Keep away from the named target: whenever it comes within <see cref="FleeDistance"/>, hop directly away,
+        /// re-evaluating as it moves. <see cref="RobotObjectiveState.Arrived"/> means "currently at a safe distance".
+        /// </summary>
+        public static RobotObjective Flee(string targetName)
+        {
+            return new RobotObjective(RobotObjectiveKind.Flee, targetName ?? string.Empty, null, null);
+        }
+
+        /// <summary>
+        /// Courier a program to another robot: walk to the named target robot and, on arrival, apply
+        /// <paramref name="payload"/> to it as its new objective (clean-slate, like
+        /// <see cref="IRobotObjectiveService.SetObjective"/>). The messenger then parks in
+        /// <see cref="RobotObjectiveState.Delivered"/> and the service raises
+        /// <see cref="IRobotObjectiveService.ProgramDelivered"/>. The payload cannot itself be a Reprogram —
+        /// couriers deliver programs, not chain letters.
+        /// </summary>
+        public static RobotObjective Reprogram(string targetRobotName, RobotObjective payload)
+        {
+            if (payload == null)
+            {
+                throw new ArgumentNullException(nameof(payload));
+            }
+
+            if (payload.Kind == RobotObjectiveKind.Reprogram)
+            {
+                throw new ArgumentException("A reprogram payload cannot itself be a Reprogram.", nameof(payload));
+            }
+
+            return new RobotObjective(RobotObjectiveKind.Reprogram, targetRobotName ?? string.Empty, null, null, payload);
+        }
+
         /// <summary>A short human-readable description (e.g. <c>"FOLLOW PLAYER"</c>) for HUD badges and ground-truth facts.</summary>
         public string Describe()
         {
@@ -236,6 +335,12 @@ namespace Robotopia.Mods
                     return "FOLLOW " + (TargetName ?? "TARGET");
                 case RobotObjectiveKind.Patrol:
                     return TargetName != null ? "PATROL TO " + TargetName : "PATROL ROUTE";
+                case RobotObjectiveKind.Wander:
+                    return TargetName != null ? "WANDER NEAR " + TargetName : "WANDER";
+                case RobotObjectiveKind.Flee:
+                    return "FLEE FROM " + (TargetName ?? "TARGET");
+                case RobotObjectiveKind.Reprogram:
+                    return "REPROGRAM " + (TargetName ?? "ROBOT") + ": " + (Payload?.Describe() ?? "IDLE");
                 default:
                     return "IDLE";
             }
@@ -261,7 +366,10 @@ namespace Robotopia.Mods
         TargetMissing,
 
         /// <summary>The objective was cancelled or replaced; the handle is inert.</summary>
-        Cancelled
+        Cancelled,
+
+        /// <summary>A <see cref="RobotObjectiveKind.Reprogram"/> courier handed its payload over; the messenger holds position. Terminal.</summary>
+        Delivered
     }
 
     /// <summary>

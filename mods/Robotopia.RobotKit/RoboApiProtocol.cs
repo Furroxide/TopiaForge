@@ -18,6 +18,11 @@ namespace Robotopia.RobotKit
         // The only model the gateway serves for a player token, based on observed RoboAPI behavior.
         public const string DefaultModel = "llama-3.3-70b";
 
+        // The backend hard-caps a /agent/check3 request at this many output fields; a sixth is rejected with
+        // "Bad Request: Too many outputs: max 5, got N" (verified live). A conversation always spends two of these
+        // on the built-in reply + decision, so a RobotConversationRequest may add at most THREE ExtraOutputs.
+        public const int MaxOutputs = 5;
+
         // Hard ceiling on any returned string, so a runaway generation can never overflow a HUD label or balloon
         // memory (the backend enforces no output length cap).
         public const int DefaultMaxValueChars = 600;

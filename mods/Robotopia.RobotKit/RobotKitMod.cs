@@ -23,7 +23,9 @@ namespace Robotopia.RobotKit
             brainService = new RobotBrainQueryService(context.Logger);
             conversationService = new RobotConversationService(brainService, context.Logger);
             dialogueInputService = new PlayerDialogueInputService(context.Logger);
-            objectiveService = new RobotObjectiveService(context.Logger);
+            // The objective service resolves Reprogram courier recipients back to agent handles via the agent
+            // service (live-object reference -> IRobotAgent), staying Unity-free itself.
+            objectiveService = new RobotObjectiveService(context.Logger, null, obj => service?.FindAgentByGameObject(obj));
 
             var registry = context.GetService<IModServiceRegistry>();
             registry?.Register<IRobotAgentService>(context.ModId, service);

@@ -3,11 +3,11 @@
   "schemaVersion": 2,
   "name": "robotopia.robotkit",
   "displayName": "Robotopia RobotKit",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "author": {
     "name": "QuantumWorks"
   },
-  "description": "Framework SDK service for spawning standard-agent robots that come up native (body, animation, native locomotion) and are driven by the game's own pathing, then overridden for behaviour and visuals. Also publishes a structured robot brain-query service, a multi-turn robot conversation service, a player dialogue-input service (typed text + push-to-talk voice via /agent/stt), and a robot objective service (persistent go-to/follow/patrol programs over named world targets) — the network services proxied through the game's own RoboAPI backend, mirroring how the base game lets you talk to robots.",
+  "description": "Framework SDK service for spawning standard-agent robots that come up native (body, animation, native locomotion) and are driven by the game's own pathing, then overridden for behaviour and visuals. Also publishes a structured robot brain-query service, a multi-turn robot conversation service, a player dialogue-input service (typed text + push-to-talk voice via /agent/stt), and a robot objective service (persistent go-to/follow/patrol/wander/flee programs over named world targets, plus robot-to-robot reprogramming: a courier robot walks a payload program over to another robot and applies it on arrival, with a delivery event mods can react to) — the network services proxied through the game's own RoboAPI backend, mirroring how the base game lets you talk to robots.",
   "entryAssembly": "Robotopia.RobotKit.dll",
   "entryType": "Robotopia.RobotKit.RobotKitMod",
   "vpmDependencies": {},

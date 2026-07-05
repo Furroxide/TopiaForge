@@ -84,6 +84,27 @@ namespace Robotopia.RobotKit
             }
         }
 
+        // Maps a spawned robot's GameObject (as object) back to its agent handle, by CLR reference — identity
+        // holds regardless of Unity fake-null, and consumers hand out agent.GameObject itself (target snapshots).
+        // Used by the objective service to resolve a Reprogram courier's recipient. Null for foreign objects.
+        internal IRobotAgent? FindAgentByGameObject(object gameObject)
+        {
+            if (gameObject == null)
+            {
+                return null;
+            }
+
+            for (var index = 0; index < agents.Count; index++)
+            {
+                if (ReferenceEquals(agents[index].GameObject, gameObject))
+                {
+                    return agents[index];
+                }
+            }
+
+            return null;
+        }
+
         public IRobotAgent? Spawn(RobotAgentSpawnRequest request)
         {
             if (disposed || request == null)
