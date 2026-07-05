@@ -246,8 +246,15 @@ extension LauncherDeveloperUgcActions on LauncherBloc {
         return;
       }
 
-      await _repository.deployUgcLiveSyncConfig(install, settings);
-      final result = await _repository.launch(install, profile);
+      final launchInstall = await _repairRuntimeBeforeLaunchIfNeeded(
+        emit,
+        install,
+      );
+      if (launchInstall == null) {
+        return;
+      }
+      await _repository.deployUgcLiveSyncConfig(launchInstall, settings);
+      final result = await _repository.launch(launchInstall, profile);
       emit(
         state.copyWith(
           isBusy: false,

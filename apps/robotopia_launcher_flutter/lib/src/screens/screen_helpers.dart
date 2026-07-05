@@ -17,7 +17,7 @@ StatusPill _restartPill(
     tone: StatusTone.warning,
     icon: Icons.restart_alt,
     tooltip: _restartRequiredTooltip,
-    onPressed: state.canLaunch && !state.isBusy
+    onPressed: state.canStartLaunchFlow && !state.isBusy
         ? () => _confirmRestart(context)
         : null,
   );

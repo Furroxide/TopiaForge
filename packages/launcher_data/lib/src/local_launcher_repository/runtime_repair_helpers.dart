@@ -1,6 +1,51 @@
 part of '../local_launcher_repository.dart';
 
 extension LocalLauncherRuntimeRepair on LocalLauncherRepository {
+  Future<_PreparedRuntime> _prepareRuntimeForLaunch(GameInstall install) async {
+    final current = await _validateGameDirectory(install.path);
+    final blockingIssues = current.issues.where((issue) => issue.isBlocking);
+    if (blockingIssues.isNotEmpty) {
+      return _PreparedRuntime.failed(
+        LaunchResult(
+          started: false,
+          message: blockingIssues.map((issue) => issue.message).join(' '),
+        ),
+      );
+    }
+
+    if (!current.needsRepair) {
+      return _PreparedRuntime.ready(current);
+    }
+
+    final report = await _installOrRepairRuntime(current);
+    final refreshed = await _validateGameDirectory(current.path);
+    if (report.ok && !refreshed.needsRepair && refreshed.canLaunch) {
+      return _PreparedRuntime.ready(refreshed);
+    }
+
+    final messages = [
+      ...report.issues
+          .where((issue) => issue.isBlocking)
+          .map((issue) => issue.message),
+      ...refreshed.issues
+          .where((issue) => issue.isBlocking)
+          .map((issue) => issue.message),
+    ];
+    if (messages.isEmpty && refreshed.needsRepair) {
+      messages.add('Runtime files are still missing or stale after repair.');
+    }
+
+    return _PreparedRuntime.failed(
+      LaunchResult(
+        started: false,
+        message: [
+          'Automatic runtime repair could not complete.',
+          ...messages,
+        ].join(' '),
+      ),
+    );
+  }
+
   Future<RepairReport> _installOrRepairRuntime(GameInstall install) async {
     final actions = <String>[];
     final issues = <LauncherIssue>[];
@@ -150,4 +195,12 @@ extension LocalLauncherRuntimeRepair on LocalLauncherRepository {
       path,
     ], mode: ProcessStartMode.detached);
   }
+}
+
+class _PreparedRuntime {
+  const _PreparedRuntime.ready(this.install) : failure = null;
+  const _PreparedRuntime.failed(this.failure) : install = null;
+
+  final GameInstall? install;
+  final LaunchResult? failure;
 }

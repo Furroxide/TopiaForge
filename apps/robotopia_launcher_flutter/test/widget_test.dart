@@ -5,6 +5,7 @@ import 'package:launcher_ui/launcher_ui.dart';
 import 'package:robotopia_launcher_flutter/src/launcher_app.dart';
 
 part 'widget_test_fakes.dart';
+part 'widget_test_snapshots.dart';
 
 // The Developer screen's ListView scrollable (stable across rebuilds). Scoped by key so it never resolves to a
 // pane's internal TextField scrollable, which the lazy ListView disposes as content scrolls off-screen.
@@ -40,6 +41,13 @@ void main() {
     expect(find.text('FIND MY GAME'), findsOneWidget);
     expect(find.text('Choose the folder myself'), findsOneWidget);
     expect(find.text('Pick your mods'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(NavigationRail),
+        matching: find.byType(Badge),
+      ),
+      findsNothing,
+    );
   });
 
   // Home stacks the hero, profiles, and discover zones vertically; the
@@ -76,6 +84,27 @@ void main() {
     expect(find.text('Preview Update'), findsOneWidget);
   });
 
+  testWidgets('sidebar badges Mods and Browse when mod updates exist', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      RobotopiaLauncherApp(
+        repository: _FakeLauncherRepository(snapshot: _updateSnapshot()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final rail = find.byType(NavigationRail);
+    expect(
+      find.descendant(of: rail, matching: find.byType(Badge)),
+      findsNWidgets(2),
+    );
+    expect(
+      find.descendant(of: rail, matching: find.text('1')),
+      findsNWidgets(2),
+    );
+  });
+
   testWidgets('home glow button launches the selected profile', (tester) async {
     final repository = _FakeLauncherRepository(snapshot: _updateSnapshot());
     await pumpHome(tester, repository);
@@ -97,11 +126,53 @@ void main() {
 
     expect(find.text('Almost ready'), findsOneWidget);
     final glowButton = tester.widget<GlowButton>(find.byType(GlowButton));
-    expect(glowButton.onPressed, isNull);
+    expect(glowButton.onPressed, isNotNull);
 
     await tester.tap(find.text('Runtime needs a quick fix'));
     await tester.pumpAndSettle();
     expect(repository.installOrRepairRuntimeCount, 1);
+  });
+
+  testWidgets('launch auto-repairs stale runtime before starting', (
+    tester,
+  ) async {
+    final repository = _FakeLauncherRepository(
+      snapshot: _readySnapshot(needsRepair: true),
+    );
+    await pumpHome(tester, repository);
+
+    await tester.tap(find.text('LAUNCH'));
+    await tester.pumpAndSettle();
+
+    expect(repository.installOrRepairRuntimeCount, 1);
+    expect(repository.launchedProfileIds, ['default']);
+    expect(find.text('Launched Robotopia.'), findsOneWidget);
+  });
+
+  testWidgets('bottom repair-needed chip runs runtime repair', (tester) async {
+    final repository = _FakeLauncherRepository(
+      snapshot: _readySnapshot(needsRepair: true),
+    );
+    await pumpHome(tester, repository);
+
+    await tester.tap(find.text('Repair needed'));
+    await tester.pumpAndSettle();
+
+    expect(repository.installOrRepairRuntimeCount, 1);
+    expect(find.text('Runtime ready'), findsWidgets);
+  });
+
+  testWidgets('bottom no-game chip opens Setup', (tester) async {
+    await tester.pumpWidget(
+      RobotopiaLauncherApp(repository: _FakeLauncherRepository()),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('No game selected'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Select Robotopia'), findsOneWidget);
+    expect(find.text('Detect Install'), findsOneWidget);
   });
 
   testWidgets('home discover rail funnels into Browse when registry is empty', (
@@ -194,6 +265,25 @@ void main() {
     await tester.tap(find.text('Play').last);
     await tester.pumpAndSettle();
 
+    expect(repository.launchedProfileIds, ['coop']);
+  });
+
+  testWidgets('profile card play auto-repairs before launch', (tester) async {
+    final repository = _FakeLauncherRepository(
+      snapshot: _readySnapshot(
+        needsRepair: true,
+        profiles: [
+          LauncherProfile.defaultProfile(),
+          const LauncherProfile(id: 'coop', name: 'Co-op'),
+        ],
+      ),
+    );
+    await pumpHome(tester, repository);
+
+    await tester.tap(find.text('Play').last);
+    await tester.pumpAndSettle();
+
+    expect(repository.installOrRepairRuntimeCount, 1);
     expect(repository.launchedProfileIds, ['coop']);
   });
 
@@ -383,7 +473,9 @@ void main() {
   });
 
   testWidgets('confirms restart before relaunching Robotopia', (tester) async {
-    final repository = _FakeLauncherRepository(snapshot: _updateSnapshot());
+    final repository = _FakeLauncherRepository(
+      snapshot: _updateSnapshot(needsRepair: true),
+    );
     await tester.pumpWidget(RobotopiaLauncherApp(repository: repository));
     await tester.pumpAndSettle();
 
@@ -399,46 +491,8 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Restart'));
     await tester.pumpAndSettle();
 
+    expect(repository.installOrRepairRuntimeCount, 1);
     expect(repository.restartCount, 1);
     expect(find.text('Restarted Robotopia.'), findsOneWidget);
   });
-}
-
-LauncherSnapshot _discoverySnapshot({bool developerMode = false}) {
-  return LauncherSnapshot(
-    gameInstall: const GameInstall(
-      path: 'C:\\Games\\Robotopia',
-      executablePath: 'C:\\Games\\Robotopia\\Robotopia.exe',
-      bepInExStatus: ComponentState.ready,
-      loaderStatus: ComponentState.ready,
-    ),
-    profiles: [LauncherProfile.defaultProfile()],
-    selectedProfileId: 'default',
-    installedMods: const [],
-    registryMods: [
-      _registryMod('framework.mod', 'Framework Mod', 'Framework'),
-      _registryMod('gameplay.mod', 'Gameplay Mod', 'Gameplay'),
-    ],
-    packageSources: const [],
-    worldCatalog: WorldCatalog.fallback(),
-    legacyMods: const [],
-    recentLog: '',
-    launcherUpdates: const LauncherUpdateSettings(enabled: false),
-    developerMode: developerMode,
-  );
-}
-
-RegistryMod _registryMod(String id, String name, String category) {
-  return RegistryMod(
-    manifest: ModManifest(
-      schemaVersion: 2,
-      id: id,
-      name: name,
-      version: '1.0.0',
-      author: const ModAuthor(name: 'QuantumWorks'),
-      entryAssembly: '$id.dll',
-      entryType: '$id.Entry',
-      category: category,
-    ),
-  );
 }

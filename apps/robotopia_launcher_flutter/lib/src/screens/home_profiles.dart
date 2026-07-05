@@ -128,7 +128,7 @@ class _ProfileCard extends StatelessWidget {
               Row(
                 children: [
                   FilledButton.icon(
-                    onPressed: state.canLaunch && !state.isBusy
+                    onPressed: state.canStartLaunchFlow && !state.isBusy
                         ? () =>
                               _add(context, ProfileLaunchRequested(profile.id))
                         : null,

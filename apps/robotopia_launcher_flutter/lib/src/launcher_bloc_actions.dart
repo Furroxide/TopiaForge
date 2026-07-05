@@ -105,7 +105,14 @@ extension LauncherBlocActions on LauncherBloc {
       return;
     }
     await _guard(emit, 'Launched Robotopia.', () async {
-      final result = await _repository.launch(install, profile);
+      final launchInstall = await _repairRuntimeBeforeLaunchIfNeeded(
+        emit,
+        install,
+      );
+      if (launchInstall == null) {
+        return;
+      }
+      final result = await _repository.launch(launchInstall, profile);
       emit(_launchResultState(result));
     });
   }
@@ -120,7 +127,14 @@ extension LauncherBlocActions on LauncherBloc {
       return;
     }
     await _guard(emit, 'Restarted Robotopia.', () async {
-      final result = await _repository.restart(install, profile);
+      final launchInstall = await _repairRuntimeBeforeLaunchIfNeeded(
+        emit,
+        install,
+      );
+      if (launchInstall == null) {
+        return;
+      }
+      final result = await _repository.restart(launchInstall, profile);
       emit(_launchResultState(result));
     });
   }
@@ -149,5 +163,69 @@ extension LauncherBlocActions on LauncherBloc {
     Emitter<LauncherState> emit,
   ) {
     return _repository.openPath(_repository.dataRoot);
+  }
+
+  Future<GameInstall?> _repairRuntimeBeforeLaunchIfNeeded(
+    Emitter<LauncherState> emit,
+    GameInstall install,
+  ) async {
+    if (!install.needsRepair) {
+      return install;
+    }
+
+    emit(state.copyWith(statusMessage: 'Repairing runtime before launch.'));
+    final report = await _repository.installOrRepairRuntime(install);
+    final snapshot = await _repository.loadSnapshot();
+    final refreshed = snapshot.gameInstall;
+    final repaired =
+        report.ok &&
+        refreshed != null &&
+        !refreshed.needsRepair &&
+        refreshed.canLaunch;
+
+    if (!repaired) {
+      final message = _runtimeRepairFailureMessage(report, refreshed);
+      emit(
+        _snapshotState(snapshot, message).copyWith(
+          isBusy: false,
+          statusMessage: message,
+          errorMessage: message,
+        ),
+      );
+      return null;
+    }
+
+    emit(
+      _snapshotState(
+        snapshot,
+        'Runtime repaired. Launching Robotopia.',
+      ).copyWith(isBusy: true, clearError: true),
+    );
+    return refreshed;
+  }
+
+  String _runtimeRepairFailureMessage(
+    RepairReport report,
+    GameInstall? install,
+  ) {
+    final messages = [
+      ...report.issues
+          .where((issue) => issue.isBlocking)
+          .map((issue) => issue.message),
+      if (install != null)
+        ...install.issues
+            .where((issue) => issue.isBlocking)
+            .map((issue) => issue.message),
+    ];
+    if (messages.isEmpty && install?.needsRepair == true) {
+      messages.add('Runtime files are still missing or stale after repair.');
+    }
+    if (messages.isEmpty) {
+      messages.add('Open Setup or Diagnostics for details.');
+    }
+    return [
+      'Automatic runtime repair could not complete.',
+      ...messages,
+    ].join(' ');
   }
 }

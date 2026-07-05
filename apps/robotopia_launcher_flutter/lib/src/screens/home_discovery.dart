@@ -241,6 +241,3 @@ class _FindFirstModCard extends StatelessWidget {
     );
   }
 }
-
-/// The very first thing a new user sees: no game detected yet, so everything
-/// funnels into one friendly action.

@@ -162,6 +162,16 @@ class LauncherState {
         selectedProfile != null;
   }
 
+  bool get canStartLaunchFlow {
+    return gameInstall != null &&
+        gameInstall!.canLaunch &&
+        selectedProfile != null;
+  }
+
+  int get availableModUpdateCount {
+    return registryMods.where((mod) => mod.updateAvailable).length;
+  }
+
   List<InstalledMod> get filteredMods {
     final query = modSearch.trim().toLowerCase();
     if (query.isEmpty) {

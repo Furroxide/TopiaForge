@@ -33,7 +33,14 @@ extension LauncherProfileActions on LauncherBloc {
     await _repository.saveProfiles(state.profiles, event.profileId);
     emit(state.copyWith(selectedProfileId: event.profileId));
     await _guard(emit, 'Launched Robotopia.', () async {
-      final result = await _repository.launch(install, selected);
+      final launchInstall = await _repairRuntimeBeforeLaunchIfNeeded(
+        emit,
+        install,
+      );
+      if (launchInstall == null) {
+        return;
+      }
+      final result = await _repository.launch(launchInstall, selected);
       emit(_launchResultState(result));
     });
   }

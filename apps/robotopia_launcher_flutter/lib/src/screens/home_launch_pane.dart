@@ -108,7 +108,7 @@ class _HeroLaunchPane extends StatelessWidget {
                           GlowButton(
                             label: safeMode ? 'Launch Safe' : 'Launch',
                             icon: Icons.rocket_launch,
-                            onPressed: state.canLaunch && !state.isBusy
+                            onPressed: state.canStartLaunchFlow && !state.isBusy
                                 ? () =>
                                       _add(context, const GameLaunchRequested())
                                 : null,
