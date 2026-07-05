@@ -66,7 +66,7 @@ extension _RobotopiaUgcCommands on _RobotopiaCli {
         final folder = args.length > 1 ? args[1] : null;
         if (folder == null) {
           stderr.writeln('Usage: robotopia ugc watch <folder> [...]');
-          return 1;
+          return 2;
         }
         forward.addAll(['--watch', folder, ...args.skip(2)]);
         break;
@@ -108,8 +108,7 @@ extension _RobotopiaUgcCommands on _RobotopiaCli {
     }
   }
 
-  // Unity-side VPM from the terminal: scaffold packages, manage packages, and
-  // manage listings.
+  // Reads the game's UGC live-sync status handshake and lists watch-folder scenes.
   Future<int> _ugcStatus(List<String> args) async {
     final launcher = LocalLauncherRepository();
     final install =

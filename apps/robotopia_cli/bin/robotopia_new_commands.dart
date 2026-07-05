@@ -6,7 +6,7 @@ extension _NewCommands on _RobotopiaCli {
   Future<int> _new(List<String> args) async {
     if (args.firstOrNull == 'unity-world') {
       if (args.length < 2) {
-        throw StateError(
+        throw UsageError(
           'Usage: robotopia new unity-world <name> [--dir Path]',
         );
       }
@@ -59,7 +59,7 @@ extension _NewCommands on _RobotopiaCli {
       return 0;
     }
     if (args.firstOrNull != 'mod' || args.length < 2) {
-      throw StateError(
+      throw UsageError(
         'Usage: robotopia new mod <id> [--template id] [--name Name] [--dir Path] [flags...]\n'
         '       robotopia new unity-world <name> [--dir Path] [--live-sync [--watch folder]]\n'
         'Run `robotopia list templates` for template ids and `robotopia help` for the full flag list.',

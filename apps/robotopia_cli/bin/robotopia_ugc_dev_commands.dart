@@ -1,6 +1,8 @@
 part of 'robotopia.dart';
 
 extension _RobotopiaUgcDevCommands on _RobotopiaCli {
+  /// `robotopia ugc setup` — persists live-sync settings into the project and deploys the game runtime config
+  /// in one shot. Usable without a game install (`--no-deploy` or auto-skip with a warning).
   Future<int> _ugcSetup(List<String> args) async {
     final projectPath = _option(args, '--project') ?? Directory.current.path;
     final workspace = await developerRepository.loadDeveloperWorkspace(

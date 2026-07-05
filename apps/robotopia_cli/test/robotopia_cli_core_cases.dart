@@ -17,13 +17,13 @@ void _coreCliTests(_CliTestHarness Function() currentHarness) {
   });
 
   test(
-    'unknown command exits 1 with a short pointer, not the full help',
+    'unknown command exits 2 with a short pointer, not the full help',
     () async {
       final result = await currentHarness().runCli([
         'definitely-not-a-command',
       ]);
 
-      expect(result.exitCode, 1);
+      expect(result.exitCode, 2);
       final errText = result.stderr.toString();
       expect(errText, contains('Unknown command: definitely-not-a-command'));
       expect(errText, contains('robotopia help'));
@@ -35,21 +35,22 @@ void _coreCliTests(_CliTestHarness Function() currentHarness) {
   test('unknown command suggests a near-miss command', () async {
     final result = await currentHarness().runCli(['isntall']);
 
-    expect(result.exitCode, 1);
+    expect(result.exitCode, 2);
     expect(
       result.stderr.toString(),
       contains('Did you mean: robotopia install?'),
     );
   });
 
-  test('check without a subcommand prints usage and exits 1', () async {
+  test('check without a subcommand prints usage and exits 2', () async {
     final result = await currentHarness().runCli(['check']);
 
-    expect(result.exitCode, 1);
+    expect(result.exitCode, 2);
     expect(
       result.stderr.toString(),
       contains('Usage: robotopia check project|package'),
     );
+    expect(result.stderr.toString(), isNot(contains('Bad state:')));
   });
 
   test('check package on a nonexistent path fails with guidance', () async {
