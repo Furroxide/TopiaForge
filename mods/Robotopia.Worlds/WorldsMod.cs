@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using Robotopia.Mods;
 using UnityEngine.SceneManagement;
 
@@ -109,49 +108,28 @@ namespace Robotopia.Worlds
 
         private static WorldLoadResult AutoLoad(WorldsService service, WorldsConfig config, IModLogger logger)
         {
-            // If the user pinned a specific, still-registered world (anything other than the default sandbox),
-            // honour it directly with the configured load mode. The sandbox default is deliberately NOT launched
-            // directly from here: at the menu it would build an additive arena over the menu and strand the
-            // player on the home screen, so it routes through the gamemode's menu entry below, which resolves a
-            // real checkpoint-backed level. A stale/unknown world id falls through to the resilient menu path.
-            var pinsWorld = !string.IsNullOrWhiteSpace(config.SelectedWorldId)
-                && !string.Equals(config.SelectedWorldId, WorldsService.OpenSandboxWorldId, StringComparison.OrdinalIgnoreCase);
-            var pinnedWorldRegistered = pinsWorld
-                && service.Worlds.Any(world => string.Equals(world.Id, config.SelectedWorldId, StringComparison.OrdinalIgnoreCase));
-            if (pinnedWorldRegistered)
-            {
-                return service.Load(new WorldLoadRequest(
-                    config.SelectedWorldId,
-                    config.SelectedGamemodeId,
-                    config.PreferSceneReplacement,
-                    config.AllowAdditiveFallback));
-            }
-
-            if (pinsWorld)
-            {
-                // The config asks for a specific world that no longer exists in the registry (most often the
-                // game's curated level list failed to load this run, so only the bare sandbox is available).
-                // Surface that loudly instead of silently substituting a different world via the fallback below.
-                logger.Warn("Auto-launch: configured world '" + config.SelectedWorldId
-                    + "' is not registered (the level list may not have loaded); falling back to the gamemode's default world.");
-            }
-
-            // Prefer the configured gamemode's registered menu entry: that resolves a real, playable level and
-            // loads it through the game's own loader (leaving the menu), exactly like the in-game Gamemodes
-            // button, honouring the configured load mode. Fall back to the raw world/gamemode only as a default.
-            foreach (var entry in service.MenuEntries)
-            {
-                if (string.Equals(entry.GamemodeId, config.SelectedGamemodeId, StringComparison.OrdinalIgnoreCase))
-                {
-                    return service.LaunchMenuEntry(entry.Id, config.PreferSceneReplacement, config.AllowAdditiveFallback);
-                }
-            }
-
-            return service.Load(new WorldLoadRequest(
+            // Honour any explicitly selected, registered world directly, including Open Sandbox. WorldsService.Load
+            // routes Open Sandbox through the clean UgcPlay scene; falling back through a blank gamemode menu entry
+            // can instead choose the first story checkpoint, which may be the tutorial.
+            var route = WorldAutoLoadRouter.Resolve(
+                service.Worlds,
+                service.MenuEntries,
                 config.SelectedWorldId,
                 config.SelectedGamemodeId,
                 config.PreferSceneReplacement,
-                config.AllowAdditiveFallback));
+                config.AllowAdditiveFallback);
+
+            if (!string.IsNullOrWhiteSpace(route.Warning))
+            {
+                logger.Warn(route.Warning);
+            }
+
+            if (route.Kind == WorldAutoLoadRouteKind.LaunchMenuEntry)
+            {
+                return service.LaunchMenuEntry(route.MenuEntryId, route.PreferSceneReplacement, route.AllowAdditiveFallback);
+            }
+
+            return service.Load(route.Request!);
         }
     }
 }

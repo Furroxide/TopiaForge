@@ -335,5 +335,19 @@ clobbers manual window changes on later domain reloads; re-running `ugc dev` re-
 live store is still machine-global EditorPrefs — when switching between projects on the same machine, go through
 `ugc dev` so the seed re-points the watch folder.
 
+### Command reference
+
+| Command | What it does |
+|---|---|
+| `robotopia ugc setup [--transport localFolder\|automerge] [--watch folder] [--sync url] [--doc url] [--scene id] [--auto-connect\|--no-auto-connect] [--debounce ms] [--max-snapshot bytes] [--project path] [--no-deploy]` | Persist live-sync settings to `robotopia.project.json` and deploy the game runtime config in one shot. |
+| `robotopia ugc dev [--project path\|name] [--new name [--dir path]] [--watch folder] [--scene id] [--scene-name n] [--environment env] [--transport localFolder\|automerge] [--update-companion] [--launch-game] [--dry-run]` | Resolve/create the Unity world project, seed the companion, deploy the game config, and launch Unity connected; `--dry-run` prints the resolved plan with no side effects. |
+| `robotopia ugc check [--watch folder] [--sync url]` | Verify Node + sidecar deps + resolved config without connecting. |
+| `robotopia ugc status [--watch folder]` | Print the game's status handshake and the watch folder's scenes. |
+| `robotopia ugc publish --file <project.json> [--sync url] [--doc url] [--scene id] [--session-file path]` | One-shot publish of an export JSON to an Automerge document (prints the document URL). |
+| `robotopia ugc watch <folder> [--sync url] [--doc url] [--scene id] [--session-file path]` | Watch an export folder and re-publish on every change. |
+| `robotopia ugc go-live` | Deploy the project's live-sync config with auto-connect on and launch the game. |
+
+Ready to ship the mod that carries your content? See [PublishingYourMod.md](PublishingYourMod.md).
+
 See [CreatorCompanion.md](CreatorCompanion.md) for the surrounding Creator-Companion workflow (projects, Unity
 templates, and VPM packages).
