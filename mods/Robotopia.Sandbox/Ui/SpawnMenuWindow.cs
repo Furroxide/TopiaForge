@@ -7,9 +7,9 @@ namespace Robotopia.Sandbox.Ui
 {
     /// <summary>
     /// The sandbox "Q menu": a Paper window with Props (searchable thumbnail grid — click to spawn,
-    /// hover for details), NPCs (RobotKit spawn options, or an unavailable hint), and Tools
-    /// (undo/freeze/cleanup + rebinds). Content containers are built once and toggled per tab so
-    /// input state survives tab switches.
+    /// hover for details), NPCs (RobotKit spawn options, or an unavailable hint), Robots (the live
+    /// roster with per-robot programs), and Tools (undo/freeze/cleanup + rebinds). Content containers
+    /// are built once and toggled per tab so input state survives tab switches.
     /// </summary>
     internal sealed class SpawnMenuWindow : IDisposable
     {
@@ -28,7 +28,10 @@ namespace Robotopia.Sandbox.Ui
         private readonly QwWindow window;
         private readonly QwContainer propsPane;
         private readonly QwContainer npcsPane;
+        private readonly QwContainer robotsPane;
         private readonly QwContainer toolsPane;
+        private readonly RobotRosterTab roster;
+        private int selectedPane;
         private readonly QwContainer propGrid;
         private readonly QwLabel propStatus;
         private readonly PropThumbnails thumbnails;
@@ -57,7 +60,7 @@ namespace Robotopia.Sandbox.Ui
             // loads in Single mode, so the canvas must be persistent (DontDestroyOnLoad) to survive the swap.
             window = ui.Window("spawnmenu", "SANDBOX", width: 560f, height: 540f, persistent: true);
             var content = window.Content;
-            var tabs = content.Tabs("PROPS", "NPCS", "TOOLS");
+            var tabs = content.Tabs("PROPS", "NPCS", "ROBOTS", "TOOLS");
 
             var paneHost = content.Stack("Panes");
             paneHost.Flex(1f, 1f);
@@ -65,6 +68,7 @@ namespace Robotopia.Sandbox.Ui
             // full-size pane is visible per selected tab.
             propsPane = paneHost.Column(QwGap.Sm, QwGap.Sm).Stretch();
             npcsPane = paneHost.Column(QwGap.Sm, QwGap.Sm).Stretch();
+            robotsPane = paneHost.Column(QwGap.Sm, QwGap.Sm).Stretch();
             toolsPane = paneHost.Column(QwGap.Sm, QwGap.Sm).Stretch();
 
             // --- PROPS ---
@@ -137,6 +141,9 @@ namespace Robotopia.Sandbox.Ui
             lastRobotsAvailable = controller.RobotsAvailable;
             ApplyRobotsAvailability(lastRobotsAvailable);
 
+            // --- ROBOTS ---
+            roster = new RobotRosterTab(robotsPane, controller);
+
             // --- TOOLS ---
             toolsPane.SectionHeader("STAGE");
             var undoRow = toolsPane.Row(QwGap.Sm);
@@ -162,6 +169,12 @@ namespace Robotopia.Sandbox.Ui
         public void Toggle()
         {
             window.Toggle();
+        }
+
+        /// <summary>Closes (hides) the menu — e.g. before the roster opens a robot chat over it.</summary>
+        public void Hide()
+        {
+            window.Close();
         }
 
         /// <summary>
@@ -235,6 +248,11 @@ namespace Robotopia.Sandbox.Ui
         public void Update()
         {
             thumbnails.Update();
+            if (selectedPane == 2)
+            {
+                roster.Update(); // roster rebinds only while its tab is the visible one
+            }
+
             var available = controller.RobotsAvailable;
             if (available != lastRobotsAvailable)
             {
@@ -291,9 +309,11 @@ namespace Robotopia.Sandbox.Ui
 
         private void ShowPane(int index)
         {
+            selectedPane = index;
             propsPane.SetVisible(index == 0);
             npcsPane.SetVisible(index == 1);
-            toolsPane.SetVisible(index == 2);
+            robotsPane.SetVisible(index == 2);
+            toolsPane.SetVisible(index == 3);
         }
     }
 }

@@ -104,6 +104,58 @@ namespace Robotopia.Sandbox
             entries.Add(new SpawnedEntry(EntryKind.Robot, null, robot, displayName, targetName));
         }
 
+        /// <summary>Fills the buffer with every live robot entry, in spawn order (cleared first). Allocation-free.</summary>
+        public void CollectRobots(List<SpawnedEntry> buffer)
+        {
+            buffer.Clear();
+            foreach (var entry in entries)
+            {
+                if (entry.Kind == EntryKind.Robot && entry.IsAlive)
+                {
+                    buffer.Add(entry);
+                }
+            }
+        }
+
+        /// <summary>The live robot registered under an objective-target name (case-insensitive), or null.</summary>
+        public IRobotAgent? FindRobotByTargetName(string targetName)
+        {
+            if (string.IsNullOrWhiteSpace(targetName))
+            {
+                return null;
+            }
+
+            foreach (var entry in entries)
+            {
+                if (entry.Kind == EntryKind.Robot && entry.IsAlive && entry.TargetName != null
+                    && string.Equals(entry.TargetName, targetName, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    return entry.Robot;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>The registry entry wrapping a robot handle (by reference), or null when it is not ours.</summary>
+        public SpawnedEntry? FindRobot(IRobotAgent robot)
+        {
+            if (robot == null)
+            {
+                return null;
+            }
+
+            foreach (var entry in entries)
+            {
+                if (entry.Kind == EntryKind.Robot && ReferenceEquals(entry.Robot, robot))
+                {
+                    return entry;
+                }
+            }
+
+            return null;
+        }
+
         /// <summary>
         /// Destroys the most recent still-alive spawn (LIFO); dead entries in between are dropped silently.
         /// Returns the display name of what was undone, or null when there was nothing left to undo.

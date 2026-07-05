@@ -30,6 +30,7 @@ namespace Robotopia.Sandbox
         private readonly IRobotConversationService? conversations;
         private readonly IRobotObjectiveService? objectives;
         private readonly IPlayerDialogueInputService? dialogueInput;
+        private readonly IRobotBrainQueryService? brains;
         private readonly System.Collections.Generic.Dictionary<string, int> targetNameCounts =
             new System.Collections.Generic.Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
@@ -37,6 +38,7 @@ namespace Robotopia.Sandbox
         private Ui.SpawnMenuWindow? menu;
         private Ui.SandboxHud? hud;
         private RobotChat? chat;
+        private RobotAmbience? ambience;
         private object? menuHotkey;
         private object? undoHotkey;
         private object? freezeHotkey;
@@ -55,6 +57,7 @@ namespace Robotopia.Sandbox
             conversations = context.GetService<IRobotConversationService>();
             objectives = context.GetService<IRobotObjectiveService>();
             dialogueInput = context.GetService<IPlayerDialogueInputService>();
+            brains = context.GetService<IRobotBrainQueryService>();
             registry.EntryRemoved += OnSpawnRemoved;
         }
 
@@ -120,11 +123,10 @@ namespace Robotopia.Sandbox
                 hud = new Ui.SandboxHud(ui, config);
             }
 
-            if (robots != null && conversations != null && objectives != null)
+            if (robots != null && objectives != null)
             {
-                chat = new RobotChat(context, config, ui, robots, conversations, objectives, dialogueInput);
-
-                // The operator is always a valid program target ("follow me").
+                // The operator is always a valid program target ("follow me") — for both the chat and the roster
+                // quick actions, so it registers whenever objectives exist, even with the chat backend absent.
                 objectives.RegisterTarget("PLAYER", RobotTargetKind.Player, () =>
                 {
                     if (robots.TryGetPlayerObject(out var playerObject) && robots.TryGetPlayerPosition(out var position))
@@ -134,6 +136,16 @@ namespace Robotopia.Sandbox
 
                     return null;
                 });
+
+                if (conversations != null)
+                {
+                    chat = new RobotChat(context, config, ui, robots, conversations, objectives, dialogueInput,
+                        registry.FindRobotByTargetName);
+                }
+
+                // Robots reacting to each other: proximity greetings, opt-in banter, courier-delivery toasts.
+                ambience = new RobotAmbience(config, ui, registry, objectives, brains,
+                    () => chat != null && chat.IsOpen, context.Logger);
             }
 
             // Sandbox hotkeys stay quiet while a robot chat is up (the chat owns the keyboard).
@@ -163,6 +175,7 @@ namespace Robotopia.Sandbox
             menu?.Update();
             hud?.Update(registry.PropCount, registry.RobotCount);
             chat?.Update();
+            ambience?.Update();
         }
 
         public void SpawnProp(SandboxPropDefinition definition)
@@ -362,6 +375,138 @@ namespace Robotopia.Sandbox
                 });
         }
 
+        // ------------------------------------------------------------------------------------------------------
+        // ROBOTS roster tab support: the window renders rows and forwards clicks; all state and policy live here.
+
+        /// <summary>True when the roster's quick actions (FOLLOW ME / IDLE) can program robots at all.</summary>
+        internal bool ObjectivesAvailable => objectives != null;
+
+        /// <summary>Fills the buffer with every live spawned robot, in spawn order (roster rows bind to these).</summary>
+        internal void CollectRobots(System.Collections.Generic.List<SpawnRegistry.SpawnedEntry> buffer)
+        {
+            registry.CollectRobots(buffer);
+        }
+
+        /// <summary>The roster's program badge: AUTONOMOUS, the objective description, or NONE.</summary>
+        internal string RobotProgramBadge(IRobotAgent robot)
+        {
+            if (robot.BrainMode == RobotBrainMode.Autonomous)
+            {
+                return "AUTONOMOUS";
+            }
+
+            var handle = objectives?.GetObjective(robot);
+            return handle == null ? "NONE" : handle.Objective.Describe();
+        }
+
+        /// <summary>The roster's state badge ("MOVING", "PAUSING", …); empty for autonomous/unprogrammed robots.</summary>
+        internal string RobotStateBadge(IRobotAgent robot)
+        {
+            if (robot.BrainMode == RobotBrainMode.Autonomous)
+            {
+                return string.Empty;
+            }
+
+            var handle = objectives?.GetObjective(robot);
+            if (handle == null)
+            {
+                return string.Empty;
+            }
+
+            switch (handle.State)
+            {
+                case RobotObjectiveState.Seeking:
+                    return "MOVING";
+                case RobotObjectiveState.Arrived:
+                    return "ARRIVED";
+                case RobotObjectiveState.Dwelling:
+                    return "PAUSING";
+                case RobotObjectiveState.TargetMissing:
+                    return "NO TARGET";
+                case RobotObjectiveState.Delivered:
+                    return "DELIVERED";
+                case RobotObjectiveState.Idle:
+                    return "IDLE";
+                default:
+                    return string.Empty;
+            }
+        }
+
+        /// <summary>Roster PROGRAM: opens the chat with the robot remotely (no walk-up needed), closing the menu.</summary>
+        internal void ProgramRobotFromRoster(SpawnRegistry.SpawnedEntry entry)
+        {
+            var robot = entry.Robot;
+            if (robot == null || !robot.IsAlive || chat == null)
+            {
+                return;
+            }
+
+            if (chat.IsOpen)
+            {
+                ui?.Toast("Finish the current chat first.", QwTone.Warning);
+                return;
+            }
+
+            if (!MayOverride(robot))
+            {
+                return;
+            }
+
+            if (chat.Begin(robot, entry.DisplayName, entry.TargetName ?? string.Empty))
+            {
+                menu?.Hide();
+            }
+        }
+
+        /// <summary>Roster FOLLOW ME: deterministic follow-the-player program, no LLM involved.</summary>
+        internal void FollowMeFromRoster(SpawnRegistry.SpawnedEntry entry)
+        {
+            QuickProgram(entry, RobotObjective.Follow("PLAYER"), "is now following you");
+        }
+
+        /// <summary>Roster IDLE: deterministic stand-down, no LLM involved.</summary>
+        internal void IdleFromRoster(SpawnRegistry.SpawnedEntry entry)
+        {
+            QuickProgram(entry, RobotObjective.Idle(), "is standing down");
+        }
+
+        private void QuickProgram(SpawnRegistry.SpawnedEntry entry, RobotObjective objective, string toastVerb)
+        {
+            var robot = entry.Robot;
+            if (robot == null || !robot.IsAlive || objectives == null)
+            {
+                return;
+            }
+
+            if (chat != null && chat.IsOpen)
+            {
+                ui?.Toast("Finish the current chat first.", QwTone.Warning);
+                return;
+            }
+
+            if (!MayOverride(robot))
+            {
+                return;
+            }
+
+            robot.SetBrainMode(RobotBrainMode.Dormant);
+            objectives.SetObjective(robot, objective);
+            ui?.Toast(entry.DisplayName + " " + toastVerb + ".", QwTone.Success);
+        }
+
+        // The same policy the interaction verb applies at spawn time: an autonomous robot's native brain is only
+        // overridden when the config allows it.
+        private bool MayOverride(IRobotAgent robot)
+        {
+            if (robot.BrainMode == RobotBrainMode.Autonomous && !config.ReprogramAutonomousRobots)
+            {
+                ui?.Toast("Autonomous robots are off-limits (reprogramAutonomousRobots is off).", QwTone.Neutral);
+                return false;
+            }
+
+            return true;
+        }
+
         internal enum SandboxHotkey
         {
             SpawnMenu,
@@ -416,6 +561,8 @@ namespace Robotopia.Sandbox
             }
 
             disposed = true;
+            ambience?.Dispose();
+            ambience = null;
             chat?.Dispose();
             chat = null;
             registry.DestroyAll();
