@@ -1,0 +1,152 @@
+name: CI
+
+on:
+  pull_request:
+    paths:
+      - "apps/robotopia_cli/**"
+      - "packages/launcher_domain/**"
+      - "packages/launcher_data/**"
+      - "templates/**"
+      - "src/**"
+      - "schemas/**"
+      - ".github/workflows/ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/robotopia_cli/**"
+      - "packages/launcher_domain/**"
+      - "packages/launcher_data/**"
+      - "templates/**"
+      - "src/**"
+      - "schemas/**"
+      - ".github/workflows/ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  dart-tests:
+    name: Analyze and test Dart packages
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - packages/launcher_domain
+          - packages/launcher_data
+          - apps/robotopia_cli
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Set up .NET
+        if: matrix.package == 'apps/robotopia_cli'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Analyze
+        working-directory: ${{ matrix.package }}
+        run: |
+          dart pub get
+          dart analyze --fatal-infos
+
+      - name: Test
+        working-directory: ${{ matrix.package }}
+        run: dart test
+
+  # Scaffold + validate + pack every mod template so template rot is caught
+  # on the PR that causes it, not at the next release.
+  template-matrix:
+    name: Template ${{ matrix.template }}
+    runs-on: ubuntu-latest
+    env:
+      # The ui template needs the game's managed refs (secret); fork PRs have
+      # no secrets, so that one leg no-ops there and still runs on main.
+      REFS_AVAILABLE: ${{ secrets.ROBOTOPIA_REFS_URL != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        template: [minimal, gameplay, gamemode, service, ui, asset, world]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Restore Robotopia managed refs
+        if: matrix.template == 'ui' && env.REFS_AVAILABLE == 'true'
+        shell: pwsh
+        env:
+          ROBOTOPIA_REFS_URL: ${{ secrets.ROBOTOPIA_REFS_URL }}
+          ROBOTOPIA_REFS_SHA256: ${{ secrets.ROBOTOPIA_REFS_SHA256 }}
+          ROBOTOPIA_REFS_TOKEN: ${{ secrets.ROBOTOPIA_REFS_TOKEN }}
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP "robotopia-managed-refs.zip"
+          $headers = @{}
+          if (![string]::IsNullOrWhiteSpace($env:ROBOTOPIA_REFS_TOKEN)) {
+            $headers["Authorization"] = "Bearer $env:ROBOTOPIA_REFS_TOKEN"
+          }
+          Invoke-WebRequest -Uri $env:ROBOTOPIA_REFS_URL -Headers $headers -OutFile $archive
+
+          $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected = $env:ROBOTOPIA_REFS_SHA256.Trim().ToLowerInvariant()
+          if ($actual -ne $expected) {
+            throw "Robotopia refs SHA-256 mismatch. Expected $expected but got $actual."
+          }
+
+          $extract = Join-Path $env:RUNNER_TEMP "robotopia-managed-refs"
+          Expand-Archive -LiteralPath $archive -DestinationPath $extract -Force
+          $unity = Get-ChildItem -LiteralPath $extract -Recurse -Filter "UnityEngine.dll" -File |
+            Select-Object -First 1
+          if ($null -eq $unity) {
+            throw "Reference archive did not contain UnityEngine.dll."
+          }
+          $managed = Split-Path $unity.FullName -Parent
+          "RobotopiaManagedDir=$managed" >> $env:GITHUB_ENV
+
+      - name: Skip ui template without managed refs
+        if: matrix.template == 'ui' && env.REFS_AVAILABLE != 'true'
+        run: echo "Skipping ui template — managed-ref secrets are unavailable (fork PR)."
+
+      # Scaffolds inside the checkout (not RUNNER_TEMP) so the generated
+      # ProjectReference to src/Robotopia.Mods.Abstractions stays a relative
+      # path, matching the release workflow's smoke test.
+      - name: Scaffold, validate, pack, and re-validate
+        if: matrix.template != 'ui' || env.REFS_AVAILABLE == 'true'
+        shell: bash
+        working-directory: apps/robotopia_cli
+        run: |
+          dart pub get
+          dart run bin/robotopia.dart new mod "ci.${{ matrix.template }}" \
+            --template "${{ matrix.template }}" \
+            --name "CI ${{ matrix.template }}" \
+            --dir ../../.ci-smoke
+          dart run bin/robotopia.dart check package "../../.ci-smoke/ci.${{ matrix.template }}"
+          package=$(dart run bin/robotopia.dart pack \
+            --project "../../.ci-smoke/ci.${{ matrix.template }}" \
+            --output "$RUNNER_TEMP/ci-pack" | tail -1)
+          echo "Packed: $package"
+          dart run bin/robotopia.dart check package "$package"

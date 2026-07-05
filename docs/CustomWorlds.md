@@ -92,6 +92,17 @@ props, robots all work inside your world).
   `UnregisterWorld` during a live session ends it cleanly.
 - Placement failure falls back to the generated sandbox arena rather than stranding the player.
 
+## Command reference
+
+| Command | What it does |
+|---|---|
+| `robotopia new unity-world <name> [--dir Path]` | Scaffold the Unity authoring project (add `--mod <modDir>` to pair it in the same step). |
+| `robotopia world link --project <unityProj> --mod <modDir> [--bundle name] [--prefab assetPath]` | Pair an existing Unity project with the mod that ships its bundle (writes `robotopia.world.json`). |
+| `robotopia world build [--project <unityProj\|name>] [--mod <modDir>] [--bundle name] [--unity Unity.exe] [--dry-run]` | Headless bundle build into `<mod>/AssetBundles/`; `--dry-run` prints the resolved project/mod/bundle/editor without launching Unity. |
+| `robotopia world play [--project <unityProj\|name>] [--mod <modDir>] [--configuration cfg]` | Build → pack → install → launch, one command. |
+
+Ready to ship the world to other players? See [PublishingYourMod.md](PublishingYourMod.md).
+
 ## Troubleshooting
 
 - **"No eligible Unity editor"** — install 6000.0.31f1 (Hub → Installs → Archive, or headless:
