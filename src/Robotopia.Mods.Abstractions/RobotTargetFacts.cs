@@ -28,6 +28,19 @@ namespace Robotopia.Mods
         }
 
         /// <summary>
+        /// Same as <see cref="Describe(RobotTargetInfo, RobotTargetSnapshot?, Vec3)"/> with an optional activity
+        /// suffix — what the target is doing right now (e.g. <c>"currently: FOLLOW PLAYER (moving)"</c>) — so a
+        /// robot can reason about the rest of the fleet, not just find it. Blank activity yields the plain line.
+        /// </summary>
+        public static string Describe(RobotTargetInfo info, RobotTargetSnapshot? snapshot, Vec3 observerPosition, string? activity)
+        {
+            var described = Describe(info, snapshot, observerPosition);
+            return described.Length == 0 || string.IsNullOrWhiteSpace(activity)
+                ? described
+                : described + "; " + activity;
+        }
+
+        /// <summary>
         /// A compact "8 m north-east of you" phrase (8-way world compass, north = +Z, east = +X, whole metres).
         /// Targets closer than a metre are "right next to you".
         /// </summary>

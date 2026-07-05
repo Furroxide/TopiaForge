@@ -26,6 +26,19 @@ namespace Robotopia.ModManager.Tests
             TestSceneChangeClearsEverything();
             TestTargetNamesAreNormalisedAndSorted();
             TestTargetKindsCarryThroughMetadata();
+            TestWanderPicksLegAndDwells();
+            TestWanderAnchorsToHomeNotCurrentPosition();
+            TestWanderNamedHomeTracksTarget();
+            TestWanderLegTimeoutRepicks();
+            TestFleeMovesDirectlyAway();
+            TestFleeArrivesWhenSafe();
+            TestFleeReEvaluatesAsThreatMoves();
+            TestFleeMissingThreatParksAndRecovers();
+            TestFleeOnTopOfThreatUsesRandomDirection();
+            TestReprogramDeliversPayloadAndRaisesEvent();
+            TestReprogramTargetMissingMidJourney();
+            TestReprogramUnmappableTargetStaysArrived();
+            TestReprogramReplacesRecipientsExistingObjective();
             Console.WriteLine("All objective runner tests passed.");
         }
 
@@ -288,10 +301,359 @@ namespace Robotopia.ModManager.Tests
             Assert(!service.TryGetTargetInfo("PLAYER", out _), "cleared metadata no longer resolves");
         }
 
+        // --- Wander -------------------------------------------------------------------------------------------
+
+        private static void TestWanderPicksLegAndDwells()
+        {
+            var (service, clock, random) = NewRunnerService();
+            var agent = new FakeRobotAgent();
+
+            // angle = 0.25 * 2pi (due +X), distance = 8 * (0.35 + 0.65 * 0.5) = 5.4.
+            random.Enqueue(0.25f, 0.5f);
+            var handle = service.SetObjective(agent, RobotObjective.Wander());
+            service.Tick(0.016f);
+
+            Assert(handle.State == RobotObjectiveState.Seeking, "a fresh wander seeks its first leg");
+            Assert(agent.MoveToCalls.Count == 1, "wander issues one leg walk");
+            Assert(Math.Abs(agent.MoveToCalls[0].X - 5.4f) < 1e-3f && Math.Abs(agent.MoveToCalls[0].Z) < 1e-3f,
+                "the leg lands where the scripted randoms point");
+            Assert(PlanarDistance(agent.MoveToCalls[0], default) <= handle.Objective.WanderRadius + 1e-3f,
+                "the leg stays within the wander radius of home");
+
+            agent.HasReachedTarget = true;
+            service.Tick(0.016f);
+            Assert(handle.State == RobotObjectiveState.Dwelling, "reaching a leg dwells");
+
+            clock.Now += 1.5f; // past DwellSeconds (default 1.0)
+            agent.HasReachedTarget = false;
+            random.Enqueue(0.75f, 0.5f); // due -X this time
+            service.Tick(0.016f);
+            Assert(agent.MoveToCalls.Count == 2, "the dwell lapsing picks a fresh leg");
+            Assert(Math.Abs(agent.MoveToCalls[1].X + 5.4f) < 1e-3f, "the fresh leg uses the next scripted direction");
+            Assert(handle.State == RobotObjectiveState.Seeking, "the wanderer seeks again");
+        }
+
+        private static void TestWanderAnchorsToHomeNotCurrentPosition()
+        {
+            var (service, clock, random) = NewRunnerService();
+            var agent = new FakeRobotAgent();
+
+            random.Enqueue(0.25f, 0.5f);
+            service.SetObjective(agent, RobotObjective.Wander());
+            service.Tick(0.016f);
+
+            // The robot drifts far off (carried, knocked back) — the next leg still orbits the ORIGINAL home.
+            agent.Position = new Vec3(100f, 0f, 100f);
+            agent.HasReachedTarget = true;
+            service.Tick(0.016f);
+            clock.Now += 1.5f;
+            agent.HasReachedTarget = false;
+            random.Enqueue(0.25f, 0.5f);
+            service.Tick(0.016f);
+
+            Assert(agent.MoveToCalls.Count == 2, "the wanderer keeps picking legs");
+            Assert(Math.Abs(agent.MoveToCalls[1].X - 5.4f) < 1e-3f && Math.Abs(agent.MoveToCalls[1].Z) < 1e-3f,
+                "legs anchor to the set-time home, not wherever the robot ended up");
+        }
+
+        private static void TestWanderNamedHomeTracksTarget()
+        {
+            var (service, clock, random) = NewRunnerService();
+            var agent = new FakeRobotAgent();
+            RobotTargetSnapshot? pad = new RobotTargetSnapshot(new Vec3(20f, 0f, 0f));
+            service.RegisterTarget("PAD", () => pad);
+
+            random.Enqueue(0.25f, 0.5f);
+            var handle = service.SetObjective(agent, RobotObjective.Wander("PAD"));
+            service.Tick(0.016f);
+            Assert(Math.Abs(agent.MoveToCalls[0].X - 25.4f) < 1e-3f, "legs orbit the named home");
+
+            // The pad moves; past the re-resolve window the next leg orbits its new spot.
+            pad = new RobotTargetSnapshot(new Vec3(40f, 0f, 0f));
+            agent.HasReachedTarget = true;
+            service.Tick(0.016f);
+            clock.Now += 1.5f;
+            agent.HasReachedTarget = false;
+            random.Enqueue(0.25f, 0.5f);
+            service.Tick(0.016f);
+            Assert(Math.Abs(agent.MoveToCalls[1].X - 45.4f) < 1e-3f, "a moved named home drifts the orbit with it");
+
+            // The pad disappears — the wanderer parks; it comes back — the wanderer resumes.
+            pad = null;
+            clock.Now += 1.5f;
+            service.Tick(0.016f);
+            Assert(handle.State == RobotObjectiveState.TargetMissing, "a missing named home parks the wanderer");
+            Assert(agent.StopCalls >= 1, "parking stops the robot");
+
+            pad = new RobotTargetSnapshot(new Vec3(40f, 0f, 0f));
+            clock.Now += 2.5f;
+            random.Enqueue(0.25f, 0.5f);
+            service.Tick(0.016f);
+            Assert(handle.State == RobotObjectiveState.Seeking, "a recovered home resumes wandering");
+            Assert(agent.MoveToCalls.Count == 3, "the resume picks a fresh leg");
+        }
+
+        private static void TestWanderLegTimeoutRepicks()
+        {
+            var (service, clock, random) = NewRunnerService();
+            var agent = new FakeRobotAgent();
+
+            random.Enqueue(0.25f, 0.5f);
+            service.SetObjective(agent, RobotObjective.Wander());
+            service.Tick(0.016f);
+            Assert(agent.MoveToCalls.Count == 1, "the first leg is issued");
+
+            // The pick was unreachable (never arrives). Before the timeout: nothing changes.
+            clock.Now += 5f;
+            service.Tick(0.016f);
+            Assert(agent.MoveToCalls.Count == 1, "a running leg is left to run before the timeout");
+
+            // Past the 12s leg timeout the pick is written off and a fresh one chosen.
+            clock.Now += 8f;
+            service.Tick(0.016f); // marks the leg stale
+            random.Enqueue(0.75f, 0.5f);
+            service.Tick(0.016f); // picks the replacement
+            Assert(agent.MoveToCalls.Count == 2, "a timed-out leg is re-picked");
+            Assert(Math.Abs(agent.MoveToCalls[1].X + 5.4f) < 1e-3f, "the replacement uses fresh randomness");
+        }
+
+        // --- Flee ---------------------------------------------------------------------------------------------
+
+        private static void TestFleeMovesDirectlyAway()
+        {
+            var (service, _, _) = NewRunnerService();
+            var agent = new FakeRobotAgent { Position = new Vec3(3f, 0f, 0f) };
+            service.RegisterTarget("THREAT", () => new RobotTargetSnapshot(default));
+
+            var handle = service.SetObjective(agent, RobotObjective.Flee("THREAT"));
+            service.Tick(0.016f);
+
+            // Distance 3 <= FleeDistance 8: hop max(4, 8*0.5) = 4 m straight away along +X.
+            Assert(handle.State == RobotObjectiveState.Seeking, "a threatened flee seeks");
+            Assert(agent.MoveToCalls.Count == 1, "the flee issues one hop");
+            Assert(Math.Abs(agent.MoveToCalls[0].X - 7f) < 1e-3f && Math.Abs(agent.MoveToCalls[0].Z) < 1e-3f,
+                "the hop points directly away from the threat");
+        }
+
+        private static void TestFleeArrivesWhenSafe()
+        {
+            var (service, clock, _) = NewRunnerService();
+            var agent = new FakeRobotAgent { Position = new Vec3(3f, 0f, 0f) };
+            service.RegisterTarget("THREAT", () => new RobotTargetSnapshot(default));
+
+            var handle = service.SetObjective(agent, RobotObjective.Flee("THREAT"));
+            service.Tick(0.016f);
+            Assert(agent.MoveToCalls.Count == 1, "the threatened robot hops away");
+
+            // Beyond FleeDistance + slack: safe. The hop is dropped mid-stride and the robot stands watchful.
+            agent.Position = new Vec3(11f, 0f, 0f);
+            clock.Now += 1.5f;
+            service.Tick(0.016f);
+            Assert(handle.State == RobotObjectiveState.Arrived, "a safe distance reads Arrived");
+            Assert(agent.StopCalls == 1, "reaching safety stops the current hop");
+
+            clock.Now += 1.5f;
+            service.Tick(0.016f);
+            Assert(agent.MoveToCalls.Count == 1 && agent.StopCalls == 1,
+                "a safe robot issues nothing new while the threat keeps its distance");
+        }
+
+        private static void TestFleeReEvaluatesAsThreatMoves()
+        {
+            var (service, clock, _) = NewRunnerService();
+            var agent = new FakeRobotAgent();
+            var threat = new Vec3(5f, 0f, 0f);
+            service.RegisterTarget("THREAT", () => new RobotTargetSnapshot(threat));
+
+            service.SetObjective(agent, RobotObjective.Flee("THREAT"));
+            service.Tick(0.016f);
+            Assert(agent.MoveToCalls.Count == 1 && agent.MoveToCalls[0].X < 0f,
+                "the first hop runs away from the east-side threat");
+
+            // The threat circles round to the west — the next evaluation re-aims from live positions.
+            threat = new Vec3(-5f, 0f, 0f);
+            clock.Now += 1.5f;
+            service.Tick(0.016f);
+            Assert(agent.MoveToCalls.Count == 2 && agent.MoveToCalls[1].X > 0f,
+                "each evaluation re-aims the hop away from the threat's new position");
+        }
+
+        private static void TestFleeMissingThreatParksAndRecovers()
+        {
+            var (service, clock, _) = NewRunnerService();
+            var agent = new FakeRobotAgent();
+            RobotTargetSnapshot? threat = null;
+            service.RegisterTarget("THREAT", () => threat);
+
+            var handle = service.SetObjective(agent, RobotObjective.Flee("THREAT"));
+            service.Tick(0.016f);
+            Assert(handle.State == RobotObjectiveState.TargetMissing, "a missing threat parks the flee");
+            Assert(agent.StopCalls == 1 && agent.MoveToCalls.Count == 0, "the robot stands down with nothing to flee");
+
+            threat = new RobotTargetSnapshot(new Vec3(2f, 0f, 0f));
+            clock.Now += 2.5f;
+            service.Tick(0.016f);
+            Assert(handle.State == RobotObjectiveState.Seeking, "a reappeared threat resumes the flee");
+            Assert(agent.MoveToCalls.Count == 1, "the resume hops away");
+        }
+
+        private static void TestFleeOnTopOfThreatUsesRandomDirection()
+        {
+            var (service, _, random) = NewRunnerService();
+            var agent = new FakeRobotAgent();
+            service.RegisterTarget("THREAT", () => new RobotTargetSnapshot(default));
+
+            random.Enqueue(0.25f); // escape angle: due +X
+            service.SetObjective(agent, RobotObjective.Flee("THREAT"));
+            service.Tick(0.016f);
+
+            Assert(agent.MoveToCalls.Count == 1, "standing on the threat still hops");
+            Assert(Math.Abs(agent.MoveToCalls[0].X - 4f) < 1e-3f && Math.Abs(agent.MoveToCalls[0].Z) < 1e-3f,
+                "the degenerate zero-distance case escapes along the scripted random direction");
+        }
+
+        // --- Reprogram (courier) ------------------------------------------------------------------------------
+
+        private static void TestReprogramDeliversPayloadAndRaisesEvent()
+        {
+            var recipient = new FakeRobotAgent { Position = new Vec3(10f, 0f, 0f) };
+            var (service, clock, _) = NewRunnerService(obj => ReferenceEquals(obj, recipient.GameObject) ? recipient : null);
+            var messenger = new FakeRobotAgent();
+            var player = new object();
+            service.RegisterTarget("ROBOT 2", RobotTargetKind.Robot,
+                () => new RobotTargetSnapshot(recipient.Position, recipient.GameObject));
+            service.RegisterTarget("PLAYER", RobotTargetKind.Player,
+                () => new RobotTargetSnapshot(new Vec3(5f, 0f, 0f), player));
+
+            var deliveries = new List<RobotProgramDelivery>();
+            service.ProgramDelivered += delivery => deliveries.Add(delivery);
+
+            var payload = RobotObjective.Follow("PLAYER");
+            var handle = service.SetObjective(messenger, RobotObjective.Reprogram("ROBOT 2", payload));
+            service.Tick(0.016f);
+            Assert(handle.State == RobotObjectiveState.Seeking, "the courier sets out");
+            Assert(messenger.MoveToCalls.Count == 1 && messenger.MoveToCalls[0].X == 10f,
+                "the courier walks to the recipient");
+
+            messenger.HasReachedTarget = true;
+            service.Tick(0.016f);
+            Assert(handle.State == RobotObjectiveState.Delivered, "arrival hands the payload over");
+            Assert(messenger.StopCalls == 1, "the courier stops on delivery");
+            Assert(deliveries.Count == 1, "the delivery event fires exactly once");
+            Assert(ReferenceEquals(deliveries[0].Sender, messenger) && ReferenceEquals(deliveries[0].Recipient, recipient)
+                && ReferenceEquals(deliveries[0].Payload, payload), "the event carries sender, recipient, and payload");
+            Assert(ReferenceEquals(service.GetObjective(recipient)!.Objective, payload),
+                "the recipient now runs the payload");
+
+            // The recipient's new runner steps on the following ticks: a live PLAYER target chases natively.
+            clock.Now += 1.5f;
+            service.Tick(0.016f);
+            Assert(recipient.ChaseCalls.Count == 1 && ReferenceEquals(recipient.ChaseCalls[0], player),
+                "the delivered follow program actually runs");
+
+            clock.Now += 1.5f;
+            service.Tick(0.016f);
+            Assert(deliveries.Count == 1 && messenger.MoveToCalls.Count == 1,
+                "a delivered courier holds position and never re-delivers");
+        }
+
+        private static void TestReprogramTargetMissingMidJourney()
+        {
+            var recipient = new FakeRobotAgent { Position = new Vec3(10f, 0f, 0f) };
+            var (service, clock, _) = NewRunnerService(obj => ReferenceEquals(obj, recipient.GameObject) ? recipient : null);
+            var messenger = new FakeRobotAgent();
+            RobotTargetSnapshot? snapshot = new RobotTargetSnapshot(recipient.Position, recipient.GameObject);
+            service.RegisterTarget("ROBOT 2", RobotTargetKind.Robot, () => snapshot);
+
+            var deliveries = new List<RobotProgramDelivery>();
+            service.ProgramDelivered += delivery => deliveries.Add(delivery);
+
+            var handle = service.SetObjective(messenger, RobotObjective.Reprogram("ROBOT 2", RobotObjective.Idle()));
+            service.Tick(0.016f);
+            Assert(messenger.MoveToCalls.Count == 1, "the courier sets out");
+
+            snapshot = null;
+            clock.Now += 1.5f;
+            service.Tick(0.016f);
+            Assert(handle.State == RobotObjectiveState.TargetMissing, "a vanished recipient parks the courier");
+
+            snapshot = new RobotTargetSnapshot(recipient.Position, recipient.GameObject);
+            clock.Now += 2.5f;
+            service.Tick(0.016f);
+            Assert(handle.State == RobotObjectiveState.Seeking, "the courier resumes when the recipient returns");
+
+            messenger.HasReachedTarget = true;
+            service.Tick(0.016f);
+            Assert(handle.State == RobotObjectiveState.Delivered && deliveries.Count == 1,
+                "the resumed courier still delivers");
+        }
+
+        private static void TestReprogramUnmappableTargetStaysArrived()
+        {
+            var (service, clock, _) = NewRunnerService(_ => null); // nothing maps back to an agent
+            var messenger = new FakeRobotAgent();
+            service.RegisterTarget("CRATE", RobotTargetKind.Prop, () => new RobotTargetSnapshot(new Vec3(6f, 0f, 0f), new object()));
+
+            var deliveries = new List<RobotProgramDelivery>();
+            service.ProgramDelivered += delivery => deliveries.Add(delivery);
+
+            var handle = service.SetObjective(messenger, RobotObjective.Reprogram("CRATE", RobotObjective.Idle()));
+            service.Tick(0.016f);
+            messenger.HasReachedTarget = true;
+            service.Tick(0.016f);
+            Assert(handle.State == RobotObjectiveState.Arrived, "an unmappable recipient leaves the courier Arrived");
+
+            clock.Now += 1.5f;
+            service.Tick(0.016f);
+            clock.Now += 1.5f;
+            service.Tick(0.016f);
+            Assert(handle.State == RobotObjectiveState.Arrived && deliveries.Count == 0,
+                "the courier keeps standing (and retrying) without ever delivering to a non-robot");
+        }
+
+        private static void TestReprogramReplacesRecipientsExistingObjective()
+        {
+            var recipient = new FakeRobotAgent { Position = new Vec3(10f, 0f, 0f) };
+            var (service, _, _) = NewRunnerService(obj => ReferenceEquals(obj, recipient.GameObject) ? recipient : null);
+            var messenger = new FakeRobotAgent();
+            service.RegisterTarget("ROBOT 2", RobotTargetKind.Robot,
+                () => new RobotTargetSnapshot(recipient.Position, recipient.GameObject));
+
+            var previous = service.SetObjective(recipient, RobotObjective.GoTo(new Vec3(50f, 0f, 0f)));
+            var payload = RobotObjective.Idle();
+            var handle = service.SetObjective(messenger, RobotObjective.Reprogram("ROBOT 2", payload));
+
+            service.Tick(0.016f);
+            messenger.HasReachedTarget = true;
+            service.Tick(0.016f); // delivery mutates the runner map mid-tick — must not throw
+
+            Assert(handle.State == RobotObjectiveState.Delivered, "the courier delivers");
+            Assert(previous.State == RobotObjectiveState.Cancelled, "the recipient's old program is cancelled clean-slate");
+            Assert(ReferenceEquals(service.GetObjective(recipient)!.Objective, payload),
+                "the payload replaces the recipient's old program");
+        }
+
+        private static float PlanarDistance(Vec3 a, Vec3 b)
+        {
+            var dx = a.X - b.X;
+            var dz = a.Z - b.Z;
+            return (float)Math.Sqrt(dx * dx + dz * dz);
+        }
+
         private static (RobotObjectiveService Service, FakeClock Clock) NewService()
         {
             var clock = new FakeClock();
             return (new RobotObjectiveService(new NullLogger(), () => clock.Now), clock);
+        }
+
+        // The wander/flee/reprogram fixture: a scripted random source and (optionally) the live-object -> agent
+        // mapping a Reprogram courier needs to hand its payload over.
+        private static (RobotObjectiveService Service, FakeClock Clock, FakeRandom Random) NewRunnerService(
+            Func<object, IRobotAgent?>? resolveAgent = null)
+        {
+            var clock = new FakeClock();
+            var random = new FakeRandom();
+            return (new RobotObjectiveService(new NullLogger(), () => clock.Now, resolveAgent, random.Next), clock, random);
         }
 
         private static void Assert(bool condition, string message)
@@ -305,6 +667,25 @@ namespace Robotopia.ModManager.Tests
         private sealed class FakeClock
         {
             public float Now;
+        }
+
+        // Scripted [0,1) source for wander legs / flee escape angles; falls back to 0.5 when the queue runs dry.
+        private sealed class FakeRandom
+        {
+            private readonly Queue<float> queued = new Queue<float>();
+
+            public void Enqueue(params float[] values)
+            {
+                foreach (var value in values)
+                {
+                    queued.Enqueue(value);
+                }
+            }
+
+            public float Next()
+            {
+                return queued.Count > 0 ? queued.Dequeue() : 0.5f;
+            }
         }
 
         // Records the movement intents the runner issues; reached/alive state is scripted by each test.

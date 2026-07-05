@@ -47,6 +47,17 @@ namespace Robotopia.RobotKit
                 return handle;
             }
 
+            // The backend rejects a request with more than RoboApiProtocol.MaxOutputs fields as a whole-turn 400
+            // ("Too many outputs"), which otherwise degrades opaquely to "unavailable". Warn loudly so a consumer
+            // that over-requests fields sees the cause instead of a silent brain-offline symptom.
+            if (request.Outputs != null && request.Outputs.Count > RoboApiProtocol.MaxOutputs)
+            {
+                logger.Warn("RobotKit brain query has " + request.Outputs.Count + " output fields; the backend caps "
+                    + "a request at " + RoboApiProtocol.MaxOutputs + " and will reject this turn. Reduce the "
+                    + "request's fields (a conversation may add at most " + (RoboApiProtocol.MaxOutputs - 2)
+                    + " ExtraOutputs beyond reply+decision).");
+            }
+
             try
             {
                 var cts = CancellationTokenSource.CreateLinkedTokenSource(serviceCts.Token);

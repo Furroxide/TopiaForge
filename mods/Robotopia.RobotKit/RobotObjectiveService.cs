@@ -4,29 +4,49 @@ using Robotopia.Mods;
 
 namespace Robotopia.RobotKit
 {
-    // Publishes IRobotObjectiveService: persistent robot programs (go-to / follow / patrol / idle) executed
-    // frame-to-frame on top of IRobotAgent movement intents, plus the session-scoped named-target registry that both
-    // the runners and LLM payloads draw from. Unity-free — it only touches the SDK contracts and ObjectiveRunner —
-    // so the whole flow unit-tests on net8.0 with a fake agent. Ticked after the agent service (agents step first,
-    // then objectives react to fresh reached/moving state). Never throws.
+    // Publishes IRobotObjectiveService: persistent robot programs (go-to / follow / patrol / wander / flee /
+    // reprogram-courier / idle) executed frame-to-frame on top of IRobotAgent movement intents, plus the
+    // session-scoped named-target registry that both the runners and LLM payloads draw from. Unity-free — it only
+    // touches the SDK contracts and ObjectiveRunner — so the whole flow unit-tests on net8.0 with a fake agent.
+    // Ticked after the agent service (agents step first, then objectives react to fresh reached/moving state).
+    // Never throws.
     internal sealed class RobotObjectiveService : IRobotObjectiveService, IDisposable
     {
         private readonly IModLogger logger;
         private readonly Func<float> now;
+        private readonly Func<float> random01;
+        private readonly Func<object, IRobotAgent?>? resolveAgent; // live object -> agent, for Reprogram couriers
         private readonly Dictionary<string, ObjectiveRunner> runners = new Dictionary<string, ObjectiveRunner>();
+        private readonly List<ObjectiveRunner> stepBuffer = new List<ObjectiveRunner>();
         private readonly Dictionary<string, (RobotTargetInfo Info, Func<RobotTargetSnapshot?> Resolve)> targets =
             new Dictionary<string, (RobotTargetInfo, Func<RobotTargetSnapshot?>)>(StringComparer.OrdinalIgnoreCase);
 
         private float clock;
         private bool disposed;
 
-        public RobotObjectiveService(IModLogger logger, Func<float>? now = null)
+        public RobotObjectiveService(
+            IModLogger logger,
+            Func<float>? now = null,
+            Func<object, IRobotAgent?>? resolveAgent = null,
+            Func<float>? random01 = null)
         {
             this.logger = logger;
             this.now = now ?? (() => clock);
+            this.resolveAgent = resolveAgent;
+            if (random01 != null)
+            {
+                this.random01 = random01;
+            }
+            else
+            {
+                var rng = new Random();
+                this.random01 = () => (float)rng.NextDouble();
+            }
         }
 
         public bool IsAvailable => !disposed;
+
+        public event Action<RobotProgramDelivery>? ProgramDelivered;
 
         public IReadOnlyList<string> TargetNames
         {
@@ -131,7 +151,10 @@ namespace Robotopia.RobotKit
                 agent,
                 program,
                 name => TryResolveTarget(name, out var snapshot) ? snapshot : (RobotTargetSnapshot?)null,
-                now);
+                now,
+                random01,
+                resolveAgent,
+                (recipient, payload) => DeliverProgram(agent, recipient, payload));
 
             if (agent == null)
             {
@@ -185,17 +208,32 @@ namespace Robotopia.RobotKit
             }
 
             clock += deltaTime;
+
+            // Step from a copied buffer: a Reprogram delivery calls SetObjective(recipient, payload) mid-step,
+            // which mutates the runner map. A runner replaced mid-tick may still sit in the buffer — harmless,
+            // cancelled runners return from Step immediately.
+            stepBuffer.Clear();
+            foreach (var runner in runners.Values)
+            {
+                stepBuffer.Add(runner);
+            }
+
+            foreach (var runner in stepBuffer)
+            {
+                if (!runner.IsCancelled && runner.AgentAlive)
+                {
+                    runner.Step();
+                }
+            }
+
+            // Prune in a second pass over the live map (cancelled/replaced runners and dead robots).
             List<string>? dead = null;
             foreach (var pair in runners)
             {
-                var runner = pair.Value;
-                if (runner.IsCancelled || !runner.AgentAlive)
+                if (pair.Value.IsCancelled || !pair.Value.AgentAlive)
                 {
                     (dead ??= new List<string>()).Add(pair.Key);
-                    continue;
                 }
-
-                runner.Step();
             }
 
             if (dead != null)
@@ -204,6 +242,27 @@ namespace Robotopia.RobotKit
                 {
                     runners.Remove(id);
                 }
+            }
+        }
+
+        // Applies a courier's payload to the recipient and announces the hand-over. Runs inside the courier
+        // runner's Step (via its delivery callback) — hence Tick stepping from a buffer, not the live map.
+        private void DeliverProgram(IRobotAgent sender, IRobotAgent recipient, RobotObjective payload)
+        {
+            SetObjective(recipient, payload);
+            var handler = ProgramDelivered;
+            if (handler == null)
+            {
+                return;
+            }
+
+            try
+            {
+                handler(new RobotProgramDelivery(sender, recipient, payload));
+            }
+            catch (Exception exception)
+            {
+                logger.Warn("A ProgramDelivered subscriber threw: " + exception.Message);
             }
         }
 

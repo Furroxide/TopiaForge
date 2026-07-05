@@ -18,9 +18,18 @@ namespace Robotopia.RobotKit
         // How far (metres) beyond ArriveDistance a reached target must move before the robot re-walks to it.
         private const float ReChaseSlack = 1f;
 
+        // How long a wander leg may run before the pick is written off as unreachable and a new one is chosen.
+        private const float WanderLegTimeoutSeconds = 12f;
+
+        // Extra metres beyond FleeDistance a threat must retreat before a fleeing robot counts as safe (hysteresis).
+        private const float FleeSlackMeters = 2f;
+
         private readonly IRobotAgent agent;
         private readonly Func<string, RobotTargetSnapshot?> resolveTarget;
         private readonly Func<float> now;
+        private readonly Func<float> random01;                       // [0,1) — wander legs, flee escape angles
+        private readonly Func<object, IRobotAgent?>? resolveAgent;   // live object -> agent, for Reprogram delivery
+        private readonly Action<IRobotAgent, RobotObjective>? deliver; // (recipient, payload); service closes over the sender
 
         private RobotObjectiveState state;
         private int waypointIndex;
@@ -30,17 +39,26 @@ namespace Robotopia.RobotKit
         private object? chasing;                 // the live object a Follow is natively tracking
         private float nextResolveAt;
         private float dwellUntil;
+        private Vec3? wanderHome;                // materialised wander home (set-time position or last named resolve)
+        private float legDeadline;               // when the current wander leg is abandoned as unreachable
+        private float deliverAttemptAt;          // hand-over retry cadence for an arrived courier
 
         public ObjectiveRunner(
             IRobotAgent agent,
             RobotObjective objective,
             Func<string, RobotTargetSnapshot?> resolveTarget,
-            Func<float> now)
+            Func<float> now,
+            Func<float>? random01 = null,
+            Func<object, IRobotAgent?>? resolveAgent = null,
+            Action<IRobotAgent, RobotObjective>? deliver = null)
         {
             this.agent = agent;
             Objective = objective;
             this.resolveTarget = resolveTarget;
             this.now = now;
+            this.random01 = random01 ?? (() => 0.5f);
+            this.resolveAgent = resolveAgent;
+            this.deliver = deliver;
             state = objective.Kind == RobotObjectiveKind.Idle ? RobotObjectiveState.Idle : RobotObjectiveState.Seeking;
         }
 
@@ -89,6 +107,15 @@ namespace Robotopia.RobotKit
                     break;
                 case RobotObjectiveKind.Patrol:
                     StepPatrol();
+                    break;
+                case RobotObjectiveKind.Wander:
+                    StepWander();
+                    break;
+                case RobotObjectiveKind.Flee:
+                    StepFlee();
+                    break;
+                case RobotObjectiveKind.Reprogram:
+                    StepReprogram();
                     break;
             }
         }
@@ -190,6 +217,192 @@ namespace Robotopia.RobotKit
             }
         }
 
+        private void StepWander()
+        {
+            if (!TryWanderHome(out var home))
+            {
+                return; // TargetMissing (named home currently unresolvable)
+            }
+
+            if (state == RobotObjectiveState.Dwelling)
+            {
+                if (now() < dwellUntil)
+                {
+                    return;
+                }
+
+                goalIssued = false;
+            }
+
+            if (!goalIssued)
+            {
+                // A fresh leg: a random spot around home, biased away from zero-length hops.
+                var angle = random01() * 2f * (float)Math.PI;
+                var distance = Objective.WanderRadius * (0.35f + 0.65f * random01());
+                IssueMoveTo(new Vec3(
+                    home.X + (float)Math.Sin(angle) * distance,
+                    home.Y,
+                    home.Z + (float)Math.Cos(angle) * distance));
+                legDeadline = now() + WanderLegTimeoutSeconds;
+                return;
+            }
+
+            if (state == RobotObjectiveState.Seeking && agent.HasReachedTarget)
+            {
+                state = RobotObjectiveState.Dwelling;
+                dwellUntil = now() + Math.Max(0f, Objective.DwellSeconds);
+                return;
+            }
+
+            if (state == RobotObjectiveState.Seeking && now() >= legDeadline)
+            {
+                // The pick never panned out (inside a wall, off the walkable grid) — quietly choose another.
+                goalIssued = false;
+            }
+        }
+
+        private void StepFlee()
+        {
+            var name = Objective.TargetName;
+            if (string.IsNullOrEmpty(name))
+            {
+                // A flee without a threat has nothing to run from; treat as idle (the degenerate-patrol shape).
+                state = RobotObjectiveState.Idle;
+                if (!goalIssued)
+                {
+                    goalIssued = true;
+                    agent.Stop();
+                }
+
+                return;
+            }
+
+            // Between evaluations the current hop keeps running natively (a missing threat waits out its retry).
+            if (now() < nextResolveAt)
+            {
+                return;
+            }
+
+            var snapshot = resolveTarget(name!);
+            nextResolveAt = now() + ReResolveSeconds;
+            if (snapshot == null)
+            {
+                MarkTargetMissing(); // nothing to flee right now; stand down and keep watching for it
+                return;
+            }
+
+            if (state == RobotObjectiveState.TargetMissing)
+            {
+                state = RobotObjectiveState.Seeking;
+                goalIssued = false;
+            }
+
+            var position = agent.Position;
+            var threat = snapshot.Value.Position;
+            var dx = position.X - threat.X;
+            var dz = position.Z - threat.Z;
+            var distance = (float)Math.Sqrt(dx * dx + dz * dz);
+            if (distance <= Objective.FleeDistance)
+            {
+                // Threatened: hop directly away, recomputed from live positions each evaluation so a cornered
+                // robot keeps re-aiming and slides along whatever the native pathing allows.
+                float awayX;
+                float awayZ;
+                if (distance < 0.01f)
+                {
+                    var angle = random01() * 2f * (float)Math.PI; // standing on the threat — any way out will do
+                    awayX = (float)Math.Sin(angle);
+                    awayZ = (float)Math.Cos(angle);
+                }
+                else
+                {
+                    awayX = dx / distance;
+                    awayZ = dz / distance;
+                }
+
+                var hop = Math.Max(4f, Objective.FleeDistance * 0.5f);
+                IssueMoveTo(new Vec3(position.X + awayX * hop, position.Y, position.Z + awayZ * hop));
+                return;
+            }
+
+            if (distance > Objective.FleeDistance + FleeSlackMeters && state != RobotObjectiveState.Arrived)
+            {
+                // Safe (with slack so the boundary never oscillates): drop any hop mid-stride and stand watchful.
+                state = RobotObjectiveState.Arrived;
+                if (goalIssued)
+                {
+                    agent.Stop();
+                    goalIssued = false;
+                }
+            }
+
+            // In the hysteresis band: finish the current hop / keep standing.
+        }
+
+        private void StepReprogram()
+        {
+            if (state == RobotObjectiveState.Delivered)
+            {
+                return; // terminal: the payload was handed over; the courier holds here like an arrived GoTo
+            }
+
+            if (!TryCurrentTargetPosition(out var goal, out _))
+            {
+                return; // TargetMissing (recipient despawned mid-journey) — park and retry
+            }
+
+            if (!goalIssued || MovedBeyondSlack(goal, lastIssuedGoal))
+            {
+                IssueMoveTo(goal); // the recipient walked off — chase it down
+                return;
+            }
+
+            if (!agent.HasReachedTarget)
+            {
+                return;
+            }
+
+            if (state == RobotObjectiveState.Seeking)
+            {
+                state = RobotObjectiveState.Arrived;
+            }
+
+            TryDeliver();
+        }
+
+        // Hand the payload over: re-resolve the recipient fresh (the journey cache may carry a stale goal with no
+        // live object) and map its live object back to an agent. Unmappable names (a prop, the player) leave the
+        // courier standing Arrived and retrying on the resolve cadence. State flips to Delivered and the courier
+        // stops BEFORE the callback runs: SetObjective(recipient, payload) cancels/replaces runners mid-step —
+        // including this one, if a consumer let a courier target itself — and nothing here runs after the callback.
+        private void TryDeliver()
+        {
+            var payload = Objective.Payload;
+            var name = Objective.TargetName;
+            if (payload == null || deliver == null || resolveAgent == null || string.IsNullOrEmpty(name))
+            {
+                return; // not deliverable (no payload/wiring) — stand Arrived, like a GoTo that reached its goal
+            }
+
+            if (now() < deliverAttemptAt)
+            {
+                return;
+            }
+
+            deliverAttemptAt = now() + ReResolveSeconds;
+            var snapshot = resolveTarget(name!);
+            var live = snapshot?.GameObject;
+            var recipient = live != null ? resolveAgent(live) : null;
+            if (recipient == null || !recipient.IsAlive)
+            {
+                return;
+            }
+
+            state = RobotObjectiveState.Delivered;
+            agent.Stop();
+            deliver(recipient, payload);
+        }
+
         // The patrol route: explicit waypoints as-is; a PatrolTo materialises [start-position, target] once the
         // target first resolves. Returns null (and parks in TargetMissing) until then.
         private IReadOnlyList<Vec3>? ResolveRoute()
@@ -228,6 +441,58 @@ namespace Robotopia.RobotKit
             }
 
             return null;
+        }
+
+        // The wander home: a fixed point as-is; a named target on the shared re-resolve cadence (the home drifts
+        // with it, so WANDER NEAR PLAYER keeps orbiting the player); otherwise wherever the robot stood when the
+        // objective was set, materialised once. Not TryCurrentTargetPosition — its between-resolves cache returns
+        // the last issued LEG goal, which for wander is a spot near home, not home itself.
+        private bool TryWanderHome(out Vec3 home)
+        {
+            if (Objective.TargetPoint != null)
+            {
+                home = Objective.TargetPoint.Value;
+                return true;
+            }
+
+            var name = Objective.TargetName;
+            if (string.IsNullOrEmpty(name))
+            {
+                wanderHome ??= agent.Position;
+                home = wanderHome.Value;
+                return true;
+            }
+
+            if (now() < nextResolveAt)
+            {
+                if (state == RobotObjectiveState.TargetMissing || wanderHome == null)
+                {
+                    home = default;
+                    return false;
+                }
+
+                home = wanderHome.Value;
+                return true;
+            }
+
+            var snapshot = resolveTarget(name!);
+            nextResolveAt = now() + ReResolveSeconds;
+            if (snapshot == null)
+            {
+                MarkTargetMissing();
+                home = default;
+                return false;
+            }
+
+            if (state == RobotObjectiveState.TargetMissing)
+            {
+                state = RobotObjectiveState.Seeking;
+                goalIssued = false;
+            }
+
+            wanderHome = snapshot.Value.Position;
+            home = wanderHome.Value;
+            return true;
         }
 
         // The objective's current goal position: a fixed point immediately, a named target via the registry with

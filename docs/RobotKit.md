@@ -330,7 +330,10 @@ fall back to your deterministic outcome.
 submitted turn and merged **over** `GroundTruthFacts` (a live key wins). A null-returning or throwing provider
 degrades to the static facts. The pure `RobotTargetFacts.Describe(...)` helper turns a registered objective target
 into a grounding line like `"another robot, 8 m north-east of you"` — combine it with `IRobotObjectiveService.Targets`
-to let a robot follow, walk to, or *locate* any registered entity by name.
+to let a robot follow, walk to, or *locate* any registered entity by name. The 4-arg overload (RobotKit **0.8.0+**)
+appends an **activity suffix** — `"another robot, 8 m north-east of you; currently: FOLLOW PLAYER (moving)"` — so a
+robot can reason about what the rest of the fleet is *doing*, not just where it is (pair it with
+`GetObjective(...)` on the described robot).
 
 ### Extra outputs & the exit-chat pattern (RobotKit 0.7.0+)
 
@@ -352,6 +355,15 @@ convo.LastValues.TryGetValue("target", out var target);
 Keep the budget small — the backend is a 3-second, single-shot call, and every extra field costs accuracy. Two or
 three fields, closed-set wherever possible, is the sweet spot. Fields named `reply`/`decision` are ignored, and with
 no `ExtraOutputs` the request is byte-identical to the historical two-field shape.
+
+**Hard cap: five outputs.** The `/agent/check3` backend rejects a request with more than **5** output fields
+(`Bad Request: Too many outputs: max 5, got N`) — and a conversation always spends two on the built-in
+`reply` + `decision`, so **`ExtraOutputs` may hold at most three fields**. Exceed it and the backend 400s the whole
+turn, which surfaces to the player as a generic "brain unreachable" (the error rides an envelope, not an exception,
+so it is otherwise silent). `RobotBrainQueryService` logs a loud warning when a request is built over the cap
+(`RoboApiProtocol.MaxOutputs`) so the cause is visible; still, keep the field count in range by design. Need more
+than three extras? Fold some into one closed-set field, or derive them client-side (the Sandbox PROGRAM verb plays
+its per-turn emote from the chosen decision rather than spending a sixth output on it).
 
 **Exit-chat is structural, not textual.** To let a robot decide *"stop talking and go do it"*, make the decision set
 itself carry the exit: reserve one decision value (e.g. `CHAT`) for *staying in the conversation* and make every
@@ -395,11 +407,11 @@ the deterministic `OverrideDecision` "robot psychology" only seeding the persuas
 
 ## Robot objectives & programs (`IRobotObjectiveService`)
 
-A **standing program** for a robot (RobotKit **0.7.0+**): instead of hand-driving `MoveTo`/`Chase` every frame, set
-an objective once and the service keeps executing it — seek, arrive, re-seek if the target moves, patrol forever —
-on top of the agent's native locomotion. Objectives reference the world through **registered named targets**, a
-session-scoped vocabulary the consumer publishes; those names are also exactly the closed set to offer an LLM (see
-the exit-chat pattern above).
+A **standing program** for a robot (RobotKit **0.7.0+**; wander/flee/reprogram **0.8.0+**): instead of hand-driving
+`MoveTo`/`Chase` every frame, set an objective once and the service keeps executing it — seek, arrive, re-seek if
+the target moves, patrol forever — on top of the agent's native locomotion. Objectives reference the world through
+**registered named targets**, a session-scoped vocabulary the consumer publishes; those names are also exactly the
+closed set to offer an LLM (see the exit-chat pattern above).
 
 ```csharp
 public interface IRobotObjectiveService
@@ -420,19 +432,29 @@ public interface IRobotObjectiveService
     IRobotObjectiveHandle SetObjective(IRobotAgent agent, RobotObjective objective);
     IRobotObjectiveHandle? GetObjective(IRobotAgent agent);
     void ClearObjective(IRobotAgent agent);
+
+    // Raised when a Reprogram courier hands its payload over (already applied via SetObjective when this fires) —
+    // react with toasts/emotes; subscriber exceptions are swallowed and logged. RobotKit 0.8.0+.
+    event Action<RobotProgramDelivery>? ProgramDelivered;   // Sender, Recipient, Payload
 }
 
 objectives.RegisterTarget("PLAYER", () => robots.TryGetPlayerObject(out var go) && robots.TryGetPlayerPosition(out var p)
     ? new RobotTargetSnapshot(p, go) : (RobotTargetSnapshot?)null);
 
 var handle = objectives.SetObjective(agent, RobotObjective.Follow("PLAYER"));
-// handle.State: Idle | Seeking | Arrived | Dwelling | TargetMissing | Cancelled
+// handle.State: Idle | Seeking | Arrived | Dwelling | TargetMissing | Cancelled | Delivered
 ```
 
 The program vocabulary: `RobotObjective.Idle()`, `.GoTo(name | Vec3)`, `.Follow(name)`,
 `.Patrol(waypoints)` / `.PatrolTo(name)` (patrols between where the robot stands when programmed and the target,
-dwelling `DwellSeconds` at each end). Per-objective knobs: `ArriveDistance` (applied as the agent's `StopDistance`),
-`Gait`. Execution details worth knowing:
+dwelling `DwellSeconds` at each end), and from **0.8.0**: `.Wander()` / `.Wander(name | Vec3)` (roam within
+`WanderRadius` of a home spot — the set-time position, a named target the orbit drifts with, or a fixed point —
+dwelling `DwellSeconds` between random legs; a leg that never arrives is re-picked after ~12 s), `.Flee(name)`
+(hop directly away whenever the target comes within `FleeDistance`, re-aimed from live positions every ~1 s;
+`Arrived` means "currently at a safe distance", with ~2 m of hysteresis so the boundary never oscillates), and
+`.Reprogram(robotName, payload)` (a **courier**: walk to the target robot and, on arrival, apply the payload as its
+new objective — see below). Per-objective knobs: `ArriveDistance` (applied as the agent's `StopDistance`), `Gait`,
+`WanderRadius`, `FleeDistance`. Execution details worth knowing:
 
 - A **live** target (`RobotTargetSnapshot.GameObject` non-null) is followed with the native `Chase` (one call,
   native re-pathing); a position-only target is re-resolved every ~1 s and the walk re-issued when it drifts more
@@ -442,8 +464,25 @@ dwelling `DwellSeconds` at each end). Per-objective knobs: `ArriveDistance` (app
 - Objectives are **session-only**: the service cancels every runner and clears the target vocabulary on scene
   change; nothing persists.
 
-`Robotopia.Sandbox` (v0.2.0) is the reference consumer: every spawned prop/robot registers itself as a target, and
-the PROGRAM verb turns an LLM conversation turn into `SetObjective`.
+**Robot-to-robot reprogramming (0.8.0+).** `RobotObjective.Reprogram("ROBOT 2", RobotObjective.Follow("PLAYER"))`
+sends the programmed robot walking to `ROBOT 2`; on arrival the payload is applied to the recipient clean-slate
+(exactly `SetObjective` — the recipient's old program is cancelled, an in-flight courier of its own never
+delivers), the messenger stops in the terminal `Delivered` state, and `ProgramDelivered` fires. Rules and edges:
+
+- The payload **cannot itself be a Reprogram** (the factory throws; parse LLM input in your own layer first —
+  the Sandbox's director degrades a nested reprogram to a chat nudge instead).
+- The recipient must resolve to a **spawned robot RobotKit knows** (its target snapshot's `GameObject` maps back to
+  an agent). A name that resolves to a prop/player leaves the courier standing `Arrived`, retrying on the ~1 s
+  cadence; a recipient that despawns mid-journey parks the courier in `TargetMissing` like any other objective.
+- A payload whose own target is currently missing still delivers — the *recipient's* runner then parks in
+  `TargetMissing` and waits, like any program set directly.
+- A courier told to deliver to itself (only possible if a consumer registers a robot's own name as its target —
+  the Sandbox filters this out) applies the payload to itself; its courier handle then reads `Cancelled` rather
+  than `Delivered`, since the delivery replaced it.
+
+`Robotopia.Sandbox` (v0.3.0) is the reference consumer: every spawned prop/robot registers itself as a target, the
+PROGRAM verb turns an LLM conversation turn into `SetObjective` (REPROGRAM decisions become couriers), and its
+ambience layer subscribes to `ProgramDelivered` for hand-over toasts and emotes.
 
 ## Example
 
