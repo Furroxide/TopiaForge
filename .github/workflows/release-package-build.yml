@@ -41,6 +41,12 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
+  build-launchers:
+    name: Build Flutter launcher artifacts
+    uses: ./.github/workflows/flutter-launcher-builds.yml
+    with:
+      artifact_retention_days: ${{ inputs.artifact_retention_days }}
+
   preflight:
     name: Verify release package inputs
     runs-on: ubuntu-latest
@@ -109,6 +115,7 @@ jobs:
     needs:
       - preflight
       - macos-cli-x64
+      - build-launchers
     if: needs.preflight.outputs.refs_available == 'true'
     runs-on: ${{ matrix.runner }}
     strategy:
@@ -138,17 +145,11 @@ jobs:
         with:
           sdk: stable
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Install Linux desktop dependencies
+      - name: Install Linux archive dependencies
         if: matrix.platform == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev zip unzip
+          sudo apt-get install -y zip unzip
 
       - name: Restore Robotopia managed refs
         shell: pwsh
@@ -222,8 +223,23 @@ jobs:
           chmod +x "$RUNNER_TEMP/robotopia-macos-universal"
           lipo -archs "$RUNNER_TEMP/robotopia-macos-universal"
 
+      - name: Download launcher artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: launcher-${{ matrix.platform }}
+          path: ${{ runner.temp }}/launcher-artifact
+
+      - name: Extract launcher artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          temp="${RUNNER_TEMP//\\//}"
+          mkdir -p "$temp/prebuilt-launcher"
+          tar -xf "$temp/launcher-artifact/launcher-${{ matrix.platform }}.tar" -C "$temp/prebuilt-launcher"
+
       - name: Build release package
-        shell: pwsh
+        shell: bash
+        working-directory: apps/robotopia_cli
         env:
           MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
@@ -232,27 +248,37 @@ jobs:
           MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
           MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
         run: |
-          $args = @(
-            "-Platform", "${{ matrix.platform }}",
-            "-OutputRoot", (Join-Path $env:GITHUB_WORKSPACE "release-artifacts"),
-            "-Configuration", "Release"
+          set -euo pipefail
+          workspace="${GITHUB_WORKSPACE//\\//}"
+          temp="${RUNNER_TEMP//\\//}"
+          dart pub get
+          args=(
+            release build-package
+            --platform "${{ matrix.platform }}"
+            --output "$workspace/release-artifacts"
+            --configuration Release
+            --prebuilt-launcher "$temp/prebuilt-launcher"
           )
-          if ("${{ matrix.platform }}" -eq "macos") {
-            $args += @("-PrebuiltCli", (Join-Path $env:RUNNER_TEMP "robotopia-macos-universal"))
-          }
-          & ./tools/package-distribution.ps1 @args
+          if [ "${{ matrix.platform }}" = "macos" ]; then
+            args+=(--prebuilt-cli "$temp/robotopia-macos-universal")
+          fi
+          dart run bin/robotopia.dart "${args[@]}"
 
       - name: Smoke test release package
-        shell: pwsh
+        shell: bash
+        working-directory: apps/robotopia_cli
         run: |
-          $args = @(
-            "-Platform", "${{ matrix.platform }}",
-            "-ZipPath", (Join-Path (Join-Path $env:GITHUB_WORKSPACE "release-artifacts") "${{ matrix.asset }}")
+          set -euo pipefail
+          workspace="${GITHUB_WORKSPACE//\\//}"
+          args=(
+            release test-package
+            --platform "${{ matrix.platform }}"
+            --zip "$workspace/release-artifacts/${{ matrix.asset }}"
           )
-          if ("${{ matrix.platform }}" -eq "macos") {
-            $args += "-RequireMacUniversal"
-          }
-          & ./tools/test-release-package.ps1 @args
+          if [ "${{ matrix.platform }}" = "macos" ]; then
+            args+=(--require-mac-universal)
+          fi
+          dart run bin/robotopia.dart "${args[@]}"
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4

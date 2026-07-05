@@ -7,6 +7,9 @@ import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 import 'package:robotopia/src/launcher_update_index_builder.dart';
 import 'package:robotopia/src/mod_registry_index_builder.dart';
+import 'package:robotopia/src/release_package_builder.dart';
+import 'package:robotopia/src/release_package_models.dart';
+import 'package:robotopia/src/release_package_validator.dart';
 import 'package:robotopia/src/registry_entry_builder.dart';
 
 part 'robotopia_check_commands.dart';
@@ -15,6 +18,7 @@ part 'robotopia_help.dart';
 part 'robotopia_mod_commands.dart';
 part 'robotopia_new_commands.dart';
 part 'robotopia_registry_commands.dart';
+part 'robotopia_release_commands.dart';
 part 'robotopia_update_commands.dart';
 part 'robotopia_ugc_dev_commands.dart';
 part 'robotopia_ugc_unity_commands.dart';
@@ -85,6 +89,7 @@ class _RobotopiaCli {
       'unity' => _unity(rest),
       'updates' => _updates(rest),
       'registry' => _registry(rest),
+      'release' => _release(rest),
       _ => _unknown(command),
     };
   }
