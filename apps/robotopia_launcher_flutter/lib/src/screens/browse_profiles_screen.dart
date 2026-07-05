@@ -7,6 +7,7 @@ class BrowseScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final registryMods = _registryModsForDiscovery(state);
     return Column(
       children: [
         const ScreenHeader(
@@ -19,7 +20,7 @@ class BrowseScreen extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
             child: BorderedPane(
               padding: EdgeInsets.zero,
-              child: state.registryMods.isEmpty
+              child: registryMods.isEmpty
                   ? const EmptyStatePanel(
                       icon: Icons.travel_explore,
                       title: 'No local packages',
@@ -28,10 +29,10 @@ class BrowseScreen extends StatelessWidget {
                       brandAsset: QuantumWorksBrandAssets.robot,
                     )
                   : ListView.separated(
-                      itemCount: state.registryMods.length,
+                      itemCount: registryMods.length,
                       separatorBuilder: (context, index) => const Divider(),
                       itemBuilder: (context, index) {
-                        final mod = state.registryMods[index];
+                        final mod = registryMods[index];
                         return ListTile(
                           leading: const Icon(Icons.public),
                           title: Text(

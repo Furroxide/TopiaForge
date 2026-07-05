@@ -194,6 +194,31 @@ RegistryMod? _availableUpdateForMod(LauncherState state, InstalledMod mod) {
       : null;
 }
 
+List<RegistryMod> _registryModsForDiscovery(
+  LauncherState state, {
+  Iterable<RegistryMod>? mods,
+}) {
+  final source = mods ?? state.registryMods;
+  if (state.developerMode) {
+    return source is List<RegistryMod> ? source : source.toList();
+  }
+
+  final regular = <RegistryMod>[];
+  final framework = <RegistryMod>[];
+  for (final mod in source) {
+    if (_isFrameworkRegistryMod(mod)) {
+      framework.add(mod);
+    } else {
+      regular.add(mod);
+    }
+  }
+  return [...regular, ...framework];
+}
+
+bool _isFrameworkRegistryMod(RegistryMod mod) {
+  return mod.manifest.category.trim().toLowerCase() == 'framework';
+}
+
 String _updateTooltip(RegistryMod mod) {
   return 'Update available: installed ${mod.installedVersion}, registry ${mod.manifest.version}.';
 }
