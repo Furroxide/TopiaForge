@@ -62,7 +62,7 @@ void _registerRuntimeRepairSecurityTests({
       );
       expect(sentinel.readAsStringSync(), 'keep');
       expect(
-        File(p.join(outside.path, 'RobotopiaModManager.dll')).existsSync(),
+        File(p.join(outside.path, 'TopiaForge.dll')).existsSync(),
         isFalse,
       );
     },
@@ -79,12 +79,13 @@ void _registerRuntimeRepairSecurityTests({
         'doorstop_config.ini': 'old config',
         p.join('BepInEx', 'core', 'BepInEx.dll'): 'old core',
         for (final dll in [
-          'Robotopia.ModManager.dll',
-          'Robotopia.ModManager.Core.dll',
-          'Robotopia.Mods.Abstractions.dll',
-          'Robotopia.Mods.UnityUi.dll',
+          'TopiaForge.ModManager.dll',
+          'TopiaForge.ModManager.Core.dll',
+          'TopiaForge.Mods.Abstractions.dll',
+          'TopiaForge.Mods.UnityUi.dll',
         ])
-          p.join('BepInEx', 'plugins', 'RobotopiaModManager', dll): 'old $dll',
+          p.join('BepInEx', 'plugins', 'TopiaForge.ModManager', dll):
+              'old $dll',
       };
       for (final entry in managedTargets.entries) {
         final target = File(p.join(gameRoot().path, entry.key));
@@ -119,7 +120,7 @@ void _registerRuntimeRepairSecurityTests({
       }
       expect(
         Directory(
-          p.join(gameRoot().path, '.robotopia-runtime-transaction'),
+          p.join(gameRoot().path, '.topiaforge-runtime-transaction'),
         ).existsSync(),
         isFalse,
       );
@@ -132,7 +133,7 @@ void _registerRuntimeRepairSecurityTests({
       final target = File(p.join(gameRoot().path, 'winhttp.dll'))
         ..writeAsStringSync('original proxy');
       final transaction = Directory(
-        p.join(gameRoot().path, '.robotopia-runtime-transaction'),
+        p.join(gameRoot().path, '.topiaforge-runtime-transaction'),
       );
       final backup = File(p.join(transaction.path, 'backups', '0.bak'));
       backup.parent.createSync(recursive: true);
@@ -140,7 +141,7 @@ void _registerRuntimeRepairSecurityTests({
       target.writeAsStringSync('partially installed proxy');
       File(p.join(transaction.path, 'journal.json')).writeAsStringSync(
         jsonEncode({
-          'formatVersion': 1,
+          'formatVersion': 2,
           'status': 'committing',
           'operations': [
             {

@@ -24,8 +24,8 @@ extension LocalDeveloperTemplateCopy on LocalDeveloperRepository {
     }
     destination.parent.createSync(recursive: true);
     final nonce = '$pid-${DateTime.now().microsecondsSinceEpoch}';
-    final staging = Directory('${destination.path}.robotopia-new-$nonce');
-    final backup = Directory('${destination.path}.robotopia-backup-$nonce');
+    final staging = Directory('${destination.path}.topiaforge-new-$nonce');
+    final backup = Directory('${destination.path}.topiaforge-backup-$nonce');
     final swap = _StagedDeveloperDirectorySwap(
       target: destination,
       backup: backup,
@@ -72,7 +72,7 @@ extension LocalDeveloperTemplateCopy on LocalDeveloperRepository {
           continue;
         }
         entryCount++;
-        if (entryCount > _maxLegacyMigrationEntries) {
+        if (entryCount > _maxTemplateCopyEntries) {
           throw StateError('Template exceeds the 8192-entry limit.');
         }
         final type = FileSystemEntity.typeSync(entity.path, followLinks: false);
@@ -83,10 +83,10 @@ extension LocalDeveloperTemplateCopy on LocalDeveloperRepository {
         } else if (type == FileSystemEntityType.file) {
           final bytes = _readDeveloperFileBoundedSync(
             File(entity.path),
-            maxBytes: _maxLegacyMigrationFileBytes,
+            maxBytes: _maxTemplateCopyFileBytes,
             label: 'Template file $relative',
           );
-          if (byteCount > _maxLegacyMigrationBytes - bytes.length) {
+          if (byteCount > _maxTemplateCopyBytes - bytes.length) {
             throw StateError('Template exceeds the 2 GB expanded-size limit.');
           }
           byteCount += bytes.length;

@@ -8,7 +8,7 @@ trap 'rm -rf "$temp_root"' EXIT
 
 git init --quiet --bare "$temp_root/remote.git"
 git init --quiet "$temp_root/source"
-git -C "$temp_root/source" config user.name "Robotopia Release Test"
+git -C "$temp_root/source" config user.name "TopiaForge Release Test"
 git -C "$temp_root/source" config user.email "release-test@example.invalid"
 git -C "$temp_root/source" remote add origin "$temp_root/remote.git"
 git -C "$temp_root/source" commit --quiet --allow-empty -m first

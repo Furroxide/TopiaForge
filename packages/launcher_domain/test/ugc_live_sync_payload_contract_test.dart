@@ -8,7 +8,7 @@ void main() {
   test('UGC Go Live runtime config matches the game-side payload fixture', () {
     final payload = const UgcLiveSyncSettings(
       transport: 'automerge',
-      watchFolder: r'C:\Robotopia\ugc-watch',
+      watchFolder: r'C:\TopiaForge\ugc-watch',
       documentUrl: 'automerge:captured-doc',
       sceneId: 'neon-rooftops',
       autoConnectOnStart: true,

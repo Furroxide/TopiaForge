@@ -1,12 +1,12 @@
-# QuantumWorks contributor setup
+# TopiaForge contributor setup
 
 This guide is for contributors building the complete repository: the C# runtime and mods, Dart CLI, Flutter
 launcher, and optional UGC sidecar. Mod users do not need this toolchain, and mod authors can use the lighter
-`robotopia setup` flow described in [Modding.md](Modding.md).
+`topiaforge setup` flow described in [Modding.md](Modding.md).
 
 ## Supported contributor hosts
 
-QuantumWorks is developed and packaged on Windows and macOS, with launcher builds also maintained for Linux.
+TopiaForge is developed and packaged on Windows and macOS, with launcher builds also maintained for Linux.
 The repository pins Flutter **3.41.4** (Dart **3.11.1**) because that is the SDK used by the recovered working
 tree and its lock files. Configure that FVM-managed SDK on `PATH`, then use ordinary `flutter` and `dart`
 commands throughout this repository.
@@ -190,16 +190,16 @@ Use the pinned SDK for Dart and Flutter work:
 
 ```powershell
 dart test packages/launcher_domain
-flutter test apps/robotopia_launcher_flutter
+flutter test apps/topiaforge_launcher_flutter
 flutter build macos --debug       # macOS
 flutter build windows --debug     # Windows
 ```
 
 For macOS debugging in Xcode, open
-`apps/robotopia_launcher_flutter/macos/Runner.xcworkspace`. The tracked scheme
+`apps/topiaforge_launcher_flutter/macos/Runner.xcworkspace`. The tracked scheme
 points Run and Profile at the checkout payload; a raw DerivedData app does not
 embed distributable BepInEx or mod packages. Build the C# Release output and run
-`robotopia pack --all` first when exercising Repair or Browse.
+`topiaforge pack --all` first when exercising Repair or Browse.
 
 Xcode's scheme pre-action log includes inherited environment variables. Do not
 launch Xcode from a terminal or parent application carrying API tokens,
@@ -212,8 +212,8 @@ environment.
 The C# entry points remain standard:
 
 ```powershell
-dotnet build RobotopiaModManager.slnx -c Release
-dotnet run --project tests/Robotopia.ModManager.Tests/Robotopia.ModManager.Tests.csproj -c Release
+dotnet build TopiaForge.slnx -c Release
+dotnet run --project tests/TopiaForge.ModManager.Tests/TopiaForge.ModManager.Tests.csproj -c Release
 ```
 
 ## Optional Unity authoring

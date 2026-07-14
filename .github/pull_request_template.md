@@ -14,7 +14,7 @@ List exact commands, platforms, Unity editor version (when relevant), and manual
 
 ## Checklist
 
-- [ ] I read `AGENTS.md` and preserved CLEAN/Bloc/Unity/QwUi boundaries.
+- [ ] I read `AGENTS.md` and preserved CLEAN/Bloc/Unity/TopiaForge UI boundaries.
 - [ ] I added focused regression coverage for meaningful defects.
 - [ ] I ran the relevant build, analyze, test, format, package, and line-count gates.
 - [ ] I added provenance, license text, and modification notes for new third-party material.

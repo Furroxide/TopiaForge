@@ -100,7 +100,7 @@ void main() {
             ),
           ],
         ),
-        downloadUrl: 'file:///feature.mod.robotopiamod',
+        downloadUrl: 'file:///feature.mod.topiaforgemod',
         packageSha256: _validSha,
       );
       final candidate = _manifest(
@@ -167,8 +167,8 @@ void main() {
             gameVersionRange: VersionRange.parse('>=2.0.0'),
           ),
           game: '1.0.0',
-          loader: RobotopiaRuntimeVersions.loaderVersion,
-          sdk: RobotopiaRuntimeVersions.sdkVersion,
+          loader: TopiaForgeRuntimeVersions.loaderVersion,
+          sdk: TopiaForgeRuntimeVersions.sdkVersion,
         ),
         (
           manifest: _manifest(
@@ -176,8 +176,8 @@ void main() {
             loaderVersionRange: VersionRange.parse('>=9.0.0'),
           ),
           game: '1.0.0',
-          loader: RobotopiaRuntimeVersions.loaderVersion,
-          sdk: RobotopiaRuntimeVersions.sdkVersion,
+          loader: TopiaForgeRuntimeVersions.loaderVersion,
+          sdk: TopiaForgeRuntimeVersions.sdkVersion,
         ),
         (
           manifest: _manifest(
@@ -185,8 +185,8 @@ void main() {
             sdkVersionRange: VersionRange.parse('>=9.0.0'),
           ),
           game: '1.0.0',
-          loader: RobotopiaRuntimeVersions.loaderVersion,
-          sdk: RobotopiaRuntimeVersions.sdkVersion,
+          loader: TopiaForgeRuntimeVersions.loaderVersion,
+          sdk: TopiaForgeRuntimeVersions.sdkVersion,
         ),
       ];
 
@@ -328,7 +328,7 @@ void main() {
       );
       final remote = RegistryMod(
         manifest: _manifest('feature.mod'),
-        downloadUrl: 'https://packages.example/feature.robotopiamod',
+        downloadUrl: 'https://packages.example/feature.topiaforgemod',
         packageSha256: '../../escape',
       );
 

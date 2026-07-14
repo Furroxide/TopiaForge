@@ -333,11 +333,11 @@ ModManifest _manifest(
   List<String> permissions = const [],
 }) {
   return ModManifest(
-    schemaVersion: 2,
+    schemaVersion: 3,
     id: id,
     name: id,
     version: version,
-    author: const ModAuthor(name: 'QuantumWorks'),
+    author: const ModAuthor(name: 'TopiaForge'),
     entryAssembly: '$id.dll',
     entryType: '$id.Entry',
     dependencies: dependencies,

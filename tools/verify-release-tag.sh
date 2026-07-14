@@ -30,7 +30,7 @@ git remote get-url "$remote" >/dev/null 2>&1 || {
 # Fetch the one remote ref into an isolated namespace. A local tag is not
 # evidence that the protected remote tag already exists, and --no-tags avoids
 # accepting any opportunistically advertised tag.
-verification_ref="refs/robotopia/release-tag-verification/$$-${RANDOM}"
+verification_ref="refs/topiaforge/release-tag-verification/$$-${RANDOM}"
 cleanup() {
   git update-ref -d "$verification_ref" >/dev/null 2>&1 || true
 }

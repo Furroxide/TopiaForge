@@ -11,7 +11,7 @@ extension _ProcessHelpers on LocalLauncherRepository {
       return const LaunchResult(
         started: false,
         message:
-            'Robotopia runtime is missing or stale. Repair Runtime before launch.',
+            'TopiaForge runtime is missing or stale. Repair Runtime before launch.',
       );
     }
 
@@ -96,7 +96,7 @@ extension _ProcessHelpers on LocalLauncherRepository {
       }
       return const LaunchResult(
         started: false,
-        message: 'Robotopia could not be started. No mod state was changed.',
+        message: 'TopiaForge could not be started. No mod state was changed.',
       );
     }
 
@@ -120,12 +120,12 @@ extension _ProcessHelpers on LocalLauncherRepository {
       '-ExecutionPolicy',
       'Bypass',
       '-Command',
-      _stopRobotopiaScript,
+      _stopTopiaForgeScript,
       install.executablePath,
     ], timeout: const Duration(seconds: 15));
 
     if (result.exitCode == 0) {
-      await _appendLauncherLog('Stopped Robotopia before restart.');
+      await _appendLauncherLog('Stopped TopiaForge before restart.');
       return true;
     }
     if (result.exitCode == 2) {
@@ -135,7 +135,7 @@ extension _ProcessHelpers on LocalLauncherRepository {
 
     final detail = '${result.stdout}\n${result.stderr}'.trim();
     throw StateError(
-      detail.isEmpty ? 'Unable to stop Robotopia before restart.' : detail,
+      detail.isEmpty ? 'Unable to stop TopiaForge before restart.' : detail,
     );
   }
 
@@ -172,11 +172,11 @@ extension _ProcessHelpers on LocalLauncherRepository {
     while (DateTime.now().isBefore(deadline)) {
       await Future<void>.delayed(const Duration(milliseconds: 200));
       if ((await matchingPids()).isEmpty) {
-        await _appendLauncherLog('Stopped Robotopia before restart.');
+        await _appendLauncherLog('Stopped TopiaForge before restart.');
         return true;
       }
     }
-    throw StateError('Robotopia did not exit before the restart timeout.');
+    throw StateError('TopiaForge did not exit before the restart timeout.');
   }
 }
 
@@ -191,7 +191,7 @@ Future<int> _startDetachedGameProcess(GameProcessRequest request) async {
   return process.pid;
 }
 
-const String _stopRobotopiaScript = r'''
+const String _stopTopiaForgeScript = r'''
 param([string]$TargetPath)
 
 $target = [System.IO.Path]::GetFullPath($TargetPath)
@@ -226,7 +226,7 @@ do {
 } while ($remaining.Count -gt 0 -and (Get-Date) -lt $deadline)
 
 if ($remaining.Count -gt 0) {
-  Write-Error "Robotopia did not exit before the restart timeout."
+  Write-Error "TopiaForge did not exit before the restart timeout."
   exit 4
 }
 

@@ -1,13 +1,13 @@
-using Robotopia.Mods;
+using TopiaForge.Mods;
 
 namespace {{ASSEMBLY_NAME}}
 {
     /// <summary>
     /// Registers the "{{DISPLAY_NAME}}" gamemode with the Worlds service so it appears in the game's
-    /// level-select menu, and runs its session loop while a session is active. Requires the robotopia.worlds
-    /// and robotopia.robotkit framework mods (declared in robotopia.mod.json).
+    /// level-select menu, and runs its session loop while a session is active. Requires the io.github.furroxide.topiaforge.worlds
+    /// and io.github.furroxide.topiaforge.robotkit framework mods (declared in topiaforge.mod.json).
     /// </summary>
-    public sealed class {{TYPE_NAME}}Mod : IRobotopiaMod
+    public sealed class {{TYPE_NAME}}Mod : ITopiaForgeMod
     {
         public const string GamemodeId = "{{MOD_ID}}.mode";
 
@@ -21,7 +21,7 @@ namespace {{ASSEMBLY_NAME}}
             worlds = context.GetService<IWorldGamemodeService>();
             if (worlds == null)
             {
-                context.Logger.Warn("Robotopia Worlds service is not available; {{DISPLAY_NAME}} cannot register its gamemode.");
+                context.Logger.Warn("TopiaForge Worlds service is not available; {{DISPLAY_NAME}} cannot register its gamemode.");
                 return;
             }
 

@@ -140,7 +140,7 @@ if ($node) {
     }
 }
 
-Write-Host "QuantumWorks contributor bootstrap"
+Write-Host "TopiaForge contributor bootstrap"
 Write-Host "  .NET: $dotnetVersion"
 Write-Host "  FVM: $fvm"
 Write-Host "  Git LFS: $gitLfs"
@@ -167,21 +167,21 @@ Invoke-Checked $git @("lfs", "fsck")
 
 Invoke-Checked $fvm @("install", $PinnedFlutter, "--skip-pub-get")
 Invoke-Checked $fvm @("use", $PinnedFlutter, "--force", "--skip-pub-get")
-$script:DartCommand = Resolve-RobotopiaSdkCommand -Tool dart -RepositoryRoot $RepoRoot
-$script:FlutterCommand = Resolve-RobotopiaSdkCommand -Tool flutter -RepositoryRoot $RepoRoot
+$script:DartCommand = Resolve-TopiaForgeSdkCommand -Tool dart -RepositoryRoot $RepoRoot
+$script:FlutterCommand = Resolve-TopiaForgeSdkCommand -Tool flutter -RepositoryRoot $RepoRoot
 Write-Host "  Dart SDK command: $script:DartCommand"
 Write-Host "  Flutter SDK command: $script:FlutterCommand"
 
 foreach ($package in @(
     "packages/launcher_domain",
     "packages/launcher_data",
-    "apps/robotopia_cli"
+    "apps/topiaforge_cli"
 )) {
     Restore-DartPackage $package
 }
 foreach ($package in @(
     "packages/launcher_ui",
-    "apps/robotopia_launcher_flutter"
+    "apps/topiaforge_launcher_flutter"
 )) {
     Restore-FlutterPackage $package
 }
@@ -196,7 +196,7 @@ if ($node -and $npm) {
     $sidecarRestored = $true
 }
 
-Invoke-Checked $dotnet @("restore", "RobotopiaModManager.slnx")
+Invoke-Checked $dotnet @("restore", "TopiaForge.slnx")
 
 if (!$SkipManagedRefs) {
     if ([string]::IsNullOrWhiteSpace($CacheRoot)) {
@@ -212,22 +212,22 @@ if (!$SkipManagedRefs) {
 }
 
 if ($Verify) {
-    Invoke-Checked $dotnet @("build", "RobotopiaModManager.slnx", "-c", "Release", "--no-restore")
+    Invoke-Checked $dotnet @("build", "TopiaForge.slnx", "-c", "Release", "--no-restore")
     Invoke-Checked $dotnet @(
-        "run", "--project", "tests/Robotopia.ModManager.Tests/Robotopia.ModManager.Tests.csproj",
+        "run", "--project", "tests/TopiaForge.ModManager.Tests/TopiaForge.ModManager.Tests.csproj",
         "-c", "Release", "--no-build"
     )
 
     foreach ($package in @(
         "packages/launcher_domain",
         "packages/launcher_data",
-        "apps/robotopia_cli"
+        "apps/topiaforge_cli"
     )) {
         Verify-DartPackage $package
     }
     foreach ($package in @(
         "packages/launcher_ui",
-        "apps/robotopia_launcher_flutter"
+        "apps/topiaforge_launcher_flutter"
     )) {
         Verify-FlutterPackage $package
     }
@@ -240,11 +240,11 @@ if ($Verify) {
 
     $platform = if ($IsWindows) { "windows" } elseif ($IsMacOS) { "macos" } else { "linux" }
     Invoke-Checked $script:FlutterCommand @("build", $platform, "--debug") `
-        (Join-Path $RepoRoot "apps/robotopia_launcher_flutter")
+        (Join-Path $RepoRoot "apps/topiaforge_launcher_flutter")
     Invoke-Checked $git @("lfs", "fsck")
 }
 
-Write-Host "QuantumWorks bootstrap complete."
+Write-Host "TopiaForge bootstrap complete."
 if (!$Verify) {
     Write-Host "Run again with -Verify to execute the complete contributor test suite."
 }

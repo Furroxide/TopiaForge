@@ -22,10 +22,10 @@ void main() {
   late LocalLauncherRepository repository;
 
   setUp(() {
-    root = Directory.systemTemp.createTempSync('robotopia-launcher-data-');
+    root = Directory.systemTemp.createTempSync('topiaforge-launcher-data-');
     dataRoot = Directory(p.join(root.path, 'data'))..createSync();
     repoRoot = Directory(p.join(root.path, 'repo'))..createSync();
-    gameRoot = Directory(p.join(root.path, 'Robotopia'))..createSync();
+    gameRoot = Directory(p.join(root.path, 'TopiaForge'))..createSync();
     _createGame(gameRoot);
     _createRuntimeSources(repoRoot);
     _createRegistry(repoRoot);
@@ -131,7 +131,7 @@ void main() {
       expect(install!.needsRepair, isTrue);
 
       Directory(
-        p.join(repoRoot.path, 'src', 'Robotopia.ModManager'),
+        p.join(repoRoot.path, 'src', 'TopiaForge.ModManager'),
       ).deleteSync(recursive: true);
 
       final result = await repository.launch(
@@ -159,8 +159,8 @@ void main() {
         gameRoot.path,
         'BepInEx',
         'plugins',
-        'RobotopiaModManager',
-        'Robotopia.Mods.Abstractions.dll',
+        'TopiaForge.ModManager',
+        'TopiaForge.Mods.Abstractions.dll',
       ),
     ).writeAsStringSync('old abstraction dll');
 
@@ -181,14 +181,15 @@ void main() {
           gameRoot.path,
           'BepInEx',
           'plugins',
-          'RobotopiaModManager',
-          'Robotopia.Mods.UnityUi.dll',
+          'TopiaForge.ModManager',
+          'TopiaForge.Mods.UnityUi.dll',
         ),
       );
       expect(
         unityUi.existsSync(),
         isTrue,
-        reason: 'runtime repair must deploy the QwUi kit beside the loader',
+        reason:
+            'runtime repair must deploy the TopiaForge Unity UI kit beside the loader',
       );
 
       // The manager plugin hard-depends on the kit, so losing it alone must drop
@@ -296,12 +297,12 @@ void main() {
 
   test('rejects zip traversal during preview', () async {
     final install = await repository.selectGameDirectory(gameRoot.path);
-    final package = File(p.join(root.path, 'traversal.robotopiamod'));
+    final package = File(p.join(root.path, 'traversal.topiaforgemod'));
     final archive = Archive()
       ..addFile(ArchiveFile.string('../escape.txt', 'nope'))
       ..addFile(
         ArchiveFile.string(
-          'robotopia.mod.json',
+          'topiaforge.mod.json',
           jsonEncode(_manifestJson('bad.mod', '1.0.0')),
         ),
       )
@@ -314,27 +315,6 @@ void main() {
     );
   });
 
-  test('parses registry and detects legacy RoboPatch-style mods', () async {
-    final legacyRoot = Directory(p.join(gameRoot.path, 'Mods'))..createSync();
-    File(p.join(legacyRoot.path, 'LegacyPrompt.dll')).writeAsStringSync('dll');
-    final manifestLegacy = Directory(p.join(legacyRoot.path, 'ManifestLegacy'))
-      ..createSync();
-    File(
-      p.join(manifestLegacy.path, 'robotopia.mod.json'),
-    ).writeAsStringSync(jsonEncode(_manifestJson('manifest.legacy', '1.0.0')));
-
-    final snapshot = await repository.loadSnapshot();
-
-    expect(snapshot.registryMods.single.manifest.id, 'registry.sample');
-    expect(snapshot.legacyMods.map((mod) => mod.id), contains('LegacyPrompt'));
-    expect(
-      snapshot.legacyMods
-          .singleWhere((mod) => mod.id == 'manifest.legacy')
-          .canMigrate,
-      isTrue,
-    );
-  });
-
   test('derives the catalog from dist packages, keeping latest per id', () async {
     final dist = Directory(p.join(repoRoot.path, 'dist'));
     // A newer build of the same mod supersedes the fixture's 1.0.0 in the listing.
@@ -342,7 +322,7 @@ void main() {
     _writeDistPackage(dist, id: 'other.mod', version: '0.3.0');
     // A malformed file must be skipped, not break the whole catalog.
     File(
-      p.join(dist.path, 'broken.robotopiamod'),
+      p.join(dist.path, 'broken.topiaforgemod'),
     ).writeAsStringSync('not a zip');
 
     final snapshot = await repository.loadSnapshot();

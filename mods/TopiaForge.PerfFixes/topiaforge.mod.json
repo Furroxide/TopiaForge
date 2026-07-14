@@ -1,0 +1,31 @@
+{
+  "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+  "schemaVersion": 3,
+  "name": "io.github.furroxide.topiaforge.perffixes",
+  "displayName": "TopiaForge Performance Fixes",
+  "version": "0.1.0",
+  "author": {
+    "name": "TopiaForge"
+  },
+  "description": "Behavior-identical root-cause performance fixes (no quality/gameplay change): caches Camera.main per frame, eliminates per-collision GC allocations, and reuses physics collision callbacks. Targets stutter and CPU waste, not graphics settings.",
+  "entryAssembly": "TopiaForge.PerfFixes.dll",
+  "entryType": "TopiaForge.PerfFixes.PerfFixesMod",
+  "vpmDependencies": {},
+  "supportedGameVersionRange": "0.0.2227",
+  "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
+  "supportedSdkVersionRange": ">=0.1.0 <0.2.0",
+  "category": "Performance",
+  "tags": [
+    "performance",
+    "fps",
+    "stutter",
+    "gc",
+    "optimization",
+    "harmony"
+  ],
+  "license": "NOASSERTION",
+  "permissions": [
+    "harmony-patch",
+    "physics-settings"
+  ]
+}

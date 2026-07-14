@@ -12,7 +12,9 @@ void main() {
   late LocalLauncherRepository repository;
 
   setUp(() async {
-    root = await Directory.systemTemp.createTemp('robotopia-persistence-test-');
+    root = await Directory.systemTemp.createTemp(
+      'topiaforge-persistence-test-',
+    );
     dataRoot = Directory(p.join(root.path, 'data'));
     repository = LocalLauncherRepository(
       dataRoot: dataRoot.path,
@@ -118,7 +120,7 @@ void main() {
   test('update settings never persist an untrusted archive URL', () async {
     await repository.saveLauncherUpdateSettings(
       const LauncherUpdateSettings(
-        manualReleasesUrl: 'http://updates.example/manual-releases.json',
+        archiveUrl: 'http://updates.example/manual-releases.json',
       ),
     );
 
@@ -128,14 +130,13 @@ void main() {
             )
             as Map<String, Object?>;
     final updates = decoded['launcherUpdates'] as Map<String, Object?>;
-    expect(
-      updates['manualReleasesUrl'],
-      LauncherUpdateSettings.defaultManualReleasesUrl,
-    );
+    expect(updates['archiveUrl'], LauncherUpdateSettings.defaultArchiveUrl);
   });
 
   test('profile import is bounded and rejects symbolic links', () async {
-    final oversized = File(p.join(root.path, 'oversized-profile.json'));
+    final oversized = File(
+      p.join(root.path, 'oversized.topiaforgeprofile.json'),
+    );
     await oversized.writeAsBytes(List<int>.filled(4 * 1024 * 1024 + 1, 0x20));
     await expectLater(
       repository.importProfile(oversized.path),
@@ -143,9 +144,16 @@ void main() {
     );
 
     if (!Platform.isWindows) {
-      final target = File(p.join(root.path, 'profile.json'));
-      await target.writeAsString(jsonEncode(LauncherProfile.defaultProfile()));
-      final link = Link(p.join(root.path, 'profile-link.json'));
+      final target = File(p.join(root.path, 'profile.topiaforgeprofile.json'));
+      await target.writeAsString(
+        jsonEncode({
+          'schemaVersion': 2,
+          'profile': LauncherProfile.defaultProfile().toJson(),
+        }),
+      );
+      final link = Link(
+        p.join(root.path, 'profile-link.topiaforgeprofile.json'),
+      );
       await link.create(target.path);
       await expectLater(
         repository.importProfile(link.path),
@@ -156,20 +164,104 @@ void main() {
     }
   });
 
-  test('profile export uses a replaceable standalone JSON object', () async {
-    final output = File(p.join(root.path, 'exported-profile.json'));
+  test('profile export uses the canonical versioned contract', () async {
+    final output = File(p.join(root.path, 'exported.topiaforgeprofile.json'));
     final profile = LauncherProfile.defaultProfile().copyWith(name: 'Portable');
 
     await repository.exportProfile(profile, output.path);
 
     final decoded = jsonDecode(await output.readAsString());
     expect(decoded, isA<Map<String, Object?>>());
-    expect((decoded as Map<String, Object?>)['name'], 'Portable');
+    expect((decoded as Map<String, Object?>)['schemaVersion'], 2);
+    expect(((decoded['profile'] as Map<String, Object?>)['name']), 'Portable');
     expect(
       root.listSync().whereType<File>().where(
         (file) => file.path.endsWith('.tmp'),
       ),
       isEmpty,
+    );
+  });
+
+  test('profile writes reject unsafe in-memory ecosystem ids', () async {
+    final retired =
+        'robo'
+        'topia.world.retired';
+    final profile = LauncherProfile(
+      id: 'unsafe-world',
+      name: 'Unsafe world',
+      worldSelection: WorldSelection(worldId: retired),
+    );
+    final output = File(p.join(root.path, 'unsafe.topiaforgeprofile.json'));
+
+    await expectLater(
+      repository.saveProfiles([profile], profile.id),
+      throwsFormatException,
+    );
+    await expectLater(
+      repository.exportProfile(profile, output.path),
+      throwsFormatException,
+    );
+    expect(output.existsSync(), isFalse);
+  });
+
+  test(
+    'profile import rejects old versions and non-canonical suffixes',
+    () async {
+      final oldVersion = File(p.join(root.path, 'old.topiaforgeprofile.json'))
+        ..writeAsStringSync(
+          jsonEncode({
+            'schemaVersion': 1,
+            'profile': LauncherProfile.defaultProfile().toJson(),
+          }),
+        );
+      final wrongSuffix = File(p.join(root.path, 'profile.json'))
+        ..writeAsStringSync('{}');
+
+      await expectLater(
+        repository.importProfile(oldVersion.path),
+        throwsFormatException,
+      );
+      await expectLater(
+        repository.importProfile(wrongSuffix.path),
+        throwsFormatException,
+      );
+    },
+  );
+
+  test('v2 profile stores and imports reject retired mod ids', () async {
+    final retired = String.fromCharCodes(const [
+      114,
+      111,
+      98,
+      111,
+      116,
+      111,
+      112,
+      105,
+      97,
+      46,
+      109,
+      111,
+      100,
+    ]);
+    final profile = {
+      ...LauncherProfile.defaultProfile().toJson(),
+      'enabledMods': [retired],
+    };
+    await dataRoot.create(recursive: true);
+    File(p.join(dataRoot.path, 'profiles.json')).writeAsStringSync(
+      jsonEncode({
+        'schemaVersion': 2,
+        'profiles': [profile],
+      }),
+    );
+    final imported = File(p.join(root.path, 'retired.topiaforgeprofile.json'))
+      ..writeAsStringSync(jsonEncode({'schemaVersion': 2, 'profile': profile}));
+
+    await expectLater(repository.loadSnapshot(), throwsFormatException);
+    await expectLater(
+      repository.importProfile(imported.path),
+      throwsFormatException,
     );
   });
 

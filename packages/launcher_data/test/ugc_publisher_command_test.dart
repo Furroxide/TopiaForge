@@ -5,7 +5,7 @@ import 'package:test/test.dart';
 void main() {
   test('publisher command keeps paths and URLs as literal arguments', () {
     final command = UgcPublisherCommand.forSettings(
-      sidecarPath: r'C:\Robotopia Tools\sidecar\index.mjs',
+      sidecarPath: r'C:\TopiaForge Tools\sidecar\index.mjs',
       sessionFilePath: r'C:\Users\Test User\ugc-session.json',
       settings: const UgcLiveSyncSettings(
         watchFolder: r'C:\UGC Worlds\watch & review',
@@ -17,7 +17,7 @@ void main() {
 
     expect(command.executable, 'node');
     expect(command.arguments, [
-      r'C:\Robotopia Tools\sidecar\index.mjs',
+      r'C:\TopiaForge Tools\sidecar\index.mjs',
       '--watch',
       r'C:\UGC Worlds\watch & review',
       '--sync',

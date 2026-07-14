@@ -39,7 +39,7 @@ test('signal cleanup preserves a replacement publisher session', async (t) => {
 });
 
 async function startFixture(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'robotopia-signal-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'topiaforge-signal-'));
   const sessionPath = path.join(root, 'session.json');
   const child = spawn(process.execPath, [fixture, sessionPath], {
     stdio: ['ignore', 'pipe', 'pipe'],

@@ -34,17 +34,18 @@ void main() {
   });
 
   Map<String, Object?> manifestJson() => {
-    'schemaVersion': 2,
+    'schemaVersion': 3,
     'name': 'sample.mod',
     'displayName': 'Sample Mod',
     'version': '1.2.3',
+    'author': {'name': 'Tester'},
     'entryAssembly': 'Sample.dll',
     'entryType': 'Sample.Entry',
   };
 
   void writeManifest([Map<String, Object?>? overrides]) {
     File(
-      p.join(projectDir.path, 'robotopia.mod.json'),
+      p.join(projectDir.path, 'topiaforge.mod.json'),
     ).writeAsStringSync(jsonEncode({...manifestJson(), ...?overrides}));
   }
 
@@ -66,10 +67,10 @@ void main() {
 
     final packagePath = await repository.packModDirectory(projectDir.path);
 
-    expect(p.basename(packagePath), 'sample.mod-1.2.3.robotopiamod');
+    expect(p.basename(packagePath), 'sample.mod-1.2.3.topiaforgemod');
     final archive = readPackage(packagePath);
     final names = archive.files.map((file) => file.name).toSet();
-    expect(names, contains('robotopia.mod.json'));
+    expect(names, contains('topiaforge.mod.json'));
     expect(names, contains('Sample.dll'));
     expect(names, contains('assets/texture.png'));
     expect(names.where((name) => name.startsWith('bin/')), isEmpty);
@@ -97,9 +98,29 @@ void main() {
     );
   });
 
+  test('rejects a manifest with schemaVersion 2', () async {
+    writeManifest({'schemaVersion': 2});
+    await expectLater(
+      repository.packModDirectory(projectDir.path),
+      throwsA(predicate((error) => error.toString().contains('schemaVersion'))),
+    );
+  });
+
+  test('rejects a manifest with a retired ecosystem id', () async {
+    writeManifest({
+      'name':
+          'robo'
+          'topia.old',
+    });
+    await expectLater(
+      repository.packModDirectory(projectDir.path),
+      throwsA(predicate((error) => error.toString().contains('name must be'))),
+    );
+  });
+
   test('rejects an oversized manifest before decoding it', () async {
     File(
-      p.join(projectDir.path, 'robotopia.mod.json'),
+      p.join(projectDir.path, 'topiaforge.mod.json'),
     ).writeAsBytesSync(List<int>.filled(1024 * 1024 + 1, 0x20));
 
     await expectLater(
@@ -143,13 +164,14 @@ void main() {
     },
   );
 
-  test('sanitizes unsafe characters in the package file name', () async {
+  test('rejects unsafe characters in the package id', () async {
     writeManifest({'name': 'weird name!', 'version': '1.0.0+build'});
     File(p.join(projectDir.path, 'Sample.dll')).writeAsStringSync('payload');
 
-    final packagePath = await repository.packModDirectory(projectDir.path);
-
-    expect(p.basename(packagePath), 'weird_name_-1.0.0_build.robotopiamod');
+    await expectLater(
+      repository.packModDirectory(projectDir.path),
+      throwsA(isA<StateError>()),
+    );
   });
 
   test('produces deterministic archives and omits placeholder files', () async {
@@ -173,7 +195,7 @@ void main() {
     final archive = readPackage(first);
     expect(
       archive.files.map((file) => file.name),
-      orderedEquals(['a.txt', 'robotopia.mod.json', 'z.txt']),
+      orderedEquals(['a.txt', 'topiaforge.mod.json', 'z.txt']),
     );
     expect(archive.files.map((file) => file.lastModTime).toSet(), hasLength(1));
   });

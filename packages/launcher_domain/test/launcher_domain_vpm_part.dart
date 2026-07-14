@@ -6,30 +6,34 @@ void _unityVpmResolverTests() {
       'name': 'Test',
       'id': 'test.repo',
       'packages': {
-        'com.robotopia.ugc-companion': {
+        'io.github.furroxide.topiaforge.ugc-companion': {
           'versions': {
             '0.1.0': {
-              'name': 'com.robotopia.ugc-companion',
+              'name': 'io.github.furroxide.topiaforge.ugc-companion',
               'version': '0.1.0',
               'displayName': 'UGC Companion',
               'url': 'file:///companion-0.1.0.zip',
               'zipSHA256': 'sha-companion',
-              'vpmDependencies': {'com.robotopia.vpm-resolver': '>=0.1.0'},
+              'vpmDependencies': {
+                'io.github.furroxide.topiaforge.vpm-resolver': '>=0.1.0',
+              },
             },
             '0.2.0': {
-              'name': 'com.robotopia.ugc-companion',
+              'name': 'io.github.furroxide.topiaforge.ugc-companion',
               'version': '0.2.0',
               'displayName': 'UGC Companion',
               'url': 'file:///companion-0.2.0.zip',
               'zipSHA256': 'sha-companion-2',
-              'vpmDependencies': {'com.robotopia.vpm-resolver': '>=0.1.0'},
+              'vpmDependencies': {
+                'io.github.furroxide.topiaforge.vpm-resolver': '>=0.1.0',
+              },
             },
           },
         },
-        'com.robotopia.vpm-resolver': {
+        'io.github.furroxide.topiaforge.vpm-resolver': {
           'versions': {
             '0.1.0': {
-              'name': 'com.robotopia.vpm-resolver',
+              'name': 'io.github.furroxide.topiaforge.vpm-resolver',
               'version': '0.1.0',
               'url': 'file:///resolver-0.1.0.zip',
               'zipSHA256': 'sha-resolver',
@@ -41,7 +45,9 @@ void _unityVpmResolverTests() {
 
     test('resolves transitive deps in dependency-first order', () {
       final manifest = VpmManifest.fromJson(const {
-        'dependencies': {'com.robotopia.ugc-companion': '>=0.1.0'},
+        'dependencies': {
+          'io.github.furroxide.topiaforge.ugc-companion': '>=0.1.0',
+        },
       });
       final resolution = const UnityVpmResolver().resolve(
         manifest: manifest,
@@ -51,12 +57,12 @@ void _unityVpmResolverTests() {
       expect(resolution.hasBlockingIssues, isFalse);
       final ids = resolution.packages.map((p) => p.id).toList();
       expect(
-        ids.indexOf('com.robotopia.vpm-resolver'),
-        lessThan(ids.indexOf('com.robotopia.ugc-companion')),
+        ids.indexOf('io.github.furroxide.topiaforge.vpm-resolver'),
+        lessThan(ids.indexOf('io.github.furroxide.topiaforge.ugc-companion')),
       );
 
       final companion = resolution.packages.firstWhere(
-        (p) => p.id == 'com.robotopia.ugc-companion',
+        (p) => p.id == 'io.github.furroxide.topiaforge.ugc-companion',
       );
       expect(companion.version, '0.2.0');
       expect(companion.zipSha256, 'sha-companion-2');
@@ -73,7 +79,9 @@ void _unityVpmResolverTests() {
 
       final unsatisfiable = const UnityVpmResolver().resolve(
         manifest: VpmManifest.fromJson(const {
-          'dependencies': {'com.robotopia.ugc-companion': '^9.0.0'},
+          'dependencies': {
+            'io.github.furroxide.topiaforge.ugc-companion': '^9.0.0',
+          },
         }),
         catalog: listing(),
       );
@@ -152,24 +160,144 @@ void _unityVpmResolverTests() {
 
     test('VpmManifest round-trips dependencies + locked', () {
       const manifest = VpmManifest(
-        dependencies: {'com.robotopia.ugc-companion': '^0.1.0'},
+        dependencies: {
+          'io.github.furroxide.topiaforge.ugc-companion': '^0.1.0',
+        },
         locked: {
-          'com.robotopia.ugc-companion': VpmLocked(
+          'io.github.furroxide.topiaforge.ugc-companion': VpmLocked(
             version: '0.1.0',
-            dependencies: {'com.robotopia.vpm-resolver': '>=0.1.0'},
+            dependencies: {
+              'io.github.furroxide.topiaforge.vpm-resolver': '>=0.1.0',
+            },
           ),
         },
       );
       final back = VpmManifest.fromJson(manifest.toJson());
 
-      expect(back.dependencies['com.robotopia.ugc-companion'], '^0.1.0');
-      expect(back.locked['com.robotopia.ugc-companion']!.version, '0.1.0');
+      expect(
+        back.dependencies['io.github.furroxide.topiaforge.ugc-companion'],
+        '^0.1.0',
+      );
+      expect(
+        back.locked['io.github.furroxide.topiaforge.ugc-companion']!.version,
+        '0.1.0',
+      );
       expect(
         back
-            .locked['com.robotopia.ugc-companion']!
-            .dependencies['com.robotopia.vpm-resolver'],
+            .locked['io.github.furroxide.topiaforge.ugc-companion']!
+            .dependencies['io.github.furroxide.topiaforge.vpm-resolver'],
         '>=0.1.0',
       );
+    });
+
+    test('VPM package ids reject unsafe and retired identities', () {
+      expect(VpmPackageId.isValid('com.example.safe-package'), isTrue);
+      for (final id in [
+        'Upper.Case',
+        '../escape',
+        'single',
+        'robo'
+            'topia.retired',
+        'com.robo'
+            'topia.retired',
+        'quantum'
+            'works.retired',
+      ]) {
+        expect(VpmPackageId.isValid(id), isFalse, reason: id);
+      }
+    });
+
+    test('VPM manifest rejects invalid direct, locked, and nested ids', () {
+      final retired =
+          'robo'
+          'topia.retired';
+      for (final json in [
+        {
+          'dependencies': {retired: '*'},
+        },
+        {
+          'locked': {
+            retired: {'version': '1.0.0'},
+          },
+        },
+        {
+          'locked': {
+            'com.example.safe': {
+              'version': '1.0.0',
+              'dependencies': {retired: '1.0.0'},
+            },
+          },
+        },
+      ]) {
+        expect(() => VpmManifest.fromJson(json), throwsFormatException);
+      }
+    });
+
+    test('VPM listings reject invalid keys, names, and transitive ids', () {
+      final retired =
+          'robo'
+          'topia.retired';
+      for (final packages in [
+        {
+          retired: {
+            'versions': {
+              '1.0.0': {'name': retired, 'version': '1.0.0'},
+            },
+          },
+        },
+        {
+          'com.example.safe': {
+            'versions': {
+              '1.0.0': {'name': 'com.example.other', 'version': '1.0.0'},
+            },
+          },
+        },
+        {
+          'com.example.safe': {
+            'versions': {
+              '1.0.0': {
+                'name': 'com.example.safe',
+                'version': '1.0.0',
+                'vpmDependencies': {retired: '*'},
+              },
+            },
+          },
+        },
+      ]) {
+        expect(
+          () => VpmListing.fromJson({'packages': packages}),
+          throwsFormatException,
+        );
+      }
+    });
+
+    test('resolver blocks invalid direct and transitive in-memory ids', () {
+      final retired =
+          'robo'
+          'topia.retired';
+      final direct = const UnityVpmResolver().resolve(
+        manifest: VpmManifest(dependencies: {retired: '*'}),
+        catalog: listing(),
+      );
+      expect(direct.hasBlockingIssues, isTrue);
+      expect(direct.packages, isEmpty);
+
+      final transitive = const UnityVpmResolver().resolve(
+        manifest: const VpmManifest(dependencies: {'com.example.parent': '*'}),
+        catalog: VpmListing(
+          packages: {
+            'com.example.parent': {
+              '1.0.0': VpmPackageInfo(
+                name: 'com.example.parent',
+                version: '1.0.0',
+                vpmDependencies: {retired: '*'},
+              ),
+            },
+          },
+        ),
+      );
+      expect(transitive.hasBlockingIssues, isTrue);
+      expect(transitive.packages, isEmpty);
     });
   });
 }

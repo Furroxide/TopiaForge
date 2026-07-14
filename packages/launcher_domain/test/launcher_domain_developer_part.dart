@@ -14,7 +14,7 @@ void _developerModelTests() {
           autoConnectOnStart: true,
         ).toRuntimeConfig();
 
-        // The mod (mods/Robotopia.UgcLiveSync/UgcLiveSyncConfig.cs) deserializes these exact DataMember names; this
+        // The mod (mods/TopiaForge.UgcLiveSync/UgcLiveSyncConfig.cs) deserializes these exact DataMember names; this
         // pins the cross-language contract so a renamed/dropped key can never silently ship.
         expect(
           config.keys.toSet(),
@@ -84,7 +84,7 @@ void _developerModelTests() {
     test('UgcLiveSyncStatusSnapshot parses the C# status handshake', () {
       // Keys mirror the C# UgcLiveSyncStatusFile [DataMember] names (cross-language contract).
       final snapshot = UgcLiveSyncStatusSnapshot.fromJson(const {
-        'schemaVersion': 1,
+        'schemaVersion': 2,
         'status': 'Connected',
         'transport': 'automerge',
         'defaultWatchFolder': r'C:\game\ugc',
@@ -103,6 +103,7 @@ void _developerModelTests() {
 
       // A bare/empty status is non-live and has safe defaults.
       final empty = UgcLiveSyncStatusSnapshot.fromJson(const {});
+      expect(empty.schemaVersion, 0);
       expect(empty.isLive, isFalse);
       expect(empty.status, 'Idle');
       expect(empty.availableScenes, isEmpty);

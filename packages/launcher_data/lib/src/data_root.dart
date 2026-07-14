@@ -2,13 +2,13 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
-String resolveRobotopiaDataRoot({
+String resolveTopiaForgeDataRoot({
   Map<String, String>? environment,
   bool? isWindows,
   String? currentDirectory,
 }) {
   final values = environment ?? Platform.environment;
-  final configured = values['ROBOTOPIA_DATA_ROOT']?.trim();
+  final configured = values['TOPIAFORGE_DATA_ROOT']?.trim();
   if (configured != null && configured.isNotEmpty) {
     return configured;
   }
@@ -16,7 +16,7 @@ String resolveRobotopiaDataRoot({
   if (isWindows ?? Platform.isWindows) {
     final appData = values['APPDATA'];
     if (appData != null && appData.isNotEmpty) {
-      return p.join(appData, 'RobotopiaLauncher');
+      return p.join(appData, 'TopiaForgeLauncher');
     }
   }
 
@@ -25,5 +25,5 @@ String resolveRobotopiaDataRoot({
       values['USERPROFILE'] ??
       currentDirectory ??
       Directory.current.path;
-  return p.join(home, '.robotopia_launcher');
+  return p.join(home, '.topiaforge_launcher');
 }

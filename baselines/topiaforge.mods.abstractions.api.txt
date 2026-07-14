@@ -1,0 +1,858 @@
+# TopiaForge.Mods.Abstractions public API baseline
+# Format version: 2
+# Regenerate with: dotnet run --project tests/TopiaForge.ModManager.Tests -c Release -- --print-sdk-api-baseline
+# Review every change. The stable 0.1 line permits additive API changes only.
+
+assembly TopiaForge.Mods.Abstractions, Version=0.1.0.0, Culture=neutral, PublicKeyToken=null
+target-framework .NETStandard,Version=v2.1
+
+type public sealed class TopiaForge.Mods.AssetBundleLoadOptions : System.Object
+  constructor .ctor()
+  property System.Boolean Cache { get; set; }
+  property System.Boolean Reload { get; set; }
+  property static TopiaForge.Mods.AssetBundleLoadOptions Default { get [static]; }
+
+type public sealed class TopiaForge.Mods.AssetBundleLoadRequest : System.Object
+  constructor .ctor(System.String ownerModId, System.String packagePath, System.String relativePath, TopiaForge.Mods.AssetBundleLoadOptions? options = null)
+  property System.String OwnerModId { get; }
+  property System.String PackagePath { get; }
+  property System.String RelativePath { get; }
+  property TopiaForge.Mods.AssetBundleLoadOptions Options { get; }
+
+type public sealed class TopiaForge.Mods.AssetBundleLoadResult : System.Object
+  method [static] TopiaForge.Mods.AssetBundleLoadResult Fail(System.String error)
+  method [static] TopiaForge.Mods.AssetBundleLoadResult Success(TopiaForge.Mods.IAssetBundleHandle bundle)
+  property System.Boolean Ok { get; }
+  property System.String Error { get; }
+  property TopiaForge.Mods.IAssetBundleHandle? Bundle { get; }
+
+type public sealed class TopiaForge.Mods.AssetLoadResult : System.Object
+  method [static] TopiaForge.Mods.AssetLoadResult Fail(System.String error)
+  method [static] TopiaForge.Mods.AssetLoadResult Success(System.Object asset)
+  property System.Boolean Ok { get; }
+  property System.Object? Asset { get; }
+  property System.String Error { get; }
+
+type public sealed class TopiaForge.Mods.AssetLoadResult<T> : System.Object where T : class
+  method [static] TopiaForge.Mods.AssetLoadResult<T> Fail(System.String error)
+  method [static] TopiaForge.Mods.AssetLoadResult<T> Success(T asset)
+  property System.Boolean Ok { get; }
+  property System.String Error { get; }
+  property T? Asset { get; }
+
+type public enum TopiaForge.Mods.BrainFieldType : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.BrainFieldType Boolean = 2 (Boolean)
+  field const TopiaForge.Mods.BrainFieldType Number = 1 (Number)
+  field const TopiaForge.Mods.BrainFieldType String = 0 (String)
+
+type public sealed class TopiaForge.Mods.BrainOutputField : System.Object
+  constructor .ctor(System.String name, System.String description, TopiaForge.Mods.BrainFieldType type = 0 (String), System.Collections.Generic.IReadOnlyList<System.String>? allowedStrings = null)
+  property System.Collections.Generic.IReadOnlyList<System.String>? AllowedStrings { get; }
+  property System.String Description { get; }
+  property System.String Name { get; }
+  property TopiaForge.Mods.BrainFieldType Type { get; }
+
+type public sealed class TopiaForge.Mods.BrainQueryRequest : System.Object
+  constructor .ctor(System.String prompt, System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.BrainOutputField> outputs)
+  property System.Boolean UseReasoning { get; set; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.BrainOutputField> Outputs { get; }
+  property System.Single Temperature { get; set; }
+  property System.String Prompt { get; }
+  property System.String Usage { get; set; }
+  property System.String? SuccessDescription { get; set; }
+
+type public sealed class TopiaForge.Mods.BrainQueryResult : System.Object
+  constructor .ctor(System.Boolean available, System.Boolean succeeded, System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> values, System.String? error)
+  field static readonly TopiaForge.Mods.BrainQueryResult Unavailable
+  method System.Boolean TryGet(System.String name, out System.String value)
+  property System.Boolean Available { get; }
+  property System.Boolean Succeeded { get; }
+  property System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> Values { get; }
+  property System.String? Error { get; }
+
+type public sealed class TopiaForge.Mods.BundleWorldContent : System.Object, TopiaForge.Mods.ICustomWorldContent
+  constructor .ctor(TopiaForge.Mods.IModContext context, System.String bundleRelativePath, System.String prefabAssetName = "", TopiaForge.Mods.CustomWorldOptions? options = null)
+  method [virtual,final,newslot] System.Object? CreateContentRoot()
+  property TopiaForge.Mods.CustomWorldOptions Options { get [virtual,final,newslot]; }
+
+type public sealed class TopiaForge.Mods.BundleWorldOptions : System.Object
+  constructor .ctor()
+  property System.Boolean RegisterSandboxMenuEntry { get; set; }
+  property System.String BundleRelativePath { get; set; }
+  property System.String Description { get; set; }
+  property System.String Id { get; set; }
+  property System.String MenuEntryId { get; set; }
+  property System.String Name { get; set; }
+  property System.String PrefabAssetName { get; set; }
+  property TopiaForge.Mods.CustomWorldOptions Content { get; set; }
+
+type public sealed class TopiaForge.Mods.CustomWorldOptions : System.Object
+  constructor .ctor()
+  property System.Boolean ApplyDefaultEnvironment { get; set; }
+  property System.Boolean EnableKillPlane { get; set; }
+  property System.Single KillPlaneDepth { get; set; }
+  property System.String SpawnPointName { get; set; }
+  property static TopiaForge.Mods.CustomWorldOptions Default { get [static]; }
+
+type public static class TopiaForge.Mods.GameScenes : System.Object
+  field const System.String MainMenuSceneName = "TestCityStartMenu"
+  method [static] System.Boolean IsMainMenuScene(System.String sceneName)
+  method [static] System.Boolean IsNonGameplayScene(System.String sceneName)
+
+type public sealed class TopiaForge.Mods.GamemodeDefinition : System.Object
+  constructor .ctor(System.String id, System.String name, System.String description)
+  property System.String Description { get; }
+  property System.String Id { get; }
+  property System.String Name { get; }
+
+type public sealed class TopiaForge.Mods.GamemodeMenuEntry : System.Object
+  constructor .ctor(System.String id, System.String title, System.String description, System.String gamemodeId, System.String worldId = "")
+  property System.String Description { get; }
+  property System.String GamemodeId { get; }
+  property System.String Id { get; }
+  property System.String Title { get; }
+  property System.String WorldId { get; }
+
+type public interface TopiaForge.Mods.IAssetBundleHandle
+  property System.Boolean IsLoaded { get [abstract,virtual,newslot]; }
+  property System.Collections.Generic.IReadOnlyList<System.String> OwnerModIds { get [abstract,virtual,newslot]; }
+  property System.Object Bundle { get [abstract,virtual,newslot]; }
+  property System.String FullPath { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IAssetBundleService
+  method [abstract,virtual,newslot] System.Collections.Generic.IReadOnlyList<System.String> GetAllAssetNames(TopiaForge.Mods.IAssetBundleHandle bundle)
+  method [abstract,virtual,newslot] System.Void UnloadOwner(System.String ownerModId, System.Boolean unloadAllLoadedObjects = false)
+  method [abstract,virtual,newslot] TopiaForge.Mods.AssetBundleLoadResult LoadBundle(TopiaForge.Mods.AssetBundleLoadRequest request)
+  method [abstract,virtual,newslot] TopiaForge.Mods.AssetLoadResult LoadAsset(TopiaForge.Mods.IAssetBundleHandle bundle, System.String assetName, System.Type assetType)
+  method [abstract,virtual,newslot] TopiaForge.Mods.AssetLoadResult<T> LoadAsset<T>(TopiaForge.Mods.IAssetBundleHandle bundle, System.String assetName) where T : class
+  method [abstract,virtual,newslot] TopiaForge.Mods.SpawnAssetResult SpawnAsset(System.Object prefab)
+  method [abstract,virtual,newslot] TopiaForge.Mods.SpawnAssetResult<T> SpawnAsset<T>(T prefab) where T : class
+
+type public interface TopiaForge.Mods.ICustomWorldContent
+  method [abstract,virtual,newslot] System.Object? CreateContentRoot()
+  property TopiaForge.Mods.CustomWorldOptions Options { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IModContext
+  event System.Action<System.Single> Update { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
+  event System.Action<System.String> SceneLoaded { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
+  method [abstract,virtual,newslot] System.Void SaveConfig<T>(T config) where T : class
+  method [abstract,virtual,newslot] T LoadConfig<T>(T defaultValue) where T : class
+  method [abstract,virtual,newslot] T? GetService<T>() where T : class
+  property System.String ModId { get [abstract,virtual,newslot]; }
+  property System.String ModName { get [abstract,virtual,newslot]; }
+  property System.Version Version { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IModLogger Logger { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.ModPaths Paths { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IModFileService
+  method [abstract,virtual,newslot] System.String GetConfigFilePath()
+  method [abstract,virtual,newslot] System.String GetDataFilePath(System.String relativePath)
+  method [abstract,virtual,newslot] System.String GetPackageFilePath(System.String relativePath)
+
+type public interface TopiaForge.Mods.IModLogger
+  method [abstract,virtual,newslot] System.Void Debug(System.String message)
+  method [abstract,virtual,newslot] System.Void Error(System.Exception exception, System.String message)
+  method [abstract,virtual,newslot] System.Void Error(System.String message)
+  method [abstract,virtual,newslot] System.Void Info(System.String message)
+  method [abstract,virtual,newslot] System.Void Warn(System.String message)
+
+type public interface TopiaForge.Mods.IModServiceRegistry
+  method [abstract,virtual,newslot] System.Void Register<T>(System.String ownerModId, T service) where T : class
+  method [abstract,virtual,newslot] System.Void UnregisterOwner(System.String ownerModId)
+  method [abstract,virtual,newslot] T? Get<T>() where T : class
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.ModServiceRegistration> Services { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IPlayerDialogueInputService
+  method [abstract,virtual,newslot] TopiaForge.Mods.IVoiceCapture BeginVoiceCapture()
+  property System.Boolean IsVoiceAvailable { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IPromptOverrideHandle : System.IDisposable
+  property System.Boolean IsDisposed { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.PromptOverride Override { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IPromptOverrideRegistry
+  method [abstract,virtual,newslot] System.Boolean TryGetEffectiveOverride(System.String promptId, out TopiaForge.Mods.PromptOverride? promptOverride)
+  method [abstract,virtual,newslot] System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.PromptConflict> GetConflicts()
+  method [abstract,virtual,newslot] System.Void UnregisterOwner(System.String ownerModId)
+  method [abstract,virtual,newslot] TopiaForge.Mods.IPromptOverrideHandle Register(TopiaForge.Mods.PromptOverrideRequest request)
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.PromptOverride> Overrides { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IReachableSpawn
+  property System.Boolean Found { get [abstract,virtual,newslot]; }
+  property System.Boolean IsComplete { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.Vec3 Position { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IRobotAgent
+  method [abstract,virtual,newslot] System.Boolean ApplyDamage(System.Single amount, TopiaForge.Mods.RobotDamageType type, System.String source)
+  method [abstract,virtual,newslot] System.Void Chase(System.Object targetGameObject)
+  method [abstract,virtual,newslot] System.Void Despawn()
+  method [abstract,virtual,newslot] System.Void Kill(TopiaForge.Mods.RobotDamageType type, System.String source)
+  method [abstract,virtual,newslot] System.Void Knockback(TopiaForge.Mods.Vec3 impulse)
+  method [abstract,virtual,newslot] System.Void MoveTo(TopiaForge.Mods.Vec3 position)
+  method [abstract,virtual,newslot] System.Void Ragdoll()
+  method [abstract,virtual,newslot] System.Void SetBrainMode(TopiaForge.Mods.RobotBrainMode mode)
+  method [abstract,virtual,newslot] System.Void SetEmote(System.String emojiShortcode)
+  method [abstract,virtual,newslot] System.Void SetInteraction(TopiaForge.Mods.RobotInteractionOptions options)
+  method [abstract,virtual,newslot] System.Void SetName(System.String name)
+  method [abstract,virtual,newslot] System.Void SetScale(System.Single scale)
+  method [abstract,virtual,newslot] System.Void SetTint(TopiaForge.Mods.RobotColor color)
+  method [abstract,virtual,newslot] System.Void Stop()
+  property System.Boolean HasReachedTarget { get [abstract,virtual,newslot]; }
+  property System.Boolean IsAlive { get [abstract,virtual,newslot]; }
+  property System.Boolean IsMoving { get [abstract,virtual,newslot]; }
+  property System.Object GameObject { get [abstract,virtual,newslot]; }
+  property System.Single MoveSpeed { get [abstract,virtual,newslot]; set [abstract,virtual,newslot]; }
+  property System.Single StopDistance { get [abstract,virtual,newslot]; set [abstract,virtual,newslot]; }
+  property System.Single TurnSpeed { get [abstract,virtual,newslot]; set [abstract,virtual,newslot]; }
+  property System.String Id { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.RobotBrainMode BrainMode { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.RobotGait Gait { get [abstract,virtual,newslot]; set [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.Vec3 HeadPosition { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.Vec3 Position { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IRobotAgentService
+  method [abstract,virtual,newslot] System.Boolean DamagePlayer(System.Single amount, System.String source)
+  method [abstract,virtual,newslot] System.Boolean IsRobotPrefab(System.Object gameObject)
+  method [abstract,virtual,newslot] System.Boolean TryGetPlayerObject(out System.Object gameObject)
+  method [abstract,virtual,newslot] System.Boolean TryGetPlayerPosition(out TopiaForge.Mods.Vec3 position)
+  method [abstract,virtual,newslot] System.Void SetPlayerControlsEnabled(System.Boolean enabled)
+  method [abstract,virtual,newslot] TopiaForge.Mods.IReachableSpawn BeginFindReachableSpawn(TopiaForge.Mods.ReachableSpawnRequest request)
+  method [abstract,virtual,newslot] TopiaForge.Mods.IRobotAgent? Spawn(TopiaForge.Mods.RobotAgentSpawnRequest request)
+  property System.Boolean IsAvailable { get [abstract,virtual,newslot]; }
+  property System.Boolean IsNavigationAvailable { get [abstract,virtual,newslot]; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.IRobotAgent> ActiveAgents { get [abstract,virtual,newslot]; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.RobotTypeDescriptor> RobotTypes { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IRobotBrainQuery
+  property System.Boolean Found { get [abstract,virtual,newslot]; }
+  property System.Boolean IsComplete { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.BrainQueryResult Result { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IRobotBrainQueryService
+  method [abstract,virtual,newslot] TopiaForge.Mods.IRobotBrainQuery BeginQuery(TopiaForge.Mods.BrainQueryRequest request)
+  property System.Boolean IsAvailable { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IRobotConversation
+  method [abstract,virtual,newslot] System.Void End()
+  method [abstract,virtual,newslot] System.Void Submit(System.String playerText)
+  property System.Boolean Ended { get [abstract,virtual,newslot]; }
+  property System.Boolean IsAvailable { get [abstract,virtual,newslot]; }
+  property System.Boolean IsThinking { get [abstract,virtual,newslot]; }
+  property System.Boolean TurnReady { get [abstract,virtual,newslot]; }
+  property System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> LastValues { get [abstract,virtual,newslot]; }
+  property System.Int32 MaxTurns { get [abstract,virtual,newslot]; }
+  property System.Int32 TurnCount { get [abstract,virtual,newslot]; }
+  property System.String LastDecision { get [abstract,virtual,newslot]; }
+  property System.String LastReply { get [abstract,virtual,newslot]; }
+  property System.String? LastError { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IRobotConversationService
+  method [abstract,virtual,newslot] TopiaForge.Mods.IRobotConversation BeginConversation(TopiaForge.Mods.RobotConversationRequest request)
+  property System.Boolean IsAvailable { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IRobotObjectiveHandle
+  method [abstract,virtual,newslot] System.Void Cancel()
+  property System.Int32 WaypointIndex { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.RobotObjective Objective { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.RobotObjectiveState State { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IRobotObjectiveService
+  event System.Action<TopiaForge.Mods.RobotProgramDelivery>? ProgramDelivered { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
+  method [abstract,virtual,newslot] System.Boolean TryGetTargetInfo(System.String name, out TopiaForge.Mods.RobotTargetInfo info)
+  method [abstract,virtual,newslot] System.Boolean TryResolveTarget(System.String name, out TopiaForge.Mods.RobotTargetSnapshot snapshot)
+  method [abstract,virtual,newslot] System.Void ClearObjective(TopiaForge.Mods.IRobotAgent agent)
+  method [abstract,virtual,newslot] System.Void RegisterTarget(System.String name, TopiaForge.Mods.RobotTargetKind kind, System.Func<System.Nullable<TopiaForge.Mods.RobotTargetSnapshot>> resolve)
+  method [abstract,virtual,newslot] System.Void UnregisterTarget(System.String name)
+  method [abstract,virtual,newslot] TopiaForge.Mods.IRobotObjectiveHandle SetObjective(TopiaForge.Mods.IRobotAgent agent, TopiaForge.Mods.RobotObjective objective)
+  method [abstract,virtual,newslot] TopiaForge.Mods.IRobotObjectiveHandle? GetObjective(TopiaForge.Mods.IRobotAgent agent)
+  property System.Boolean IsAvailable { get [abstract,virtual,newslot]; }
+  property System.Collections.Generic.IReadOnlyList<System.String> TargetNames { get [abstract,virtual,newslot]; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.RobotTargetInfo> Targets { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.ISceneCoordinator
+  method [abstract,virtual,newslot] System.Void ReleaseOwner(System.String ownerModId)
+  method [abstract,virtual,newslot] TopiaForge.Mods.SceneTransitionDecision RequestTransition(TopiaForge.Mods.SceneTransitionRequest request)
+  property System.Boolean IsSceneBusy { get [abstract,virtual,newslot]; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.SceneClaimInfo> ActiveClaims { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IShopWallet
+  event System.Action<System.Int32>? BalanceChanged { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
+  method [abstract,virtual,newslot] System.Boolean TrySpend(System.Int32 amount)
+  property System.Int32 Balance { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.ITimeControlService
+  method [abstract,virtual,newslot] System.Void ForceReset()
+  method [abstract,virtual,newslot] System.Void Step(System.Single seconds)
+  method [abstract,virtual,newslot] System.Void StepFixed(System.Int32 ticks)
+  method [abstract,virtual,newslot] TopiaForge.Mods.ITimeLease ExemptPlayer(System.String usage)
+  method [abstract,virtual,newslot] TopiaForge.Mods.ITimeLease Freeze(System.String usage, System.Boolean suspendPlayer = false)
+  method [abstract,virtual,newslot] TopiaForge.Mods.ITimeLease SetDriver(System.String usage, TopiaForge.Mods.ITimeDriver driver)
+  method [abstract,virtual,newslot] TopiaForge.Mods.ITimeLease Slow(System.String usage, System.Single scale)
+  method [abstract,virtual,newslot] TopiaForge.Mods.ITurnScheduler BeginTurnBased(System.String usage, TopiaForge.Mods.TurnSchedulerOptions options)
+  property System.Boolean IsAvailable { get [abstract,virtual,newslot]; }
+  property System.Boolean IsFrozen { get [abstract,virtual,newslot]; }
+  property System.Single ControlDeltaTime { get [abstract,virtual,newslot]; }
+  property System.Single ControlTime { get [abstract,virtual,newslot]; }
+  property System.Single WorldDeltaTime { get [abstract,virtual,newslot]; }
+  property System.Single WorldScale { get [abstract,virtual,newslot]; }
+  property System.Single WorldTime { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.TimeMode Mode { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.ITimeDriver
+  method [abstract,virtual,newslot] System.Single ComputeScale(in TopiaForge.Mods.TimeSignal signal)
+
+type public interface TopiaForge.Mods.ITimeLease : System.IDisposable
+  method [abstract,virtual,newslot] System.Void Release()
+  property System.Boolean IsActive { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.ITopiaForgeMod
+  method [abstract,virtual,newslot] System.Void OnLoad(TopiaForge.Mods.IModContext context)
+  method [abstract,virtual,newslot] System.Void OnUnload()
+
+type public interface TopiaForge.Mods.ITurnScheduler : System.IDisposable
+  method [abstract,virtual,newslot] System.Void BeginAction()
+  method [abstract,virtual,newslot] System.Void EndAction()
+  method [abstract,virtual,newslot] System.Void Register(System.Object actorToken, System.Single speed)
+  method [abstract,virtual,newslot] System.Void Tick(System.Single controlDeltaTime)
+  method [abstract,virtual,newslot] System.Void Unregister(System.Object actorToken)
+  property System.Int32 ActorCount { get [abstract,virtual,newslot]; }
+  property System.Object? CurrentActor { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.TurnState State { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IUgcLiveSyncService
+  event System.Action<TopiaForge.Mods.UgcSnapshotInfo>? PatchApplied { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
+  event System.Action<TopiaForge.Mods.UgcSnapshotInfo>? SnapshotImported { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
+  event System.Action<TopiaForge.Mods.UgcSyncError>? SyncError { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
+  event System.Action<TopiaForge.Mods.UgcSyncSession>? SessionStarted { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
+  event System.Action<TopiaForge.Mods.UgcSyncSession>? SessionStopped { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
+  method [abstract,virtual,newslot] System.Void ClearAssetOverrides()
+  method [abstract,virtual,newslot] System.Void RegisterAssetOverride(TopiaForge.Mods.UgcAssetOverride assetOverride)
+  method [abstract,virtual,newslot] System.Void Stop()
+  method [abstract,virtual,newslot] TopiaForge.Mods.UgcLiveSyncResult StartAutomergeSession(TopiaForge.Mods.UgcLiveSyncRequest request)
+  method [abstract,virtual,newslot] TopiaForge.Mods.UgcLiveSyncResult StartLocalSession(TopiaForge.Mods.UgcLiveSyncRequest request)
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.UgcAssetOverride> AssetOverrides { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.UgcLiveSyncStatus Status { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.UgcSyncSession? CurrentSession { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IVoiceCapture
+  method [abstract,virtual,newslot] System.Void Cancel()
+  method [abstract,virtual,newslot] System.Void Stop()
+  property System.Boolean Found { get [abstract,virtual,newslot]; }
+  property System.Boolean IsComplete { get [abstract,virtual,newslot]; }
+  property System.Boolean IsRecording { get [abstract,virtual,newslot]; }
+  property System.String Text { get [abstract,virtual,newslot]; }
+  property System.String? Error { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IWorldGamemodeService
+  event System.Action<TopiaForge.Mods.WorldSession>? SessionChanged { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
+  event System.Action<TopiaForge.Mods.WorldSessionEnd>? SessionEnded { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
+  method [abstract,virtual,newslot] System.Boolean UnregisterWorld(System.String worldId)
+  method [abstract,virtual,newslot] System.Void EndSession(TopiaForge.Mods.WorldSessionEndReason reason)
+  method [abstract,virtual,newslot] System.Void RegisterGamemode(TopiaForge.Mods.GamemodeDefinition gamemode)
+  method [abstract,virtual,newslot] System.Void RegisterMenuEntry(TopiaForge.Mods.GamemodeMenuEntry entry)
+  method [abstract,virtual,newslot] System.Void RegisterWorld(TopiaForge.Mods.WorldDefinition world)
+  method [abstract,virtual,newslot] System.Void RegisterWorld(TopiaForge.Mods.WorldDefinition world, TopiaForge.Mods.ICustomWorldContent content)
+  method [abstract,virtual,newslot] TopiaForge.Mods.WorldLoadResult LaunchMenuEntry(System.String entryId)
+  method [abstract,virtual,newslot] TopiaForge.Mods.WorldLoadResult Load(TopiaForge.Mods.WorldLoadRequest request)
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.GamemodeDefinition> Gamemodes { get [abstract,virtual,newslot]; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.GamemodeMenuEntry> MenuEntries { get [abstract,virtual,newslot]; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.WorldDefinition> Worlds { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.WorldSession? CurrentSession { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IWorldPauseMenuService
+  method [abstract,virtual,newslot] System.IDisposable RegisterAction(TopiaForge.Mods.WorldPauseAction action)
+  method [abstract,virtual,newslot] System.Void SetExitInterceptor(System.Func<TopiaForge.Mods.WorldPauseExitContext, TopiaForge.Mods.WorldPauseExitDecision>? interceptor)
+  property System.Boolean IsAvailable { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IWorldRegistrationService
+  method [abstract,virtual,newslot] System.Boolean UnregisterGamemode(System.String gamemodeId)
+  method [abstract,virtual,newslot] System.Boolean UnregisterMenuEntry(System.String entryId)
+
+type public interface TopiaForge.Mods.IWorldTransitionState
+  property System.Boolean IsTransitionInFlight { get [abstract,virtual,newslot]; }
+
+type public static class TopiaForge.Mods.ModContextExtensions : System.Object
+  method extension [static] System.Boolean TryGetService<T>(TopiaForge.Mods.IModContext context, out T? service) where T : class
+  method extension [static] T RequireService<T>(TopiaForge.Mods.IModContext context) where T : class
+  method extension [static] TopiaForge.Mods.AssetBundleLoadResult LoadAssetBundle(TopiaForge.Mods.IModContext context, System.String relativePath, TopiaForge.Mods.AssetBundleLoadOptions? options = null)
+  method extension [static] TopiaForge.Mods.AssetLoadResult<T> LoadAsset<T>(TopiaForge.Mods.IModContext context, TopiaForge.Mods.IAssetBundleHandle bundle, System.String assetName) where T : class
+  method extension [static] TopiaForge.Mods.IPromptOverrideHandle RegisterPromptOverride(TopiaForge.Mods.IModContext context, System.String promptId, System.String replacementText, System.Int32 priority = 0, System.String description = "")
+  method extension [static] TopiaForge.Mods.SpawnAssetResult<T> SpawnAsset<T>(TopiaForge.Mods.IModContext context, T prefab) where T : class
+  method extension [static] TopiaForge.Mods.WorldDefinition RegisterWorldFromBundle(TopiaForge.Mods.IModContext context, TopiaForge.Mods.IWorldGamemodeService worlds, TopiaForge.Mods.BundleWorldOptions options)
+
+type public sealed class TopiaForge.Mods.ModPaths : System.Object
+  constructor .ctor(System.String packagePath, System.String configPath, System.String dataPath)
+  property System.String ConfigPath { get; }
+  property System.String DataPath { get; }
+  property System.String PackagePath { get; }
+
+type public sealed class TopiaForge.Mods.ModServiceRegistration : System.Object
+  constructor .ctor(System.String ownerModId, System.Type serviceType, System.Object service)
+  property System.Object Service { get; }
+  property System.String OwnerModId { get; }
+  property System.Type ServiceType { get; }
+
+type public sealed class TopiaForge.Mods.PromptConflict : System.Object
+  constructor .ctor(System.String promptId, System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.PromptOverride> overrides, TopiaForge.Mods.PromptOverride? effectiveOverride)
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.PromptOverride> Overrides { get; }
+  property System.String PromptId { get; }
+  property TopiaForge.Mods.PromptOverride? EffectiveOverride { get; }
+
+type public sealed class TopiaForge.Mods.PromptOverride : System.Object
+  constructor .ctor(System.String modId, System.String promptId, System.String replacementText, System.Int32 priority = 0, System.String description = "")
+  property System.Int32 Priority { get; }
+  property System.String Description { get; }
+  property System.String ModId { get; }
+  property System.String PromptId { get; }
+  property System.String ReplacementText { get; }
+
+type public sealed class TopiaForge.Mods.PromptOverrideRequest : System.Object
+  constructor .ctor(System.String ownerModId, System.String promptId, System.String replacementText, System.Int32 priority = 0, System.String description = "")
+  property System.Int32 Priority { get; }
+  property System.String Description { get; }
+  property System.String OwnerModId { get; }
+  property System.String PromptId { get; }
+  property System.String ReplacementText { get; }
+
+type public sealed class TopiaForge.Mods.ReachableSpawnRequest : System.Object
+  constructor .ctor(TopiaForge.Mods.Vec3 origin)
+  property System.Int32 MaxCandidates { get; set; }
+  property System.Nullable<TopiaForge.Mods.Vec3> ReachableFrom { get; set; }
+  property System.Single GroundProbeDepth { get; set; }
+  property System.Single HeightOffset { get; set; }
+  property System.Single MaxRadius { get; set; }
+  property System.Single MinRadius { get; set; }
+  property System.Single VerticalScan { get; set; }
+  property TopiaForge.Mods.Vec3 Origin { get; }
+
+type public sealed class TopiaForge.Mods.RobotAgentSpawnRequest : System.Object
+  constructor .ctor(TopiaForge.Mods.Vec3 position, System.Nullable<TopiaForge.Mods.Vec3> facing = null)
+  property System.Nullable<TopiaForge.Mods.RobotColor> Tint { get; set; }
+  property System.Nullable<TopiaForge.Mods.Vec3> Facing { get; }
+  property System.Single MoveSpeed { get; set; }
+  property System.Single Scale { get; set; }
+  property System.Single StopDistance { get; set; }
+  property System.Single TurnSpeed { get; set; }
+  property System.String? Name { get; set; }
+  property System.String? RobotTypeId { get; set; }
+  property TopiaForge.Mods.RobotBrainMode BrainMode { get; set; }
+  property TopiaForge.Mods.RobotGait Gait { get; set; }
+  property TopiaForge.Mods.RobotInteractionOptions Interaction { get; set; }
+  property TopiaForge.Mods.Vec3 Position { get; }
+
+type public enum TopiaForge.Mods.RobotBrainMode : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.RobotBrainMode Autonomous = 1 (Autonomous)
+  field const TopiaForge.Mods.RobotBrainMode Dormant = 0 (Dormant)
+
+type public readonly struct TopiaForge.Mods.RobotColor : System.ValueType, System.IEquatable<TopiaForge.Mods.RobotColor>
+  constructor .ctor(System.Single r, System.Single g, System.Single b, System.Single a = 1)
+  method [virtual,final,newslot] System.Boolean Equals(TopiaForge.Mods.RobotColor other)
+  method [virtual] System.Boolean Equals(System.Object? obj)
+  method [virtual] System.Int32 GetHashCode()
+  method [virtual] System.String ToString()
+  property System.Single A { get; }
+  property System.Single B { get; }
+  property System.Single G { get; }
+  property System.Single R { get; }
+  property static TopiaForge.Mods.RobotColor White { get [static]; }
+
+type public sealed class TopiaForge.Mods.RobotConversationRequest : System.Object
+  constructor .ctor(System.String systemFrame, System.Collections.Generic.IReadOnlyList<System.String> decisionOptions)
+  property System.Collections.Generic.IReadOnlyDictionary<System.String, System.String>? GroundTruthFacts { get; set; }
+  property System.Collections.Generic.IReadOnlyList<System.String> DecisionOptions { get; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.BrainOutputField>? ExtraOutputs { get; set; }
+  property System.Func<System.Collections.Generic.IReadOnlyDictionary<System.String, System.String>?>? LiveFacts { get; set; }
+  property System.Int32 MaxReplyChars { get; set; }
+  property System.Int32 MaxTurns { get; set; }
+  property System.Single Temperature { get; set; }
+  property System.String SystemFrame { get; }
+  property System.String Usage { get; set; }
+  property System.String? DecisionGuidance { get; set; }
+  property System.String? ReplyGuidance { get; set; }
+
+type public sealed class TopiaForge.Mods.RobotCustomInteraction : System.Object
+  constructor .ctor(System.String prompt, System.Action<TopiaForge.Mods.RobotInteractionContext>? interact = null)
+  property System.Action<TopiaForge.Mods.RobotInteractionContext>? Interact { get; set; }
+  property System.Func<TopiaForge.Mods.RobotInteractionContext, System.Boolean>? CanInteract { get; set; }
+  property System.Single Distance { get; set; }
+  property System.Single ScreenRectExpansion { get; set; }
+  property System.String Prompt { get; set; }
+
+type public enum TopiaForge.Mods.RobotDamageType : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.RobotDamageType Electricity = 2 (Electricity)
+  field const TopiaForge.Mods.RobotDamageType Fire = 1 (Fire)
+  field const TopiaForge.Mods.RobotDamageType Normal = 0 (Normal)
+  field const TopiaForge.Mods.RobotDamageType Poison = 3 (Poison)
+  field const TopiaForge.Mods.RobotDamageType Water = 4 (Water)
+
+type public enum TopiaForge.Mods.RobotDecision : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.RobotDecision Comply = 0 (Comply)
+  field const TopiaForge.Mods.RobotDecision Flee = 2 (Flee)
+  field const TopiaForge.Mods.RobotDecision Freeze = 1 (Freeze)
+  field const TopiaForge.Mods.RobotDecision Resist = 3 (Resist)
+  field const TopiaForge.Mods.RobotDecision Unknown = 4 (Unknown)
+
+type public enum TopiaForge.Mods.RobotGait : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.RobotGait Run = 1 (Run)
+  field const TopiaForge.Mods.RobotGait Sprint = 2 (Sprint)
+  field const TopiaForge.Mods.RobotGait Walk = 0 (Walk)
+
+type public sealed class TopiaForge.Mods.RobotInteractionContext : System.Object
+  constructor .ctor(TopiaForge.Mods.IRobotAgent agent, System.Object? hand, TopiaForge.Mods.Vec3 agentPosition, TopiaForge.Mods.Vec3 handPosition, System.Single distance)
+  property System.Object? Hand { get; }
+  property System.Single Distance { get; }
+  property TopiaForge.Mods.IRobotAgent Agent { get; }
+  property TopiaForge.Mods.Vec3 AgentPosition { get; }
+  property TopiaForge.Mods.Vec3 HandPosition { get; }
+
+type public sealed class TopiaForge.Mods.RobotInteractionOptions : System.Object
+  constructor .ctor()
+  method TopiaForge.Mods.RobotInteractionOptions Clone()
+  method [static] TopiaForge.Mods.RobotInteractionOptions Custom(TopiaForge.Mods.RobotCustomInteraction interaction)
+  method [static] TopiaForge.Mods.RobotInteractionOptions DisableNativeTalk()
+  method [static] TopiaForge.Mods.RobotInteractionOptions NativeTalk()
+  method [static] TopiaForge.Mods.RobotInteractionOptions NativeTalkAtDistance(System.Single distance)
+  property System.Single NativeTalkDistance { get; set; }
+  property TopiaForge.Mods.RobotCustomInteraction? CustomInteraction { get; set; }
+  property TopiaForge.Mods.RobotNativeTalkMode NativeTalkMode { get; set; }
+
+type public enum TopiaForge.Mods.RobotNativeTalkMode : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.RobotNativeTalkMode Disabled = 1 (Disabled)
+  field const TopiaForge.Mods.RobotNativeTalkMode Enabled = 0 (Enabled)
+
+type public sealed class TopiaForge.Mods.RobotObjective : System.Object
+  method System.String Describe()
+  method [static] TopiaForge.Mods.RobotObjective Flee(System.String targetName)
+  method [static] TopiaForge.Mods.RobotObjective Follow(System.String targetName)
+  method [static] TopiaForge.Mods.RobotObjective GoTo(System.String targetName)
+  method [static] TopiaForge.Mods.RobotObjective GoTo(TopiaForge.Mods.Vec3 point)
+  method [static] TopiaForge.Mods.RobotObjective Idle()
+  method [static] TopiaForge.Mods.RobotObjective Patrol(System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.Vec3> waypoints)
+  method [static] TopiaForge.Mods.RobotObjective PatrolTo(System.String targetName)
+  method [static] TopiaForge.Mods.RobotObjective Reprogram(System.String targetRobotName, TopiaForge.Mods.RobotObjective payload)
+  method [static] TopiaForge.Mods.RobotObjective Wander()
+  method [static] TopiaForge.Mods.RobotObjective Wander(System.String targetName)
+  method [static] TopiaForge.Mods.RobotObjective Wander(TopiaForge.Mods.Vec3 home)
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.Vec3>? Waypoints { get; }
+  property System.Nullable<TopiaForge.Mods.Vec3> TargetPoint { get; }
+  property System.Single ArriveDistance { get; set; }
+  property System.Single DwellSeconds { get; set; }
+  property System.Single FleeDistance { get; set; }
+  property System.Single WanderRadius { get; set; }
+  property System.String? TargetName { get; }
+  property TopiaForge.Mods.RobotGait Gait { get; set; }
+  property TopiaForge.Mods.RobotObjective? Payload { get; }
+  property TopiaForge.Mods.RobotObjectiveKind Kind { get; }
+
+type public enum TopiaForge.Mods.RobotObjectiveKind : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.RobotObjectiveKind Flee = 5 (Flee)
+  field const TopiaForge.Mods.RobotObjectiveKind Follow = 2 (Follow)
+  field const TopiaForge.Mods.RobotObjectiveKind GoTo = 1 (GoTo)
+  field const TopiaForge.Mods.RobotObjectiveKind Idle = 0 (Idle)
+  field const TopiaForge.Mods.RobotObjectiveKind Patrol = 3 (Patrol)
+  field const TopiaForge.Mods.RobotObjectiveKind Reprogram = 6 (Reprogram)
+  field const TopiaForge.Mods.RobotObjectiveKind Wander = 4 (Wander)
+
+type public enum TopiaForge.Mods.RobotObjectiveState : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.RobotObjectiveState Arrived = 2 (Arrived)
+  field const TopiaForge.Mods.RobotObjectiveState Cancelled = 5 (Cancelled)
+  field const TopiaForge.Mods.RobotObjectiveState Delivered = 6 (Delivered)
+  field const TopiaForge.Mods.RobotObjectiveState Dwelling = 3 (Dwelling)
+  field const TopiaForge.Mods.RobotObjectiveState Idle = 0 (Idle)
+  field const TopiaForge.Mods.RobotObjectiveState Seeking = 1 (Seeking)
+  field const TopiaForge.Mods.RobotObjectiveState TargetMissing = 4 (TargetMissing)
+
+type public sealed class TopiaForge.Mods.RobotProgramDelivery : System.Object
+  constructor .ctor(TopiaForge.Mods.IRobotAgent sender, TopiaForge.Mods.IRobotAgent recipient, TopiaForge.Mods.RobotObjective payload)
+  property TopiaForge.Mods.IRobotAgent Recipient { get; }
+  property TopiaForge.Mods.IRobotAgent Sender { get; }
+  property TopiaForge.Mods.RobotObjective Payload { get; }
+
+type public static class TopiaForge.Mods.RobotTargetFacts : System.Object
+  method [static] System.String Describe(TopiaForge.Mods.RobotTargetInfo info, System.Nullable<TopiaForge.Mods.RobotTargetSnapshot> snapshot, TopiaForge.Mods.Vec3 observerPosition)
+  method [static] System.String Describe(TopiaForge.Mods.RobotTargetInfo info, System.Nullable<TopiaForge.Mods.RobotTargetSnapshot> snapshot, TopiaForge.Mods.Vec3 observerPosition, System.String? activity)
+  method [static] System.String DirectionAndDistance(TopiaForge.Mods.Vec3 from, TopiaForge.Mods.Vec3 to)
+
+type public sealed class TopiaForge.Mods.RobotTargetInfo : System.Object
+  constructor .ctor(System.String name, TopiaForge.Mods.RobotTargetKind kind, System.String? description = null)
+  property System.String Name { get; }
+  property System.String? Description { get; }
+  property TopiaForge.Mods.RobotTargetKind Kind { get; }
+
+type public enum TopiaForge.Mods.RobotTargetKind : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.RobotTargetKind Custom = 0 (Custom)
+  field const TopiaForge.Mods.RobotTargetKind Marker = 4 (Marker)
+  field const TopiaForge.Mods.RobotTargetKind Player = 1 (Player)
+  field const TopiaForge.Mods.RobotTargetKind Prop = 3 (Prop)
+  field const TopiaForge.Mods.RobotTargetKind Robot = 2 (Robot)
+
+type public readonly struct TopiaForge.Mods.RobotTargetSnapshot : System.ValueType
+  constructor .ctor(TopiaForge.Mods.Vec3 position, System.Object? gameObject = null)
+  property System.Object? GameObject { get; }
+  property TopiaForge.Mods.Vec3 Position { get; }
+
+type public sealed class TopiaForge.Mods.RobotTypeDescriptor : System.Object
+  constructor .ctor(System.String id, System.String displayName)
+  property System.String DisplayName { get; }
+  property System.String Id { get; }
+
+type public sealed class TopiaForge.Mods.SceneClaimInfo : System.Object
+  constructor .ctor(System.String ownerModId, System.String sceneName, TopiaForge.Mods.SceneTransitionPriority priority, System.String reason, System.DateTime acquiredAtUtc)
+  property System.DateTime AcquiredAtUtc { get; }
+  property System.String OwnerModId { get; }
+  property System.String Reason { get; }
+  property System.String SceneName { get; }
+  property TopiaForge.Mods.SceneTransitionPriority Priority { get; }
+
+type public sealed class TopiaForge.Mods.SceneTransitionDecision : System.Object
+  method [static] TopiaForge.Mods.SceneTransitionDecision Approve(System.IDisposable claim, System.String message)
+  method [static] TopiaForge.Mods.SceneTransitionDecision Refuse(System.String message)
+  property System.Boolean Approved { get; }
+  property System.IDisposable? Claim { get; }
+  property System.String Message { get; }
+
+type public enum TopiaForge.Mods.SceneTransitionPriority : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.SceneTransitionPriority Automatic = 0 (Automatic)
+  field const TopiaForge.Mods.SceneTransitionPriority UserInitiated = 1 (UserInitiated)
+
+type public sealed class TopiaForge.Mods.SceneTransitionRequest : System.Object
+  constructor .ctor(System.String ownerModId, System.String sceneName, TopiaForge.Mods.SceneTransitionPriority priority, System.String reason = "")
+  property System.String OwnerModId { get; }
+  property System.String Reason { get; }
+  property System.String SceneName { get; }
+  property TopiaForge.Mods.SceneTransitionPriority Priority { get; }
+
+type public sealed class TopiaForge.Mods.ShopItem : System.Object
+  constructor .ctor(System.String id, System.String name, System.String description, System.Int32 price, System.String category = "", System.Int32 maxPurchases = 0)
+  property System.Int32 MaxPurchases { get; }
+  property System.Int32 Price { get; }
+  property System.String Category { get; }
+  property System.String Description { get; }
+  property System.String Id { get; }
+  property System.String Name { get; }
+
+type public enum TopiaForge.Mods.ShopPurchaseResult : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.ShopPurchaseResult InsufficientFunds = 1 (InsufficientFunds)
+  field const TopiaForge.Mods.ShopPurchaseResult Purchased = 0 (Purchased)
+  field const TopiaForge.Mods.ShopPurchaseResult Rejected = 3 (Rejected)
+  field const TopiaForge.Mods.ShopPurchaseResult SoldOut = 2 (SoldOut)
+
+type public static class TopiaForge.Mods.ShopTransactions : System.Object
+  method [static] TopiaForge.Mods.ShopPurchaseResult TryPurchase(TopiaForge.Mods.ShopItem item, TopiaForge.Mods.IShopWallet wallet, System.Int32 timesPurchased, System.Func<TopiaForge.Mods.ShopItem, System.Boolean>? canPurchase = null)
+
+type public sealed class TopiaForge.Mods.ShopWallet : System.Object, TopiaForge.Mods.IShopWallet
+  constructor .ctor(System.Int32 balance = 0)
+  event System.Action<System.Int32>? BalanceChanged { add [virtual,final,newslot]; remove [virtual,final,newslot]; }
+  method System.Void Earn(System.Int32 amount)
+  method System.Void Reset(System.Int32 balance = 0)
+  method [virtual,final,newslot] System.Boolean TrySpend(System.Int32 amount)
+  property System.Int32 Balance { get [virtual,final,newslot]; }
+
+type public sealed class TopiaForge.Mods.SpawnAssetResult : System.Object
+  method [static] TopiaForge.Mods.SpawnAssetResult Fail(System.String error)
+  method [static] TopiaForge.Mods.SpawnAssetResult Success(System.Object instance)
+  property System.Boolean Ok { get; }
+  property System.Object? Instance { get; }
+  property System.String Error { get; }
+
+type public sealed class TopiaForge.Mods.SpawnAssetResult<T> : System.Object where T : class
+  method [static] TopiaForge.Mods.SpawnAssetResult<T> Fail(System.String error)
+  method [static] TopiaForge.Mods.SpawnAssetResult<T> Success(T instance)
+  property System.Boolean Ok { get; }
+  property System.String Error { get; }
+  property T? Instance { get; }
+
+type public sealed class TopiaForge.Mods.SuperhotTimeDriver : System.Object, TopiaForge.Mods.ITimeDriver
+  constructor .ctor(System.Single idleScale = 0.03, System.Single moveThreshold = 0.05, System.Single actionRate = 14, System.Single moveRate = 9, System.Single easeDownRate = 4)
+  method System.Single ComputeScale(in TopiaForge.Mods.TimeSignal signal)
+  property System.Single IdleScale { get; }
+
+type public sealed class TopiaForge.Mods.TextInputBuffer : System.Object
+  constructor .ctor(System.Int32 maxChars = 200)
+  method System.Boolean ConsumeSubmit()
+  method System.Void Append(System.String? inputString)
+  method System.Void Backspace()
+  method System.Void Clear()
+  property System.Int32 Length { get; }
+  property System.String Text { get; }
+
+type public enum TopiaForge.Mods.TimeMode : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.TimeMode Paused = 2 (Paused)
+  field const TopiaForge.Mods.TimeMode Realtime = 0 (Realtime)
+  field const TopiaForge.Mods.TimeMode Slowed = 1 (Slowed)
+  field const TopiaForge.Mods.TimeMode TurnBased = 3 (TurnBased)
+
+type public readonly struct TopiaForge.Mods.TimeSignal : System.ValueType
+  constructor .ctor(System.Single controlDeltaTime, System.Single currentScale, System.Single playerInputMagnitude, System.Boolean playerActing)
+  property System.Boolean PlayerActing { get; }
+  property System.Single ControlDeltaTime { get; }
+  property System.Single CurrentScale { get; }
+  property System.Single PlayerInputMagnitude { get; }
+
+type public sealed class TopiaForge.Mods.TurnSchedulerOptions : System.Object
+  constructor .ctor()
+  property System.Single EnergyPerTurn { get; set; }
+  property System.Single MaxActionSeconds { get; set; }
+
+type public enum TopiaForge.Mods.TurnState : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.TurnState Acting = 2 (Acting)
+  field const TopiaForge.Mods.TurnState AwaitingAction = 1 (AwaitingAction)
+  field const TopiaForge.Mods.TurnState Idle = 0 (Idle)
+
+type public sealed class TopiaForge.Mods.UgcAssetOverride : System.Object
+  constructor .ctor(System.String assetId, System.Object prefab, System.Single[]? localPositionOffset = null)
+  property System.Object Prefab { get; }
+  property System.Single[]? LocalPositionOffset { get; }
+  property System.String AssetId { get; }
+
+type public sealed class TopiaForge.Mods.UgcLiveSyncRequest : System.Object
+  constructor .ctor(TopiaForge.Mods.SceneTransitionPriority priority = 1 (UserInitiated), System.String watchFolder = "", System.String editorUrl = "", System.String documentUrl = "", System.String syncServerUrl = "", System.String sceneId = "", System.String filePattern = "*.json;*.json.gz", System.Int32 debounceMilliseconds = 200)
+  property System.Int32 DebounceMilliseconds { get; }
+  property System.String DocumentUrl { get; }
+  property System.String EditorUrl { get; }
+  property System.String FilePattern { get; }
+  property System.String SceneId { get; }
+  property System.String SyncServerUrl { get; }
+  property System.String WatchFolder { get; }
+  property TopiaForge.Mods.SceneTransitionPriority Priority { get; }
+
+type public sealed class TopiaForge.Mods.UgcLiveSyncResult : System.Object
+  method [static] TopiaForge.Mods.UgcLiveSyncResult Fail(System.String message)
+  method [static] TopiaForge.Mods.UgcLiveSyncResult Success(TopiaForge.Mods.UgcSyncSession session, System.String message)
+  property System.Boolean Ok { get; }
+  property System.String Message { get; }
+  property TopiaForge.Mods.UgcSyncSession? Session { get; }
+
+type public enum TopiaForge.Mods.UgcLiveSyncStatus : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.UgcLiveSyncStatus Connected = 3 (Connected)
+  field const TopiaForge.Mods.UgcLiveSyncStatus Error = 6 (Error)
+  field const TopiaForge.Mods.UgcLiveSyncStatus Idle = 0 (Idle)
+  field const TopiaForge.Mods.UgcLiveSyncStatus Starting = 1 (Starting)
+  field const TopiaForge.Mods.UgcLiveSyncStatus Stopped = 7 (Stopped)
+  field const TopiaForge.Mods.UgcLiveSyncStatus Unavailable = 5 (Unavailable)
+  field const TopiaForge.Mods.UgcLiveSyncStatus WaitingForScene = 2 (WaitingForScene)
+  field const TopiaForge.Mods.UgcLiveSyncStatus Watching = 4 (Watching)
+
+type public sealed class TopiaForge.Mods.UgcSnapshotInfo : System.Object
+  constructor .ctor(System.String projectName, System.String sceneId, System.String sceneName, System.Int32 entityCount, System.String revisionLabel, System.Boolean isFullRebuild, System.DateTime appliedAtUtc)
+  property System.Boolean IsFullRebuild { get; }
+  property System.DateTime AppliedAtUtc { get; }
+  property System.Int32 EntityCount { get; }
+  property System.String ProjectName { get; }
+  property System.String RevisionLabel { get; }
+  property System.String SceneId { get; }
+  property System.String SceneName { get; }
+
+type public sealed class TopiaForge.Mods.UgcSyncError : System.Object
+  constructor .ctor(System.String phase, System.String message)
+  property System.String Message { get; }
+  property System.String Phase { get; }
+
+type public sealed class TopiaForge.Mods.UgcSyncSession : System.Object
+  constructor .ctor(TopiaForge.Mods.UgcSyncTransport transport, System.String target, System.String sceneId, System.DateTime startedAtUtc)
+  property System.DateTime StartedAtUtc { get; }
+  property System.String SceneId { get; }
+  property System.String Target { get; }
+  property TopiaForge.Mods.UgcSyncTransport Transport { get; }
+
+type public enum TopiaForge.Mods.UgcSyncTransport : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.UgcSyncTransport Automerge = 1 (Automerge)
+  field const TopiaForge.Mods.UgcSyncTransport LocalFolder = 0 (LocalFolder)
+
+type public readonly struct TopiaForge.Mods.Vec3 : System.ValueType, System.IEquatable<TopiaForge.Mods.Vec3>
+  constructor .ctor(System.Single x, System.Single y, System.Single z)
+  method System.Single[] ToArray()
+  method [static] TopiaForge.Mods.Vec3 FromArray(System.Single[]? values)
+  method [virtual,final,newslot] System.Boolean Equals(TopiaForge.Mods.Vec3 other)
+  method [virtual] System.Boolean Equals(System.Object? obj)
+  method [virtual] System.Int32 GetHashCode()
+  method [virtual] System.String ToString()
+  property System.Single X { get; }
+  property System.Single Y { get; }
+  property System.Single Z { get; }
+  property static TopiaForge.Mods.Vec3 Zero { get [static]; }
+
+type public static class TopiaForge.Mods.WellKnownIds : System.Object
+  field const System.String OpenSandboxWorldId = "io.github.furroxide.topiaforge.worlds.open_sandbox"
+  field const System.String SandboxGamemodeId = "io.github.furroxide.topiaforge.worlds.sandbox"
+
+type public sealed class TopiaForge.Mods.WorldDefinition : System.Object
+  constructor .ctor(System.String id, System.String name, System.String description, System.String sceneName = "", System.Boolean firstParty = false, System.Boolean supportsSceneReplacement = false, System.Boolean supportsAdditiveArena = true)
+  property System.Boolean FirstParty { get; }
+  property System.Boolean SupportsAdditiveArena { get; }
+  property System.Boolean SupportsSceneReplacement { get; }
+  property System.String Description { get; }
+  property System.String Id { get; }
+  property System.String Name { get; }
+  property System.String SceneName { get; }
+
+type public sealed class TopiaForge.Mods.WorldLoadRequest : System.Object
+  constructor .ctor(System.String worldId, System.String gamemodeId, TopiaForge.Mods.SceneTransitionPriority priority = 1 (UserInitiated), System.Boolean preferSceneReplacement = true, System.Boolean allowAdditiveFallback = true)
+  property System.Boolean AllowAdditiveFallback { get; }
+  property System.Boolean PreferSceneReplacement { get; }
+  property System.String GamemodeId { get; }
+  property System.String WorldId { get; }
+  property TopiaForge.Mods.SceneTransitionPriority Priority { get; }
+
+type public sealed class TopiaForge.Mods.WorldLoadResult : System.Object
+  method [static] TopiaForge.Mods.WorldLoadResult Fail(System.String message)
+  method [static] TopiaForge.Mods.WorldLoadResult Success(TopiaForge.Mods.WorldSession session, System.String message)
+  property System.Boolean Ok { get; }
+  property System.String Message { get; }
+  property TopiaForge.Mods.WorldSession? Session { get; }
+
+type public sealed class TopiaForge.Mods.WorldPauseAction : System.Object
+  constructor .ctor(System.String id, System.String label, System.Action callback, System.Boolean closePauseMenu = true, System.Int32 order = 0, System.Boolean destructive = false)
+  property System.Action Callback { get; }
+  property System.Boolean ClosePauseMenu { get; }
+  property System.Boolean Destructive { get; }
+  property System.Int32 Order { get; }
+  property System.String Id { get; }
+  property System.String Label { get; }
+
+type public sealed class TopiaForge.Mods.WorldPauseExitContext : System.Object
+  constructor .ctor(TopiaForge.Mods.WorldSession session)
+  property TopiaForge.Mods.WorldSession Session { get; }
+
+type public enum TopiaForge.Mods.WorldPauseExitDecision : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.WorldPauseExitDecision Block = 2 (Block)
+  field const TopiaForge.Mods.WorldPauseExitDecision EndSessionAndExit = 0 (EndSessionAndExit)
+  field const TopiaForge.Mods.WorldPauseExitDecision ExitWithoutEnding = 1 (ExitWithoutEnding)
+
+type public sealed class TopiaForge.Mods.WorldSession : System.Object
+  constructor .ctor(System.String worldId, System.String gamemodeId, System.String mode, System.String sceneName, System.DateTime startedAtUtc)
+  property System.DateTime StartedAtUtc { get; }
+  property System.String GamemodeId { get; }
+  property System.String Mode { get; }
+  property System.String SceneName { get; }
+  property System.String WorldId { get; }
+
+type public sealed class TopiaForge.Mods.WorldSessionEnd : System.Object
+  constructor .ctor(TopiaForge.Mods.WorldSession session, TopiaForge.Mods.WorldSessionEndReason reason)
+  property TopiaForge.Mods.WorldSession Session { get; }
+  property TopiaForge.Mods.WorldSessionEndReason Reason { get; }
+
+type public enum TopiaForge.Mods.WorldSessionEndReason : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.WorldSessionEndReason EndedByGamemode = 1 (EndedByGamemode)
+  field const TopiaForge.Mods.WorldSessionEndReason LoadFailed = 5 (LoadFailed)
+  field const TopiaForge.Mods.WorldSessionEndReason MenuReached = 0 (MenuReached)
+  field const TopiaForge.Mods.WorldSessionEndReason ProviderUnloading = 3 (ProviderUnloading)
+  field const TopiaForge.Mods.WorldSessionEndReason SceneReplaced = 4 (SceneReplaced)
+  field const TopiaForge.Mods.WorldSessionEndReason Superseded = 2 (Superseded)

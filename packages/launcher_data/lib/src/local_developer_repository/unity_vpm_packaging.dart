@@ -4,7 +4,6 @@ part of '../local_developer_repository.dart';
 /// listing. With no explicit roots this preserves the first-party repository
 /// build; community authors can pass one or more scaffolded package roots.
 extension LocalDeveloperUnityVpmPackaging on LocalDeveloperRepository {
-  static final _vpmPackageIdPattern = RegExp(r'^[a-z0-9][a-z0-9._-]{1,127}$');
   static const _excludedVpmSourceDirectories = {
     '.dart_tool',
     '.git',
@@ -27,14 +26,14 @@ extension LocalDeveloperUnityVpmPackaging on LocalDeveloperRepository {
     final explicitPackages = packageDirectories.isNotEmpty;
     final effectiveRepositoryId = explicitPackages
         ? repositoryId.trim()
-        : 'com.robotopia.repos.local';
+        : 'io.github.furroxide.topiaforge.vpm.local';
     final effectiveRepositoryName = explicitPackages
         ? repositoryName.trim()
-        : 'QuantumWorks Local';
+        : 'TopiaForge Local';
     final effectiveRepositoryAuthor = explicitPackages
         ? repositoryAuthor.trim()
-        : 'QuantumWorks';
-    if (!_vpmPackageIdPattern.hasMatch(effectiveRepositoryId) ||
+        : 'TopiaForge';
+    if (!PackageSourceId.isValid(effectiveRepositoryId) ||
         effectiveRepositoryName.isEmpty ||
         effectiveRepositoryAuthor.isEmpty) {
       throw StateError(
@@ -69,7 +68,8 @@ extension LocalDeveloperUnityVpmPackaging on LocalDeveloperRepository {
       final manifest = _readVpmPackageManifest(packageJson);
       final id = manifest['name'];
       if (!explicitPackages &&
-          (id is! String || !id.startsWith('com.robotopia.'))) {
+          (id is! String ||
+              !id.startsWith('io.github.furroxide.topiaforge.'))) {
         continue;
       }
       _validateVpmPackageManifest(manifest, packageJson.path);
@@ -184,7 +184,7 @@ extension LocalDeveloperUnityVpmPackaging on LocalDeveloperRepository {
           .where(
             (file) =>
                 !file.path.contains('Samples~') &&
-                !file.path.contains('Robotopia.UnityPackageTemplate'),
+                !file.path.contains('TopiaForge.UnityPackageTemplate'),
           )
           .toList();
     }
@@ -233,7 +233,7 @@ extension LocalDeveloperUnityVpmPackaging on LocalDeveloperRepository {
     final id = manifest['name'];
     final version = manifest['version'];
     final displayName = manifest['displayName'];
-    if (id is! String || !_vpmPackageIdPattern.hasMatch(id)) {
+    if (id is! String || !VpmPackageId.isValid(id)) {
       throw StateError('$source has an invalid lowercase VPM package name.');
     }
     if (version is! String ||
@@ -251,7 +251,7 @@ extension LocalDeveloperUnityVpmPackaging on LocalDeveloperRepository {
     if (dependencies is Map) {
       for (final entry in dependencies.entries) {
         if (entry.key is! String ||
-            !_vpmPackageIdPattern.hasMatch(entry.key as String) ||
+            !VpmPackageId.isValid(entry.key as String) ||
             entry.value is! String ||
             !_isValidVpmRange(entry.value as String)) {
           throw StateError('$source has an invalid VPM dependency.');

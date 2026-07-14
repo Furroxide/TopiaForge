@@ -1,5 +1,5 @@
 #!/bin/sh
-# Robotopia commit-msg hook: keep AI co-author trailers out of commits.
+# TopiaForge commit-msg hook: keep AI co-author trailers out of commits.
 #
 # Enabled per clone with:
 #   git config core.hooksPath .githooks

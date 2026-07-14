@@ -59,7 +59,7 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
         workspace.projectRoot,
         'unity-companion',
         'Packages',
-        'com.robotopia.ugc-companion',
+        'io.github.furroxide.topiaforge.ugc-companion',
         'package.json',
       ),
     );
@@ -71,8 +71,8 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
           severity: IssueSeverity.warning,
           message:
               'UGC companion package missing. Re-scaffold with '
-              '`robotopia new mod --unity-companion` or copy '
-              'unity-companion/Packages/com.robotopia.ugc-companion into the project.',
+              '`topiaforge new mod --unity-companion` or copy '
+              'unity-companion/Packages/io.github.furroxide.topiaforge.ugc-companion into the project.',
         ),
       );
     }
@@ -89,7 +89,7 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
 
     try {
       final dir = Directory(watchFolder)..createSync(recursive: true);
-      final probe = File(p.join(dir.path, '.robotopia-doctor-probe'));
+      final probe = File(p.join(dir.path, '.topiaforge-doctor-probe'));
       probe.writeAsStringSync('ok');
       probe.deleteSync();
       messages.add('UGC watch folder is writable: $watchFolder');
@@ -130,7 +130,7 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
           detail: _dotnetDiscoveryMessage(error),
           remediation:
               'Install the exact SDK pinned by global.json or set '
-              'ROBOTOPIA_DOTNET_PATH to a compatible dotnet executable.',
+              'TOPIAFORGE_DOTNET_PATH to a compatible dotnet executable.',
           url: 'https://dotnet.microsoft.com/download',
         ),
       );
@@ -172,7 +172,7 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
     final unityHub = await _findUnityHub();
     // World/UI bundle builds must use the exact game-player editor.
     final editors = await _scanUnityEditors();
-    final unityEditor = RobotopiaUnityCompatibility.selectEditor(editors);
+    final unityEditor = RobotopiaGameUnityCompatibility.selectEditor(editors);
     final ToolStatus unityStatus;
     final String unityDetail;
     final String unityRemediation;
@@ -188,7 +188,7 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
       unityDetail =
           'Found ${editors.map((editor) => editor.version).join(', ')} — none can build '
           'world/UI bundles (needs Unity '
-          '${RobotopiaUnityCompatibility.requiredEditorDisplay}).';
+          '${RobotopiaGameUnityCompatibility.requiredEditorDisplay}).';
       unityRemediation = WorldBundleEditorGate.installHint;
     } else {
       unityStatus = ToolStatus.ok;

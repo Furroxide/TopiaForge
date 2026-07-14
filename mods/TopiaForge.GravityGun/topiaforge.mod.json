@@ -1,0 +1,30 @@
+{
+  "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+  "schemaVersion": 3,
+  "name": "io.github.furroxide.topiaforge.gravitygun",
+  "displayName": "Gravity Gun",
+  "version": "0.1.5",
+  "author": {
+    "name": "TopiaForge"
+  },
+  "description": "Grab, hold, pull, and throw physics objects and robots with a continuous gravity beam.",
+  "entryAssembly": "TopiaForge.GravityGun.dll",
+  "entryType": "TopiaForge.GravityGun.GravityGunMod",
+  "vpmDependencies": {},
+  "supportedGameVersionRange": "0.0.2227",
+  "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
+  "supportedSdkVersionRange": ">=0.1.0 <0.2.0",
+  "category": "Gameplay",
+  "tags": [
+    "gravity-gun",
+    "physics",
+    "particles",
+    "robots"
+  ],
+  "license": "NOASSERTION",
+  "permissions": [
+    "input",
+    "physics",
+    "particles"
+  ]
+}

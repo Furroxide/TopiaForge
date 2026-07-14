@@ -33,8 +33,8 @@ void main() {
   Directory createModShape(String name) {
     final root = Directory(p.join(tempDir.path, name))
       ..createSync(recursive: true);
-    File(p.join(root.path, 'robotopia.mod.json')).writeAsStringSync(
-      jsonEncode({'schemaVersion': 2, 'name': name, 'version': '0.1.0'}),
+    File(p.join(root.path, 'topiaforge.mod.json')).writeAsStringSync(
+      jsonEncode({'schemaVersion': 3, 'name': name, 'version': '0.1.0'}),
     );
     return root;
   }
@@ -62,7 +62,7 @@ void main() {
       expect(WorldAuthoringConfig.deriveBundleName('---'), 'world');
     });
 
-    test('round-trips through robotopia.world.json', () async {
+    test('round-trips through topiaforge.world.json', () async {
       final project = createUnityProjectShape('World');
       final written = await repository.writeWorldAuthoringConfig(
         project.path,
@@ -84,6 +84,60 @@ void main() {
     test('reads null when the project has no config', () async {
       final project = createUnityProjectShape('Bare');
       expect(await repository.readWorldAuthoringConfig(project.path), isNull);
+    });
+
+    test('rejects missing and old world config discriminators', () async {
+      final project = createUnityProjectShape('OldConfig');
+      final file = File(p.join(project.path, WorldAuthoringConfig.fileName));
+      for (final json in [
+        {'worldId': 'old.world'},
+        {'schemaVersion': 1, 'worldId': 'old.world'},
+      ]) {
+        file.writeAsStringSync(jsonEncode(json));
+        await expectLater(
+          repository.readWorldAuthoringConfig(project.path),
+          throwsFormatException,
+        );
+      }
+    });
+
+    test('rejects a retired world id in a current config', () async {
+      final project = createUnityProjectShape('RetiredWorld');
+      File(
+        p.join(project.path, WorldAuthoringConfig.fileName),
+      ).writeAsStringSync(
+        jsonEncode({
+          'schemaVersion': 2,
+          'worldId':
+              'robo'
+              'topia.world.old',
+        }),
+      );
+
+      await expectLater(
+        repository.readWorldAuthoringConfig(project.path),
+        throwsFormatException,
+      );
+    });
+
+    test('write rejects old schema and retired in-memory world ids', () async {
+      final project = createUnityProjectShape('UnsafeWrite');
+      final retired =
+          'robo'
+          'topia.world.retired';
+      for (final config in [
+        const WorldAuthoringConfig(schemaVersion: 1, worldId: 'safe.world'),
+        WorldAuthoringConfig(worldId: retired),
+      ]) {
+        await expectLater(
+          repository.writeWorldAuthoringConfig(project.path, config),
+          throwsFormatException,
+        );
+      }
+      expect(
+        File(p.join(project.path, WorldAuthoringConfig.fileName)).existsSync(),
+        isFalse,
+      );
     });
   });
 
@@ -112,7 +166,7 @@ void main() {
         modPath: p.join(tempDir.path, 'not-a-mod'),
       );
       expect(result.success, isFalse);
-      expect(result.errorMessage, contains('robotopia.mod.json'));
+      expect(result.errorMessage, contains('topiaforge.mod.json'));
     });
 
     test('requires a bundle name from config or override', () async {

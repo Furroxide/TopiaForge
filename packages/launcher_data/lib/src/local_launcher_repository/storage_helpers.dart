@@ -1,5 +1,22 @@
 part of '../local_launcher_repository.dart';
 
+const _profileFormatVersion = 2;
+const _profileExportSuffix = '.topiaforgeprofile.json';
+const _packageSourceFormatVersion = 2;
+
+void _requireProfileExportPath(String path) {
+  if (!path.toLowerCase().endsWith(_profileExportSuffix)) {
+    throw const FormatException(
+      'TopiaForge profile files must end with .topiaforgeprofile.json.',
+    );
+  }
+}
+
+LauncherProfile _requireValidLauncherProfile(LauncherProfile profile) {
+  ProfileLaunchConfiguration.fromProfile(profile);
+  return profile;
+}
+
 extension _StorageHelpers on LocalLauncherRepository {
   Future<List<LauncherProfile>> _loadProfiles() async {
     await _recoverAtomicBackupIfMissing(_profilesFile);
@@ -14,7 +31,12 @@ extension _StorageHelpers on LocalLauncherRepository {
       maxBytes: _maxProfilesBytes,
       label: 'Launcher profiles',
     );
-    final profiles = (decoded is Map ? decoded['profiles'] : null) as List?;
+    if (decoded is! Map || decoded['schemaVersion'] != _profileFormatVersion) {
+      throw const FormatException(
+        'Launcher profiles must use TopiaForge schemaVersion 2.',
+      );
+    }
+    final profiles = decoded['profiles'] as List?;
     final result = profiles == null
         ? <LauncherProfile>[]
         : profiles
@@ -24,6 +46,7 @@ extension _StorageHelpers on LocalLauncherRepository {
                   item.map((key, value) => MapEntry(key.toString(), value)),
                 ),
               )
+              .map(_requireValidLauncherProfile)
               .toList();
     return result.isEmpty ? [LauncherProfile.defaultProfile()] : result;
   }
@@ -39,7 +62,13 @@ extension _StorageHelpers on LocalLauncherRepository {
       maxBytes: _maxPackageSourcesBytes,
       label: 'Package sources',
     );
-    final sources = (decoded is Map ? decoded['sources'] : null) as List?;
+    if (decoded is! Map ||
+        decoded['formatVersion'] != _packageSourceFormatVersion) {
+      throw const FormatException(
+        'Package sources must use TopiaForge formatVersion 2.',
+      );
+    }
+    final sources = decoded['sources'] as List?;
     final builtIns = _defaultPackageSources();
     final parsed = sources == null
         ? <PackageSource>[]
@@ -50,14 +79,9 @@ extension _StorageHelpers on LocalLauncherRepository {
                   item.map((key, value) => MapEntry(key.toString(), value)),
                 ),
               )
-              .where(
-                (source) =>
-                    source.id.trim().isNotEmpty && source.url.trim().isNotEmpty,
-              )
-              // Built-in sources are app-managed: always reconcile their URL to the current
-              // default so an older persisted entry (e.g. one that still points at a removed
-              // mod_registry.json file) cannot pin a stale catalog location. Only the player's
-              // enabled flag survives.
+              // Built-in sources are app-managed: always reconcile their URL
+              // to the canonical default. Only the player's enabled flag is
+              // configurable.
               .map((source) {
                 final builtIn = builtIns
                     .where((item) => item.id == source.id)
@@ -67,8 +91,8 @@ extension _StorageHelpers on LocalLauncherRepository {
                     : builtIn.copyWith(enabled: source.enabled);
               })
               .toList();
-    // Append built-ins the persisted file predates (e.g. the official registry
-    // added in an update). They can be disabled but never removed.
+    _validatePackageSources(parsed);
+    // Required built-ins can be disabled but never removed.
     for (final builtIn in builtIns) {
       if (!parsed.any((source) => source.id == builtIn.id)) {
         parsed.add(builtIn);
@@ -80,9 +104,9 @@ extension _StorageHelpers on LocalLauncherRepository {
   List<PackageSource> _defaultPackageSources() {
     return [
       PackageSource(
-        id: 'robotopia.local',
+        id: 'io.github.furroxide.topiaforge.local',
         name: 'Bundled Local Packages',
-        // Point at the directory of built .robotopiamod packages. The catalog is derived
+        // Point at the directory of built .topiaforgemod packages. The catalog is derived
         // directly from those packages (manifest + sha read from each file), so there is no
         // separate metadata to drift out of sync with the packages themselves.
         url: Uri.file(p.join(_repositoryRoot.path, 'dist')).toString(),
@@ -202,7 +226,7 @@ extension _StorageHelpers on LocalLauncherRepository {
     List<RegistryMod> registryMods,
   ) async {
     final file = File(
-      p.join(_managerData(install).path, 'robotopia.worlds', 'catalog.json'),
+      p.join(_managerData(install).path, 'topiaforge.worlds', 'catalog.json'),
     );
     WorldCatalog catalog;
     if (!file.existsSync()) {
@@ -238,7 +262,9 @@ extension _StorageHelpers on LocalLauncherRepository {
 
     for (final mod in installedMods.where((mod) => mod.enabled)) {
       for (final gamemode in mod.manifest?.worldGamemodes ?? const []) {
-        if (seen.add(gamemode.id.toLowerCase())) {
+        if (ModManifest.isValidId(gamemode.id) &&
+            gamemode.name.trim().isNotEmpty &&
+            seen.add(gamemode.id.toLowerCase())) {
           gamemodes.add(gamemode);
         }
       }
@@ -248,7 +274,9 @@ extension _StorageHelpers on LocalLauncherRepository {
       (mod) => installedIds.contains(mod.manifest.id.toLowerCase()),
     )) {
       for (final gamemode in mod.manifest.worldGamemodes) {
-        if (seen.add(gamemode.id.toLowerCase())) {
+        if (ModManifest.isValidId(gamemode.id) &&
+            gamemode.name.trim().isNotEmpty &&
+            seen.add(gamemode.id.toLowerCase())) {
           gamemodes.add(gamemode);
         }
       }
@@ -261,8 +289,9 @@ extension _StorageHelpers on LocalLauncherRepository {
     GameInstall install,
     WorldSelection selection,
   ) async {
+    WorldSelection.fromJson(selection.toJson());
     final file = File(
-      p.join(_managerConfig(install).path, 'robotopia.worlds.json'),
+      p.join(_managerConfig(install).path, 'topiaforge.worlds.json'),
     );
     var existing = <String, Object?>{};
     if (await file.exists()) {

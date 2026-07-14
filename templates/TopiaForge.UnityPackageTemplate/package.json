@@ -1,0 +1,20 @@
+{
+  "name": "io.github.furroxide.topiaforge.example",
+  "version": "0.1.0",
+  "displayName": "TopiaForge Example Package",
+  "description": "A starter TopiaForge (VPM) Unity package. Replace this with your own package id, code, and samples, then publish it to a listing with `topiaforge unity pack-packages`.",
+  "license": "NOASSERTION",
+  "unity": "2022.3",
+  "keywords": ["robotopia", "topiaforge"],
+  "author": {
+    "name": "Your Name"
+  },
+  "vpmDependencies": {},
+  "samples": [
+    {
+      "displayName": "Example Sample",
+      "description": "An example sample scene/asset.",
+      "path": "Samples~/Example"
+    }
+  ]
+}

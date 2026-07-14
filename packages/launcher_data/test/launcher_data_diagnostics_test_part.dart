@@ -22,13 +22,7 @@ void _registerDiagnosticDataTests({
       'session_token=standalone-session-secret\n',
     );
     final managerLog = File(
-      p.join(
-        game.path,
-        'BepInEx',
-        'RobotopiaModManager',
-        'logs',
-        'manager.log',
-      ),
+      p.join(game.path, 'BepInEx', 'TopiaForge', 'logs', 'manager.log'),
     )..parent.createSync(recursive: true);
     managerLog.writeAsStringSync(
       '${List.filled(2 * 1024 * 1024 + 128, 'x').join()}\n'

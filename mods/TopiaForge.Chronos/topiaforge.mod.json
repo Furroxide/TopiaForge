@@ -1,0 +1,35 @@
+{
+  "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+  "schemaVersion": 3,
+  "name": "io.github.furroxide.topiaforge.chronos",
+  "displayName": "TopiaForge Chronos",
+  "version": "0.1.0",
+  "author": {
+    "name": "TopiaForge"
+  },
+  "description": "Framework SDK service that controls GAME TIME — the single, leak-proof authority over Unity's timeScale/fixedDeltaTime. A reusable foundation for time-bending gamemodes: a hard freeze (turn-based / RPG pause / freeze-to-talk), a continuous or input-driven scale (Superhot 'time moves only when you move', with the player kept full-speed), bounded stepping, and a full turn scheduler. Effects are ref-counted owner-tagged leases force-reset on every teardown, so a held scale can never leak into a menu or the next gamemode.",
+  "entryAssembly": "TopiaForge.Chronos.dll",
+  "entryType": "TopiaForge.Chronos.ChronosMod",
+  "vpmDependencies": {},
+  "supportedGameVersionRange": "0.0.2227",
+  "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
+  "supportedSdkVersionRange": ">=0.1.0 <0.2.0",
+  "category": "Framework",
+  "tags": [
+    "time",
+    "timescale",
+    "slow-motion",
+    "superhot",
+    "turn-based",
+    "pause",
+    "framework",
+    "sdk",
+    "chronos"
+  ],
+  "license": "NOASSERTION",
+  "permissions": [
+    "time",
+    "input",
+    "player-control"
+  ]
+}

@@ -6,7 +6,7 @@ it can import a level (`UgcExportProject`) from a file or subscribe to an extern
 patch the running scene** — no restart. This document specifies the pieces a mod and a Unity-Editor
 companion need to drive that pipeline:
 
-- the **`IUgcLiveSyncService`** SDK surface (`Robotopia.Mods.Abstractions`),
+- the **`IUgcLiveSyncService`** SDK surface (`TopiaForge.Mods.Abstractions`),
 - the **shared `UgcExportProject` JSON contract** (the single source of truth both the Unity exporter
   and the game importer must agree on),
 - the **two content channels** (local watch folder, and Automerge live), and
@@ -17,7 +17,7 @@ companion need to drive that pipeline:
 > Unity companion or the external web editor.
 
 All access to game (`GameCode`) types is **clean-room reflection** — no mod or tool references
-`GameCode.dll`. The framework mod `Robotopia.UgcLiveSync` reproduces the game's own
+`GameCode.dll`. The framework mod `TopiaForge.UgcLiveSync` reproduces the game's own
 `UgcLiveSyncController.ApplyMaterializedProjectJson` logic against the game's **public** import/diff/patch
 APIs.
 
@@ -168,7 +168,7 @@ origin). **Unresolved ids render as placeholder cubes.** To make a modder's *own
 mod registers **runtime overrides** (`UgcAssetOverride`) via the SDK; the bridge calls
 `UgcBuiltInAssetMap.SetRuntimeOverride(assetId, prefab, offset)`. The prefab is supplied by the modder
 as a loaded `UnityEngine.GameObject` (e.g. via `context.LoadAssetBundle(...)` and `context.LoadAsset<GameObject>(...)`
-from the `Robotopia.Assets` framework mod).
+from the `TopiaForge.Assets` framework mod).
 
 ---
 
@@ -184,9 +184,9 @@ entity **ids and parents stable** across exports to stay on the fast (incrementa
 
 ## SDK: `IUgcLiveSyncService`
 
-Registered by `Robotopia.UgcLiveSync` and resolved via `context.GetService<IUgcLiveSyncService>()`
+Registered by `TopiaForge.UgcLiveSync` and resolved via `context.GetService<IUgcLiveSyncService>()`
 (same pattern as `IWorldGamemodeService`). Unity-free (prefabs as `object`, offsets as `float[3]`).
-See [`src/Robotopia.Mods.Abstractions/UgcLiveSync.cs`](../src/Robotopia.Mods.Abstractions/UgcLiveSync.cs)
+See [`src/TopiaForge.Mods.Abstractions/UgcLiveSync.cs`](../src/TopiaForge.Mods.Abstractions/UgcLiveSync.cs)
 for the full surface and `///` docs. Summary:
 
 - `StartLocalSession(UgcLiveSyncRequest)` / `StartAutomergeSession(UgcLiveSyncRequest)` / `Stop()`
@@ -198,7 +198,7 @@ for the full surface and `///` docs. Summary:
 
 ## Config
 
-The mod reads `config/robotopia.ugc.livesync.json` (`BepInEx/RobotopiaModManager/config/<modId>.json`)
+The mod reads `config/topiaforge.ugc.livesync.json` (`BepInEx/TopiaForge/config/<modId>.json`)
 via `IModContext.LoadConfig`. Keys (mirrored by the Dart launcher/CLI domain model):
 
 | Key | Type | Default |
@@ -242,9 +242,9 @@ play scene immediately.
 
 ## End-to-end verification
 
-1. `dotnet build RobotopiaModManager.slnx -c Release` — the mod compiles with **zero `GameCode`
+1. `dotnet build TopiaForge.slnx -c Release` — the mod compiles with **zero `GameCode`
    references** (clean-room). Run the .NET test harness and `dart test`.
-2. `robotopia dev-install`, then launch `Robotopia.exe` (winhttp/doorstop auto-loads BepInEx).
+2. `topiaforge dev-install`, then launch `Robotopia.exe` (winhttp/doorstop auto-loads BepInEx).
 3. **Local dev:** F10 → Gamemodes → "UGC Live" (or the in-mod panel); start a local session on a folder;
    in Unity toggle Live Sync and move/add/remove an entity; the scene updates **with no restart, no
    flicker**.
@@ -253,7 +253,7 @@ play scene immediately.
 
 **Success log lines** (mirroring the Worlds `Auto-launch:` / `Scene loaded: UgcPlay` proof):
 
-- `manager.log`: `Robotopia UgcLiveSync loaded`, `UGC live sync: watching <folder>`, and per snapshot
+- `manager.log`: `TopiaForge UgcLiveSync loaded`, `UGC live sync: watching <folder>`, and per snapshot
   `UGC live sync: applied incremental patch (<n> patches)` or `UGC live sync: full rebuild (<reason>)`;
   a bad file logs `UGC live sync: rejected snapshot (<reason>)` and the game stays up.
 - `Player.log` (Automerge): the game's own `UgcLiveSyncController: connected to live Automerge sync`,
@@ -275,13 +275,13 @@ Run it via the CLI (which verifies Node 20+, locates the trusted sidecar, and ru
 
 ```powershell
 # One-shot publish (prints the document URL to paste into the in-game UGC Live "Automerge" field):
-robotopia ugc publish --file path\to\project.json --scene main
+topiaforge ugc publish --file path\to\project.json --scene main
 
 # Watch the Unity companion's export folder and re-publish on every change:
-robotopia ugc watch path\to\watch-folder --scene main
+topiaforge ugc watch path\to\watch-folder --scene main
 
 # Verify Node + deps + resolved config without connecting:
-robotopia ugc check
+topiaforge ugc check
 ```
 
 Pass `--doc <automerge-url>` to publish into an existing document (e.g. one the web editor already created);
@@ -291,12 +291,12 @@ game's `UgcLiveSyncController`.
 
 ## Launcher cockpit: auto-detect + one-button Go Live (no manual scripts)
 
-The QuantumWorks launcher's **UGC Live Sync** pane is a cockpit that removes the manual steps:
+The TopiaForge launcher's **UGC Live Sync** pane is a cockpit that removes the manual steps:
 
-- **Auto-detected connection values.** The sidecar emits a machine-readable `ROBOTOPIA_UGC_SESSION {json}` line
+- **Auto-detected connection values.** The sidecar emits a machine-readable `TOPIAFORGE_UGC_SESSION {json}` line
   (and an optional `--session-file`); when the launcher starts the publisher it captures the live document URL
-  from that line and **writes it straight into the game's `config/robotopia.ugc.livesync.json`** — no copy/paste.
-- **Game → launcher status handshake.** The mod writes `config/robotopia.ugc.livesync.status.json` (default watch
+  from that line and **writes it straight into the game's `config/topiaforge.ugc.livesync.json`** — no copy/paste.
+- **Game → launcher status handshake.** The mod writes `config/topiaforge.ugc.livesync.status.json` (default watch
   folder, current status, connected document, applied scenes). The cockpit reads it to pre-fill the watch folder
   with the game's default, show live diagnostics chips, and populate a scene dropdown (also parsed from the newest
   exported project in the watch folder).
@@ -307,37 +307,37 @@ The QuantumWorks launcher's **UGC Live Sync** pane is a cockpit that removes the
   clears captured Automerge connection state, removes stale status/session files, and disables auto-connect
   while preserving watch-folder and scene preferences.
 
-Terminal equivalents: `robotopia ugc status [--watch folder]` (prints the handshake + watch-folder scenes) and
-`robotopia ugc go-live`; use `robotopia ugc cleanup` to stop and clear transient live state.
+Terminal equivalents: `topiaforge ugc status [--watch folder]` (prints the handshake + watch-folder scenes) and
+`topiaforge ugc go-live`; use `topiaforge ugc cleanup` to stop and clear transient live state.
 
 ## CLI: `ugc setup` and `ugc dev` (one-command authoring loop)
 
-`robotopia ugc setup` configures live sync without the launcher: it persists the settings into the project's
-`robotopia.project.json` **and** deploys the game runtime config in one shot.
+`topiaforge ugc setup` configures live sync without the launcher: it persists the settings into the project's
+`topiaforge.project.json` **and** deploys the game runtime config in one shot.
 
 ```powershell
-robotopia ugc setup --watch C:\ugc-watch --scene main --auto-connect
-robotopia ugc setup --transport automerge --doc automerge:abc --sync https://my-sync-server
-robotopia ugc setup --watch C:\ugc-watch --no-deploy     # project only (no game install needed)
+topiaforge ugc setup --watch C:\ugc-watch --scene main --auto-connect
+topiaforge ugc setup --transport automerge --doc automerge:abc --sync https://my-sync-server
+topiaforge ugc setup --watch C:\ugc-watch --no-deploy     # project only (no game install needed)
 ```
 
 The watch folder resolves as: `--watch` → the game's advertised default (status handshake) → `<project>/ugc-watch`
 (created automatically). When no game install is detected the deploy step is skipped with a warning, so the
 command works on authoring-only machines.
 
-`robotopia ugc dev` is the dedicated **Unity-side** command: it sets up and launches a live-sync-connected Unity
+`topiaforge ugc dev` is the dedicated **Unity-side** command: it sets up and launches a live-sync-connected Unity
 Editor instance in one go.
 
 ```powershell
-robotopia ugc dev --new my-world            # scaffold a Unity world project, then everything below
-robotopia ugc dev                           # cwd Unity project, or most recently opened registered world
-robotopia ugc dev --project my-world        # a registered project by name (or an explicit path)
-robotopia ugc dev --launch-game             # also deploy + launch the game (full go-live loop)
-robotopia ugc dev --dry-run                 # print the resolved plan (project, editor, folders) — no side effects
+topiaforge ugc dev --new my-world            # scaffold a Unity world project, then everything below
+topiaforge ugc dev                           # cwd Unity project, or most recently opened registered world
+topiaforge ugc dev --project my-world        # a registered project by name (or an explicit path)
+topiaforge ugc dev --launch-game             # also deploy + launch the game (full go-live loop)
+topiaforge ugc dev --dry-run                 # print the resolved plan (project, editor, folders) — no side effects
 ```
 
-It resolves/creates the world project, ensures `Packages/com.robotopia.ugc-companion` (VPM-resolving deps;
-`--update-companion` re-copies it), writes the **companion seed** `ProjectSettings/RobotopiaUgcCompanion.json`
+It resolves/creates the world project, ensures `Packages/io.github.furroxide.topiaforge.ugc-companion` (VPM-resolving deps;
+`--update-companion` re-copies it), writes the **companion seed** `ProjectSettings/TopiaForgeUgcCompanion.json`
 (watch folder, scene, `liveSync: true`), deploys the game config with auto-connect, and launches the matching
 Unity editor via `-projectPath`. With `--transport automerge` it also starts the publisher sidecar (detached,
 `--session-file`) and injects the captured document URL into the game config.
@@ -353,14 +353,14 @@ live store is still machine-global EditorPrefs — when switching between projec
 
 | Command | What it does |
 |---|---|
-| `robotopia ugc setup [--transport localFolder\|automerge] [--watch folder] [--sync url] [--doc url] [--scene id] [--auto-connect\|--no-auto-connect] [--debounce ms] [--max-snapshot bytes] [--project path] [--no-deploy]` | Persist live-sync settings to `robotopia.project.json` and deploy the game runtime config in one shot. |
-| `robotopia ugc dev [--project path\|name] [--new name [--dir path]] [--watch folder] [--scene id] [--scene-name n] [--environment env] [--transport localFolder\|automerge] [--doc url] [--update-companion] [--launch-game] [--dry-run]` | Resolve/create the Unity world project, seed the companion, deploy the game config, and launch Unity connected; `--dry-run` prints the resolved plan with no side effects. |
-| `robotopia ugc check [--watch folder] [--sync url]` | Verify Node + sidecar deps + resolved config without connecting. |
-| `robotopia ugc status [--watch folder]` | Print the game's status handshake and the watch folder's scenes. |
-| `robotopia ugc publish --file <project.json> [--sync url] [--doc url] [--scene id] [--session-file path]` | One-shot publish of an export JSON to an Automerge document (prints the document URL). |
-| `robotopia ugc watch <folder> [--sync url] [--doc url] [--scene id] [--session-file path]` | Watch an export folder and re-publish on every change. |
-| `robotopia ugc go-live` | Deploy the project's live-sync config with auto-connect on and launch the game. |
-| `robotopia ugc cleanup [--project path]` | Request the running game to stop live sync, clear transient Automerge state, and deploy a non-auto-connect config. |
+| `topiaforge ugc setup [--transport localFolder\|automerge] [--watch folder] [--sync url] [--doc url] [--scene id] [--auto-connect\|--no-auto-connect] [--debounce ms] [--max-snapshot bytes] [--project path] [--no-deploy]` | Persist live-sync settings to `topiaforge.project.json` and deploy the game runtime config in one shot. |
+| `topiaforge ugc dev [--project path\|name] [--new name [--dir path]] [--watch folder] [--scene id] [--scene-name n] [--environment env] [--transport localFolder\|automerge] [--doc url] [--update-companion] [--launch-game] [--dry-run]` | Resolve/create the Unity world project, seed the companion, deploy the game config, and launch Unity connected; `--dry-run` prints the resolved plan with no side effects. |
+| `topiaforge ugc check [--watch folder] [--sync url]` | Verify Node + sidecar deps + resolved config without connecting. |
+| `topiaforge ugc status [--watch folder]` | Print the game's status handshake and the watch folder's scenes. |
+| `topiaforge ugc publish --file <project.json> [--sync url] [--doc url] [--scene id] [--session-file path]` | One-shot publish of an export JSON to an Automerge document (prints the document URL). |
+| `topiaforge ugc watch <folder> [--sync url] [--doc url] [--scene id] [--session-file path]` | Watch an export folder and re-publish on every change. |
+| `topiaforge ugc go-live` | Deploy the project's live-sync config with auto-connect on and launch the game. |
+| `topiaforge ugc cleanup [--project path]` | Request the running game to stop live sync, clear transient Automerge state, and deploy a non-auto-connect config. |
 
 Ready to ship the mod that carries your content? See [PublishingYourMod.md](PublishingYourMod.md).
 

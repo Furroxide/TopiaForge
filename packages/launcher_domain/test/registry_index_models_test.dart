@@ -7,7 +7,7 @@ ModManifest _manifest({
   Map<String, Object?> extra = const {},
 }) {
   return ModManifest.fromJson({
-    'schemaVersion': 2,
+    'schemaVersion': 3,
     'name': id,
     'displayName': 'Jetpack',
     'version': version,
@@ -15,7 +15,7 @@ ModManifest _manifest({
     'entryAssembly': 'Jetpack.dll',
     'entryType': 'Author.Jetpack.JetpackMod',
     'description': 'Fly around.',
-    'vpmDependencies': {'robotopia.robotkit': '>=0.7.0'},
+    'vpmDependencies': {'io.github.furroxide.topiaforge.robotkit': '>=0.7.0'},
     ...extra,
   });
 }
@@ -27,7 +27,7 @@ void main() {
     test('toJson round-trips through RegistryMod.fromJson', () {
       final entry = RegistryIndexEntry(
         manifest: _manifest(),
-        downloadUrl: 'https://example.com/author.jetpack-1.2.0.robotopiamod',
+        downloadUrl: 'https://example.com/author.jetpack-1.2.0.topiaforgemod',
         packageSha256: _sha.toUpperCase(),
         changelog: 'Added fuel gauge.',
         origin: 'community',
@@ -35,7 +35,7 @@ void main() {
           RegistryVersionRef(
             version: '1.1.0',
             downloadUrl:
-                'https://example.com/author.jetpack-1.1.0.robotopiamod',
+                'https://example.com/author.jetpack-1.1.0.topiaforgemod',
             packageSha256: _sha,
           ),
         ],
@@ -46,10 +46,13 @@ void main() {
       expect(mod.manifest.id, 'author.jetpack');
       expect(mod.manifest.version, '1.2.0');
       expect(mod.manifest.dependencies, hasLength(1));
-      expect(mod.manifest.dependencies.single.id, 'robotopia.robotkit');
+      expect(
+        mod.manifest.dependencies.single.id,
+        'io.github.furroxide.topiaforge.robotkit',
+      );
       expect(
         mod.downloadUrl,
-        'https://example.com/author.jetpack-1.2.0.robotopiamod',
+        'https://example.com/author.jetpack-1.2.0.topiaforgemod',
       );
       expect(mod.packageSha256, _sha, reason: 'sha is normalized lowercase');
       expect(mod.changelog, 'Added fuel gauge.');
@@ -58,7 +61,7 @@ void main() {
     test('fromJson tolerates unknown keys and missing optionals', () {
       final entry = RegistryIndexEntry.fromJson({
         'manifest': _manifest().toJson(),
-        'downloadUrl': 'https://example.com/pkg.robotopiamod',
+        'downloadUrl': 'https://example.com/pkg.topiaforgemod',
         'packageSha256': _sha,
         'someFutureField': {'nested': true},
       });
@@ -72,7 +75,7 @@ void main() {
     test('preserves unknown index and history fields immutably', () {
       final entry = RegistryIndexEntry.fromJson({
         'manifest': _manifest().toJson(),
-        'downloadUrl': 'https://example.com/pkg.robotopiamod',
+        'downloadUrl': 'https://example.com/pkg.topiaforgemod',
         'packageSha256': _sha,
         'futureIndex': {
           'channels': ['stable'],
@@ -80,7 +83,7 @@ void main() {
         'history': [
           {
             'version': '1.1.0',
-            'downloadUrl': 'https://example.com/old.robotopiamod',
+            'downloadUrl': 'https://example.com/old.topiaforgemod',
             'packageSha256': _sha,
             'futureHistory': {'provenance': true},
           },
@@ -107,7 +110,7 @@ void main() {
   group('RegistryEntryFile.validate', () {
     RegistryEntryFile entryWith({
       String id = 'author.jetpack',
-      int formatVersion = 1,
+      int formatVersion = 2,
       List<RegistryEntryVersion>? versions,
     }) {
       return RegistryEntryFile(
@@ -118,7 +121,7 @@ void main() {
             [
               RegistryEntryVersion(
                 version: '1.2.0',
-                downloadUrl: 'https://example.com/pkg.robotopiamod',
+                downloadUrl: 'https://example.com/pkg.topiaforgemod',
                 packageSha256: _sha,
                 manifest: _manifest(),
               ),
@@ -140,7 +143,7 @@ void main() {
     test('preserves nested unknown entry and version fields', () {
       final source = {
         r'$schema': ModRegistryFormat.canonicalEntrySchemaUrl,
-        'formatVersion': 1,
+        'formatVersion': 2,
         'id': 'author.jetpack',
         'futureEntry': {
           'maintainers': ['author'],
@@ -148,7 +151,7 @@ void main() {
         'versions': [
           {
             'version': '1.2.0',
-            'downloadUrl': 'https://example.com/pkg.robotopiamod',
+            'downloadUrl': 'https://example.com/pkg.topiaforgemod',
             'packageSha256': _sha,
             'futureVersion': {'trust': 'verified'},
             'manifest': _manifest(
@@ -172,7 +175,7 @@ void main() {
     test('canonical fields take precedence over supplied extras', () {
       final version = RegistryEntryVersion(
         version: '1.2.0',
-        downloadUrl: 'https://example.com/pkg.robotopiamod',
+        downloadUrl: 'https://example.com/pkg.topiaforgemod',
         packageSha256: _sha,
         manifest: _manifest(),
         extraFields: {'version': 'evil', 'changelog': 'evil', 'future': true},
@@ -200,7 +203,7 @@ void main() {
     test('rejects wrong formatVersion, bad id, and empty versions', () {
       final issues = entryWith(
         id: '!',
-        formatVersion: 2,
+        formatVersion: 3,
         versions: const [],
       ).validate();
       final messages = issues.map((issue) => issue.message).join(' ');
@@ -221,8 +224,8 @@ void main() {
 
       final issues = entryWith(
         versions: [
-          version('http://example.com/pkg.robotopiamod', sha: 'zz'),
-          version('https://example.com/pkg.robotopiamod'),
+          version('http://example.com/pkg.topiaforgemod', sha: 'zz'),
+          version('https://example.com/pkg.topiaforgemod'),
         ],
       ).validate();
       final messages = issues.map((issue) => issue.message).join(' ');
@@ -233,10 +236,10 @@ void main() {
 
     test('rejects credentials, query, fragment, and loopback HTTP', () {
       for (final url in [
-        'http://127.0.0.1:8123/pkg.robotopiamod',
-        'https://user:secret@example.com/pkg.robotopiamod',
-        'https://example.com/pkg.robotopiamod?token=secret',
-        'https://example.com/pkg.robotopiamod#latest',
+        'http://127.0.0.1:8123/pkg.topiaforgemod',
+        'https://user:secret@example.com/pkg.topiaforgemod',
+        'https://example.com/pkg.topiaforgemod?token=secret',
+        'https://example.com/pkg.topiaforgemod#latest',
       ]) {
         final issues = entryWith(
           versions: [
@@ -273,13 +276,13 @@ void main() {
         versions: [
           RegistryEntryVersion(
             version: '9.9.9',
-            downloadUrl: 'https://example.com/pkg.robotopiamod',
+            downloadUrl: 'https://example.com/pkg.topiaforgemod',
             packageSha256: _sha,
             manifest: _manifest(id: 'other.mod', version: '1.0.0'),
           ),
           RegistryEntryVersion(
             version: '1.0.0',
-            downloadUrl: 'https://example.com/pkg2.robotopiamod',
+            downloadUrl: 'https://example.com/pkg2.topiaforgemod',
             packageSha256: _sha,
           ),
         ],
@@ -295,7 +298,7 @@ void main() {
     RegistryEntryVersion version(String value) {
       return RegistryEntryVersion(
         version: value,
-        downloadUrl: 'https://example.com/$value.robotopiamod',
+        downloadUrl: 'https://example.com/$value.topiaforgemod',
         packageSha256: _sha,
         manifest: _manifest(version: value),
       );

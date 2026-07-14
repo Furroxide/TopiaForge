@@ -10,7 +10,7 @@ void main() {
 
   setUp(() {
     root = Directory.systemTemp.createTempSync(
-      'robotopia-developer-persistence-',
+      'topiaforge-developer-persistence-',
     );
     repository = LocalDeveloperRepository(
       dataRoot: p.join(root.path, 'data'),
@@ -31,7 +31,7 @@ void main() {
       name: 'Recovery',
     );
     final projectFile = File(
-      p.join(workspace.projectRoot, 'robotopia.project.json'),
+      p.join(workspace.projectRoot, 'topiaforge.project.json'),
     );
     final backup = await projectFile.rename('${projectFile.path}.bak');
 
@@ -48,12 +48,33 @@ void main() {
     final projectRoot = Directory(p.join(root.path, 'oversized'))
       ..createSync(recursive: true);
     await File(
-      p.join(projectRoot.path, 'robotopia.project.json'),
+      p.join(projectRoot.path, 'topiaforge.project.json'),
     ).writeAsBytes(List<int>.filled(1024 * 1024 + 1, 0x20));
 
     await expectLater(
       repository.loadDeveloperWorkspace(projectPath: projectRoot.path),
       throwsA(predicate((error) => error.toString().contains('1 MB limit'))),
+    );
+  });
+
+  test('rejects old project schema versions', () async {
+    final workspace = await repository.createModProject(
+      parentDirectory: root.path,
+      id: 'test.old-format',
+      name: 'Old format',
+    );
+    final projectFile = File(
+      p.join(workspace.projectRoot, 'topiaforge.project.json'),
+    );
+    final projectJson = projectFile.readAsStringSync().replaceFirst(
+      '"schemaVersion": 2',
+      '"schemaVersion": 1',
+    );
+    projectFile.writeAsStringSync(projectJson);
+
+    await expectLater(
+      repository.loadDeveloperWorkspace(projectPath: workspace.projectRoot),
+      throwsFormatException,
     );
   });
 
@@ -66,7 +87,7 @@ void main() {
       id: 'test.symlink',
       name: 'Symlink',
     );
-    final manifest = File(p.join(workspace.projectRoot, 'robotopia.mod.json'));
+    final manifest = File(p.join(workspace.projectRoot, 'topiaforge.mod.json'));
     final outside = File(p.join(root.path, 'outside.json'));
     await manifest.rename(outside.path);
     await Link(manifest.path).create(outside.path);

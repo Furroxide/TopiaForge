@@ -26,17 +26,17 @@ RoboPatch was used only as behavior prior art for clean-room compatibility plann
 
 Prism Launcher was used only as product maturity and UX inspiration. No Prism Launcher code was copied or ported.
 
-Robotopia launcher UI bundles first-party Robotopia web brand assets from `https://robotopia.gg/` and local
-QuantumWorks brand derivatives for offline launcher theming.
+TopiaForge launcher UI bundles first-party Robotopia web brand assets from `https://robotopia.gg/` and local
+TopiaForge brand derivatives for offline launcher theming.
 
-- Web-derived raster files: `quantumworks-city-header.webp`, `baby-stitch.webp`, `robot.webp`, and `sheriff.webp`
-- Local brand derivatives: `quantumworks-logo.svg`, `quantumworks-mark.svg`, and the Windows/macOS launcher
-  app-icon variants under `apps/robotopia_launcher_flutter`
+- Web-derived raster files: `topiaforge-city-header.webp`, `baby-stitch.webp`, `robot.webp`, and `sheriff.webp`
+- Local brand derivatives: `topiaforge-logo.svg`, `topiaforge-mark.svg`, and the Windows/macOS launcher
+  app-icon variants under `apps/topiaforge_launcher_flutter`
 - Source: `https://robotopia.gg/`
-- Local changes: filenames were normalized; the QuantumWorks logo, mark, and platform icon variants were
+- Local changes: filenames were normalized; the TopiaForge logo, mark, and platform icon variants were
   adapted for launcher packaging.
 
-Robotopia launcher UI bundles the Quicksand font copied from the Robotopia web bundle into `packages/launcher_ui/fonts`.
+TopiaForge launcher UI bundles the Quicksand font copied from the Robotopia web bundle into `packages/launcher_ui/fonts`.
 
 - Project: Quicksand
 - Source file: `https://robotopia.gg/assets/Quicksand-VariableFont_wght-DE2wFU7n.ttf`
@@ -46,7 +46,7 @@ Robotopia launcher UI bundles the Quicksand font copied from the Robotopia web b
 - SHA-256: `8b3a3842cc4b666fde454446e28d1bacde30a0ac861e90cbb0bd77b02ecb9dae`
 - License text: `packages/launcher_ui/fonts/Quicksand-OFL.txt` (also copied into the Unity UI bundle source)
 
-Robotopia bundles the Audiowide font for display typography in the launcher UI and Unity brand bundle.
+TopiaForge bundles the Audiowide font for display typography in the launcher UI and Unity brand bundle.
 
 - Project: Audiowide
 - Source files: `https://github.com/google/fonts/raw/main/ofl/audiowide/Audiowide-Regular.ttf`, `https://github.com/google/fonts/raw/main/ofl/audiowide/OFL.txt`
@@ -56,8 +56,8 @@ Robotopia bundles the Audiowide font for display typography in the launcher UI a
 - Local changes: none known; filename was normalized for launcher and Unity packaging.
 - SHA-256: `c7c0f2b0f6fad8c623e31772ce79f94a4edb9321ffce9fce978ea892d20ae730`
 
-The standalone `robotopia` executable embeds the Dart SDK runtime and the following runtime packages. Release
-packaging copies the exact license texts resolved by `apps/robotopia_cli/.dart_tool/package_config.json` into
+The standalone `topiaforge` executable embeds the Dart SDK runtime and the following runtime packages. Release
+packaging copies the exact license texts resolved by `apps/topiaforge_cli/.dart_tool/package_config.json` into
 `third_party/dart/LICENSES`, together with `VERSIONS.json`; package validation fails if any text is absent.
 
 | Component | Pinned release resolution | License |
@@ -94,7 +94,7 @@ The Flutter 3.41.4 launcher embeds Flutter, Dart, plugins, and package dependenc
 `flutter_assets/NOTICES.Z` notice bundle during each platform build; release validation requires that bundle inside
 the shipped launcher.
 
-The self-contained `Robotopia.GameCompat.Extractor` embeds .NET Runtime 10.0.9. Packaging copies `LICENSE.TXT` and
+The self-contained `TopiaForge.GameCompat.Extractor` embeds .NET Runtime 10.0.9. Packaging copies `LICENSE.TXT` and
 `THIRD-PARTY-NOTICES.TXT` from the exact restored `Microsoft.NETCore.App.Runtime.<rid>/10.0.9` runtime pack into
 `third_party/dotnet`; validation fails if the runtime version marker or either notice is absent. Public runners pin
 .NET SDK 10.0.301 so the runtime pack and its notices cannot drift between release runs.
@@ -110,5 +110,5 @@ The CLI's publication gate includes a generated identifier allowlist from SPDX L
 - Version/tag: 3.28.0 (`v3.28.0`)
 - Upstream: https://github.com/spdx/license-list-data/tree/v3.28.0
 - License: CC0-1.0
-- Generated file: `apps/robotopia_cli/lib/src/spdx_ids_3_28.g.dart`
+- Generated file: `apps/topiaforge_cli/lib/src/spdx_ids_3_28.g.dart`
 - Source URLs and verified SHA-256 values: `third_party/SPDX_LICENSE_LIST_PROVENANCE.json`

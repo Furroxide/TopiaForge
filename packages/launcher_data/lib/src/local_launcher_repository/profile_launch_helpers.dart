@@ -25,7 +25,7 @@ extension _ProfileLaunchHelpers on LocalLauncherRepository {
     GameInstall install,
   ) async {
     final file = File(
-      p.join(_managerConfig(install).path, 'robotopia.worlds.json'),
+      p.join(_managerConfig(install).path, 'topiaforge.worlds.json'),
     );
     final type = await FileSystemEntity.type(file.path, followLinks: false);
     if (type == FileSystemEntityType.notFound) {

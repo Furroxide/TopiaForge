@@ -2,7 +2,7 @@
 
 ## Version lines
 
-QuantumWorks runtime, SDK, launcher packages, CLI, schemas, and first-party mods use Semantic Versioning 2.0. Before
+TopiaForge runtime, SDK, launcher packages, CLI, schemas, and first-party mods use Semantic Versioning 2.0. Before
 `1.0.0`, a minor release may contain an intentional breaking API or contract change; patch releases must remain
 backward-compatible within the same minor line. Build metadata does not affect precedence.
 
@@ -12,7 +12,7 @@ wildcard. Dependency planning compares full SemVer precedence, including prerele
 
 ## Manifests and serialized data
 
-`robotopia.mod.json` schema version 2 is the current package contract. Readers ignore unknown fields so a newer producer
+`topiaforge.mod.json` schema version 3 is the current package contract. Readers ignore unknown fields so a newer producer
 can add optional data; authoring tools preserve unknown manifest fields when they read and rewrite a manifest. A reader
 must fail closed when a required field is missing, a known field has the wrong type, or the declared schema version is
 unsupported.
@@ -66,7 +66,7 @@ owner-signed metadata verification and bounded extraction are available.
 
 The official registry initially contains only release-engineering-generated first-party entries. Community submission
 and automatic deployment are closed until namespace ownership, moderation, malware response, revocation, appeal, and
-installed-user response policies are approved. Authors can still publish through a self-hosted format-version-1
+installed-user response policies are approved. Authors can still publish through a self-hosted format-version-2
 registry or a local package source.
 
 A registry listing is not a security endorsement. C# mods execute in the game process with the user's authority. The

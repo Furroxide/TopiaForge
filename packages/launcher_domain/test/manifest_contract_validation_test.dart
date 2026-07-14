@@ -7,7 +7,7 @@ void main() {
       'preserves additive unknown fields through canonical serialization',
       () {
         final manifest = ModManifest.fromJson({
-          'schemaVersion': 2,
+          'schemaVersion': 3,
           'name': 'sample.forward-compatible',
           'displayName': 'Forward Compatible',
           'version': '1.2.3',
@@ -30,10 +30,10 @@ void main() {
 
     test('parses but rejects a bare-string author', () {
       final manifest = ModManifest.fromJson(
-        _manifestJson(author: 'QuantumWorks'),
+        _manifestJson(author: 'TopiaForge'),
       );
 
-      expect(manifest.author.name, 'QuantumWorks');
+      expect(manifest.author.name, 'TopiaForge');
       expect(manifest.authorIsObject, isFalse);
       expect(
         manifest.validate().where((issue) => issue.isBlocking),
@@ -49,11 +49,113 @@ void main() {
 
     test('accepts an object-shaped author', () {
       final manifest = ModManifest.fromJson(
-        _manifestJson(author: {'name': 'QuantumWorks'}),
+        _manifestJson(author: {'name': 'TopiaForge'}),
       );
 
       expect(manifest.authorIsObject, isTrue);
       expect(manifest.validate().where((issue) => issue.isBlocking), isEmpty);
+    });
+
+    test('rejects retired manifest field aliases', () {
+      for (final entry in const <String, Object?>{
+        'id': 'alias.mod',
+        'title': 'Alias Mod',
+        'gameVersion': '1.0.0',
+        'gameVersionRange': '>=1.0.0',
+        'loaderVersionRange': '>=1.0.0',
+        'sdkVersionRange': '>=1.0.0',
+        'packageHashes': <String, String>{'sha256': 'abc'},
+        'gamemodes': <Object?>[],
+        'legacyFolders': <String, String>{},
+        'legacyFiles': <String, String>{},
+        'legacyPackages': <Object?>[],
+      }.entries) {
+        final manifest = ModManifest.fromJson({
+          ..._manifestJson(),
+          entry.key: entry.value,
+        });
+
+        expect(
+          manifest.validate().where((issue) => issue.isBlocking),
+          isNotEmpty,
+          reason: entry.key,
+        );
+      }
+    });
+
+    test('rejects retired dependency and conflict version aliases', () {
+      expect(
+        () => ModManifest.fromJson({
+          ..._manifestJson(),
+          'dependencies': [
+            {'id': 'dependency.mod', 'version': '1.0.0'},
+          ],
+        }),
+        throwsFormatException,
+      );
+      expect(
+        () => ModManifest.fromJson({
+          ..._manifestJson(),
+          'conflicts': [
+            {'id': 'conflict.mod', 'version': '1.0.0'},
+          ],
+        }),
+        throwsFormatException,
+      );
+    });
+
+    test('rejects the retired ai permission', () {
+      final manifest = ModManifest.fromJson({
+        ..._manifestJson(),
+        'permissions': ['ai'],
+      });
+
+      expect(
+        manifest.validate().where((issue) => issue.isBlocking),
+        isNotEmpty,
+      );
+    });
+
+    test('rejects retired ecosystem ID namespaces', () {
+      for (final id in const [
+        'robo'
+            'topia.example',
+        'com.robo'
+            'topia.example',
+        'quantum'
+            'works.example',
+      ]) {
+        final manifest = ModManifest.fromJson({..._manifestJson(), 'name': id});
+
+        expect(
+          manifest.validate().where((issue) => issue.isBlocking),
+          isNotEmpty,
+          reason: id,
+        );
+      }
+    });
+
+    test('rejects retired or incomplete world gamemode identities', () {
+      final retiredId =
+          'robo'
+          'topia.mode.old';
+      final manifest = ModManifest.fromJson({
+        ..._manifestJson(),
+        'worldGamemodes': [
+          {'id': retiredId, 'name': 'Old Mode'},
+          {'id': 'author.unnamed', 'name': ''},
+        ],
+      });
+
+      final blocking = manifest.validate().where((issue) => issue.isBlocking);
+
+      expect(
+        blocking.map((issue) => issue.message),
+        containsAll([
+          contains('worldGamemodes id $retiredId'),
+          contains('worldGamemodes name is required'),
+        ]),
+      );
     });
 
     test('accepts a complete SemVer 2.0.0 version', () {
@@ -175,11 +277,11 @@ void main() {
 }
 
 Map<String, Object?> _manifestJson({
-  Object author = const {'name': 'QuantumWorks'},
+  Object author = const {'name': 'TopiaForge'},
   String entryAssembly = 'Validation.dll',
   String version = '1.0.0',
 }) => {
-  'schemaVersion': 2,
+  'schemaVersion': 3,
   'name': 'validation.mod',
   'displayName': 'Validation Mod',
   'version': version,

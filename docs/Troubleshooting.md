@@ -3,13 +3,13 @@
 The first stop for any problem:
 
 ```sh
-robotopia doctor
+topiaforge doctor
 ```
 
 It audits the toolchain (with versions and install links), the current project, and game compatibility, and
-ends with a **Recommended actions:** section that maps every finding to a next step — run `robotopia setup`
+ends with a **Recommended actions:** section that maps every finding to a next step — run `topiaforge setup`
 for the safe auto-fixes, a pointer to this page when no game install is detected, and `No action needed.`
-when everything is green. `robotopia setup` runs the same audit and applies the safe fixes automatically
+when everything is green. `topiaforge setup` runs the same audit and applies the safe fixes automatically
 (for example installing the Automerge sidecar dependencies); anything that needs a manual install is
 spelled out.
 
@@ -24,7 +24,7 @@ Detection order (first hit wins):
 4. **Linux:** no auto-detect — always set `ROBOTOPIA_GAME_DIR` or pass `--game-dir`.
 
 `--game-dir` on a command always wins over the environment variable. Point either at the game folder itself
-(the directory containing the game, not a launcher shortcut). Verify with `robotopia doctor` — it prints
+(the directory containing the game, not a launcher shortcut). Verify with `topiaforge doctor` — it prints
 what was detected.
 
 ### Setting the variable per shell
@@ -68,8 +68,8 @@ The game is the Windows build running under Proton/Wine:
 
 | Log | Location |
 |---|---|
-| Launcher | `<launcher data root>/logs/launcher.log` — Windows `%APPDATA%\RobotopiaLauncher\logs\launcher.log`, macOS/Linux `~/.robotopia_launcher/logs/launcher.log` |
-| Game-side mod manager | `<game>/BepInEx/RobotopiaModManager/logs/manager.log` |
+| Launcher | `<launcher data root>/logs/launcher.log` — Windows `%APPDATA%\TopiaForgeLauncher\logs\launcher.log`, macOS/Linux `~/.topiaforge_launcher/logs/launcher.log` |
+| Game-side mod manager | `<game>/BepInEx/TopiaForge/logs/manager.log` |
 
 `manager.log` carries each mod's load lines and staged-action results; attach both files to bug reports.
 

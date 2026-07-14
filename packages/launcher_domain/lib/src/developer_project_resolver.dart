@@ -74,7 +74,7 @@ class DeveloperProjectResolver {
     }
 
     final lock = DeveloperLock(
-      schemaVersion: 1,
+      schemaVersion: 2,
       projectId: project.id,
       resolvedAtUtc: (now ?? DateTime.now().toUtc()).toIso8601String(),
       packages: [

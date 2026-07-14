@@ -65,7 +65,7 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
     return templates;
   }
 
-  /// Scaffolds the mod source files + `robotopia.mod.json` into [root]. Falls back to the built-in minimal
+  /// Scaffolds the mod source files + `topiaforge.mod.json` into [root]. Falls back to the built-in minimal
   /// generator when the requested template directory is absent (synthetic test environments).
   Future<void> _scaffoldModFromTemplate(
     String root,
@@ -103,18 +103,18 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
     // the author; templates must never claim ownership on their behalf.
     var manifestMap = <String, Object?>{
       r'$schema': ModManifest.canonicalSchemaUrl,
-      'schemaVersion': 2,
+      'schemaVersion': 3,
       'name': id,
       'displayName': name,
       'version': '0.1.0',
-      'author': {'name': RobotopiaScaffoldDefaults.authorName},
+      'author': {'name': TopiaForgeScaffoldDefaults.authorName},
       'description': '',
       'entryAssembly': '${tokens['ASSEMBLY_NAME']}.dll',
       'entryType': '${tokens['ASSEMBLY_NAME']}.${tokens['TYPE_NAME']}Mod',
       'vpmDependencies': <String, Object?>{},
       'supportedSdkVersionRange': '>=0.1.0 <0.2.0',
       'apiAssemblies': <Object?>[],
-      'license': RobotopiaScaffoldDefaults.license,
+      'license': TopiaForgeScaffoldDefaults.license,
     };
     if (info != null && info.manifestDefaults.isNotEmpty) {
       manifestMap = {...manifestMap, ...info.manifestDefaults};
@@ -122,15 +122,15 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
     if (options.authorName == null &&
         options.authorEmail == null &&
         options.authorUrl == null) {
-      manifestMap['author'] = {'name': RobotopiaScaffoldDefaults.authorName};
+      manifestMap['author'] = {'name': TopiaForgeScaffoldDefaults.authorName};
     }
     if (options.license == null) {
-      manifestMap['license'] = RobotopiaScaffoldDefaults.license;
+      manifestMap['license'] = TopiaForgeScaffoldDefaults.license;
     }
     manifestMap = options.applyTo(manifestMap);
     final manifest = ModManifest.fromJson(manifestMap);
     _writeDeveloperTextAtomic(
-      File(p.join(root, 'robotopia.mod.json')),
+      File(p.join(root, 'topiaforge.mod.json')),
       _prettyJson(manifest.toJson()),
     );
     _writeScaffoldLicense(root, manifest, options.licenseText);
@@ -147,15 +147,15 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
       'DISPLAY_NAME': name,
       'ASSEMBLY_NAME': assembly,
       'TYPE_NAME': _typeName(id),
-      // The same derivation `robotopia world link` uses, so a scaffolded world mod and its paired Unity
+      // The same derivation `topiaforge world link` uses, so a scaffolded world mod and its paired Unity
       // project agree on the bundle name out of the box.
       'BUNDLE_NAME': WorldAuthoringConfig.deriveBundleName(id),
       'ABSTRACTIONS_PROJECT': _canonicalRelativeReference(
         p.join(
           _repositoryRoot.path,
           'src',
-          'Robotopia.Mods.Abstractions',
-          'Robotopia.Mods.Abstractions.csproj',
+          'TopiaForge.Mods.Abstractions',
+          'TopiaForge.Mods.Abstractions.csproj',
         ),
         from: root,
       ),
@@ -163,8 +163,8 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
         p.join(
           _repositoryRoot.path,
           'src',
-          'Robotopia.Mods.UnityUi',
-          'Robotopia.Mods.UnityUi.csproj',
+          'TopiaForge.Mods.UnityUi',
+          'TopiaForge.Mods.UnityUi.csproj',
         ),
         from: root,
       ),
@@ -172,7 +172,7 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
   }
 
   /// Copies [templateDir] into [root], substituting `{{TOKEN}}` markers in both file paths and text-file
-  /// contents. `template.json` (metadata) and any `robotopia.mod.json` (generated separately) are skipped.
+  /// contents. `template.json` (metadata) and any `topiaforge.mod.json` (generated separately) are skipped.
   /// Returns the parsed template metadata with tokens substituted in its manifest defaults.
   Future<ModTemplateInfo> _instantiateModTemplate(
     Directory templateDir,
@@ -190,7 +190,7 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
     for (final entity in templateDir.listSync(recursive: true)) {
       final relative = p.relative(entity.path, from: templateDir.path);
       final base = p.basename(relative);
-      if (base == 'template.json' || base == 'robotopia.mod.json') {
+      if (base == 'template.json' || base == 'topiaforge.mod.json') {
         continue;
       }
       final target = p.join(root, substitute(relative));
@@ -229,10 +229,10 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
 
   Future<ModManifest> _readModManifest(String projectPath) async {
     final root = _requireProjectRoot(projectPath);
-    final file = File(p.join(root.path, 'robotopia.mod.json'));
+    final file = File(p.join(root.path, 'topiaforge.mod.json'));
     if (!file.existsSync()) {
       throw StateError(
-        'robotopia.mod.json was not found in ${root.path}. Run from a mod '
+        'topiaforge.mod.json was not found in ${root.path}. Run from a mod '
         'directory or pass --project <dir>.',
       );
     }
@@ -242,7 +242,7 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
               await _readDeveloperFileBounded(
                 file,
                 maxBytes: _maxDeveloperManifestBytes,
-                label: 'robotopia.mod.json',
+                label: 'topiaforge.mod.json',
               ),
             ),
           )
@@ -256,7 +256,7 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
   ) async {
     final root = _requireProjectRoot(projectPath);
     _writeDeveloperTextAtomic(
-      File(p.join(root.path, 'robotopia.mod.json')),
+      File(p.join(root.path, 'topiaforge.mod.json')),
       _prettyJson(manifest.toJson()),
     );
     return manifest.validate();
@@ -268,7 +268,7 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
       'templates',
       'unity-companion',
       'Packages',
-      'com.robotopia.ugc-companion',
+      'io.github.furroxide.topiaforge.ugc-companion',
     ),
   );
 
@@ -277,7 +277,11 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
     bool update = false,
   }) async {
     final target = Directory(
-      p.join(projectPath, 'Packages', 'com.robotopia.ugc-companion'),
+      p.join(
+        projectPath,
+        'Packages',
+        'io.github.furroxide.topiaforge.ugc-companion',
+      ),
     );
     if (target.existsSync() && !update) {
       return true;
@@ -301,11 +305,11 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
   }) async {
     final settingsDir = Directory(p.join(projectPath, 'ProjectSettings'))
       ..createSync(recursive: true);
-    final file = File(p.join(settingsDir.path, 'RobotopiaUgcCompanion.json'));
+    final file = File(p.join(settingsDir.path, 'TopiaForgeUgcCompanion.json'));
     _writeDeveloperTextAtomic(
       file,
       _prettyJson({
-        'schemaVersion': 1,
+        'schemaVersion': 2,
         'watchFolder': watchFolder,
         if (projectName.isNotEmpty) 'projectName': projectName,
         if (sceneId.isNotEmpty) 'sceneId': sceneId,

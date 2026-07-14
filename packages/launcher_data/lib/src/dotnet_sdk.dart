@@ -75,7 +75,7 @@ Future<DotnetSdkSelection> resolveRepositoryDotnetSdk(
       ? 'No dotnet executables were found.'
       : 'Checked: ${failures.join('; ')}.';
   throw StateError(
-    'Could not find $requirement. $attempts Set ROBOTOPIA_DOTNET_PATH to '
+    'Could not find $requirement. $attempts Set TOPIAFORGE_DOTNET_PATH to '
     'the dotnet executable that provides the required SDK.',
   );
 }
@@ -177,7 +177,7 @@ Future<List<String>> _discoverDotnetCandidates() async {
     if (value != null && value.trim().isNotEmpty) candidates.add(value.trim());
   }
 
-  add(Platform.environment['ROBOTOPIA_DOTNET_PATH']);
+  add(Platform.environment['TOPIAFORGE_DOTNET_PATH']);
   add(Platform.environment['DOTNET_HOST_PATH']);
   for (final name in const [
     'DOTNET_ROOT',

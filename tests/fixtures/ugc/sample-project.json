@@ -130,7 +130,7 @@
               "scale": { "x": 1.0, "y": 1.0, "z": 1.0 }
             },
             "model-renderer": { "model": "@robotopia/tree-model" },
-            "robotopia-future-component": { "note": "Unknown component captured by JsonExtensionData; a change here forces a full rebuild." }
+            "topiaforge-future-component": { "note": "Unknown component captured by JsonExtensionData; a change here forces a full rebuild." }
           }
         }
       }

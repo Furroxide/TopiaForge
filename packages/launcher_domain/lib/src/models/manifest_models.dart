@@ -31,18 +31,21 @@ class ModManifest {
     this.permissions = const [],
     this.worldGamemodes = const [],
     this.apiAssemblies = const [],
-    this.legacyFolders = const {},
-    this.legacyFiles = const {},
-    this.legacyPackages = const [],
     this.extraFields = const {},
   });
 
   /// Canonical URL for the manifest JSON schema, used by editors for
-  /// autocomplete and validation of `robotopia.mod.json`.
+  /// autocomplete and validation of `topiaforge.mod.json`.
   static const canonicalSchemaUrl =
-      'https://raw.githubusercontent.com/furroxide/quantum-works/main/schemas/robotopia.mod.schema.json';
+      'https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json';
 
-  static bool isValidId(String id) => _modIdPattern.hasMatch(id);
+  static bool isValidId(String id) {
+    if (!_modIdPattern.hasMatch(id)) {
+      return false;
+    }
+    final normalized = id.toLowerCase();
+    return !_retiredEcosystemIdPrefixes.any(normalized.startsWith);
+  }
 
   final int schemaVersion;
   final String schemaUrl;
@@ -73,13 +76,10 @@ class ModManifest {
   final List<String> permissions;
   final List<GamemodeDefinition> worldGamemodes;
   final List<String> apiAssemblies;
-  final Map<String, String> legacyFolders;
-  final Map<String, String> legacyFiles;
-  final List<String> legacyPackages;
 
-  /// Additive fields from a newer schema revision. Known aliases are
-  /// canonicalized, while fields this version does not understand survive a
-  /// read/edit/write cycle unchanged.
+  /// Additive fields from a newer schema revision survive a read/edit/write
+  /// cycle unchanged. Retired aliases remain visible here so validation can
+  /// reject them explicitly.
   final Map<String, Object?> extraFields;
 
   List<ModDependency> get allDependencies => [
@@ -103,11 +103,8 @@ class ModManifest {
     return ModManifest(
       schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 0,
       schemaUrl: (json[r'$schema'] as String?) ?? '',
-      id: (json['name'] as String?) ?? (json['id'] as String?) ?? '',
-      name:
-          (json['displayName'] as String?) ??
-          (json['title'] as String?) ??
-          (json['id'] == null ? '' : (json['name'] as String?) ?? ''),
+      id: (json['name'] as String?) ?? '',
+      name: (json['displayName'] as String?) ?? '',
       version: (json['version'] as String?) ?? '',
       author: ModAuthor.fromJson(json['author']),
       authorIsObject: json['author'] is Map,
@@ -119,17 +116,13 @@ class ModManifest {
       conflicts: _conflictList(json['conflicts']),
       loadAfter: _stringList(json['loadAfter']),
       gameVersionRange: VersionRange.parse(
-        (json['supportedGameVersionRange'] as String?) ??
-            (json['gameVersionRange'] as String?) ??
-            (json['gameVersion'] as String?),
+        json['supportedGameVersionRange'] as String?,
       ),
       loaderVersionRange: VersionRange.parse(
-        (json['supportedLoaderVersionRange'] as String?) ??
-            (json['loaderVersionRange'] as String?),
+        json['supportedLoaderVersionRange'] as String?,
       ),
       sdkVersionRange: VersionRange.parse(
-        (json['supportedSdkVersionRange'] as String?) ??
-            (json['sdkVersionRange'] as String?),
+        json['supportedSdkVersionRange'] as String?,
       ),
       category: (json['category'] as String?) ?? '',
       tags: _stringList(json['tags']),
@@ -139,15 +132,10 @@ class ModManifest {
       source: (json['source'] as String?) ?? '',
       license: (json['license'] as String?) ?? '',
       licenseFiles: _stringList(json['licenseFiles']),
-      hashes: _stringMap(json['hashes'] ?? json['packageHashes']),
+      hashes: _stringMap(json['hashes']),
       permissions: _stringList(json['permissions']),
-      worldGamemodes: _gamemodeList(
-        json['worldGamemodes'] ?? json['gamemodes'],
-      ),
+      worldGamemodes: _gamemodeList(json['worldGamemodes']),
       apiAssemblies: _stringList(json['apiAssemblies']),
-      legacyFolders: _stringMap(json['legacyFolders']),
-      legacyFiles: _stringMap(json['legacyFiles']),
-      legacyPackages: _stringList(json['legacyPackages']),
       extraFields: Map<String, Object?>.unmodifiable(
         Map<String, Object?>.of(json)
           ..removeWhere((key, _) => _knownManifestJsonKeys.contains(key)),
@@ -196,9 +184,6 @@ class ModManifest {
     if (worldGamemodes.isNotEmpty)
       'worldGamemodes': worldGamemodes.map((item) => item.toJson()).toList(),
     if (apiAssemblies.isNotEmpty) 'apiAssemblies': apiAssemblies,
-    if (legacyFolders.isNotEmpty) 'legacyFolders': legacyFolders,
-    if (legacyFiles.isNotEmpty) 'legacyFiles': legacyFiles,
-    if (legacyPackages.isNotEmpty) 'legacyPackages': legacyPackages,
   };
 
   List<LauncherIssue> validate() {
@@ -208,7 +193,8 @@ class ModManifest {
     _validateConflicts(issues);
     _validateLoadAfter(issues);
     _validateApiAssemblies(issues);
-    _validateMigrationHints(issues);
+    _validateManifestWorldGamemodes(this, issues);
+    _validateUnsupportedAliases(issues);
     _validatePermissions(issues);
     _validateLicense(issues);
     _validateManifestLicenseFiles(this, issues);
@@ -217,11 +203,11 @@ class ModManifest {
   }
 
   void _validateRequiredFields(List<LauncherIssue> issues) {
-    if (schemaVersion != 2) {
+    if (schemaVersion != 3) {
       issues.add(
         const LauncherIssue(
           severity: IssueSeverity.error,
-          message: 'schemaVersion must be 2.',
+          message: 'schemaVersion must be 3.',
         ),
       );
     }
@@ -367,13 +353,15 @@ class ModManifest {
     }
   }
 
-  void _validateMigrationHints(List<LauncherIssue> issues) {
-    for (final path in [...legacyFolders.keys, ...legacyFiles.keys]) {
-      if (path.trim().isEmpty || _isUnsafeRelativePath(path)) {
+  void _validateUnsupportedAliases(List<LauncherIssue> issues) {
+    for (final field in _unsupportedManifestFields) {
+      if (extraFields.containsKey(field)) {
         issues.add(
-          const LauncherIssue(
-            severity: IssueSeverity.warning,
-            message: 'legacy migration hints should use relative paths.',
+          LauncherIssue(
+            severity: IssueSeverity.error,
+            subjectId: id,
+            message:
+                '$field is not supported by the TopiaForge manifest contract.',
           ),
         );
       }
@@ -400,7 +388,15 @@ class ModManifest {
 
   void _validatePermissions(List<LauncherIssue> issues) {
     for (final permission in permissions) {
-      if (!_knownPermissions.contains(permission)) {
+      if (permission == 'ai') {
+        issues.add(
+          LauncherIssue(
+            severity: IssueSeverity.error,
+            subjectId: id,
+            message: 'permissions must use remote-ai instead of ai.',
+          ),
+        );
+      } else if (!_knownPermissions.contains(permission)) {
         issues.add(
           LauncherIssue(
             severity: IssueSeverity.warning,
@@ -417,9 +413,7 @@ const _knownManifestJsonKeys = <String>{
   r'$schema',
   'schemaVersion',
   'name',
-  'id',
   'displayName',
-  'title',
   'version',
   'author',
   'description',
@@ -431,12 +425,8 @@ const _knownManifestJsonKeys = <String>{
   'conflicts',
   'loadAfter',
   'supportedGameVersionRange',
-  'gameVersionRange',
-  'gameVersion',
   'supportedLoaderVersionRange',
-  'loaderVersionRange',
   'supportedSdkVersionRange',
-  'sdkVersionRange',
   'category',
   'tags',
   'icon',
@@ -446,11 +436,20 @@ const _knownManifestJsonKeys = <String>{
   'license',
   'licenseFiles',
   'hashes',
-  'packageHashes',
   'permissions',
   'worldGamemodes',
-  'gamemodes',
   'apiAssemblies',
+};
+
+const _unsupportedManifestFields = <String>{
+  'id',
+  'title',
+  'gameVersion',
+  'gameVersionRange',
+  'loaderVersionRange',
+  'sdkVersionRange',
+  'packageHashes',
+  'gamemodes',
   'legacyFolders',
   'legacyFiles',
   'legacyPackages',
@@ -459,7 +458,6 @@ const _knownManifestJsonKeys = <String>{
 final _modIdPattern = RegExp(r'^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$');
 
 const _knownPermissions = {
-  'ai',
   'asset-bundles',
   'filesystem',
   'filesystem-watch',

@@ -5,7 +5,7 @@ extension LocalDeveloperPackageRestore on LocalDeveloperRepository {
     String root,
     DeveloperLock lock,
   ) async {
-    final transactionParent = Directory(p.join(root, '.robotopia', 'staging'))
+    final transactionParent = Directory(p.join(root, '.topiaforge', 'staging'))
       ..createSync(recursive: true);
     final transaction = transactionParent.createTempSync('restore-');
     final swaps = <_StagedDeveloperDirectorySwap>[];
@@ -42,7 +42,7 @@ extension LocalDeveloperPackageRestore on LocalDeveloperRepository {
 
         final staging = Directory(p.join(transaction.path, 'staging-$index'))
           ..createSync(recursive: true);
-        final packageName = '$id-$version.robotopiamod';
+        final packageName = '$id-$version.topiaforgemod';
         final packageFile = File(p.join(staging.path, packageName));
         await packageFile.writeAsBytes(result.bytes, flush: true);
         _extractDeveloperArchive(
@@ -52,7 +52,7 @@ extension LocalDeveloperPackageRestore on LocalDeveloperRepository {
         );
 
         final target = Directory(
-          p.join(root, '.robotopia', 'packages', id, version),
+          p.join(root, '.topiaforge', 'packages', id, version),
         );
         swaps.add(
           _StagedDeveloperDirectorySwap(

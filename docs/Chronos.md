@@ -1,11 +1,11 @@
 # Chronos — game-time control framework
 
-`Robotopia.Chronos` is a framework mod that publishes **`ITimeControlService`** — the single, leak-proof
+`TopiaForge.Chronos` is a framework mod that publishes **`ITimeControlService`** — the single, leak-proof
 authority over Unity's `Time.timeScale` / `Time.fixedDeltaTime` for the whole mod ecosystem. It's the reusable
 foundation for time-bending gamemodes: a hard **freeze** (turn-based / RPG pause / freeze-to-talk), a
 continuous or input-driven **slow-mo** (Superhot), bounded **stepping**, and a full **turn scheduler**.
 
-Resolve it with `context.GetService<ITimeControlService>()` and declare a dependency on `robotopia.chronos`
+Resolve it with `context.GetService<ITimeControlService>()` and declare a dependency on `io.github.furroxide.topiaforge.chronos`
 (`loadAfter` it). All ops degrade gracefully — when the engine hooks can't be resolved, `IsAvailable` is
 `false` and effects become no-ops rather than throwing.
 
@@ -74,7 +74,7 @@ safety story.
 
 ## Reference consumer — Zombies
 
-`Robotopia.Zombies` (v0.9.0) dogfoods Chronos two ways: the **JACK-IN** freeze-to-talk acquires a `Freeze`
+`TopiaForge.Zombies` (v0.9.0) dogfoods Chronos two ways: the **JACK-IN** freeze-to-talk acquires a `Freeze`
 lease (so native robots + physics halt at `timeScale 0`, not just a per-entity stop), and a **`superhotMode`**
 config toggle acquires a `SetDriver(SuperhotTimeDriver)` + `ExemptPlayer` lease for a "the horde only moves
 when you do" mode. Both are released through the same lease discipline on every teardown.

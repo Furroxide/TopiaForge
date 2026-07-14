@@ -6,32 +6,32 @@ class ModRegistryFormat {
   /// Format of the published `registry/index.json`. Within a format version
   /// changes are additive-only; breaking changes move to a new path
   /// (`registry/v2/index.json`) so older launchers keep a readable index.
-  static const indexFormatVersion = 1;
+  static const indexFormatVersion = 2;
 
   /// Format of a community entry file under `registry/`.
-  static const entryFormatVersion = 1;
+  static const entryFormatVersion = 2;
 
   static const canonicalIndexSchemaUrl =
-      'https://raw.githubusercontent.com/furroxide/quantum-works/main/schemas/robotopia.registry-index.schema.json';
+      'https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.registry-index.schema.json';
 
   static const canonicalEntrySchemaUrl =
-      'https://raw.githubusercontent.com/furroxide/quantum-works/main/schemas/robotopia.registry-entry.schema.json';
+      'https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.registry-entry.schema.json';
 
-  /// The official QuantumWorks registry index published by CI to GitHub
+  /// The official TopiaForge registry index published by CI to GitHub
   /// Pages. The launcher and developer tooling register this as a built-in
   /// package source.
   static const officialRegistryUrl =
-      'https://furroxide.github.io/quantum-works/registry/index.json';
+      'https://furroxide.github.io/TopiaForge/registry/index.json';
 
-  static const officialSourceId = 'robotopia.official';
-  static const officialSourceName = 'QuantumWorks Mod Registry';
+  static const officialSourceId = 'io.github.furroxide.topiaforge.official';
+  static const officialSourceName = 'TopiaForge Mod Registry';
 
   /// Launcher-enforced package size cap; registry validation mirrors it so
   /// oversized submissions are rejected before players ever see them.
   static const maxPackageBytes = 512 * 1024 * 1024;
 
   /// Community entries may not claim these first-party namespaces.
-  static const reservedIdPrefixes = ['robotopia.', 'sample.', 'quantumworks.'];
+  static const reservedIdPrefixes = ['io.github.furroxide.topiaforge.'];
 }
 
 /// One prior version of a mod in the published index (`history` array) or a
@@ -332,7 +332,7 @@ class RegistryEntryFile {
             severity: IssueSeverity.error,
             subjectId: label,
             message:
-                'manifest is required inline (generate the entry with `robotopia registry add-entry`).',
+                'manifest is required inline (generate the entry with `topiaforge registry add-entry`).',
           ),
         );
         continue;

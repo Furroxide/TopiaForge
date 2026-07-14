@@ -1,18 +1,18 @@
 part of '../models.dart';
 
 /// Pairing config between a Unity world-authoring project and the mod that ships its bundle, stored as
-/// `robotopia.world.json` at the Unity project root. Build-time input only — the game runtime never reads
+/// `topiaforge.world.json` at the Unity project root. Build-time input only — the game runtime never reads
 /// it (world identity/metadata are baked into the mod's C#).
 class WorldAuthoringConfig {
   const WorldAuthoringConfig({
-    this.schemaVersion = 1,
+    this.schemaVersion = 2,
     this.worldId = '',
     this.bundleName = '',
     this.worldPrefab = defaultWorldPrefab,
     this.modPath = '',
   });
 
-  static const String fileName = 'robotopia.world.json';
+  static const String fileName = 'topiaforge.world.json';
   static const String defaultWorldPrefab = 'Assets/World/World.prefab';
 
   final int schemaVersion;
@@ -31,7 +31,7 @@ class WorldAuthoringConfig {
 
   factory WorldAuthoringConfig.fromJson(Map<String, Object?> json) =>
       WorldAuthoringConfig(
-        schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 1,
+        schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 0,
         worldId: (json['worldId'] as String?) ?? '',
         bundleName: (json['bundleName'] as String?) ?? '',
         worldPrefab: (json['worldPrefab'] as String?) ?? defaultWorldPrefab,
@@ -70,10 +70,10 @@ class WorldAuthoringConfig {
   }
 }
 
-/// Unity editor compatibility for Robotopia authoring. Code-only mods do not
+/// Unity editor compatibility for TopiaForge authoring. Code-only mods do not
 /// require Unity, but Unity-authored assets/worlds must be serialized by the
 /// same editor version as the shipped player.
-class RobotopiaUnityCompatibility {
+class RobotopiaGameUnityCompatibility {
   static const requiredEditorVersion = '6000.0.23f1';
   static const requiredEditorChangeset = '1c4764c07fb4';
   static const requiredEditorDisplay =
@@ -84,7 +84,7 @@ class RobotopiaUnityCompatibility {
       'on Windows, unityhub on macOS/Linux): <hub> -- --headless install '
       '--version $requiredEditorVersion --changeset $requiredEditorChangeset';
 
-  /// Selects only the exact editor requested by a project, or the Robotopia
+  /// Selects only the exact editor requested by a project, or the TopiaForge
   /// release editor when the project has no explicit pin. The order returned
   /// by Unity Hub discovery must never change this compatibility decision.
   static UnityEditor? selectEditor(
@@ -103,13 +103,13 @@ class RobotopiaUnityCompatibility {
 }
 
 /// Pure editor-version gate for world/UI bundle builds. Enforced by
-/// `robotopia world build` and `robotopia unity build-ui-bundle`.
+/// `topiaforge world build` and `topiaforge unity build-ui-bundle`.
 class WorldBundleEditorGate {
   static bool isEligible(String version) =>
-      version.trim() == RobotopiaUnityCompatibility.requiredEditorVersion;
+      version.trim() == RobotopiaGameUnityCompatibility.requiredEditorVersion;
 
   /// Remediation shown when no eligible editor exists.
-  static const String installHint = RobotopiaUnityCompatibility.installHint;
+  static const String installHint = RobotopiaGameUnityCompatibility.installHint;
 }
 
 /// Outcome of a headless world-bundle build.

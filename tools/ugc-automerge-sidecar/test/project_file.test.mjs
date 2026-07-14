@@ -8,7 +8,7 @@ import { gzipSync } from 'node:zlib';
 import { newestProjectFile, readProject } from '../project_file.mjs';
 
 test('watch discovery ignores snapshot symlinks', (t) => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'robotopia-project-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'topiaforge-project-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const outside = path.join(root, 'outside-secret.json');
   const watch = path.join(root, 'watch');
@@ -23,7 +23,7 @@ test('watch discovery ignores snapshot symlinks', (t) => {
 });
 
 test('direct project reads reject symlinks', (t) => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'robotopia-project-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'topiaforge-project-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const target = path.join(root, 'target.json');
   const linked = path.join(root, 'linked.json');
@@ -37,7 +37,7 @@ test('direct project reads reject symlinks', (t) => {
 });
 
 test('project reads enforce compressed and expanded byte limits', (t) => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'robotopia-project-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'topiaforge-project-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const plain = path.join(root, 'oversize.json');
   const compressed = path.join(root, 'bomb.json.gz');

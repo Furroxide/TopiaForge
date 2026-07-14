@@ -16,23 +16,21 @@ void _registerUgcDataTests({
       }),
     );
 
-    final scenes = await repository().listWatchFolderScenes(watch.path);
+    final initial = await repository().inspectWatchFolderScenes(watch.path);
 
-    expect(scenes.map((scene) => scene.id), ['scene-a', 'z-scene']);
+    expect(initial.scenes.map((scene) => scene.id), ['scene-a', 'z-scene']);
+    expect(initial.issues, isEmpty);
 
     File(p.join(watch.path, 'project.json')).writeAsStringSync('{not-json');
-    await expectLater(
-      repository().listWatchFolderScenes(watch.path),
-      throwsA(isA<FormatException>()),
-    );
+    final malformed = await repository().inspectWatchFolderScenes(watch.path);
+    expect(malformed.hasBlockingIssues, isTrue);
 
     File(
       p.join(watch.path, 'project.json'),
     ).writeAsBytesSync(List<int>.filled(16 * 1024 * 1024 + 1, 0x20));
-    await expectLater(
-      repository().listWatchFolderScenes(watch.path),
-      throwsA(predicate((error) => error.toString().contains('exceeds'))),
-    );
+    final oversized = await repository().inspectWatchFolderScenes(watch.path);
+    expect(oversized.hasBlockingIssues, isTrue);
+    expect(oversized.issues.single.message, contains('exceeds'));
   });
 
   test('UGC inspection reports source and strict UTF-8 failures', () async {
@@ -48,10 +46,6 @@ void _registerUgcDataTests({
     expect(result.source?.path, snapshot.path);
     expect(result.source?.byteLength, 3);
     expect(result.issues.single.message, contains('UTF-8'));
-    await expectLater(
-      repository().listWatchFolderScenes(watch.path),
-      throwsA(isA<FormatException>()),
-    );
   });
 
   test('UGC inspection breaks equal-mtime ties deterministically', () async {
@@ -109,9 +103,9 @@ void _registerUgcDataTests({
   test('malformed UGC config and status are surfaced', () async {
     final install = await repository().selectGameDirectory(gameRoot().path);
     final configDir = Directory(
-      p.join(gameRoot().path, 'BepInEx', 'RobotopiaModManager', 'config'),
+      p.join(gameRoot().path, 'BepInEx', 'TopiaForge', 'config'),
     )..createSync(recursive: true);
-    final config = File(p.join(configDir.path, 'robotopia.ugc.livesync.json'))
+    final config = File(p.join(configDir.path, 'topiaforge.ugc.livesync.json'))
       ..writeAsStringSync('{broken');
 
     await expectLater(
@@ -124,12 +118,26 @@ void _registerUgcDataTests({
     expect(config.readAsStringSync(), '{broken');
 
     File(
-      p.join(configDir.path, 'robotopia.ugc.livesync.status.json'),
+      p.join(configDir.path, 'topiaforge.ugc.livesync.status.json'),
     ).writeAsStringSync('[]');
     await expectLater(
       repository().readUgcLiveSyncStatus(install),
       throwsA(isA<FormatException>()),
     );
+
+    final status = File(
+      p.join(configDir.path, 'topiaforge.ugc.livesync.status.json'),
+    );
+    for (final value in [
+      {'status': 'Connected'},
+      {'schemaVersion': 1, 'status': 'Connected'},
+    ]) {
+      status.writeAsStringSync(jsonEncode(value));
+      await expectLater(
+        repository().readUgcLiveSyncStatus(install),
+        throwsFormatException,
+      );
+    }
   });
 
   test('cleans up UGC live-sync runtime state', () async {
@@ -137,10 +145,10 @@ void _registerUgcDataTests({
     final game = gameRoot();
     final install = await repo.selectGameDirectory(game.path);
     final configDir = Directory(
-      p.join(game.path, 'BepInEx', 'RobotopiaModManager', 'config'),
+      p.join(game.path, 'BepInEx', 'TopiaForge', 'config'),
     )..createSync(recursive: true);
     final statusFile = File(
-      p.join(configDir.path, 'robotopia.ugc.livesync.status.json'),
+      p.join(configDir.path, 'topiaforge.ugc.livesync.status.json'),
     )..writeAsStringSync('{"status":"Connected"}');
     final sessionFile = File(p.join(dataRoot().path, 'ugc-session.json'))
       ..writeAsStringSync('{"documentUrl":"automerge:stale"}');
@@ -149,7 +157,7 @@ void _registerUgcDataTests({
       install,
       const UgcLiveSyncSettings(
         transport: 'automerge',
-        watchFolder: r'C:\Robotopia\ugc-watch',
+        watchFolder: r'C:\TopiaForge\ugc-watch',
         editorUrl: 'https://editor/?project=automerge:stale',
         documentUrl: 'automerge:stale',
         sceneId: 'main',
@@ -166,7 +174,7 @@ void _registerUgcDataTests({
     expect(config['autoConnectOnStart'], isFalse);
     expect(config['editorUrl'], isEmpty);
     expect(config['documentUrl'], isEmpty);
-    expect(config['watchFolder'], r'C:\Robotopia\ugc-watch');
+    expect(config['watchFolder'], r'C:\TopiaForge\ugc-watch');
     expect(command['command'], 'stop');
     expect(command['cleanup'], isTrue);
     expect(statusFile.existsSync(), isFalse);
@@ -188,7 +196,7 @@ void _registerUgcDataTests({
       install,
       const UgcLiveSyncSettings(
         transport: 'automerge',
-        watchFolder: r'C:\Robotopia\durable-watch',
+        watchFolder: r'C:\TopiaForge\durable-watch',
         editorUrl: 'https://editor/?project=automerge:stale',
         documentUrl: 'automerge:stale',
         syncServerUrl: 'https://sync.example.test',
@@ -208,7 +216,7 @@ void _registerUgcDataTests({
       install,
       const UgcLiveSyncSettings(
         transport: 'automerge',
-        watchFolder: r'C:\Robotopia\durable-watch',
+        watchFolder: r'C:\TopiaForge\durable-watch',
         documentUrl: 'automerge:new',
         syncServerUrl: 'https://sync.example.test',
         sceneId: 'durable-scene',
@@ -226,7 +234,7 @@ void _registerUgcDataTests({
             as Map<String, Object?>;
 
     expect(config['transport'], 'automerge');
-    expect(config['watchFolder'], r'C:\Robotopia\durable-watch');
+    expect(config['watchFolder'], r'C:\TopiaForge\durable-watch');
     expect(config['syncServerUrl'], 'https://sync.example.test');
     expect(config['sceneId'], 'durable-scene');
     expect(config['maxSnapshotBytes'], 123456);

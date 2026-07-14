@@ -9,7 +9,7 @@ trap 'rm -rf "$temp_root"' EXIT
 
 git init --quiet --bare "$temp_root/remote.git"
 git init --quiet "$temp_root/work"
-git -C "$temp_root/work" config user.name "Robotopia Release Test"
+git -C "$temp_root/work" config user.name "TopiaForge Release Test"
 git -C "$temp_root/work" config user.email "release-test@example.invalid"
 git -C "$temp_root/work" remote add origin "$temp_root/remote.git"
 git -C "$temp_root/work" commit --quiet --allow-empty -m first
@@ -26,10 +26,10 @@ ln -s "$fake_gh" "$temp_root/bin/gh"
 printf 'release notes\n' >"$temp_root/notes.md"
 printf '{"distributable":true,"blockingReasons":[]}\n' >"$temp_root/assets/release-bom.json"
 printf '{"spdxVersion":"SPDX-2.3"}\n' >"$temp_root/assets/release-sbom.spdx.json"
-printf 'payload\n' >"$temp_root/assets/QuantumWorks-linux-x64.zip"
+printf 'payload\n' >"$temp_root/assets/TopiaForge-linux-x64.zip"
 (
   cd "$temp_root/assets"
-  sha256sum release-bom.json release-sbom.spdx.json QuantumWorks-linux-x64.zip >SHA256SUMS
+  sha256sum release-bom.json release-sbom.spdx.json TopiaForge-linux-x64.zip >SHA256SUMS
 )
 
 export PATH="$temp_root/bin:$PATH"
@@ -37,7 +37,7 @@ export FAKE_GH_STATE="$temp_root/state"
 run_publisher() {
   (
     cd "$temp_root/work"
-    "$publisher" owner/repo "$@" "QuantumWorks 1.0.0" \
+    "$publisher" owner/repo "$@" "TopiaForge 1.0.0" \
       "$temp_root/notes.md" "$temp_root/assets"
   )
 }
@@ -50,7 +50,7 @@ must_fail() {
 reset_matching_release() {
   jq -n \
     --arg body "$(<"$temp_root/notes.md")" \
-    '{id:1,tag_name:"v1.0.0",name:"QuantumWorks 1.0.0",body:$body,draft:true,prerelease:false}' \
+    '{id:1,tag_name:"v1.0.0",name:"TopiaForge 1.0.0",body:$body,draft:true,prerelease:false}' \
     >"$FAKE_GH_STATE/release.json"
 }
 

@@ -6,7 +6,7 @@ void main() {
   testWidgets('StatusPill renders label', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: buildQuantumWorksTheme(),
+        theme: buildTopiaForgeTheme(),
         home: const Scaffold(
           body: StatusPill(label: 'Ready', tone: StatusTone.good),
         ),
@@ -19,19 +19,19 @@ void main() {
   testWidgets('StatusPill exposes optional tooltip', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: buildQuantumWorksTheme(),
+        theme: buildTopiaForgeTheme(),
         home: const Scaffold(
           body: StatusPill(
             label: 'Restart',
             tone: StatusTone.warning,
-            tooltip: 'Relaunch Robotopia to apply pending changes.',
+            tooltip: 'Relaunch TopiaForge to apply pending changes.',
           ),
         ),
       ),
     );
 
     expect(
-      find.byTooltip('Relaunch Robotopia to apply pending changes.'),
+      find.byTooltip('Relaunch TopiaForge to apply pending changes.'),
       findsOneWidget,
     );
   });

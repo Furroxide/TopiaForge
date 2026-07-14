@@ -1,21 +1,21 @@
-using Robotopia.Mods;
-using Robotopia.Mods.UnityUi;
+using TopiaForge.Mods;
+using TopiaForge.Mods.UnityUi;
 
 namespace {{ASSEMBLY_NAME}}
 {
     /// <summary>
-    /// F8 toggles a QwUi window. QwUi handles theming (Paper/HUD schemes), accessibility toggles, and layout;
+    /// F8 toggles a TopiaForgeUi window. TopiaForgeUi handles theming (Paper/HUD schemes), accessibility toggles, and layout;
     /// see the UI Gallery mod (press F8 in game) for a live catalog of every widget.
     /// </summary>
-    public sealed class {{TYPE_NAME}}Mod : IRobotopiaMod
+    public sealed class {{TYPE_NAME}}Mod : ITopiaForgeMod
     {
         private UiHost? ui;
-        private QwWindow? window;
+        private TopiaForgeWindow? window;
 
         public void OnLoad(IModContext context)
         {
-            ui = QwUi.For(context);
-            ui.Hotkey(QwKey.F8, () =>
+            ui = TopiaForgeUi.For(context);
+            ui.Hotkey(TopiaForgeKey.F8, () =>
             {
                 window ??= BuildWindow(ui);
                 if (window.IsOpen)
@@ -37,7 +37,7 @@ namespace {{ASSEMBLY_NAME}}
             window = null;
         }
 
-        private static QwWindow BuildWindow(UiHost host)
+        private static TopiaForgeWindow BuildWindow(UiHost host)
         {
             var window = host.Window(
                 "{{MOD_ID}}.window",
@@ -47,7 +47,7 @@ namespace {{ASSEMBLY_NAME}}
 
             var column = window.Content;
             column.Label("Hello from {{DISPLAY_NAME}}.");
-            column.Button("CLOSE", window.Close, QwButtonStyle.Outline);
+            column.Button("CLOSE", window.Close, TopiaForgeButtonStyle.Outline);
             return window;
         }
     }

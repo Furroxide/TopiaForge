@@ -1,0 +1,51 @@
+{
+  "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+  "schemaVersion": 3,
+  "name": "io.github.furroxide.topiaforge.sandbox",
+  "displayName": "Sandbox",
+  "version": "0.3.1",
+  "author": {
+    "name": "TopiaForge"
+  },
+  "description": "The freeform creator sandbox, fleshed out: press Q for a spawn menu of the game's own UGC props and native robots (dormant statues or fully autonomous, talkable NPCs), undo with Z, freeze physics with F, and clean the whole stage with one confirmed click. Spawned props are real rigidbodies — grab and launch them with the Gravity Gun. Walk up to a dormant robot and PROGRAM it: talk (typed or push-to-talk voice) and it accepts a task — follow you or another robot, go to a marker, patrol, wander, flee, or even carry a new program over to another robot and reprogram it — then leaves the chat (with a matching emote) to go do it. The ROBOTS tab lists the whole fleet live, with one-click FOLLOW ME / IDLE and remote PROGRAM; idle robots greet each other in passing, with optional LLM banter. Runs on the Open Sandbox arena from TopiaForge Worlds.",
+  "entryAssembly": "TopiaForge.Sandbox.dll",
+  "entryType": "TopiaForge.Sandbox.SandboxMod",
+  "vpmDependencies": {
+    "io.github.furroxide.topiaforge.worlds": ">=0.5.4",
+    "io.github.furroxide.topiaforge.robotkit": ">=0.8.0"
+  },
+  "loadAfter": [
+    "io.github.furroxide.topiaforge.worlds",
+    "io.github.furroxide.topiaforge.robotkit",
+    "io.github.furroxide.topiaforge.gravitygun"
+  ],
+  "supportedGameVersionRange": "0.0.2227",
+  "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
+  "supportedSdkVersionRange": ">=0.1.2 <0.2.0",
+  "category": "Gameplay",
+  "tags": [
+    "sandbox",
+    "gamemode",
+    "spawn-menu",
+    "props",
+    "robots",
+    "physics",
+    "creative",
+    "ai",
+    "conversation",
+    "objectives"
+  ],
+  "license": "NOASSERTION",
+  "permissions": [
+    "world-service",
+    "robot-spawning",
+    "input",
+    "physics",
+    "hud",
+    "network",
+    "remote-ai",
+    "player-token",
+    "microphone",
+    "speech-to-text"
+  ]
+}

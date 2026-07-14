@@ -1,0 +1,424 @@
+{
+  "schemaVersion": 2,
+  "modId": "io.github.furroxide.topiaforge.worlds",
+  "modName": "TopiaForge Worlds",
+  "bindings": [
+    {
+      "id": "worlds.type.globalAssetsMap",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "GlobalAssetsMap",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Reading curated level entry points from game's level-select menu",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:42"
+    },
+    {
+      "id": "worlds.type.loadSceneOnTriggerEnter",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "LoadSceneOnTriggerEnter",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Scene loading dispatch mechanism",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:43"
+    },
+    {
+      "id": "worlds.type.sceneUtil",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "SceneUtil",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Scene loading by name without checkpoint asset",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:44"
+    },
+    {
+      "id": "worlds.type.ugcImportPlayBootstrap",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportPlayBootstrap",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Sandbox player prefab resolution and spawn position queries",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:45"
+    },
+    {
+      "id": "worlds.type.ugcPlayLaunchRequest",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcPlayLaunchRequest",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Suppressing UGC import in sandbox mode",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:46"
+    },
+    {
+      "id": "worlds.type.ugcPlayLauncherLastRun",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcPlayLauncherLastRun",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Suppressing UGC import in sandbox mode",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:47"
+    },
+    {
+      "id": "worlds.type.playerController",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "PlayerController",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Checking if player is currently spawned",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:48"
+    },
+    {
+      "id": "worlds.prop.globalAssetsMap.levelEntryPoints",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "GlobalAssetsMap",
+      "member": "LevelEntryPoints",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Reading curated level entry points from game's level-select menu",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:57",
+      "returnType": ""
+    },
+    {
+      "id": "worlds.field.levelEntryPoints.entries",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "LevelEntryPoints",
+      "member": "entries",
+      "matchMode": "DynamicInstance",
+      "criticality": "Degraded",
+      "feature": "Reading curated level entry points from game's level-select menu",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:63",
+      "returnType": ""
+    },
+    {
+      "id": "worlds.field.levelEntry.checkpointAsset",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "LevelEntry",
+      "member": "checkpointAsset",
+      "matchMode": "Uncheckable",
+      "criticality": "Degraded",
+      "feature": "Reading checkpoint asset from level entry",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:79",
+      "returnType": ""
+    },
+    {
+      "id": "worlds.prop.checkpointAsset.sceneName.read",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "CheckpointAsset",
+      "member": "SceneName",
+      "matchMode": "DynamicInstance",
+      "criticality": "Degraded",
+      "feature": "Reading scene name from checkpoint asset",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:85",
+      "returnType": "System.String"
+    },
+    {
+      "id": "worlds.field.levelEntry.displayName",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "LevelEntry",
+      "member": "displayName",
+      "matchMode": "Uncheckable",
+      "criticality": "Degraded",
+      "feature": "Reading display name from level entry",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:91",
+      "returnType": "System.String"
+    },
+    {
+      "id": "worlds.field.levelEntry.description",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "LevelEntry",
+      "member": "description",
+      "matchMode": "Uncheckable",
+      "criticality": "Degraded",
+      "feature": "Reading description from level entry",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:92",
+      "returnType": "System.String"
+    },
+    {
+      "id": "worlds.prop.checkpointAsset.sceneName.launch",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "CheckpointAsset",
+      "member": "SceneName",
+      "matchMode": "DynamicInstance",
+      "criticality": "Critical",
+      "feature": "Launching a level via checkpoint asset",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:123",
+      "returnType": "System.String"
+    },
+    {
+      "id": "worlds.method.loadSceneOnTriggerEnter.loadSceneImpl",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "LoadSceneOnTriggerEnter",
+      "member": "LoadSceneImpl",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Launching a level via the game's async loader",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:130",
+      "parameters": [
+        {
+          "type": "System.Boolean",
+          "constrained": false
+        },
+        {
+          "type": "System.Object",
+          "constrained": false
+        }
+      ],
+      "returnType": ""
+    },
+    {
+      "id": "worlds.type.uniTaskExtensions",
+      "kind": "Type",
+      "assembly": "Cysharp.Threading.Tasks",
+      "declaringType": "Cysharp.Threading.Tasks.UniTaskExtensions",
+      "matchMode": "Uncheckable",
+      "criticality": "Optional",
+      "feature": "Converting UniTask to Task for continuation-based observation",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:192"
+    },
+    {
+      "id": "worlds.method.uniTaskExtensions.asTask",
+      "kind": "Method",
+      "assembly": "Cysharp.Threading.Tasks",
+      "declaringType": "Cysharp.Threading.Tasks.UniTaskExtensions",
+      "member": "AsTask",
+      "matchMode": "Uncheckable",
+      "criticality": "Optional",
+      "feature": "Converting UniTask to Task for continuation-based observation",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:193",
+      "parameters": [
+        {
+          "type": "Cysharp.Threading.Tasks.UniTask",
+          "constrained": true
+        }
+      ],
+      "returnType": "System.Threading.Tasks.Task"
+    },
+    {
+      "id": "worlds.method.uniTask.getAwaiter",
+      "kind": "Method",
+      "assembly": "Cysharp.Threading.Tasks",
+      "declaringType": "Cysharp.Threading.Tasks.UniTask",
+      "member": "GetAwaiter",
+      "matchMode": "Uncheckable",
+      "criticality": "Optional",
+      "feature": "Fallback observation of UniTask via awaiter contract",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:210",
+      "parameters": [],
+      "returnType": ""
+    },
+    {
+      "id": "worlds.method.uniTaskAwaiter.getResult",
+      "kind": "Method",
+      "assembly": "Cysharp.Threading.Tasks",
+      "declaringType": "Cysharp.Threading.Tasks.UniTask.Awaiter",
+      "member": "GetResult",
+      "matchMode": "Uncheckable",
+      "criticality": "Optional",
+      "feature": "Fallback observation of UniTask result or exception",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:218",
+      "parameters": [],
+      "returnType": ""
+    },
+    {
+      "id": "worlds.prop.uniTaskAwaiter.isCompleted",
+      "kind": "Property",
+      "assembly": "Cysharp.Threading.Tasks",
+      "declaringType": "Cysharp.Threading.Tasks.UniTask.Awaiter",
+      "member": "IsCompleted",
+      "matchMode": "Uncheckable",
+      "criticality": "Optional",
+      "feature": "Checking if UniTask awaiter is already completed",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:242",
+      "returnType": "System.Boolean"
+    },
+    {
+      "id": "worlds.method.uniTaskAwaiter.onCompleted",
+      "kind": "Method",
+      "assembly": "Cysharp.Threading.Tasks",
+      "declaringType": "Cysharp.Threading.Tasks.UniTask.Awaiter",
+      "member": "OnCompleted",
+      "matchMode": "Uncheckable",
+      "criticality": "Optional",
+      "feature": "Registering continuation for UniTask completion",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:250",
+      "parameters": [
+        {
+          "type": "System.Action",
+          "constrained": true
+        }
+      ],
+      "returnType": ""
+    },
+    {
+      "id": "worlds.method.uniTaskAwaiter.unsafeOnCompleted",
+      "kind": "Method",
+      "assembly": "Cysharp.Threading.Tasks",
+      "declaringType": "Cysharp.Threading.Tasks.UniTask.Awaiter",
+      "member": "UnsafeOnCompleted",
+      "matchMode": "Uncheckable",
+      "criticality": "Optional",
+      "feature": "Registering continuation for UniTask completion (unsafe variant)",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:251",
+      "parameters": [
+        {
+          "type": "System.Action",
+          "constrained": true
+        }
+      ],
+      "returnType": ""
+    },
+    {
+      "id": "worlds.method.sceneUtil.loadScene",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "SceneUtil",
+      "member": "LoadScene",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Loading scene by name without checkpoint asset",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:288",
+      "parameters": [
+        {
+          "type": "System.String",
+          "constrained": true
+        },
+        {
+          "type": "System.Threading.CancellationToken",
+          "constrained": true
+        }
+      ],
+      "returnType": ""
+    },
+    {
+      "id": "worlds.method.playerController.findPlayer",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "PlayerController",
+      "member": "FindPlayer",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Checking if player is currently spawned",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:332",
+      "parameters": [],
+      "returnType": "PlayerController"
+    },
+    {
+      "id": "worlds.field.playerController.instance",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "PlayerController",
+      "member": "_instance",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Resolving the live player for pause-menu interception",
+      "sourceRef": "mods/TopiaForge.Worlds/PauseMenuBridge.cs:196",
+      "returnType": "PlayerController"
+    },
+    {
+      "id": "worlds.field.playerController.pauseUI",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "PlayerController",
+      "member": "pauseUI",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Rewiring the vanilla pause menu while a world session is active",
+      "sourceRef": "mods/TopiaForge.Worlds/PauseMenuBridge.cs:166",
+      "returnType": ""
+    },
+    {
+      "id": "worlds.method.playerController.exitPause",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "PlayerController",
+      "member": "ExitPause",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Closing the vanilla pause menu after a gamemode pause action runs",
+      "sourceRef": "mods/TopiaForge.Worlds/PauseMenuBridge.cs:392",
+      "parameters": [],
+      "returnType": "System.Void"
+    },
+    {
+      "id": "worlds.prop.ugcImportPlayBootstrap.runtimePlayerPrefab",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportPlayBootstrap",
+      "member": "RuntimePlayerPrefab",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Resolving sandbox player prefab for fallback spawning",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:353",
+      "returnType": "UnityEngine.GameObject"
+    },
+    {
+      "id": "worlds.field.ugcLastRun.mode",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcPlayLauncherLastRun",
+      "member": "Mode",
+      "matchMode": "ValueContract",
+      "criticality": "Optional",
+      "feature": "Suppressing UGC import in sandbox mode",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:417",
+      "returnType": "System.String",
+      "contractValue": "SelectedFile"
+    },
+    {
+      "id": "worlds.field.ugcLastRun.importFolderPath",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcPlayLauncherLastRun",
+      "member": "ImportFolderPath",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Suppressing UGC import in sandbox mode",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:418",
+      "returnType": "System.String"
+    },
+    {
+      "id": "worlds.field.ugcLastRun.selectedExportFilePath",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcPlayLauncherLastRun",
+      "member": "SelectedExportFilePath",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Suppressing UGC import in sandbox mode",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:419",
+      "returnType": "System.String"
+    },
+    {
+      "id": "worlds.method.ugcPlayLaunchRequest.create",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcPlayLaunchRequest",
+      "member": "Create",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Suppressing UGC import in sandbox mode",
+      "sourceRef": "mods/TopiaForge.Worlds/GameLevelBridge.cs:421",
+      "parameters": [
+        {
+          "type": "UgcPlayLauncherLastRun",
+          "constrained": true
+        }
+      ],
+      "returnType": ""
+    }
+  ]
+}

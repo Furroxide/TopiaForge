@@ -1,0 +1,28 @@
+{
+  "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+  "schemaVersion": 3,
+  "name": "io.github.furroxide.topiaforge.no-feedback-url",
+  "displayName": "No Feedback URL",
+  "version": "0.1.1",
+  "author": {
+    "name": "TopiaForge"
+  },
+  "description": "Allows Robotopia's shutdown feedback page only on the first game launch, then suppresses it.",
+  "entryAssembly": "TopiaForge.NoFeedbackUrl.dll",
+  "entryType": "TopiaForge.NoFeedbackUrl.NoFeedbackUrlMod",
+  "vpmDependencies": {},
+  "supportedGameVersionRange": "0.0.2227",
+  "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
+  "supportedSdkVersionRange": ">=0.1.0 <0.2.0",
+  "category": "Utility",
+  "tags": [
+    "privacy",
+    "feedback",
+    "shutdown",
+    "browser"
+  ],
+  "license": "NOASSERTION",
+  "permissions": [
+    "harmony-patch"
+  ]
+}

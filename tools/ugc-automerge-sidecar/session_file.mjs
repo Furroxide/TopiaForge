@@ -243,6 +243,6 @@ export function establishPublisherSession(
   } = {},
 ) {
   if (!writeSession(sessionPath, session)) return false;
-  announce(`ROBOTOPIA_UGC_SESSION ${JSON.stringify(publicSession)}\n`);
+  announce(`TOPIAFORGE_UGC_SESSION ${JSON.stringify(publicSession)}\n`);
   return true;
 }

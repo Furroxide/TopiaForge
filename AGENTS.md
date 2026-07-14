@@ -1,9 +1,9 @@
-# Robotopia Agent Guide
+# TopiaForge Agent Guide
 
 ## Project Shape
 
-- C# runtime loader projects live under `src/Robotopia.*`.
-- The standalone launcher lives under `apps/robotopia_launcher_flutter`.
+- C# runtime loader projects live under `src/TopiaForge.*`.
+- The standalone launcher lives under `apps/topiaforge_launcher_flutter`.
 - Launcher packages live under `packages/launcher_domain`, `packages/launcher_data`, and `packages/launcher_ui`.
 - Keep domain logic UI-independent. Flutter screens dispatch `LauncherEvent`s to `LauncherBloc`; blocs talk to `LauncherRepository`.
 - Use Bloc classes for Flutter application state. Do not introduce Cubit-based launcher state.
@@ -16,16 +16,16 @@
 Run these before handoff when touching the relevant areas:
 
 ```powershell
-dotnet build RobotopiaModManager.slnx -c Release
-dotnet run --project tests\Robotopia.ModManager.Tests\Robotopia.ModManager.Tests.csproj -c Release
+dotnet build TopiaForge.slnx -c Release
+dotnet run --project tests\TopiaForge.ModManager.Tests\TopiaForge.ModManager.Tests.csproj -c Release
 dart test packages\launcher_domain
 dart test packages\launcher_data
 dart analyze packages\launcher_domain
 dart analyze packages\launcher_data
 flutter test packages\launcher_ui
 flutter analyze packages\launcher_ui
-flutter analyze apps\robotopia_launcher_flutter
-flutter test apps\robotopia_launcher_flutter
+flutter analyze apps\topiaforge_launcher_flutter
+flutter test apps\topiaforge_launcher_flutter
 flutter build windows --debug
 ```
 
@@ -52,8 +52,8 @@ $rows = @(); foreach ($file in rg --files -g "*.dart") { $count = (Get-Content -
 
 ## In-game SDK UI Quality Bar
 
-- All in-game UI (manager overlay, mod HUDs, mod windows) goes through the QwUi kit in
-  `src/Robotopia.Mods.UnityUi` — never hand-rolled uGUI in consumers. See `docs/UiKit.md`.
+- All in-game UI (manager overlay, mod HUDs, mod windows) goes through the TopiaForgeUi kit in
+  `src/TopiaForge.Mods.UnityUi` — never hand-rolled uGUI in consumers. See `docs/UiKit.md`.
 - Paper scheme for full-screen tools/windows/dialogs; HUD scheme for gameplay overlays.
   Tokens/tones only — no hex literals in consumer code.
 - Per-frame updates use the kit's dirty-checked setters; zero steady-state allocation
@@ -63,13 +63,13 @@ $rows = @(); foreach ($file in rg --files -g "*.dart") { $count = (Get-Content -
   toasts; long content always lives in a scroll view or virtualized list.
 - Canvas sorting comes from the kit's band allocator — never set sortingOrder directly.
 - Respect the accessibility contract: high contrast, UI scale, and reduced-motion/motion
-  intensity flow through `QwTheme` (feed mod config into it, like Zombies does).
-- Split UI files by responsibility (~400 lines max); the `mods/Robotopia.UiGallery` dev
+  intensity flow through `TopiaForgeTheme` (feed mod config into it, like Zombies does).
+- Split UI files by responsibility (~400 lines max); the `mods/TopiaForge.UiGallery` dev
   mod (F8) is the living catalog and manual QA surface.
 
 ## C# Runtime Boundaries
 
-- Preserve `.robotopiamod`, `robotopia.mod.json`, dependency ordering, package inbox, manager logs, enable/disable state, and restart-required behavior.
-- Keep Unity/BepInEx-specific work in `src/Robotopia.ModManager`.
-- Keep `src/Robotopia.ModManager.Core` free of Unity references.
-- SDK conveniences in `Robotopia.Mods.Abstractions` must remain additive and clean-room.
+- Preserve `.topiaforgemod`, `topiaforge.mod.json`, dependency ordering, package inbox, manager logs, enable/disable state, and restart-required behavior.
+- Keep Unity/BepInEx-specific work in `src/TopiaForge.ModManager`.
+- Keep `src/TopiaForge.ModManager.Core` free of Unity references.
+- SDK conveniences in `TopiaForge.Mods.Abstractions` must remain additive and clean-room.

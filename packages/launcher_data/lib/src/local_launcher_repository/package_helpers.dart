@@ -5,6 +5,7 @@ extension _PackageHelpers on LocalLauncherRepository {
     String packageReference, {
     String expectedSha256 = '',
   }) async {
+    requireCanonicalTopiaForgePackageReference(packageReference);
     final reference = await _resolvePackageReference(
       packageReference,
       expectedSha256: expectedSha256,
@@ -23,12 +24,12 @@ extension _PackageHelpers on LocalLauncherRepository {
 
     final archive = SafeZipArchive.decode(bytes, label: 'Package');
 
-    final manifestFile = archive.entryNamed('robotopia.mod.json');
+    final manifestFile = archive.entryNamed('topiaforge.mod.json');
     if (manifestFile == null || !manifestFile.isFile) {
-      throw StateError('Package is missing robotopia.mod.json.');
+      throw StateError('Package is missing topiaforge.mod.json.');
     }
     if (manifestFile.size > _maxManifestBytes) {
-      throw StateError('robotopia.mod.json exceeds the 1 MB manifest limit.');
+      throw StateError('topiaforge.mod.json exceeds the 1 MB manifest limit.');
     }
 
     final manifest = ModManifest.fromJson(
@@ -36,7 +37,7 @@ extension _PackageHelpers on LocalLauncherRepository {
             utf8.decode(
               manifestFile.readBytes(
                 maxBytes: _maxManifestBytes,
-                label: 'robotopia.mod.json',
+                label: 'topiaforge.mod.json',
               ),
             ),
           )
@@ -92,7 +93,7 @@ extension _PackageHelpers on LocalLauncherRepository {
         );
       }
       final cached = File(
-        p.join(_packageCache.path, '$normalizedSha.robotopiamod'),
+        p.join(_packageCache.path, '$normalizedSha.topiaforgemod'),
       );
       if (cached.existsSync()) {
         try {

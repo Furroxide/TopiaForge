@@ -4,8 +4,8 @@ part of '../local_developer_repository.dart';
 /// identities. Two generated packages must be installable together without
 /// colliding on the template's example asmdef names.
 extension LocalDeveloperUnityPackageScaffolding on LocalDeveloperRepository {
-  static const _templateAssemblyRoot = 'Robotopia.Example';
-  static const _templateMenuPath = 'Robotopia/Example/Say Hello';
+  static const _templateAssemblyRoot = 'TopiaForge.Example';
+  static const _templateMenuPath = 'TopiaForge/Example/Say Hello';
 
   Future<String> _createUnityPackage(
     String parentDirectory,
@@ -16,7 +16,7 @@ extension LocalDeveloperUnityPackageScaffolding on LocalDeveloperRepository {
       p.join(
         _repositoryRoot.path,
         'templates',
-        'Robotopia.UnityPackageTemplate',
+        'TopiaForge.UnityPackageTemplate',
       ),
     );
     if (!templateDir.existsSync()) {
@@ -34,7 +34,7 @@ extension LocalDeveloperUnityPackageScaffolding on LocalDeveloperRepository {
     final staging = Directory(
       p.join(
         parent.path,
-        '.${_safeName(id)}.robotopia-new-$pid-'
+        '.${_safeName(id)}.topiaforge-new-$pid-'
         '${DateTime.now().microsecondsSinceEpoch}',
       ),
     );
@@ -97,7 +97,7 @@ extension LocalDeveloperUnityPackageScaffolding on LocalDeveloperRepository {
       if (p.extension(file.path).toLowerCase() == '.cs') {
         updated = updated.replaceAll(
           jsonEncode(_templateMenuPath),
-          jsonEncode('Robotopia/Packages/$id/Say Hello'),
+          jsonEncode('TopiaForge/Packages/$id/Say Hello'),
         );
       }
       _writeDeveloperTextAtomic(file, updated);

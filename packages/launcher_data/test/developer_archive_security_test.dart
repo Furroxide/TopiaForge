@@ -15,7 +15,7 @@ void main() {
   late LocalDeveloperRepository repository;
 
   setUp(() {
-    root = Directory.systemTemp.createTempSync('robotopia-archive-security-');
+    root = Directory.systemTemp.createTempSync('topiaforge-archive-security-');
     dataRoot = Directory(p.join(root.path, 'data'))..createSync();
     repoRoot = Directory(p.join(root.path, 'repo'))..createSync();
     repository = LocalDeveloperRepository(
@@ -34,12 +34,12 @@ void main() {
     'developer restore rejects traversal and preserves prior cache',
     () async {
       final package = _writeModPackage(
-        File(p.join(root.path, 'unsafe.robotopiamod')),
+        File(p.join(root.path, 'unsafe.topiaforgemod')),
         extraEntries: [ArchiveFile.string('../escape.txt', 'escape')],
       );
       final project = await _createDeveloperProject(repository, root, package);
       final packageRoot = Directory(
-        p.join(project, '.robotopia', 'packages', 'safe.mod', '1.0.0'),
+        p.join(project, '.topiaforge', 'packages', 'safe.mod', '1.0.0'),
       )..createSync(recursive: true);
       final marker = File(p.join(packageRoot.path, 'extracted', 'keep.txt'))
         ..createSync(recursive: true)
@@ -52,11 +52,11 @@ void main() {
 
       expect(marker.readAsStringSync(), 'keep');
       expect(
-        File(p.join(project, '.robotopia', 'escape.txt')).existsSync(),
+        File(p.join(project, '.topiaforge', 'escape.txt')).existsSync(),
         isFalse,
       );
       expect(
-        Directory(p.join(project, '.robotopia', 'staging')).existsSync(),
+        Directory(p.join(project, '.topiaforge', 'staging')).existsSync(),
         isFalse,
       );
     },
@@ -64,7 +64,7 @@ void main() {
 
   test('percent-encoded dot segments remain literal archive names', () async {
     final package = _writeModPackage(
-      File(p.join(root.path, 'encoded.robotopiamod')),
+      File(p.join(root.path, 'encoded.topiaforgemod')),
       extraEntries: [ArchiveFile.string('%2e%2e/escape.txt', 'literal')],
     );
     final project = await _createDeveloperProject(repository, root, package);
@@ -73,7 +73,7 @@ void main() {
 
     final packageRoot = p.join(
       project,
-      '.robotopia',
+      '.topiaforge',
       'packages',
       'safe.mod',
       '1.0.0',
@@ -91,7 +91,7 @@ void main() {
     'developer package preflight rejects symlinks and false sizes',
     () async {
       final symlinkPackage = _writeModPackage(
-        File(p.join(root.path, 'symlink.robotopiamod')),
+        File(p.join(root.path, 'symlink.topiaforgemod')),
         extraEntries: [_symlinkEntry('linked.dll', '../outside.dll')],
       );
       await expectLater(
@@ -100,7 +100,7 @@ void main() {
       );
 
       final oversizedPackage = _writeModPackage(
-        File(p.join(root.path, 'oversized.robotopiamod')),
+        File(p.join(root.path, 'oversized.topiaforgemod')),
       );
       final bytes = oversizedPackage.readAsBytesSync();
       _setFirstCentralUncompressedSize(bytes, 1024 * 1024 * 1024 + 1);
@@ -121,7 +121,7 @@ void main() {
   test(
     'local archives and package catalogs are bounded before reading',
     () async {
-      final hugePackage = File(p.join(root.path, 'huge.robotopiamod'));
+      final hugePackage = File(p.join(root.path, 'huge.topiaforgemod'));
       hugePackage.openSync(mode: FileMode.write)
         ..truncateSync(512 * 1024 * 1024 + 1)
         ..closeSync();
@@ -217,7 +217,7 @@ void main() {
             .whereType<Directory>()
             .where(
               (directory) =>
-                  p.basename(directory.path).startsWith('.robotopia-vpm-'),
+                  p.basename(directory.path).startsWith('.topiaforge-vpm-'),
             ),
         isEmpty,
       );
@@ -265,7 +265,7 @@ void main() {
       ),
     );
     await expectLater(
-      repository.checkPackage('https://packages.example/test.robotopiamod'),
+      repository.checkPackage('https://packages.example/test.topiaforgemod'),
       throwsA(
         isA<StateError>().having(
           (error) => error.message,
@@ -317,7 +317,7 @@ Future<String> _createDeveloperProject(
 File _writeModPackage(File file, {List<ArchiveFile> extraEntries = const []}) {
   final archive = Archive()
     ..addFile(
-      ArchiveFile.string('robotopia.mod.json', jsonEncode(_modManifest)),
+      ArchiveFile.string('topiaforge.mod.json', jsonEncode(_modManifest)),
     )
     ..addFile(ArchiveFile.string('SafeMod.dll', 'dll'));
   for (final entry in extraEntries) {
@@ -328,11 +328,11 @@ File _writeModPackage(File file, {List<ArchiveFile> extraEntries = const []}) {
 }
 
 const _modManifest = <String, Object?>{
-  'schemaVersion': 2,
+  'schemaVersion': 3,
   'name': 'safe.mod',
   'displayName': 'Safe Mod',
   'version': '1.0.0',
-  'author': {'name': 'QuantumWorks'},
+  'author': {'name': 'TopiaForge'},
   'entryAssembly': 'SafeMod.dll',
   'entryType': 'SafeMod.Entry',
 };

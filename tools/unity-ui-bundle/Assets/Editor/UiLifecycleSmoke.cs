@@ -9,17 +9,17 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-namespace Robotopia
+namespace TopiaForge
 {
     /// <summary>
-    /// Exact-editor smoke for repeated QwUi host creation and teardown. The SDK is
+    /// Exact-editor smoke for repeated TopiaForgeUi host creation and teardown. The SDK is
     /// loaded from its Release output so this project remains only a bundle builder.
     /// </summary>
     public static class UiLifecycleSmoke
     {
         private const int Cycles = 16;
         private const int MaxAssemblyBytes = 64 * 1024 * 1024;
-        private const string PendingSessionKey = "Robotopia.UiLifecycleSmoke.Pending";
+        private const string PendingSessionKey = "TopiaForge.UiLifecycleSmoke.Pending";
         private static Assembly uiAssembly;
         private static Snapshot baseline;
         private static int verificationAttempts;
@@ -75,16 +75,16 @@ namespace Robotopia
                     Snapshot.Capture(uiAssembly).AssertRuntimeStateEquals(baseline, index);
                 }
 
-                var debug = RequiredType("Robotopia.Mods.UnityUi.QwDebugOverlay");
+                var debug = RequiredType("TopiaForge.Mods.UnityUi.TopiaForgeDebugOverlay");
                 debug.GetMethod("Toggle", BindingFlags.Public | BindingFlags.Static).Invoke(null, null);
                 debug.GetMethod("Dispose", BindingFlags.Public | BindingFlags.Static).Invoke(null, null);
                 Snapshot.Capture(uiAssembly).AssertRuntimeStateEquals(baseline, Cycles);
 
-                var toneType = RequiredType("Robotopia.Mods.UnityUi.QwTone");
-                RequiredType("Robotopia.Mods.UnityUi.QwToasts")
+                var toneType = RequiredType("TopiaForge.Mods.UnityUi.TopiaForgeTone");
+                RequiredType("TopiaForge.Mods.UnityUi.TopiaForgeToasts")
                     .GetMethod("Show", BindingFlags.Public | BindingFlags.Static)
                     .Invoke(null, new object[] { "Lifecycle smoke toast", Enum.Parse(toneType, "Success"), 1f });
-                RequiredType("Robotopia.Mods.UnityUi.QwUi")
+                RequiredType("TopiaForge.Mods.UnityUi.TopiaForgeUi")
                     .GetMethod("Shutdown", BindingFlags.Public | BindingFlags.Static)
                     .Invoke(null, null);
                 Snapshot.Capture(uiAssembly).AssertRuntimeStateEquals(baseline, Cycles + 1);
@@ -99,28 +99,28 @@ namespace Robotopia
 
         private static void ExerciseHost(int index)
         {
-            var optionsType = RequiredType("Robotopia.Mods.UnityUi.QwUiOptions");
+            var optionsType = RequiredType("TopiaForge.Mods.UnityUi.TopiaForgeUiOptions");
             var options = Activator.CreateInstance(optionsType);
-            optionsType.GetProperty("OwnerId").SetValue(options, "robotopia.lifecycle-smoke-" + index);
+            optionsType.GetProperty("OwnerId").SetValue(options, "io.github.furroxide.topiaforge.lifecycle-smoke-" + index);
 
-            var profileType = RequiredType("Robotopia.Mods.UnityUi.QwAccessibilityProfile");
+            var profileType = RequiredType("TopiaForge.Mods.UnityUi.TopiaForgeAccessibilityProfile");
             var profile = Activator.CreateInstance(
                 profileType,
                 new object[] { index % 2 == 0, 1.1f, index % 3 == 0, 0.75f });
             optionsType.GetProperty("AccessibilityProfile").SetValue(options, profile);
 
-            var qwUi = RequiredType("Robotopia.Mods.UnityUi.QwUi");
-            var host = qwUi.GetMethod("Create", BindingFlags.Public | BindingFlags.Static)
+            var topiaForgeUi = RequiredType("TopiaForge.Mods.UnityUi.TopiaForgeUi");
+            var host = topiaForgeUi.GetMethod("Create", BindingFlags.Public | BindingFlags.Static)
                 .Invoke(null, new[] { options });
             var hostType = host.GetType();
 
-            var keyType = RequiredType("Robotopia.Mods.UnityUi.QwKey");
+            var keyType = RequiredType("TopiaForge.Mods.UnityUi.TopiaForgeKey");
             hostType.GetMethod("Hotkey").Invoke(
                 host,
                 new object[] { Enum.Parse(keyType, "F8"), (Action)(() => { }) });
 
-            var bandType = RequiredType("Robotopia.Mods.UnityUi.QwLayerBand");
-            var schemeType = RequiredType("Robotopia.Mods.UnityUi.QwScheme");
+            var bandType = RequiredType("TopiaForge.Mods.UnityUi.TopiaForgeLayerBand");
+            var schemeType = RequiredType("TopiaForge.Mods.UnityUi.TopiaForgeScheme");
             var layer = hostType.GetMethod("Layer").Invoke(
                 host,
                 new object[]
@@ -206,19 +206,19 @@ namespace Robotopia
             var abstractionsPath = Path.Combine(
                 repoRoot,
                 "src",
-                "Robotopia.Mods.Abstractions",
+                "TopiaForge.Mods.Abstractions",
                 "bin",
                 "Release",
                 "netstandard2.1",
-                "Robotopia.Mods.Abstractions.dll");
+                "TopiaForge.Mods.Abstractions.dll");
             var uiPath = Path.Combine(
                 repoRoot,
                 "src",
-                "Robotopia.Mods.UnityUi",
+                "TopiaForge.Mods.UnityUi",
                 "bin",
                 "Release",
                 "netstandard2.1",
-                "Robotopia.Mods.UnityUi.dll");
+                "TopiaForge.Mods.UnityUi.dll");
 
             LoadRequiredAssembly(Path.Combine(managedDir, "Unity.InputSystem.dll"));
             LoadRequiredAssembly(abstractionsPath);
@@ -313,23 +313,23 @@ namespace Robotopia
 
             public static Snapshot Capture(Assembly assembly)
             {
-                var theme = assembly.GetType("Robotopia.Mods.UnityUi.QwTheme", true);
+                var theme = assembly.GetType("TopiaForge.Mods.UnityUi.TopiaForgeTheme", true);
                 var changed = theme.GetField("Changed", BindingFlags.Static | BindingFlags.NonPublic)
                     ?.GetValue(null) as Delegate;
                 var registrations = (ICollection)assembly
-                    .GetType("Robotopia.Mods.UnityUi.QwHotkeys", true)
+                    .GetType("TopiaForge.Mods.UnityUi.TopiaForgeHotkeys", true)
                     .GetField("Registrations", BindingFlags.Static | BindingFlags.NonPublic)
                     .GetValue(null);
-                var hosts = StaticCollection(assembly, "Robotopia.Mods.UnityUi.QwUi", "Hosts");
-                var toastViews = StaticCollection(assembly, "Robotopia.Mods.UnityUi.QwToasts", "Views");
-                var queuedToasts = StaticCollection(assembly, "Robotopia.Mods.UnityUi.QwToasts", "Queue");
-                var runtimeType = assembly.GetType("Robotopia.Mods.UnityUi.QwRuntime", true);
+                var hosts = StaticCollection(assembly, "TopiaForge.Mods.UnityUi.TopiaForgeUi", "Hosts");
+                var toastViews = StaticCollection(assembly, "TopiaForge.Mods.UnityUi.TopiaForgeToasts", "Views");
+                var queuedToasts = StaticCollection(assembly, "TopiaForge.Mods.UnityUi.TopiaForgeToasts", "Queue");
+                var runtimeType = assembly.GetType("TopiaForge.Mods.UnityUi.TopiaForgeRuntime", true);
 
                 return new Snapshot(
                     Resources.FindObjectsOfTypeAll<Canvas>().Length,
-                    StaticInt(assembly, "Robotopia.Mods.UnityUi.QwTween", "ActiveCount"),
-                    StaticInt(assembly, "Robotopia.Mods.UnityUi.QwCursor", "ActiveLeases"),
-                    StaticInt(assembly, "Robotopia.Mods.UnityUi.QwDismissStack", "Count"),
+                    StaticInt(assembly, "TopiaForge.Mods.UnityUi.TopiaForgeTween", "ActiveCount"),
+                    StaticInt(assembly, "TopiaForge.Mods.UnityUi.TopiaForgeCursor", "ActiveLeases"),
+                    StaticInt(assembly, "TopiaForge.Mods.UnityUi.TopiaForgeDismissStack", "Count"),
                     registrations.Count,
                     changed?.GetInvocationList().Length ?? 0,
                     hosts.Count,
@@ -392,10 +392,10 @@ namespace Robotopia
 
             private static string LayerCapacitySnapshot(Assembly assembly)
             {
-                var layers = assembly.GetType("Robotopia.Mods.UnityUi.QwLayers", true);
+                var layers = assembly.GetType("TopiaForge.Mods.UnityUi.TopiaForgeLayers", true);
                 var bands = layers.GetField("Bands", BindingFlags.Static | BindingFlags.NonPublic)
                     .GetValue(null);
-                var bandType = assembly.GetType("Robotopia.Mods.UnityUi.QwLayerBand", true);
+                var bandType = assembly.GetType("TopiaForge.Mods.UnityUi.TopiaForgeLayerBand", true);
                 var remaining = bands.GetType().GetMethod("Remaining");
                 var values = new List<string>();
                 foreach (var band in Enum.GetValues(bandType))

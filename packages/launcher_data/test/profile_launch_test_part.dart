@@ -105,7 +105,7 @@ void _registerProfileLaunchTests({
             selectedVersions: {'alpha.mod': '1.0.0'},
             launchSettings: LaunchSettings(
               extraArguments: ['--profile-test'],
-              environment: {'ROBOTOPIA_PROFILE_TEST': 'isolated'},
+              environment: {'TOPIAFORGE_PROFILE_TEST': 'isolated'},
             ),
           ),
         );
@@ -113,7 +113,7 @@ void _registerProfileLaunchTests({
         expect(result.started, isTrue);
         expect(result.processId, 4242);
         expect(request.arguments, contains('--profile-test'));
-        expect(request.environment['ROBOTOPIA_PROFILE_TEST'], 'isolated');
+        expect(request.environment['TOPIAFORGE_PROFILE_TEST'], 'isolated');
         expect(
           request.environment[ProfileLaunchConfiguration.environmentVariable],
           launchFilePath,
@@ -204,13 +204,13 @@ void _registerProfileLaunchTests({
           p.join(
             gameRoot().path,
             'BepInEx',
-            'RobotopiaModManager',
+            'TopiaForge',
             'config',
-            'robotopia.worlds.json',
+            'topiaforge.worlds.json',
           ),
         );
         const worldBefore =
-            '{"selectedWorldId":"legacy.world","providerState":{"x":1}}\n';
+            '{"selectedWorldId":"existing.world","providerState":{"x":1}}\n';
         worldFile
           ..parent.createSync(recursive: true)
           ..writeAsStringSync(worldBefore);
@@ -261,13 +261,55 @@ void _registerProfileLaunchTests({
       expect(result.message, contains('cannot replace required variable'));
       expect(processStarted, isFalse);
       final staging = Directory(
-        p.join(gameRoot().path, 'BepInEx', 'RobotopiaModManager', 'staging'),
+        p.join(gameRoot().path, 'BepInEx', 'TopiaForge', 'staging'),
       );
       expect(
         staging.listSync().where(
           (entry) => p.basename(entry.path).startsWith('launch-profile-'),
         ),
         isEmpty,
+      );
+    });
+
+    test('world selection write rejects retired in-memory ids', () async {
+      var processStarted = false;
+      final prepared = await _prepareProfileLaunchRepository(
+        dataRoot: dataRoot(),
+        repositoryRoot: repositoryRoot(),
+        gameRoot: gameRoot(),
+        starter: (_) async {
+          processStarted = true;
+          return 1;
+        },
+      );
+      final retired =
+          'robo'
+          'topia.world.retired';
+
+      await expectLater(
+        prepared.$1.launch(
+          prepared.$2,
+          LauncherProfile(
+            id: 'retired-world',
+            name: 'Retired world',
+            worldSelection: WorldSelection(worldId: retired),
+          ),
+        ),
+        throwsFormatException,
+      );
+
+      expect(processStarted, isFalse);
+      expect(
+        File(
+          p.join(
+            gameRoot().path,
+            'BepInEx',
+            'TopiaForge',
+            'config',
+            'topiaforge.worlds.json',
+          ),
+        ).existsSync(),
+        isFalse,
       );
     });
   });
@@ -299,4 +341,4 @@ Future<(LocalLauncherRepository, GameInstall)> _prepareProfileLaunchRepository({
 }
 
 File _profileManagerState(Directory gameRoot) =>
-    File(p.join(gameRoot.path, 'BepInEx', 'RobotopiaModManager', 'state.json'));
+    File(p.join(gameRoot.path, 'BepInEx', 'TopiaForge', 'state.json'));

@@ -125,17 +125,17 @@ void _createRuntimeSources(Directory repoRoot) {
     p.join(
       repoRoot.path,
       'src',
-      'Robotopia.ModManager',
+      'TopiaForge.ModManager',
       'bin',
       'Release',
       'netstandard2.1',
     ),
   )..createSync(recursive: true);
   for (final dll in [
-    'Robotopia.ModManager.dll',
-    'Robotopia.ModManager.Core.dll',
-    'Robotopia.Mods.Abstractions.dll',
-    'Robotopia.Mods.UnityUi.dll',
+    'TopiaForge.ModManager.dll',
+    'TopiaForge.ModManager.Core.dll',
+    'TopiaForge.Mods.Abstractions.dll',
+    'TopiaForge.Mods.UnityUi.dll',
   ]) {
     File(p.join(loader.path, dll)).writeAsStringSync('');
   }

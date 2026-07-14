@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible Robotopia ecosystem defect.
+description: Report a reproducible TopiaForge ecosystem defect.
 title: "[Bug]: "
 labels:
   - bug
@@ -18,14 +18,14 @@ body:
         - Launcher
         - CLI / packaging / registry
         - Unity tooling / custom worlds / VPM
-        - QwUi / first-party mod
+        - TopiaForge UI / first-party mod
         - Documentation / release infrastructure
     validations:
       required: true
   - type: input
     id: version
     attributes:
-      label: Robotopia / QuantumWorks version
+      label: TopiaForge version
       placeholder: "Game version, launcher version, package version, or commit SHA"
     validations:
       required: true

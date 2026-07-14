@@ -62,7 +62,7 @@ final class TrustedUgcSidecar {
   Future<UgcNodeToolchain> ensureDependencies() async {
     final toolchain = await UgcNodeToolchain.resolve();
     final nodeModules = Directory(p.join(directory.path, 'node_modules'));
-    final stamp = File(p.join(nodeModules.path, '.robotopia-lock-sha256'));
+    final stamp = File(p.join(nodeModules.path, '.topiaforge-lock-sha256'));
     if (_hasCurrentDependencyStamp(nodeModules, stamp, lockDigest)) {
       return toolchain;
     }
@@ -160,7 +160,7 @@ String _resolveNpmCli(String node, String locatedNpm) {
   try {
     candidates.add(File(locatedNpm).resolveSymbolicLinksSync());
   } on FileSystemException {
-    // Derived candidates below cover Windows npm.cmd and broken shims.
+    // Derived candidates below cover Windows npm.cmd and broken command wrappers.
   }
   for (final base in {p.dirname(node), p.dirname(locatedNpm)}) {
     candidates.addAll([

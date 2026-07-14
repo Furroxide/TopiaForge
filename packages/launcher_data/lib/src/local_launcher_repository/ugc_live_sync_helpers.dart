@@ -34,7 +34,7 @@ extension _UgcLiveSyncHelpers on LocalLauncherRepository {
     final configPath = await _deployUgcLiveSyncConfig(install, cleanupSettings);
     final commandFile = _ugcCommandFile(install);
     await _writeJsonFileAtomic(commandFile, {
-      'schemaVersion': 1,
+      'schemaVersion': 2,
       'command': 'stop',
       'cleanup': true,
       'createdUtc': DateTime.now().toUtc().toIso8601String(),
@@ -85,9 +85,15 @@ extension _UgcLiveSyncHelpers on LocalLauncherRepository {
     if (decoded is! Map) {
       throw const FormatException('UGC live-sync status must be an object.');
     }
-    return UgcLiveSyncStatusSnapshot.fromJson(
+    final snapshot = UgcLiveSyncStatusSnapshot.fromJson(
       decoded.map((key, value) => MapEntry(key.toString(), value)),
     );
+    if (snapshot.schemaVersion != 2) {
+      throw const FormatException(
+        'UGC live-sync status must use schemaVersion 2.',
+      );
+    }
+    return snapshot;
   }
 
   Future<UgcSceneInspectionResult> _inspectWatchFolderScenes(
@@ -197,16 +203,6 @@ extension _UgcLiveSyncHelpers on LocalLauncherRepository {
     }
   }
 
-  Future<List<UgcSceneRef>> _listWatchFolderScenes(String watchFolder) async {
-    final result = await _inspectWatchFolderScenes(watchFolder);
-    if (result.hasBlockingIssues) {
-      throw FormatException(
-        result.issues.firstWhere((issue) => issue.isBlocking).message,
-      );
-    }
-    return result.scenes;
-  }
-
   Future<Uint8List> _readStableUgcSnapshot(
     _UgcSnapshotCandidate selected,
   ) async {
@@ -228,15 +224,19 @@ extension _UgcLiveSyncHelpers on LocalLauncherRepository {
     return Uint8List.fromList(second);
   }
 
-  File _ugcConfigFile(GameInstall install) =>
-      File(p.join(_managerConfig(install).path, 'robotopia.ugc.livesync.json'));
+  File _ugcConfigFile(GameInstall install) => File(
+    p.join(_managerConfig(install).path, 'topiaforge.ugc.livesync.json'),
+  );
 
   File _ugcStatusFile(GameInstall install) => File(
-    p.join(_managerConfig(install).path, 'robotopia.ugc.livesync.status.json'),
+    p.join(_managerConfig(install).path, 'topiaforge.ugc.livesync.status.json'),
   );
 
   File _ugcCommandFile(GameInstall install) => File(
-    p.join(_managerConfig(install).path, 'robotopia.ugc.livesync.command.json'),
+    p.join(
+      _managerConfig(install).path,
+      'topiaforge.ugc.livesync.command.json',
+    ),
   );
 }
 

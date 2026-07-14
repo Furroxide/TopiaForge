@@ -3,7 +3,7 @@
 Status: engineering disclosure for the initial-release candidate. This document does **not** replace an approved
 privacy notice, backend authorization, or platform microphone-consent text. Those approvals remain release blockers.
 
-Robotopia mods are trusted in-process C# code. Manifest capabilities explain potentially sensitive behavior to a
+TopiaForge mods are trusted in-process C# code. Manifest capabilities explain potentially sensitive behavior to a
 player; they do not sandbox, mediate, or grant that behavior. Install only packages whose author and source you trust.
 
 ## Canonical capabilities
@@ -16,7 +16,7 @@ player; they do not sandbox, mediate, or grant that behavior. Install only packa
 | `microphone` | Captures audio from a local microphone after an explicit player action. |
 | `speech-to-text` | Sends captured audio to a remote transcription service. |
 
-`ai` is a deprecated compatibility alias for `remote-ai`. New manifests must use the canonical labels. These labels
+`remote-ai` is the only canonical remote-inference label. These labels
 are deliberately descriptive: a package that has one label is not technically prevented from exercising another
 capability, because mods run with the game process's authority.
 
@@ -52,7 +52,7 @@ uses RobotKit conversations declares `network`, `remote-ai`, and `player-token`;
 Consumers should still repeat the capabilities they expose to players so the direct behavioral surface is clear.
 
 Publication validation treats unknown or deprecated capability labels as findings. Official publication has a
-zero-finding bar, while ordinary local validation can retain compatibility warnings for legacy packages.
+zero-finding bar, while ordinary local validation may retain non-publishing compatibility warnings.
 
 ## Acceptance matrix
 

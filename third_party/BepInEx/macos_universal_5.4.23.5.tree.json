@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "directories": ["BepInEx", "BepInEx/core"],
   "files": {
     ".doorstop_version": { "size": 5, "mode": "0644", "sha256": "75a2f501000d4fe28f74bc7ee66dae5581959d28b6c44f0c1b0c05cd5ba261e6" },

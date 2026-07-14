@@ -4,38 +4,53 @@ import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 void main() {
-  test('explicit Robotopia data root overrides platform defaults', () {
+  test('explicit TopiaForge data root overrides platform defaults', () {
     expect(
-      resolveRobotopiaDataRoot(
+      resolveTopiaForgeDataRoot(
         environment: const {
-          'ROBOTOPIA_DATA_ROOT': '  /portable/robotopia-data  ',
+          'TOPIAFORGE_DATA_ROOT': '  /portable/topiaforge-data  ',
           'APPDATA': r'C:\Users\test\AppData\Roaming',
           'HOME': '/home/test',
         },
         isWindows: true,
       ),
-      '/portable/robotopia-data',
+      '/portable/topiaforge-data',
     );
   });
 
   test('launcher and developer defaults share the Windows data root', () {
     expect(
-      resolveRobotopiaDataRoot(
+      resolveTopiaForgeDataRoot(
         environment: const {'APPDATA': r'C:\Users\test\AppData\Roaming'},
         isWindows: true,
       ),
-      p.join(r'C:\Users\test\AppData\Roaming', 'RobotopiaLauncher'),
+      p.join(r'C:\Users\test\AppData\Roaming', 'TopiaForgeLauncher'),
+    );
+  });
+
+  test('retired environment variables and data roots are ignored', () {
+    expect(
+      resolveTopiaForgeDataRoot(
+        environment: const {
+          'ROBOTO'
+                  'PIA_DATA_ROOT':
+              '/retired/data',
+          'HOME': '/home/test',
+        },
+        isWindows: false,
+      ),
+      p.join('/home/test', '.topiaforge_launcher'),
     );
   });
 
   test('falls back to the current directory without a home directory', () {
     expect(
-      resolveRobotopiaDataRoot(
+      resolveTopiaForgeDataRoot(
         environment: const {},
         isWindows: false,
         currentDirectory: '/workspace',
       ),
-      p.join('/workspace', '.robotopia_launcher'),
+      p.join('/workspace', '.topiaforge_launcher'),
     );
   });
 

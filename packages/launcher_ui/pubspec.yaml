@@ -1,5 +1,5 @@
 name: launcher_ui
-description: Shared Flutter widgets and theme for the QuantumWorks launcher.
+description: Shared Flutter widgets and theme for the TopiaForge launcher.
 version: 0.1.1
 publish_to: none
 homepage:
@@ -27,9 +27,9 @@ flutter:
   assets:
     - assets/brand/baby-stitch.webp
     - assets/brand/robot.webp
-    - assets/brand/quantumworks-city-header.webp
-    - assets/brand/quantumworks-logo.svg
-    - assets/brand/quantumworks-mark.svg
+    - assets/brand/topiaforge-city-header.webp
+    - assets/brand/topiaforge-logo.svg
+    - assets/brand/topiaforge-mark.svg
     - assets/brand/sheriff.webp
 
   # For details regarding assets in packages, see
@@ -39,10 +39,10 @@ flutter:
   # https://flutter.dev/to/resolution-aware-images
 
   fonts:
-    - family: QuantumWorksQuicksand
+    - family: TopiaForgeQuicksand
       fonts:
         - asset: fonts/Quicksand-VariableFont_wght.ttf
-    - family: QuantumWorksAudiowide
+    - family: TopiaForgeAudiowide
       fonts:
         - asset: fonts/Audiowide-Regular.ttf
 

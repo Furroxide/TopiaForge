@@ -10,7 +10,7 @@ void main() {
   late Directory root;
 
   setUp(() {
-    root = Directory.systemTemp.createTempSync('robotopia-dotnet-sdk-');
+    root = Directory.systemTemp.createTempSync('topiaforge-dotnet-sdk-');
   });
 
   tearDown(() {
@@ -64,7 +64,7 @@ void main() {
             .having(
               (error) => error.message,
               'message',
-              contains('ROBOTOPIA_DOTNET_PATH'),
+              contains('TOPIAFORGE_DOTNET_PATH'),
             ),
       ),
     );

@@ -1,10 +1,10 @@
 {
   "id": "ui",
   "label": "UI / HUD mod",
-  "description": "QwUi window toggled with a hotkey (modeled on the UI Gallery mod).",
+  "description": "TopiaForgeUi window toggled with a hotkey (modeled on the UI Gallery mod).",
   "manifestDefaults": {
     "category": "DevTool",
-    "description": "QwUi window mod for Robotopia.",
+    "description": "TopiaForgeUi window mod for Robotopia.",
     "tags": ["ui"],
     "permissions": ["hud", "input"]
   }

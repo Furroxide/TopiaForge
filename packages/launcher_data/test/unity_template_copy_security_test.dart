@@ -13,7 +13,7 @@ void main() {
       addTearDown(() => root.deleteSync(recursive: true));
       final repo = Directory(p.join(root.path, 'repo'))..createSync();
       final template = Directory(
-        p.join(repo.path, 'templates', 'Robotopia.UnityWorldTemplate'),
+        p.join(repo.path, 'templates', 'TopiaForge.UnityWorldTemplate'),
       )..createSync(recursive: true);
       File(
         p.join(template.path, 'Packages', 'vpm-manifest.json'),
@@ -44,8 +44,9 @@ void main() {
       );
       expect(
         root.listSync().where(
-          (entity) =>
-              p.basename(entity.path).startsWith('Broken_World.robotopia-new-'),
+          (entity) => p
+              .basename(entity.path)
+              .startsWith('Broken_World.topiaforge-new-'),
         ),
         isEmpty,
       );

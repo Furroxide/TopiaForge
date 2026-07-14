@@ -1,7 +1,7 @@
-# Robotopia launcher data
+# TopiaForge launcher data
 
 Filesystem, archive, process, HTTP, persistence, installation, diagnostics, and
-developer-tool adapters for the Robotopia desktop launcher. The implementation
+developer-tool adapters for the TopiaForge desktop launcher. The implementation
 fulfils repository interfaces from `launcher_domain`; UI and Bloc code should
 not reproduce these operations.
 

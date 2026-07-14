@@ -6,10 +6,10 @@ native robot does (native body, humanoid animation, head/look-at, and **native l
 lean on the game's own systems for everything you don't change: movement is the game's own pathing and
 animation, death is the game's own ragdoll/cleanup, and (optionally) the brain is the game's own LLM agent.
 
-The capability is published by the `Robotopia.RobotKit` framework mod as the `IRobotAgentService` SDK service.
+The capability is published by the `TopiaForge.RobotKit` framework mod as the `IRobotAgentService` SDK service.
 It exists so that "spawn enemies/companions/NPCs that walk the world" mods do not each have to re-derive the
 brittle, decompile-driven GameCode reflection it takes to bring a robot up, take over its decisions, and route
-it. The `Robotopia.Zombies` gamemode is built entirely on this service.
+it. The `TopiaForge.Zombies` gamemode is built entirely on this service.
 
 ## What "lean on standard agents" means
 
@@ -27,7 +27,7 @@ A spawned robot is a **real game robot**, not a hand-driven puppet:
 ## Architecture
 
 ```
-your gamemode mod                       Robotopia.RobotKit (framework mod)             GameCode.dll
+your gamemode mod                       TopiaForge.RobotKit (framework mod)             GameCode.dll
 ─────────────────                       ──────────────────────────────────             ────────────
 context.GetService<IRobotAgentService>()
 Spawn(request) ───────────────────────► resolve robot prefab ────────────────────────► PooledSpawner / loaded assets
@@ -64,7 +64,7 @@ automatically on scene change.
 
 ## SDK surface
 
-Defined Unity-free in `src/Robotopia.Mods.Abstractions/RobotControl.cs` (positions use `Vec3`, colours use
+Defined Unity-free in `src/TopiaForge.Mods.Abstractions/RobotControl.cs` (positions use `Vec3`, colours use
 `RobotColor`; the spawned object is exposed as `object`, a `UnityEngine.GameObject`).
 
 ```csharp
@@ -285,7 +285,7 @@ Design rules the service enforces / you should follow:
   (amortize one call over the group). Hardening (single-flight cap, hard ~3s timeout, length-clamped values) lives
   in the service so a slow/expensive backend can never stall a frame or run up unbounded cost.
 
-Declare a dependency on `robotopia.robotkit >= 0.5.0` (the version that adds this service).
+Declare a dependency on `io.github.furroxide.topiaforge.robotkit >= 0.5.0` (the version that adds this service).
 
 ## Robot conversations (`IRobotConversationService`)
 
@@ -376,7 +376,7 @@ other value an accepted task. The moment the robot picks a non-`CHAT` decision, 
 executes — pairing the decision with a closed-set `target` extra field (whose options are exactly the registered
 objective-target names, plus `NONE`) gives the full "what to do and to what" program in one turn. Gate it
 deterministically: an action whose target is `NONE`/unknown must degrade back to chat, never program the robot
-against a place the model invented. `Robotopia.Sandbox`'s PROGRAM verb is the reference consumer.
+against a place the model invented. `TopiaForge.Sandbox`'s PROGRAM verb is the reference consumer.
 
 ## Player dialogue input — text + voice (`IPlayerDialogueInputService`)
 
@@ -401,13 +401,13 @@ public interface IVoiceCapture                       // pollable, driven by the 
 }
 ```
 
-For the **typed** path use the shared `Robotopia.Mods.TextInputBuffer` (a Unity-free `Input.inputString`
+For the **typed** path use the shared `TopiaForge.Mods.TextInputBuffer` (a Unity-free `Input.inputString`
 accumulator with backspace/submit/clamp) so every mod buffers text the same way. Voice degrades gracefully: no
 mic / no backend → `IsVoiceAvailable == false` and you fall back to text. Mirror the base game's UX — **Tab**
 toggles text/voice, robot replies are shown as on-screen subtitles (no TTS), and recording uses a held key or an
 on-screen button.
 
-`Robotopia.Zombies`' **JACK IN** verb (v0.8.0) is the reference consumer for all three services: aim at a robot,
+`TopiaForge.Zombies`' **JACK IN** verb (v0.8.0) is the reference consumer for all three services: aim at a robot,
 open a channel (the horde freezes), type or speak, and its brain decides whether to convert/stand-down/flee — with
 the deterministic `OverrideDecision` "robot psychology" only seeding the persuasion gate, not authoring the outcome.
 
@@ -486,14 +486,14 @@ delivers), the messenger stops in the terminal `Delivered` state, and `ProgramDe
   the Sandbox filters this out) applies the payload to itself; its courier handle then reads `Cancelled` rather
   than `Delivered`, since the delivery replaced it.
 
-`Robotopia.Sandbox` (v0.3.1) is the reference consumer: every spawned prop/robot registers itself as a target, the
+`TopiaForge.Sandbox` (v0.3.1) is the reference consumer: every spawned prop/robot registers itself as a target, the
 PROGRAM verb turns an LLM conversation turn into `SetObjective` (REPROGRAM decisions become couriers), and its
 ambience layer subscribes to `ProgramDelivered` for hand-over toasts and emotes.
 
 ## Example
 
 ```csharp
-public sealed class MyMod : IRobotopiaMod
+public sealed class MyMod : ITopiaForgeMod
 {
     private IModContext? context;
     private IRobotAgentService? robots;
@@ -534,13 +534,13 @@ public sealed class MyMod : IRobotopiaMod
 Manifest: declare the dependency so RobotKit loads first.
 
 ```json
-"vpmDependencies": { "robotopia.robotkit": ">=0.2.0" },
-"loadAfter": ["robotopia.robotkit"]
+"vpmDependencies": { "io.github.furroxide.topiaforge.robotkit": ">=0.2.0" },
+"loadAfter": ["io.github.furroxide.topiaforge.robotkit"]
 ```
 
 ## Reference consumer
 
-`mods/Robotopia.Zombies` is the canonical consumer. `ZombiesController` resolves `IRobotAgentService` and
+`mods/TopiaForge.Zombies` is the canonical consumer. `ZombiesController` resolves `IRobotAgentService` and
 `Spawn`s each wave enemy as a tinted, dormant-brain robot; `ZombieEnemyController` (attached to the spawned
 robot) only does the Zombies-specific work — `Chase` the player, attack in range, mod-tracked health with hit
 flashes, and a native ragdoll death via `Kill`. All movement, collision, path-finding, grounding, and animation
@@ -548,11 +548,11 @@ are the game's own.
 
 ## End-to-end verification
 
-Build and deploy (`dotnet build mods/Robotopia.RobotKit/...`, then `robotopia dev-install`), launch the game,
+Build and deploy (`dotnet build mods/TopiaForge.RobotKit/...`, then `topiaforge dev-install`), launch the game,
 and start a gamemode that spawns robots (e.g. pick **Zombies** from the menu). Confirm in
-`…/RobotopiaModManager/logs/manager.log`:
+`…/TopiaForge/logs/manager.log`:
 
-- `Robotopia RobotKit loaded; IRobotAgentService + IRobotBrainQueryService registered (poll IsAvailable once a level is loaded).` (on boot)
+- `TopiaForge RobotKit loaded; IRobotAgentService + IRobotBrainQueryService registered (poll IsAvailable once a level is loaded).` (on boot)
 - `RobotKit: spawning standard agents — native locomotion via WalkSession.` (first spawn)
 - `RobotKit navigation: native pathfinder available.` (first spawn, when a pathfinder is present)
 - `RobotKit: brain queries enabled — robot decisions can consult the RoboAPI backend (llama-3.3-70b).` (first live brain query)

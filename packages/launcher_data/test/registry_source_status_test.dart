@@ -15,7 +15,7 @@ void main() {
   late Directory repoRoot;
 
   setUp(() async {
-    temp = await Directory.systemTemp.createTemp('robotopia-sources-test-');
+    temp = await Directory.systemTemp.createTemp('topiaforge-sources-test-');
     dataRoot = Directory(p.join(temp.path, 'data'))..createSync();
     repoRoot = Directory(p.join(temp.path, 'repo'))..createSync();
     Directory(p.join(repoRoot.path, 'dist')).createSync();
@@ -35,16 +35,90 @@ void main() {
     );
   }
 
-  void writeSources(List<Map<String, Object?>> sources) {
+  void writeSources(
+    List<Map<String, Object?>> sources, {
+    int? formatVersion = 2,
+  }) {
+    final payload = <String, Object?>{'sources': sources};
+    if (formatVersion != null) {
+      payload['formatVersion'] = formatVersion;
+    }
     File(
       p.join(dataRoot.path, 'package_sources.json'),
-    ).writeAsStringSync(jsonEncode({'sources': sources}));
+    ).writeAsStringSync(jsonEncode(payload));
   }
+
+  for (final formatVersion in <int?>[null, 1]) {
+    final label = formatVersion == null ? 'missing' : 'version 1';
+    test('package source store rejects $label formatVersion', () async {
+      writeSources([
+        {
+          'id':
+              'robo'
+              'topia.custom',
+          'name': 'Retired',
+          'url': temp.path,
+        },
+      ], formatVersion: formatVersion);
+
+      await expectLater(repository().loadSnapshot(), throwsFormatException);
+    });
+  }
+
+  test('package source store rejects retired ids at formatVersion 2', () async {
+    writeSources([
+      {
+        'id':
+            'robo'
+            'topia.custom',
+        'name': 'Retired',
+        'url': temp.path,
+      },
+    ]);
+
+    await expectLater(repository().loadSnapshot(), throwsStateError);
+    await expectLater(
+      repository().savePackageSources([
+        PackageSource(
+          id:
+              'robo'
+              'topia.custom',
+          name: 'Retired',
+          url: temp.path,
+        ),
+      ]),
+      throwsStateError,
+    );
+  });
+
+  test('package source store round-trips formatVersion 2', () async {
+    final sources = [
+      PackageSource.fromJson(_localSourceJson(repoRoot)),
+      PackageSource.fromJson(_officialDisabledJson()),
+      PackageSource(id: 'custom', name: 'Custom', url: temp.path),
+    ];
+    await repository().savePackageSources(sources);
+
+    final stored =
+        jsonDecode(
+              File(
+                p.join(dataRoot.path, 'package_sources.json'),
+              ).readAsStringSync(),
+            )
+            as Map<String, Object?>;
+    final snapshot = await repository().loadSnapshot();
+
+    expect(stored['formatVersion'], 2);
+    expect(
+      snapshot.packageSources.map((source) => source.id),
+      contains('custom'),
+    );
+  });
 
   test('built-in sources are reconciled and keep the persisted flag', () async {
     writeSources([
       {
-        'id': 'robotopia.local',
+        'id': 'io.github.furroxide.topiaforge.local',
         'name': 'Stale Name',
         'url': 'file:///somewhere/stale',
         'enabled': true,
@@ -61,7 +135,7 @@ void main() {
 
     final snapshot = await repository().loadSnapshot();
     final local = snapshot.packageSources.singleWhere(
-      (source) => source.id == 'robotopia.local',
+      (source) => source.id == 'io.github.furroxide.topiaforge.local',
     );
     final official = snapshot.packageSources.singleWhere(
       (source) => source.id == ModRegistryFormat.officialSourceId,
@@ -74,24 +148,30 @@ void main() {
     expect(official.builtIn, isTrue);
   });
 
-  test('official registry is appended to pre-upgrade source files', () async {
-    writeSources([
-      {
-        'id': 'robotopia.local',
-        'name': 'Bundled Local Packages',
-        'url': Uri.file(p.join(repoRoot.path, 'dist')).toString(),
-        'enabled': true,
-        'builtIn': true,
-      },
-    ]);
+  test(
+    'official registry is restored when required built-ins are missing',
+    () async {
+      writeSources([
+        {
+          'id': 'io.github.furroxide.topiaforge.local',
+          'name': 'Bundled Local Packages',
+          'url': Uri.file(p.join(repoRoot.path, 'dist')).toString(),
+          'enabled': true,
+          'builtIn': true,
+        },
+      ]);
 
-    final snapshot = await repository().loadSnapshot();
+      final snapshot = await repository().loadSnapshot();
 
-    expect(
-      snapshot.packageSources.map((source) => source.id),
-      containsAll(['robotopia.local', ModRegistryFormat.officialSourceId]),
-    );
-  });
+      expect(
+        snapshot.packageSources.map((source) => source.id),
+        containsAll([
+          'io.github.furroxide.topiaforge.local',
+          ModRegistryFormat.officialSourceId,
+        ]),
+      );
+    },
+  );
 
   test('registry mods dedupe to the highest version across sources', () async {
     _writePackage(
@@ -135,7 +215,7 @@ void main() {
       (item) => item.manifest.id == 'cool.mod',
     );
 
-    expect(mod.sourceId, 'robotopia.local');
+    expect(mod.sourceId, 'io.github.furroxide.topiaforge.local');
   });
 
   test('a dead document source degrades without failing the load', () async {
@@ -162,7 +242,7 @@ void main() {
       reason: 'healthy sources still load when one source is dead',
     );
     final healthy = snapshot.sourceStatuses.singleWhere(
-      (status) => status.sourceId == 'robotopia.local',
+      (status) => status.sourceId == 'io.github.furroxide.topiaforge.local',
     );
     final dead = snapshot.sourceStatuses.singleWhere(
       (status) => status.sourceId == 'dead',
@@ -182,17 +262,18 @@ void main() {
     final unsafe = File(p.join(temp.path, 'unsafe-source.json'))
       ..writeAsStringSync(
         jsonEncode({
+          'formatVersion': ModRegistryFormat.indexFormatVersion,
           'mods': [
             {
               'manifest': {
-                'schemaVersion': 2,
+                'schemaVersion': 3,
                 'name': 'unsafe.mod',
                 'displayName': 'Unsafe',
                 'version': '1.0.0',
                 'entryAssembly': 'Unsafe.dll',
                 'entryType': 'Unsafe.Mod',
               },
-              'downloadUrl': 'https://packages.example/unsafe.robotopiamod',
+              'downloadUrl': 'https://packages.example/unsafe.topiaforgemod',
             },
           ],
         }),
@@ -212,6 +293,32 @@ void main() {
     expect(status.ok, isFalse);
     expect(status.message, contains('SHA-256'));
   });
+
+  for (final formatVersion in <int?>[null, 1]) {
+    final label = formatVersion == null ? 'missing' : 'version 1';
+    test('flat registry rejects $label formatVersion', () async {
+      final sourceId = 'retired-${formatVersion ?? 'missing'}';
+      final index = File(p.join(temp.path, '$sourceId.json'));
+      final payload = <String, Object?>{'mods': <Object?>[]};
+      if (formatVersion != null) {
+        payload['formatVersion'] = formatVersion;
+      }
+      index.writeAsStringSync(jsonEncode(payload));
+      writeSources([
+        _localSourceJson(repoRoot),
+        _officialDisabledJson(),
+        {'id': sourceId, 'name': 'Retired', 'url': index.path},
+      ]);
+
+      final snapshot = await repository().loadSnapshot();
+      final status = snapshot.sourceStatuses.singleWhere(
+        (item) => item.sourceId == sourceId,
+      );
+
+      expect(status.ok, isFalse);
+      expect(status.message, contains('formatVersion 2'));
+    });
+  }
 
   test('oversized source documents are rejected before decoding', () async {
     final oversized = File(p.join(temp.path, 'oversized-source.json'))
@@ -233,7 +340,7 @@ void main() {
 }
 
 Map<String, Object?> _localSourceJson(Directory repoRoot) => {
-  'id': 'robotopia.local',
+  'id': 'io.github.furroxide.topiaforge.local',
   'name': 'Bundled Local Packages',
   'url': Uri.file(p.join(repoRoot.path, 'dist')).toString(),
   'enabled': true,
@@ -258,9 +365,9 @@ void _writePackage(
   final archive = Archive()
     ..addFile(
       ArchiveFile.string(
-        'robotopia.mod.json',
+        'topiaforge.mod.json',
         jsonEncode({
-          'schemaVersion': 2,
+          'schemaVersion': 3,
           'name': id,
           'displayName': id,
           'version': version,
@@ -272,6 +379,6 @@ void _writePackage(
     )
     ..addFile(ArchiveFile.string('Mod.dll', 'dll'));
   File(
-    p.join(directory.path, '$id-$version.robotopiamod'),
+    p.join(directory.path, '$id-$version.topiaforgemod'),
   ).writeAsBytesSync(ZipEncoder().encode(archive));
 }

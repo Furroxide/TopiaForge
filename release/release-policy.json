@@ -1,6 +1,6 @@
 {
-  "$schema": "../schemas/robotopia.release-policy.schema.json",
-  "schemaVersion": 1,
+  "$schema": "../schemas/topiaforge.release-policy.schema.json",
+  "schemaVersion": 2,
   "toolchains": {
     "dotnetSdk": "10.0.301",
     "dotnetRuntime": "10.0.9",
@@ -29,9 +29,9 @@
   },
   "artifactPolicy": {
     "platformArchives": [
-      "QuantumWorks-linux-x64.zip",
-      "QuantumWorks-macos-universal.zip",
-      "QuantumWorks-windows-x64.zip"
+      "TopiaForge-linux-x64.zip",
+      "TopiaForge-macos-universal.zip",
+      "TopiaForge-windows-x64.zip"
     ],
     "generatedMetadata": [
       "release-bom.json",

@@ -5,14 +5,12 @@ typedef UnityEditorVersionProbe = Future<String> Function(String executable);
 typedef UnityEditorLauncher =
     Future<void> Function(String executable, List<String> arguments);
 
-/// VCC-style multi-project registry + Unity editor detection. The registry (`developer_projects.json` at the
-/// launcher data root) holds only metadata + a path; each project's own files stay the source of truth. Unity
-/// detection is detect-only — the launcher never installs Unity.
+/// Multi-project registry plus detect-only Unity editor discovery. Project
+/// files remain the source of truth; the launcher never installs Unity.
 extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
   File get _projectsFile =>
       File(p.join(_dataRoot.path, 'developer_projects.json'));
 
-  // Canonical key for dedupe/lookup (lowercases the drive + normalizes separators on Windows).
   String _canonicalKey(String path) => p.canonicalize(path);
 
   Future<List<RegisteredProject>> _readRegistry() async {
@@ -63,10 +61,13 @@ extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
     final kind = _detectProjectKind(dir);
     if (kind == ProjectKind.unknown) {
       throw StateError(
-        'Not a recognized project: $normalized (expected robotopia.project.json, '
+        'Not a recognized project: $normalized (expected topiaforge.project.json, '
         'Packages/vpm-manifest.json, or package.json).',
       );
     }
+    final projectName = kind == ProjectKind.modCSharp
+        ? (await _readProject(normalized)).name
+        : _readProjectName(dir, kind);
 
     final projects = await _readRegistry();
     final key = _canonicalKey(normalized);
@@ -78,7 +79,7 @@ extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
     projects.add(
       RegisteredProject(
         path: normalized,
-        name: _readProjectName(dir, kind),
+        name: projectName,
         kind: kind,
         unityVersion: _readUnityVersion(dir),
         lastOpenedUtc: lastOpened,
@@ -88,10 +89,8 @@ extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
     return projects;
   }
 
-  // Instantiates a new Unity world project from templates/Robotopia.UnityWorldTemplate: copies the template,
-  // installs the UGC companion package into Packages/, stamps the name, and registers it. Mirrors VCC's
-  // copy-template-then-resolve flow. The embedded package is a read-only recovery bridge; archive/network
-  // restore remains behind this repository's hardened VPM implementation.
+  // Creates a Unity world project from the bundled template and companion;
+  // archive/network restoration stays behind the hardened VPM implementation.
   Future<List<RegisteredProject>> _createUnityProject({
     required String parentDirectory,
     required String name,
@@ -103,7 +102,11 @@ extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
       );
     }
     final templateDir = Directory(
-      p.join(_repositoryRoot.path, 'templates', 'Robotopia.UnityWorldTemplate'),
+      p.join(
+        _repositoryRoot.path,
+        'templates',
+        'TopiaForge.UnityWorldTemplate',
+      ),
     );
     if (FileSystemEntity.typeSync(templateDir.path, followLinks: false) !=
         FileSystemEntityType.directory) {
@@ -125,7 +128,7 @@ extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
       throw StateError('Project already exists: ${root.path}');
     }
     final staging = Directory(
-      '${root.path}.robotopia-new-$pid-'
+      '${root.path}.topiaforge-new-$pid-'
       '${DateTime.now().microsecondsSinceEpoch}',
     );
     var installed = false;
@@ -149,7 +152,7 @@ extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
             ),
           );
           if (lines.isNotEmpty && lines.first.startsWith('# ')) {
-            lines[0] = '# $name — Robotopia UGC World';
+            lines[0] = '# $name — TopiaForge UGC World';
             _writeDeveloperTextAtomic(readme, '${lines.join('\n')}\n');
           }
         } on Object {
@@ -202,7 +205,7 @@ extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
   }
 
   ProjectKind _detectProjectKind(Directory dir) {
-    if (File(p.join(dir.path, 'robotopia.project.json')).existsSync()) {
+    if (File(p.join(dir.path, 'topiaforge.project.json')).existsSync()) {
       return ProjectKind.modCSharp;
     }
     if (File(p.join(dir.path, 'Packages', 'vpm-manifest.json')).existsSync()) {
@@ -222,14 +225,14 @@ extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
   String _readProjectName(Directory dir, ProjectKind kind) {
     try {
       if (kind == ProjectKind.modCSharp) {
-        final file = File(p.join(dir.path, 'robotopia.project.json'));
+        final file = File(p.join(dir.path, 'topiaforge.project.json'));
         if (file.existsSync()) {
           final decoded = jsonDecode(
             utf8.decode(
               _readDeveloperFileBoundedSync(
                 file,
                 maxBytes: _maxDeveloperManifestBytes,
-                label: 'robotopia.project.json',
+                label: 'topiaforge.project.json',
               ),
             ),
           );
@@ -265,7 +268,7 @@ extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
   }
 
   // Reads the project's required Unity version from ProjectSettings/ProjectVersion.txt.
-  // UPM package.json `unity` is package API metadata, not a Robotopia editor pin.
+  // UPM package.json `unity` is package API metadata, not a TopiaForge editor pin.
   String _readUnityVersion(Directory dir) {
     final versionFile = File(
       p.join(dir.path, 'ProjectSettings', 'ProjectVersion.txt'),
@@ -447,21 +450,22 @@ extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
     final required = _readUnityVersion(dir);
     if (required.isEmpty) {
       throw StateError(
-        '$normalized is not a Robotopia Unity authoring project: '
+        '$normalized is not a TopiaForge Unity authoring project: '
         'ProjectSettings/ProjectVersion.txt was not found or does not contain m_EditorVersion.',
       );
     }
-    if (required != RobotopiaUnityCompatibility.requiredEditorVersion) {
+    if (required != RobotopiaGameUnityCompatibility.requiredEditorVersion) {
       throw StateError(
-        '$normalized is pinned to Unity $required, but Robotopia authoring '
-        'requires Unity ${RobotopiaUnityCompatibility.requiredEditorDisplay}.',
+        '$normalized is pinned to Unity $required, but TopiaForge authoring '
+        'requires Unity ${RobotopiaGameUnityCompatibility.requiredEditorDisplay}.',
       );
     }
 
     final editors = await _scanUnityEditors();
     UnityEditor? chosen;
     for (final editor in editors) {
-      if (editor.version == RobotopiaUnityCompatibility.requiredEditorVersion) {
+      if (editor.version ==
+          RobotopiaGameUnityCompatibility.requiredEditorVersion) {
         chosen = editor;
         break;
       }
@@ -471,9 +475,9 @@ extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
           ? 'none detected'
           : editors.map((editor) => editor.version).join(', ');
       throw StateError(
-        'Unity ${RobotopiaUnityCompatibility.requiredEditorDisplay} is required '
-        'to open Robotopia Unity projects. Detected editors: $detected. '
-        '${RobotopiaUnityCompatibility.installHint}',
+        'Unity ${RobotopiaGameUnityCompatibility.requiredEditorDisplay} is required '
+        'to open TopiaForge Unity projects. Detected editors: $detected. '
+        '${RobotopiaGameUnityCompatibility.installHint}',
       );
     }
 

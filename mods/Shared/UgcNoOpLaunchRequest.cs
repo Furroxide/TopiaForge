@@ -2,13 +2,13 @@ using System;
 using System.IO;
 using System.Reflection;
 
-namespace Robotopia.Mods.GameBridge
+namespace TopiaForge.Mods.GameBridge
 {
     /// <summary>
     /// Shared clean-room reflection helper: queues the game's <c>UgcPlayLaunchRequest</c> pointed at an empty
     /// temp folder, so a subsequent load of the UGC play scene imports no user content (the scene's bootstrap
     /// still runs and spawns the player — only the content import is neutralized). Source-linked into every
-    /// mod that loads the play scene (Robotopia.Worlds, Robotopia.UgcLiveSync) so the request shape lives in
+    /// mod that loads the play scene (TopiaForge.Worlds, TopiaForge.UgcLiveSync) so the request shape lives in
     /// exactly one place. Unity-free on purpose; degrades silently when the game symbols are missing.
     /// </summary>
     internal static class UgcNoOpLaunchRequest

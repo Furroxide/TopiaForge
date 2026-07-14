@@ -15,7 +15,7 @@ permissions:
 # Pages deployment replaces the complete site. Every caller shares one static
 # lock so two refs cannot publish stale indexes out of order.
 concurrency:
-  group: robotopia-pages-publication
+  group: topiaforge-pages-publication
   cancel-in-progress: false
 
 jobs:
@@ -46,11 +46,11 @@ jobs:
           sdk: "3.11.1"
 
       - name: Restore CLI packages
-        working-directory: apps/robotopia_cli
+        working-directory: apps/topiaforge_cli
         run: dart pub get --enforce-lockfile
 
       - name: Build and validate an official first-party-only site
-        working-directory: apps/robotopia_cli
+        working-directory: apps/topiaforge_cli
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LAUNCHER_UPDATE_BASE_URL: ${{ vars.LAUNCHER_UPDATE_BASE_URL }}
@@ -60,10 +60,10 @@ jobs:
           trap 'rm -rf "$staging_root"' EXIT
           site="$staging_root/site"
 
-          dart run robotopia updates index \
+          dart run topiaforge updates index \
             --repository "$GITHUB_REPOSITORY" \
             --output "$site"
-          dart run robotopia registry index \
+          dart run topiaforge registry index \
             --repository "$GITHUB_REPOSITORY" \
             --changelogs ../../mods \
             --output "$site/registry"
@@ -71,9 +71,9 @@ jobs:
           test -s "$site/manual-releases.json"
           test -s "$site/registry/index.json"
           test ! -e "$site/index.json"
-          jq -e '.formatVersion == 1 and .manualOnly == true' \
+          jq -e '.formatVersion == 2 and .manualOnly == true' \
             "$site/manual-releases.json" >/dev/null
-          jq -e '.formatVersion == 1 and all(.mods[]; .origin == "first-party")' \
+          jq -e '.formatVersion == 2 and all(.mods[]; .origin == "first-party")' \
             "$site/registry/index.json" >/dev/null
           if find "$site" ! -type f ! -type d -print -quit | grep -q .; then
             echo "Pages staging contains a link or special entry." >&2

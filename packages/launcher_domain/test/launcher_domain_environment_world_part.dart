@@ -76,7 +76,7 @@ void _environmentAndWorldModelTests() {
     });
   });
 
-  group('RobotopiaUnityCompatibility', () {
+  group('RobotopiaGameUnityCompatibility', () {
     const releaseEditor = UnityEditor(
       version: '6000.0.23f1',
       path: '/unity/6000.0.23f1',
@@ -92,7 +92,7 @@ void _environmentAndWorldModelTests() {
 
     test('selects the exact release editor regardless of discovery order', () {
       expect(
-        RobotopiaUnityCompatibility.selectEditor(const [
+        RobotopiaGameUnityCompatibility.selectEditor(const [
           newestEditor,
           releaseEditor,
         ]),
@@ -102,7 +102,7 @@ void _environmentAndWorldModelTests() {
 
     test('honors an explicit project editor pin', () {
       expect(
-        RobotopiaUnityCompatibility.selectEditor(const [
+        RobotopiaGameUnityCompatibility.selectEditor(const [
           newestEditor,
           releaseEditor,
           configuredEditor,
@@ -113,7 +113,7 @@ void _environmentAndWorldModelTests() {
 
     test('does not silently fall back to an incompatible editor', () {
       expect(
-        RobotopiaUnityCompatibility.selectEditor(const [newestEditor]),
+        RobotopiaGameUnityCompatibility.selectEditor(const [newestEditor]),
         isNull,
       );
     });
@@ -169,8 +169,8 @@ void _environmentAndWorldModelTests() {
 
     test('round-trips through toJson and back', () {
       const selection = WorldSelection(
-        worldId: 'robotopia.level.city',
-        gamemodeId: 'robotopia.zombies.survival',
+        worldId: 'io.github.furroxide.topiaforge.worlds.level.city',
+        gamemodeId: 'io.github.furroxide.topiaforge.zombies.survival',
         loadMode: WorldSelection.sceneReplacement,
         autoLoadOnStart: true,
       );
@@ -183,23 +183,31 @@ void _environmentAndWorldModelTests() {
       expect(restored.autoLoadOnStart, selection.autoLoadOnStart);
     });
 
-    test('fromJson reads the runtime selected* key aliases', () {
+    test('fromJson ignores runtime-only selected* keys', () {
       final selection = WorldSelection.fromJson({
         'selectedWorldId': 'w',
         'selectedGamemodeId': 'g',
       });
 
-      expect(selection.worldId, 'w');
-      expect(selection.gamemodeId, 'g');
+      expect(selection.worldId, WorldCatalog.openSandboxWorldId);
+      expect(selection.gamemodeId, WorldCatalog.sandboxGamemodeId);
     });
 
-    test('fromJson prefers canonical keys over selected* aliases', () {
-      final selection = WorldSelection.fromJson({
-        'worldId': 'canonical',
-        'selectedWorldId': 'alias',
-      });
-
-      expect(selection.worldId, 'canonical');
+    test('fromJson rejects retired canonical world and gamemode ids', () {
+      for (final selection in [
+        {
+          'worldId':
+              'robo'
+              'topia.world.old',
+        },
+        {
+          'gamemodeId':
+              'robo'
+              'topia.mode.old',
+        },
+      ]) {
+        expect(() => WorldSelection.fromJson(selection), throwsFormatException);
+      }
     });
 
     test('fromJson clamps an unknown loadMode and applies defaults', () {
@@ -222,16 +230,60 @@ void _environmentAndWorldModelTests() {
       expect(catalog.gamemodes.single.id, WorldCatalog.sandboxGamemodeId);
     });
 
+    test('fromJson filters retired gamemode identifiers', () {
+      final catalog = WorldCatalog.fromJson({
+        'worlds': [
+          {'id': 'author.world', 'name': 'World'},
+        ],
+        'gamemodes': [
+          {
+            'id':
+                'robo'
+                'topia.mode.old',
+            'name': 'Old Mode',
+          },
+        ],
+      });
+
+      expect(catalog.worlds.single.id, 'author.world');
+      expect(catalog.gamemodes.single.id, WorldCatalog.sandboxGamemodeId);
+    });
+
+    test('fromJson filters retired world identifiers', () {
+      final catalog = WorldCatalog.fromJson({
+        'worlds': [
+          {
+            'id':
+                'robo'
+                'topia.world.old',
+            'name': 'Old World',
+          },
+        ],
+        'gamemodes': [
+          {'id': 'author.mode', 'name': 'Mode'},
+        ],
+      });
+
+      expect(catalog.worlds.single.id, WorldCatalog.openSandboxWorldId);
+      expect(catalog.gamemodes.single.id, 'author.mode');
+    });
+
     test(
       'fromJson keeps real worlds and backfills only the missing gamemodes',
       () {
         final catalog = WorldCatalog.fromJson({
           'worlds': [
-            {'id': 'robotopia.level.city', 'name': 'City'},
+            {
+              'id': 'io.github.furroxide.topiaforge.worlds.level.city',
+              'name': 'City',
+            },
           ],
         });
 
-        expect(catalog.worlds.single.id, 'robotopia.level.city');
+        expect(
+          catalog.worlds.single.id,
+          'io.github.furroxide.topiaforge.worlds.level.city',
+        );
         expect(catalog.gamemodes.single.id, WorldCatalog.sandboxGamemodeId);
       },
     );
@@ -255,11 +307,11 @@ void _environmentAndWorldModelTests() {
       const catalog = WorldCatalog(
         worlds: [
           WorldDefinition(
-            id: 'robotopia.worlds.open_sandbox',
+            id: 'io.github.furroxide.topiaforge.worlds.open_sandbox',
             name: 'Open Sandbox',
           ),
           WorldDefinition(
-            id: 'robotopia.level.introsewer',
+            id: 'io.github.furroxide.topiaforge.worlds.level.introsewer',
             name: 'The Sewer',
             sceneName: 'IntroSewer',
             firstParty: true,
@@ -267,7 +319,7 @@ void _environmentAndWorldModelTests() {
             supportsAdditiveArena: false,
           ),
           WorldDefinition(
-            id: 'robotopia.first_party.arena',
+            id: 'io.github.furroxide.topiaforge.worlds.first-party.arena',
             name: 'Arena',
             sceneName: 'Arena',
             firstParty: true,
@@ -275,14 +327,17 @@ void _environmentAndWorldModelTests() {
           ),
         ],
         gamemodes: [
-          GamemodeDefinition(id: 'robotopia.worlds.sandbox', name: 'Sandbox'),
+          GamemodeDefinition(
+            id: 'io.github.furroxide.topiaforge.worlds.sandbox',
+            name: 'Sandbox',
+          ),
         ],
       );
 
       test('snaps a scene-replacement-only world off additiveArena', () {
         expect(
           catalog.reconcileLoadMode(
-            'robotopia.level.introsewer',
+            'io.github.furroxide.topiaforge.worlds.level.introsewer',
             WorldSelection.additiveArena,
           ),
           WorldSelection.sceneReplacement,
@@ -292,7 +347,7 @@ void _environmentAndWorldModelTests() {
       test('snaps an additive-only world off sceneReplacement', () {
         expect(
           catalog.reconcileLoadMode(
-            'robotopia.worlds.open_sandbox',
+            'io.github.furroxide.topiaforge.worlds.open_sandbox',
             WorldSelection.sceneReplacement,
           ),
           WorldSelection.additiveArena,
@@ -302,14 +357,14 @@ void _environmentAndWorldModelTests() {
       test('keeps a supported mode for a world that honours both', () {
         expect(
           catalog.reconcileLoadMode(
-            'robotopia.first_party.arena',
+            'io.github.furroxide.topiaforge.worlds.first-party.arena',
             WorldSelection.additiveArena,
           ),
           WorldSelection.additiveArena,
         );
         expect(
           catalog.reconcileLoadMode(
-            'robotopia.first_party.arena',
+            'io.github.furroxide.topiaforge.worlds.first-party.arena',
             WorldSelection.sceneReplacement,
           ),
           WorldSelection.sceneReplacement,
@@ -318,11 +373,17 @@ void _environmentAndWorldModelTests() {
 
       test('normalizes an unknown/bogus mode before clamping', () {
         expect(
-          catalog.reconcileLoadMode('robotopia.level.introsewer', 'bogus'),
+          catalog.reconcileLoadMode(
+            'io.github.furroxide.topiaforge.worlds.level.introsewer',
+            'bogus',
+          ),
           WorldSelection.sceneReplacement,
         );
         expect(
-          catalog.reconcileLoadMode('robotopia.level.unknown', 'bogus'),
+          catalog.reconcileLoadMode(
+            'io.github.furroxide.topiaforge.worlds.level.unknown',
+            'bogus',
+          ),
           WorldSelection.additiveArena,
         );
       });

@@ -1,5 +1,5 @@
 name: launcher_domain
-description: UI-independent QuantumWorks launcher domain models and planning logic.
+description: UI-independent TopiaForge launcher domain models and planning logic.
 version: 0.1.1
 publish_to: none
 

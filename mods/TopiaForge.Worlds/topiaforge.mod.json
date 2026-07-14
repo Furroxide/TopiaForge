@@ -1,0 +1,30 @@
+{
+  "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+  "schemaVersion": 3,
+  "name": "io.github.furroxide.topiaforge.worlds",
+  "displayName": "TopiaForge Worlds",
+  "version": "0.6.0",
+  "author": {
+    "name": "TopiaForge"
+  },
+  "description": "World and gamemode runtime service with a simple open-world sandbox and first-party scene loading support.",
+  "entryAssembly": "TopiaForge.Worlds.dll",
+  "entryType": "TopiaForge.Worlds.WorldsMod",
+  "vpmDependencies": {},
+  "supportedGameVersionRange": "0.0.2227",
+  "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
+  "supportedSdkVersionRange": ">=0.1.3 <0.2.0",
+  "category": "Framework",
+  "tags": [
+    "worlds",
+    "gamemodes",
+    "sdk",
+    "sandbox"
+  ],
+  "license": "NOASSERTION",
+  "permissions": [
+    "scene-management",
+    "world-service",
+    "hud"
+  ]
+}

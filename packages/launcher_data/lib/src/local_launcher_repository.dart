@@ -11,14 +11,15 @@ import 'package:path/path.dart' as p;
 import 'bounded_process.dart';
 import 'data_root.dart';
 import 'process_identity.dart';
+import 'package_contract.dart';
 import 'public_url.dart';
 import 'secure_http.dart';
 import 'ugc_sidecar_runtime.dart';
 import 'safe_zip_archive.dart';
 
 part 'local_launcher_repository/game_layout.dart';
+part 'local_launcher_repository/diagnostics_helpers.dart';
 part 'local_launcher_repository/game_runtime_helpers.dart';
-part 'local_launcher_repository/legacy_diagnostics_helpers.dart';
 part 'local_launcher_repository/manager_state_helpers.dart';
 part 'local_launcher_repository/package_installation_helpers.dart';
 part 'local_launcher_repository/package_helpers.dart';
@@ -44,7 +45,7 @@ class LocalLauncherRepository implements LauncherRepository {
     RuntimeRepairCommitHook? runtimeRepairCommitHook,
     UgcInspectionReadHook? ugcInspectionReadHook,
     GameProcessStarter? gameProcessStarter,
-  }) : _dataRoot = Directory(dataRoot ?? resolveRobotopiaDataRoot()),
+  }) : _dataRoot = Directory(dataRoot ?? resolveTopiaForgeDataRoot()),
        _repositoryRoot = Directory(
          repositoryRoot ?? _findRepositoryRoot(workingDirectory),
        ),
@@ -75,8 +76,8 @@ class LocalLauncherRepository implements LauncherRepository {
   bool _disposed = false;
 
   static const _bepInExVersion = '5.4.23.5';
-  static const _loaderVersion = RobotopiaRuntimeVersions.loaderVersion;
-  static const _sdkVersion = RobotopiaRuntimeVersions.sdkVersion;
+  static const _loaderVersion = TopiaForgeRuntimeVersions.loaderVersion;
+  static const _sdkVersion = TopiaForgeRuntimeVersions.sdkVersion;
   @override
   String get dataRoot => _dataRoot.path;
 
@@ -121,9 +122,6 @@ class LocalLauncherRepository implements LauncherRepository {
       worldCatalog: gameInstall == null
           ? WorldCatalog.fallback()
           : await _loadWorldCatalog(gameInstall, installedMods, registryMods),
-      legacyMods: gameInstall == null
-          ? <LegacyMod>[]
-          : await detectLegacyMods(gameInstall),
       recentLog: gameInstall == null
           ? await _readLauncherLog()
           : await readRecentLog(gameInstall),
@@ -220,7 +218,10 @@ class LocalLauncherRepository implements LauncherRepository {
     _validatePackageSources(normalized);
     await _writeJsonFileAtomic(
       _sourcesFile,
-      {'sources': normalized.map((source) => source.toJson()).toList()},
+      {
+        'formatVersion': _packageSourceFormatVersion,
+        'sources': normalized.map((source) => source.toJson()).toList(),
+      },
       maxBytes: _maxPackageSourcesBytes,
       label: 'Package sources',
     );
@@ -236,7 +237,7 @@ class LocalLauncherRepository implements LauncherRepository {
     }
 
     for (final file in inbox.listSync().whereType<File>().where(
-      (file) => file.path.toLowerCase().endsWith('.robotopiamod'),
+      (file) => file.path.toLowerCase().endsWith('.topiaforgemod'),
     )) {
       try {
         await installPackage(file.path, install);
@@ -313,9 +314,13 @@ class LocalLauncherRepository implements LauncherRepository {
     final normalizedProfiles = profiles.isEmpty
         ? [LauncherProfile.defaultProfile()]
         : profiles;
+    for (final profile in normalizedProfiles) {
+      _requireValidLauncherProfile(profile);
+    }
     await _writeJsonFileAtomic(
       _profilesFile,
       {
+        'schemaVersion': _profileFormatVersion,
         'profiles': normalizedProfiles
             .map((profile) => profile.toJson())
             .toList(),
@@ -331,9 +336,11 @@ class LocalLauncherRepository implements LauncherRepository {
 
   @override
   Future<void> exportProfile(LauncherProfile profile, String path) async {
+    _requireProfileExportPath(path);
+    _requireValidLauncherProfile(profile);
     await _writeJsonFileAtomic(
       File(path),
-      profile.toJson(),
+      {'schemaVersion': _profileFormatVersion, 'profile': profile.toJson()},
       maxBytes: _maxProfilesBytes,
       label: 'Exported launcher profile',
     );
@@ -341,18 +348,27 @@ class LocalLauncherRepository implements LauncherRepository {
 
   @override
   Future<LauncherProfile> importProfile(String path) async {
+    _requireProfileExportPath(path);
     final decoded = await _readJsonFileBounded(
       File(path),
       maxBytes: _maxProfilesBytes,
       label: 'Imported launcher profile',
     );
-    if (decoded is! Map) {
+    if (decoded is! Map || decoded['schemaVersion'] != _profileFormatVersion) {
       throw const FormatException(
-        'Imported launcher profile is not an object.',
+        'Imported launcher profile must use TopiaForge schemaVersion 2.',
       );
     }
-    return LauncherProfile.fromJson(
-      decoded.map((key, value) => MapEntry(key.toString(), value)),
+    final profile = decoded['profile'];
+    if (profile is! Map) {
+      throw const FormatException(
+        'Imported launcher profile is missing profile.',
+      );
+    }
+    return _requireValidLauncherProfile(
+      LauncherProfile.fromJson(
+        profile.map((key, value) => MapEntry(key.toString(), value)),
+      ),
     );
   }
 
@@ -367,8 +383,8 @@ class LocalLauncherRepository implements LauncherRepository {
     }
     final launchInstall = prepared.install!;
     final message = profile.launchSettings.safeMode
-        ? 'Launched Robotopia in safe mode for this run only.'
-        : 'Launched Robotopia.';
+        ? 'Launched TopiaForge in safe mode for this run only.'
+        : 'Launched TopiaForge.';
     return _startGameWithWorldSelection(
       launchInstall,
       profile,
@@ -388,11 +404,11 @@ class LocalLauncherRepository implements LauncherRepository {
     }
     final launchInstall = prepared.install!;
     final message = switch ((stopped, profile.launchSettings.safeMode)) {
-      (true, true) => 'Restarted Robotopia in safe mode for this run only.',
-      (true, false) => 'Restarted Robotopia.',
+      (true, true) => 'Restarted TopiaForge in safe mode for this run only.',
+      (true, false) => 'Restarted TopiaForge.',
       (false, true) =>
-        'Started Robotopia in temporary safe mode. No running process was found.',
-      (false, false) => 'Started Robotopia. No running process was found.',
+        'Started TopiaForge in temporary safe mode. No running process was found.',
+      (false, false) => 'Started TopiaForge. No running process was found.',
     };
     return _startGameWithWorldSelection(
       launchInstall,
@@ -400,10 +416,6 @@ class LocalLauncherRepository implements LauncherRepository {
       message: message,
     );
   }
-
-  @override
-  Future<List<LegacyMod>> detectLegacyMods(GameInstall install) =>
-      _detectLegacyMods(install);
 
   @override
   Future<String> deployUgcLiveSyncConfig(
@@ -447,10 +459,6 @@ class LocalLauncherRepository implements LauncherRepository {
   Future<UgcSceneInspectionResult> inspectWatchFolderScenes(
     String watchFolder,
   ) => _inspectWatchFolderScenes(watchFolder);
-
-  @override
-  Future<List<UgcSceneRef>> listWatchFolderScenes(String watchFolder) =>
-      _listWatchFolderScenes(watchFolder);
 
   @override
   Future<DiagnosticBundle> createDiagnosticBundle(

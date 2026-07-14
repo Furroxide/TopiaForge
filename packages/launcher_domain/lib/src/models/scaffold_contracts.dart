@@ -2,7 +2,7 @@ part of '../models.dart';
 
 /// Deliberately non-publishable defaults used when a scaffold caller has not
 /// supplied the new mod author's identity and license decision.
-abstract final class RobotopiaScaffoldDefaults {
+abstract final class TopiaForgeScaffoldDefaults {
   static const authorName = 'REPLACE_WITH_YOUR_NAME';
   static const license = 'NOASSERTION';
 }
@@ -11,7 +11,7 @@ void _validateScaffoldPlaceholders(
   ModManifest manifest,
   List<LauncherIssue> issues,
 ) {
-  if (manifest.author.name.trim() == RobotopiaScaffoldDefaults.authorName) {
+  if (manifest.author.name.trim() == TopiaForgeScaffoldDefaults.authorName) {
     issues.add(
       LauncherIssue(
         severity: IssueSeverity.warning,
@@ -20,7 +20,7 @@ void _validateScaffoldPlaceholders(
       ),
     );
   }
-  if (manifest.license.trim() == RobotopiaScaffoldDefaults.license) {
+  if (manifest.license.trim() == TopiaForgeScaffoldDefaults.license) {
     issues.add(
       LauncherIssue(
         severity: IssueSeverity.warning,

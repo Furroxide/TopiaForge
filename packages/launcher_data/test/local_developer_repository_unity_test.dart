@@ -15,7 +15,7 @@ void main() {
   late LocalDeveloperRepository repository;
 
   setUp(() {
-    root = Directory.systemTemp.createTempSync('robotopia-developer-unity-');
+    root = Directory.systemTemp.createTempSync('topiaforge-developer-unity-');
     dataRoot = Directory(p.join(root.path, 'data'))..createSync();
     repoRoot = Directory(p.join(root.path, 'repo'))..createSync();
     repository = LocalDeveloperRepository(
@@ -33,9 +33,8 @@ void main() {
   test(
     'createUnityProject copies the template + companion and registers it',
     () async {
-      // Seed a fake Unity world template + companion package under the temp repo root.
       final templateDir = Directory(
-        p.join(repoRoot.path, 'templates', 'Robotopia.UnityWorldTemplate'),
+        p.join(repoRoot.path, 'templates', 'TopiaForge.UnityWorldTemplate'),
       );
       Directory(
         p.join(templateDir.path, 'Packages'),
@@ -43,7 +42,7 @@ void main() {
       File(
         p.join(templateDir.path, 'Packages', 'vpm-manifest.json'),
       ).writeAsStringSync(
-        '{"dependencies":{"com.robotopia.ugc-companion":"^0.1.0"}}',
+        '{"dependencies":{"io.github.furroxide.topiaforge.ugc-companion":"^0.1.0"}}',
       );
       Directory(p.join(templateDir.path, 'ProjectSettings')).createSync();
       File(
@@ -72,11 +71,11 @@ void main() {
           'templates',
           'unity-companion',
           'Packages',
-          'com.robotopia.ugc-companion',
+          'io.github.furroxide.topiaforge.ugc-companion',
         ),
       )..createSync(recursive: true);
       File(p.join(companionDir.path, 'package.json')).writeAsStringSync(
-        '{"name":"com.robotopia.ugc-companion","version":"0.1.0"}',
+        '{"name":"io.github.furroxide.topiaforge.ugc-companion","version":"0.1.0"}',
       );
 
       final projects = await repository.createUnityProject(
@@ -99,7 +98,7 @@ void main() {
           p.join(
             created.path,
             'Packages',
-            'com.robotopia.ugc-companion',
+            'io.github.furroxide.topiaforge.ugc-companion',
             'package.json',
           ),
         ).existsSync(),
@@ -175,7 +174,7 @@ void main() {
       );
       expect(
         packages.listSync().whereType<Directory>().where(
-          (entry) => p.basename(entry.path).startsWith('.robotopia-vpm-'),
+          (entry) => p.basename(entry.path).startsWith('.topiaforge-vpm-'),
         ),
         isEmpty,
       );
@@ -227,7 +226,7 @@ void main() {
       File(p.join(indexDir.path, 'index.json')).writeAsStringSync(
         jsonEncode({
           'name': 'Local',
-          'id': 'robotopia.vpm.local',
+          'id': 'io.github.furroxide.topiaforge.vpm.local',
           'packages': {
             'com.test.pkg': {
               'versions': {
@@ -329,14 +328,19 @@ void main() {
 
   test('packUnityPackages produces deterministic zips and index', () async {
     final packageDir = Directory(
-      p.join(repoRoot.path, 'templates', 'sample', 'com.robotopia.sample'),
+      p.join(
+        repoRoot.path,
+        'templates',
+        'sample',
+        'io.github.furroxide.topiaforge.sample',
+      ),
     )..createSync(recursive: true);
     File(p.join(packageDir.path, 'z.txt')).writeAsStringSync('z');
     File(p.join(packageDir.path, 'a.txt')).writeAsStringSync('a');
     File(p.join(packageDir.path, '.gitkeep')).writeAsStringSync('');
     File(p.join(packageDir.path, 'package.json')).writeAsStringSync(
       jsonEncode({
-        'name': 'com.robotopia.sample',
+        'name': 'io.github.furroxide.topiaforge.sample',
         'version': '1.2.3',
         'displayName': 'Sample',
       }),
@@ -347,7 +351,7 @@ void main() {
     await repository.packUnityPackages(outputDir: firstDir);
     await repository.packUnityPackages(outputDir: secondDir);
 
-    final zipName = 'com.robotopia.sample-1.2.3.zip';
+    final zipName = 'io.github.furroxide.topiaforge.sample-1.2.3.zip';
     final firstZip = File(p.join(firstDir, zipName)).readAsBytesSync();
     final secondZip = File(p.join(secondDir, zipName)).readAsBytesSync();
     expect(firstZip, secondZip);
@@ -363,7 +367,7 @@ void main() {
 
   group('openProjectInUnity', () {
     test(
-      'launches the exact Robotopia editor instead of the newest editor',
+      'launches the exact TopiaForge editor instead of the newest editor',
       () async {
         final project = _createUnityProject(root, 'World', '6000.0.23f1');
         final editor23 = p.join(root.path, 'Hub', '6000.0.23f1', 'Unity.exe');

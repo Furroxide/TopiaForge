@@ -7,8 +7,8 @@
   <PropertyGroup>
     <!-- Release tooling and workflows consume these values rather than
          carrying independent runtime pins. global.json pins the SDK itself. -->
-    <RobotopiaDotNetSdkVersion>10.0.301</RobotopiaDotNetSdkVersion>
-    <RobotopiaDotNetRuntimeVersion>10.0.9</RobotopiaDotNetRuntimeVersion>
+    <TopiaForgeDotNetSdkVersion>10.0.301</TopiaForgeDotNetSdkVersion>
+    <TopiaForgeDotNetRuntimeVersion>10.0.9</TopiaForgeDotNetRuntimeVersion>
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
 

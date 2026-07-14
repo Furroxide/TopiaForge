@@ -1,5 +1,5 @@
 bin/
 obj/
-.robotopia/
-robotopia.dev.props
-*.robotopiamod
+.topiaforge/
+topiaforge.dev.props
+*.topiaforgemod

@@ -17,10 +17,10 @@ if (!(Test-Path -LiteralPath $ZipPath -PathType Leaf)) {
     throw "Release archive was not found: $ZipPath"
 }
 $ZipPath = (Resolve-Path -LiteralPath $ZipPath).Path
-$dart = Resolve-RobotopiaSdkCommand -Tool dart -RepositoryRoot $repo
-$cliApp = Join-Path $repo "apps/robotopia_cli"
+$dart = Resolve-TopiaForgeSdkCommand -Tool dart -RepositoryRoot $repo
+$cliApp = Join-Path $repo "apps/topiaforge_cli"
 $cliArguments = @(
-    "run", (Join-Path "bin" "robotopia.dart"),
+    "run", (Join-Path "bin" "topiaforge.dart"),
     "release", "test-package",
     "--platform", $Platform,
     "--zip", $ZipPath,

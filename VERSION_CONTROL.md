@@ -1,18 +1,18 @@
 # Version Control
 
-Robotopia uses git with Git LFS and Unity Smart Merge support. This keeps the
+TopiaForge uses git with Git LFS and Unity Smart Merge support. This keeps the
 launcher and C# source code normal git content while protecting bundled runtime
 binaries, durable assets, and Unity YAML files from common Unity+git mistakes.
 
 ## What is configured
 
 - Root `.gitignore` keeps generated build output out of source control without
-  hiding source directories such as `apps/robotopia_cli/bin/`.
+  hiding source directories such as `apps/topiaforge_cli/bin/`.
 - Root `.gitattributes` normalizes text, routes durable binary assets through
   Git LFS, and marks Unity YAML files for `UnityYAMLMerge`.
-- `templates/Robotopia.UnityWorldTemplate/.gitignore` and `.gitattributes`
+- `templates/TopiaForge.UnityWorldTemplate/.gitignore` and `.gitattributes`
   carry the same git hygiene into newly created Unity world projects.
-- `templates/Robotopia.UnityWorldTemplate/ProjectSettings` pins Unity asset
+- `templates/TopiaForge.UnityWorldTemplate/ProjectSettings` pins Unity asset
   serialization to Force Text and version control mode to Visible Meta Files.
 - `.githooks/commit-msg` strips AI co-author trailers, and the other hooks
   forward to Git LFS because this repo uses `core.hooksPath=.githooks`.

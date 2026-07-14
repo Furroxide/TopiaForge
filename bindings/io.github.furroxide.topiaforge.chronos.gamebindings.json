@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 2,
+  "modId": "io.github.furroxide.topiaforge.chronos",
+  "modName": "TopiaForge Chronos",
+  "bindings": [
+    {
+      "id": "chronos.playercontroller-type",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "PlayerController",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Critical",
+      "feature": "Chronos: locate player controller",
+      "sourceRef": "mods/TopiaForge.Chronos/PlayerTimeExemption.cs:204"
+    },
+    {
+      "id": "chronos.firstpersoncontroller-type",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "FirstPersonController",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Critical",
+      "feature": "Chronos: locate FPS controller",
+      "sourceRef": "mods/TopiaForge.Chronos/PlayerTimeExemption.cs:205"
+    },
+    {
+      "id": "chronos.findplayer",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "PlayerController",
+      "member": "FindPlayer",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Critical",
+      "feature": "Chronos: find player instance",
+      "sourceRef": "mods/TopiaForge.Chronos/PlayerTimeExemption.cs:212",
+      "parameters": [],
+      "returnType": "PlayerController"
+    },
+    {
+      "id": "chronos.fpscontroller-prop",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "PlayerController",
+      "member": "FPSController",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Critical",
+      "feature": "Chronos: get player FPS controller",
+      "sourceRef": "mods/TopiaForge.Chronos/PlayerTimeExemption.cs:213",
+      "returnType": "FirstPersonController"
+    },
+    {
+      "id": "chronos.groundspeed-field",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "FirstPersonController",
+      "member": "groundSpeed",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Critical",
+      "feature": "Chronos: scale player move speed (ground)",
+      "sourceRef": "mods/TopiaForge.Chronos/PlayerTimeExemption.cs:214",
+      "returnType": "System.Single"
+    },
+    {
+      "id": "chronos.airspeed-field",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "FirstPersonController",
+      "member": "airSpeed",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Degraded",
+      "feature": "Chronos: scale player move speed (air)",
+      "sourceRef": "mods/TopiaForge.Chronos/PlayerTimeExemption.cs:215",
+      "returnType": "System.Single"
+    }
+  ]
+}

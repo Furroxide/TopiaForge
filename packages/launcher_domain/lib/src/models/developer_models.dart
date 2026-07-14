@@ -48,12 +48,10 @@ class DeveloperProject {
       optionalDependencies: _dependencyList(json['optionalDependencies']),
       packageSources: _packageSourceList(json['packageSources']),
       gameVersionRange: VersionRange.parse(
-        (json['supportedGameVersionRange'] as String?) ??
-            (json['gameVersionRange'] as String?),
+        json['supportedGameVersionRange'] as String?,
       ),
       loaderVersionRange: VersionRange.parse(
-        (json['supportedLoaderVersionRange'] as String?) ??
-            (json['loaderVersionRange'] as String?),
+        json['supportedLoaderVersionRange'] as String?,
       ),
       unityCompanion: UnityCompanionSettings.fromJson(
         _objectMap(json['unityCompanion']),
@@ -213,7 +211,8 @@ class DeveloperWorkspace {
 /// Unity projects get "Open in Unity").
 enum ProjectKind { modCSharp, unityWorld, unityPackage, unknown }
 
-/// Parses a persisted/serialized [ProjectKind] name (tolerant of legacy/unknown values).
+/// Parses a persisted/serialized [ProjectKind] name, treating unknown values
+/// as [ProjectKind.unknown].
 ProjectKind projectKindFromString(String? value) {
   switch ((value ?? '').trim()) {
     case 'modCSharp':
@@ -229,7 +228,7 @@ ProjectKind projectKindFromString(String? value) {
 
 /// One tracked developer project in the VCC-style multi-project registry (persisted to
 /// `developer_projects.json` at the launcher data root). The registry holds only metadata + a path; the project's
-/// own files (`robotopia.project.json`, `Packages/vpm-manifest.json`, …) remain the source of truth.
+/// own files (`topiaforge.project.json`, `Packages/vpm-manifest.json`, …) remain the source of truth.
 class RegisteredProject {
   const RegisteredProject({
     required this.path,
@@ -283,7 +282,7 @@ class RegisteredProject {
 }
 
 /// A scaffoldable mod template discovered under `templates/mod/<id>/template.json`. [manifestDefaults] is a
-/// partial `robotopia.mod.json` map merged under the author's CLI flag overrides at scaffold time.
+/// partial `topiaforge.mod.json` map merged under the author's CLI flag overrides at scaffold time.
 class ModTemplateInfo {
   const ModTemplateInfo({
     required this.id,
@@ -322,8 +321,9 @@ class ModTemplateInfo {
 }
 
 /// Everything `new mod` can customize at scaffold time: the template plus per-field manifest overrides. A null
-/// scalar / empty list means "not specified — keep the template's default". `hashes` (pack-time), `legacy*`
-/// (migration-time), and `schemaVersion` (pinned to 2) are deliberately not scaffoldable.
+/// scalar / empty list means "not specified — keep the template's default".
+/// `hashes` (pack-time) and `schemaVersion` (pinned to 3) are deliberately not
+/// scaffoldable.
 class ModScaffoldOptions {
   const ModScaffoldOptions({
     this.template = 'minimal',
@@ -389,7 +389,7 @@ class ModScaffoldOptions {
   final UgcLiveSyncSettings? liveSync;
 
   /// Applies the specified overrides on top of [manifest] (a template-default or generated manifest map),
-  /// returning the merged `robotopia.mod.json` map. List/map fields replace wholesale when specified.
+  /// returning the merged `topiaforge.mod.json` map. List/map fields replace wholesale when specified.
   Map<String, Object?> applyTo(Map<String, Object?> manifest) {
     final merged = Map<String, Object?>.of(manifest);
     void set(String key, Object? value) {

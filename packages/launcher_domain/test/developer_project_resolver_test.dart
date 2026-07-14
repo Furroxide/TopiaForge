@@ -5,7 +5,7 @@ void main() {
   group('DeveloperProjectResolver', () {
     test('selects highest compatible stable package deterministically', () {
       final project = DeveloperProject(
-        schemaVersion: 1,
+        schemaVersion: 2,
         id: 'creator.mod',
         name: 'Creator Mod',
         dependencies: [
@@ -36,7 +36,7 @@ void main() {
 
     test('allows prerelease packages only when opted in', () {
       final project = DeveloperProject(
-        schemaVersion: 1,
+        schemaVersion: 2,
         id: 'creator.mod',
         name: 'Creator Mod',
         dependencies: [
@@ -59,7 +59,7 @@ void main() {
 
     test('orders prerelease dependency candidates by SemVer identifiers', () {
       final project = DeveloperProject(
-        schemaVersion: 1,
+        schemaVersion: 2,
         id: 'creator.mod',
         name: 'Creator Mod',
         dependencies: [
@@ -86,7 +86,7 @@ void main() {
 
     test('does not mistake hyphenated build metadata for a prerelease', () {
       final project = DeveloperProject(
-        schemaVersion: 1,
+        schemaVersion: 2,
         id: 'creator.mod',
         name: 'Creator Mod',
         dependencies: [
@@ -111,7 +111,7 @@ void main() {
 
     test('orders transitive dependencies before dependents', () {
       final project = DeveloperProject(
-        schemaVersion: 1,
+        schemaVersion: 2,
         id: 'creator.mod',
         name: 'Creator Mod',
         dependencies: [
@@ -159,11 +159,11 @@ ModManifest _manifest(
   List<String> apiAssemblies = const [],
 }) {
   return ModManifest(
-    schemaVersion: 2,
+    schemaVersion: 3,
     id: id,
     name: id,
     version: version,
-    author: const ModAuthor(name: 'QuantumWorks'),
+    author: const ModAuthor(name: 'TopiaForge'),
     entryAssembly: '$id.dll',
     entryType: '$id.Entry',
     dependencies: dependencies,
@@ -174,7 +174,7 @@ ModManifest _manifest(
 RegistryMod _registry(ModManifest manifest) {
   return RegistryMod(
     manifest: manifest,
-    downloadUrl: 'file:///${manifest.id}-${manifest.version}.robotopiamod',
+    downloadUrl: 'file:///${manifest.id}-${manifest.version}.topiaforgemod',
     packageSha256: manifest.version,
     sourceId: 'test',
     sourceName: 'Test',

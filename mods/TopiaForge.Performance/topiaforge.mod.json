@@ -1,0 +1,33 @@
+{
+  "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+  "schemaVersion": 3,
+  "name": "io.github.furroxide.topiaforge.performance",
+  "displayName": "TopiaForge Performance",
+  "version": "0.2.0",
+  "author": {
+    "name": "TopiaForge"
+  },
+  "description": "Runtime, fully-reversible performance tuning for Robotopia (HDRP). Presets off/balanced/performance/potato plus per-effect overrides: post-FX kills, dynamic resolution, quality/reflection-probe forcing, GPU occlusion culling (GPU Resident Drawer), frame pacing, and telemetry throttling.",
+  "entryAssembly": "TopiaForge.Performance.dll",
+  "entryType": "TopiaForge.Performance.PerformanceMod",
+  "vpmDependencies": {},
+  "supportedGameVersionRange": "0.0.2227",
+  "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
+  "supportedSdkVersionRange": ">=0.1.0 <0.2.0",
+  "category": "Performance",
+  "tags": [
+    "performance",
+    "fps",
+    "optimization",
+    "hdrp",
+    "quality",
+    "tweaks"
+  ],
+  "license": "NOASSERTION",
+  "permissions": [
+    "render-settings",
+    "quality-settings",
+    "harmony-patch",
+    "physics-settings"
+  ]
+}

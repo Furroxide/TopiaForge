@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>TopiaForge.Worlds</AssemblyName>
+    <RootNamespace>TopiaForge.Worlds</RootNamespace>
+    <Version>0.6.0</Version>
+    <AssemblyVersion>0.6.0.0</AssemblyVersion>
+    <FileVersion>0.6.0.0</FileVersion>
+    <InformationalVersion>0.6.0</InformationalVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.UnityUi\TopiaForge.Mods.UnityUi.csproj" />
+  </ItemGroup>
+
+  <!-- Shared clean-room game-reflection helpers (source-linked so the request shape lives in one place). -->
+  <ItemGroup>
+    <Compile Include="..\Shared\UgcNoOpLaunchRequest.cs" Link="Shared\UgcNoOpLaunchRequest.cs" />
+    <Compile Include="..\Shared\SafeEvent.cs" Link="Shared\SafeEvent.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="UnityEngine" HintPath="$(RobotopiaManagedDir)\UnityEngine.dll" Private="false" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="UnityEngine.PhysicsModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.PhysicsModule.dll" Private="false" />
+    <Reference Include="UnityEngine.UI" HintPath="$(RobotopiaManagedDir)\UnityEngine.UI.dll" Private="false" />
+    <Reference Include="UnityEngine.UIModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.UIModule.dll" Private="false" />
+    <Reference Include="UnityEngine.TextRenderingModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.TextRenderingModule.dll" Private="false" />
+    <Reference Include="Unity.RenderPipelines.Core.Runtime" HintPath="$(RobotopiaManagedDir)\Unity.RenderPipelines.Core.Runtime.dll" Private="false" />
+    <Reference Include="Unity.RenderPipelines.HighDefinition.Runtime" HintPath="$(RobotopiaManagedDir)\Unity.RenderPipelines.HighDefinition.Runtime.dll" Private="false" />
+  </ItemGroup>
+</Project>

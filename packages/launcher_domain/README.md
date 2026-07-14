@@ -1,6 +1,6 @@
-# Robotopia launcher domain
+# TopiaForge launcher domain
 
-Framework-independent models and planning rules shared by the Robotopia
+Framework-independent models and planning rules shared by the TopiaForge
 launcher, CLI, and data adapters. This package owns serialized launcher
 contracts, SemVer and version-range handling, dependency resolution, profile
 launch configuration, registry models, and developer-project planning. It does
@@ -27,13 +27,13 @@ if (resolution.hasBlockingIssues) {
 }
 ```
 
-Robotopia launcher build `N` maps to the canonical game version `0.0.N` when
+TopiaForge launcher build `N` maps to the canonical game version `0.0.N` when
 manifest compatibility ranges are evaluated. Missing compatibility ranges mean
 `*`; production callers should require a known game build for constrained mods.
 
 Run `dart analyze` and `dart test` from this directory after contract changes.
-Serialized changes must remain additive unless a coordinated schema migration
-is supplied for every C# and Dart consumer.
+Breaking serialized changes must increment their discriminator across every
+C# and Dart consumer.
 
 See [CompatibilityPolicy.md](../../docs/CompatibilityPolicy.md) and
 [Modding.md](../../docs/Modding.md) for ecosystem-facing policy.

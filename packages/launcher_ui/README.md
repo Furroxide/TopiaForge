@@ -1,7 +1,7 @@
-# Robotopia launcher UI
+# TopiaForge launcher UI
 
 Shared Flutter theme, motion policy, brand assets, and reusable desktop widgets
-for the Robotopia launcher. Application state stays in `LauncherBloc`; this
+for the TopiaForge launcher. Application state stays in `LauncherBloc`; this
 package contains presentation primitives only and performs no filesystem,
 process, archive, or network work.
 
@@ -12,12 +12,12 @@ import 'package:flutter/material.dart';
 import 'package:launcher_ui/launcher_ui.dart';
 
 MaterialApp(
-  theme: buildQuantumWorksTheme(),
+  theme: buildTopiaForgeTheme(),
   home: const BorderedPane(
     child: EmptyStatePanel(
       icon: Icons.extension_off,
       title: 'No mods installed',
-      message: 'Install a .robotopiamod package to begin.',
+      message: 'Install a .topiaforgemod package to begin.',
     ),
   ),
 );

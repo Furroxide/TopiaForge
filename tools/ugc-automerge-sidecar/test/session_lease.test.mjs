@@ -47,7 +47,7 @@ test('publisher exits when the lease path is replaced during a read', async (t) 
 });
 
 async function startPublisherFixture(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'robotopia-lease-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'topiaforge-lease-'));
   const sessionPath = path.join(root, 'session.json');
   const child = spawn(process.execPath, [fixture, sessionPath], {
     stdio: ['ignore', 'pipe', 'pipe'],

@@ -28,15 +28,15 @@ void main() {
       expect(first.selectedVersions, {'alpha.mod': '1.0.0'});
       expect(second.enabledMods, {'beta.mod'});
       expect(second.selectedVersions, {'beta.mod': '2.0.0'});
-      expect(first.toJson()['schemaVersion'], 1);
+      expect(first.toJson()['schemaVersion'], 2);
     });
 
     test('distinguishes exact empty profiles from manager inheritance', () {
       const exact = LauncherProfile(id: 'empty', name: 'Empty');
       final restored = LauncherProfile.fromJson(exact.toJson());
-      final legacy = LauncherProfile.fromJson(const {
-        'id': 'legacy',
-        'name': 'Legacy',
+      final missingFlag = LauncherProfile.fromJson(const {
+        'id': 'missing-flag',
+        'name': 'Missing flag',
         'enabledMods': <Object?>[],
       });
 
@@ -45,12 +45,12 @@ void main() {
         ProfileLaunchConfiguration.fromProfile(restored).inheritManagerModState,
         isFalse,
       );
-      expect(legacy.inheritManagerModState, isTrue);
+      expect(missingFlag.inheritManagerModState, isFalse);
       expect(LauncherProfile.defaultProfile().inheritManagerModState, isTrue);
     });
 
     test('carries safe mode while keeping launch environment process-only', () {
-      const environment = {'ROBOTOPIA_PROFILE_TEST': 'safe'};
+      const environment = {'TOPIAFORGE_PROFILE_TEST': 'safe'};
       const profile = LauncherProfile(
         id: 'safe',
         name: 'Safe',
@@ -82,6 +82,27 @@ void main() {
       ]) {
         expect(
           () => ProfileLaunchConfiguration.fromProfile(profile),
+          throwsFormatException,
+        );
+      }
+    });
+
+    test('rejects unsafe in-memory world and gamemode ids', () {
+      final retired =
+          'robo'
+          'topia.world.retired';
+      for (final selection in [
+        WorldSelection(worldId: retired),
+        WorldSelection(gamemodeId: retired),
+      ]) {
+        expect(
+          () => ProfileLaunchConfiguration.fromProfile(
+            LauncherProfile(
+              id: 'unsafe-world',
+              name: 'Unsafe world',
+              worldSelection: selection,
+            ),
+          ),
           throwsFormatException,
         );
       }

@@ -12,8 +12,8 @@
 /tools/package-distribution.ps1 @furroxide
 /tools/test-release-package.ps1 @furroxide
 /tools/restore-robotopia-managed-refs.ps1 @furroxide
-/apps/robotopia_cli/bin/robotopia_release_commands.dart @furroxide
-/apps/robotopia_cli/lib/src/release_*.dart @furroxide
+/apps/topiaforge_cli/bin/topiaforge_release_commands.dart @furroxide
+/apps/topiaforge_cli/lib/src/release_*.dart @furroxide
 
 # Platform signing and sandbox authority.
-/apps/robotopia_launcher_flutter/macos/Runner/*.entitlements @furroxide
+/apps/topiaforge_launcher_flutter/macos/Runner/*.entitlements @furroxide

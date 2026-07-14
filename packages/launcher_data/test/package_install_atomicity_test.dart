@@ -14,7 +14,7 @@ void main() {
     () async {
       final root = Directory.systemTemp.createTempSync('package-atomicity-');
       addTearDown(() => root.deleteSync(recursive: true));
-      final game = Directory(p.join(root.path, 'Robotopia'))..createSync();
+      final game = Directory(p.join(root.path, 'TopiaForge'))..createSync();
       _createGame(game);
       final repository = LocalLauncherRepository(
         dataRoot: p.join(root.path, 'data'),
@@ -75,7 +75,7 @@ void main() {
           p.join(
             game.path,
             'BepInEx',
-            'RobotopiaModManager',
+            'TopiaForge',
             'packages',
             'first.dep',
             '2.0.0',
@@ -92,7 +92,7 @@ void main() {
   test('rolls back committed package directories when commit fails', () async {
     final root = Directory.systemTemp.createTempSync('package-rollback-');
     addTearDown(() => root.deleteSync(recursive: true));
-    final game = Directory(p.join(root.path, 'Robotopia'))..createSync();
+    final game = Directory(p.join(root.path, 'TopiaForge'))..createSync();
     _createGame(game);
     final dataRoot = p.join(root.path, 'data');
     final repository = LocalLauncherRepository(
@@ -161,12 +161,7 @@ void main() {
       ),
     );
 
-    final packages = p.join(
-      game.path,
-      'BepInEx',
-      'RobotopiaModManager',
-      'packages',
-    );
+    final packages = p.join(game.path, 'BepInEx', 'TopiaForge', 'packages');
     expect(
       Directory(p.join(packages, 'first.dep', '2.0.0')).existsSync(),
       isFalse,
@@ -179,7 +174,7 @@ void main() {
     final snapshotWithEmptyDirectory = await failingRepository.loadSnapshot();
     expect(snapshotWithEmptyDirectory.installedMods.single.id, 'first.dep');
     final staging = Directory(
-      p.join(game.path, 'BepInEx', 'RobotopiaModManager', 'staging'),
+      p.join(game.path, 'BepInEx', 'TopiaForge', 'staging'),
     );
     expect(staging.existsSync() ? staging.listSync() : const [], isEmpty);
   });
@@ -187,7 +182,7 @@ void main() {
   test('rejects an invalid downloaded dependency before staging', () async {
     final root = Directory.systemTemp.createTempSync('package-validation-');
     addTearDown(() => root.deleteSync(recursive: true));
-    final game = Directory(p.join(root.path, 'Robotopia'))..createSync();
+    final game = Directory(p.join(root.path, 'TopiaForge'))..createSync();
     _createGame(game);
     final repository = LocalLauncherRepository(
       dataRoot: p.join(root.path, 'data'),
@@ -237,12 +232,7 @@ void main() {
       ),
     );
 
-    final packages = p.join(
-      game.path,
-      'BepInEx',
-      'RobotopiaModManager',
-      'packages',
-    );
+    final packages = p.join(game.path, 'BepInEx', 'TopiaForge', 'packages');
     expect(Directory(p.join(packages, 'invalid.dep')).existsSync(), isFalse);
     expect(Directory(p.join(packages, 'main.mod')).existsSync(), isFalse);
   });
@@ -250,7 +240,7 @@ void main() {
   test('retains older registry versions for dependency resolution', () async {
     final root = Directory.systemTemp.createTempSync('package-versions-');
     addTearDown(() => root.deleteSync(recursive: true));
-    final game = Directory(p.join(root.path, 'Robotopia'))..createSync();
+    final game = Directory(p.join(root.path, 'TopiaForge'))..createSync();
     _createGame(game);
     final repository = LocalLauncherRepository(
       dataRoot: p.join(root.path, 'data'),
@@ -304,7 +294,7 @@ void main() {
       '1.0.0',
     );
     final staging = Directory(
-      p.join(game.path, 'BepInEx', 'RobotopiaModManager', 'staging'),
+      p.join(game.path, 'BepInEx', 'TopiaForge', 'staging'),
     );
     expect(staging.existsSync() ? staging.listSync() : const [], isEmpty);
   });
@@ -314,7 +304,7 @@ void main() {
       'package-directory-versions-',
     );
     addTearDown(() => root.deleteSync(recursive: true));
-    final game = Directory(p.join(root.path, 'Robotopia'))..createSync();
+    final game = Directory(p.join(root.path, 'TopiaForge'))..createSync();
     _createGame(game);
     final repository = LocalLauncherRepository(
       dataRoot: p.join(root.path, 'data'),
@@ -355,7 +345,7 @@ void main() {
     }
     final root = Directory.systemTemp.createTempSync('package-target-link-');
     addTearDown(() => root.deleteSync(recursive: true));
-    final game = Directory(p.join(root.path, 'Robotopia'))..createSync();
+    final game = Directory(p.join(root.path, 'TopiaForge'))..createSync();
     _createGame(game);
     final repository = LocalLauncherRepository(
       dataRoot: p.join(root.path, 'data'),
@@ -368,7 +358,7 @@ void main() {
     final target = p.join(
       game.path,
       'BepInEx',
-      'RobotopiaModManager',
+      'TopiaForge',
       'packages',
       'linked.mod',
       '1.0.0',
@@ -405,11 +395,11 @@ File _package(
   String version, {
   Map<String, String> dependencies = const {},
 }) {
-  final file = File(p.join(root.path, '$id-$version.robotopiamod'));
+  final file = File(p.join(root.path, '$id-$version.topiaforgemod'));
   final archive = Archive()
     ..addFile(
       ArchiveFile.string(
-        'robotopia.mod.json',
+        'topiaforge.mod.json',
         jsonEncode(_manifest(id, version, dependencies: dependencies)),
       ),
     )
@@ -423,11 +413,11 @@ Map<String, Object?> _manifest(
   String version, {
   Map<String, String> dependencies = const {},
 }) => {
-  'schemaVersion': 2,
+  'schemaVersion': 3,
   'name': id,
   'displayName': id,
   'version': version,
-  'author': {'name': 'QuantumWorks'},
+  'author': {'name': 'TopiaForge'},
   'entryAssembly': '${_assembly(id)}.dll',
   'entryType': '$id.Entry',
   if (dependencies.isNotEmpty) 'vpmDependencies': dependencies,

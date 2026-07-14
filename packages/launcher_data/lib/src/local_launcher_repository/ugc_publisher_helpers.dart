@@ -239,7 +239,7 @@ final class _BoundedCoalescedLineTransformer
       if (truncated) text = '$text … [publisher output truncated]';
       truncated = false;
       final output = '$prefix$text';
-      if (prefix.isEmpty && output.startsWith('ROBOTOPIA_UGC_SESSION ')) {
+      if (prefix.isEmpty && output.startsWith('TOPIAFORGE_UGC_SESSION ')) {
         if (batch.isNotEmpty) {
           controller.add(batch.join('\n'));
           batch.clear();

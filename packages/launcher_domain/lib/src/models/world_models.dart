@@ -106,15 +106,23 @@ class WorldSelection {
   bool get preferSceneReplacement => loadMode == sceneReplacement;
 
   factory WorldSelection.fromJson(Map<String, Object?> json) {
+    final worldId =
+        (json['worldId'] as String?) ?? WorldCatalog.openSandboxWorldId;
+    final gamemodeId =
+        (json['gamemodeId'] as String?) ?? WorldCatalog.sandboxGamemodeId;
+    if (!ModManifest.isValidId(worldId)) {
+      throw const FormatException(
+        'World selection worldId must use the safe TopiaForge id format.',
+      );
+    }
+    if (!ModManifest.isValidId(gamemodeId)) {
+      throw const FormatException(
+        'World selection gamemodeId must use the safe TopiaForge id format.',
+      );
+    }
     return WorldSelection(
-      worldId:
-          (json['worldId'] as String?) ??
-          (json['selectedWorldId'] as String?) ??
-          WorldCatalog.openSandboxWorldId,
-      gamemodeId:
-          (json['gamemodeId'] as String?) ??
-          (json['selectedGamemodeId'] as String?) ??
-          WorldCatalog.sandboxGamemodeId,
+      worldId: worldId,
+      gamemodeId: gamemodeId,
       loadMode: normalizeLoadMode(json['loadMode'] as String?),
       autoLoadOnStart: (json['autoLoadOnStart'] as bool?) ?? false,
     );
@@ -136,7 +144,7 @@ class WorldSelection {
   };
 
   /// Applies launcher-owned selection keys without erasing runtime-owned or
-  /// future fields from an existing `robotopia.worlds.json` object.
+  /// future fields from an existing `topiaforge.worlds.json` object.
   Map<String, Object?> mergeRuntimeConfig(Map<String, Object?> existing) => {
     ...existing,
     ...toRuntimeConfig(),
@@ -160,8 +168,10 @@ class WorldSelection {
 class WorldCatalog {
   const WorldCatalog({required this.worlds, required this.gamemodes});
 
-  static const openSandboxWorldId = 'robotopia.worlds.open_sandbox';
-  static const sandboxGamemodeId = 'robotopia.worlds.sandbox';
+  static const openSandboxWorldId =
+      'io.github.furroxide.topiaforge.worlds.open_sandbox';
+  static const sandboxGamemodeId =
+      'io.github.furroxide.topiaforge.worlds.sandbox';
 
   final List<WorldDefinition> worlds;
   final List<GamemodeDefinition> gamemodes;
@@ -208,12 +218,18 @@ class WorldCatalog {
     final worlds = (json['worlds'] as List? ?? const [])
         .whereType<Map>()
         .map((item) => WorldDefinition.fromJson(_objectMap(item)))
-        .where((world) => world.id.isNotEmpty && world.name.isNotEmpty)
+        .where(
+          (world) =>
+              ModManifest.isValidId(world.id) && world.name.trim().isNotEmpty,
+        )
         .toList();
     final gamemodes = (json['gamemodes'] as List? ?? const [])
         .whereType<Map>()
         .map((item) => GamemodeDefinition.fromJson(_objectMap(item)))
-        .where((mode) => mode.id.isNotEmpty && mode.name.isNotEmpty)
+        .where(
+          (mode) =>
+              ModManifest.isValidId(mode.id) && mode.name.trim().isNotEmpty,
+        )
         .toList();
 
     // Backfill only the missing side from the built-in catalog rather than discarding both: a catalog with

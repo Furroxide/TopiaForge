@@ -1,14 +1,14 @@
-using Robotopia.Mods;
+using TopiaForge.Mods;
 
 namespace {{ASSEMBLY_NAME}}
 {
     /// <summary>
     /// Registers a custom world whose content is a Unity prefab shipped in this package's AssetBundle
-    /// (built from the paired Unity project by `robotopia world build`). Launching the world loads the
+    /// (built from the paired Unity project by `topiaforge world build`). Launching the world loads the
     /// game's clean play stage and places the prefab at the player spawn; a menu entry pairing it with
     /// the Sandbox gamemode is registered too, so it shows up under GAMEMODES.
     /// </summary>
-    public sealed class {{TYPE_NAME}}Mod : IRobotopiaMod
+    public sealed class {{TYPE_NAME}}Mod : ITopiaForgeMod
     {
         private const string WorldId = "{{MOD_ID}}.world";
 
@@ -24,7 +24,7 @@ namespace {{ASSEMBLY_NAME}}
                 Id = WorldId,
                 Name = "{{DISPLAY_NAME}}",
                 Description = "A custom world.",
-                // The bundle `robotopia world build` drops into this package.
+                // The bundle `topiaforge world build` drops into this package.
                 BundleRelativePath = "AssetBundles/{{BUNDLE_NAME}}.bundle",
                 // PrefabAssetName omitted: the bundle's single prefab is used.
                 // Content = new CustomWorldOptions { SpawnPointName = "SpawnPoint", KillPlaneDepth = 100f, ... }

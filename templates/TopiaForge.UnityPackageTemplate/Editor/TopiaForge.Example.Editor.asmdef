@@ -1,0 +1,9 @@
+{
+  "name": "TopiaForge.Example.Editor",
+  "rootNamespace": "TopiaForge.Example.Editor",
+  "references": ["TopiaForge.Example.Runtime"],
+  "includePlatforms": ["Editor"],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "autoReferenced": true
+}
