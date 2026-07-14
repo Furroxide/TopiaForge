@@ -244,19 +244,9 @@ namespace Robotopia.GameCompat
         // ---- core per-binding resolution ----
         private static Resolution Resolve(GameBinding binding, SurfaceSnapshot surface)
         {
-            // SimpleNameWalk: the mod matches by simple name anywhere in a component's inheritance chain, so the
-            // honest check is "does some type with this simple name still exist" (we cannot prove WHICH type).
             if (binding.MatchMode == MatchMode.SimpleNameWalk)
             {
-                var key = binding.Assembly + "|" + Simple(binding.DeclaringType);
-                var count = surface.SimpleNameCounts.TryGetValue(key, out var c) ? c : 0;
-                if (count <= 0)
-                {
-                    return new Resolution(ChangeKind.MissingType,
-                        "no type named '" + Simple(binding.DeclaringType) + "' found in " + binding.Assembly + " (matched by simple name)");
-                }
-
-                return Resolution.Ok;
+                return ResolveSimpleNameWalk(binding, surface);
             }
 
             var type = surface.FindType(binding.TypeKey);
@@ -269,6 +259,78 @@ namespace Robotopia.GameCompat
             {
                 return new Resolution(ChangeKind.Indeterminate,
                     "type '" + binding.DeclaringType + "' could not be read in this environment (missing referenced assembly)");
+            }
+
+            return ResolveOnType(binding, type);
+        }
+
+        private static Resolution ResolveSimpleNameWalk(GameBinding binding, SurfaceSnapshot surface)
+        {
+            var simpleName = Simple(binding.DeclaringType);
+            var key = binding.Assembly + "|" + simpleName;
+            if (!surface.SimpleNameCounts.TryGetValue(key, out var count))
+            {
+                return new Resolution(ChangeKind.Indeterminate,
+                    "snapshot has no simple-name scan for '" + simpleName + "' in " + binding.Assembly);
+            }
+
+            if (count == 0)
+            {
+                return new Resolution(ChangeKind.MissingType,
+                    "no type named '" + simpleName + "' found in " + binding.Assembly + " (matched by simple name)");
+            }
+
+            var candidates = surface.Types.Values
+                .Where(type => type.Status != SurfaceStatus.Absent &&
+                               string.Equals(type.Assembly, binding.Assembly, StringComparison.Ordinal) &&
+                               string.Equals(type.SimpleName, simpleName, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(type => type.FullName, StringComparer.Ordinal)
+                .ToList();
+
+            // A type-only walk has no member contract to validate. A positive, complete count remains sufficient.
+            if (binding.Kind == BindingKind.Type)
+            {
+                return count > 0 || candidates.Count > 0
+                    ? Resolution.Ok
+                    : new Resolution(ChangeKind.Indeterminate,
+                        "simple-name scan for '" + simpleName + "' was incomplete");
+            }
+
+            var resolutions = candidates.Select(type => ResolveOnType(binding, type)).ToList();
+            if (resolutions.Any(resolution => resolution.Kind == ChangeKind.Ok))
+            {
+                return Resolution.Ok;
+            }
+
+            // A negative result is only conclusive when every simple-name candidate was captured. Older snapshots
+            // stored the count but not the candidate surfaces; never green-light or red-light a member from that.
+            if (count < 0 || candidates.Count < count ||
+                resolutions.Any(resolution => resolution.Kind == ChangeKind.Indeterminate))
+            {
+                return new Resolution(ChangeKind.Indeterminate,
+                    "could not inspect every type named '" + simpleName + "' for member '" + binding.Member + "'");
+            }
+
+            var mismatch = resolutions.FirstOrDefault(resolution =>
+                resolution.Kind == ChangeKind.SignatureMismatch ||
+                resolution.Kind == ChangeKind.ConstructorUnavailable ||
+                resolution.Kind == ChangeKind.ValueContractBroken);
+            if (mismatch.Kind != ChangeKind.Ok)
+            {
+                return mismatch;
+            }
+
+            return new Resolution(ChangeKind.MissingMember,
+                "member '" + binding.Member + "' not found on any of the " + candidates.Count +
+                " type(s) named '" + simpleName + "' in " + binding.Assembly);
+        }
+
+        private static Resolution ResolveOnType(GameBinding binding, TypeSurface type)
+        {
+            if (type.Status == SurfaceStatus.Unreadable)
+            {
+                return new Resolution(ChangeKind.Indeterminate,
+                    "type '" + type.FullName + "' could not be read in this environment (missing referenced assembly)");
             }
 
             switch (binding.Kind)
@@ -341,15 +403,12 @@ namespace Robotopia.GameCompat
                 return new Resolution(ChangeKind.MissingMember, "method '" + binding.Member + "' not found on " + binding.DeclaringType);
             }
 
-            // Name-only binding (the mod matches purely by name): presence is enough.
-            if (binding.Parameters.Count == 0)
-            {
-                return Resolution.Ok;
-            }
-
             // Match the SAME overload the runtime binder selects: correct arity, and every CONSTRAINED position's
-            // type matches. Unconstrained positions are ignored (the runtime predicate ignores them too).
-            var matched = overloads.Any(overload =>
+            // type matches. An empty parameter declaration remains name-only, so every overload is a candidate.
+            // Unconstrained positions are ignored (the runtime predicate ignores them too).
+            var matched = binding.Parameters.Count == 0
+                ? overloads
+                : overloads.Where(overload =>
             {
                 if (overload.Parameters.Count != binding.Parameters.Count)
                 {
@@ -366,14 +425,23 @@ namespace Robotopia.GameCompat
                 }
 
                 return true;
-            });
+            }).ToList();
 
-            if (!matched)
+            if (matched.Count == 0)
             {
                 var expected = string.Join(", ", binding.Parameters.Select(p => p.Constrained ? p.Type : "*"));
                 var available = string.Join(" | ", overloads.Select(o => "(" + string.Join(", ", o.Parameters) + ")"));
                 return new Resolution(ChangeKind.SignatureMismatch,
                     "no '" + binding.Member + "' overload matches [" + expected + "]; available: " + available);
+            }
+
+            if (binding.ReturnType.Length > 0 &&
+                !matched.Any(overload => TypeNameMatches(overload.ReturnType, binding.ReturnType)))
+            {
+                var available = string.Join(" | ", matched.Select(overload => overload.ReturnType));
+                return new Resolution(ChangeKind.SignatureMismatch,
+                    "method '" + binding.Member + "' return type is [" + available +
+                    "], expected '" + binding.ReturnType + "'");
             }
 
             return Resolution.Ok;
@@ -502,7 +570,91 @@ namespace Robotopia.GameCompat
                 return true;
             }
 
-            return string.Equals(Simple(actual), Simple(expected), StringComparison.OrdinalIgnoreCase);
+            return string.Equals(
+                ComparableTypeShape(actual),
+                ComparableTypeShape(expected),
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Preserve the complete type shape while allowing manifests to use either qualified or simple names.
+        // The old Simple() fallback discarded everything after '<', so UniTask<Expected> incorrectly matched
+        // UniTask<Unrelated>. Accept both reflection-style Func`2[A,B] and normalized Func<A,B> spellings.
+        private static string ComparableTypeShape(string typeName)
+        {
+            var result = new System.Text.StringBuilder(typeName.Length);
+            var brackets = new Stack<bool>(); // true = legacy generic bracket, false = array/other bracket
+
+            for (var index = 0; index < typeName.Length;)
+            {
+                var character = typeName[index];
+                if (char.IsWhiteSpace(character))
+                {
+                    index++;
+                    continue;
+                }
+
+                if (char.IsLetterOrDigit(character) || character == '_' || character == '.' || character == '+')
+                {
+                    var start = index;
+                    while (index < typeName.Length)
+                    {
+                        character = typeName[index];
+                        if (!char.IsLetterOrDigit(character) && character != '_' && character != '.' && character != '+')
+                        {
+                            break;
+                        }
+
+                        index++;
+                    }
+
+                    var token = typeName.Substring(start, index - start);
+                    var separator = Math.Max(token.LastIndexOf('.'), token.LastIndexOf('+'));
+                    result.Append(separator >= 0 ? token.Substring(separator + 1) : token);
+
+                    if (index < typeName.Length && typeName[index] == '`')
+                    {
+                        index++;
+                        while (index < typeName.Length && char.IsDigit(typeName[index]))
+                        {
+                            index++;
+                        }
+
+                        while (index < typeName.Length && char.IsWhiteSpace(typeName[index]))
+                        {
+                            index++;
+                        }
+
+                        if (index < typeName.Length && typeName[index] == '[')
+                        {
+                            result.Append('<');
+                            brackets.Push(true);
+                            index++;
+                        }
+                    }
+
+                    continue;
+                }
+
+                if (character == '[')
+                {
+                    result.Append(character);
+                    brackets.Push(false);
+                    index++;
+                    continue;
+                }
+
+                if (character == ']')
+                {
+                    result.Append(brackets.Count > 0 && brackets.Pop() ? '>' : ']');
+                    index++;
+                    continue;
+                }
+
+                result.Append(character);
+                index++;
+            }
+
+            return result.ToString();
         }
 
         private static string Simple(string fullName)

@@ -9,7 +9,8 @@ namespace Robotopia.GameCompat.Extractor
 {
     internal static class Program
     {
-        private const string ExtractorVersion = "1.0.0";
+        private const string ExtractorVersion = "1.1.0";
+        private const int MaxSurfaceSnapshotBytes = 16 * 1024 * 1024;
 
         private static int Main(string[] args)
         {
@@ -67,8 +68,8 @@ Commands:
             Exit code 1 when a critical binding is broken. Skips cleanly (exit 0) when no game install is found.
   audit     Offline source-vs-manifest drift check (no game DLL needed).
 
-Managed dir resolution order: --managed, $RobotopiaManagedDir, $RobotopiaGameDir\Robotopia_Data\Managed,
-then the default launcher install path.");
+Managed dir resolution order: --managed, $RobotopiaManagedDir, the platform-specific layout under
+$RobotopiaGameDir, then the default launcher install path.");
             return 0;
         }
 
@@ -117,9 +118,8 @@ then the default launcher install path.");
             var outPath = options.Out ?? Path.Combine(repoRoot, ManifestLoader.BaselineRelativePath);
 
             // Show what a refresh actually changes, so a baseline bump is a reviewed act, not an opaque blob.
-            if (File.Exists(outPath))
+            if (TryReadSurfaceSnapshot(outPath, out var previous))
             {
-                var previous = SurfaceSnapshot.Parse(File.ReadAllText(outPath));
                 var diff = SurfaceDiffer.DiffSurfaces(previous, snapshot, manifests);
                 Console.WriteLine("Baseline refresh — changes vs the previous baseline:");
                 PrintReport(diff);
@@ -163,9 +163,8 @@ then the default launcher install path.");
 
             var baselinePath = options.Against ?? Path.Combine(repoRoot, ManifestLoader.BaselineRelativePath);
             CompatReport? diff = null;
-            if (File.Exists(baselinePath))
+            if (TryReadSurfaceSnapshot(baselinePath, out var baseline))
             {
-                var baseline = SurfaceSnapshot.Parse(File.ReadAllText(baselinePath));
                 diff = SurfaceDiffer.DiffSurfaces(baseline, candidate, manifests);
             }
 
@@ -174,6 +173,7 @@ then the default launcher install path.");
                 var root = new JsonObject()
                     .Set("status", resolve.HasBreakingChanges ? "broken" : "ok")
                     .Set("gameVersionLabel", candidate.GameVersionLabel)
+                    .Set("gameVersion", candidate.GameVersion)
                     .Set("surfaceHash", candidate.ComputeContentHash())
                     .Set("gameCodeMvid", candidate.GameCodeMvid)
                     .Set("resolve", resolve.ToJson());
@@ -252,35 +252,10 @@ then the default launcher install path.");
         private static SurfaceSnapshot Capture(string managedDir, IReadOnlyList<BindingManifest> manifests)
         {
             using var reader = new GameCodeSurfaceReader(managedDir);
-            var versionLabel = ReadGameVersionLabel(managedDir);
+            var versionLabel = GameVersionLabelReader.Read(managedDir);
+            var gameVersion = GameVersionLabelReader.ReadCanonicalVersion(managedDir);
             var capturedUtc = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
-            return reader.Extract(manifests, ExtractorVersion, versionLabel, capturedUtc);
-        }
-
-        // Best-effort human version label from the install's changelog.txt (one dir up from Robotopia_Data).
-        private static string ReadGameVersionLabel(string managedDir)
-        {
-            try
-            {
-                var installRoot = Directory.GetParent(managedDir)?.Parent?.FullName; // Managed -> Robotopia_Data -> install
-                if (installRoot == null)
-                {
-                    return string.Empty;
-                }
-
-                var changelog = Path.Combine(installRoot, "changelog.txt");
-                if (File.Exists(changelog))
-                {
-                    var firstLine = File.ReadLines(changelog).FirstOrDefault(l => l.Trim().Length > 0);
-                    return (firstLine ?? string.Empty).Trim();
-                }
-            }
-            catch
-            {
-                // provenance only; never fatal
-            }
-
-            return string.Empty;
+            return reader.Extract(manifests, ExtractorVersion, versionLabel, capturedUtc, gameVersion);
         }
 
         private static void PrintReport(CompatReport report)
@@ -316,6 +291,28 @@ then the default launcher install path.");
             Console.WriteLine("Wrote " + outPath);
         }
 
+        private static bool TryReadSurfaceSnapshot(string path, out SurfaceSnapshot snapshot)
+        {
+            try
+            {
+                snapshot = SurfaceSnapshot.Parse(ExtractorFileIo.ReadStableUtf8(
+                    path,
+                    MaxSurfaceSnapshotBytes,
+                    "GameCode surface snapshot"));
+                return true;
+            }
+            catch (FileNotFoundException)
+            {
+                snapshot = null!;
+                return false;
+            }
+            catch (DirectoryNotFoundException)
+            {
+                snapshot = null!;
+                return false;
+            }
+        }
+
         private static string RequireRepoRoot() =>
             ManifestLoader.FindDataRoot() ?? throw new InvalidOperationException("could not locate bindings/ (neither a repo root with RobotopiaModManager.slnx nor a bundled bindings/ next to the tool)");
 
@@ -343,6 +340,8 @@ then the default launcher install path.");
                 yield return Path.Combine(gameDir, "Robotopia_Data", "Managed");
                 // macOS installs are an app bundle; the managed assemblies sit inside Contents/.
                 yield return Path.Combine(gameDir, "Contents", "Resources", "Data", "Managed");
+                // The launcher and GameLayout also treat the directory containing Robotopia.app as a game root.
+                yield return Path.Combine(gameDir, "Robotopia.app", "Contents", "Resources", "Data", "Managed");
             }
 
             var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
