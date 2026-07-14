@@ -1,5 +1,26 @@
 part of 'widget_test.dart';
 
+LauncherSnapshot _replaceGameInstall(
+  LauncherSnapshot snapshot,
+  GameInstall? install,
+) {
+  return LauncherSnapshot(
+    gameInstall: install,
+    profiles: snapshot.profiles,
+    selectedProfileId: snapshot.selectedProfileId,
+    installedMods: snapshot.installedMods,
+    registryMods: snapshot.registryMods,
+    packageSources: snapshot.packageSources,
+    worldCatalog: snapshot.worldCatalog,
+    legacyMods: snapshot.legacyMods,
+    recentLog: snapshot.recentLog,
+    launcherUpdates: snapshot.launcherUpdates,
+    developerMode: snapshot.developerMode,
+    sourceStatuses: snapshot.sourceStatuses,
+    launcherLog: snapshot.launcherLog,
+  );
+}
+
 /// A detected, launchable install. [needsRepair] flips the loader to missing
 /// so Home renders its "Almost ready" state.
 LauncherSnapshot _readySnapshot({

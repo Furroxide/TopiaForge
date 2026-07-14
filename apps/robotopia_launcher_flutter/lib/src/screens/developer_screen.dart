@@ -291,6 +291,7 @@ class _ProjectsPane extends StatelessWidget {
     required bool busy,
     required bool managed,
   }) {
+    final canOpenInUnity = project.kind == ProjectKind.unityWorld;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
@@ -348,7 +349,7 @@ class _ProjectsPane extends StatelessWidget {
                   icon: const Icon(Icons.tune, size: 16),
                   label: Text(managed ? 'Managing' : 'Manage'),
                 ),
-                if (project.isUnity)
+                if (canOpenInUnity)
                   OutlinedButton.icon(
                     onPressed: busy
                         ? null

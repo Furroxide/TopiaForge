@@ -385,6 +385,12 @@ class DeveloperUgcPublishToggled extends LauncherEvent {
   const DeveloperUgcPublishToggled();
 }
 
+/// Stops UGC live-sync end-to-end: publisher process, game-side session,
+/// captured document, and stale status.
+class DeveloperUgcCleanupRequested extends LauncherEvent {
+  const DeveloperUgcCleanupRequested();
+}
+
 /// Refreshes the cockpit's live diagnostics: reads the game's status handshake and the watch-folder scenes.
 class DeveloperUgcStatusRefreshed extends LauncherEvent {
   const DeveloperUgcStatusRefreshed();
@@ -393,9 +399,18 @@ class DeveloperUgcStatusRefreshed extends LauncherEvent {
 /// Internal: one line of output from the running Automerge publisher. The launcher parses the machine-readable
 /// `ROBOTOPIA_UGC_SESSION {json}` line to auto-detect the live document URL and pre-populate the game's config.
 class DeveloperUgcSidecarOutput extends LauncherEvent {
-  const DeveloperUgcSidecarOutput(this.line);
+  const DeveloperUgcSidecarOutput(this.line, this.publisherSessionId);
 
   final String line;
+  final int publisherSessionId;
+}
+
+/// Internal: reports that one publisher process exited.
+class DeveloperUgcPublisherExited extends LauncherEvent {
+  const DeveloperUgcPublisherExited(this.publisherSessionId, this.exitCode);
+
+  final int publisherSessionId;
+  final int exitCode;
 }
 
 /// One-button "Go Live": runs setup, starts the publisher (Automerge), deploys the auto-detected config with

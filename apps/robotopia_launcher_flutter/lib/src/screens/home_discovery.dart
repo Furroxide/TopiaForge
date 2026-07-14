@@ -22,13 +22,16 @@ class _DiscoverRail extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 12,
+          runSpacing: 4,
           children: [
             Text(
               'Discover mods',
               style: Theme.of(context).textTheme.titleLarge,
             ),
-            const Spacer(),
             TextButton.icon(
               onPressed: () => _add(
                 context,
@@ -44,7 +47,13 @@ class _DiscoverRail extends StatelessWidget {
           _FindFirstModCard(state: state)
         else
           SizedBox(
-            height: 200,
+            height:
+                200 +
+                100 *
+                    (MediaQuery.textScalerOf(
+                          context,
+                        ).scale(1).clamp(1.0, 2.0).toDouble() -
+                        1),
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
@@ -65,6 +74,9 @@ class _DiscoverCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textScale = MediaQuery.textScalerOf(
+      context,
+    ).scale(1).clamp(1.0, 2.0).toDouble();
     final manifest = mod.manifest;
     final category = manifest.category.isEmpty ? 'Mod' : manifest.category;
     final description = manifest.description.isNotEmpty
@@ -76,7 +88,7 @@ class _DiscoverCard extends StatelessWidget {
       padding: const EdgeInsets.only(right: 12, bottom: 8),
       child: HoverLift(
         child: Container(
-          width: 252,
+          width: 252 + 110 * (textScale - 1),
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
           decoration: BoxDecoration(
             color: QuantumWorksPalette.surface,
@@ -197,47 +209,66 @@ class _FindFirstModCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BorderedPane(
-      accentColor: QuantumWorksPalette.accentDark,
-      padding: const EdgeInsets.fromLTRB(22, 18, 22, 18),
-      child: Row(
-        children: [
-          Image.asset(
-            QuantumWorksBrandAssets.robot,
-            package: QuantumWorksBrandAssets.package,
-            width: 84,
-            fit: BoxFit.contain,
-            filterQuality: FilterQuality.medium,
-          ),
-          const SizedBox(width: 18),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Find your first mod',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Browse community-made mods and install them with one '
-                  'click — the launcher handles the rest.',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final stacked =
+            constraints.maxWidth < 760 ||
+            MediaQuery.textScalerOf(context).scale(1) > 1.3;
+        final image = Image.asset(
+          QuantumWorksBrandAssets.robot,
+          package: QuantumWorksBrandAssets.package,
+          width: stacked ? 64 : 84,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.medium,
+        );
+        final copy = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Find your first mod',
+              style: Theme.of(context).textTheme.titleLarge,
             ),
-          ),
-          const SizedBox(width: 18),
-          FilledButton.icon(
-            onPressed: () => _add(
-              context,
-              const LauncherSectionSelected(LauncherSection.browse),
+            const SizedBox(height: 4),
+            Text(
+              'Browse community-made mods and install them with one '
+              'click — the launcher handles the rest.',
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
-            icon: const Icon(Icons.travel_explore),
-            label: const Text('Open Browse'),
+          ],
+        );
+        final action = FilledButton.icon(
+          onPressed: () => _add(
+            context,
+            const LauncherSectionSelected(LauncherSection.browse),
           ),
-        ],
-      ),
+          icon: const Icon(Icons.travel_explore),
+          label: const Text('Open Browse'),
+        );
+        return BorderedPane(
+          accentColor: QuantumWorksPalette.accentDark,
+          padding: const EdgeInsets.fromLTRB(22, 18, 22, 18),
+          child: stacked
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    image,
+                    const SizedBox(height: 12),
+                    copy,
+                    const SizedBox(height: 16),
+                    action,
+                  ],
+                )
+              : Row(
+                  children: [
+                    image,
+                    const SizedBox(width: 18),
+                    Expanded(child: copy),
+                    const SizedBox(width: 18),
+                    action,
+                  ],
+                ),
+        );
+      },
     );
   }
 }

@@ -193,8 +193,11 @@ class _GameCompatSection extends StatelessWidget {
   String get _headline {
     switch (compat.status) {
       case 'ok':
-        final version = compat.gameVersionLabel.isNotEmpty
-            ? ' (${compat.gameVersionLabel})'
+        final checkedVersion = compat.gameVersionLabel.isNotEmpty
+            ? compat.gameVersionLabel
+            : compat.gameVersion;
+        final version = checkedVersion != null && checkedVersion.isNotEmpty
+            ? ' ($checkedVersion)'
             : '';
         return 'All mod features are compatible with the installed game$version.';
       case 'broken':

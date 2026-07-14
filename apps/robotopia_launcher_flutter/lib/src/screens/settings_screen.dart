@@ -24,7 +24,7 @@ class SettingsScreen extends StatelessWidget {
                 const SizedBox(height: 14),
                 _LauncherDataSettings(state: state),
                 const SizedBox(height: 14),
-                _LauncherUpdateSettings(state: state),
+                const _LauncherUpdateSettings(),
                 const SizedBox(height: 14),
                 _DeveloperModeSettings(state: state),
                 const SizedBox(height: 14),
@@ -89,8 +89,9 @@ class _PackageSourcesSettings extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall,
             )
           else
-            ...state.packageSources.map(
-              (source) => ListTile(
+            ...state.packageSources.map((source) {
+              final status = _sourceStatus(state, source.id);
+              return ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: Switch(
                   value: source.enabled,
@@ -100,7 +101,23 @@ class _PackageSourcesSettings extends StatelessWidget {
                   ),
                 ),
                 title: Text(source.name, overflow: TextOverflow.ellipsis),
-                subtitle: Text(source.url, overflow: TextOverflow.ellipsis),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(source.url, overflow: TextOverflow.ellipsis),
+                    if (source.enabled && status != null)
+                      Text(
+                        status.message,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: status.ok
+                              ? QuantumWorksPalette.good
+                              : Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                  ],
+                ),
                 trailing: IconButton(
                   tooltip: 'Remove source',
                   onPressed: source.builtIn
@@ -108,23 +125,28 @@ class _PackageSourcesSettings extends StatelessWidget {
                       : () => _add(context, PackageSourceRemoved(source.id)),
                   icon: const Icon(Icons.delete),
                 ),
-              ),
-            ),
+              );
+            }),
         ],
       ),
     );
   }
 }
 
-class _LauncherUpdateSettings extends StatelessWidget {
-  const _LauncherUpdateSettings({required this.state});
+PackageSourceStatus? _sourceStatus(LauncherState state, String sourceId) {
+  for (final status in state.sourceStatuses) {
+    if (status.sourceId == sourceId) {
+      return status;
+    }
+  }
+  return null;
+}
 
-  final LauncherState state;
+class _LauncherUpdateSettings extends StatelessWidget {
+  const _LauncherUpdateSettings();
 
   @override
   Widget build(BuildContext context) {
-    final settings = state.launcherUpdates;
-    final controller = LauncherUpdateScope.maybeControllerOf(context);
     return BorderedPane(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -137,62 +159,19 @@ class _LauncherUpdateSettings extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
-              OutlinedButton.icon(
-                onPressed: controller == null || state.isBusy
-                    ? null
-                    : () => _checkLauncherUpdates(
-                        context,
-                        controller,
-                        settings.channel,
-                      ),
-                icon: const Icon(Icons.system_update_alt),
-                label: const Text('Check'),
-              ),
+              const StatusPill(label: 'Manual only', tone: StatusTone.warning),
             ],
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            value: settings.enabled,
-            onChanged: (enabled) =>
-                _add(context, LauncherUpdateSettingsChanged(enabled: enabled)),
-            title: const Text('Enable launcher updates'),
-            subtitle: Text(settings.appArchiveUrl),
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            value: settings.checkAutomatically,
-            onChanged: !settings.enabled
-                ? null
-                : (enabled) => _add(
-                    context,
-                    LauncherUpdateSettingsChanged(checkAutomatically: enabled),
-                  ),
-            title: const Text('Check automatically on startup'),
           ),
           const SizedBox(height: 8),
-          DropdownButtonFormField<LauncherUpdateChannel>(
-            initialValue: settings.channel,
-            decoration: const InputDecoration(
-              labelText: 'Release channel',
-              border: OutlineInputBorder(),
-            ),
-            items: [
-              for (final channel in LauncherUpdateChannel.values)
-                DropdownMenuItem(
-                  value: channel,
-                  child: Text(_updateChannelLabel(channel)),
-                ),
-            ],
-            onChanged: !settings.enabled
-                ? null
-                : (channel) {
-                    if (channel != null) {
-                      _add(
-                        context,
-                        LauncherUpdateSettingsChanged(channel: channel),
-                      );
-                    }
-                  },
+          const Text(
+            'Automatic self-update is disabled for the initial release. The '
+            'available updater cannot verify owner-signed metadata or bound '
+            'every extraction step, so it is not included in the launcher.',
+          ),
+          const SizedBox(height: 8),
+          const SelectableText(
+            'Install new platform packages manually from '
+            'https://github.com/furroxide/quantum-works/releases',
           ),
         ],
       ),

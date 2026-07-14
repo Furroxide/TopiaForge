@@ -60,7 +60,7 @@ extension LauncherDeveloperProjectActions on LauncherBloc {
     }
     await _guard(emit, 'Packed project.', () async {
       final path = await repository.packProject(workspace!.projectRoot);
-      await _repository.openPath(File(path).parent.path);
+      await _repository.openContainingFolder(path);
       emit(state.copyWith(isBusy: false, statusMessage: 'Packed to $path.'));
     });
   }

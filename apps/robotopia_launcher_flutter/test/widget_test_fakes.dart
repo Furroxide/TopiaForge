@@ -1,9 +1,10 @@
 part of 'widget_test.dart';
 
-class _FakeLauncherRepository implements LauncherRepository {
+class _FakeLauncherRepository extends _PublisherFakeLauncherRepository {
   _FakeLauncherRepository({
     LauncherSnapshot? snapshot,
     bool developerMode = false,
+    this.packageInstallPlan,
   }) : _snapshot =
            snapshot ??
            LauncherSnapshot(
@@ -19,13 +20,45 @@ class _FakeLauncherRepository implements LauncherRepository {
              developerMode: developerMode,
            );
   LauncherSnapshot _snapshot;
+  final PackageInstallPlan? packageInstallPlan;
+  int installPackageCount = 0;
   int restartCount = 0;
   int installOrRepairRuntimeCount = 0;
   final launchedProfileIds = <String>[];
+  final launchedProfiles = <LauncherProfile>[];
+  List<LauncherProfile> savedProfiles = const [];
+  String savedSelectedProfileId = '';
+  LauncherProfile? importedProfile;
+  LaunchResult launchResult = const LaunchResult(
+    started: true,
+    message: 'Launched Robotopia.',
+  );
+  Completer<void>? loadGate;
+  Completer<void>? loadEntered;
+  int loadCount = 0;
+  int activeLoads = 0;
+  int maxConcurrentLoads = 0;
   @override
   String get dataRoot => '/tmp/robotopia-launcher';
   @override
-  Future<LauncherSnapshot> loadSnapshot() async => _snapshot;
+  Future<LauncherSnapshot> loadSnapshot() async {
+    loadCount += 1;
+    activeLoads += 1;
+    if (activeLoads > maxConcurrentLoads) {
+      maxConcurrentLoads = activeLoads;
+    }
+    final entered = loadEntered;
+    if (entered != null && !entered.isCompleted) {
+      entered.complete();
+    }
+    try {
+      await loadGate?.future;
+      return _snapshot;
+    } finally {
+      activeLoads -= 1;
+    }
+  }
+
   @override
   Future<GameInstall?> detectKnownInstall() async => null;
   @override
@@ -65,7 +98,7 @@ class _FakeLauncherRepository implements LauncherRepository {
     String sourceId = '',
     String sourceName = '',
   }) async {
-    throw UnimplementedError();
+    return packageInstallPlan ?? (throw UnimplementedError());
   }
 
   @override
@@ -74,7 +107,8 @@ class _FakeLauncherRepository implements LauncherRepository {
     GameInstall install, {
     String expectedSha256 = '',
   }) async {
-    throw UnimplementedError();
+    installPackageCount += 1;
+    return _snapshot.installedMods;
   }
 
   @override
@@ -116,8 +150,17 @@ class _FakeLauncherRepository implements LauncherRepository {
     List<LauncherProfile> profiles,
     String selectedProfileId,
   ) async {
+    savedProfiles = profiles;
+    savedSelectedProfileId = selectedProfileId;
     return profiles;
   }
+
+  @override
+  Future<void> exportProfile(LauncherProfile profile, String path) async {}
+
+  @override
+  Future<LauncherProfile> importProfile(String path) async =>
+      importedProfile ?? LauncherProfile.defaultProfile();
 
   @override
   Future<LaunchResult> launch(
@@ -125,7 +168,8 @@ class _FakeLauncherRepository implements LauncherRepository {
     LauncherProfile profile,
   ) async {
     launchedProfileIds.add(profile.id);
-    return const LaunchResult(started: true, message: 'Launched Robotopia.');
+    launchedProfiles.add(profile);
+    return launchResult;
   }
 
   @override
@@ -161,20 +205,16 @@ class _FakeLauncherRepository implements LauncherRepository {
   @override
   Future<void> openPath(String path) async {}
   @override
+  Future<void> openContainingFolder(String path) async {}
+  @override
+  Future<void> ensureDirectory(String path) async {}
+  @override
   Future<void> setDeveloperMode(bool enabled) async {}
 
   @override
   Future<void> saveLauncherUpdateSettings(
     LauncherUpdateSettings settings,
   ) async {}
-
-  @override
-  Future<String> deployUgcLiveSyncConfig(
-    GameInstall install,
-    UgcLiveSyncSettings settings,
-  ) async {
-    return '/tmp/robotopia.ugc.livesync.json';
-  }
 
   @override
   Future<UgcLiveSyncStatusSnapshot?> readUgcLiveSyncStatus(
@@ -184,17 +224,37 @@ class _FakeLauncherRepository implements LauncherRepository {
   }
 
   @override
+  Future<UgcSceneInspectionResult> inspectWatchFolderScenes(
+    String watchFolder,
+  ) async => UgcSceneInspectionResult();
+
+  @override
   Future<List<UgcSceneRef>> listWatchFolderScenes(String watchFolder) async {
     return const [];
   }
 }
 
 class _FakeDeveloperRepository implements DeveloperRepository {
+  _FakeDeveloperRepository({
+    this.initialUgcSettings = const UgcLiveSyncSettings(
+      editorUrl: 'https://editor/?project=automerge:stale',
+      documentUrl: 'automerge:stale',
+      autoConnectOnStart: true,
+    ),
+  }) : _currentUgcSettings = initialUgcSettings;
+
+  bool hasProject = true;
+  final UgcLiveSyncSettings initialUgcSettings;
+  UgcLiveSyncSettings _currentUgcSettings;
+  UgcLiveSyncSettings? updatedUgcSettings;
+  Completer<void>? updateUgcGate;
+  Completer<void>? updateUgcEntered;
+
   @override
   String get developerDataRoot => '/tmp/robotopia-developer';
   @override
   Future<DeveloperWorkspace> loadDeveloperWorkspace({String? projectPath}) {
-    return Future.value(_workspace());
+    return Future.value(_workspace(_currentUgcSettings));
   }
 
   @override
@@ -351,8 +411,15 @@ class _FakeDeveloperRepository implements DeveloperRepository {
   Future<DeveloperProject> updateUgcLiveSync(
     String projectPath,
     UgcLiveSyncSettings settings,
-  ) {
-    throw UnimplementedError();
+  ) async {
+    final entered = updateUgcEntered;
+    if (entered != null && !entered.isCompleted) {
+      entered.complete();
+    }
+    await updateUgcGate?.future;
+    updatedUgcSettings = settings;
+    _currentUgcSettings = settings;
+    return _workspace(settings).project!;
   }
 
   @override
@@ -424,49 +491,4 @@ class _FakeDeveloperRepository implements DeveloperRepository {
     String bundleName = '',
     String unityExePath = '',
   }) async => const WorldBundleBuildResult(success: false);
-  DeveloperWorkspace _workspace() {
-    return const DeveloperWorkspace(
-      projectRoot: '/tmp/creator',
-      generatedPropsPath: '/tmp/creator/robotopia.dev.props',
-      project: DeveloperProject(
-        schemaVersion: 1,
-        id: 'creator.mod',
-        name: 'Creator Mod',
-      ),
-      lock: DeveloperLock(
-        schemaVersion: 1,
-        projectId: 'creator.mod',
-        resolvedAtUtc: '2026-06-29T00:00:00Z',
-        packages: [
-          LockedPackage(
-            id: 'api.mod',
-            name: 'API Mod',
-            version: '1.0.0',
-            packageUrl: 'file:///api.robotopiamod',
-            packageSha256: 'sha',
-            apiAssemblies: ['ref/Api.dll'],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-LauncherSnapshot _replaceGameInstall(
-  LauncherSnapshot snapshot,
-  GameInstall? install,
-) {
-  return LauncherSnapshot(
-    gameInstall: install,
-    profiles: snapshot.profiles,
-    selectedProfileId: snapshot.selectedProfileId,
-    installedMods: snapshot.installedMods,
-    registryMods: snapshot.registryMods,
-    packageSources: snapshot.packageSources,
-    worldCatalog: snapshot.worldCatalog,
-    legacyMods: snapshot.legacyMods,
-    recentLog: snapshot.recentLog,
-    launcherUpdates: snapshot.launcherUpdates,
-    developerMode: snapshot.developerMode,
-  );
 }
