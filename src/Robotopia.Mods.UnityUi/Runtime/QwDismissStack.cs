@@ -61,5 +61,10 @@ namespace Robotopia.Mods.UnityUi
 
             Top()?.Dismiss();
         }
+
+        internal static void Reset()
+        {
+            Entries.Clear();
+        }
     }
 }

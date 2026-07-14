@@ -9,17 +9,19 @@ Write-Warning "tools/build-ui-bundle.ps1 is deprecated; use 'robotopia unity bui
 
 $repo = Resolve-Path (Join-Path $PSScriptRoot "..")
 $cliApp = Join-Path $repo "apps/robotopia_cli"
+. (Join-Path $PSScriptRoot "flutter-sdk.ps1")
+$dart = Resolve-RobotopiaSdkCommand -Tool dart -RepositoryRoot $repo
 
 Push-Location $cliApp
 try {
-    & dart pub get
+    & $dart pub get
     if ($LASTEXITCODE -ne 0) { throw "dart pub get failed (exit $LASTEXITCODE)." }
 
-    $args = @("run", (Join-Path "bin" "robotopia.dart"), "unity", "build-ui-bundle")
+    $commandArguments = @("run", (Join-Path "bin" "robotopia.dart"), "unity", "build-ui-bundle")
     if ($UnityExe -ne "") {
-        $args += @("--unity", $UnityExe)
+        $commandArguments += @("--unity", $UnityExe)
     }
-    & dart @args
+    & $dart @commandArguments
     if ($LASTEXITCODE -ne 0) { throw "robotopia unity build-ui-bundle failed (exit $LASTEXITCODE)." }
 }
 finally {

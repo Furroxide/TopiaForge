@@ -175,6 +175,10 @@ void OnUpdate(float dt)
 - **Hotkeys** (`ui.Hotkey(QwKey.F7, action)`): polled through whichever input backend
   the game runs; letter keys are suppressed while a text field has focus. Pair with
   `Keybind(...)` fields for rebinding.
+- **Callback isolation**: button/input/list/hotkey callbacks and public QwUi events are
+  invoked independently; one throwing consumer is logged and cannot starve later subscribers.
+- **Host lifetime**: after `UiHost.Dispose`, creation, theme, toast, modal, accent, and
+  hotkey operations throw `ObjectDisposedException` instead of leaking process-global state.
 - **Cursor**: windows/modals lease it automatically. For custom gameplay modals hold a
   `QwCursorLease` — it re-asserts the unlock every frame (the game re-locks per frame).
 - **ESC limitation**: BepInEx UI cannot consume the key before the game sees it; the
@@ -182,17 +186,23 @@ void OnUpdate(float dt)
 
 ## Accessibility
 
-Global, live-applied (no rebuilds — widgets re-tint in place):
+Player-wide settings are live-applied through `QwTheme` (no rebuilds — widgets
+re-tint in place):
 
 - `QwTheme.HighContrast` — re-tones both schemes; custom `SetColor` values are
   emphasized automatically.
 - `QwTheme.UiScale` (0.75–1.5) — canvas-level scaling.
 - `QwTheme.ReducedMotion` — transitions become instant, pulses/punches stop.
-- `QwTheme.MotionScale` (0–2) — HUD motion intensity; multiply your own effect
-  amplitudes by `QwTheme.EffectiveMotion`.
+- `QwTheme.MotionScale` (0–2) — player-wide motion intensity.
 
-The manager's Settings tab exposes these to players; feed your mod's config into them
-(the Zombies pattern: `hudHighContrast`, `hudMotionIntensity`, `hudScale`).
+The manager's Settings tab owns those process-wide values. A mod must not mutate them.
+Pass mod-specific preferences through `QwUiOptions.AccessibilityProfile`, or call
+`host.SetAccessibilityProfile(...)`. High contrast and reduced motion can only
+strengthen the player's global choices; UI scale composes and clamps to 0.75–1.5;
+motion intensity multiplies the global value. Read `host.EffectiveHighContrast`,
+`host.EffectiveUiScale`, `host.EffectiveReducedMotion`, and `host.EffectiveMotion`
+inside custom effects. Host changes retheme only that host. Zombies is the reference
+for `hudHighContrast` and `hudMotionIntensity`.
 
 ## Performance contract
 
@@ -212,9 +222,12 @@ and tween/lease/canvas counters.
 
 Text is TextMeshPro. Fonts resolve through a tiered chain, logged at init:
 
-1. **Brand bundle** (Quicksand + Audiowide SDF assets) — embedded inside
+1. **Brand bundle** (`QuantumWorks Body SDF` and `QuantumWorks Display SDF`) — embedded inside
    `Robotopia.Mods.UnityUi.dll`; built by `robotopia unity build-ui-bundle` from
-   `tools/unity-ui-bundle` (editor must be Unity 6000.0.x ≤ 31 — see that README).
+   `tools/unity-ui-bundle` with Unity 6000.0.23f1. The committed bundle and provenance manifest contain the
+   neutral-named generated derivatives of the attributed, unmodified Quicksand and
+   Audiowide source fonts from that pinned editor. The bundle targets `StandaloneWindows64`; on native
+   macOS, a load failure continues through the fallback chain below.
 2. OS font (Segoe UI) as a dynamic TMP asset.
 3. The game's own TMP default.
 4. Safe-mode banner (kit UI still functions; text is the only casualty).

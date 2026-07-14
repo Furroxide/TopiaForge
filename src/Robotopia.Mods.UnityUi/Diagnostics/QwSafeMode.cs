@@ -25,7 +25,9 @@ namespace Robotopia.Mods.UnityUi
                 Object.DontDestroyOnLoad(root);
                 var canvas = root.AddComponent<Canvas>();
                 canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-                canvas.sortingOrder = QwLayerBands.DefaultCeiling - 1;
+                QwLayers.AssignAllocatedOrder(
+                    canvas,
+                    QwLayers.Allocate(QwLayerBand.Debug, "QwSafeModeBanner"));
 
                 var panel = new GameObject("Panel", typeof(RectTransform));
                 panel.transform.SetParent(root.transform, false);
@@ -57,6 +59,17 @@ namespace Robotopia.Mods.UnityUi
             {
                 // Even the safe mode failed; the log line from the caller is all we have.
             }
+        }
+
+        internal static void Reset()
+        {
+            if (banner != null)
+            {
+                QwLayers.Release(banner);
+                Object.Destroy(banner);
+            }
+
+            banner = null;
         }
     }
 }

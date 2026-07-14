@@ -40,7 +40,7 @@ namespace Robotopia.Mods.UnityUi
 
             var canvas = root.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = Allocate(band, name);
+            Assign(canvas, band, name);
 
             var scaler = root.AddComponent<CanvasScaler>();
             ApplyScaler(scaler);
@@ -56,13 +56,46 @@ namespace Robotopia.Mods.UnityUi
             return root;
         }
 
+        /// <summary>Releases a canvas's allocator slot before the canvas is destroyed.</summary>
+        internal static void Release(GameObject root)
+        {
+            var canvas = root != null ? root.GetComponent<Canvas>() : null;
+            if (canvas != null)
+            {
+                Bands.TryRelease(canvas.sortingOrder);
+            }
+        }
+
+        /// <summary>
+        /// Assigns a previously allocated order. Used only to permute allocator-owned window slots
+        /// during focus changes and to repair Unity's hard-coded dropdown popup order.
+        /// </summary>
+        internal static void AssignAllocatedOrder(Canvas canvas, int sortingOrder)
+        {
+            if (canvas != null)
+            {
+                canvas.sortingOrder = sortingOrder;
+            }
+        }
+
+        private static void Assign(Canvas canvas, QwLayerBand band, string ownerName)
+        {
+            AssignAllocatedOrder(canvas, Allocate(band, ownerName));
+        }
+
         /// <summary>Applies the brand scale mode; re-applied when QwTheme.UiScale changes.</summary>
         public static void ApplyScaler(CanvasScaler scaler)
         {
+            ApplyScaler(scaler, QwTheme.UiScale);
+        }
+
+        /// <summary>Applies the brand scale mode for one host's effective scale.</summary>
+        internal static void ApplyScaler(CanvasScaler scaler, float uiScale)
+        {
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(
-                QwTokens.ReferenceWidth / QwTheme.UiScale,
-                QwTokens.ReferenceHeight / QwTheme.UiScale);
+                QwTokens.ReferenceWidth / uiScale,
+                QwTokens.ReferenceHeight / uiScale);
             scaler.matchWidthOrHeight = 0.5f;
         }
     }

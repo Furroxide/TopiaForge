@@ -14,8 +14,15 @@ namespace Robotopia.Mods.UnityUi
         private QwTone tone = QwTone.Neutral;
         private bool hasCustomColor;
         private string lastText;
+        private byte cachedComposition;
         private string cachedPrefix = string.Empty;
+        private string cachedMiddle = string.Empty;
+        private string cachedSuffix = string.Empty;
+        private string cachedFormat = string.Empty;
         private int cachedValue = int.MinValue;
+        private int cachedValue2 = int.MinValue;
+        private int cachedValue3 = int.MinValue;
+        private int cachedValue4 = int.MinValue;
 
         internal QwLabel(QwContainer parent, string initialText, QwTextStyle textStyle)
             : base(parent.Host, parent.Scheme, parent.CreateChildGameObject("Label"))
@@ -49,10 +56,21 @@ namespace Robotopia.Mods.UnityUi
         /// <summary>Semantic color role; re-applied automatically on theme change.</summary>
         public QwLabel Tone(QwTone value)
         {
+            SetTone(value);
+            return this;
+        }
+
+        /// <summary>Dirty-checked runtime semantic color role.</summary>
+        public void SetTone(QwTone value)
+        {
+            if (!hasCustomColor && tone == value)
+            {
+                return;
+            }
+
             tone = value;
             hasCustomColor = false;
             text.color = Theme.ToneColor(tone);
-            return this;
         }
 
         public QwLabel AlignCenter()
@@ -88,6 +106,7 @@ namespace Robotopia.Mods.UnityUi
                 return;
             }
 
+            cachedComposition = 0;
             lastText = value;
             text.text = value;
         }
@@ -98,14 +117,105 @@ namespace Robotopia.Mods.UnityUi
         /// </summary>
         public void SetText(string prefix, int value)
         {
-            if (value == cachedValue && ReferenceEquals(prefix, cachedPrefix))
+            if (cachedComposition == 1 && value == cachedValue && ReferenceEquals(prefix, cachedPrefix))
             {
                 return;
             }
 
+            cachedComposition = 1;
             cachedPrefix = prefix;
             cachedValue = value;
             var composed = prefix + value;
+            lastText = composed;
+            text.text = composed;
+        }
+
+        /// <summary>
+        /// Formatted integer update that only formats when the value or format changes.
+        /// </summary>
+        public void SetNumber(int value, string format)
+        {
+            SetNumber(string.Empty, value, format);
+        }
+
+        /// <summary>
+        /// Prefix + formatted integer update that only allocates when an input changes.
+        /// </summary>
+        public void SetNumber(string prefix, int value, string format)
+        {
+            if (cachedComposition == 2 &&
+                value == cachedValue &&
+                ReferenceEquals(prefix, cachedPrefix) &&
+                ReferenceEquals(format, cachedFormat))
+            {
+                return;
+            }
+
+            cachedComposition = 2;
+            cachedPrefix = prefix;
+            cachedFormat = format;
+            cachedValue = value;
+            var composed = prefix + value.ToString(format, System.Globalization.CultureInfo.CurrentCulture);
+            lastText = composed;
+            text.text = composed;
+        }
+
+        /// <summary>Two-integer text update that only composes when an input changes.</summary>
+        public void SetText(string prefix, int first, string middle, int second)
+        {
+            if (cachedComposition == 3 &&
+                first == cachedValue &&
+                second == cachedValue2 &&
+                ReferenceEquals(prefix, cachedPrefix) &&
+                ReferenceEquals(middle, cachedMiddle))
+            {
+                return;
+            }
+
+            cachedComposition = 3;
+            cachedPrefix = prefix;
+            cachedMiddle = middle;
+            cachedValue = first;
+            cachedValue2 = second;
+            var composed = prefix + first + middle + second;
+            lastText = composed;
+            text.text = composed;
+        }
+
+        /// <summary>Four-integer text update that only composes when an input changes.</summary>
+        public void SetText(
+            string prefix,
+            int first,
+            string secondPrefix,
+            int second,
+            string thirdPrefix,
+            int third,
+            string fourthPrefix,
+            int fourth)
+        {
+            if (cachedComposition == 4 &&
+                first == cachedValue &&
+                second == cachedValue2 &&
+                third == cachedValue3 &&
+                fourth == cachedValue4 &&
+                ReferenceEquals(prefix, cachedPrefix) &&
+                ReferenceEquals(secondPrefix, cachedMiddle) &&
+                ReferenceEquals(thirdPrefix, cachedSuffix) &&
+                ReferenceEquals(fourthPrefix, cachedFormat))
+            {
+                return;
+            }
+
+            cachedComposition = 4;
+            cachedPrefix = prefix;
+            cachedMiddle = secondPrefix;
+            cachedSuffix = thirdPrefix;
+            cachedFormat = fourthPrefix;
+            cachedValue = first;
+            cachedValue2 = second;
+            cachedValue3 = third;
+            cachedValue4 = fourth;
+            var composed = prefix + first + secondPrefix + second + thirdPrefix + third + fourthPrefix + fourth;
             lastText = composed;
             text.text = composed;
         }

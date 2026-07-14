@@ -46,6 +46,16 @@ namespace Robotopia.Mods.UnityUi
         /// <summary>Registers a hotkey; returns a handle whose Key can be rebound.</summary>
         public static object Register(string owner, QwKey key, Action action)
         {
+            if (string.IsNullOrWhiteSpace(owner))
+            {
+                throw new ArgumentException("A stable hotkey owner is required.", nameof(owner));
+            }
+
+            if (action == null)
+            {
+                throw new ArgumentNullException(nameof(action));
+            }
+
             var registration = new Registration(owner, key, action);
             Registrations.Add(registration);
             QwRuntime.Ensure();
@@ -89,9 +99,14 @@ namespace Robotopia.Mods.UnityUi
 
                 if (WasPressedThisFrame(registration.Key))
                 {
-                    registration.Action();
+                    QwCallbacks.Invoke(registration.Action, "Hotkey " + registration.Key);
                 }
             }
+        }
+
+        internal static void Reset()
+        {
+            Registrations.Clear();
         }
 
         /// <summary>Any key pressed this frame (keybind capture). None when nothing pressed.</summary>

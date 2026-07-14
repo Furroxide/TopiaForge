@@ -61,12 +61,12 @@ namespace Robotopia.Mods.UnityUi
 
             field = value;
             Version++;
-            Changed?.Invoke();
+            QwCallbacks.Invoke(Changed, "Theme Changed");
         }
 
         private static float Clamp(float value, float min, float max)
         {
-            return value < min ? min : value > max ? max : value;
+            return QwAccessibilityProfile.ClampFinite(value, min, max, 1f);
         }
     }
 }

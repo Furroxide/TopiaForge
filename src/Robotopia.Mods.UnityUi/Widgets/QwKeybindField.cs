@@ -131,7 +131,7 @@ namespace Robotopia.Mods.UnityUi
             if (captured != QwKey.None)
             {
                 key = captured;
-                onChanged(captured);
+                QwCallbacks.Invoke(onChanged, captured, "Keybind change");
             }
 
             Repaint();

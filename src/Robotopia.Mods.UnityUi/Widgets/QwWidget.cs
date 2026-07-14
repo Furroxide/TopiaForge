@@ -24,7 +24,8 @@ namespace Robotopia.Mods.UnityUi
             Host = host;
             Scheme = scheme;
             Go = go;
-            Rect = go.GetComponent<RectTransform>() ?? go.AddComponent<RectTransform>();
+            Rect = QwComponents.GetOrAdd<RectTransform>(go);
+            host.RegisterWidget(this);
             if (this is IQwThemeAware aware)
             {
                 host.RegisterThemeAware(aware);
@@ -54,7 +55,7 @@ namespace Robotopia.Mods.UnityUi
             visible = value;
             if (visibilityGroup == null)
             {
-                visibilityGroup = Go.GetComponent<CanvasGroup>() ?? Go.AddComponent<CanvasGroup>();
+                visibilityGroup = QwComponents.GetOrAdd<CanvasGroup>(Go);
             }
 
             visibilityGroup.alpha = value ? 1f : 0f;
@@ -65,27 +66,19 @@ namespace Robotopia.Mods.UnityUi
         /// <summary>Destroys the widget's GameObject and unregisters it from theming.</summary>
         public void Destroy()
         {
-            if (this is IQwThemeAware aware)
-            {
-                Host.UnregisterThemeAware(aware);
-            }
-
-            if (Go != null)
-            {
-                Object.Destroy(Go);
-            }
+            Host.DestroyWidget(this);
         }
 
         internal LayoutElement EnsureLayoutElement()
         {
-            return Go.GetComponent<LayoutElement>() ?? Go.AddComponent<LayoutElement>();
+            return QwComponents.GetOrAdd<LayoutElement>(Go);
         }
 
         internal CanvasGroup EnsureCanvasGroup()
         {
             if (visibilityGroup == null)
             {
-                visibilityGroup = Go.GetComponent<CanvasGroup>() ?? Go.AddComponent<CanvasGroup>();
+                visibilityGroup = QwComponents.GetOrAdd<CanvasGroup>(Go);
             }
 
             return visibilityGroup;

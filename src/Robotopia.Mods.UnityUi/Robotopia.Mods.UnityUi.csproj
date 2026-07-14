@@ -11,6 +11,7 @@
     <Version>1.0.0</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0</FileVersion>
+    <InformationalVersion>1.0.0</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -41,5 +42,19 @@
   -->
   <ItemGroup>
     <EmbeddedResource Include="Assets\quantumworks-ui.bundle" Condition="Exists('Assets\quantumworks-ui.bundle')" LogicalName="Robotopia.Mods.UnityUi.quantumworks-ui.bundle" />
+  </ItemGroup>
+
+  <!--
+    The embedded brand bundle contains redistributable OFL fonts. Keep their
+    license texts beside every copied UnityUi assembly so mod packaging can
+    carry the notices with standalone .robotopiamod release assets.
+  -->
+  <ItemGroup>
+    <None Include="..\..\tools\unity-ui-bundle\Assets\Fonts\Audiowide-OFL.txt"
+          Link="third_party\Robotopia.Mods.UnityUi\LICENSES\Audiowide-OFL.txt"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\tools\unity-ui-bundle\Assets\Fonts\Quicksand-OFL.txt"
+          Link="third_party\Robotopia.Mods.UnityUi\LICENSES\Quicksand-OFL.txt"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

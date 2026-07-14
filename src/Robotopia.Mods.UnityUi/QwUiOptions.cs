@@ -21,6 +21,12 @@ namespace Robotopia.Mods.UnityUi
         /// <summary>Directory for UI state persistence (window rects). Falls back to in-memory.</summary>
         public string? DataDirectory { get; set; }
 
+        /// <summary>
+        /// Optional host-scoped accessibility preferences. These compose with, and
+        /// cannot weaken, process-wide high-contrast or reduced-motion settings.
+        /// </summary>
+        public QwAccessibilityProfile AccessibilityProfile { get; set; } = QwAccessibilityProfile.Default;
+
         public Action<string>? LogInfo { get; set; }
         public Action<string>? LogWarn { get; set; }
         public Action<string>? LogError { get; set; }

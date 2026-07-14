@@ -55,7 +55,7 @@ namespace Robotopia.Mods.UnityUi
             input.placeholder = placeholderComponent;
             input.lineType = TMP_InputField.LineType.SingleLine;
             input.text = value;
-            input.onValueChanged.AddListener(next => onChanged(next));
+            input.onValueChanged.AddListener(next => QwCallbacks.Invoke(onChanged, next, "Input change"));
             input.onSelect.AddListener(_ =>
             {
                 focused = true;
@@ -82,7 +82,7 @@ namespace Robotopia.Mods.UnityUi
         /// <summary>Enter-to-submit hook (Packages path field, conversation send).</summary>
         public QwInputField OnSubmit(Action<string> onSubmit)
         {
-            input.onSubmit.AddListener(value => onSubmit(value));
+            input.onSubmit.AddListener(value => QwCallbacks.Invoke(onSubmit, value, "Input submit"));
             return this;
         }
 

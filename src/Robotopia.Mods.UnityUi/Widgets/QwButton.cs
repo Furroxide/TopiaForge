@@ -119,7 +119,7 @@ namespace Robotopia.Mods.UnityUi
 
             button = Go.AddComponent<Button>();
             button.targetGraphic = fill;
-            button.onClick.AddListener(() => onClick());
+            button.onClick.AddListener(() => QwCallbacks.Invoke(onClick, "Button click"));
 
             var colors = button.colors;
             colors.normalColor = Color.white;
@@ -130,7 +130,7 @@ namespace Robotopia.Mods.UnityUi
             button.colors = colors;
 
             var press = Go.AddComponent<QwPressEffect>();
-            press.Initialize(body, shadow);
+            press.Initialize(Host, body, shadow);
 
             ApplyTheme(Theme);
         }
@@ -138,6 +138,12 @@ namespace Robotopia.Mods.UnityUi
         private bool HasShadow => style == QwButtonStyle.Filled || style == QwButtonStyle.Danger || style == QwButtonStyle.Outline;
 
         public Button Button => button;
+
+        /// <summary>Moves keyboard/controller focus to this button.</summary>
+        public void Focus()
+        {
+            button.Select();
+        }
 
         /// <summary>Dirty-checked label update.</summary>
         public void SetText(string value)
@@ -275,19 +281,21 @@ namespace Robotopia.Mods.UnityUi
     internal sealed class QwPressEffect : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerExitHandler
     {
         private RectTransform? body;
+        private UiHost? host;
         private Image? shadow;
         private Color shadowColor;
         private bool pressed;
 
-        public void Initialize(RectTransform bodyRect, Image? shadowImage)
+        public void Initialize(UiHost owner, RectTransform bodyRect, Image? shadowImage)
         {
+            host = owner;
             body = bodyRect;
             shadow = shadowImage;
         }
 
         public void OnPointerDown(PointerEventData eventData)
         {
-            if (QwTheme.ReducedMotion || body == null || pressed)
+            if (host?.EffectiveReducedMotion != false || body == null || pressed)
             {
                 return;
             }

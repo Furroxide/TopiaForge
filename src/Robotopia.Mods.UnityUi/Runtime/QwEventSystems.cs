@@ -11,6 +11,8 @@ namespace Robotopia.Mods.UnityUi
     /// </summary>
     public static class QwEventSystems
     {
+        private static GameObject? ownedEventSystem;
+
         public static void EnsureEventSystem()
         {
             if (Object.FindFirstObjectByType<EventSystem>() != null)
@@ -21,6 +23,7 @@ namespace Robotopia.Mods.UnityUi
             var go = new GameObject("QuantumWorksEventSystem");
             Object.DontDestroyOnLoad(go);
             go.AddComponent<EventSystem>();
+            ownedEventSystem = go;
 
             if (QwInput.LegacyAvailable)
             {
@@ -32,6 +35,16 @@ namespace Robotopia.Mods.UnityUi
                 go.AddComponent<InputSystemUIInputModule>();
                 QwLog.Info("Created EventSystem with InputSystemUIInputModule (InputSystem-only mode).");
             }
+        }
+
+        internal static void Reset()
+        {
+            if (ownedEventSystem != null)
+            {
+                Object.Destroy(ownedEventSystem);
+            }
+
+            ownedEventSystem = null;
         }
     }
 }

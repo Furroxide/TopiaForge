@@ -105,7 +105,7 @@ namespace Robotopia.Mods.UnityUi
 
                 value = next;
                 Repaint();
-                onChanged(next);
+                QwCallbacks.Invoke(onChanged, next, "Toggle change");
             });
 
             Repaint();

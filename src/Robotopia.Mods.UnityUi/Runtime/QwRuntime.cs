@@ -33,6 +33,26 @@ namespace Robotopia.Mods.UnityUi
             _ = Instance;
         }
 
+        /// <summary>Stops and destroys the hidden driver. Safe to call repeatedly.</summary>
+        internal static void Shutdown()
+        {
+            var current = instance;
+            instance = null;
+            if (current != null)
+            {
+                current.enabled = false;
+                Object.Destroy(current.gameObject);
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (ReferenceEquals(instance, this))
+            {
+                instance = null;
+            }
+        }
+
         private void Update()
         {
             // The game re-asserts its own cursor lock every frame, so the lease must

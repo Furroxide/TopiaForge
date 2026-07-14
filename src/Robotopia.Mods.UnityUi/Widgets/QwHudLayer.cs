@@ -119,10 +119,21 @@ namespace Robotopia.Mods.UnityUi
 
         public QwBanner Tone(QwTone value)
         {
+            SetTone(value);
+            return this;
+        }
+
+        /// <summary>Dirty-checked runtime semantic color role.</summary>
+        public void SetTone(QwTone value)
+        {
+            if (!hasCustomColor && tone == value)
+            {
+                return;
+            }
+
             tone = value;
             hasCustomColor = false;
             ApplyTheme(Theme);
-            return this;
         }
 
         /// <summary>

@@ -151,7 +151,7 @@ namespace Robotopia.Mods.UnityUi
 
             button = Go.AddComponent<Button>();
             button.targetGraphic = fill;
-            button.onClick.AddListener(() => onClick());
+            button.onClick.AddListener(() => QwCallbacks.Invoke(onClick, "Card click"));
 
             var colors = button.colors;
             colors.normalColor = Color.white;
@@ -162,7 +162,7 @@ namespace Robotopia.Mods.UnityUi
             button.colors = colors;
 
             var press = Go.AddComponent<QwPressEffect>();
-            press.Initialize(body, shadow);
+            press.Initialize(Host, body, shadow);
 
             var hover = Go.AddComponent<QwHoverNotifier>();
             hover.Changed = value =>
@@ -327,12 +327,12 @@ namespace Robotopia.Mods.UnityUi
 
         public void OnPointerEnter(PointerEventData eventData)
         {
-            Changed?.Invoke(true);
+            QwCallbacks.Invoke(Changed, true, "Card hover");
         }
 
         public void OnPointerExit(PointerEventData eventData)
         {
-            Changed?.Invoke(false);
+            QwCallbacks.Invoke(Changed, false, "Card hover");
         }
     }
 }

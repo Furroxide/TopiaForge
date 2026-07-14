@@ -15,9 +15,9 @@ namespace Robotopia.Mods.UnityUi
     public static class QwBrandBundle
     {
         private const string ResourceName = "Robotopia.Mods.UnityUi.quantumworks-ui.bundle";
-        private const string QuicksandName = "QuantumWorks-Quicksand SDF";
-        private const string QuicksandBoldName = "QuantumWorks-Quicksand-Bold SDF";
-        private const string AudiowideName = "QuantumWorks-Audiowide SDF";
+        private const string BodyName = "QuantumWorks Body SDF";
+        private const string BodyBoldName = "QuantumWorks Body Bold SDF";
+        private const string DisplayName = "QuantumWorks Display SDF";
 
         private static bool attempted;
         private static AssetBundle? bundle;
@@ -56,16 +56,16 @@ namespace Robotopia.Mods.UnityUi
                     return false;
                 }
 
-                BodyFont = bundle.LoadAsset<TMP_FontAsset>(QuicksandName);
-                BoldFont = bundle.LoadAsset<TMP_FontAsset>(QuicksandBoldName);
-                DisplayFont = bundle.LoadAsset<TMP_FontAsset>(AudiowideName);
+                BodyFont = bundle.LoadAsset<TMP_FontAsset>(BodyName);
+                BoldFont = bundle.LoadAsset<TMP_FontAsset>(BodyBoldName);
+                DisplayFont = bundle.LoadAsset<TMP_FontAsset>(DisplayName);
 
                 var provenance = bundle.LoadAsset<TextAsset>("UiBundleManifest");
                 QwLog.Info("Brand bundle loaded" + (provenance != null ? ": " + Condense(provenance.text) : "."));
 
                 if (BodyFont == null || DisplayFont == null)
                 {
-                    QwLog.Warn("Brand bundle is missing expected font assets (" + QuicksandName + ", " + AudiowideName + "); font fallback tiers will fill the gaps.");
+                    QwLog.Warn("Brand bundle is missing expected font assets (" + BodyName + ", " + DisplayName + "); font fallback tiers will fill the gaps.");
                 }
 
                 return true;

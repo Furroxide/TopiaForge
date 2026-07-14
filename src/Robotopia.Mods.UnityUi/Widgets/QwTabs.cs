@@ -126,7 +126,7 @@ namespace Robotopia.Mods.UnityUi
                 Repaint();
             }
 
-            onSelected?.Invoke(index);
+            QwCallbacks.Invoke(onSelected, index, "Tab selection");
         }
 
         /// <summary>Moves selection by a delta (keyboard Up/Down / Ctrl+Tab cycling).</summary>

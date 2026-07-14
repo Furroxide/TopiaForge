@@ -103,7 +103,7 @@ namespace Robotopia.Mods.UnityUi
             slider.onValueChanged.AddListener(next =>
             {
                 UpdateValueLabel(next);
-                onChanged(next);
+                QwCallbacks.Invoke(onChanged, next, "Slider change");
             });
 
             ApplyTheme(Theme);

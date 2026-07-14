@@ -7,9 +7,13 @@ namespace Robotopia.Mods.UnityUi
     /// Raw image handle with dirty-checked setters — the building block for reticles,
     /// hit markers, vignettes, and flashes that reposition/retint every frame.
     /// </summary>
-    public sealed class QwImage : QwWidget
+    public sealed class QwImage : QwWidget, IQwThemeAware
     {
         private readonly Image image;
+        private QwTone tone = QwTone.Neutral;
+        private bool hasCustomColor;
+        private Color customColor = Color.white;
+        private float alpha = 1f;
         private float lastX = float.NaN;
         private float lastY = float.NaN;
         private float lastWidth = float.NaN;
@@ -26,6 +30,8 @@ namespace Robotopia.Mods.UnityUi
             {
                 this.Free();
             }
+
+            ApplyTheme(Theme);
         }
 
         public Image Image => image;
@@ -85,19 +91,42 @@ namespace Robotopia.Mods.UnityUi
 
         public void SetColor(Color color)
         {
-            var emphasized = Theme.Emphasize(color);
-            if (image.color != emphasized)
+            hasCustomColor = true;
+            customColor = color;
+            alpha = color.a;
+            ApplyTheme(Theme);
+        }
+
+        /// <summary>Uses a theme semantic tone and follows accessibility theme changes.</summary>
+        public void SetTone(QwTone value)
+        {
+            if (!hasCustomColor && tone == value)
             {
-                image.color = emphasized;
+                return;
             }
+
+            tone = value;
+            hasCustomColor = false;
+            ApplyTheme(Theme);
         }
 
         public void SetAlpha(float alpha)
         {
+            this.alpha = alpha;
             var color = image.color;
             if (color.a != alpha)
             {
                 color.a = alpha;
+                image.color = color;
+            }
+        }
+
+        public void ApplyTheme(QwResolvedTheme theme)
+        {
+            var color = hasCustomColor ? theme.Emphasize(customColor) : theme.ToneColor(tone);
+            color.a = alpha;
+            if (image.color != color)
+            {
                 image.color = color;
             }
         }

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
 
 namespace Robotopia.Mods.UnityUi
 {
@@ -37,13 +36,30 @@ namespace Robotopia.Mods.UnityUi
         public void Write(string key, string value)
         {
             EnsureLoaded();
-            if (entries.TryGetValue(key, out var existing) && string.Equals(existing, value, StringComparison.Ordinal))
+            if (!QwStateFileCodec.IsValidEntry(key, value))
+            {
+                QwLog.Warn("UI state write ignored because its key/value exceeds the bounded state contract.");
+                return;
+            }
+
+            var hadExisting = entries.TryGetValue(key, out var existing);
+            if (hadExisting && string.Equals(existing, value, StringComparison.Ordinal))
             {
                 return;
             }
 
             entries[key] = value;
-            Flush();
+            if (!Flush())
+            {
+                if (hadExisting)
+                {
+                    entries[key] = existing!;
+                }
+                else
+                {
+                    entries.Remove(key);
+                }
+            }
         }
 
         private void EnsureLoaded()
@@ -56,20 +72,9 @@ namespace Robotopia.Mods.UnityUi
             loaded = true;
             try
             {
-                if (!File.Exists(path))
+                foreach (var entry in QwStateFileCodec.Load(path))
                 {
-                    return;
-                }
-
-                foreach (var line in File.ReadAllLines(path))
-                {
-                    var separator = line.IndexOf('\t');
-                    if (separator <= 0)
-                    {
-                        continue;
-                    }
-
-                    entries[Unescape(line.Substring(0, separator))] = Unescape(line.Substring(separator + 1));
+                    entries.Add(entry.Key, entry.Value);
                 }
             }
             catch (Exception ex)
@@ -79,66 +84,20 @@ namespace Robotopia.Mods.UnityUi
             }
         }
 
-        private void Flush()
+        private bool Flush()
         {
             try
             {
-                var directory = Path.GetDirectoryName(path);
-                if (!string.IsNullOrEmpty(directory))
-                {
-                    Directory.CreateDirectory(directory);
-                }
-
-                var builder = new StringBuilder();
-                foreach (var entry in entries)
-                {
-                    builder.Append(Escape(entry.Key)).Append('\t').Append(Escape(entry.Value)).Append('\n');
-                }
-
-                var temp = path + ".tmp";
-                File.WriteAllText(temp, builder.ToString());
-                if (File.Exists(path))
-                {
-                    File.Delete(path);
-                }
-
-                File.Move(temp, path);
+                QwStateFileCodec.Save(path, entries);
+                return true;
             }
             catch (Exception ex)
             {
                 QwLog.Warn("UI state store write failed (" + ex.Message + ").");
+                return false;
             }
         }
 
-        private static string Escape(string value)
-        {
-            return value.Replace("\\", "\\\\").Replace("\t", "\\t").Replace("\n", "\\n").Replace("\r", "\\r");
-        }
-
-        private static string Unescape(string value)
-        {
-            var builder = new StringBuilder(value.Length);
-            for (var index = 0; index < value.Length; index++)
-            {
-                var current = value[index];
-                if (current != '\\' || index + 1 >= value.Length)
-                {
-                    builder.Append(current);
-                    continue;
-                }
-
-                index++;
-                builder.Append(value[index] switch
-                {
-                    't' => '\t',
-                    'n' => '\n',
-                    'r' => '\r',
-                    _ => value[index],
-                });
-            }
-
-            return builder.ToString();
-        }
     }
 
     /// <summary>In-memory store for hosts created without a data directory.</summary>

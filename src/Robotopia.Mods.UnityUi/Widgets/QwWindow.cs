@@ -2,7 +2,6 @@ using System;
 using System.Globalization;
 using TMPro;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using UImage = UnityEngine.UI.Image;
 
@@ -17,6 +16,7 @@ namespace Robotopia.Mods.UnityUi
     public sealed class QwWindow : QwContainer, IQwThemeAware, IQwDismissable
     {
         private readonly UImage shadow;
+        private readonly GameObject canvasRoot;
         private readonly UImage fill;
         private readonly UImage ring;
         private readonly UImage titleBarFill;
@@ -26,10 +26,12 @@ namespace Robotopia.Mods.UnityUi
         private readonly bool autoHeight;
         private bool open;
         private bool closing;
+        private bool tornDown;
 
         internal QwWindow(UiHost host, QwContainer layerRoot, string id, string title, float width, float height)
             : base(host, layerRoot.Scheme, layerRoot.CreateChildGameObject("Window"))
         {
+            canvasRoot = layerRoot.Go;
             persistKey = "win:" + id;
             autoHeight = height <= 0f;
 
@@ -121,11 +123,13 @@ namespace Robotopia.Mods.UnityUi
 
         public void SetTitle(string title)
         {
+            ThrowIfTornDown();
             titleLabel.text = title;
         }
 
         public void Show()
         {
+            ThrowIfTornDown();
             if (open)
             {
                 BringToFront();
@@ -144,7 +148,7 @@ namespace Robotopia.Mods.UnityUi
 
         public void Close()
         {
-            if (!open || closing)
+            if (tornDown || !open || closing)
             {
                 return;
             }
@@ -162,7 +166,7 @@ namespace Robotopia.Mods.UnityUi
                     Go.SetActive(false);
                 }
 
-                Closed?.Invoke();
+                RaiseClosed();
             });
         }
 
@@ -180,18 +184,48 @@ namespace Robotopia.Mods.UnityUi
 
         public void BringToFront()
         {
+            if (tornDown)
+            {
+                return;
+            }
+
             QwWindowRegistry.BringToFront(this);
         }
 
         /// <summary>Host teardown: release shared state without animation.</summary>
         internal void Teardown()
         {
+            if (tornDown)
+            {
+                return;
+            }
+
+            tornDown = true;
+            QwTween.Cancel(this);
             cursorLease.Release();
             QwDismissStack.Remove(this);
             QwWindowRegistry.Unregister(this);
+            open = false;
+            closing = false;
+            Closed = null;
+        }
+
+        private void ThrowIfTornDown()
+        {
+            if (tornDown)
+            {
+                throw new ObjectDisposedException(nameof(QwWindow));
+            }
+        }
+
+        private void RaiseClosed()
+        {
+            QwCallbacks.Invoke(Closed, "Window Closed");
         }
 
         internal Canvas? OwnCanvas => Go != null ? Go.GetComponentInParent<Canvas>() : null;
+
+        internal GameObject CanvasRoot => canvasRoot;
 
         internal void HandleDrag(Vector2 screenDelta)
         {
@@ -301,86 +335,4 @@ namespace Robotopia.Mods.UnityUi
         }
     }
 
-    /// <summary>Title-bar drag behavior.</summary>
-    internal sealed class QwWindowDrag : MonoBehaviour, IDragHandler, IEndDragHandler, IPointerDownHandler
-    {
-        public QwWindow? Window;
-
-        public void OnPointerDown(PointerEventData eventData)
-        {
-            Window?.BringToFront();
-        }
-
-        public void OnDrag(PointerEventData eventData)
-        {
-            Window?.HandleDrag(eventData.delta);
-        }
-
-        public void OnEndDrag(PointerEventData eventData)
-        {
-            Window?.HandleDragEnd();
-        }
-    }
-
-    /// <summary>Click-anywhere-to-front behavior on the window body.</summary>
-    internal sealed class QwWindowFocus : MonoBehaviour, IPointerDownHandler
-    {
-        public QwWindow? Window;
-
-        public void OnPointerDown(PointerEventData eventData)
-        {
-            Window?.BringToFront();
-        }
-    }
-
-    /// <summary>
-    /// Process-wide window z-order: focus reassigns canvas sorting orders sequentially
-    /// from the window band base, so click-to-front never exhausts the band.
-    /// </summary>
-    internal static class QwWindowRegistry
-    {
-        private static readonly System.Collections.Generic.List<QwWindow> Order = new System.Collections.Generic.List<QwWindow>();
-
-        public static void Register(QwWindow window)
-        {
-            if (!Order.Contains(window))
-            {
-                Order.Add(window);
-                Reassign();
-            }
-        }
-
-        public static void Unregister(QwWindow window)
-        {
-            if (Order.Remove(window))
-            {
-                Reassign();
-            }
-        }
-
-        public static void BringToFront(QwWindow window)
-        {
-            var index = Order.IndexOf(window);
-            if (index < 0 || index == Order.Count - 1)
-            {
-                return;
-            }
-
-            Order.RemoveAt(index);
-            Order.Add(window);
-            Reassign();
-        }
-
-        private static void Reassign()
-        {
-            for (var index = 0; index < Order.Count; index++)
-            {
-                var canvas = Order[index].OwnCanvas;
-                if (canvas != null)
-                {
-                    canvas.sortingOrder = QwLayerBands.DefaultWindowBase + index;
-                }
-            }
-        }
-    }
 }

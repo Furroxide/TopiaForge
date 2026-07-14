@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 using UImage = UnityEngine.UI.Image;
 
 namespace Robotopia.Mods.UnityUi
@@ -13,6 +14,7 @@ namespace Robotopia.Mods.UnityUi
     {
         private const float PipSize = 12f;
 
+        private readonly HorizontalLayoutGroup layout;
         private readonly List<UImage> pips = new List<UImage>();
         private int filledCount = -1;
         private float lastRegen = -1f;
@@ -22,7 +24,15 @@ namespace Robotopia.Mods.UnityUi
             : base(parent.Host, parent.Scheme, parent.CreateChildGameObject("PipRow"))
         {
             QwLayout.ApplyRow(Go, QwGap.Xs, QwGap.None);
+            layout = QwComponents.GetOrAdd<HorizontalLayoutGroup>(Go);
             this.FixedHeight(PipSize + 2f);
+        }
+
+        /// <summary>Centers the complete pip group within the row.</summary>
+        public QwPipRow AlignCenter()
+        {
+            layout.childAlignment = TextAnchor.MiddleCenter;
+            return this;
         }
 
         public QwPipRow Tone(QwTone value)

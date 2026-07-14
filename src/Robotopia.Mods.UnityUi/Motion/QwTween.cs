@@ -90,6 +90,28 @@ namespace Robotopia.Mods.UnityUi
                     continue;
                 }
 
+                if (Pool[index].Target.Go == null)
+                {
+                    Pool[index].Active = false;
+                    Pool[index].OnDone = null;
+                    ActiveCount--;
+                    continue;
+                }
+
+                if (Pool[index].Target.Host.EffectiveReducedMotion)
+                {
+                    var target = Pool[index].Target;
+                    var kind = Pool[index].Kind;
+                    var endValue = Pool[index].To;
+                    var onDone = Pool[index].OnDone;
+                    Pool[index].Active = false;
+                    Pool[index].OnDone = null;
+                    ActiveCount--;
+                    Apply(target, kind, endValue);
+                    QwCallbacks.Invoke(onDone, "Tween completion");
+                    continue;
+                }
+
                 Pool[index].Elapsed += unscaledDelta;
                 var t = Pool[index].Duration <= 0f ? 1f : Mathf.Clamp01(Pool[index].Elapsed / Pool[index].Duration);
                 var eased = QwEasing.Evaluate(Pool[index].Ease, t);
@@ -102,19 +124,27 @@ namespace Robotopia.Mods.UnityUi
                     Pool[index].Active = false;
                     Pool[index].OnDone = null;
                     ActiveCount--;
-                    onDone?.Invoke();
+                    QwCallbacks.Invoke(onDone, "Tween completion");
                 }
             }
+        }
+
+        internal static void Reset()
+        {
+            Array.Clear(Pool, 0, Pool.Length);
+            highWater = 0;
+            overflowLogged = false;
+            ActiveCount = 0;
         }
 
         private static void Start(QwWidget target, Channel kind, float from, float to, float duration, QwEase ease, Action? onDone)
         {
             QwRuntime.Ensure();
 
-            if (QwTheme.ReducedMotion || duration <= 0f)
+            if (target.Host.EffectiveReducedMotion || duration <= 0f)
             {
                 Apply(target, kind, to);
-                onDone?.Invoke();
+                QwCallbacks.Invoke(onDone, "Tween completion");
                 return;
             }
 
@@ -163,7 +193,7 @@ namespace Robotopia.Mods.UnityUi
             }
 
             Apply(target, kind, to);
-            onDone?.Invoke();
+            QwCallbacks.Invoke(onDone, "Tween completion");
         }
 
         private static void Apply(QwWidget target, Channel kind, float value)
@@ -182,20 +212,20 @@ namespace Robotopia.Mods.UnityUi
                     target.Rect.localScale = new Vector3(value, value, 1f);
                     break;
                 case Channel.OffsetX:
-                {
-                    var position = target.Rect.anchoredPosition;
-                    position.x = value;
-                    target.Rect.anchoredPosition = position;
-                    break;
-                }
+                    {
+                        var position = target.Rect.anchoredPosition;
+                        position.x = value;
+                        target.Rect.anchoredPosition = position;
+                        break;
+                    }
 
                 case Channel.OffsetY:
-                {
-                    var position = target.Rect.anchoredPosition;
-                    position.y = value;
-                    target.Rect.anchoredPosition = position;
-                    break;
-                }
+                    {
+                        var position = target.Rect.anchoredPosition;
+                        position.y = value;
+                        target.Rect.anchoredPosition = position;
+                        break;
+                    }
             }
         }
     }
