@@ -20,8 +20,7 @@ ModManifest _manifest({
   });
 }
 
-const _sha =
-    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const _sha = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 void main() {
   group('RegistryIndexEntry', () {
@@ -32,10 +31,11 @@ void main() {
         packageSha256: _sha.toUpperCase(),
         changelog: 'Added fuel gauge.',
         origin: 'community',
-        history: const [
+        history: [
           RegistryVersionRef(
             version: '1.1.0',
-            downloadUrl: 'https://example.com/author.jetpack-1.1.0.robotopiamod',
+            downloadUrl:
+                'https://example.com/author.jetpack-1.1.0.robotopiamod',
             packageSha256: _sha,
           ),
         ],
@@ -66,6 +66,41 @@ void main() {
       expect(entry.manifest.id, 'author.jetpack');
       expect(entry.origin, isEmpty);
       expect(entry.history, isEmpty);
+      expect(entry.toJson()['someFutureField'], {'nested': true});
+    });
+
+    test('preserves unknown index and history fields immutably', () {
+      final entry = RegistryIndexEntry.fromJson({
+        'manifest': _manifest().toJson(),
+        'downloadUrl': 'https://example.com/pkg.robotopiamod',
+        'packageSha256': _sha,
+        'futureIndex': {
+          'channels': ['stable'],
+        },
+        'history': [
+          {
+            'version': '1.1.0',
+            'downloadUrl': 'https://example.com/old.robotopiamod',
+            'packageSha256': _sha,
+            'futureHistory': {'provenance': true},
+          },
+        ],
+      });
+
+      final rewritten = entry.toJson();
+      expect(rewritten['futureIndex'], {
+        'channels': ['stable'],
+      });
+      expect((rewritten['history'] as List).single['futureHistory'], {
+        'provenance': true,
+      });
+      expect(() => entry.extraFields['mutate'] = true, throwsUnsupportedError);
+      final nested = entry.extraFields['futureIndex'] as Map;
+      expect(() => nested['mutate'] = true, throwsUnsupportedError);
+      expect(
+        () => (nested['channels'] as List).add('nightly'),
+        throwsUnsupportedError,
+      );
     });
   });
 
@@ -102,6 +137,66 @@ void main() {
       expect(restored.validate(), isEmpty);
     });
 
+    test('preserves nested unknown entry and version fields', () {
+      final source = {
+        r'$schema': ModRegistryFormat.canonicalEntrySchemaUrl,
+        'formatVersion': 1,
+        'id': 'author.jetpack',
+        'futureEntry': {
+          'maintainers': ['author'],
+        },
+        'versions': [
+          {
+            'version': '1.2.0',
+            'downloadUrl': 'https://example.com/pkg.robotopiamod',
+            'packageSha256': _sha,
+            'futureVersion': {'trust': 'verified'},
+            'manifest': _manifest(
+              extra: {
+                'futureManifest': {'flag': true},
+              },
+            ).toJson(),
+          },
+        ],
+      };
+
+      final rewritten = RegistryEntryFile.fromJson(source).toJson();
+      final version = (rewritten['versions'] as List).single as Map;
+      expect(rewritten['futureEntry'], {
+        'maintainers': ['author'],
+      });
+      expect(version['futureVersion'], {'trust': 'verified'});
+      expect((version['manifest'] as Map)['futureManifest'], {'flag': true});
+    });
+
+    test('canonical fields take precedence over supplied extras', () {
+      final version = RegistryEntryVersion(
+        version: '1.2.0',
+        downloadUrl: 'https://example.com/pkg.robotopiamod',
+        packageSha256: _sha,
+        manifest: _manifest(),
+        extraFields: {'version': 'evil', 'changelog': 'evil', 'future': true},
+      );
+      final entry = RegistryEntryFile(
+        id: 'author.jetpack',
+        versions: [version],
+        extraFields: {
+          r'$schema': 'https://evil.invalid/schema',
+          'id': 'evil',
+          'versions': const [],
+          'future': true,
+        },
+      ).toJson();
+
+      expect(entry[r'$schema'], ModRegistryFormat.canonicalEntrySchemaUrl);
+      expect(entry['id'], 'author.jetpack');
+      expect(entry['future'], isTrue);
+      final rewrittenVersion = (entry['versions'] as List).single as Map;
+      expect(rewrittenVersion['version'], '1.2.0');
+      expect(rewrittenVersion.containsKey('changelog'), isFalse);
+      expect(rewrittenVersion['future'], isTrue);
+    });
+
     test('rejects wrong formatVersion, bad id, and empty versions', () {
       final issues = entryWith(
         id: '!',
@@ -136,18 +231,41 @@ void main() {
       expect(messages, contains('duplicate version'));
     });
 
-    test('allows plain http only for loopback hosts', () {
-      final issues = entryWith(
-        versions: [
-          RegistryEntryVersion(
-            version: '1.2.0',
-            downloadUrl: 'http://127.0.0.1:8123/pkg.robotopiamod',
-            packageSha256: _sha,
-            manifest: _manifest(),
-          ),
-        ],
-      ).validate();
-      expect(issues, isEmpty);
+    test('rejects credentials, query, fragment, and loopback HTTP', () {
+      for (final url in [
+        'http://127.0.0.1:8123/pkg.robotopiamod',
+        'https://user:secret@example.com/pkg.robotopiamod',
+        'https://example.com/pkg.robotopiamod?token=secret',
+        'https://example.com/pkg.robotopiamod#latest',
+      ]) {
+        final issues = entryWith(
+          versions: [
+            RegistryEntryVersion(
+              version: '1.2.0',
+              downloadUrl: url,
+              packageSha256: _sha,
+              manifest: _manifest(),
+            ),
+          ],
+        ).validate();
+        expect(
+          issues.where((issue) => issue.isBlocking),
+          isNotEmpty,
+          reason: url,
+        );
+      }
+    });
+
+    test('rejects an unsafe public homepage URL', () {
+      final entry = RegistryEntryFile(
+        id: 'author.jetpack',
+        homepage: 'https://example.com/mod?token=secret',
+        versions: entryWith().versions,
+      );
+      expect(
+        entry.validate().map((issue) => issue.message),
+        contains(contains('homepage')),
+      );
     });
 
     test('requires the inline manifest to match id and version', () {
@@ -188,9 +306,10 @@ void main() {
       versions: [version('1.0.0'), version('nonsense'), version('2.1.0')],
     );
 
-    expect(
-      entry.sortedVersions.map((item) => item.version).toList(),
-      ['2.1.0', '1.0.0', 'nonsense'],
-    );
+    expect(entry.sortedVersions.map((item) => item.version).toList(), [
+      '2.1.0',
+      '1.0.0',
+      'nonsense',
+    ]);
   });
 }

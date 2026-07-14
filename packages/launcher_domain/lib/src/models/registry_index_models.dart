@@ -38,19 +38,24 @@ class ModRegistryFormat {
 /// non-latest version of a community entry. Ignored by launchers that only
 /// understand the flat `mods` list — the field is purely additive.
 class RegistryVersionRef {
-  const RegistryVersionRef({
+  RegistryVersionRef({
     required this.version,
     required this.downloadUrl,
     required this.packageSha256,
     this.changelog = '',
     this.publishedAt = '',
-  });
+    Map<String, Object?> extraFields = const {},
+  }) : extraFields = _withoutKnownRegistryFields(
+         extraFields,
+         _registryVersionRefKeys,
+       );
 
   final String version;
   final String downloadUrl;
   final String packageSha256;
   final String changelog;
   final String publishedAt;
+  final Map<String, Object?> extraFields;
 
   factory RegistryVersionRef.fromJson(Map<String, Object?> json) {
     return RegistryVersionRef(
@@ -59,10 +64,12 @@ class RegistryVersionRef {
       packageSha256: _lowercaseSha(json['packageSha256']),
       changelog: (json['changelog'] as String?) ?? '',
       publishedAt: (json['publishedAt'] as String?) ?? '',
+      extraFields: _unknownRegistryFields(json, _registryVersionRefKeys),
     );
   }
 
   Map<String, Object?> toJson() => {
+    ...extraFields,
     'version': version,
     'downloadUrl': downloadUrl,
     'packageSha256': packageSha256.toLowerCase(),
@@ -76,7 +83,7 @@ class RegistryVersionRef {
 /// packageSha256, changelog), plus additive metadata (`origin`, `history`)
 /// that current launchers ignore.
 class RegistryIndexEntry {
-  const RegistryIndexEntry({
+  RegistryIndexEntry({
     required this.manifest,
     required this.downloadUrl,
     required this.packageSha256,
@@ -84,7 +91,11 @@ class RegistryIndexEntry {
     this.origin = '',
     this.publishedAt = '',
     this.history = const [],
-  });
+    Map<String, Object?> extraFields = const {},
+  }) : extraFields = _withoutKnownRegistryFields(
+         extraFields,
+         _registryIndexEntryKeys,
+       );
 
   final ModManifest manifest;
   final String downloadUrl;
@@ -95,6 +106,7 @@ class RegistryIndexEntry {
   final String origin;
   final String publishedAt;
   final List<RegistryVersionRef> history;
+  final Map<String, Object?> extraFields;
 
   factory RegistryIndexEntry.fromJson(Map<String, Object?> json) {
     return RegistryIndexEntry(
@@ -105,10 +117,12 @@ class RegistryIndexEntry {
       origin: (json['origin'] as String?) ?? '',
       publishedAt: (json['publishedAt'] as String?) ?? '',
       history: _versionRefList(json['history']),
+      extraFields: _unknownRegistryFields(json, _registryIndexEntryKeys),
     );
   }
 
   Map<String, Object?> toJson() => {
+    ...extraFields,
     'manifest': manifest.toJson(),
     'downloadUrl': downloadUrl,
     'packageSha256': packageSha256.toLowerCase(),
@@ -124,19 +138,24 @@ class RegistryIndexEntry {
 /// inline so the published index can be built without downloading community
 /// packages (deploys stay hermetic; only PR validation fetches the bytes).
 class RegistryEntryVersion {
-  const RegistryEntryVersion({
+  RegistryEntryVersion({
     required this.version,
     required this.downloadUrl,
     required this.packageSha256,
     this.changelog = '',
     this.manifest,
-  });
+    Map<String, Object?> extraFields = const {},
+  }) : extraFields = _withoutKnownRegistryFields(
+         extraFields,
+         _registryEntryVersionKeys,
+       );
 
   final String version;
   final String downloadUrl;
   final String packageSha256;
   final String changelog;
   final ModManifest? manifest;
+  final Map<String, Object?> extraFields;
 
   factory RegistryEntryVersion.fromJson(Map<String, Object?> json) {
     final manifestJson = _objectMap(json['manifest']);
@@ -145,11 +164,15 @@ class RegistryEntryVersion {
       downloadUrl: (json['downloadUrl'] as String?) ?? '',
       packageSha256: _lowercaseSha(json['packageSha256']),
       changelog: (json['changelog'] as String?) ?? '',
-      manifest: manifestJson.isEmpty ? null : ModManifest.fromJson(manifestJson),
+      manifest: manifestJson.isEmpty
+          ? null
+          : ModManifest.fromJson(manifestJson),
+      extraFields: _unknownRegistryFields(json, _registryEntryVersionKeys),
     );
   }
 
   Map<String, Object?> toJson() => {
+    ...extraFields,
     'version': version,
     'downloadUrl': downloadUrl,
     'packageSha256': packageSha256.toLowerCase(),
@@ -162,17 +185,22 @@ class RegistryEntryVersion {
 /// the lowercase mod id). Versions are kept newest-first by convention; the
 /// index builder re-sorts by semantic version regardless.
 class RegistryEntryFile {
-  const RegistryEntryFile({
+  RegistryEntryFile({
     required this.id,
     this.formatVersion = ModRegistryFormat.entryFormatVersion,
     this.homepage = '',
     this.versions = const [],
-  });
+    Map<String, Object?> extraFields = const {},
+  }) : extraFields = _withoutKnownRegistryFields(
+         extraFields,
+         _registryEntryFileKeys,
+       );
 
   final int formatVersion;
   final String id;
   final String homepage;
   final List<RegistryEntryVersion> versions;
+  final Map<String, Object?> extraFields;
 
   factory RegistryEntryFile.fromJson(Map<String, Object?> json) {
     return RegistryEntryFile(
@@ -180,10 +208,12 @@ class RegistryEntryFile {
       id: (json['id'] as String?) ?? '',
       homepage: (json['homepage'] as String?) ?? '',
       versions: _entryVersionList(json['versions']),
+      extraFields: _unknownRegistryFields(json, _registryEntryFileKeys),
     );
   }
 
   Map<String, Object?> toJson() => {
+    ...extraFields,
     r'$schema': ModRegistryFormat.canonicalEntrySchemaUrl,
     'formatVersion': formatVersion,
     'id': id,
@@ -246,6 +276,16 @@ class RegistryEntryFile {
         ),
       );
     }
+    if (homepage.isNotEmpty && !_isTrustedPublicHttpsUrl(homepage.trim())) {
+      issues.add(
+        LauncherIssue(
+          severity: IssueSeverity.error,
+          subjectId: id,
+          message:
+              'homepage must be an absolute HTTPS URL without credentials, query, or fragment.',
+        ),
+      );
+    }
     final seenVersions = <String>{};
     for (final version in versions) {
       final label = '$id@${version.version}';
@@ -254,7 +294,7 @@ class RegistryEntryFile {
           LauncherIssue(
             severity: IssueSeverity.error,
             subjectId: label,
-            message: 'version must be parseable as a semantic version.',
+            message: 'version must be a valid SemVer 2.0.0 string.',
           ),
         );
       } else if (!seenVersions.add(version.version.trim())) {
@@ -330,21 +370,8 @@ bool _isSha256Hex(String value) {
   return RegExp(r'^[0-9a-f]{64}$').hasMatch(value);
 }
 
-/// Registry package URLs must be https; plain http is tolerated only for
-/// loopback hosts so local test servers and dev setups work. A loopback URL
-/// in a real submission fails CI's download check anyway.
 bool _isAllowedPackageUrl(String value) {
-  final uri = Uri.tryParse(value.trim());
-  if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
-    return false;
-  }
-  if (uri.scheme == 'https') {
-    return true;
-  }
-  if (uri.scheme == 'http') {
-    return uri.host == '127.0.0.1' || uri.host == 'localhost' || uri.host == '::1';
-  }
-  return false;
+  return _isTrustedPublicHttpsUrl(value.trim());
 }
 
 List<RegistryVersionRef> _versionRefList(Object? value) {
@@ -366,3 +393,69 @@ List<RegistryEntryVersion> _entryVersionList(Object? value) {
       .map((item) => RegistryEntryVersion.fromJson(_objectMap(item)))
       .toList(growable: false);
 }
+
+Map<String, Object?> _unknownRegistryFields(
+  Map<String, Object?> json,
+  Set<String> knownKeys,
+) => _immutableRegistryFields(
+  Map<String, Object?>.of(json)
+    ..removeWhere((key, _) => knownKeys.contains(key)),
+);
+
+Map<String, Object?> _withoutKnownRegistryFields(
+  Map<String, Object?> fields,
+  Set<String> knownKeys,
+) => _immutableRegistryFields(
+  Map<String, Object?>.of(fields)
+    ..removeWhere((key, _) => knownKeys.contains(key)),
+);
+
+Map<String, Object?> _immutableRegistryFields(Map<String, Object?> fields) =>
+    Map<String, Object?>.unmodifiable({
+      for (final entry in fields.entries)
+        entry.key: _immutableRegistryValue(entry.value),
+    });
+
+Object? _immutableRegistryValue(Object? value) {
+  if (value is Map) {
+    return Map<String, Object?>.unmodifiable({
+      for (final entry in value.entries)
+        entry.key.toString(): _immutableRegistryValue(entry.value),
+    });
+  }
+  if (value is List) {
+    return List<Object?>.unmodifiable(value.map(_immutableRegistryValue));
+  }
+  return value;
+}
+
+const _registryVersionRefKeys = {
+  'version',
+  'downloadUrl',
+  'packageSha256',
+  'changelog',
+  'publishedAt',
+};
+const _registryIndexEntryKeys = {
+  'manifest',
+  'downloadUrl',
+  'packageSha256',
+  'changelog',
+  'origin',
+  'publishedAt',
+  'history',
+};
+const _registryEntryVersionKeys = {
+  'version',
+  'downloadUrl',
+  'packageSha256',
+  'changelog',
+  'manifest',
+};
+const _registryEntryFileKeys = {
+  r'$schema',
+  'formatVersion',
+  'id',
+  'homepage',
+  'versions',
+};

@@ -25,11 +25,15 @@ class LaunchSettings {
     if (environment.isNotEmpty) 'environment': environment,
   };
 
-  LaunchSettings copyWith({bool? safeMode, List<String>? extraArguments}) {
+  LaunchSettings copyWith({
+    bool? safeMode,
+    List<String>? extraArguments,
+    Map<String, String>? environment,
+  }) {
     return LaunchSettings(
       safeMode: safeMode ?? this.safeMode,
       extraArguments: extraArguments ?? this.extraArguments,
-      environment: environment,
+      environment: environment ?? this.environment,
     );
   }
 }
@@ -38,6 +42,7 @@ class LauncherProfile {
   const LauncherProfile({
     required this.id,
     required this.name,
+    this.inheritManagerModState = false,
     this.enabledMods = const {},
     this.selectedVersions = const {},
     this.configMetadata = const {},
@@ -48,6 +53,10 @@ class LauncherProfile {
 
   final String id;
   final String name;
+
+  /// Whether mod enablement should come from the manager's durable state.
+  /// Exact profiles may deliberately have an empty [enabledMods] set.
+  final bool inheritManagerModState;
   final Set<String> enabledMods;
   final Map<String, String> selectedVersions;
   final Map<String, Object?> configMetadata;
@@ -59,6 +68,7 @@ class LauncherProfile {
     return LauncherProfile(
       id: 'default',
       name: 'Default',
+      inheritManagerModState: true,
       enabledMods: const {},
       selectedVersions: const {},
       configMetadata: const {},
@@ -69,10 +79,15 @@ class LauncherProfile {
   }
 
   factory LauncherProfile.fromJson(Map<String, Object?> json) {
+    final enabledMods = _stringList(json['enabledMods']).toSet();
     return LauncherProfile(
       id: (json['id'] as String?) ?? 'default',
       name: (json['name'] as String?) ?? 'Default',
-      enabledMods: _stringList(json['enabledMods']).toSet(),
+      // Profiles written before this flag existed used an empty set as their
+      // inheritance sentinel. Preserve that meaning during migration.
+      inheritManagerModState:
+          (json['inheritManagerModState'] as bool?) ?? enabledMods.isEmpty,
+      enabledMods: enabledMods,
       selectedVersions: _stringMap(json['selectedVersions']),
       configMetadata: _objectMap(json['configMetadata']),
       launchSettings: LaunchSettings.fromJson(
@@ -88,6 +103,7 @@ class LauncherProfile {
   Map<String, Object?> toJson() => {
     'id': id,
     'name': name,
+    'inheritManagerModState': inheritManagerModState,
     'enabledMods': enabledMods.toList()..sort(),
     'selectedVersions': selectedVersions,
     if (configMetadata.isNotEmpty) 'configMetadata': configMetadata,
@@ -99,6 +115,7 @@ class LauncherProfile {
   LauncherProfile copyWith({
     String? id,
     String? name,
+    bool? inheritManagerModState,
     Set<String>? enabledMods,
     Map<String, String>? selectedVersions,
     LaunchSettings? launchSettings,
@@ -107,6 +124,8 @@ class LauncherProfile {
     return LauncherProfile(
       id: id ?? this.id,
       name: name ?? this.name,
+      inheritManagerModState:
+          inheritManagerModState ?? this.inheritManagerModState,
       enabledMods: enabledMods ?? this.enabledMods,
       selectedVersions: selectedVersions ?? this.selectedVersions,
       configMetadata: configMetadata,
@@ -116,3 +135,90 @@ class LauncherProfile {
     );
   }
 }
+
+/// Immutable, process-scoped mod selection consumed by the runtime loader.
+///
+/// This is deliberately separate from manager state: applying a profile must
+/// never rewrite the user's durable enablement or selected-version choices.
+class ProfileLaunchConfiguration {
+  ProfileLaunchConfiguration._({
+    required this.profileId,
+    required this.safeMode,
+    required this.inheritManagerModState,
+    required this.enabledMods,
+    required this.selectedVersions,
+  });
+
+  static const int schemaVersion = 1;
+  static const String environmentVariable = 'ROBOTOPIA_LAUNCH_PROFILE';
+
+  final String profileId;
+  final bool safeMode;
+  final bool inheritManagerModState;
+  final Set<String> enabledMods;
+  final Map<String, String> selectedVersions;
+
+  factory ProfileLaunchConfiguration.fromProfile(LauncherProfile profile) {
+    final profileId = profile.id;
+    if (!_profileIdPattern.hasMatch(profileId)) {
+      throw FormatException(
+        'Profile id must contain 1-128 letters, numbers, dots, dashes, or '
+        'underscores, and start with a letter or number.',
+      );
+    }
+
+    final seenIds = <String>{};
+    final enabledMods = <String>[];
+    for (final id in profile.enabledMods) {
+      if (!ModManifest.isValidId(id) || !seenIds.add(id.toLowerCase())) {
+        throw FormatException('Profile contains an invalid mod id: $id.');
+      }
+      enabledMods.add(id);
+    }
+    enabledMods.sort(_compareModIds);
+
+    seenIds.clear();
+    final selectedEntries = profile.selectedVersions.entries.toList();
+    for (final entry in selectedEntries) {
+      if (!ModManifest.isValidId(entry.key) ||
+          !seenIds.add(entry.key.toLowerCase())) {
+        throw FormatException(
+          'Profile contains an invalid selected-version id: ${entry.key}.',
+        );
+      }
+      if (SemanticVersion.tryParse(entry.value) == null) {
+        throw FormatException(
+          'Profile selects an invalid version for ${entry.key}: '
+          '${entry.value}.',
+        );
+      }
+    }
+    selectedEntries.sort((a, b) => _compareModIds(a.key, b.key));
+
+    return ProfileLaunchConfiguration._(
+      profileId: profileId,
+      safeMode: profile.launchSettings.safeMode,
+      inheritManagerModState: profile.inheritManagerModState,
+      enabledMods: Set.unmodifiable(enabledMods),
+      selectedVersions: Map.unmodifiable({
+        for (final entry in selectedEntries) entry.key: entry.value,
+      }),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'schemaVersion': schemaVersion,
+    'profileId': profileId,
+    'safeMode': safeMode,
+    'inheritManagerModState': inheritManagerModState,
+    'enabledMods': enabledMods.toList(growable: false),
+    'selectedVersions': selectedVersions,
+  };
+
+  static int _compareModIds(String left, String right) {
+    final folded = left.toLowerCase().compareTo(right.toLowerCase());
+    return folded != 0 ? folded : left.compareTo(right);
+  }
+}
+
+final _profileIdPattern = RegExp(r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$');

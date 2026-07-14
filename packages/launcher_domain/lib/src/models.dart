@@ -1,12 +1,21 @@
 import 'versioning.dart';
+import 'package:unorm_dart/unorm_dart.dart' as unicode;
 
 part 'models/common_models.dart';
 part 'models/developer_environment_models.dart';
 part 'models/developer_vpm_models.dart';
 part 'models/developer_models.dart';
+part 'models/developer_ugc_models.dart';
+part 'models/ugc_live_sync_cleanup_models.dart';
+part 'models/ugc_publisher_models.dart';
 part 'models/install_models.dart';
 part 'models/json_helpers.dart';
+part 'models/manifest_support_models.dart';
 part 'models/manifest_models.dart';
+part 'models/manifest_license_validation.dart';
+part 'models/manifest_parsers.dart';
+part 'models/runtime_dependency_models.dart';
+part 'models/scaffold_contracts.dart';
 part 'models/registry_index_models.dart';
 part 'models/source_models.dart';
 part 'models/profile_models.dart';

@@ -6,5 +6,3 @@ export 'src/models.dart';
 export 'src/repositories.dart';
 export 'src/unity_vpm_resolver.dart';
 export 'src/versioning.dart';
-
-// TODO: Export any libraries intended for clients of this package.

@@ -1,11 +1,84 @@
 part of '../models.dart';
 
 bool _isUnsafeRelativePath(String value) {
-  final normalized = value.replaceAll('\\', '/');
-  return normalized.startsWith('/') ||
-      RegExp(r'^[A-Za-z]:/').hasMatch(normalized) ||
-      normalized.split('/').contains('..');
+  final portable = value.replaceAll('\\', '/');
+  return portable.isEmpty ||
+      portable.startsWith('/') ||
+      portable.split('/').any(_isUnsafePortablePathSegment);
 }
+
+String? _portableManifestPathCollisionKey(String value) {
+  if (value.length > 1024 ||
+      value.contains('\\') ||
+      value.startsWith('/') ||
+      value.trim().isEmpty) {
+    return null;
+  }
+  try {
+    if (unicode.nfc(value) != value) {
+      return null;
+    }
+    final folded = <String>[];
+    for (final segment in value.split('/')) {
+      if (segment.length > 255 || _isUnsafePortablePathSegment(segment)) {
+        return null;
+      }
+      final key = unicode
+          .nfkc(segment)
+          .toUpperCase()
+          .replaceAll('\u00df', 'SS')
+          .replaceAll('\u1e9e', 'SS');
+      if (key.contains('/') ||
+          key.contains('\\') ||
+          _isUnsafePortablePathSegment(key)) {
+        return null;
+      }
+      folded.add(key);
+    }
+    return folded.join('/');
+  } on Object {
+    return null;
+  }
+}
+
+bool _isUnsafePortablePathSegment(String segment) {
+  if (segment.isEmpty ||
+      segment == '.' ||
+      segment == '..' ||
+      segment.contains(':') ||
+      segment.endsWith(' ') ||
+      segment.endsWith('.') ||
+      segment.codeUnits.any((unit) => unit < 0x20)) {
+    return true;
+  }
+  final deviceName = segment.split('.').first.toLowerCase();
+  return _windowsReservedDeviceNames.contains(deviceName);
+}
+
+const _windowsReservedDeviceNames = {
+  'con',
+  'prn',
+  'aux',
+  'nul',
+  'com1',
+  'com2',
+  'com3',
+  'com4',
+  'com5',
+  'com6',
+  'com7',
+  'com8',
+  'com9',
+  'lpt1',
+  'lpt2',
+  'lpt3',
+  'lpt4',
+  'lpt5',
+  'lpt6',
+  'lpt7',
+  'lpt8',
+  'lpt9',
+};
 
 List<String> _stringList(Object? value) {
   if (value is! List) {

@@ -76,6 +76,49 @@ void _environmentAndWorldModelTests() {
     });
   });
 
+  group('RobotopiaUnityCompatibility', () {
+    const releaseEditor = UnityEditor(
+      version: '6000.0.23f1',
+      path: '/unity/6000.0.23f1',
+    );
+    const newestEditor = UnityEditor(
+      version: '6000.2.10f1',
+      path: '/unity/6000.2.10f1',
+    );
+    const configuredEditor = UnityEditor(
+      version: '6000.0.31f1',
+      path: '/unity/6000.0.31f1',
+    );
+
+    test('selects the exact release editor regardless of discovery order', () {
+      expect(
+        RobotopiaUnityCompatibility.selectEditor(const [
+          newestEditor,
+          releaseEditor,
+        ]),
+        same(releaseEditor),
+      );
+    });
+
+    test('honors an explicit project editor pin', () {
+      expect(
+        RobotopiaUnityCompatibility.selectEditor(const [
+          newestEditor,
+          releaseEditor,
+          configuredEditor,
+        ], configuredVersion: ' 6000.0.31f1 '),
+        same(configuredEditor),
+      );
+    });
+
+    test('does not silently fall back to an incompatible editor', () {
+      expect(
+        RobotopiaUnityCompatibility.selectEditor(const [newestEditor]),
+        isNull,
+      );
+    });
+  });
+
   group('WorldSelection', () {
     test(
       'toRuntimeConfig emits exactly the keys the C# WorldsConfig expects',
@@ -104,6 +147,25 @@ void _environmentAndWorldModelTests() {
         expect(config['allowAdditiveFallback'], isTrue);
       },
     );
+
+    test('mergeRuntimeConfig preserves runtime-owned and future keys', () {
+      final merged =
+          const WorldSelection(
+            worldId: 'new-world',
+            gamemodeId: 'new-mode',
+          ).mergeRuntimeConfig({
+            'selectedWorldId': 'old-world',
+            'endSessionOnMenuScene': false,
+            'interceptPauseMenu': false,
+            'futureRuntimeOption': {'enabled': true},
+          });
+
+      expect(merged['selectedWorldId'], 'new-world');
+      expect(merged['selectedGamemodeId'], 'new-mode');
+      expect(merged['endSessionOnMenuScene'], isFalse);
+      expect(merged['interceptPauseMenu'], isFalse);
+      expect(merged['futureRuntimeOption'], {'enabled': true});
+    });
 
     test('round-trips through toJson and back', () {
       const selection = WorldSelection(
