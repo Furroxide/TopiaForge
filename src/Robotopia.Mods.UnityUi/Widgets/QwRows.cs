@@ -94,7 +94,7 @@ namespace Robotopia.Mods.UnityUi
 
             var button = Go.AddComponent<Button>();
             button.targetGraphic = fill;
-            button.onClick.AddListener(() => onClick?.Invoke());
+            button.onClick.AddListener(() => QwCallbacks.Invoke(onClick, "List row click"));
 
             ApplyTheme(Theme);
         }

@@ -6,7 +6,7 @@ Texture2D:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: QuantumWorks-Quicksand SDF Atlas
+  m_Name: QuantumWorks Body SDF Atlas
   m_ImageContentsHash:
     serializedVersion: 2
     Hash: 00000000000000000000000000000000
@@ -56,12 +56,12 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 71c1514a6bd24e1e882cebbe1904ce04, type: 3}
-  m_Name: QuantumWorks-Quicksand SDF
+  m_Name: QuantumWorks Body SDF
   m_EditorClassIdentifier: 
   m_Version: 1.1.0
   m_FaceInfo:
     m_FaceIndex: 0
-    m_FamilyName: Quicksand
+    m_FamilyName: QuantumWorks Body
     m_StyleName: Light
     m_PointSize: 90
     m_Scale: 1
@@ -7448,7 +7448,7 @@ Texture2D:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: QuantumWorks-Quicksand SDF Atlas
+  m_Name: QuantumWorks Body SDF Atlas
   m_ImageContentsHash:
     serializedVersion: 2
     Hash: 00000000000000000000000000000000
@@ -7495,7 +7495,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: QuantumWorks-Quicksand SDF Material
+  m_Name: QuantumWorks Body SDF Material
   m_Shader: {fileID: 4800000, guid: fe393ace9b354375a9cb14cdbbc28be4, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0

@@ -11,6 +11,7 @@ namespace Robotopia.Mods.UnityUi
     {
         private static GameObject? root;
         private static QwLabel? body;
+        private static UiHost? host;
 
         public static bool IsOpen => root != null && root.activeSelf;
 
@@ -26,9 +27,18 @@ namespace Robotopia.Mods.UnityUi
             }
         }
 
+        /// <summary>Releases the debug host, canvas, theme subscription, and widgets.</summary>
+        public static void Dispose()
+        {
+            host?.Dispose();
+            host = null;
+            root = null;
+            body = null;
+        }
+
         private static void Build()
         {
-            var host = QwUi.Create(new QwUiOptions { OwnerId = "quantumworks.debug" });
+            host = QwUi.Create(new QwUiOptions { OwnerId = "quantumworks.debug" });
             var layer = host.Layer("debug", QwLayerBand.Debug, QwScheme.Hud, interactive: false, persistent: true);
             root = layer.Go;
 

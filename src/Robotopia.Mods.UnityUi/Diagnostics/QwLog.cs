@@ -62,5 +62,12 @@ namespace Robotopia.Mods.UnityUi
         {
             Error(message + " (" + exception.GetType().Name + ": " + exception.Message + ")");
         }
+
+        internal static void Reset()
+        {
+            infoSink = null;
+            warnSink = null;
+            errorSink = null;
+        }
     }
 }

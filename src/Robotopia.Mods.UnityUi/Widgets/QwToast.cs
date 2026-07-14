@@ -13,6 +13,8 @@ namespace Robotopia.Mods.UnityUi
     public static class QwToasts
     {
         private const int MaxVisible = 4;
+        private const int MaxQueued = 64;
+        private const int MaxTextChars = 512;
         private const float DefaultDuration = 3.5f;
         private const float ToastWidth = 340f;
         private const float ToastHeight = 44f;
@@ -39,12 +41,33 @@ namespace Robotopia.Mods.UnityUi
         private static readonly List<ToastView> Views = new List<ToastView>();
         private static readonly Queue<Pending> Queue = new Queue<Pending>();
         private static QwContainer? layer;
+        private static bool queueOverflowLogged;
 
         /// <summary>Shows a toast (queues when 4 are already visible).</summary>
         public static void Show(string text, QwTone tone = QwTone.Neutral, float duration = DefaultDuration)
         {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return;
+            }
+
             QwRuntime.Ensure();
-            Queue.Enqueue(new Pending { Text = text, Tone = tone, Duration = duration });
+            if (Queue.Count >= MaxQueued)
+            {
+                Queue.Dequeue();
+                if (!queueOverflowLogged)
+                {
+                    queueOverflowLogged = true;
+                    QwLog.Warn("Toast queue reached " + MaxQueued + " entries; dropping the oldest queued toast.");
+                }
+            }
+
+            Queue.Enqueue(new Pending
+            {
+                Text = text.Length > MaxTextChars ? text.Substring(0, MaxTextChars) : text,
+                Tone = tone,
+                Duration = Mathf.Clamp(duration, 0.25f, 30f),
+            });
             Pump();
         }
 
@@ -80,6 +103,22 @@ namespace Robotopia.Mods.UnityUi
             if (anyExpired)
             {
                 Pump();
+            }
+        }
+
+        /// <summary>Releases the process-wide toast host, pending work, and pooled views.</summary>
+        internal static void Reset()
+        {
+            try
+            {
+                QwToastHost.Reset();
+            }
+            finally
+            {
+                layer = null;
+                Queue.Clear();
+                Views.Clear();
+                queueOverflowLogged = false;
             }
         }
 
@@ -226,9 +265,12 @@ namespace Robotopia.Mods.UnityUi
                 return;
             }
 
-            var root = QwLayers.CreateCanvas("QuantumWorksToasts", QwLayerBand.Toast, interactive: false, persistent: true);
-            // A standalone host-less container: toasts are process-wide.
-            layer = new QwContainer(QwToastHost.Instance, QwScheme.Hud, root);
+            layer = QwToastHost.Instance.Layer(
+                "toasts",
+                QwLayerBand.Toast,
+                QwScheme.Hud,
+                interactive: false,
+                persistent: true);
         }
 
         private static UImage CreateImage(Transform parent, string name, Sprite sprite)
@@ -250,5 +292,12 @@ namespace Robotopia.Mods.UnityUi
         private static UiHost? instance;
 
         public static UiHost Instance => instance ??= QwUi.Create(new QwUiOptions { OwnerId = "quantumworks.toasts" });
+
+        public static void Reset()
+        {
+            var host = instance;
+            instance = null;
+            host?.Dispose();
+        }
     }
 }

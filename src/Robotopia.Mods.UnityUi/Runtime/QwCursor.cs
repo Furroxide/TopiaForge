@@ -51,6 +51,17 @@ namespace Robotopia.Mods.UnityUi
             }
         }
 
+        internal static void Reset()
+        {
+            if (activeLeases > 0)
+            {
+                Cursor.lockState = savedLockState;
+                Cursor.visible = savedVisible;
+            }
+
+            activeLeases = 0;
+        }
+
         private static void Assert()
         {
             Cursor.lockState = CursorLockMode.None;

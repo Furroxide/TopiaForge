@@ -92,35 +92,35 @@ namespace Robotopia.Mods.UnityUi
                 case QwIcon.ChevronRight:
                     return Strokes(ChevronRight, x, y, stroke);
                 case QwIcon.Magnifier:
-                {
-                    var ring = RingDisc(x, y, 0.42f, 0.60f, 0.24f, stroke);
-                    var handle = Strokes(MagnifierHandle, x, y, stroke * 1.2f);
-                    return Math.Max(ring, handle);
-                }
-
-                case QwIcon.Grip:
-                {
-                    var coverage = 0f;
-                    for (var row = 0; row < 2; row++)
                     {
-                        for (var column = 0; column < 3; column++)
-                        {
-                            var cx = 0.30f + (column * 0.20f);
-                            var cy = 0.40f + (row * 0.20f);
-                            coverage = Math.Max(coverage, Disc(x, y, cx, cy, 0.055f, stroke));
-                        }
+                        var ring = RingDisc(x, y, 0.42f, 0.60f, 0.24f, stroke);
+                        var handle = Strokes(MagnifierHandle, x, y, stroke * 1.2f);
+                        return Math.Max(ring, handle);
                     }
 
-                    return coverage;
-                }
+                case QwIcon.Grip:
+                    {
+                        var coverage = 0f;
+                        for (var row = 0; row < 2; row++)
+                        {
+                            for (var column = 0; column < 3; column++)
+                            {
+                                var cx = 0.30f + (column * 0.20f);
+                                var cy = 0.40f + (row * 0.20f);
+                                coverage = Math.Max(coverage, Disc(x, y, cx, cy, 0.055f, stroke));
+                            }
+                        }
+
+                        return coverage;
+                    }
 
                 case QwIcon.Warning:
-                {
-                    var triangle = Strokes(WarningTriangle, x, y, stroke);
-                    var bang = Strokes(new[] { new Segment(0.50f, 0.66f, 0.50f, 0.40f) }, x, y, stroke * 1.1f);
-                    var dot = Disc(x, y, 0.50f, 0.28f, 0.045f, stroke);
-                    return Math.Max(triangle, Math.Max(bang, dot));
-                }
+                    {
+                        var triangle = Strokes(WarningTriangle, x, y, stroke);
+                        var bang = Strokes(new[] { new Segment(0.50f, 0.66f, 0.50f, 0.40f) }, x, y, stroke * 1.1f);
+                        var dot = Disc(x, y, 0.50f, 0.28f, 0.045f, stroke);
+                        return Math.Max(triangle, Math.Max(bang, dot));
+                    }
 
                 default:
                     return 0f;

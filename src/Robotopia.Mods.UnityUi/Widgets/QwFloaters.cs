@@ -111,6 +111,12 @@ namespace Robotopia.Mods.UnityUi
             slots[slot].Rect.gameObject.SetActive(true);
         }
 
+        /// <summary>Spawns a label using a theme semantic tone.</summary>
+        public void Push(Vector3 world, string text, QwTone tone, float ttlSeconds = 1.1f)
+        {
+            Push(world, text, Theme.ToneColor(tone), ttlSeconds);
+        }
+
         /// <summary>Deactivates every slot (round reset / ClearTransient).</summary>
         public void Clear()
         {

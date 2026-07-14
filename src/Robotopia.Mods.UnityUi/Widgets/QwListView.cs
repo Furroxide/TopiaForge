@@ -114,7 +114,7 @@ namespace Robotopia.Mods.UnityUi
             Refresh(force: true);
             if (index >= 0)
             {
-                onSelected?.Invoke(index);
+                QwCallbacks.Invoke(onSelected, index, "List selection");
             }
         }
 
@@ -165,7 +165,7 @@ namespace Robotopia.Mods.UnityUi
                 row.Rect.anchoredPosition = new Vector2(0f, -QwVirtualListMath.RowOffset(itemIndex, rowHeight, Spacing));
                 poolBinding[poolIndex] = itemIndex;
                 row.SetSelected(itemIndex == selectedIndex);
-                binder?.Invoke(row, items[itemIndex], itemIndex);
+                QwCallbacks.Invoke(binder, row, items[itemIndex], itemIndex, "List row binding");
             }
         }
 
@@ -199,7 +199,7 @@ namespace Robotopia.Mods.UnityUi
                     {
                         selectedIndex = bound;
                         RepaintSelectionOnly();
-                        onSelected?.Invoke(bound);
+                        QwCallbacks.Invoke(onSelected, bound, "List selection");
                     }
                 });
                 pool.Add(row);

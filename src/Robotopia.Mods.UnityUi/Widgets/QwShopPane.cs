@@ -218,7 +218,7 @@ namespace Robotopia.Mods.UnityUi
                     QwToasts.Success("Bought " + item.Name + ".");
                 }
 
-                Purchased?.Invoke(item);
+                QwCallbacks.Invoke(Purchased, item, "Shop Purchased");
                 Rebind(); // counts changed → tooltips/badges may flip to MAX
                 return;
             }
@@ -239,7 +239,7 @@ namespace Robotopia.Mods.UnityUi
                 }
             }
 
-            PurchaseFailed?.Invoke(item, result);
+            QwCallbacks.Invoke(PurchaseFailed, item, result, "Shop PurchaseFailed");
             RefreshStates();
         }
 

@@ -156,8 +156,12 @@ namespace Robotopia.Mods.UnityUi
     {
         private readonly TextMeshProUGUI label;
         private string lastLabel;
+        private byte cachedComposition;
         private string cachedPrefix = string.Empty;
+        private string cachedMiddle = string.Empty;
+        private string cachedSuffix = string.Empty;
         private int cachedValue = int.MinValue;
+        private int cachedValue2 = int.MinValue;
 
         internal QwStatBar(QwContainer parent, string title)
             : base(parent, "StatBar")
@@ -193,6 +197,7 @@ namespace Robotopia.Mods.UnityUi
                 return;
             }
 
+            cachedComposition = 0;
             lastLabel = value;
             label.text = value;
         }
@@ -200,14 +205,38 @@ namespace Robotopia.Mods.UnityUi
         /// <summary>Prefix + int label that only concatenates on change ("INTEGRITY ", 87).</summary>
         public void SetLabel(string prefix, int value)
         {
-            if (value == cachedValue && ReferenceEquals(prefix, cachedPrefix))
+            if (cachedComposition == 1 && value == cachedValue && ReferenceEquals(prefix, cachedPrefix))
             {
                 return;
             }
 
+            cachedComposition = 1;
             cachedPrefix = prefix;
             cachedValue = value;
             lastLabel = prefix + value;
+            label.text = lastLabel;
+        }
+
+        /// <summary>Two-integer label update that only composes when an input changes.</summary>
+        public void SetLabel(string prefix, int first, string middle, int second, string suffix = "")
+        {
+            if (cachedComposition == 2 &&
+                first == cachedValue &&
+                second == cachedValue2 &&
+                ReferenceEquals(prefix, cachedPrefix) &&
+                ReferenceEquals(middle, cachedMiddle) &&
+                ReferenceEquals(suffix, cachedSuffix))
+            {
+                return;
+            }
+
+            cachedComposition = 2;
+            cachedPrefix = prefix;
+            cachedMiddle = middle;
+            cachedSuffix = suffix;
+            cachedValue = first;
+            cachedValue2 = second;
+            lastLabel = prefix + first + middle + second + suffix;
             label.text = lastLabel;
         }
 

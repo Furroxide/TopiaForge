@@ -13,7 +13,7 @@ namespace Robotopia.Mods.UnityUi
     /// </summary>
     public sealed class QwDropdown : QwWidget, IQwThemeAware
     {
-        private readonly TMP_Dropdown dropdown;
+        private readonly QwTmpDropdown dropdown;
         private readonly UImage fill;
         private readonly UImage ring;
         private readonly UImage chevron;
@@ -123,6 +123,7 @@ namespace Robotopia.Mods.UnityUi
             templateGo.SetActive(false);
 
             dropdown = Go.AddComponent<QwTmpDropdown>();
+            dropdown.ConfigureSortingOrders(PopupOrders.Blocker, PopupOrders.List);
             dropdown.targetGraphic = fill;
             dropdown.template = templateRect;
             dropdown.captionText = caption;
@@ -135,7 +136,7 @@ namespace Robotopia.Mods.UnityUi
 
             dropdown.SetValueWithoutNotify(selected);
             dropdown.RefreshShownValue();
-            dropdown.onValueChanged.AddListener(next => onChanged(next));
+            dropdown.onValueChanged.AddListener(next => QwCallbacks.Invoke(onChanged, next, "Dropdown change"));
 
             this.FixedHeight(QwTokens.ControlHeight);
             ApplyTheme(Theme);
@@ -228,9 +229,15 @@ namespace Robotopia.Mods.UnityUi
         /// </summary>
         private sealed class QwTmpDropdown : TMP_Dropdown
         {
-            private const int ListSortingOrder = QwLayerBands.DefaultToastBase - 2;
-
             private GameObject? list;
+            private int blockerSortingOrder;
+            private int listSortingOrder;
+
+            public void ConfigureSortingOrders(int blockerOrder, int listOrder)
+            {
+                blockerSortingOrder = blockerOrder;
+                listSortingOrder = listOrder;
+            }
 
             protected override GameObject CreateDropdownList(GameObject template)
             {
@@ -245,18 +252,26 @@ namespace Robotopia.Mods.UnityUi
                 if (listCanvas != null)
                 {
                     listCanvas.overrideSorting = true;
-                    listCanvas.sortingOrder = ListSortingOrder;
+                    QwLayers.AssignAllocatedOrder(listCanvas, listSortingOrder);
                 }
 
                 var blockerCanvas = blocker.GetComponent<Canvas>();
                 if (blockerCanvas != null)
                 {
                     blockerCanvas.overrideSorting = true;
-                    blockerCanvas.sortingOrder = ListSortingOrder - 1;
+                    QwLayers.AssignAllocatedOrder(blockerCanvas, blockerSortingOrder);
                 }
 
                 return blocker;
             }
+        }
+
+        private static class PopupOrders
+        {
+            // TMP allows only one dropdown blocker at a time, so every dropdown can safely share one
+            // process-wide allocator-owned pair rather than leaking two band slots per widget rebuild.
+            public static readonly int Blocker = QwLayers.Allocate(QwLayerBand.Modal, "dropdown-blocker");
+            public static readonly int List = QwLayers.Allocate(QwLayerBand.Modal, "dropdown-list");
         }
     }
 }

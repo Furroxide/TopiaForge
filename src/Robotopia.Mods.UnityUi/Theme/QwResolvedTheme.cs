@@ -38,10 +38,19 @@ namespace Robotopia.Mods.UnityUi
         public Color FocusRing { get; }
 
         public QwResolvedTheme(QwScheme scheme, QwRgba? accentOverride)
+            : this(scheme, accentOverride, QwTheme.HighContrast, QwTheme.Version)
+        {
+        }
+
+        internal QwResolvedTheme(
+            QwScheme scheme,
+            QwRgba? accentOverride,
+            bool highContrast,
+            int themeVersion)
         {
             Scheme = scheme;
-            ThemeVersion = QwTheme.Version;
-            HighContrast = QwTheme.HighContrast;
+            ThemeVersion = themeVersion;
+            HighContrast = highContrast;
 
             var colors = QwSchemes.Resolve(scheme, accentOverride, HighContrast);
             Backdrop = ToColor(colors.Backdrop);

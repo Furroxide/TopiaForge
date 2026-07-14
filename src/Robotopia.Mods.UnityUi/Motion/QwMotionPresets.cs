@@ -51,17 +51,18 @@ namespace Robotopia.Mods.UnityUi
         /// <summary>Banner punch: scale 1.35 → 1 (HUD wave banners).</summary>
         public static void Punch(QwWidget widget, float intensity = 1.35f)
         {
-            var scaled = 1f + ((intensity - 1f) * QwTheme.EffectiveMotion);
+            var scaled = 1f + ((intensity - 1f) * widget.Host.EffectiveMotion);
             QwTween.ScaleTo(widget, scaled, 1f, QwTokens.DurationSlow, QwEase.OutCubic);
         }
 
         /// <summary>Attaches a breathing pulse (alpha/scale sine) to a widget.</summary>
         public static QwPulse Pulse(QwWidget widget, float frequency = 2f, float alphaAmplitude = 0.12f, float scaleAmplitude = 0.02f)
         {
-            var pulse = widget.Go.GetComponent<QwPulse>() ?? widget.Go.AddComponent<QwPulse>();
+            var pulse = QwComponents.GetOrAdd<QwPulse>(widget.Go);
             pulse.Frequency = frequency;
             pulse.AlphaAmplitude = alphaAmplitude;
             pulse.ScaleAmplitude = scaleAmplitude;
+            pulse.Initialize(widget.Host);
             return pulse;
         }
     }
@@ -78,8 +79,14 @@ namespace Robotopia.Mods.UnityUi
         public float ScaleAmplitude = 0.02f;
 
         private Graphic? graphic;
+        private UiHost? host;
         private float baseAlpha;
         private Vector3 baseScale;
+
+        internal void Initialize(UiHost owner)
+        {
+            host = owner;
+        }
 
         private void Awake()
         {
@@ -94,7 +101,7 @@ namespace Robotopia.Mods.UnityUi
 
         private void Update()
         {
-            var motion = QwTheme.EffectiveMotion;
+            var motion = host?.EffectiveMotion ?? QwTheme.EffectiveMotion;
             if (motion <= 0f)
             {
                 transform.localScale = baseScale;

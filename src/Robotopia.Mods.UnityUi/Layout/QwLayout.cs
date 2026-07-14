@@ -11,7 +11,7 @@ namespace Robotopia.Mods.UnityUi
     {
         public static void ApplyColumn(GameObject go, QwGap gap, QwGap padding, bool expandChildWidth = true)
         {
-            var layout = go.GetComponent<VerticalLayoutGroup>() ?? go.AddComponent<VerticalLayoutGroup>();
+            var layout = QwComponents.GetOrAdd<VerticalLayoutGroup>(go);
             layout.spacing = (int)gap;
             var pad = (int)padding;
             layout.padding = new RectOffset(pad, pad, pad, pad);
@@ -24,7 +24,7 @@ namespace Robotopia.Mods.UnityUi
 
         public static void ApplyRow(GameObject go, QwGap gap, QwGap padding, bool expandChildWidth = false)
         {
-            var layout = go.GetComponent<HorizontalLayoutGroup>() ?? go.AddComponent<HorizontalLayoutGroup>();
+            var layout = QwComponents.GetOrAdd<HorizontalLayoutGroup>(go);
             layout.spacing = (int)gap;
             var pad = (int)padding;
             layout.padding = new RectOffset(pad, pad, pad, pad);
@@ -37,7 +37,7 @@ namespace Robotopia.Mods.UnityUi
 
         public static void ApplyGrid(GameObject go, float cellWidth, float cellHeight, QwGap gap, QwGap padding)
         {
-            var layout = go.GetComponent<GridLayoutGroup>() ?? go.AddComponent<GridLayoutGroup>();
+            var layout = QwComponents.GetOrAdd<GridLayoutGroup>(go);
             layout.cellSize = new Vector2(cellWidth, cellHeight);
             layout.spacing = new Vector2((int)gap, (int)gap);
             var pad = (int)padding;

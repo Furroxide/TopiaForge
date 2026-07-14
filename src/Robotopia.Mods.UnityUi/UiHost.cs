@@ -11,12 +11,14 @@ namespace Robotopia.Mods.UnityUi
     /// walks its widgets on theme change (no rebuilds — focus/scroll/selection
     /// survive), and tears everything down on Dispose.
     /// </summary>
-    public sealed class UiHost : IDisposable
+    public sealed partial class UiHost : IDisposable
     {
         private readonly List<GameObject> layerRoots = new List<GameObject>();
         private readonly List<CanvasScaler> scalers = new List<CanvasScaler>();
         private readonly List<IQwThemeAware> themeAware = new List<IQwThemeAware>();
+        private readonly List<QwWidget> widgets = new List<QwWidget>();
         private readonly List<QwWindow> windows = new List<QwWindow>();
+        private readonly List<QwModalInstance> modalInstances = new List<QwModalInstance>();
         private QwModals? modals;
         private QwResolvedTheme? paperTheme;
         private QwResolvedTheme? hudTheme;
@@ -28,6 +30,7 @@ namespace Robotopia.Mods.UnityUi
         {
             OwnerId = options.OwnerId;
             accent = options.Accent;
+            accessibilityProfile = options.AccessibilityProfile ?? QwAccessibilityProfile.Default;
             StateStore = string.IsNullOrEmpty(options.DataDirectory)
                 ? (IQwStateStore)new QwMemoryStateStore()
                 : new QwFileStateStore(options.DataDirectory!);
@@ -38,22 +41,31 @@ namespace Robotopia.Mods.UnityUi
 
         public IQwStateStore StateStore { get; }
 
-        /// <summary>Resolved theme for a scheme, cached per global theme version.</summary>
+        /// <summary>Resolved theme for a scheme, cached per global and host theme version.</summary>
         public QwResolvedTheme Theme(QwScheme scheme)
         {
+            ThrowIfDisposed();
             if (scheme == QwScheme.Paper)
             {
-                if (paperTheme == null || paperTheme.ThemeVersion != QwTheme.Version)
+                if (paperTheme == null || paperTheme.ThemeVersion != themeRevision)
                 {
-                    paperTheme = new QwResolvedTheme(QwScheme.Paper, accent);
+                    paperTheme = new QwResolvedTheme(
+                        QwScheme.Paper,
+                        accent,
+                        EffectiveHighContrast,
+                        themeRevision);
                 }
 
                 return paperTheme;
             }
 
-            if (hudTheme == null || hudTheme.ThemeVersion != QwTheme.Version)
+            if (hudTheme == null || hudTheme.ThemeVersion != themeRevision)
             {
-                hudTheme = new QwResolvedTheme(QwScheme.Hud, accent);
+                hudTheme = new QwResolvedTheme(
+                    QwScheme.Hud,
+                    accent,
+                    EffectiveHighContrast,
+                    themeRevision);
             }
 
             return hudTheme;
@@ -62,15 +74,14 @@ namespace Robotopia.Mods.UnityUi
         /// <summary>Sets this host's accent override and re-tints its live widgets.</summary>
         public void SetAccent(QwRgba? value)
         {
+            ThrowIfDisposed();
             if (Nullable.Equals(accent, value))
             {
                 return;
             }
 
             accent = value;
-            paperTheme = null;
-            hudTheme = null;
-            WalkThemeAware();
+            RefreshResolvedTheme(reapplyScalers: false);
         }
 
         /// <summary>
@@ -86,6 +97,7 @@ namespace Robotopia.Mods.UnityUi
         /// <summary>Shows a process-wide toast notification.</summary>
         public void Toast(string text, QwTone tone = QwTone.Neutral)
         {
+            ThrowIfDisposed();
             QwToasts.Show(text, tone);
         }
 
@@ -102,11 +114,19 @@ namespace Robotopia.Mods.UnityUi
         }
 
         /// <summary>Modal dialog presets (Confirm/Destructive/Custom).</summary>
-        public QwModals Modal => modals ??= new QwModals(this);
+        public QwModals Modal
+        {
+            get
+            {
+                ThrowIfDisposed();
+                return modals ??= new QwModals(this);
+            }
+        }
 
         /// <summary>Registers a global hotkey owned by this host (unregistered on Dispose).</summary>
         public object Hotkey(QwKey key, Action action)
         {
+            ThrowIfDisposed();
             return QwHotkeys.Register(OwnerId, key, action);
         }
 
@@ -117,7 +137,9 @@ namespace Robotopia.Mods.UnityUi
             ReportInitOnce();
             var root = QwLayers.CreateCanvas(OwnerId + ":" + name, band, interactive, persistent);
             layerRoots.Add(root);
-            scalers.Add(root.GetComponent<CanvasScaler>());
+            var scaler = root.GetComponent<CanvasScaler>();
+            QwLayers.ApplyScaler(scaler, EffectiveUiScale);
+            scalers.Add(scaler);
             return new QwContainer(this, scheme, root);
         }
 
@@ -131,6 +153,51 @@ namespace Robotopia.Mods.UnityUi
             themeAware.Remove(widget);
         }
 
+        internal void RegisterWidget(QwWidget widget)
+        {
+            widgets.Add(widget);
+        }
+
+        internal void RegisterModal(QwModalInstance modal)
+        {
+            modalInstances.Add(modal);
+        }
+
+        internal void UnregisterModal(QwModalInstance modal)
+        {
+            modalInstances.Remove(modal);
+        }
+
+        /// <summary>
+        /// Destroys every child widget under a container and unregisters theme/tween state first.
+        /// Use this when rebuilding dynamic pages instead of destroying Unity children directly.
+        /// </summary>
+        public void Clear(QwContainer container)
+        {
+            if (container == null || container.Go == null)
+            {
+                return;
+            }
+
+            for (var index = container.Go.transform.childCount - 1; index >= 0; index--)
+            {
+                DestroySubtree(container.Go.transform.GetChild(index).gameObject);
+            }
+        }
+
+        internal void DestroyWidget(QwWidget widget)
+        {
+            if (widget != null && widget.Go != null)
+            {
+                DestroySubtree(widget is QwWindow window ? window.CanvasRoot : widget.Go);
+            }
+        }
+
+        internal void DestroyLayer(GameObject root)
+        {
+            DestroySubtree(root);
+        }
+
         public void Dispose()
         {
             if (disposed)
@@ -140,48 +207,120 @@ namespace Robotopia.Mods.UnityUi
 
             disposed = true;
             QwTheme.Changed -= OnThemeChanged;
+            AccessibilityProfileChanged = null;
             QwHotkeys.UnregisterOwner(OwnerId);
-            foreach (var window in windows)
+            while (modalInstances.Count > 0)
             {
-                window.Teardown();
+                modalInstances[modalInstances.Count - 1].Teardown();
+            }
+
+            for (var index = windows.Count - 1; index >= 0; index--)
+            {
+                windows[index].Teardown();
             }
 
             windows.Clear();
+            for (var index = widgets.Count - 1; index >= 0; index--)
+            {
+                QwTween.Cancel(widgets[index]);
+            }
+
+            widgets.Clear();
             themeAware.Clear();
             foreach (var root in layerRoots)
             {
                 if (root != null)
                 {
+                    QwLayers.Release(root);
                     UnityEngine.Object.Destroy(root);
                 }
             }
 
             layerRoots.Clear();
             scalers.Clear();
+            QwUi.OnHostDisposed(this);
+        }
+
+        private void DestroySubtree(GameObject root)
+        {
+            if (root == null)
+            {
+                return;
+            }
+
+            for (var index = modalInstances.Count - 1; index >= 0; index--)
+            {
+                var modalRoot = modalInstances[index].CanvasRoot;
+                if (modalRoot == root || modalRoot != null && modalRoot.transform.IsChildOf(root.transform))
+                {
+                    modalInstances[index].Teardown();
+                }
+            }
+
+            for (var index = windows.Count - 1; index >= 0; index--)
+            {
+                var window = windows[index];
+                if (window.Go == root || window.Go != null && window.Go.transform.IsChildOf(root.transform))
+                {
+                    window.Teardown();
+                    windows.RemoveAt(index);
+                }
+            }
+
+            for (var index = widgets.Count - 1; index >= 0; index--)
+            {
+                var widget = widgets[index];
+                if (widget.Go != root && (widget.Go == null || !widget.Go.transform.IsChildOf(root.transform)))
+                {
+                    continue;
+                }
+
+                QwTween.Cancel(widget);
+                if (widget is IQwThemeAware aware)
+                {
+                    themeAware.Remove(aware);
+                }
+
+                widgets.RemoveAt(index);
+            }
+
+            var layerIndex = layerRoots.IndexOf(root);
+            if (layerIndex >= 0)
+            {
+                QwLayers.Release(root);
+                layerRoots.RemoveAt(layerIndex);
+                scalers.RemoveAt(layerIndex);
+            }
+
+            UnityEngine.Object.Destroy(root);
         }
 
         private void OnThemeChanged()
         {
-            paperTheme = null;
-            hudTheme = null;
-            foreach (var scaler in scalers)
-            {
-                if (scaler != null)
-                {
-                    QwLayers.ApplyScaler(scaler);
-                }
-            }
-
-            WalkThemeAware();
+            RefreshResolvedTheme(reapplyScalers: true);
         }
 
         private void WalkThemeAware()
         {
-            for (var index = 0; index < themeAware.Count; index++)
+            for (var index = themeAware.Count - 1; index >= 0; index--)
             {
                 var aware = themeAware[index];
+                if (aware is QwWidget deadWidget && deadWidget.Go == null)
+                {
+                    themeAware.RemoveAt(index);
+                    widgets.Remove(deadWidget);
+                    continue;
+                }
+
                 var scheme = aware is QwWidget widget ? widget.Scheme : QwScheme.Paper;
-                aware.ApplyTheme(Theme(scheme));
+                try
+                {
+                    aware.ApplyTheme(Theme(scheme));
+                }
+                catch (Exception exception)
+                {
+                    QwLog.Warn("UiHost '" + OwnerId + "' could not refresh a widget theme: " + exception.Message);
+                }
             }
         }
 
@@ -196,8 +335,8 @@ namespace Robotopia.Mods.UnityUi
             QwLog.Info(
                 "UiHost '" + OwnerId + "' initialized (fonts: " + QwFonts.ResolvedTier +
                 ", input: " + (QwInput.LegacyAvailable ? "legacy/both" : "input-system") +
-                ", ui-scale: " + QwTheme.UiScale.ToString("0.##") +
-                ", high-contrast: " + (QwTheme.HighContrast ? "on" : "off") + ").");
+                ", ui-scale: " + EffectiveUiScale.ToString("0.##") +
+                ", high-contrast: " + (EffectiveHighContrast ? "on" : "off") + ").");
         }
 
         private void ThrowIfDisposed()

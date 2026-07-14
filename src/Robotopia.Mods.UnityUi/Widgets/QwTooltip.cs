@@ -23,7 +23,7 @@ namespace Robotopia.Mods.UnityUi
         /// <summary>Adds a hover tooltip to any widget.</summary>
         public static T Tooltip<T>(this T widget, string text) where T : QwWidget
         {
-            var behaviour = widget.Go.GetComponent<QwTooltipTrigger>() ?? widget.Go.AddComponent<QwTooltipTrigger>();
+            var behaviour = QwComponents.GetOrAdd<QwTooltipTrigger>(widget.Go);
             behaviour.Text = text;
             behaviour.enabled = false;
 
@@ -46,11 +46,13 @@ namespace Robotopia.Mods.UnityUi
                 return;
             }
 
+            text ??= string.Empty;
+            ApplyTheme();
             label.text = text;
             panelRoot.SetActive(true);
 
             var size = label.GetPreferredValues(text, 360f, 0f);
-            panelRect.sizeDelta = new Vector2(Mathf.Min(360f, size.x + 24f), size.y + 16f);
+            panelRect.sizeDelta = new Vector2(Mathf.Min(360f, size.x + 24f), Mathf.Min(240f, size.y + 16f));
             Position(screenPosition);
         }
 
@@ -106,7 +108,6 @@ namespace Robotopia.Mods.UnityUi
             fill.sprite = QwSprites.Fill(QwRadius.Tip);
             fill.type = UImage.Type.Sliced;
             fill.raycastTarget = false;
-            fill.color = new Color(0x2D / 255f, 0x37 / 255f, 0x48 / 255f, 0.98f); // brand DarkPanel
 
             var ringGo = new GameObject("Ring", typeof(RectTransform));
             ringGo.transform.SetParent(panelRoot.transform, false);
@@ -114,7 +115,6 @@ namespace Robotopia.Mods.UnityUi
             ring.sprite = QwSprites.Ring(QwRadius.Tip, QwTokens.BorderStandard);
             ring.type = UImage.Type.Sliced;
             ring.raycastTarget = false;
-            ring.color = new Color(0xFF / 255f, 0x7A / 255f, 0x11 / 255f, 1f); // brand Launch
             QwAnchors.Stretch((RectTransform)ringGo.transform);
 
             var labelGo = new GameObject("Label", typeof(RectTransform));
@@ -123,7 +123,7 @@ namespace Robotopia.Mods.UnityUi
             label.fontSize = QwTokens.CaptionSize;
             label.alignment = TextAlignmentOptions.Left;
             label.textWrappingMode = TextWrappingModes.Normal;
-            label.color = Color.white;
+            label.overflowMode = TextOverflowModes.Ellipsis;
             var font = QwFonts.For(QwTextStyle.Body);
             if (font != null)
             {
@@ -131,7 +131,22 @@ namespace Robotopia.Mods.UnityUi
             }
 
             QwAnchors.Stretch((RectTransform)labelGo.transform, 12f, 8f, 12f, 8f);
+            QwTheme.Changed += ApplyTheme;
+            ApplyTheme();
             panelRoot.SetActive(false);
+        }
+
+        private static void ApplyTheme()
+        {
+            if (fill == null || ring == null || label == null)
+            {
+                return;
+            }
+
+            var theme = new QwResolvedTheme(QwScheme.Hud, null);
+            fill.color = theme.SurfaceAlt;
+            ring.color = theme.OutlineStrong;
+            label.color = theme.Text;
         }
     }
 

@@ -56,7 +56,7 @@ namespace Robotopia.Mods.UnityUi
             row.Button(confirmLabel, () =>
             {
                 modal.Close();
-                onConfirm();
+                QwCallbacks.Invoke(onConfirm, "Modal confirmation");
             }, destructive ? QwButtonStyle.Danger : QwButtonStyle.Filled);
             modal.Show();
         }
@@ -66,16 +66,20 @@ namespace Robotopia.Mods.UnityUi
     public sealed class QwModalInstance : IQwDismissable
     {
         private readonly GameObject canvasRoot;
+        private readonly UiHost host;
         private readonly QwContainer dialog;
         private readonly UImage backdrop;
         private readonly QwCursorLease cursorLease = new QwCursorLease();
         private bool open;
         private bool closing;
+        private bool tornDown;
 
         internal QwModalInstance(UiHost host, string title, QwScheme scheme, float width, bool showTitle)
         {
-            canvasRoot = QwLayers.CreateCanvas(host.OwnerId + ":modal", QwLayerBand.Modal, interactive: true, persistent: false);
-            var layer = new QwContainer(host, scheme, canvasRoot);
+            this.host = host;
+            var layer = host.Layer("modal", QwLayerBand.Modal, scheme, interactive: true, persistent: false);
+            canvasRoot = layer.Go;
+            host.RegisterModal(this);
 
             var theme = host.Theme(scheme);
             backdrop = canvasRoot.AddComponent<UImage>();
@@ -105,12 +109,15 @@ namespace Robotopia.Mods.UnityUi
             }
 
             Content = dialog;
+            canvasRoot.SetActive(false);
         }
 
         /// <summary>Dialog body — add content here before Show().</summary>
         public QwContainer Content { get; }
 
         public event Action? Closed;
+
+        internal GameObject CanvasRoot => canvasRoot;
 
         QwLayerBand IQwDismissable.Band => QwLayerBand.Modal;
 
@@ -121,12 +128,18 @@ namespace Robotopia.Mods.UnityUi
 
         public void Show()
         {
+            if (tornDown)
+            {
+                throw new ObjectDisposedException(nameof(QwModalInstance));
+            }
+
             if (open)
             {
                 return;
             }
 
             open = true;
+            canvasRoot.SetActive(true);
             cursorLease.Acquire();
             QwDismissStack.Push(this);
             QwMotion.ModalIn(dialog);
@@ -134,8 +147,14 @@ namespace Robotopia.Mods.UnityUi
 
         public void Close()
         {
-            if (!open || closing)
+            if (tornDown || closing)
             {
+                return;
+            }
+
+            if (!open)
+            {
+                CompleteClose();
                 return;
             }
 
@@ -144,12 +163,48 @@ namespace Robotopia.Mods.UnityUi
             QwDismissStack.Remove(this);
             QwMotion.ModalOut(dialog, () =>
             {
-                Closed?.Invoke();
-                if (canvasRoot != null)
-                {
-                    UnityEngine.Object.Destroy(canvasRoot);
-                }
+                CompleteClose();
             });
+        }
+
+        internal void Teardown()
+        {
+            if (tornDown)
+            {
+                return;
+            }
+
+            tornDown = true;
+            cursorLease.Release();
+            QwDismissStack.Remove(this);
+            open = false;
+            closing = false;
+            host.UnregisterModal(this);
+            Closed = null;
+        }
+
+        private void CompleteClose()
+        {
+            if (tornDown)
+            {
+                return;
+            }
+
+            tornDown = true;
+            cursorLease.Release();
+            QwDismissStack.Remove(this);
+            open = false;
+            closing = false;
+            host.UnregisterModal(this);
+            host.DestroyLayer(canvasRoot);
+            RaiseClosed();
+        }
+
+        private void RaiseClosed()
+        {
+            var handlers = Closed;
+            Closed = null;
+            QwCallbacks.Invoke(handlers, "Modal Closed");
         }
 
         private static UImage CreateDecor(Transform parent, string name, Sprite sprite, bool raycast)
