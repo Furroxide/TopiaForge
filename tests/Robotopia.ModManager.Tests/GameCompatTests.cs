@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Robotopia.GameCompat;
+using Robotopia.GameCompat.Extractor;
 using Robotopia.Mods;
 
 namespace Robotopia.ModManager.Tests
@@ -29,6 +30,8 @@ namespace Robotopia.ModManager.Tests
 
             // THE gate: resolve every declared binding against the independently-captured full surface.
             var report = SurfaceDiffer.ResolveManifests(manifests, baseline);
+            Assert(report.IndeterminateBindings == 0,
+                "the checked-in baseline must contain enough metadata to verify every offline-verifiable binding");
             var errors = report.Findings.Where(f => f.Severity == Severity.Error).ToList();
             if (errors.Count > 0)
             {
@@ -38,6 +41,8 @@ namespace Robotopia.ModManager.Tests
 
             AssertDamageTypeOrdinalsMatchSdk(baseline);
             AssertDifferDetectsBreakage(baseline, manifests);
+            AssertSimpleNameWalkValidatesMembers();
+            AssertLinkedCompileSourcesAreAudited();
 
             Console.WriteLine("GameCompat: " + manifests.Count + " manifest(s), " + report.TotalBindings + " binding(s) (" +
                 report.VerifiableBindings + " verifiable, " + report.UncheckableBindings + " uncheckable-offline, " +
@@ -166,6 +171,156 @@ namespace Robotopia.ModManager.Tests
             }
 
             Assert(proofs > 0, "breakage self-test could not run (no suitable bindings found) — cannot certify the differ detects breaks");
+        }
+
+        private static void AssertSimpleNameWalkValidatesMembers()
+        {
+            var manifest = new BindingManifest { ModId = "test.simple", ModName = "Simple-name test" };
+            var binding = new GameBinding
+            {
+                Id = "test.simple.tick",
+                Kind = BindingKind.Method,
+                Assembly = "GameCode",
+                DeclaringType = "Widget",
+                Member = "Tick",
+                ReturnType = "System.Boolean",
+                MatchMode = MatchMode.SimpleNameWalk,
+                Criticality = Criticality.Critical,
+                Feature = "Simple-name member validation"
+            };
+            binding.Parameters.Add(new ParameterSpec("System.Int32", constrained: true));
+            manifest.Bindings.Add(binding);
+
+            SurfaceSnapshot SnapshotWith(MethodSurface? method)
+            {
+                var snapshot = new SurfaceSnapshot();
+                snapshot.SimpleNameCounts["GameCode|Widget"] = 1;
+                var type = new TypeSurface
+                {
+                    TypeKey = "GameCode|Game.Namespace.Widget",
+                    Assembly = "GameCode",
+                    FullName = "Game.Namespace.Widget",
+                    SimpleName = "Widget",
+                    Status = SurfaceStatus.Resolved
+                };
+                if (method != null)
+                {
+                    type.Methods.Add(method);
+                }
+
+                snapshot.Types[type.TypeKey] = type;
+                return snapshot;
+            }
+
+            var healthyMethod = new MethodSurface { Name = "Tick", ReturnType = "System.Boolean" };
+            healthyMethod.Parameters.Add("System.Int32");
+            var healthy = SurfaceDiffer.ResolveManifests(new[] { manifest }, SnapshotWith(healthyMethod));
+            Assert(healthy.Findings.Count == 0 && healthy.VerifiableBindings == 1,
+                "a SimpleNameWalk member should resolve against a captured matching type surface");
+
+            var missing = SurfaceDiffer.ResolveManifests(new[] { manifest }, SnapshotWith(method: null));
+            Assert(missing.Findings.Any(f => f.BindingId == binding.Id && f.ChangeKind == ChangeKind.MissingMember),
+                "SimpleNameWalk must report a missing member even when the simple type name still exists");
+
+            var wrongReturn = new MethodSurface { Name = "Tick", ReturnType = "System.String" };
+            wrongReturn.Parameters.Add("System.Int32");
+            var mismatched = SurfaceDiffer.ResolveManifests(new[] { manifest }, SnapshotWith(wrongReturn));
+            Assert(mismatched.Findings.Any(f =>
+                    f.BindingId == binding.Id && f.ChangeKind == ChangeKind.SignatureMismatch),
+                "SimpleNameWalk must validate the selected member signature, not just its name");
+
+            binding.ReturnType = "System.Collections.Generic.IReadOnlyList<System.String>";
+            var legacyGenericReturn = new MethodSurface
+            {
+                Name = "Tick",
+                ReturnType = "IReadOnlyList`1[System.String]"
+            };
+            legacyGenericReturn.Parameters.Add("System.Int32");
+            var equivalentGeneric = SurfaceDiffer.ResolveManifests(
+                new[] { manifest },
+                SnapshotWith(legacyGenericReturn));
+            Assert(equivalentGeneric.Findings.Count == 0,
+                "equivalent normalized and reflection-style generic type names should match");
+
+            var wrongGenericReturn = new MethodSurface
+            {
+                Name = "Tick",
+                ReturnType = "IReadOnlyList`1[System.Int32]"
+            };
+            wrongGenericReturn.Parameters.Add("System.Int32");
+            var genericMismatch = SurfaceDiffer.ResolveManifests(
+                new[] { manifest },
+                SnapshotWith(wrongGenericReturn));
+            Assert(genericMismatch.Findings.Any(f =>
+                    f.BindingId == binding.Id && f.ChangeKind == ChangeKind.SignatureMismatch),
+                "member signature validation must retain generic arguments across supported type-name spellings");
+
+            var legacy = new SurfaceSnapshot();
+            legacy.SimpleNameCounts["GameCode|Widget"] = 1;
+            var indeterminate = SurfaceDiffer.ResolveManifests(new[] { manifest }, legacy);
+            Assert(indeterminate.IndeterminateBindings == 1,
+                "a count-only legacy snapshot must be indeterminate instead of falsely passing a member binding");
+        }
+
+        private static void AssertLinkedCompileSourcesAreAudited()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "RobotopiaGameCompatLinked-" + Guid.NewGuid().ToString("N"));
+            var bindings = Path.Combine(root, "bindings");
+            var mod = Path.Combine(root, "mods", "Test.Linked");
+            var shared = Path.Combine(root, "mods", "Shared");
+            Directory.CreateDirectory(bindings);
+            Directory.CreateDirectory(mod);
+            Directory.CreateDirectory(shared);
+
+            try
+            {
+                var manifest = new BindingManifest { ModId = "test.linked", ModName = "Linked source" };
+                manifest.Bindings.Add(new GameBinding
+                {
+                    Id = "test.linked.field",
+                    Kind = BindingKind.Field,
+                    DeclaringType = "LinkedGameType",
+                    Member = "LinkedMember",
+                    MatchMode = MatchMode.StaticFullName,
+                    Feature = "Linked source discovery"
+                });
+                File.WriteAllText(
+                    Path.Combine(bindings, "test.linked.gamebindings.json"),
+                    manifest.ToCanonicalJson());
+                File.WriteAllText(
+                    Path.Combine(mod, "Test.Linked.csproj"),
+                    "<Project Sdk=\"Microsoft.NET.Sdk\"><ItemGroup>" +
+                    "<Compile Include=\"..\\Shared\\LinkedBridge.cs\" Link=\"Shared\\LinkedBridge.cs\" />" +
+                    "</ItemGroup></Project>");
+                var linkedSource = Path.Combine(shared, "LinkedBridge.cs");
+                File.WriteAllText(
+                    linkedSource,
+                    "class LinkedBridge { void Bind() { " +
+                    "System.Type.GetType(\"LinkedGameType, GameCode\")?.GetField(\"LinkedMember\"); } }");
+
+                var healthy = GameReflectionAuditor.Audit(root);
+                Assert(healthy.Count == 0,
+                    "source-linked Compile Include files should satisfy declared type/member audit bindings");
+
+                File.WriteAllText(linkedSource, "class LinkedBridge { }");
+                var broken = GameReflectionAuditor.Audit(root);
+                Assert(broken.Any(finding =>
+                        finding.ModId == "test.linked" &&
+                        finding.Kind == "stale" &&
+                        finding.Detail.Contains("LinkedMember", StringComparison.Ordinal)),
+                    "linked-source regression must fail when the linked member reference is actually removed");
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+                catch
+                {
+                    // Test cleanup only.
+                }
+            }
         }
 
         private static string Normalize(string value) => value.Replace("\r\n", "\n");

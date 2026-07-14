@@ -26,6 +26,8 @@ namespace Robotopia.ModManager.Tests
             TestIdleNeedsNoTarget();
             TestAutonomousExitsWithoutObjective();
             TestActionsMapToObjectives();
+            TestFollowMissingTargetInfersKnownTargetsFromOperatorText();
+            TestFollowMissingTargetInferenceStaysConservative();
             TestActionWithoutTargetDegradesToChat();
             TestUnknownTargetDegradesToChat();
             TestTargetMatchingIsCaseInsensitive();
@@ -126,6 +128,8 @@ namespace Robotopia.ModManager.Tests
             Assert(request.DecisionGuidance!.Contains("WANDER") && request.DecisionGuidance.Contains("FLEE")
                 && request.DecisionGuidance.Contains("REPROGRAM"),
                 "the decision guidance explains the new actions");
+            Assert(request.ExtraOutputs![0].Description.Contains("never use NONE"),
+                "the target field tells accepted movement actions to use a real target");
         }
 
         // The describe provider is wired into LiveFacts and re-invoked per call, so every turn sees fresh
@@ -183,6 +187,64 @@ namespace Robotopia.ModManager.Tests
             var patrol = Parse("PATROL", "CRATE");
             Assert(!patrol.IsChat && patrol.Objective!.Kind == RobotObjectiveKind.Patrol && patrol.Objective.TargetName == "CRATE",
                 "PATROL maps to a here<->target patrol");
+        }
+
+        private static void TestFollowMissingTargetInfersKnownTargetsFromOperatorText()
+        {
+            AssertFollowFallback("follow me", "PLAYER");
+            AssertFollowFallback("follow the player", "PLAYER");
+            AssertFollowFallback("stay with me", "PLAYER");
+            AssertFollowFallback("right behind me", "PLAYER");
+            AssertFollowFallback("follow robot 2", "ROBOT 2");
+            AssertFollowFallback("follow the red marker", "RED MARKER");
+            AssertFollowFallback("follow crate", "CRATE");
+
+            var numbered = RobotProgramDirector.Parse("FOLLOW", RobotProgramDirector.NoTarget, null, null,
+                new[] { "CRATE", "CRATE 2" }, Array.Empty<string>(), Self, "follow crate 2");
+            Assert(!numbered.IsChat && numbered.Objective!.TargetName == "CRATE 2",
+                "a numbered target beats its shorter base name when the operator says the full name");
+        }
+
+        private static void TestFollowMissingTargetInferenceStaysConservative()
+        {
+            var ambiguous = Parse("FOLLOW", RobotProgramDirector.NoTarget, "follow me to crate");
+            Assert(ambiguous.IsChat && ambiguous.Objective == null,
+                "fallback does not guess when the operator text names multiple unrelated targets");
+
+            var unknown = Parse("FOLLOW", RobotProgramDirector.NoTarget, "follow the moon");
+            Assert(unknown.IsChat && unknown.Objective == null,
+                "fallback does not invent a target outside the closed known-target set");
+
+            var noFollowIntent = Parse("FOLLOW", RobotProgramDirector.NoTarget, "go to crate");
+            Assert(noFollowIntent.IsChat && noFollowIntent.Objective == null,
+                "fallback only repairs follow-like operator text");
+
+            Assert(Parse("FOLLOW", RobotProgramDirector.NoTarget, "what is behind the red marker?").IsChat,
+                "an incidental spatial question must not become a follow command");
+            Assert(Parse("FOLLOW", RobotProgramDirector.NoTarget, "inspect robot 2's tail").IsChat,
+                "an incidental body-part mention must not become a follow command");
+            Assert(Parse("FOLLOW", RobotProgramDirector.NoTarget, "the crate's shadow looks odd").IsChat,
+                "an incidental shadow mention must not become a follow command");
+            Assert(Parse("FOLLOW", RobotProgramDirector.NoTarget, "what is following robot 2?").IsChat,
+                "a descriptive use of following must not become an imperative command");
+            Assert(Parse("FOLLOW", RobotProgramDirector.NoTarget, "what does follow red marker mean?").IsChat,
+                "mentioning the follow verb in a question must not become an imperative command");
+            Assert(Parse("FOLLOW", RobotProgramDirector.NoTarget, "why did you stay with robot 2?").IsChat,
+                "describing past motion must not become an imperative command");
+
+            var noPlayer = RobotProgramDirector.Parse("FOLLOW", RobotProgramDirector.NoTarget, null, null,
+                new[] { "CRATE" }, Array.Empty<string>(), Self, "follow me");
+            Assert(noPlayer.IsChat && noPlayer.Objective == null,
+                "fallback cannot resolve PLAYER when PLAYER is not a known target");
+
+            var absentEntity = RobotProgramDirector.Parse("FOLLOW", RobotProgramDirector.NoTarget, null, null,
+                new[] { "PLAYER", "CRATE" }, Array.Empty<string>(), Self, "follow red marker");
+            Assert(absentEntity.IsChat && absentEntity.Objective == null,
+                "fallback cannot resolve a named entity that is absent from known targets");
+
+            var structuredWins = Parse("FOLLOW", "CRATE", "follow robot 2");
+            Assert(!structuredWins.IsChat && structuredWins.Objective!.TargetName == "CRATE",
+                "a valid structured target is never overridden by text fallback");
         }
 
         private static void TestActionWithoutTargetDegradesToChat()
@@ -368,9 +430,17 @@ namespace Robotopia.ModManager.Tests
         }
 
         // The common-case parse: no REPROGRAM sub-fields in play.
-        private static ProgramParseResult Parse(string? decision, string? target)
+        private static ProgramParseResult Parse(string? decision, string? target, string? operatorText = null)
         {
-            return RobotProgramDirector.Parse(decision, target, null, null, KnownTargets, RobotTargets, Self);
+            return RobotProgramDirector.Parse(decision, target, null, null, KnownTargets, RobotTargets, Self, operatorText);
+        }
+
+        private static void AssertFollowFallback(string operatorText, string expectedTarget)
+        {
+            var result = Parse("FOLLOW", RobotProgramDirector.NoTarget, operatorText);
+            Assert(!result.IsChat && result.Objective != null, operatorText + " should program a follow objective");
+            Assert(result.Objective!.Kind == RobotObjectiveKind.Follow && result.Objective.TargetName == expectedTarget,
+                operatorText + " should resolve to " + expectedTarget);
         }
 
         private static ProgramParseResult ParseReprogram(string? target, string? program, string? programTarget)

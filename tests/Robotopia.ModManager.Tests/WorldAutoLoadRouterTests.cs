@@ -29,6 +29,8 @@ namespace Robotopia.ModManager.Tests
             Assert(route.Request != null, "direct Open Sandbox auto-load should carry a load request");
             Assert(route.Request!.WorldId == WellKnownIds.OpenSandboxWorldId, "Open Sandbox auto-load should not fall through to the gamemode menu");
             Assert(route.Request.GamemodeId == ZombiesGamemodeId, "Open Sandbox auto-load should keep the selected gamemode");
+            Assert(route.Request.Priority == SceneTransitionPriority.Automatic,
+                "startup world loads must use automatic scene priority");
             Assert(string.IsNullOrWhiteSpace(route.Warning), "registered Open Sandbox should not warn");
         }
 
@@ -47,6 +49,8 @@ namespace Robotopia.ModManager.Tests
             Assert(route.Request!.WorldId == "robotopia.level.city", "registered first-party world id should be preserved");
             Assert(route.Request.PreferSceneReplacement, "scene-replacement preference should be preserved");
             Assert(!route.Request.AllowAdditiveFallback, "additive fallback preference should be preserved");
+            Assert(route.Request.Priority == SceneTransitionPriority.Automatic,
+                "first-party auto-load should preserve automatic scene priority");
         }
 
         private static void TestUnregisteredSelectionFallsBackToMenuEntry()
@@ -61,6 +65,8 @@ namespace Robotopia.ModManager.Tests
 
             Assert(route.Kind == WorldAutoLoadRouteKind.LaunchMenuEntry, "missing world should fall back to the gamemode menu entry");
             Assert(route.MenuEntryId == "robotopia.zombies.menu", "missing world fallback should launch the matching gamemode menu entry");
+            Assert(route.Priority == SceneTransitionPriority.Automatic,
+                "menu-entry fallback from auto-load must remain automatic");
             Assert(route.Warning.Contains("robotopia.level.missing"), "missing world fallback should surface the stale world id");
         }
 

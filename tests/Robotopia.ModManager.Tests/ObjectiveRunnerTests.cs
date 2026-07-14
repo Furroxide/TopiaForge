@@ -22,6 +22,10 @@ namespace Robotopia.ModManager.Tests
             TestPatrolAdvancesDwellsAndLoops();
             TestPatrolToMaterialisesRouteFromStart();
             TestSetObjectiveReplacesCleanly();
+            TestNullAgentReturnsCancelledHandle();
+            TestInvalidAgentIdentityReturnsCancelledHandle();
+            TestFaultyAgentDoesNotStarveOtherObjectives();
+            TestCancelIsSafeWhenAgentCleanupThrows();
             TestDeadAgentRunnerIsDropped();
             TestSceneChangeClearsEverything();
             TestTargetNamesAreNormalisedAndSorted();
@@ -247,6 +251,57 @@ namespace Robotopia.ModManager.Tests
             agent.IsAlive = false;
             service.Tick(0.016f);
             Assert(service.GetObjective(agent) == null, "a dead agent's runner is dropped on the next tick");
+        }
+
+        private static void TestNullAgentReturnsCancelledHandle()
+        {
+            var (service, _) = NewService();
+            var objective = RobotObjective.GoTo(new Vec3(1f, 0f, 0f));
+            var handle = service.SetObjective(null!, objective);
+
+            Assert(handle.State == RobotObjectiveState.Cancelled, "a null agent should return an inert cancelled handle");
+            Assert(ReferenceEquals(handle.Objective, objective), "the inert handle should preserve the requested objective");
+            handle.Cancel();
+        }
+
+        private static void TestInvalidAgentIdentityReturnsCancelledHandle()
+        {
+            var (service, _) = NewService();
+            var agent = new FakeRobotAgent { ThrowOnId = true };
+
+            var handle = service.SetObjective(agent, RobotObjective.Idle());
+
+            Assert(handle.State == RobotObjectiveState.Cancelled,
+                "an agent whose identity getter fails returns an inert cancelled handle");
+        }
+
+        private static void TestFaultyAgentDoesNotStarveOtherObjectives()
+        {
+            var (service, _) = NewService();
+            var faulty = new FakeRobotAgent { ThrowOnMoveTo = true };
+            var healthy = new FakeRobotAgent();
+            var failed = service.SetObjective(faulty, RobotObjective.GoTo(new Vec3(1f, 0f, 0f)));
+            service.SetObjective(healthy, RobotObjective.GoTo(new Vec3(2f, 0f, 0f)));
+
+            service.Tick(0.016f);
+
+            Assert(failed.State == RobotObjectiveState.Cancelled,
+                "an objective whose agent throws is cancelled and isolated");
+            Assert(healthy.MoveToCalls.Count == 1,
+                "a faulty agent objective must not starve later objectives in the same tick");
+        }
+
+        private static void TestCancelIsSafeWhenAgentCleanupThrows()
+        {
+            var (service, _) = NewService();
+            var agent = new FakeRobotAgent();
+            var handle = service.SetObjective(agent, RobotObjective.Idle());
+            agent.ThrowOnIsAlive = true;
+
+            handle.Cancel();
+
+            Assert(handle.State == RobotObjectiveState.Cancelled,
+                "objective cancellation remains terminal when agent cleanup throws");
         }
 
         private static void TestSceneChangeClearsEverything()
@@ -691,13 +746,23 @@ namespace Robotopia.ModManager.Tests
         // Records the movement intents the runner issues; reached/alive state is scripted by each test.
         private sealed class FakeRobotAgent : IRobotAgent
         {
+            private readonly string id = Guid.NewGuid().ToString("N");
+            private bool isAlive = true;
+
             public List<Vec3> MoveToCalls { get; } = new List<Vec3>();
             public List<object> ChaseCalls { get; } = new List<object>();
             public int StopCalls { get; private set; }
+            public bool ThrowOnId { get; set; }
+            public bool ThrowOnIsAlive { get; set; }
+            public bool ThrowOnMoveTo { get; set; }
 
-            public string Id { get; } = Guid.NewGuid().ToString("N");
+            public string Id => ThrowOnId ? throw new InvalidOperationException("id failed") : id;
             public object GameObject { get; } = new object();
-            public bool IsAlive { get; set; } = true;
+            public bool IsAlive
+            {
+                get => ThrowOnIsAlive ? throw new InvalidOperationException("liveness failed") : isAlive;
+                set => isAlive = value;
+            }
             public Vec3 Position { get; set; }
             public Vec3 HeadPosition => Position;
             public RobotBrainMode BrainMode { get; private set; } = RobotBrainMode.Dormant;
@@ -710,6 +775,11 @@ namespace Robotopia.ModManager.Tests
 
             public void MoveTo(Vec3 position)
             {
+                if (ThrowOnMoveTo)
+                {
+                    throw new InvalidOperationException("movement failed");
+                }
+
                 MoveToCalls.Add(position);
             }
 

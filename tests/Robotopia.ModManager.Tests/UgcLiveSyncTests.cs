@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Text;
 using Robotopia.ModManager.Core;
 using Robotopia.Mods;
@@ -16,14 +17,29 @@ namespace Robotopia.ModManager.Tests
         {
             TestValidationHelpers();
             TestEditorUrlParsing();
+            TestSecureSyncServerPolicy();
             TestFindNewestSnapshot();
+            TestStableBoundedSnapshotRead();
             TestLocalFirstThenSubsequent();
             TestGarbageAndOversizeRejected();
             TestApplyErrorKeepsWatching();
             TestLifecycleCleanup();
+            TestActiveSessionStopsOnSceneExit();
             TestAutomergeSession();
             TestLauncherDeployedAutomergePayloadStartsSession();
+            TestAutomaticConnectDefersWhenSceneIsHeld();
+            TestAutomaticAutomergeDefersWhenSceneIsHeld();
+            TestDeferredAutomaticTargetWithoutControllerKeepsYielding();
+            TestDeferredLocalConnectRetriesAfterBlockerEnds();
+            TestUserInitiatedConnectLoadsAndReleasesClaim();
+            TestFailedSceneDispatchReleasesClaim();
+            TestSupersededUserConnectFailsAfterSceneDispatch();
+            TestSceneDispatchTimeoutReleasesClaim();
+            TestAutomergeTimeoutCannotReconnectFromLateRevision();
             TestStatusFileRoundTrip();
+            TestCommandFileRoundTrip();
+            TestStatusAndCommandFileBounds();
+            TestCommandPollGateThrottles();
             Console.WriteLine("All UGC live-sync service tests passed.");
         }
 
@@ -31,11 +47,41 @@ namespace Robotopia.ModManager.Tests
         {
             Assert(UgcLiveSyncService.LooksLikeProjectJson(Bytes("{\"a\":1}")), "object json should pass");
             Assert(UgcLiveSyncService.LooksLikeProjectJson(Bytes("   \n\t {\"a\":1}")), "leading whitespace json should pass");
-            Assert(UgcLiveSyncService.LooksLikeProjectJson(new byte[] { 0xEF, 0xBB, 0xBF, (byte)'{' }), "BOM + brace should pass");
-            Assert(UgcLiveSyncService.LooksLikeProjectJson(new byte[] { 0x1f, 0x8b, 0x08, 0x00 }), "gzip magic should pass");
+            Assert(UgcLiveSyncService.LooksLikeProjectJson(
+                    new byte[] { 0xEF, 0xBB, 0xBF, (byte)'{', (byte)'}' }),
+                "BOM + complete object should pass");
+            Assert(UgcLiveSyncService.LooksLikeProjectJson(Gzip(Bytes("{\"a\":1}"))),
+                "a complete gzip JSON object should pass");
+            Assert(!UgcLiveSyncService.LooksLikeProjectJson(new byte[] { 0x1f, 0x8b, 0x08, 0x00 }),
+                "gzip magic without a complete stream must fail structural validation");
             Assert(!UgcLiveSyncService.LooksLikeProjectJson(Bytes("nonsense")), "non-json should fail");
             Assert(!UgcLiveSyncService.LooksLikeProjectJson(Bytes("[1,2,3]")), "json array should fail (project is an object)");
+            Assert(!UgcLiveSyncService.LooksLikeProjectJson(Bytes("{\"a\":1")),
+                "an object prefix without structural completion must fail");
+            Assert(!UgcLiveSyncService.LooksLikeProjectJson(Bytes("{\"a\":1} trailing")),
+                "trailing non-whitespace content must fail");
+            Assert(!UgcLiveSyncService.LooksLikeProjectJson(new byte[] { (byte)'{', (byte)'"', 0xC3, 0x28, (byte)'"', (byte)':', (byte)'1', (byte)'}' }),
+                "malformed UTF-8 must fail closed");
             Assert(!UgcLiveSyncService.LooksLikeProjectJson(Array.Empty<byte>()), "empty should fail");
+
+            var gzipBomb = Gzip(Bytes("{\"padding\":\"" + new string('x', 4096) + "\"}"));
+            Assert(!UgcLiveSyncService.TryValidateExpandedSnapshot(gzipBomb, 256, out var expansionError)
+                    && expansionError.Contains("expanded gzip"),
+                "gzip expansion beyond the runtime cap should be rejected before the bridge");
+            Assert(!UgcLiveSyncService.TryValidateExpandedSnapshot(new byte[] { 0x1f, 0x8b, 0x00 }, 256, out var gzipError)
+                    && gzipError.Contains("invalid gzip"),
+                "malformed gzip should be rejected before the bridge");
+            Assert(!UgcLiveSyncService.TryValidateExpandedSnapshot(Gzip(Bytes("[1,2,3]")), 256, out var shapeError)
+                    && shapeError.Contains("root must be an object"),
+                "gzip content must expand to a project JSON object");
+            Assert(UgcLiveSyncService.TryValidateExpandedSnapshot(
+                    Gzip(new byte[] { 0xEF, 0xBB, 0xBF, (byte)' ', (byte)'{', (byte)'}' }), 256, out _),
+                "gzip JSON should accept a UTF-8 BOM and leading whitespace");
+            Assert(UgcLiveSyncService.TryValidateExpandedSnapshot(Bytes("{}"), 2, out _),
+                "ordinary JSON should receive the same strict structural preflight");
+            Assert(!UgcLiveSyncService.TryValidateExpandedSnapshot(Bytes("{}{}"), 16, out var trailingError)
+                    && trailingError.Contains("trailing"),
+                "multiple JSON roots must not be accepted");
         }
 
         private static void TestEditorUrlParsing()
@@ -47,6 +93,42 @@ namespace Robotopia.ModManager.Tests
 
             Assert(!UgcLiveSyncService.TryParseEditorUrl("https://editor.example/?foo=bar", out _, out _), "url without project should not parse");
             Assert(!UgcLiveSyncService.TryParseEditorUrl("not a url", out _, out _), "garbage should not parse");
+            Assert(!UgcLiveSyncService.TryParseEditorUrl("https://editor.example/?project=%ZZ", out _, out _),
+                "malformed URL escapes should fail without escaping the parser");
+        }
+
+        private static void TestSecureSyncServerPolicy()
+        {
+            Assert(UgcLiveSyncService.TryValidateSecureSyncServerUrl("https://sync.example/room", out _),
+                "HTTPS sync servers should be accepted");
+            Assert(UgcLiveSyncService.TryValidateSecureSyncServerUrl("wss://sync.example/room", out _),
+                "WSS sync servers should be accepted");
+            Assert(!UgcLiveSyncService.TryValidateSecureSyncServerUrl("http://sync.example/", out _),
+                "plaintext HTTP sync servers must be rejected");
+            Assert(!UgcLiveSyncService.TryValidateSecureSyncServerUrl("ws://sync.example/", out _),
+                "plaintext WebSocket sync servers must be rejected");
+            Assert(!UgcLiveSyncService.TryValidateSecureSyncServerUrl("wss://user:secret@sync.example/", out _),
+                "sync URLs containing credentials must be rejected");
+
+            var bridge = new FakeBridge();
+            var service = new UgcLiveSyncService(bridge, new NullLogger(), enableFileWatcher: false);
+            var started = service.StartAutomergeSession(new UgcLiveSyncRequest(
+                documentUrl: "automerge:healthy",
+                syncServerUrl: "wss://sync.example/"));
+            Assert(started.Ok, "the secure baseline Automerge request should start");
+            var stopCalls = bridge.StopAutomergeCalls;
+
+            var rejected = service.StartAutomergeSession(new UgcLiveSyncRequest(
+                documentUrl: "automerge:replacement",
+                syncServerUrl: "http://sync.example/"));
+
+            Assert(!rejected.Ok && rejected.Message.Contains("https:// or wss://"),
+                "an insecure replacement request should fail with an actionable reason");
+            Assert(service.PendingSession?.Target == "automerge:healthy",
+                "an invalid replacement request must preserve the healthy pending session");
+            Assert(bridge.StopAutomergeCalls == stopCalls,
+                "validation failure must not tear down the healthy native Automerge request");
+            service.Dispose();
         }
 
         private static void TestFindNewestSnapshot()
@@ -56,15 +138,114 @@ namespace Robotopia.ModManager.Tests
             {
                 File.WriteAllText(Path.Combine(dir, "ignore.txt"), "x");
                 var older = Path.Combine(dir, "older.json");
-                var newer = Path.Combine(dir, "newer.json.gz");
+                var newer = Path.Combine(dir, "newer.JSON.GZ");
                 File.WriteAllText(older, "{}");
                 File.WriteAllText(newer, "{}");
                 File.SetLastWriteTimeUtc(older, DateTime.UtcNow.AddMinutes(-5));
                 File.SetLastWriteTimeUtc(newer, DateTime.UtcNow);
 
                 var found = UgcLiveSyncService.FindNewestSnapshot(dir);
-                Assert(found == newer, "newest snapshot should be the .json.gz, got: " + found);
+                Assert(found == newer, "newest snapshot should accept case-insensitive .json.gz, got: " + found);
+
+                var sameTime = DateTime.UtcNow.AddMinutes(1);
+                var tieA = Path.Combine(dir, "tie-a.JSON");
+                var tieB = Path.Combine(dir, "tie-b.json");
+                File.WriteAllText(tieA, "{}");
+                File.WriteAllText(tieB, "{}");
+                File.SetLastWriteTimeUtc(tieA, sameTime);
+                File.SetLastWriteTimeUtc(tieB, sameTime);
+                Assert(UgcLiveSyncService.FindNewestSnapshot(dir) == tieB,
+                    "equal timestamps should resolve deterministically by ordinal path");
+
+                var linkTarget = Path.Combine(dir, "link-target.txt");
+                var link = Path.Combine(dir, "linked.JSON");
+                File.WriteAllText(linkTarget, "{}");
+                if (TryCreateFileSymbolicLink(link, linkTarget))
+                {
+                    File.SetLastWriteTimeUtc(linkTarget, DateTime.UtcNow.AddMinutes(5));
+                    Assert(UgcLiveSyncService.FindNewestSnapshot(dir) == tieB,
+                        "snapshot discovery must ignore symbolic links/reparse points");
+                }
+
                 Assert(UgcLiveSyncService.FindNewestSnapshot(Path.Combine(dir, "missing")) == null, "missing folder returns null");
+
+                var bounded = Path.Combine(dir, "bounded");
+                Directory.CreateDirectory(bounded);
+                File.WriteAllText(Path.Combine(bounded, "one.txt"), "x");
+                File.WriteAllText(Path.Combine(bounded, "two.json"), "{}");
+                File.WriteAllText(Path.Combine(bounded, "three.txt"), "x");
+                var boundedResult = UgcLiveSyncService.ScanNewestSnapshot(bounded, maximumEntries: 2);
+                Assert(boundedResult.Outcome == UgcLiveSyncService.SnapshotScanOutcome.Rejected
+                    && boundedResult.Error.Contains("more than 2"),
+                    "watch-folder enumeration must stop at a configured all-entry bound");
+            }
+            finally
+            {
+                TryDelete(dir);
+            }
+        }
+
+        private static void TestStableBoundedSnapshotRead()
+        {
+            var dir = NewTempDir();
+            try
+            {
+                Assert(UgcLiveSyncService.IsSnapshotPath("snapshot.JSON")
+                    && UgcLiveSyncService.IsSnapshotPath("snapshot.JSON.GZ")
+                    && !UgcLiveSyncService.IsSnapshotPath("snapshot.json.tmp"),
+                    "snapshot extension matching should be exact and case-insensitive");
+
+                var path = Path.Combine(dir, "stable.json");
+                File.WriteAllText(path, "{\"version\":1}");
+                var outcome = UgcLiveSyncService.ReadStableSnapshot(path, 1024, out var bytes, out var error);
+                Assert(outcome == UgcLiveSyncService.SnapshotReadOutcome.Success
+                    && Encoding.UTF8.GetString(bytes) == "{\"version\":1}",
+                    "stable bounded read should return the complete snapshot: " + error);
+
+                outcome = UgcLiveSyncService.ReadStableSnapshot(path, 4, out _, out error);
+                Assert(outcome == UgcLiveSyncService.SnapshotReadOutcome.Rejected && error.Contains("limit"),
+                    "bounded read should reject metadata larger than its cap");
+
+                File.Delete(path);
+                outcome = UgcLiveSyncService.ReadStableSnapshot(path, 1024, out _, out _);
+                Assert(outcome == UgcLiveSyncService.SnapshotReadOutcome.Retry,
+                    "a snapshot rotated away before open should be retried");
+
+                var replacement = Path.Combine(dir, "replacement.json");
+                File.WriteAllText(replacement, "{\"value\":1}");
+                var originalWriteTime = File.GetLastWriteTimeUtc(replacement);
+                outcome = UgcLiveSyncService.ReadStableSnapshot(
+                    replacement,
+                    1024,
+                    () =>
+                    {
+                        File.WriteAllText(replacement, "{\"value\":2}");
+                        File.SetLastWriteTimeUtc(replacement, originalWriteTime);
+                    },
+                    out _,
+                    out error);
+                Assert(outcome == UgcLiveSyncService.SnapshotReadOutcome.Retry
+                    && (error.Contains("replaced") || error.Contains("changed")),
+                    "same-size/same-timestamp replacement races must be detected by content verification");
+
+                var target = Path.Combine(dir, "target.txt");
+                var link = Path.Combine(dir, "linked.json");
+                File.WriteAllText(target, "{}");
+                if (TryCreateFileSymbolicLink(link, target))
+                {
+                    outcome = UgcLiveSyncService.ReadStableSnapshot(link, 1024, out _, out error);
+                    Assert(outcome == UgcLiveSyncService.SnapshotReadOutcome.Rejected
+                        && error.Contains("reparse"),
+                        "bounded read must reject symbolic links/reparse points");
+                }
+
+                var service = new UgcLiveSyncService(new FakeBridge(), new NullLogger(), enableFileWatcher: false)
+                {
+                    CurrentMaxBytes = 0
+                };
+                Assert(service.CurrentMaxBytes > 0,
+                    "a non-positive config must not disable the snapshot allocation bound");
+                service.Dispose();
             }
             finally
             {
@@ -138,6 +319,9 @@ namespace Robotopia.ModManager.Tests
             try
             {
                 File.WriteAllText(Path.Combine(dir2, "big.json"), "{\"padding\":\"" + new string('x', 200) + "\"}");
+                var bigPath = Path.Combine(dir2, "big.json");
+                Assert(UgcLiveSyncService.IsSnapshotTooLarge(bigPath, 16, out var fileLength) && fileLength > 16,
+                    "the metadata preflight should identify an oversized snapshot before it is read");
                 var bridge = new FakeBridge();
                 var service = new UgcLiveSyncService(bridge, new NullLogger(), enableFileWatcher: false) { CurrentMaxBytes = 16 };
                 var errors = 0;
@@ -202,6 +386,31 @@ namespace Robotopia.ModManager.Tests
             }
         }
 
+        private static void TestActiveSessionStopsOnSceneExit()
+        {
+            var dir = NewTempDir();
+            try
+            {
+                var bridge = new FakeBridge();
+                var service = new UgcLiveSyncService(bridge, new NullLogger(), enableFileWatcher: false);
+                var stopped = 0;
+                service.SessionStopped += _ => stopped++;
+                service.StartLocalSession(new UgcLiveSyncRequest(watchFolder: dir));
+
+                bridge.ActiveSceneName = "ForeignScene";
+                bridge.ImportControllerReady = false;
+                service.NotifySceneLoaded("ForeignScene");
+
+                Assert(service.Status == UgcLiveSyncStatus.Stopped && service.CurrentSession == null,
+                    "an active live session must stop when a foreign active scene has no import controller");
+                Assert(stopped == 1, "scene exit should raise SessionStopped exactly once");
+            }
+            finally
+            {
+                TryDelete(dir);
+            }
+        }
+
         private static void TestAutomergeSession()
         {
             var bridge = new FakeBridge();
@@ -213,11 +422,16 @@ namespace Robotopia.ModManager.Tests
 
             var result = service.StartAutomergeSession(new UgcLiveSyncRequest(editorUrl: "https://h/?project=automerge:doc&scene=s"));
             Assert(result.Ok, "automerge session should start: " + result.Message);
-            Assert(started == 1, "SessionStarted should fire for automerge");
+            Assert(started == 0, "SessionStarted must wait for the Automerge controller to become ready");
             Assert(bridge.StartAutomergeDocument == "automerge:doc", "bridge should receive the parsed document, got " + bridge.StartAutomergeDocument);
-            Assert(service.Status == UgcLiveSyncStatus.Connected, "status should be Connected");
+            Assert(bridge.StartAutomergeLoadPlayScene, "an explicit Automerge connect should load the play scene");
+            Assert(service.Status == UgcLiveSyncStatus.WaitingForScene, "status should wait for the play scene");
+            Assert(service.CurrentSession == null && service.PendingSession?.Target == "automerge:doc",
+                "the requested session should remain pending until native confirmation");
 
             service.NotifySceneLoaded("UgcPlay"); // bridge replays the live revision callback
+            Assert(started == 1, "SessionStarted should fire once when the Automerge controller is ready");
+            Assert(service.Status == UgcLiveSyncStatus.Connected, "status should become Connected after confirmation");
             Assert(imported == 1, "automerge live confirmation should raise SnapshotImported once, got " + imported);
 
             service.Dispose();
@@ -257,13 +471,19 @@ namespace Robotopia.ModManager.Tests
             var result = service.StartAutomergeSession(request);
 
             Assert(result.Ok, "launcher Automerge payload should start: " + result.Message);
-            Assert(started == 1, "launcher payload should raise SessionStarted once");
-            Assert(service.Status == UgcLiveSyncStatus.Connected, "launcher payload should leave service connected, got " + service.Status);
+            Assert(started == 0, "launcher payload should wait to raise SessionStarted until the scene is ready");
+            Assert(service.Status == UgcLiveSyncStatus.WaitingForScene,
+                "launcher payload should wait for its play scene, got " + service.Status);
             Assert(bridge.StartAutomergeDocument == "automerge:captured-doc", "bridge should receive launcher documentUrl");
             Assert(bridge.StartAutomergeSyncServer == UgcLiveSyncConfig.DefaultSyncServerUrl, "bridge should receive launcher sync server");
             Assert(bridge.StartAutomergeScene == "neon-rooftops", "bridge should receive launcher sceneId");
+            Assert(service.PendingSession?.Target == "automerge:captured-doc", "pending target should be the launcher documentUrl");
+            Assert(service.PendingSession?.SceneId == "neon-rooftops", "pending scene should be the launcher sceneId");
+
+            service.NotifySceneLoaded("UgcPlay");
+            Assert(started == 1, "launcher payload should raise SessionStarted once after native confirmation");
+            Assert(service.Status == UgcLiveSyncStatus.Connected, "launcher payload should become connected");
             Assert(service.CurrentSession?.Target == "automerge:captured-doc", "session target should be the launcher documentUrl");
-            Assert(service.CurrentSession?.SceneId == "neon-rooftops", "session scene should be the launcher sceneId");
 
             service.Dispose();
         }
@@ -295,6 +515,11 @@ namespace Robotopia.ModManager.Tests
             Assert(round.AvailableScenes.Length == 2, "availableScenes should round-trip, got " + round.AvailableScenes.Length);
             Assert(round.SchemaVersion == 1, "schemaVersion should default to 1, got " + round.SchemaVersion);
 
+            round.ClearLiveSession(clearHistory: true);
+            Assert(round.ConnectedDocumentUrl == string.Empty, "ClearLiveSession should clear document url");
+            Assert(round.SceneId == string.Empty, "ClearLiveSession should clear scene");
+            Assert(round.AvailableScenes.Length == 0, "ClearLiveSession should clear available scenes");
+
             // JSON keys are the cross-language contract with the Dart reader.
             var json = original.ToJson();
             foreach (var key in new[] { "schemaVersion", "status", "transport", "defaultWatchFolder", "connectedDocumentUrl", "sceneId", "availableScenes" })
@@ -314,6 +539,11 @@ namespace Robotopia.ModManager.Tests
                 Assert(File.Exists(statusPath), "status file should be written");
                 var reread = UgcLiveSyncStatusFile.FromJson(File.ReadAllText(statusPath));
                 Assert(reread.ConnectedDocumentUrl == "automerge:abc123", "written status file should read back");
+                original.Status = "Idle";
+                original.WriteTo(statusPath);
+                reread = UgcLiveSyncStatusFile.FromJson(File.ReadAllText(statusPath));
+                Assert(reread.Status == "Idle", "status replacement should expose only the complete new document");
+                Assert(Directory.GetFiles(dir, "*.tmp-*").Length == 0, "atomic status writes should clean temporary files");
             }
             finally
             {
@@ -321,13 +551,129 @@ namespace Robotopia.ModManager.Tests
             }
         }
 
+        private static void TestCommandFileRoundTrip()
+        {
+            var original = new UgcLiveSyncCommandFile
+            {
+                Command = UgcLiveSyncCommandFile.StopCommand,
+                Cleanup = true,
+                CreatedUtc = "2026-07-05T00:00:00Z",
+            };
+            var round = UgcLiveSyncCommandFile.FromJson(original.ToJson());
+            Assert(round.IsStop, "stop command should round-trip");
+            Assert(round.Cleanup, "cleanup flag should round-trip");
+            Assert(round.SchemaVersion == 1, "command schemaVersion should default to 1");
+
+            var json = original.ToJson();
+            foreach (var key in new[] { "schemaVersion", "command", "cleanup", "createdUtc" })
+            {
+                Assert(json.Contains("\"" + key + "\""), "command JSON must contain key '" + key + "'");
+            }
+
+            Assert(UgcLiveSyncCommandFile.PathForConfig(@"C:\a\b\robotopia.ugc.livesync.json")
+                .EndsWith("robotopia.ugc.livesync.command.json"), "command path should be a sibling *.command.json");
+            Assert(UgcLiveSyncCommandFile.PathForConfig("") == string.Empty, "empty config path yields empty command path");
+        }
+
+        private static void TestStatusAndCommandFileBounds()
+        {
+            var status = new UgcLiveSyncStatusFile();
+            for (var index = 0; index < UgcLiveSyncStatusFile.MaxAvailableScenes + 20; index++)
+            {
+                status.AddScene("scene-" + index);
+            }
+
+            Assert(status.AvailableScenes.Length == UgcLiveSyncStatusFile.MaxAvailableScenes,
+                "status scene history should remain bounded");
+            Assert(status.AvailableScenes[status.AvailableScenes.Length - 1] ==
+                   "scene-" + (UgcLiveSyncStatusFile.MaxAvailableScenes + 19),
+                "bounded status history should retain the latest scene");
+
+            var now = DateTime.UtcNow;
+            var command = new UgcLiveSyncCommandFile
+            {
+                Command = UgcLiveSyncCommandFile.StopCommand,
+                CreatedUtc = now.ToString("o", System.Globalization.CultureInfo.InvariantCulture),
+            };
+            Assert(command.IsFresh(now), "a newly written command should be fresh");
+            command.CreatedUtc = now.Subtract(UgcLiveSyncCommandFile.MaxCommandAge).AddSeconds(-1)
+                .ToString("o", System.Globalization.CultureInfo.InvariantCulture);
+            Assert(!command.IsFresh(now), "an old command should not be replayed");
+            command.CreatedUtc = "not-a-date";
+            Assert(!command.IsFresh(now), "an invalid command timestamp should be rejected");
+
+            var dir = NewTempDir();
+            try
+            {
+                var path = Path.Combine(dir, "command.json");
+                command.CreatedUtc = now.ToString("o", System.Globalization.CultureInfo.InvariantCulture);
+                File.WriteAllText(path, command.ToJson());
+                Assert(UgcLiveSyncCommandFile.ReadFrom(path).IsStop, "bounded command reader should accept a valid command");
+
+                File.WriteAllBytes(path, new byte[UgcLiveSyncCommandFile.MaxFileBytes + 1]);
+                var rejected = false;
+                try
+                {
+                    UgcLiveSyncCommandFile.ReadFrom(path);
+                }
+                catch (InvalidDataException)
+                {
+                    rejected = true;
+                }
+
+                Assert(rejected, "oversized command file should be rejected before allocation/parsing");
+            }
+            finally
+            {
+                TryDelete(dir);
+            }
+        }
+
+        private static void TestCommandPollGateThrottles()
+        {
+            var gate = new UgcCommandPollGate(0.35f);
+            Assert(gate.Tick(0f), "command polling should run immediately on startup");
+            Assert(!gate.Tick(0.10f) && !gate.Tick(0.10f) && !gate.Tick(0.15f),
+                "command polling should stay closed during the interval");
+            Assert(gate.Tick(0f), "command polling should reopen after the interval elapses");
+            Assert(!gate.Tick(-1f), "negative delta time must not advance the gate");
+            gate.Reset();
+            Assert(gate.Tick(0f), "reset should make the next command check immediate");
+        }
+
         private static byte[] Bytes(string s) => Encoding.UTF8.GetBytes(s);
+
+        private static byte[] Gzip(byte[] bytes)
+        {
+            using var output = new MemoryStream();
+            using (var gzip = new GZipStream(output, CompressionMode.Compress, leaveOpen: true))
+            {
+                gzip.Write(bytes, 0, bytes.Length);
+            }
+
+            return output.ToArray();
+        }
 
         private static string NewTempDir()
         {
             var dir = Path.Combine(Path.GetTempPath(), "UgcLiveSyncTests-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(dir);
             return dir;
+        }
+
+        private static bool TryCreateFileSymbolicLink(string linkPath, string targetPath)
+        {
+            try
+            {
+                File.CreateSymbolicLink(linkPath, targetPath);
+                return true;
+            }
+            catch
+            {
+                // Windows requires Developer Mode or an elevated token. Other assertions still cover the
+                // platform-independent reparse-point gate when link creation is unavailable on the test host.
+                return false;
+            }
         }
 
         private static string FindRepoRoot()
@@ -368,10 +714,353 @@ namespace Robotopia.ModManager.Tests
             }
         }
 
+        // The scene-stomp regression: an automatic connect (auto-connect on start) that needs the play scene
+        // must defer while another mod holds the scene (a live world session), then attach when the play
+        // scene arrives on its own — never dispatch a scene load over the session.
+        private static void TestAutomaticConnectDefersWhenSceneIsHeld()
+        {
+            var dir = NewTempDir();
+            try
+            {
+                var bridge = new FakeBridge { ImportControllerReady = false };
+                var coordinator = new SceneCoordinator();
+                var service = new UgcLiveSyncService(bridge, new NullLogger(), enableFileWatcher: false)
+                {
+                    SceneCoordinator = coordinator,
+                    SceneOwnerId = "robotopia.ugc.livesync"
+                };
+
+                // Another mod (the worlds provider) holds the scene for its session.
+                var worldClaim = coordinator.RequestTransition(new SceneTransitionRequest(
+                    "robotopia.worlds", "IntroSewer", SceneTransitionPriority.UserInitiated, "world session"));
+                Assert(worldClaim.Approved, "the world session's user-initiated claim should be approved");
+
+                var result = service.StartLocalSession(UgcLiveSyncRequest.WithPriority(
+                    SceneTransitionPriority.Automatic, watchFolder: dir));
+
+                Assert(result.Ok, "a deferred automatic connect still starts: " + result.Message);
+                Assert(bridge.EnsurePlaySceneLoadedCalls == 0, "a refused automatic connect must not load the play scene");
+                Assert(service.Status == UgcLiveSyncStatus.WaitingForScene, "deferred connect should wait for the scene");
+
+                // The play scene later arrives by other means (e.g. the player launches the sandbox): attach.
+                bridge.ImportControllerReady = true;
+                service.NotifySceneLoaded("UgcPlay");
+                Assert(service.Status == UgcLiveSyncStatus.Watching, "deferred connect should attach when the scene arrives");
+
+                worldClaim.Claim!.Dispose();
+            }
+            finally
+            {
+                TryDelete(dir);
+            }
+        }
+
+        // The explicit path: a user-initiated connect loads the play scene even while another claim is
+        // active, and releases its own claim once a scene arrives so automatic transitions unblock.
+        private static void TestUserInitiatedConnectLoadsAndReleasesClaim()
+        {
+            var dir = NewTempDir();
+            try
+            {
+                var bridge = new FakeBridge { ImportControllerReady = false };
+                var coordinator = new SceneCoordinator();
+                var service = new UgcLiveSyncService(bridge, new NullLogger(), enableFileWatcher: false)
+                {
+                    SceneCoordinator = coordinator,
+                    SceneOwnerId = "robotopia.ugc.livesync"
+                };
+
+                var result = service.StartLocalSession(new UgcLiveSyncRequest(watchFolder: dir));
+                Assert(result.Ok, "user-initiated connect should start: " + result.Message);
+                Assert(bridge.EnsurePlaySceneLoadedCalls == 1, "user-initiated connect should load the play scene");
+                Assert(coordinator.IsSceneBusy, "the in-flight play-scene load should hold a claim");
+
+                bridge.ImportControllerReady = true;
+                service.NotifySceneLoaded("UgcPlay");
+                Assert(service.Status == UgcLiveSyncStatus.Watching, "connect should attach once the scene is up");
+                Assert(coordinator.IsSceneBusy,
+                    "the resolved claim must survive the full SceneLoaded dispatch so later mods can identify the takeover");
+                var duringDispatch = coordinator.RequestTransition(new SceneTransitionRequest(
+                    "automatic.mod", "OtherScene", SceneTransitionPriority.Automatic));
+                Assert(!duringDispatch.Approved,
+                    "the resolved claim should remain visible until the next main-thread pump");
+                service.Pump(0f);
+                Assert(!coordinator.IsSceneBusy, "the claim should release on the next pump after scene dispatch");
+            }
+            finally
+            {
+                TryDelete(dir);
+            }
+        }
+
+        private static void TestAutomaticAutomergeDefersWhenSceneIsHeld()
+        {
+            var bridge = new FakeBridge();
+            var coordinator = new SceneCoordinator();
+            var service = new UgcLiveSyncService(bridge, new NullLogger(), enableFileWatcher: false)
+            {
+                SceneCoordinator = coordinator,
+                SceneOwnerId = "robotopia.ugc.livesync"
+            };
+            var started = 0;
+            service.SessionStarted += _ => started++;
+
+            var worldClaim = coordinator.RequestTransition(new SceneTransitionRequest(
+                "robotopia.worlds", "IntroSewer", SceneTransitionPriority.UserInitiated, "world session"));
+            var result = service.StartAutomergeSession(UgcLiveSyncRequest.WithPriority(
+                SceneTransitionPriority.Automatic, documentUrl: "automerge:deferred"));
+
+            Assert(result.Ok, "a deferred Automerge connect should be accepted: " + result.Message);
+            Assert(!bridge.StartAutomergeLoadPlayScene,
+                "a refused automatic Automerge connect must arm the request without loading a scene");
+            Assert(service.Status == UgcLiveSyncStatus.WaitingForScene && service.CurrentSession == null,
+                "deferred Automerge should remain pending");
+            Assert(service.PendingSession?.Target == "automerge:deferred",
+                "deferred Automerge should retain its target for status reporting");
+            Assert(coordinator.ActiveClaims.Count == 1,
+                "a refused transition must not add a UGC claim beside the world claim");
+
+            worldClaim.Claim!.Dispose();
+            service.Pump(0f);
+            Assert(bridge.StartAutomergeCalls == 2 && bridge.StartAutomergeLoadPlayScene,
+                "once the blocker ends, Automerge should refresh its launch request and load the play scene");
+            Assert(coordinator.IsSceneBusy,
+                "the resumed deferred play-scene load should hold its own transition claim");
+            service.NotifySceneLoaded("UgcPlay");
+            Assert(started == 1 && service.Status == UgcLiveSyncStatus.Connected,
+                "the resumed Automerge session should activate when the play scene arrives");
+            service.Dispose();
+        }
+
+        private static void TestDeferredLocalConnectRetriesAfterBlockerEnds()
+        {
+            var dir = NewTempDir();
+            try
+            {
+                var bridge = new FakeBridge { ImportControllerReady = false };
+                var coordinator = new SceneCoordinator();
+                var service = new UgcLiveSyncService(bridge, new NullLogger(), enableFileWatcher: false)
+                {
+                    SceneCoordinator = coordinator,
+                    SceneOwnerId = "robotopia.ugc.livesync"
+                };
+                var blocker = coordinator.RequestTransition(new SceneTransitionRequest(
+                    "robotopia.worlds", "IntroSewer", SceneTransitionPriority.UserInitiated, "world session"));
+
+                var result = service.StartLocalSession(UgcLiveSyncRequest.WithPriority(
+                    SceneTransitionPriority.Automatic, watchFolder: dir));
+                Assert(result.Ok && bridge.EnsurePlaySceneLoadedCalls == 0,
+                    "the automatic local connect should initially defer without a scene load");
+
+                blocker.Claim!.Dispose();
+                service.Pump(0f);
+                Assert(bridge.EnsurePlaySceneLoadedCalls == 1,
+                    "the deferred local connect should resume its scene load once the blocker ends");
+                Assert(coordinator.IsSceneBusy,
+                    "the resumed local scene load should be protected by a transition claim");
+                service.Dispose();
+                Assert(!coordinator.IsSceneBusy, "stopping a resumed pending connect should release its claim");
+            }
+            finally
+            {
+                TryDelete(dir);
+            }
+        }
+
+        private static void TestDeferredAutomaticTargetWithoutControllerKeepsYielding()
+        {
+            var bridge = new FakeBridge
+            {
+                ActiveSceneName = "UgcPlay",
+                ImportControllerReady = false
+            };
+            var coordinator = new SceneCoordinator();
+            var service = new UgcLiveSyncService(bridge, new NullLogger(), enableFileWatcher: false)
+            {
+                SceneCoordinator = coordinator,
+                SceneOwnerId = "robotopia.ugc.livesync"
+            };
+            var foreign = coordinator.RequestTransition(new SceneTransitionRequest(
+                "robotopia.worlds", "UgcPlay", SceneTransitionPriority.UserInitiated, "custom world"));
+
+            var result = service.StartAutomergeSession(UgcLiveSyncRequest.WithPriority(
+                SceneTransitionPriority.Automatic,
+                documentUrl: "automerge:deferred-target"));
+            Assert(result.Ok && !bridge.StartAutomergeLoadPlayScene,
+                "automatic Automerge should initially yield to the foreign target-scene claim");
+
+            service.NotifySceneLoaded("UgcPlay");
+            Assert(service.Status == UgcLiveSyncStatus.WaitingForScene && service.PendingSession != null,
+                "a foreign target scene without a controller must remain deferred, not fail or connect");
+            Assert(coordinator.ActiveClaims.Count == 1
+                && coordinator.ActiveClaims[0].OwnerModId == "robotopia.worlds",
+                "the deferred UGC request must not manufacture a claim for the foreign arrival");
+
+            foreign.Claim!.Dispose();
+            service.Pump(0f);
+            Assert(bridge.StartAutomergeCalls == 2 && bridge.StartAutomergeLoadPlayScene,
+                "after the foreign owner releases, Automerge should refresh its process-wide request and retry");
+            Assert(coordinator.ActiveClaims.Count == 1
+                && coordinator.ActiveClaims[0].OwnerModId == "robotopia.ugc.livesync",
+                "the retried scene dispatch should hold the UGC claim");
+            service.Dispose();
+        }
+
+        private static void TestFailedSceneDispatchReleasesClaim()
+        {
+            var dir = NewTempDir();
+            try
+            {
+                var bridge = new FakeBridge
+                {
+                    ImportControllerReady = false,
+                    EnsurePlaySceneLoadedResult = false
+                };
+                var coordinator = new SceneCoordinator();
+                var service = new UgcLiveSyncService(bridge, new NullLogger(), enableFileWatcher: false)
+                {
+                    SceneCoordinator = coordinator,
+                    SceneOwnerId = "robotopia.ugc.livesync"
+                };
+
+                var result = service.StartLocalSession(new UgcLiveSyncRequest(watchFolder: dir));
+                Assert(!result.Ok, "a failed play-scene dispatch must fail the start request");
+                Assert(service.Status == UgcLiveSyncStatus.Error, "failed dispatch should leave an Error status");
+                Assert(service.PendingSession == null && service.CurrentSession == null,
+                    "failed dispatch should clear pending session state");
+                Assert(!coordinator.IsSceneBusy, "failed dispatch must release its coordinator claim");
+            }
+            finally
+            {
+                TryDelete(dir);
+            }
+        }
+
+        private static void TestSupersededUserConnectFailsAfterSceneDispatch()
+        {
+            var dir = NewTempDir();
+            try
+            {
+                var bridge = new FakeBridge { ImportControllerReady = false };
+                var coordinator = new SceneCoordinator();
+                var service = new UgcLiveSyncService(bridge, new NullLogger(), enableFileWatcher: false)
+                {
+                    SceneCoordinator = coordinator,
+                    SceneOwnerId = "robotopia.ugc.livesync"
+                };
+                var result = service.StartLocalSession(new UgcLiveSyncRequest(watchFolder: dir));
+                Assert(result.Ok && coordinator.ActiveClaims.Count == 1,
+                    "the user connect should dispatch under its UGC scene claim");
+                var foreign = coordinator.RequestTransition(new SceneTransitionRequest(
+                    "foreign.mod", "ForeignScene", SceneTransitionPriority.UserInitiated, "user takeover"));
+
+                bridge.ActiveSceneName = "ForeignScene";
+                service.NotifySceneLoaded("ForeignScene");
+                Assert(coordinator.ActiveClaims.Count == 2,
+                    "the superseded UGC claim should remain visible for the full SceneLoaded dispatch");
+                service.Pump(0f);
+                Assert(service.Status == UgcLiveSyncStatus.Error
+                    && service.PendingSession == null
+                    && service.CurrentSession == null,
+                    "a superseded user connect must fail instead of staying WaitingForScene forever");
+                Assert(coordinator.ActiveClaims.Count == 1
+                    && coordinator.ActiveClaims[0].OwnerModId == "foreign.mod",
+                    "failing the superseded connect should release only the UGC claim");
+                foreign.Claim!.Dispose();
+            }
+            finally
+            {
+                TryDelete(dir);
+            }
+        }
+
+        private static void TestSceneDispatchTimeoutReleasesClaim()
+        {
+            var dir = NewTempDir();
+            try
+            {
+                var bridge = new FakeBridge { ImportControllerReady = false };
+                var coordinator = new SceneCoordinator();
+                var service = new UgcLiveSyncService(bridge, new NullLogger(), enableFileWatcher: false)
+                {
+                    SceneCoordinator = coordinator,
+                    SceneOwnerId = "robotopia.ugc.livesync"
+                };
+                service.StartLocalSession(new UgcLiveSyncRequest(watchFolder: dir));
+
+                service.Pump(31f);
+
+                Assert(service.Status == UgcLiveSyncStatus.Error && service.PendingSession == null,
+                    "a silent UGC scene dispatch should fail after its timeout");
+                Assert(!coordinator.IsSceneBusy,
+                    "a timed-out UGC scene dispatch must release its coordinator claim");
+            }
+            finally
+            {
+                TryDelete(dir);
+            }
+        }
+
+        private static void TestAutomergeTimeoutCannotReconnectFromLateRevision()
+        {
+            var bridge = new FakeBridge { ImportControllerReady = false };
+            var coordinator = new SceneCoordinator();
+            var service = new UgcLiveSyncService(bridge, new ThrowingLogger(), enableFileWatcher: false)
+            {
+                SceneCoordinator = coordinator,
+                SceneOwnerId = "robotopia.ugc.livesync"
+            };
+            var started = 0;
+            var imported = 0;
+            service.SessionStarted += _ => started++;
+            service.SnapshotImported += _ => imported++;
+            service.SyncError += _ => throw new InvalidOperationException("subscriber failure");
+
+            var result = service.StartAutomergeSession(new UgcLiveSyncRequest(
+                documentUrl: "automerge:will-time-out"));
+            Assert(result.Ok && bridge.StartAutomergeCalls == 1,
+                "the Automerge timeout regression must begin from a dispatched request");
+            var stopCallsAfterStart = bridge.StopAutomergeCalls;
+
+            // Neither a throwing logger nor a throwing error subscriber may interrupt terminal teardown.
+            var originalError = Console.Error;
+            using var capturedError = new StringWriter();
+            try
+            {
+                Console.SetError(capturedError);
+                service.Pump(31f);
+            }
+            finally
+            {
+                Console.SetError(originalError);
+            }
+
+            Assert(capturedError.ToString().Contains("logger failed"),
+                "terminal-state diagnostics should fall back to an independent sink when the mod logger fails");
+            Assert(service.Status == UgcLiveSyncStatus.Error
+                && service.PendingSession == null
+                && service.CurrentSession == null,
+                "a timed-out Automerge start should be fully torn down in Error");
+            Assert(bridge.StopAutomergeCalls > stopCallsAfterStart,
+                "failing a pending Automerge start must detach its native controller/request");
+            Assert(!coordinator.IsSceneBusy,
+                "the timed-out Automerge start must release its scene claim");
+
+            // Simulate a native revision that was already queued before Stop detached the bridge callback.
+            bridge.EmitLastAutomergeRevision();
+            Assert(service.Status == UgcLiveSyncStatus.Error
+                && service.CurrentSession == null
+                && started == 0
+                && imported == 0,
+                "a late native revision must not resurrect a failed Automerge session");
+            service.Dispose();
+        }
+
         private sealed class FakeBridge : IUgcLiveSyncBridge
         {
             private int appliedSinceReset;
             private Action<UgcApplyOutcome>? onRevision;
+            private Action<UgcApplyOutcome>? lastAutomergeRevision;
             private bool automergePending;
             private string automergeScene = string.Empty;
 
@@ -381,10 +1070,24 @@ namespace Robotopia.ModManager.Tests
             public string StartAutomergeDocument { get; private set; } = string.Empty;
             public string StartAutomergeSyncServer { get; private set; } = string.Empty;
             public string StartAutomergeScene { get; private set; } = string.Empty;
+            public bool ImportControllerReady { get; set; } = true;
+            public int EnsurePlaySceneLoadedCalls { get; private set; }
+            public bool EnsurePlaySceneLoadedResult { get; set; } = true;
+            public bool StartAutomergeLoadPlayScene { get; private set; }
+            public int StartAutomergeCalls { get; private set; }
+            public string ActiveSceneName { get; set; } = string.Empty;
 
             public bool IsAvailable => true;
-            public bool IsImportControllerReady() => true;
-            public bool EnsurePlaySceneLoaded() => true;
+            public bool IsImportControllerReady() => ImportControllerReady;
+            public string PlaySceneName => "UgcPlay";
+            public bool IsActiveScene(string sceneName) =>
+                string.Equals(sceneName, ActiveSceneName, StringComparison.OrdinalIgnoreCase);
+
+            public bool EnsurePlaySceneLoaded()
+            {
+                EnsurePlaySceneLoadedCalls++;
+                return EnsurePlaySceneLoadedResult;
+            }
             public string GetDefaultWatchFolder() => string.Empty;
             public void ResetApplyState() => appliedSinceReset = 0;
             public void ApplyAssetOverrides(IReadOnlyList<UgcAssetOverride> overrides) { }
@@ -403,12 +1106,20 @@ namespace Robotopia.ModManager.Tests
                 return new UgcApplyOutcome("Sample", sceneId, "Main Scene", 7, isFullRebuild: false, wasFirstSnapshot: first);
             }
 
-            public bool StartAutomerge(string documentUrl, string syncServerUrl, string sceneId, Action<UgcApplyOutcome> onRevisionCallback)
+            public bool StartAutomerge(
+                string documentUrl,
+                string syncServerUrl,
+                string sceneId,
+                bool loadPlayScene,
+                Action<UgcApplyOutcome> onRevisionCallback)
             {
+                StartAutomergeCalls++;
                 StartAutomergeDocument = documentUrl;
                 StartAutomergeSyncServer = syncServerUrl;
                 StartAutomergeScene = sceneId;
+                StartAutomergeLoadPlayScene = loadPlayScene;
                 onRevision = onRevisionCallback;
+                lastAutomergeRevision = onRevisionCallback;
                 automergeScene = sceneId ?? string.Empty;
                 automergePending = true;
                 return true;
@@ -423,11 +1134,17 @@ namespace Robotopia.ModManager.Tests
 
             public void NotifySceneLoaded(string sceneName)
             {
-                if (automergePending)
+                if (automergePending && ImportControllerReady)
                 {
                     automergePending = false;
                     onRevision?.Invoke(new UgcApplyOutcome("(live)", automergeScene, sceneName, 0, isFullRebuild: false, wasFirstSnapshot: true));
                 }
+            }
+
+            public void EmitLastAutomergeRevision()
+            {
+                lastAutomergeRevision?.Invoke(new UgcApplyOutcome(
+                    "(late)", automergeScene, "UgcPlay", 0, isFullRebuild: false, wasFirstSnapshot: true));
             }
         }
 
@@ -438,6 +1155,15 @@ namespace Robotopia.ModManager.Tests
             public void Warn(string message) { }
             public void Error(string message) { }
             public void Error(Exception exception, string message) { }
+        }
+
+        private sealed class ThrowingLogger : IModLogger
+        {
+            public void Debug(string message) { }
+            public void Info(string message) { }
+            public void Warn(string message) => throw new InvalidOperationException("logger failure");
+            public void Error(string message) => throw new InvalidOperationException("logger failure");
+            public void Error(Exception exception, string message) => throw new InvalidOperationException("logger failure");
         }
     }
 }

@@ -22,6 +22,7 @@ namespace Robotopia.ModManager.Tests
             TestMaxTurnsEndsConversation();
             TestUnavailableTurnDegradesGracefully();
             TestEndIgnoresFurtherSubmits();
+            TestDisposedServiceReturnsEndedHandle();
             TestTextInputBuffer();
             TestSttResponseParsing();
             TestExtraOutputsAppendAfterBuiltIns();
@@ -251,6 +252,18 @@ namespace Robotopia.ModManager.Tests
             convo.Submit("are you there?");
             service.Tick(0.016f);
             Assert(convo.TurnCount == 0 && brains.Requests.Count == 0, "a submit after End is ignored");
+        }
+
+        private static void TestDisposedServiceReturnsEndedHandle()
+        {
+            var brains = new FakeBrainService();
+            var service = new RobotConversationService(brains, new NullLogger());
+            service.Dispose();
+
+            var convo = service.BeginConversation(new RobotConversationRequest("frame", new[] { "COMPLY" }));
+            Assert(convo.Ended, "a disposed conversation service should return an inert ended handle");
+            convo.Submit("ignored");
+            Assert(brains.Requests.Count == 0, "an inert post-disposal handle must not start backend work");
         }
 
         private static void TestExtraOutputsAppendAfterBuiltIns()
