@@ -1,5 +1,17 @@
 <Project>
+  <!-- Optional machine-local reference configuration written by tools/bootstrap-dev.ps1.
+       It is ignored by git and imported before defaults so explicit local values win. -->
+  <Import Project="$(MSBuildThisFileDirectory)Directory.Build.local.props"
+          Condition="Exists('$(MSBuildThisFileDirectory)Directory.Build.local.props')" />
+
   <PropertyGroup>
+    <!-- Release tooling and workflows consume these values rather than
+         carrying independent runtime pins. global.json pins the SDK itself. -->
+    <RobotopiaDotNetSdkVersion>10.0.301</RobotopiaDotNetSdkVersion>
+    <RobotopiaDotNetRuntimeVersion>10.0.9</RobotopiaDotNetRuntimeVersion>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+
     <!-- Explicit override always wins: set ROBOTOPIA_GAME_DIR (or pass -p:RobotopiaGameDir=...) to point at any
          game install. CI sets RobotopiaManagedDir directly from its reference-assembly archive. On Linux the
          game runs under Proton, so there is no default — set ROBOTOPIA_GAME_DIR to the Windows-layout game
@@ -16,7 +28,6 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
-    <Deterministic>true</Deterministic>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
   </PropertyGroup>
 
