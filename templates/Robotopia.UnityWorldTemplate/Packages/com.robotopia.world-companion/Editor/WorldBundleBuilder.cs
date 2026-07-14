@@ -1,10 +1,11 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.HighDefinition;
 
 namespace Robotopia.WorldCompanion.Editor
 {
@@ -19,6 +20,8 @@ namespace Robotopia.WorldCompanion.Editor
     {
         private const string ConfigFileName = "robotopia.world.json";
         private const string OutputDir = "Build/WorldBundles";
+        private const string PipelineAssetPath = "Assets/HDRPDefaultResources/RobotopiaWorldHDRP.asset";
+        private const long MaxConfigBytes = 64 * 1024;
 
         [Serializable]
         private class WorldConfig
@@ -62,6 +65,7 @@ namespace Robotopia.WorldCompanion.Editor
 
         private static string BuildInternal()
         {
+            EnsureHdrpConfiguration();
             var config = LoadConfig();
             ApplyCommandLineOverrides(config);
 
@@ -70,6 +74,9 @@ namespace Robotopia.WorldCompanion.Editor
                 throw new InvalidOperationException(
                     "No bundle name: set bundleName in " + ConfigFileName + " (robotopia world link) or pass -robotopiaBundleName.");
             }
+
+            ValidateBundleName(config.bundleName);
+            config.worldPrefab = ValidatePrefabPath(config.worldPrefab);
 
             var modPath = ResolveModPath(config.modPath);
 
@@ -98,13 +105,17 @@ namespace Robotopia.WorldCompanion.Editor
                 importer.SaveAndReimport();
             }
 
-            var labeled = AssetDatabase.GetAssetPathsFromAssetBundle(config.bundleName);
+            var labeled = AssetDatabase.GetAssetPathsFromAssetBundle(config.bundleName)
+                .OrderBy(asset => asset, StringComparer.Ordinal)
+                .ToArray();
             Debug.Log("[WorldBundleBuilder] Bundle contents:\n  " + string.Join("\n  ", labeled));
 
             Directory.CreateDirectory(OutputDir);
             var manifest = BuildPipeline.BuildAssetBundles(
                 OutputDir,
-                BuildAssetBundleOptions.ChunkBasedCompression | BuildAssetBundleOptions.DeterministicAssetBundle,
+                // Unity 5+ always produces deterministic AssetBundles. The old
+                // DeterministicAssetBundle flag is obsolete in Unity 6.
+                BuildAssetBundleOptions.ChunkBasedCompression,
                 BuildTarget.StandaloneWindows64);
             if (manifest == null)
             {
@@ -120,25 +131,103 @@ namespace Robotopia.WorldCompanion.Editor
             var targetDir = Path.Combine(modPath, "AssetBundles");
             Directory.CreateDirectory(targetDir);
             var target = Path.Combine(targetDir, config.bundleName + ".bundle");
-            File.Copy(built, target, overwrite: true);
-
-            var sha256 = ComputeSha256(target);
-            WriteProvenance(targetDir, config, labeled, sha256);
+            var provenanceTarget = Path.Combine(targetDir, config.bundleName + ".manifest.json");
+            var sha256 = WorldCompanionFileIo.PublishPairAtomic(
+                built,
+                target,
+                provenanceTarget,
+                hash => BuildProvenance(config, labeled, hash));
             Debug.Log("[WorldBundleBuilder] Wrote " + target + " (SHA256 " + sha256 + ").");
             return target;
+        }
+
+        private static void EnsureHdrpConfiguration()
+        {
+            var pipeline = AssetDatabase.LoadAssetAtPath<HDRenderPipelineAsset>(PipelineAssetPath);
+            if (pipeline == null)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(PipelineAssetPath));
+                pipeline = ScriptableObject.CreateInstance<HDRenderPipelineAsset>();
+                pipeline.name = "Robotopia World HDRP";
+                AssetDatabase.CreateAsset(pipeline, PipelineAssetPath);
+            }
+
+            if (GraphicsSettings.defaultRenderPipeline != pipeline)
+            {
+                GraphicsSettings.defaultRenderPipeline = pipeline;
+            }
+
+            // Quality levels inherit the single pinned project asset. Per-quality
+            // overrides are intentionally absent so authoring and batch builds agree.
+            if (QualitySettings.renderPipeline != null)
+            {
+                QualitySettings.renderPipeline = null;
+            }
+
+            EditorUtility.SetDirty(pipeline);
+            AssetDatabase.SaveAssets();
         }
 
         private static WorldConfig LoadConfig()
         {
             var path = Path.GetFullPath(Path.Combine(Application.dataPath, "..", ConfigFileName));
-            if (!File.Exists(path))
+            string json;
+            try
             {
-                // Headless overrides can still supply everything; start from defaults.
+                json = WorldCompanionFileIo.ReadStableUtf8(path, MaxConfigBytes, ConfigFileName);
+            }
+            catch (FileNotFoundException)
+            {
+                // Headless overrides can still supply everything; start from defaults only when no path exists.
                 return new WorldConfig();
             }
 
-            var config = JsonUtility.FromJson<WorldConfig>(File.ReadAllText(path));
+            var config = JsonUtility.FromJson<WorldConfig>(json);
             return config ?? new WorldConfig();
+        }
+
+        private static void ValidateBundleName(string value)
+        {
+            if (value.Length > 128 || !IsAsciiLetterOrDigit(value[0])
+                || !IsAsciiLetterOrDigit(value[value.Length - 1]))
+            {
+                throw new InvalidOperationException(
+                    "Bundle name must be 1-128 characters and start/end with an ASCII letter or digit.");
+            }
+
+            foreach (var character in value)
+            {
+                if (!IsAsciiLetterOrDigit(character) && character != '.' && character != '-' && character != '_')
+                {
+                    throw new InvalidOperationException(
+                        "Bundle name may contain only ASCII letters, digits, '.', '-', and '_'.");
+                }
+            }
+        }
+
+        private static string ValidatePrefabPath(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value) || value.IndexOf('\\') >= 0
+                || !value.StartsWith("Assets/", StringComparison.Ordinal)
+                || !value.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "World prefab must be a project-relative Assets/... .prefab path using '/'.");
+            }
+
+            var segments = value.Split('/');
+            if (segments.Any(segment => segment.Length == 0 || segment == "." || segment == ".."))
+            {
+                throw new InvalidOperationException("World prefab path contains an unsafe segment.");
+            }
+
+            return string.Join("/", segments);
+        }
+
+        private static bool IsAsciiLetterOrDigit(char value)
+        {
+            return (value >= 'a' && value <= 'z') || (value >= 'A' && value <= 'Z')
+                || (value >= '0' && value <= '9');
         }
 
         // The standard Unity batch pattern: our own -robotopia* args ride on the editor command line.
@@ -180,29 +269,51 @@ namespace Robotopia.WorldCompanion.Editor
             return resolved;
         }
 
-        private static void WriteProvenance(string targetDir, WorldConfig config, string[] labeled, string sha256)
+        private static string BuildProvenance(WorldConfig config, string[] labeled, string sha256)
         {
             var payload = new StringBuilder();
             payload.AppendLine("{");
-            payload.AppendLine("  \"bundle\": \"" + config.bundleName + ".bundle\",");
-            payload.AppendLine("  \"worldPrefab\": \"" + config.worldPrefab + "\",");
-            payload.AppendLine("  \"editorVersion\": \"" + Application.unityVersion + "\",");
-            payload.AppendLine("  \"builtUtc\": \"" + DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ") + "\",");
-            payload.AppendLine("  \"sha256\": \"" + sha256 + "\",");
+            payload.AppendLine("  \"bundle\": " + JsonString(config.bundleName + ".bundle") + ",");
+            payload.AppendLine("  \"worldPrefab\": " + JsonString(config.worldPrefab) + ",");
+            payload.AppendLine("  \"editorVersion\": " + JsonString(Application.unityVersion) + ",");
+            payload.AppendLine("  \"sha256\": " + JsonString(sha256) + ",");
             payload.AppendLine("  \"assets\": [");
-            payload.AppendLine(string.Join(",\n", labeled.Select(asset => "    \"" + asset + "\"")));
+            payload.AppendLine(string.Join(",\n", labeled.Select(asset => "    " + JsonString(asset))));
             payload.AppendLine("  ]");
             payload.AppendLine("}");
-            File.WriteAllText(Path.Combine(targetDir, config.bundleName + ".manifest.json"), payload.ToString());
+            return payload.ToString();
         }
 
-        private static string ComputeSha256(string path)
+        private static string JsonString(string value)
         {
-            using (var stream = File.OpenRead(path))
-            using (var sha = SHA256.Create())
+            var escaped = new StringBuilder(value.Length + 2);
+            escaped.Append('"');
+            foreach (var character in value)
             {
-                return BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", string.Empty).ToLowerInvariant();
+                switch (character)
+                {
+                    case '"': escaped.Append("\\\""); break;
+                    case '\\': escaped.Append("\\\\"); break;
+                    case '\b': escaped.Append("\\b"); break;
+                    case '\f': escaped.Append("\\f"); break;
+                    case '\n': escaped.Append("\\n"); break;
+                    case '\r': escaped.Append("\\r"); break;
+                    case '\t': escaped.Append("\\t"); break;
+                    default:
+                        if (character < 0x20)
+                        {
+                            escaped.Append("\\u").Append(((int)character).ToString("x4"));
+                        }
+                        else
+                        {
+                            escaped.Append(character);
+                        }
+                        break;
+                }
             }
+
+            return escaped.Append('"').ToString();
         }
+
     }
 }

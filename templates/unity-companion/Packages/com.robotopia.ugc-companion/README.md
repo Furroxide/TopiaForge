@@ -2,7 +2,7 @@
 
 Author UGC level content in the Unity Editor and **live-sync it into the running game with no restart**.
 This package is the authoring side of Robotopia's UGC live-sync pipeline; the game side is the
-`Robotopia.UgcLiveSync` mod. See [`docs/UgcLiveSync.md`](../../../../../docs/UgcLiveSync.md) for the full
+`Robotopia.UgcLiveSync` mod. See [`docs/UgcLiveSync.md`](../../../../docs/UgcLiveSync.md) for the full
 contract.
 
 ## How it works
