@@ -3,13 +3,17 @@
   <!-- Unity-free, GameCode-free core of the game-compatibility tooling: the binding-manifest and
        surface-snapshot models, a canonical (byte-stable) JSON codec, and the pure differ that turns a
        manifest + a known-good surface baseline + an optional freshly-extracted candidate surface into a
-       severity-ranked CompatReport. Targets netstandard2.0 so it is usable from BOTH the net8.0 extractor
-       tool and the net8.0 test harness. It NEVER references GameCode.dll or UnityEngine — all game metadata
+       severity-ranked CompatReport. Targets netstandard2.0 so it is usable from BOTH the net10.0 extractor
+       tool and the net10.0 test harness. It NEVER references GameCode.dll or UnityEngine — all game metadata
        reaches it as plain data produced by the extractor. -->
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <AssemblyName>Robotopia.GameCompat.Surface</AssemblyName>
     <RootNamespace>Robotopia.GameCompat</RootNamespace>
+    <Version>1.1.0</Version>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <FileVersion>1.1.0.0</FileVersion>
+    <InformationalVersion>1.1.0</InformationalVersion>
   </PropertyGroup>
 
 </Project>

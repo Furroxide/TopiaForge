@@ -31,7 +31,12 @@ namespace Robotopia.GameCompat.Extractor
             _context = new MetadataLoadContext(new PathAssemblyResolver(dlls), coreAssemblyName: "netstandard");
         }
 
-        public SurfaceSnapshot Extract(IEnumerable<BindingManifest> manifests, string extractorVersion, string gameVersionLabel, string capturedUtc)
+        public SurfaceSnapshot Extract(
+            IEnumerable<BindingManifest> manifests,
+            string extractorVersion,
+            string gameVersionLabel,
+            string capturedUtc,
+            string gameVersion = "")
         {
             var bindings = manifests.SelectMany(m => m.Bindings).ToList();
 
@@ -39,6 +44,7 @@ namespace Robotopia.GameCompat.Extractor
             {
                 ExtractorVersion = extractorVersion,
                 GameVersionLabel = gameVersionLabel,
+                GameVersion = gameVersion,
                 CapturedUtc = capturedUtc,
             };
 
@@ -70,8 +76,9 @@ namespace Robotopia.GameCompat.Extractor
                 snapshot.Types[key] = ReadType(assemblyName, typeName);
             }
 
-            // Simple-name-walk counts: how many types in the assembly carry that simple name (case-insensitive,
-            // matching the runtime IsNamed walk).
+            // Simple-name-walk candidates: retain both the count and each matching type's complete surface.
+            // A count alone can prove that a component name exists, but cannot prove that the field/method/property
+            // the mod subsequently reflects still exists on that component.
             var simpleTargets = bindings
                 .Where(b => b.MatchMode == MatchMode.SimpleNameWalk)
                 .Select(b => (b.Assembly, Simple: SimpleName(b.DeclaringType)))
@@ -85,7 +92,15 @@ namespace Robotopia.GameCompat.Extractor
                     continue;
                 }
 
-                snapshot.SimpleNameCounts[key] = CountSimpleName(assemblyName, simple);
+                var scan = ReadSimpleNameTypes(assemblyName, simple);
+                snapshot.SimpleNameCounts[key] = scan.Count;
+                foreach (var type in scan.Types)
+                {
+                    if (!snapshot.Types.ContainsKey(type.TypeKey))
+                    {
+                        snapshot.Types[type.TypeKey] = type;
+                    }
+                }
             }
 
             return snapshot;
@@ -288,38 +303,44 @@ namespace Robotopia.GameCompat.Extractor
             return true;
         }
 
-        private long CountSimpleName(string assemblyName, string simpleName)
+        private (long Count, IReadOnlyList<TypeSurface> Types) ReadSimpleNameTypes(
+            string assemblyName,
+            string simpleName)
         {
             var assembly = LoadAssembly(assemblyName);
             if (assembly == null)
             {
-                return -1; // unknown: assembly missing from this environment
+                return (-1, Array.Empty<TypeSurface>()); // unknown: assembly missing from this environment
             }
 
-            long count = 0;
-            foreach (var type in SafeGetTypes(assembly))
+            var matches = new List<TypeSurface>();
+            var types = SafeGetTypes(assembly, out var complete);
+            foreach (var type in types)
             {
                 if (type != null && string.Equals(type.Name, simpleName, StringComparison.OrdinalIgnoreCase))
                 {
-                    count++;
+                    matches.Add(ReadType(assemblyName, type.FullName ?? type.Name));
                 }
             }
 
-            return count;
+            return (complete ? matches.Count : -1, matches);
         }
 
-        private static Type?[] SafeGetTypes(Assembly assembly)
+        private static Type?[] SafeGetTypes(Assembly assembly, out bool complete)
         {
             try
             {
+                complete = true;
                 return assembly.GetTypes();
             }
             catch (ReflectionTypeLoadException ex)
             {
+                complete = false;
                 return ex.Types;
             }
             catch (FileNotFoundException)
             {
+                complete = false;
                 return Array.Empty<Type?>();
             }
         }

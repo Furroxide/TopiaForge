@@ -17,7 +17,7 @@ It is deliberately **separate from `SdkSurfaceTests`**, which only guards the SD
 | --- | --- | --- |
 | Binding manifests | `bindings/<mod-id>.gamebindings.json` | One per mod. The declarative single source of truth for every game symbol that mod reflectively depends on. |
 | Surface library | `src/Robotopia.GameCompat.Surface` | Unity-free, GameCode-free core: manifest + snapshot models, canonical JSON, and the pure differ. Referenced by the extractor **and** the test harness. |
-| Extractor tool | `src/Robotopia.GameCompat.Extractor` | net8.0 console tool. Reads the real `GameCode.dll` via `MetadataLoadContext` (metadata only — no Unity, no code execution) and produces/verifies a surface snapshot. |
+| Extractor tool | `src/Robotopia.GameCompat.Extractor` | net10.0 console tool. Reads the real `GameCode.dll` via `MetadataLoadContext` (metadata only — no Unity, no code execution) and produces/verifies a surface snapshot. |
 | Surface baseline | `baselines/gamecode.surface.baseline.json` | The checked-in, known-good snapshot of the exact game surface the mods use, captured from a real install. |
 | Offline CI gate | `tests/Robotopia.ModManager.Tests/GameCompatTests.cs` | Runs in the existing hand-rolled harness. Deterministic, no DLL needed. |
 

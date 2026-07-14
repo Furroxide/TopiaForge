@@ -279,6 +279,7 @@ namespace Robotopia.GameCompat
         public string CapturedUtc { get; set; } = string.Empty;
         public string GameCodeMvid { get; set; } = string.Empty;
         public string GameVersionLabel { get; set; } = string.Empty;
+        public string GameVersion { get; set; } = string.Empty;
 
         // Sorted list of "<name> <version>" for every assembly in the resolver set. If two snapshots have
         // different reference sets, a differing method signature is more likely an environment artifact than a
@@ -348,6 +349,12 @@ namespace Robotopia.GameCompat
                 .Set("gameVersionLabel", GameVersionLabel)
                 .Set("surfaceContentHash", ComputeContentHash());
 
+            // Additive metadata: old baselines must remain byte-canonical when the version was not captured.
+            if (!string.IsNullOrEmpty(GameVersion))
+            {
+                root.Set("gameVersion", GameVersion);
+            }
+
             foreach (var member in content.Members)
             {
                 root.Set(member.Key, member.Value);
@@ -366,6 +373,7 @@ namespace Robotopia.GameCompat
                 CapturedUtc = root.GetString("capturedUtc"),
                 GameCodeMvid = root.GetString("gameCodeMvid"),
                 GameVersionLabel = root.GetString("gameVersionLabel"),
+                GameVersion = root.GetString("gameVersion"),
             };
 
             foreach (var item in root.GetArray("referenceSet").Items)

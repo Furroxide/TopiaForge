@@ -9,6 +9,8 @@ namespace Robotopia.GameCompat.Extractor
     internal static class ManifestLoader
     {
         public const string BaselineRelativePath = "baselines/gamecode.surface.baseline.json";
+        private const int MaxManifestBytes = 1024 * 1024;
+        private const int MaxManifestFiles = 256;
 
         public static List<(BindingManifest manifest, string path)> LoadAll(string repoRoot)
         {
@@ -19,9 +21,27 @@ namespace Robotopia.GameCompat.Extractor
                 return result;
             }
 
-            foreach (var file in Directory.GetFiles(dir, "*.gamebindings.json").OrderBy(x => x, StringComparer.Ordinal))
+            if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) != 0)
             {
-                result.Add((BindingManifest.Parse(File.ReadAllText(file)), file));
+                throw new InvalidDataException("The GameCompat bindings directory must not be a symbolic link: " + dir);
+            }
+
+            var files = Directory.GetFiles(dir, "*.gamebindings.json")
+                .OrderBy(x => x, StringComparer.Ordinal)
+                .ToList();
+            if (files.Count > MaxManifestFiles)
+            {
+                throw new InvalidDataException(
+                    "The GameCompat binding set exceeds the " + MaxManifestFiles + " file safety limit.");
+            }
+
+            foreach (var file in files)
+            {
+                var json = ExtractorFileIo.ReadStableUtf8(
+                    file,
+                    MaxManifestBytes,
+                    "GameCompat binding manifest");
+                result.Add((BindingManifest.Parse(json), file));
             }
 
             return result;
