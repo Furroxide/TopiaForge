@@ -174,14 +174,13 @@ bool vpmRangeAllows(String range, String version) {
 }
 
 SemanticVersion _caretMax(SemanticVersion base) {
-  if (base.major > 0) {
-    return SemanticVersion(base.major + 1, 0, 0);
+  if (base.majorNumber.isPositive) {
+    return base.incrementMajor();
   }
-  if (base.minor > 0) {
-    return SemanticVersion(0, base.minor + 1, 0);
+  if (base.minorNumber.isPositive) {
+    return base.incrementMinor();
   }
-  return SemanticVersion(0, 0, base.patch + 1);
+  return base.incrementPatch();
 }
 
-SemanticVersion _tildeMax(SemanticVersion base) =>
-    SemanticVersion(base.major, base.minor + 1, 0);
+SemanticVersion _tildeMax(SemanticVersion base) => base.incrementMinor();

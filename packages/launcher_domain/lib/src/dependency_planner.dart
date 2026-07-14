@@ -1,6 +1,9 @@
 import 'models.dart';
 import 'versioning.dart';
 
+part 'dependency_resolution.dart';
+part 'dependency_install_resolution.dart';
+
 class DependencyResolutionResult {
   const DependencyResolutionResult({
     required this.orderedMods,
@@ -24,6 +27,7 @@ class PackageInstallPlan {
     required this.conflictingMods,
     required this.packageSha256,
     this.installActions = const [],
+    this.requiredPermissions = const [],
   });
 
   final ModManifest manifest;
@@ -33,6 +37,7 @@ class PackageInstallPlan {
   final List<InstalledMod> conflictingMods;
   final String packageSha256;
   final List<PackageInstallAction> installActions;
+  final List<String> requiredPermissions;
 
   bool get hasBlockingIssues => issues.any((issue) => issue.isBlocking);
 }
@@ -40,94 +45,19 @@ class PackageInstallPlan {
 class DependencyPlanner {
   const DependencyPlanner();
 
-  DependencyResolutionResult resolveInstalled(List<InstalledMod> mods) {
-    final enabled = <String, InstalledMod>{};
-    for (final mod in mods) {
-      if (mod.enabled && !mod.uninstallPending && mod.manifest != null) {
-        enabled[mod.id.toLowerCase()] = mod;
-      }
-    }
-
-    final issues = <LauncherIssue>[];
-    final graph = <String, List<String>>{
-      for (final mod in enabled.values) mod.id: <String>[],
-    };
-
-    for (final mod in enabled.values) {
-      final manifest = mod.manifest!;
-      for (final dependency in manifest.dependencies) {
-        final dependencyMod = enabled[dependency.id.toLowerCase()];
-        if (dependencyMod == null) {
-          issues.add(
-            LauncherIssue(
-              severity: IssueSeverity.error,
-              subjectId: mod.id,
-              message:
-                  '${manifest.name} is missing dependency ${dependency.id}.',
-            ),
-          );
-          continue;
-        }
-
-        if (!dependency.versionRange.allows(dependencyMod.version)) {
-          issues.add(
-            LauncherIssue(
-              severity: IssueSeverity.error,
-              subjectId: mod.id,
-              message:
-                  '${manifest.name} requires ${dependency.id} ${dependency.versionRange}, but ${dependencyMod.version} is installed.',
-            ),
-          );
-        }
-
-        _addEdge(graph[mod.id]!, dependencyMod.id);
-      }
-
-      // loadAfter edges are soft ordering hints and commonly mirror the hard dependencies (a mod
-      // both depends on X and loads after X). De-duplicate so the graph lists each id once.
-      for (final after in manifest.loadAfter) {
-        final afterMod = enabled[after.toLowerCase()];
-        if (afterMod != null) {
-          _addEdge(graph[mod.id]!, afterMod.id);
-        }
-      }
-
-      for (final conflict in manifest.conflicts) {
-        final conflictingMod = enabled[conflict.id.toLowerCase()];
-        if (conflictingMod != null &&
-            conflict.versionRange.allows(conflictingMod.version)) {
-          issues.add(
-            LauncherIssue(
-              severity: IssueSeverity.error,
-              subjectId: mod.id,
-              message:
-                  '${manifest.name} conflicts with ${conflictingMod.name}${conflict.reason.isEmpty ? '' : ': ${conflict.reason}'}',
-            ),
-          );
-        }
-      }
-    }
-
-    final ordered = <InstalledMod>[];
-    final temporary = <String>{};
-    final permanent = <String>{};
-
-    for (final id in graph.keys.toList()..sort()) {
-      _visit(id, graph, enabled, temporary, permanent, ordered, issues);
-    }
-
-    final blockedIds = issues
-        .where((issue) => issue.isBlocking && issue.subjectId != null)
-        .map((issue) => issue.subjectId!.toLowerCase())
-        .toSet();
-    ordered.removeWhere((mod) => blockedIds.contains(mod.id.toLowerCase()));
-
-    return DependencyResolutionResult(
-      orderedMods: ordered,
-      issues: issues,
-      graph: graph,
-    );
-  }
+  DependencyResolutionResult resolveInstalled(
+    List<InstalledMod> mods, {
+    String? gameVersion,
+    bool requireKnownGameVersion = false,
+    String loaderVersion = RobotopiaRuntimeVersions.loaderVersion,
+    String sdkVersion = RobotopiaRuntimeVersions.sdkVersion,
+  }) => _resolveInstalled(
+    mods,
+    gameVersion: gameVersion,
+    requireKnownGameVersion: requireKnownGameVersion,
+    loaderVersion: loaderVersion,
+    sdkVersion: sdkVersion,
+  );
 
   PackageInstallPlan previewInstall(
     ModManifest candidate,
@@ -140,6 +70,7 @@ class DependencyPlanner {
     String? gameVersion,
     String? loaderVersion,
     String? sdkVersion,
+    bool requireKnownGameVersion = false,
   }) {
     final issues = [...candidate.validate()];
     final installed = {
@@ -149,102 +80,32 @@ class DependencyPlanner {
     final optionalMissing = <ModDependency>[];
     final conflictingMods = <InstalledMod>[];
 
-    if (gameVersion != null &&
-        !candidate.gameVersionRange.isAny &&
-        !candidate.gameVersionRange.allows(gameVersion)) {
-      issues.add(
-        LauncherIssue(
-          severity: IssueSeverity.error,
-          subjectId: candidate.id,
-          message:
-              '${candidate.name} supports game ${candidate.gameVersionRange}, not $gameVersion.',
-        ),
-      );
-    }
+    issues.addAll(
+      _runtimeCompatibilityIssues(
+        candidate,
+        gameVersion: gameVersion,
+        requireKnownGameVersion: requireKnownGameVersion,
+        loaderVersion: loaderVersion,
+        sdkVersion: sdkVersion,
+      ),
+    );
 
-    if (loaderVersion != null &&
-        !candidate.loaderVersionRange.isAny &&
-        !candidate.loaderVersionRange.allows(loaderVersion)) {
-      issues.add(
-        LauncherIssue(
-          severity: IssueSeverity.error,
-          subjectId: candidate.id,
-          message:
-              '${candidate.name} supports loader ${candidate.loaderVersionRange}, not $loaderVersion.',
-        ),
-      );
-    }
-
-    if (sdkVersion != null &&
-        !candidate.sdkVersionRange.isAny &&
-        !candidate.sdkVersionRange.allows(sdkVersion)) {
-      issues.add(
-        LauncherIssue(
-          severity: IssueSeverity.error,
-          subjectId: candidate.id,
-          message:
-              '${candidate.name} supports SDK ${candidate.sdkVersionRange}, not $sdkVersion.',
-        ),
-      );
-    }
-
-    final installActions = <PackageInstallAction>[];
-    final planned = <String, RegistryMod>{};
-
+    final dependencyPlan = _resolveInstallDependencies(
+      candidate,
+      installed,
+      availableMods,
+      gameVersion: gameVersion,
+      requireKnownGameVersion: requireKnownGameVersion,
+      loaderVersion: loaderVersion,
+      sdkVersion: sdkVersion,
+    );
+    issues.addAll(dependencyPlan.issues);
+    final installActions = [...dependencyPlan.actions];
     for (final dependency in candidate.dependencies) {
-      final installedDependency = installed[dependency.id.toLowerCase()];
-      if (installedDependency == null) {
-        final selected = _selectDependency(
-          dependency,
-          installed,
-          availableMods,
-        );
-        if (selected == null) {
-          dependenciesToInstall.add(dependency);
-          issues.add(
-            LauncherIssue(
-              severity: IssueSeverity.error,
-              subjectId: candidate.id,
-              message: 'Required dependency ${dependency.id} is not installed.',
-            ),
-          );
-        } else {
-          _collectInstallActions(
-            selected,
-            installed,
-            availableMods,
-            planned,
-            installActions,
-            issues,
-            candidate.id,
-          );
-        }
-      } else if (!dependency.versionRange.allows(installedDependency.version)) {
-        final selected = _selectDependency(
-          dependency,
-          installed,
-          availableMods,
-        );
-        if (selected == null) {
-          issues.add(
-            LauncherIssue(
-              severity: IssueSeverity.error,
-              subjectId: candidate.id,
-              message:
-                  'Dependency ${dependency.id} must satisfy ${dependency.versionRange}, but ${installedDependency.version} is installed.',
-            ),
-          );
-        } else {
-          _collectInstallActions(
-            selected,
-            installed,
-            availableMods,
-            planned,
-            installActions,
-            issues,
-            candidate.id,
-          );
-        }
+      final key = dependency.id.toLowerCase();
+      if (dependencyPlan.unresolvedIds.contains(key) &&
+          installed[key] == null) {
+        dependenciesToInstall.add(dependency);
       }
     }
 
@@ -262,13 +123,13 @@ class DependencyPlanner {
     );
 
     for (final action in installActions) {
-      if (action.isRemote && action.packageSha256.trim().isEmpty) {
+      if (action.isRemote && !_isSha256(action.packageSha256)) {
         issues.add(
           LauncherIssue(
             severity: IssueSeverity.error,
             subjectId: action.modId,
             message:
-                '${action.name} is remote and must include a SHA-256 hash before install.',
+                '${action.name} is remote and must include a valid 64-digit SHA-256 hash before install.',
           ),
         );
       }
@@ -290,21 +151,17 @@ class DependencyPlanner {
       }
     }
 
-    for (final conflict in candidate.conflicts) {
-      final installedConflict = installed[conflict.id.toLowerCase()];
-      if (installedConflict != null &&
-          conflict.versionRange.allows(installedConflict.version)) {
-        conflictingMods.add(installedConflict);
-        issues.add(
-          LauncherIssue(
-            severity: IssueSeverity.error,
-            subjectId: candidate.id,
-            message:
-                'Conflicts with ${installedConflict.name}${conflict.reason.isEmpty ? '' : ': ${conflict.reason}'}.',
-          ),
-        );
-      }
-    }
+    _appendProspectiveConflicts(
+      candidate,
+      dependencyPlan.selectedManifests,
+      installedMods,
+      issues,
+      conflictingMods,
+      gameVersion: gameVersion,
+      requireKnownGameVersion: requireKnownGameVersion,
+      loaderVersion: loaderVersion,
+      sdkVersion: sdkVersion,
+    );
 
     final existing = installed[candidate.id.toLowerCase()];
     if (existing != null) {
@@ -333,7 +190,6 @@ class DependencyPlanner {
         }
       }
     }
-
     return PackageInstallPlan(
       manifest: candidate,
       issues: issues,
@@ -342,140 +198,109 @@ class DependencyPlanner {
       conflictingMods: conflictingMods,
       packageSha256: packageSha256,
       installActions: installActions,
-    );
-  }
-
-  RegistryMod? _selectDependency(
-    ModDependency dependency,
-    Map<String, InstalledMod> installed,
-    List<RegistryMod> availableMods,
-  ) {
-    final options = availableMods
-        .where(
-          (mod) =>
-              mod.manifest.id.toLowerCase() == dependency.id.toLowerCase() &&
-              dependency.versionRange.allows(mod.manifest.version),
-        )
-        .toList();
-    if (options.isEmpty) {
-      return null;
-    }
-
-    options.sort((a, b) {
-      final aVersion = SemanticVersion.tryParse(a.manifest.version);
-      final bVersion = SemanticVersion.tryParse(b.manifest.version);
-      if (aVersion == null || bVersion == null) {
-        return b.manifest.version.compareTo(a.manifest.version);
-      }
-      return bVersion.compareTo(aVersion);
-    });
-    return options.first;
-  }
-
-  void _collectInstallActions(
-    RegistryMod mod,
-    Map<String, InstalledMod> installed,
-    List<RegistryMod> availableMods,
-    Map<String, RegistryMod> planned,
-    List<PackageInstallAction> actions,
-    List<LauncherIssue> issues,
-    String rootId,
-  ) {
-    final key = mod.manifest.id.toLowerCase();
-    final installedMod = installed[key];
-    if (installedMod != null &&
-        mod.manifest.version == installedMod.version &&
-        installedMod.enabled) {
-      return;
-    }
-    if (planned.containsKey(key)) {
-      return;
-    }
-
-    planned[key] = mod;
-    for (final dependency in mod.manifest.dependencies) {
-      final installedDependency = installed[dependency.id.toLowerCase()];
-      if (installedDependency != null &&
-          dependency.versionRange.allows(installedDependency.version)) {
-        continue;
-      }
-      final selected = _selectDependency(dependency, installed, availableMods);
-      if (selected == null) {
-        issues.add(
-          LauncherIssue(
-            severity: IssueSeverity.error,
-            subjectId: rootId,
-            message:
-                '${mod.manifest.name} requires ${dependency.id} ${dependency.versionRange}, but no source package satisfies it.',
-          ),
-        );
-        continue;
-      }
-      _collectInstallActions(
-        selected,
-        installed,
-        availableMods,
-        planned,
-        actions,
-        issues,
-        rootId,
-      );
-    }
-
-    actions.add(
-      PackageInstallAction(
-        modId: mod.manifest.id,
-        name: mod.manifest.name,
-        version: mod.manifest.version,
-        packageUrl: mod.downloadUrl,
-        packageSha256: mod.packageSha256,
-        sourceId: mod.sourceId,
-        sourceName: mod.sourceName,
+      requiredPermissions: List.unmodifiable(
+        {
+          ...candidate.permissions,
+          for (final manifest in dependencyPlan.selectedManifests.values)
+            ...manifest.permissions,
+        }.toList()..sort(),
       ),
     );
   }
+}
 
-  // Appends an edge unless it is already present, so a mod listed in both `dependencies` and
-  // `loadAfter` produces a single graph edge (and the diagnostics view shows it once).
-  void _addEdge(List<String> edges, String id) {
-    if (!edges.contains(id)) {
-      edges.add(id);
-    }
-  }
-
-  void _visit(
-    String id,
-    Map<String, List<String>> graph,
-    Map<String, InstalledMod> mods,
-    Set<String> temporary,
-    Set<String> permanent,
-    List<InstalledMod> ordered,
-    List<LauncherIssue> issues,
-  ) {
-    final key = id.toLowerCase();
-    if (permanent.contains(key)) {
-      return;
-    }
-    if (!temporary.add(key)) {
+void _appendProspectiveConflicts(
+  ModManifest root,
+  Map<String, ModManifest> dependencies,
+  List<InstalledMod> installedMods,
+  List<LauncherIssue> issues,
+  List<InstalledMod> conflictingMods, {
+  required String? gameVersion,
+  required bool requireKnownGameVersion,
+  required String? loaderVersion,
+  required String? sdkVersion,
+}) {
+  final planned = <String, ModManifest>{
+    ...dependencies,
+    root.id.toLowerCase(): root,
+  };
+  final installedById = <String, InstalledMod>{
+    for (final mod in installedMods) mod.id.toLowerCase(): mod,
+  };
+  final prospective = <String, ModManifest>{
+    for (final mod in installedMods)
+      if (mod.enabled &&
+          !mod.uninstallPending &&
+          mod.manifest != null &&
+          mod.errors.isEmpty &&
+          !planned.containsKey(mod.id.toLowerCase()) &&
+          _supportsRuntime(
+            mod.manifest!,
+            gameVersion: gameVersion,
+            requireKnownGameVersion: requireKnownGameVersion,
+            loaderVersion: loaderVersion,
+            sdkVersion: sdkVersion,
+          ))
+        mod.id.toLowerCase(): mod.manifest!,
+    ...planned,
+  };
+  final entries = prospective.entries.toList()
+    ..sort((left, right) => left.key.compareTo(right.key));
+  final conflictingIds = <String>{};
+  for (var leftIndex = 0; leftIndex < entries.length; leftIndex++) {
+    for (
+      var rightIndex = leftIndex + 1;
+      rightIndex < entries.length;
+      rightIndex++
+    ) {
+      final left = entries[leftIndex];
+      final right = entries[rightIndex];
+      if (!planned.containsKey(left.key) && !planned.containsKey(right.key)) {
+        continue;
+      }
+      final leftConflict = _declaredConflict(left.value, right.value);
+      final rightConflict = _declaredConflict(right.value, left.value);
+      if (leftConflict == null && rightConflict == null) {
+        continue;
+      }
+      final reasons = {
+        if (leftConflict?.reason.trim().isNotEmpty ?? false)
+          leftConflict!.reason.trim(),
+        if (rightConflict?.reason.trim().isNotEmpty ?? false)
+          rightConflict!.reason.trim(),
+      };
       issues.add(
         LauncherIssue(
           severity: IssueSeverity.error,
-          subjectId: id,
-          message: 'Dependency/loadAfter cycle detected at $id.',
+          subjectId: root.id,
+          message:
+              'Conflict between ${left.value.name} ${left.value.version} and '
+              '${right.value.name} ${right.value.version}'
+              '${reasons.isEmpty ? '.' : ': ${reasons.join(' / ')}.'}',
         ),
       );
-      return;
-    }
-
-    for (final dependency in graph[id] ?? const <String>[]) {
-      _visit(dependency, graph, mods, temporary, permanent, ordered, issues);
-    }
-
-    temporary.remove(key);
-    permanent.add(key);
-    final mod = mods[key];
-    if (mod != null && !ordered.any((item) => item.id == mod.id)) {
-      ordered.add(mod);
+      for (final entry in [left, right]) {
+        if (entry.key == root.id.toLowerCase()) {
+          continue;
+        }
+        final installed = installedById[entry.key];
+        if (installed != null && conflictingIds.add(entry.key)) {
+          conflictingMods.add(installed);
+        }
+      }
     }
   }
 }
+
+ModConflict? _declaredConflict(ModManifest source, ModManifest target) {
+  for (final conflict in source.conflicts) {
+    if (conflict.id.toLowerCase() == target.id.toLowerCase() &&
+        conflict.versionRange.allows(target.version)) {
+      return conflict;
+    }
+  }
+  return null;
+}
+
+bool _isSha256(String value) =>
+    RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(value.trim());

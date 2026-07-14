@@ -76,6 +76,7 @@ class PackageInstallAction {
     this.sourceId = '',
     this.sourceName = '',
     this.root = false,
+    this.enableOnly = false,
   });
 
   final String modId;
@@ -86,6 +87,7 @@ class PackageInstallAction {
   final String sourceId;
   final String sourceName;
   final bool root;
+  final bool enableOnly;
 
-  bool get isRemote => packageUrl.startsWith('https://');
+  bool get isRemote => packageUrl.trim().toLowerCase().startsWith('https://');
 }

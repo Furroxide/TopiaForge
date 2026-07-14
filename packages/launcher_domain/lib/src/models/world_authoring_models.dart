@@ -70,28 +70,46 @@ class WorldAuthoringConfig {
   }
 }
 
-/// Pure editor-version gate for world/UI bundle builds: bundles must come from the same Unity stream as
-/// the game player (6000.0.x) with a patch no newer than the player's (31, i.e. 6000.0.31f1) — bundles
-/// built by newer editors may fail to load in the shipped player. Enforced by
+/// Unity editor compatibility for Robotopia authoring. Code-only mods do not
+/// require Unity, but Unity-authored assets/worlds must be serialized by the
+/// same editor version as the shipped player.
+class RobotopiaUnityCompatibility {
+  static const requiredEditorVersion = '6000.0.23f1';
+  static const requiredEditorChangeset = '1c4764c07fb4';
+  static const requiredEditorDisplay =
+      '$requiredEditorVersion ($requiredEditorChangeset)';
+  static const installHint =
+      'Install Unity $requiredEditorVersion via Unity Hub (Installs > '
+      'Install Editor > Archive), or headless with the Hub CLI ("Unity Hub.exe" '
+      'on Windows, unityhub on macOS/Linux): <hub> -- --headless install '
+      '--version $requiredEditorVersion --changeset $requiredEditorChangeset';
+
+  /// Selects only the exact editor requested by a project, or the Robotopia
+  /// release editor when the project has no explicit pin. The order returned
+  /// by Unity Hub discovery must never change this compatibility decision.
+  static UnityEditor? selectEditor(
+    Iterable<UnityEditor> editors, {
+    String configuredVersion = '',
+  }) {
+    final configured = configuredVersion.trim();
+    final required = configured.isEmpty ? requiredEditorVersion : configured;
+    for (final editor in editors) {
+      if (editor.version.trim() == required) {
+        return editor;
+      }
+    }
+    return null;
+  }
+}
+
+/// Pure editor-version gate for world/UI bundle builds. Enforced by
 /// `robotopia world build` and `robotopia unity build-ui-bundle`.
 class WorldBundleEditorGate {
-  static const int maxPatch = 31;
-
-  static bool isEligible(String version) {
-    final match = RegExp(r'^6000\.0\.(\d+)').firstMatch(version.trim());
-    if (match == null) {
-      return false;
-    }
-    final patch = int.tryParse(match.group(1) ?? '');
-    return patch != null && patch <= maxPatch;
-  }
+  static bool isEligible(String version) =>
+      version.trim() == RobotopiaUnityCompatibility.requiredEditorVersion;
 
   /// Remediation shown when no eligible editor exists.
-  static const String installHint =
-      'Install Unity 6000.0.31f1 via Unity Hub (Installs > Install Editor > '
-      'Archive), or headless with the Hub CLI ("Unity Hub.exe" on Windows, '
-      'unityhub on macOS/Linux): '
-      '<hub> -- --headless install --version 6000.0.31f1 --changeset a206c360e2a8';
+  static const String installHint = RobotopiaUnityCompatibility.installHint;
 }
 
 /// Outcome of a headless world-bundle build.

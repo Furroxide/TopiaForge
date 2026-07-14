@@ -135,6 +135,13 @@ class WorldSelection {
     'allowAdditiveFallback': true,
   };
 
+  /// Applies launcher-owned selection keys without erasing runtime-owned or
+  /// future fields from an existing `robotopia.worlds.json` object.
+  Map<String, Object?> mergeRuntimeConfig(Map<String, Object?> existing) => {
+    ...existing,
+    ...toRuntimeConfig(),
+  };
+
   WorldSelection copyWith({
     String? worldId,
     String? gamemodeId,

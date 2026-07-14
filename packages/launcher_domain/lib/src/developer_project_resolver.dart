@@ -192,7 +192,8 @@ class DeveloperProjectResolver {
     return a.manifest.id.compareTo(b.manifest.id);
   }
 
-  bool _isPrerelease(String version) => version.contains('-');
+  bool _isPrerelease(String version) =>
+      SemanticVersion.tryParse(version)?.isPrerelease ?? false;
 
   void _checkConflicts(Iterable<RegistryMod> mods, List<LauncherIssue> issues) {
     final byId = {for (final mod in mods) mod.manifest.id.toLowerCase(): mod};
