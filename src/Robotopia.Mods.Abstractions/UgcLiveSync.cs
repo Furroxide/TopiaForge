@@ -111,6 +111,7 @@ namespace Robotopia.Mods
     /// <summary>Parameters for starting a live-sync session. Unused fields for a given channel are ignored.</summary>
     public sealed class UgcLiveSyncRequest
     {
+        // SDK 0.1.0 constructor retained verbatim for binary compatibility with already-compiled mods.
         public UgcLiveSyncRequest(
             string watchFolder = "",
             string editorUrl = "",
@@ -119,7 +120,33 @@ namespace Robotopia.Mods
             string sceneId = "",
             string filePattern = "*.json;*.json.gz",
             int debounceMilliseconds = 200)
+            : this(
+                SceneTransitionPriority.UserInitiated,
+                watchFolder,
+                editorUrl,
+                documentUrl,
+                syncServerUrl,
+                sceneId,
+                filePattern,
+                debounceMilliseconds)
         {
+        }
+
+        private UgcLiveSyncRequest(
+            SceneTransitionPriority priority,
+            string watchFolder,
+            string editorUrl,
+            string documentUrl,
+            string syncServerUrl,
+            string sceneId,
+            string filePattern,
+            int debounceMilliseconds)
+        {
+            if (!Enum.IsDefined(typeof(SceneTransitionPriority), priority))
+            {
+                throw new ArgumentOutOfRangeException(nameof(priority));
+            }
+
             WatchFolder = watchFolder ?? string.Empty;
             EditorUrl = editorUrl ?? string.Empty;
             DocumentUrl = documentUrl ?? string.Empty;
@@ -127,6 +154,33 @@ namespace Robotopia.Mods
             SceneId = sceneId ?? string.Empty;
             FilePattern = string.IsNullOrWhiteSpace(filePattern) ? "*.json;*.json.gz" : filePattern;
             DebounceMilliseconds = debounceMilliseconds;
+            Priority = priority;
+        }
+
+        /// <summary>
+        /// Creates a request with an explicit scene-transition priority. This is a named factory rather than
+        /// a public constructor overload so source that passed a <c>default</c> literal to the SDK 0.1.0
+        /// constructor remains unambiguous.
+        /// </summary>
+        public static UgcLiveSyncRequest WithPriority(
+            SceneTransitionPriority priority,
+            string watchFolder = "",
+            string editorUrl = "",
+            string documentUrl = "",
+            string syncServerUrl = "",
+            string sceneId = "",
+            string filePattern = "*.json;*.json.gz",
+            int debounceMilliseconds = 200)
+        {
+            return new UgcLiveSyncRequest(
+                priority,
+                watchFolder,
+                editorUrl,
+                documentUrl,
+                syncServerUrl,
+                sceneId,
+                filePattern,
+                debounceMilliseconds);
         }
 
         /// <summary>Folder watched for exported project files (local-folder channel).</summary>
@@ -149,6 +203,14 @@ namespace Robotopia.Mods
 
         /// <summary>Quiet period (ms) after a file change before it is read, to skip partial writes.</summary>
         public int DebounceMilliseconds { get; }
+
+        /// <summary>
+        /// Scene-transition priority when the session must load the UGC play scene first. Explicit user
+        /// actions keep the default (<see cref="SceneTransitionPriority.UserInitiated"/>); automatic triggers
+        /// (auto-connect on start) pass <see cref="SceneTransitionPriority.Automatic"/> so the load defers
+        /// instead of stomping a live world/gamemode session (see <see cref="ISceneCoordinator"/>).
+        /// </summary>
+        public SceneTransitionPriority Priority { get; }
     }
 
     /// <summary>Describes an active live-sync session.</summary>

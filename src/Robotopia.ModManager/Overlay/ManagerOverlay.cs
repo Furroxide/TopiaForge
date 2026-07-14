@@ -171,10 +171,9 @@ namespace Robotopia.ModManager
                 return;
             }
 
-            foreach (Transform child in content.Go.transform)
-            {
-                UnityEngine.Object.Destroy(child.gameObject);
-            }
+            // QwUi retains widgets for theme refresh/tween cancellation. Clear through the host so a tab rebuild
+            // cannot leave destroyed widgets, callbacks, or tweens registered for the rest of the process.
+            host.Clear(content);
 
             statusLabel?.SetText(status);
             var context = new ManagerTabContext(plugin, host, RunAction, SetStatus, RefreshContent, Close);
