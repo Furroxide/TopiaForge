@@ -1,0 +1,19 @@
+{
+  "name": "SPDX License List Data",
+  "version": "3.28.0",
+  "sourceRepository": "https://github.com/spdx/license-list-data",
+  "tag": "v3.28.0",
+  "license": "CC0-1.0",
+  "generatedOutput": "apps/robotopia_cli/lib/src/spdx_ids_3_28.g.dart",
+  "generator": "apps/robotopia_cli/tool/generate_spdx_ids.dart",
+  "inputs": [
+    {
+      "url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.28.0/json/licenses.json",
+      "sha256": "f728c534d8bd1044fc515a2ddb2292be99559021d830bfa3281be0bcd36302ee"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.28.0/json/exceptions.json",
+      "sha256": "bd145bb558f44432fcd6f0d7e956ed0124dff72af7641a7cfcb1b557dc390a5b"
+    }
+  ]
+}
