@@ -9,8 +9,8 @@
     "tags": ["assets", "content"],
     "permissions": ["asset-bundles", "filesystem"],
     "vpmDependencies": {
-      "robotopia.assets": ">=0.1.0"
+      "io.github.furroxide.topiaforge.assets": ">=0.1.0"
     },
-    "loadAfter": ["robotopia.assets"]
+    "loadAfter": ["io.github.furroxide.topiaforge.assets"]
   }
 }

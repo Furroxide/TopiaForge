@@ -70,22 +70,22 @@ jobs:
 
       - name: Verify formatting
         run: |
-          dotnet restore RobotopiaModManager.slnx
-          dotnet format RobotopiaModManager.slnx --verify-no-changes --no-restore
+          dotnet restore TopiaForge.slnx
+          dotnet format TopiaForge.slnx --verify-no-changes --no-restore
 
       - name: Build solution
-        run: dotnet build RobotopiaModManager.slnx -c Release --no-restore
+        run: dotnet build TopiaForge.slnx -c Release --no-restore
 
       - name: Run test harness
         run: >-
           dotnet run
-          --project tests/Robotopia.ModManager.Tests/Robotopia.ModManager.Tests.csproj
+          --project tests/TopiaForge.ModManager.Tests/TopiaForge.ModManager.Tests.csproj
           -c Release
 
       - name: Audit game-binding coverage
         run: >-
           dotnet run
-          --project src/Robotopia.GameCompat.Extractor/Robotopia.GameCompat.Extractor.csproj
+          --project src/TopiaForge.GameCompat.Extractor/TopiaForge.GameCompat.Extractor.csproj
           -c Release -- audit --strict
 
   dart-tests:
@@ -98,7 +98,7 @@ jobs:
         package:
           - packages/launcher_domain
           - packages/launcher_data
-          - apps/robotopia_cli
+          - apps/topiaforge_cli
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -111,7 +111,7 @@ jobs:
           sdk: "3.11.1"
 
       - name: Set up .NET
-        if: matrix.package == 'apps/robotopia_cli'
+        if: matrix.package == 'apps/topiaforge_cli'
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: "10.0.301"
@@ -158,7 +158,7 @@ jobs:
           flutter test
 
       - name: Analyze and test launcher
-        working-directory: apps/robotopia_launcher_flutter
+        working-directory: apps/topiaforge_launcher_flutter
         run: |
           flutter pub get --enforce-lockfile
           dart format --output=none --set-exit-if-changed lib test
@@ -207,6 +207,12 @@ jobs:
           fetch-depth: 0
           lfs: true
           persist-credentials: false
+
+      - name: Reject retired ecosystem names
+        run: python3 .github/scripts/check_topiaforge_residue.py
+
+      - name: Test generated-payload residue scanning
+        run: python3 .github/scripts/test_check_topiaforge_residue.py
 
       - name: Set up Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
@@ -351,23 +357,23 @@ jobs:
         run: ./tools/restore-robotopia-managed-refs.ps1 -Source public -RequireLatest
 
       # Scaffolds inside the checkout (not RUNNER_TEMP) so the generated
-      # ProjectReference to src/Robotopia.Mods.Abstractions stays a relative
+      # ProjectReference to src/TopiaForge.Mods.Abstractions stays a relative
       # path, matching the release workflow's smoke test.
       - name: Scaffold, validate, pack, and re-validate
         shell: bash
-        working-directory: apps/robotopia_cli
+        working-directory: apps/topiaforge_cli
         run: |
           dart pub get --enforce-lockfile
-          dart run bin/robotopia.dart new mod "ci.${{ matrix.template }}" \
+          dart run bin/topiaforge.dart new mod "ci.${{ matrix.template }}" \
             --template "${{ matrix.template }}" \
             --name "CI ${{ matrix.template }}" \
             --dir ../../.ci-smoke
-          dart run bin/robotopia.dart check package "../../.ci-smoke/ci.${{ matrix.template }}"
-          package=$(dart run bin/robotopia.dart pack \
+          dart run bin/topiaforge.dart check package "../../.ci-smoke/ci.${{ matrix.template }}"
+          package=$(dart run bin/topiaforge.dart pack \
             --project "../../.ci-smoke/ci.${{ matrix.template }}" \
             --output "$RUNNER_TEMP/ci-pack" | tail -1)
           echo "Packed: $package"
-          dart run bin/robotopia.dart check package "$package"
+          dart run bin/topiaforge.dart check package "$package"
 
   required-ci:
     name: Required / CI validation

@@ -1,4 +1,4 @@
-function Resolve-RobotopiaSdkCommand {
+function Resolve-TopiaForgeSdkCommand {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]

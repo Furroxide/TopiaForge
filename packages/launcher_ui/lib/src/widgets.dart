@@ -86,11 +86,11 @@ class StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = switch (tone) {
-      StatusTone.good => QuantumWorksPalette.good,
-      StatusTone.info => QuantumWorksPalette.accentDark,
-      StatusTone.warning => QuantumWorksPalette.warning,
-      StatusTone.danger => QuantumWorksPalette.danger,
-      StatusTone.neutral => QuantumWorksPalette.mutedText,
+      StatusTone.good => TopiaForgePalette.good,
+      StatusTone.info => TopiaForgePalette.accentDark,
+      StatusTone.warning => TopiaForgePalette.warning,
+      StatusTone.danger => TopiaForgePalette.danger,
+      StatusTone.neutral => TopiaForgePalette.mutedText,
     };
     final background = switch (tone) {
       StatusTone.good => const Color(0x1F148D63),
@@ -183,7 +183,7 @@ class EmptyStatePanel extends StatelessWidget {
                 child: IgnorePointer(
                   child: Image.asset(
                     brandAsset!,
-                    package: QuantumWorksBrandAssets.package,
+                    package: TopiaForgeBrandAssets.package,
                     width: 136,
                     fit: BoxFit.contain,
                     filterQuality: FilterQuality.medium,
@@ -201,17 +201,17 @@ class EmptyStatePanel extends StatelessWidget {
                       width: 62,
                       height: 62,
                       decoration: BoxDecoration(
-                        color: QuantumWorksPalette.surfaceTint,
+                        color: TopiaForgePalette.surfaceTint,
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: QuantumWorksPalette.launch,
+                          color: TopiaForgePalette.launch,
                           width: 3,
                         ),
                       ),
                       child: Icon(
                         icon,
                         size: 32,
-                        color: QuantumWorksPalette.text,
+                        color: TopiaForgePalette.text,
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -241,8 +241,8 @@ class EmptyStatePanel extends StatelessWidget {
   }
 }
 
-class QuantumWorksBackdrop extends StatelessWidget {
-  const QuantumWorksBackdrop({super.key, required this.child});
+class TopiaForgeBackdrop extends StatelessWidget {
+  const TopiaForgeBackdrop({super.key, required this.child});
 
   final Widget child;
 
@@ -250,32 +250,32 @@ class QuantumWorksBackdrop extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: const BoxDecoration(
-        color: QuantumWorksPalette.paper,
+        color: TopiaForgePalette.paper,
         image: DecorationImage(
           image: AssetImage(
-            QuantumWorksBrandAssets.cityHeader,
-            package: QuantumWorksBrandAssets.package,
+            TopiaForgeBrandAssets.cityHeader,
+            package: TopiaForgeBrandAssets.package,
           ),
           fit: BoxFit.cover,
           opacity: 0.15,
           alignment: Alignment.topCenter,
         ),
       ),
-      child: CustomPaint(painter: _QuantumWorksGridPainter(), child: child),
+      child: CustomPaint(painter: _TopiaForgeGridPainter(), child: child),
     );
   }
 }
 
-class QuantumWorksLogo extends StatelessWidget {
-  const QuantumWorksLogo({super.key, this.height = 34});
+class TopiaForgeLogo extends StatelessWidget {
+  const TopiaForgeLogo({super.key, this.height = 34});
 
   final double height;
 
   @override
   Widget build(BuildContext context) {
     return SvgPicture.asset(
-      QuantumWorksBrandAssets.logo,
-      package: QuantumWorksBrandAssets.package,
+      TopiaForgeBrandAssets.logo,
+      package: TopiaForgeBrandAssets.package,
       height: height,
       fit: BoxFit.contain,
     );
@@ -287,7 +287,7 @@ class BorderedPane extends StatelessWidget {
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(12),
-    this.accentColor = QuantumWorksPalette.borderStrong,
+    this.accentColor = TopiaForgePalette.borderStrong,
     this.clipBehavior = Clip.none,
   });
 
@@ -317,7 +317,7 @@ class BorderedPane extends StatelessWidget {
         ],
       ),
       child: Material(
-        color: QuantumWorksPalette.surface,
+        color: TopiaForgePalette.surface,
         shape: RoundedRectangleBorder(
           borderRadius: borderRadius,
           side: BorderSide(
@@ -363,12 +363,12 @@ class LogViewer extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: QuantumWorksPalette.logPanel,
-        border: Border.all(color: QuantumWorksPalette.launch, width: 3),
+        color: TopiaForgePalette.logPanel,
+        border: Border.all(color: TopiaForgePalette.launch, width: 3),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: QuantumWorksPalette.launchDark.withValues(alpha: 0.24),
+            color: TopiaForgePalette.launchDark.withValues(alpha: 0.24),
             offset: const Offset(-4, 8),
             blurRadius: 0,
           ),
@@ -382,7 +382,7 @@ class LogViewer extends StatelessWidget {
             fontFamily: 'Consolas',
             fontSize: 12,
             height: 1.35,
-            color: QuantumWorksPalette.white,
+            color: TopiaForgePalette.white,
           ),
         ),
       ),
@@ -390,7 +390,7 @@ class LogViewer extends StatelessWidget {
   }
 }
 
-class _QuantumWorksGridPainter extends CustomPainter {
+class _TopiaForgeGridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()

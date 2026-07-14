@@ -9,7 +9,7 @@ extension LocalDeveloperVpmRestore on LocalDeveloperRepository {
   ) async {
     final packagesRoot = Directory(p.join(root, 'Packages'))
       ..createSync(recursive: true);
-    final transaction = packagesRoot.createTempSync('.robotopia-vpm-');
+    final transaction = packagesRoot.createTempSync('.topiaforge-vpm-');
     final manifestFile = File(p.join(packagesRoot.path, 'vpm-manifest.json'));
     final reposFile = File(
       p.join(packagesRoot.path, 'vpm-resolver-repos.json'),

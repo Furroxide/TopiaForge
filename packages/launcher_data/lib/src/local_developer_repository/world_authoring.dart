@@ -1,13 +1,13 @@
 part of '../local_developer_repository.dart';
 
-/// Custom-world authoring: the `robotopia.world.json` pairing config between a Unity world project and the
+/// Custom-world authoring: the `topiaforge.world.json` pairing config between a Unity world project and the
 /// mod that ships its bundle, plus the headless Unity build that turns the world prefab into an AssetBundle
-/// inside that mod. The headless invocation mirrors `robotopia unity build-ui-bundle` (the brand-font bundle build):
+/// inside that mod. The headless invocation mirrors `topiaforge unity build-ui-bundle` (the brand-font bundle build):
 /// `-batchmode -executeMethod` against the exact game-player editor, no `-quit` (the entry
 /// point exits explicitly), no `-nographics` (HDRP shader access).
 extension LocalDeveloperWorldAuthoring on LocalDeveloperRepository {
   static const String _worldBuilderEntryPoint =
-      'Robotopia.WorldCompanion.Editor.WorldBundleBuilder.Build';
+      'TopiaForge.WorldCompanion.Editor.WorldBundleBuilder.Build';
 
   Future<WorldAuthoringConfig?> _readWorldAuthoringConfig(
     String unityProjectPath,
@@ -31,7 +31,20 @@ extension LocalDeveloperWorldAuthoring on LocalDeveloperRepository {
         '${WorldAuthoringConfig.fileName} in $unityProjectPath is not a JSON object.',
       );
     }
-    return WorldAuthoringConfig.fromJson(decoded.cast<String, Object?>());
+    final config = WorldAuthoringConfig.fromJson(
+      decoded.cast<String, Object?>(),
+    );
+    if (config.schemaVersion != 2) {
+      throw const FormatException(
+        'topiaforge.world.json must use schemaVersion 2.',
+      );
+    }
+    if (config.worldId.isNotEmpty && !ModManifest.isValidId(config.worldId)) {
+      throw const FormatException(
+        'topiaforge.world.json worldId must use the safe TopiaForge id format.',
+      );
+    }
+    return config;
   }
 
   Future<WorldAuthoringConfig> _writeWorldAuthoringConfig(
@@ -41,6 +54,16 @@ extension LocalDeveloperWorldAuthoring on LocalDeveloperRepository {
     final dir = Directory(unityProjectPath);
     if (!dir.existsSync()) {
       throw StateError('Unity project does not exist: $unityProjectPath');
+    }
+    if (config.schemaVersion != 2) {
+      throw const FormatException(
+        'topiaforge.world.json must use schemaVersion 2.',
+      );
+    }
+    if (config.worldId.isNotEmpty && !ModManifest.isValidId(config.worldId)) {
+      throw const FormatException(
+        'topiaforge.world.json worldId must use the safe TopiaForge id format.',
+      );
     }
     _writeDeveloperTextAtomic(
       File(p.join(unityProjectPath, WorldAuthoringConfig.fileName)),
@@ -105,14 +128,14 @@ extension LocalDeveloperWorldAuthoring on LocalDeveloperRepository {
         success: false,
         errorMessage:
             'No paired mod: pass --mod, or pair the project once with '
-            '`robotopia world link --project <unityProj> --mod <modDir>`.',
+            '`topiaforge world link --project <unityProj> --mod <modDir>`.',
       );
     }
-    if (!File(p.join(resolvedModPath, 'robotopia.mod.json')).existsSync()) {
+    if (!File(p.join(resolvedModPath, 'topiaforge.mod.json')).existsSync()) {
       return WorldBundleBuildResult(
         success: false,
         errorMessage:
-            '$resolvedModPath is not a mod directory (no robotopia.mod.json).',
+            '$resolvedModPath is not a mod directory (no topiaforge.mod.json).',
       );
     }
 
@@ -123,7 +146,7 @@ extension LocalDeveloperWorldAuthoring on LocalDeveloperRepository {
       return const WorldBundleBuildResult(
         success: false,
         errorMessage:
-            'No bundle name: pass --bundle or set bundleName in robotopia.world.json.',
+            'No bundle name: pass --bundle or set bundleName in topiaforge.world.json.',
       );
     }
 
@@ -133,8 +156,8 @@ extension LocalDeveloperWorldAuthoring on LocalDeveloperRepository {
         success: false,
         errorMessage:
             '$projectRoot is pinned to ${projectVersion.isEmpty ? 'an unknown Unity version' : 'Unity $projectVersion'}; '
-            'Robotopia world bundles require Unity '
-            '${RobotopiaUnityCompatibility.requiredEditorDisplay}.',
+            'TopiaForge world bundles require Unity '
+            '${RobotopiaGameUnityCompatibility.requiredEditorDisplay}.',
       );
     }
     if (unityExePath.isNotEmpty && !File(unityExePath).existsSync()) {
@@ -153,12 +176,12 @@ extension LocalDeveloperWorldAuthoring on LocalDeveloperRepository {
         success: false,
         errorMessage:
             'No eligible Unity editor: world bundles must be built with Unity '
-            '${RobotopiaUnityCompatibility.requiredEditorDisplay}. '
+            '${RobotopiaGameUnityCompatibility.requiredEditorDisplay}. '
             '${WorldBundleEditorGate.installHint}',
       );
     }
 
-    final logPath = p.join(projectRoot, 'Logs', 'robotopia-world-build.log');
+    final logPath = p.join(projectRoot, 'Logs', 'topiaforge-world-build.log');
     Directory(p.dirname(logPath)).createSync(recursive: true);
     final arguments = <String>[
       '-batchmode',
@@ -168,12 +191,12 @@ extension LocalDeveloperWorldAuthoring on LocalDeveloperRepository {
       _worldBuilderEntryPoint,
       '-logFile',
       logPath,
-      '-robotopiaModPath',
+      '-topiaForgeModPath',
       resolvedModPath,
-      '-robotopiaBundleName',
+      '-topiaForgeBundleName',
       effectiveBundleName,
       if (config != null && config.worldPrefab.isNotEmpty) ...[
-        '-robotopiaWorldPrefab',
+        '-topiaForgeWorldPrefab',
         config.worldPrefab,
       ],
     ];

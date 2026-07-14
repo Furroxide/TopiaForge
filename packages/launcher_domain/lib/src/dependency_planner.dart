@@ -49,8 +49,8 @@ class DependencyPlanner {
     List<InstalledMod> mods, {
     String? gameVersion,
     bool requireKnownGameVersion = false,
-    String loaderVersion = RobotopiaRuntimeVersions.loaderVersion,
-    String sdkVersion = RobotopiaRuntimeVersions.sdkVersion,
+    String loaderVersion = TopiaForgeRuntimeVersions.loaderVersion,
+    String sdkVersion = TopiaForgeRuntimeVersions.sdkVersion,
   }) => _resolveInstalled(
     mods,
     gameVersion: gameVersion,

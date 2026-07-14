@@ -1,6 +1,6 @@
 # Security Policy
 
-Robotopia mods execute native-trust C# code inside the game process. A valid package hash proves integrity, not safety;
+TopiaForge mods execute native-trust C# code inside the game process. A valid package hash proves integrity, not safety;
 install packages only from authors you trust.
 
 Sensitive first-party network, player-token, remote-AI, microphone, and speech-to-text behavior is inventoried in

@@ -8,9 +8,9 @@ enum LauncherUpdateChannel {
   static LauncherUpdateChannel fromName(String? value) {
     final normalized = (value ?? '').trim().toLowerCase();
     return switch (normalized) {
-      'stable' || 'release' => LauncherUpdateChannel.release,
-      'beta' || 'preview' || 'prerelease' => LauncherUpdateChannel.beta,
-      'nightly' || 'canary' || 'dev' => LauncherUpdateChannel.nightly,
+      'release' => LauncherUpdateChannel.release,
+      'beta' => LauncherUpdateChannel.beta,
+      'nightly' => LauncherUpdateChannel.nightly,
       _ => LauncherUpdateChannel.release,
     };
   }
@@ -21,40 +21,32 @@ class LauncherUpdateSettings {
     this.enabled = false,
     this.checkAutomatically = true,
     this.channel = LauncherUpdateChannel.release,
-    String? manualReleasesUrl,
-    @Deprecated('Use manualReleasesUrl') String? appArchiveUrl,
-  }) : manualReleasesUrl =
-           manualReleasesUrl ?? appArchiveUrl ?? defaultManualReleasesUrl;
+    this.archiveUrl = defaultArchiveUrl,
+  });
 
-  static const defaultManualReleasesUrl =
-      'https://furroxide.github.io/quantum-works/manual-releases.json';
-
-  @Deprecated('Use defaultManualReleasesUrl')
-  static const defaultAppArchiveUrl = defaultManualReleasesUrl;
+  static const defaultArchiveUrl =
+      'https://furroxide.github.io/TopiaForge/manual-releases.json';
 
   final bool enabled;
   final bool checkAutomatically;
   final LauncherUpdateChannel channel;
-  final String manualReleasesUrl;
-
-  @Deprecated('Use manualReleasesUrl')
-  String get appArchiveUrl => manualReleasesUrl;
+  final String archiveUrl;
 
   factory LauncherUpdateSettings.fromJson(Map<String, Object?> json) {
-    final configuredUrl =
-        (json['manualReleasesUrl'] as String?)?.trim() ??
-        (json['appArchiveUrl'] as String?)?.trim() ??
-        '';
+    if (json.containsKey('manualReleasesUrl') ||
+        json.containsKey('appArchiveUrl')) {
+      throw const FormatException(
+        'Retired launcher update URL keys are not supported; use archiveUrl.',
+      );
+    }
+    final configuredUrl = (json['archiveUrl'] as String?)?.trim() ?? '';
     return LauncherUpdateSettings(
-      // The previous updater accepted unsigned metadata and did not expose
-      // complete network/extraction bounds. Persisted opt-ins are therefore
-      // migrated to a fail-closed manual-update state.
       enabled: false,
       checkAutomatically: (json['checkAutomatically'] as bool?) ?? true,
       channel: LauncherUpdateChannel.fromName(json['channel'] as String?),
-      manualReleasesUrl: _isTrustedPublicHttpsUrl(configuredUrl)
+      archiveUrl: _isTrustedPublicHttpsUrl(configuredUrl)
           ? configuredUrl
-          : defaultManualReleasesUrl,
+          : defaultArchiveUrl,
     );
   }
 
@@ -62,22 +54,20 @@ class LauncherUpdateSettings {
     'enabled': enabled,
     'checkAutomatically': checkAutomatically,
     'channel': channel.name,
-    'manualReleasesUrl': manualReleasesUrl,
+    'archiveUrl': archiveUrl,
   };
 
   LauncherUpdateSettings copyWith({
     bool? enabled,
     bool? checkAutomatically,
     LauncherUpdateChannel? channel,
-    String? manualReleasesUrl,
-    @Deprecated('Use manualReleasesUrl') String? appArchiveUrl,
+    String? archiveUrl,
   }) {
     return LauncherUpdateSettings(
       enabled: enabled ?? this.enabled,
       checkAutomatically: checkAutomatically ?? this.checkAutomatically,
       channel: channel ?? this.channel,
-      manualReleasesUrl:
-          manualReleasesUrl ?? appArchiveUrl ?? this.manualReleasesUrl,
+      archiveUrl: archiveUrl ?? this.archiveUrl,
     );
   }
 }
@@ -95,11 +85,7 @@ class ManualReleaseArtifact {
 
   factory ManualReleaseArtifact.fromJson(Map<String, Object?> json) =>
       ManualReleaseArtifact(
-        url:
-            (json['url'] as String?) ??
-            (json['artifactUrl'] as String?) ??
-            (json['artifact'] as String?) ??
-            '',
+        url: (json['url'] as String?) ?? '',
         sha256: (json['sha256'] as String?) ?? '',
         size: (json['size'] as num?)?.toInt() ?? 0,
       );
@@ -130,8 +116,7 @@ class ManualReleaseCatalog {
     return ManualReleaseCatalog(
       formatVersion: (json['formatVersion'] as num?)?.toInt() ?? 0,
       manualOnly: json['manualOnly'] == true,
-      releaseUrl:
-          (json['releaseUrl'] as String?) ?? (json['release'] as String?) ?? '',
+      releaseUrl: (json['releaseUrl'] as String?) ?? '',
       platforms: rawPlatforms is Map
           ? Map.unmodifiable({
               for (final entry in rawPlatforms.entries)
@@ -156,7 +141,7 @@ class ManualReleaseCatalog {
   };
 
   bool get isValid =>
-      formatVersion == 1 &&
+      formatVersion == 2 &&
       manualOnly &&
       _isTrustedPublicHttpsUrl(releaseUrl) &&
       platforms.isNotEmpty &&

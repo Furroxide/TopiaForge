@@ -41,11 +41,14 @@ class ModConflict {
   final String reason;
 
   factory ModConflict.fromJson(Map<String, Object?> json) {
+    if (json.containsKey('version')) {
+      throw const FormatException(
+        'Conflict version aliases are not supported; use versionRange.',
+      );
+    }
     return ModConflict(
       id: (json['id'] as String?) ?? '',
-      versionRange: VersionRange.parse(
-        (json['versionRange'] as String?) ?? (json['version'] as String?),
-      ),
+      versionRange: VersionRange.parse(json['versionRange'] as String?),
       reason: (json['reason'] as String?) ?? '',
     );
   }

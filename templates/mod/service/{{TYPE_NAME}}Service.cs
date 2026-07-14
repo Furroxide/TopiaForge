@@ -1,4 +1,4 @@
-using Robotopia.Mods;
+using TopiaForge.Mods;
 
 namespace {{ASSEMBLY_NAME}}
 {

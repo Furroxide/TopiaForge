@@ -1,8 +1,8 @@
-using Robotopia.Mods;
+using TopiaForge.Mods;
 
 namespace {{ASSEMBLY_NAME}}
 {
-    public sealed class {{TYPE_NAME}}Mod : IRobotopiaMod
+    public sealed class {{TYPE_NAME}}Mod : ITopiaForgeMod
     {
         private IModContext? context;
 

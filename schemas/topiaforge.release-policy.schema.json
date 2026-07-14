@@ -1,0 +1,93 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.release-policy.schema.json",
+  "title": "TopiaForge release policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "toolchains", "gameBuild", "projectLicense", "thirdPartyProvenance", "versioning", "artifactPolicy", "bepInEx", "publication"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": 2 },
+    "toolchains": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dotnetSdk", "dotnetRuntime", "dart", "flutter", "nodeMinimum", "unity"],
+      "properties": {
+        "dotnetSdk": { "type": "string" },
+        "dotnetRuntime": { "type": "string" },
+        "dart": { "type": "string" },
+        "flutter": { "type": "string" },
+        "nodeMinimum": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "unity": { "type": "string" }
+      }
+    },
+    "gameBuild": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "metadataFile", "requireLatestAtRelease"],
+      "properties": {
+        "id": { "type": "integer", "minimum": 1 },
+        "metadataFile": { "type": "string", "minLength": 1 },
+        "requireLatestAtRelease": { "type": "boolean" }
+      }
+    },
+    "projectLicense": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["spdxExpression", "licenseFile", "decisionStatus"],
+      "properties": {
+        "spdxExpression": { "type": "string", "minLength": 1 },
+        "licenseFile": { "type": ["string", "null"] },
+        "decisionStatus": { "enum": ["blocked", "approved"] }
+      }
+    },
+    "thirdPartyProvenance": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "versioning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["productVersion", "componentVersionsAreIndependent", "rollback"],
+      "properties": {
+        "productVersion": { "type": "string" },
+        "componentVersionsAreIndependent": { "const": true },
+        "rollback": { "type": "string", "minLength": 1 }
+      }
+    },
+    "artifactPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platformArchives", "generatedMetadata", "canonicalEcosystemPayload"],
+      "properties": {
+        "platformArchives": { "type": "array", "minItems": 3, "uniqueItems": true, "items": { "type": "string" } },
+        "generatedMetadata": { "type": "array", "minItems": 3, "uniqueItems": true, "items": { "type": "string" } },
+        "canonicalEcosystemPayload": { "const": true }
+      }
+    },
+    "bepInEx": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "provenanceFile", "unityDoorstopVersion", "unityDoorstopCommit"],
+      "properties": {
+        "version": { "const": "5.4.23.5" },
+        "provenanceFile": { "type": "string" },
+        "unityDoorstopVersion": { "const": "4.5.0" },
+        "unityDoorstopCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+      }
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "allowTagCreation", "allowAssetReplacement", "requireImmutableReleasesBeforeManualPublish"],
+      "properties": {
+        "mode": { "const": "draft-only" },
+        "allowTagCreation": { "const": false },
+        "allowAssetReplacement": { "const": false },
+        "requireImmutableReleasesBeforeManualPublish": { "const": true }
+      }
+    }
+  }
+}

@@ -11,9 +11,9 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
     final ids = <String>{};
     for (final source in sources) {
       final id = source.id.trim();
-      if (id.isEmpty || id.length > 128) {
+      if (!PackageSourceId.isValid(source.id)) {
         throw StateError(
-          'Package source ids must contain 1 to 128 characters.',
+          'Package source ids must use the safe TopiaForge source id format.',
         );
       }
       if (!ids.add(id.toLowerCase())) {
@@ -133,7 +133,7 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
   }
 
   Future<List<RegistryMod>> _loadRegistrySource(PackageSource source) async {
-    // A local source can point at a DIRECTORY of .robotopiamod packages. The catalog is then
+    // A local source can point at a DIRECTORY of .topiaforgemod packages. The catalog is then
     // derived straight from the packages (manifest + sha read from each file) with no separate
     // pinned metadata, so the listing can never disagree with the packages on disk.
     final directory = _resolveDirectorySource(source);
@@ -223,7 +223,7 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
         directory
             .listSync()
             .whereType<File>()
-            .where((file) => file.path.toLowerCase().endsWith('.robotopiamod'))
+            .where((file) => file.path.toLowerCase().endsWith('.topiaforgemod'))
             .toList()
           ..sort((left, right) {
             final insensitive = left.path.toLowerCase().compareTo(
@@ -327,11 +327,26 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
     PackageSource source,
     Uri baseUri,
   ) {
-    return (decoded['mods'] as List? ?? const []).whereType<Map>().map((item) {
+    if (!decoded.containsKey('mods')) {
+      return const <RegistryMod>[];
+    }
+    if (decoded['formatVersion'] != ModRegistryFormat.indexFormatVersion) {
+      throw FormatException(
+        'TopiaForge registry indexes must use formatVersion '
+        '${ModRegistryFormat.indexFormatVersion}.',
+      );
+    }
+    final entries = decoded['mods'];
+    if (entries is! List) {
+      throw const FormatException('Registry index mods must be a JSON array.');
+    }
+    return entries.whereType<Map>().map((item) {
       final json = item.map((key, value) => MapEntry(key.toString(), value));
       final parsed = RegistryMod.fromJson(json);
       final localPath = json['localPath'] as String?;
-      final packageBaseUri = localPath != null && source.id == 'robotopia.local'
+      final packageBaseUri =
+          localPath != null &&
+              source.id == 'io.github.furroxide.topiaforge.local'
           ? Uri.file(_repositoryRoot.path)
           : baseUri;
       final downloadUrl = _resolvePackageUrl(
@@ -366,7 +381,7 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
         final manifestSource = manifestJson.isEmpty
             ? <String, Object?>{
                 ...versionJson,
-                'schemaVersion': versionJson['schemaVersion'] ?? 2,
+                'schemaVersion': versionJson['schemaVersion'] ?? 3,
                 'name': versionJson['name'] ?? packageId,
                 'displayName':
                     versionJson['displayName'] ??
@@ -375,7 +390,6 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
                 'version': versionJson['version'] ?? versionEntry.key,
               }
             : manifestJson;
-        final normalizedManifest = _normalizeManifestAliases(manifestSource);
         final rawUrl =
             (versionJson['downloadUrl'] as String?) ??
             (versionJson['url'] as String?) ??
@@ -388,7 +402,7 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
             '';
         mods.add(
           RegistryMod(
-            manifest: ModManifest.fromJson(normalizedManifest),
+            manifest: ModManifest.fromJson(manifestSource),
             downloadUrl: _resolvePackageUrl(rawUrl, baseUri),
             packageSha256: sha,
             changelog:
@@ -459,8 +473,4 @@ Map<String, Object?> _objectMap(Object? value) {
     return const {};
   }
   return value.map((key, mapValue) => MapEntry(key.toString(), mapValue));
-}
-
-Map<String, Object?> _normalizeManifestAliases(Map<String, Object?> json) {
-  return json;
 }

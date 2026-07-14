@@ -10,10 +10,10 @@ final _semanticVersionPattern = RegExp(
 final _numericIdentifierPattern = RegExp(r'^[0-9]+$');
 final _rangeCoreComponentPattern = RegExp(r'^(0|[1-9][0-9]*)$');
 
-/// Canonical version mapping for Robotopia launcher build identifiers.
+/// Canonical version mapping for Robotopia game build identifiers.
 ///
 /// The game launcher publishes monotonically increasing integer build ids,
-/// while mod compatibility ranges use SemVer. Robotopia reserves the
+/// while mod compatibility ranges use SemVer. TopiaForge reserves the
 /// `0.0.<build>` namespace for that bridge, so build `2227` is represented as
 /// `0.0.2227` everywhere a manifest range is evaluated.
 abstract final class RobotopiaGameVersion {

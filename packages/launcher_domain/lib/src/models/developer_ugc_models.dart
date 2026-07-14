@@ -38,8 +38,8 @@ class UnityCompanionSettings {
 }
 
 /// UGC content live-sync settings. The Dart source of truth for the launcher/CLI, and the mirror of the C#
-/// `Robotopia.UgcLiveSync.UgcLiveSyncConfig`. [toRuntimeConfig] produces the exact JSON the game mod reads from
-/// `config/robotopia.ugc.livesync.json`; a contract test pins these keys to the C# `[DataMember]` names.
+/// `TopiaForge.UgcLiveSync.UgcLiveSyncConfig`. [toRuntimeConfig] produces the exact JSON the game mod reads from
+/// `config/topiaforge.ugc.livesync.json`; a contract test pins these keys to the C# `[DataMember]` names.
 class UgcLiveSyncSettings {
   const UgcLiveSyncSettings({
     this.transport = 'localFolder',
@@ -91,7 +91,7 @@ class UgcLiveSyncSettings {
     );
   }
 
-  /// Sparse persistence inside `robotopia.project.json` (only non-default values).
+  /// Sparse persistence inside `topiaforge.project.json` (only non-default values).
   Map<String, Object?> toJson() => {
     'transport': normalizeTransport(transport),
     if (watchFolder.isNotEmpty) 'watchFolder': watchFolder,
@@ -164,11 +164,11 @@ class UgcSceneInspectionResult {
 }
 
 /// The game → launcher status handshake the UGC live-sync mod writes to
-/// `config/robotopia.ugc.livesync.status.json`. Lets the cockpit auto-detect the game's default watch folder and
+/// `config/topiaforge.ugc.livesync.status.json`. Lets the cockpit auto-detect the game's default watch folder and
 /// show live diagnostics without guessing. Mirrors the C# `UgcLiveSyncStatusFile` DTO (keys are a contract).
 class UgcLiveSyncStatusSnapshot {
   const UgcLiveSyncStatusSnapshot({
-    this.schemaVersion = 1,
+    this.schemaVersion = 2,
     this.status = 'Idle',
     this.transport = 'localFolder',
     this.defaultWatchFolder = '',
@@ -198,7 +198,7 @@ class UgcLiveSyncStatusSnapshot {
 
   factory UgcLiveSyncStatusSnapshot.fromJson(Map<String, Object?> json) {
     return UgcLiveSyncStatusSnapshot(
-      schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 1,
+      schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 0,
       status: (json['status'] as String?) ?? 'Idle',
       transport: (json['transport'] as String?) ?? 'localFolder',
       defaultWatchFolder: (json['defaultWatchFolder'] as String?) ?? '',

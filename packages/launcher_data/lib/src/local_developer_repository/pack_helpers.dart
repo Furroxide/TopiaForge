@@ -5,7 +5,7 @@ part of '../local_developer_repository.dart';
 extension LocalDeveloperPackOperations on LocalDeveloperRepository {
   static const _contentDirs = ['ref', 'assets', 'AssetBundles', 'Resources'];
   static const _buildOutputContentDirs = ['third_party'];
-  static const _excludedTreeDirs = ['bin', 'obj', 'dist', '.robotopia'];
+  static const _excludedTreeDirs = ['bin', 'obj', 'dist', '.topiaforge'];
   static const _rootNoticeNames = {
     'license',
     'license.txt',
@@ -18,8 +18,8 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
   };
   static final _reproducibleZipTimestamp = DateTime(1980, 1, 1);
 
-  /// Packs a bare mod directory (a `robotopia.mod.json` with no
-  /// `robotopia.project.json`), e.g. the first-party mods under `mods/`.
+  /// Packs a bare mod directory (a `topiaforge.mod.json` with no
+  /// `topiaforge.project.json`), e.g. the first-party mods under `mods/`.
   Future<String> packModDirectory(
     String projectDir, {
     String outputDir = '',
@@ -35,9 +35,9 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
     String outputDir = '',
     String configuration = 'Release',
   }) async {
-    final manifestFile = File(p.join(root.path, 'robotopia.mod.json'));
+    final manifestFile = File(p.join(root.path, 'topiaforge.mod.json'));
     if (!manifestFile.existsSync()) {
-      throw StateError('robotopia.mod.json was not found in ${root.path}');
+      throw StateError('topiaforge.mod.json was not found in ${root.path}');
     }
     final manifest =
         jsonDecode(
@@ -45,25 +45,21 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
                 _readDeveloperFileBoundedSync(
                   manifestFile,
                   maxBytes: _maxDeveloperManifestBytes,
-                  label: 'robotopia.mod.json',
+                  label: 'topiaforge.mod.json',
                 ),
               ),
             )
             as Map<String, Object?>;
-    for (final field in [
-      'name',
-      'displayName',
-      'version',
-      'entryAssembly',
-      'entryType',
-    ]) {
-      final value = manifest[field];
-      if (value is! String || value.trim().isEmpty) {
-        throw StateError(
-          'Manifest must include name, displayName, version, entryAssembly, '
-          'and entryType.',
-        );
-      }
+    final manifestContract = ModManifest.fromJson(manifest);
+    final blockingManifestIssues = manifestContract
+        .validate()
+        .where((issue) => issue.isBlocking)
+        .toList();
+    if (blockingManifestIssues.isNotEmpty) {
+      throw StateError(
+        'topiaforge.mod.json is invalid: '
+        '${blockingManifestIssues.map((issue) => issue.message).join(' ')}',
+      );
     }
 
     final archive = Archive();
@@ -73,17 +69,17 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
     void addFile(String archivePath, File source) {
       final name = _portableDeveloperArchivePath(
         p.posix.joinAll(p.split(archivePath)),
-        label: 'Robotopia package',
+        label: 'TopiaForge package',
       );
       if (p.posix.basename(name) == '.gitkeep') {
         return;
       }
       if (!added.add(name.toLowerCase())) {
-        throw StateError('Robotopia package contains duplicate path: $name');
+        throw StateError('TopiaForge package contains duplicate path: $name');
       }
       exactAdded.add(name);
       if (added.length > _maxDeveloperArchiveEntries) {
-        throw StateError('Robotopia package exceeds the 8192-entry limit.');
+        throw StateError('TopiaForge package exceeds the 8192-entry limit.');
       }
       final bytes = _readDeveloperFileBoundedSync(
         source,
@@ -96,7 +92,7 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
       }
       if (expandedBytes > _maxDeveloperArchiveExpandedBytes - length) {
         throw StateError(
-          'Robotopia package exceeds the 2 GB expanded-size limit.',
+          'TopiaForge package exceeds the 2 GB expanded-size limit.',
         );
       }
       expandedBytes += length;
@@ -127,7 +123,7 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
     // Ship the mod's game-binding manifest (from the centralized repo-root
     // bindings/ dir) inside its package, so a game-compatibility check can
     // travel with the mod.
-    final modName = manifest['name'] as String;
+    final modName = manifestContract.id;
     final bindingFile = File(
       p.join(_repositoryRoot.path, 'bindings', '$modName.gamebindings.json'),
     );
@@ -139,14 +135,14 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
       outputDir.isEmpty ? p.join(root.path, 'dist') : outputDir,
     )..createSync(recursive: true);
     final safeId = _sanitizePackageToken(modName);
-    final safeVersion = _sanitizePackageToken(manifest['version'] as String);
+    final safeVersion = _sanitizePackageToken(manifestContract.version);
     final packagePath = p.join(
       output.path,
-      '$safeId-$safeVersion.robotopiamod',
+      '$safeId-$safeVersion.topiaforgemod',
     );
     final packageBytes = _encodeReproducibleZip(archive);
     if (packageBytes.length > _maxDeveloperArchiveBytes) {
-      throw StateError('Robotopia package exceeds the 512 MB archive limit.');
+      throw StateError('TopiaForge package exceeds the 512 MB archive limit.');
     }
     _writeDeveloperBytesAtomic(File(packagePath), packageBytes);
     return packagePath;
@@ -197,8 +193,8 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
     }
 
     addFile(
-      'robotopia.mod.json',
-      File(p.join(root.path, 'robotopia.mod.json')),
+      'topiaforge.mod.json',
+      File(p.join(root.path, 'topiaforge.mod.json')),
     );
     final rootNotices =
         root
@@ -220,7 +216,7 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
       final name = p.basename(file.path);
       final extension = p.extension(name).toLowerCase();
       if ((extension == '.dll' || extension == '.pdb') &&
-          !name.startsWith('Robotopia.Mods.Abstractions.')) {
+          !name.startsWith('TopiaForge.Mods.Abstractions.')) {
         addFile(name, file);
       }
     }
@@ -257,7 +253,7 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
       }
       final archivePath = _portableDeveloperArchivePath(
         p.posix.joinAll(p.split(entry)),
-        label: 'Robotopia API assembly',
+        label: 'TopiaForge API assembly',
       );
       // Framework/service mods often expose their entry assembly as their API
       // assembly. It is already staged by the build-output DLL pass above.

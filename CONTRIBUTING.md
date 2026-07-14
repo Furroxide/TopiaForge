@@ -1,6 +1,6 @@
-# Contributing to Robotopia
+# Contributing to TopiaForge
 
-Thank you for helping improve the Robotopia modding ecosystem. Read `AGENTS.md` before changing code; it is the
+Thank you for helping improve the TopiaForge modding ecosystem. Read `AGENTS.md` before changing code; it is the
 authoritative repository guide for architecture, generated artifacts, UI quality, and required verification.
 
 ## Before starting
@@ -20,8 +20,8 @@ the repository owner first.
 - Keep launcher domain logic independent of Flutter and operating-system I/O.
 - Put filesystem, network, archive, and process work behind data-layer services.
 - Use `Bloc<LauncherEvent, LauncherState>` for launcher state; do not introduce Cubits.
-- Keep `Robotopia.ModManager.Core` Unity-free and Unity/BepInEx code in the runtime project.
-- Build all in-game UI through QwUi and keep non-generated Dart files at 500 lines or fewer.
+- Keep `TopiaForge.ModManager.Core` Unity-free and Unity/BepInEx code in the runtime project.
+- Build all in-game UI through TopiaForgeUi and keep non-generated Dart files at 500 lines or fewer.
 - Treat manifests, archives, registries, process arguments, and downloaded content as untrusted input.
 
 ## Verification
@@ -29,17 +29,17 @@ the repository owner first.
 Run the checks relevant to your change, including every command required by `AGENTS.md`. The full pre-PR baseline is:
 
 ```powershell
-dotnet build RobotopiaModManager.slnx -c Release
-dotnet run --project tests/Robotopia.ModManager.Tests/Robotopia.ModManager.Tests.csproj -c Release
+dotnet build TopiaForge.slnx -c Release
+dotnet run --project tests/TopiaForge.ModManager.Tests/TopiaForge.ModManager.Tests.csproj -c Release
 
 Push-Location packages/launcher_domain; dart format --output=none --set-exit-if-changed lib test; dart analyze; dart test; Pop-Location
 Push-Location packages/launcher_data; dart format --output=none --set-exit-if-changed lib test; dart analyze; dart test; Pop-Location
-Push-Location apps/robotopia_cli; dart format --output=none --set-exit-if-changed bin lib test; dart analyze; dart test; Pop-Location
+Push-Location apps/topiaforge_cli; dart format --output=none --set-exit-if-changed bin lib test; dart analyze; dart test; Pop-Location
 Push-Location packages/launcher_ui; dart format --output=none --set-exit-if-changed lib test; flutter analyze; flutter test; Pop-Location
-Push-Location apps/robotopia_launcher_flutter; dart format --output=none --set-exit-if-changed lib test; flutter analyze; flutter test; Pop-Location
+Push-Location apps/topiaforge_launcher_flutter; dart format --output=none --set-exit-if-changed lib test; flutter analyze; flutter test; Pop-Location
 ```
 
-Unity authoring and QwUi changes must use exactly Unity `6000.0.23f1`; include the batch-mode command and resulting
+Unity authoring and TopiaForgeUi changes must use exactly Unity `6000.0.23f1`; include the batch-mode command and resulting
 manifest/hash in the pull request. Never substitute another editor version.
 
 ## Pull requests

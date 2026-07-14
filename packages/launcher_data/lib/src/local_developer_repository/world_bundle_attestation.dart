@@ -56,7 +56,7 @@ extension LocalDeveloperWorldBundleAttestation on LocalDeveloperRepository {
     if (json['bundle'] != expectedBundle ||
         json['worldPrefab'] != worldPrefab ||
         json['editorVersion'] !=
-            RobotopiaUnityCompatibility.requiredEditorVersion) {
+            RobotopiaGameUnityCompatibility.requiredEditorVersion) {
       throw StateError('World bundle provenance does not match build inputs.');
     }
     final assets = json['assets'];

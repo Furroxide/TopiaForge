@@ -2,7 +2,7 @@ import 'package:launcher_domain/launcher_domain.dart';
 
 void main() {
   final manifest = ModManifest(
-    schemaVersion: 2,
+    schemaVersion: 3,
     id: 'example.mod',
     name: 'Example Mod',
     version: '1.0.0',

@@ -4,8 +4,8 @@
   "sourceRepository": "https://github.com/spdx/license-list-data",
   "tag": "v3.28.0",
   "license": "CC0-1.0",
-  "generatedOutput": "apps/robotopia_cli/lib/src/spdx_ids_3_28.g.dart",
-  "generator": "apps/robotopia_cli/tool/generate_spdx_ids.dart",
+  "generatedOutput": "apps/topiaforge_cli/lib/src/spdx_ids_3_28.g.dart",
+  "generator": "apps/topiaforge_cli/tool/generate_spdx_ids.dart",
   "inputs": [
     {
       "url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.28.0/json/licenses.json",

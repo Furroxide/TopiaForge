@@ -12,7 +12,7 @@ permissions:
 # Publication is globally serialized. Dynamic ref-based groups allow two
 # candidates to race and mutate the same release/tag namespace.
 concurrency:
-  group: robotopia-release-publication
+  group: topiaforge-release-publication
   cancel-in-progress: false
 
 env:
@@ -50,7 +50,7 @@ jobs:
           sdk: "3.11.1"
 
       - name: Restore release validator
-        working-directory: apps/robotopia_cli
+        working-directory: apps/topiaforge_cli
         run: dart pub get --enforce-lockfile
 
       - name: Resolve catalog entry
@@ -79,9 +79,9 @@ jobs:
           } >>"$GITHUB_OUTPUT"
 
       - name: Enforce complete release policy and provenance
-        working-directory: apps/robotopia_cli
+        working-directory: apps/topiaforge_cli
         run: >-
-          dart run robotopia release validate-policy
+          dart run topiaforge release validate-policy
           --version "${{ steps.metadata.outputs.version }}"
 
       - name: Require the pinned game build to still be latest
@@ -139,14 +139,14 @@ jobs:
           sdk: "3.11.1"
 
       - name: Restore release metadata builder
-        working-directory: apps/robotopia_cli
+        working-directory: apps/topiaforge_cli
         run: dart pub get --enforce-lockfile
 
       - name: Download platform archives
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: release-assets
-          pattern: QuantumWorks-*.zip
+          pattern: TopiaForge-*.zip
           merge-multiple: true
 
       - name: Download canonical mod packages
@@ -156,14 +156,14 @@ jobs:
           path: release-assets
 
       - name: Generate and verify BOM, SBOM, and checksums
-        working-directory: apps/robotopia_cli
+        working-directory: apps/topiaforge_cli
         run: |
           set -euo pipefail
-          dart run robotopia release build-metadata \
+          dart run topiaforge release build-metadata \
             --version "${{ needs.resolve-release.outputs.version }}" \
             --target-sha "${{ needs.resolve-release.outputs.target_sha }}" \
             --assets ../../release-assets
-          dart run robotopia release verify-metadata \
+          dart run topiaforge release verify-metadata \
             --version "${{ needs.resolve-release.outputs.version }}" \
             --target-sha "${{ needs.resolve-release.outputs.target_sha }}" \
             --assets ../../release-assets
@@ -176,7 +176,7 @@ jobs:
           "$GITHUB_REPOSITORY"
           "${{ needs.resolve-release.outputs.tag }}"
           "${{ needs.resolve-release.outputs.target_sha }}"
-          "QuantumWorks ${{ needs.resolve-release.outputs.version }}"
+          "TopiaForge ${{ needs.resolve-release.outputs.version }}"
           "${{ needs.resolve-release.outputs.notes_file }}"
           release-assets
 

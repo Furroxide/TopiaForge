@@ -36,7 +36,7 @@ void main() {
     'Linux proc enumeration ignores unrelated and malformed entries',
     () async {
       final root = await Directory.systemTemp.createTemp(
-        'robotopia-proc-test-',
+        'topiaforge-proc-test-',
       );
       addTearDown(() async {
         if (await root.exists()) {

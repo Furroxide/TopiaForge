@@ -132,23 +132,23 @@ class _GlowButtonState extends State<GlowButton>
                 gradient: _enabled
                     ? const LinearGradient(
                         colors: [
-                          QuantumWorksPalette.launch,
-                          QuantumWorksPalette.magenta,
+                          TopiaForgePalette.launch,
+                          TopiaForgePalette.magenta,
                         ],
                       )
                     : null,
-                color: _enabled ? null : QuantumWorksPalette.surfaceTint,
+                color: _enabled ? null : TopiaForgePalette.surfaceTint,
                 border: Border.all(
                   color: _enabled
-                      ? QuantumWorksPalette.launchDark
-                      : QuantumWorksPalette.surfaceTint,
+                      ? TopiaForgePalette.launchDark
+                      : TopiaForgePalette.surfaceTint,
                   width: 2.5,
                 ),
                 borderRadius: BorderRadius.circular(22),
                 boxShadow: _enabled
                     ? [
                         BoxShadow(
-                          color: QuantumWorksPalette.launch.withValues(
+                          color: TopiaForgePalette.launch.withValues(
                             alpha: 0.20 + 0.22 * t,
                           ),
                           blurRadius: 16 + 12 * t,
@@ -174,16 +174,16 @@ class _GlowButtonState extends State<GlowButton>
                       widget.icon,
                       size: 26,
                       color: _enabled
-                          ? QuantumWorksPalette.white
-                          : QuantumWorksPalette.faintText,
+                          ? TopiaForgePalette.white
+                          : TopiaForgePalette.faintText,
                     ),
                     const SizedBox(width: 12),
                     Text(
                       widget.label.toUpperCase(),
                       style: display.copyWith(
                         color: _enabled
-                            ? QuantumWorksPalette.white
-                            : QuantumWorksPalette.faintText,
+                            ? TopiaForgePalette.white
+                            : TopiaForgePalette.faintText,
                         fontSize: 20,
                         letterSpacing: 1.2,
                       ),

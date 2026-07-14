@@ -1,6 +1,6 @@
-# Robotopia Performance mod
+# TopiaForge Performance mod
 
-`robotopia.performance` is a runtime, **fully-reversible** performance mod for Robotopia (Unity 6 / HDRP).
+`io.github.furroxide.topiaforge.performance` is a runtime, **fully-reversible** performance mod for Robotopia (Unity 6 / HDRP).
 It exposes a small set of presets plus fine-grained per-effect overrides, and reverts everything it
 touched when it unloads. Nothing is baked into game assets — every lever is applied at runtime via an
 injected HDRP override Volume, reflection on the active render-pipeline asset, plain
@@ -8,7 +8,7 @@ injected HDRP override Volume, reflection on the active render-pipeline asset, p
 
 ## Presets (`performance_mode`)
 
-Set `performance_mode` in `config/robotopia.performance.json` (created on first launch). A preset rewrites
+Set `performance_mode` in `config/topiaforge.performance.json` (created on first launch). A preset rewrites
 the individual lever fields below unless you set `override_manual: true`.
 
 | Mode | What it does | Fidelity cost |
@@ -75,9 +75,9 @@ mod.
 
 ## Build & install
 ```
-dotnet build mods/Robotopia.Performance/Robotopia.Performance.csproj -c Release
+dotnet build mods/TopiaForge.Performance/TopiaForge.Performance.csproj -c Release
 ```
-`robotopia dev-install` packs every `mods/*` with a `robotopia.mod.json` into the game's
+`topiaforge dev-install` packs every `mods/*` with a `topiaforge.mod.json` into the game's
 `package-inbox`; launch the game once and install from the F10 overlay (or the main-menu Mod Manager
 button) to apply.
 

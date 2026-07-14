@@ -1,34 +1,34 @@
-# QuantumWorks UI Kit (QwUi)
+# TopiaForge UI Kit (TopiaForgeUi)
 
-`Robotopia.Mods.UnityUi` is the in-game UI framework for Robotopia mods and the mod
-manager. It renders the QuantumWorks brand (the same design system as the desktop
+`TopiaForge.Mods.UnityUi` is the in-game UI framework for TopiaForge mods running in Robotopia and the mod
+manager. It renders the TopiaForge brand (the same design system as the desktop
 launcher) on uGUI + TextMeshPro, and ships with the loader — reference the DLL from your
 mod project and go; no manifest dependency is needed.
 
 ```xml
-<ProjectReference Include="..\..\src\Robotopia.Mods.UnityUi\Robotopia.Mods.UnityUi.csproj" />
+<ProjectReference Include="..\..\src\TopiaForge.Mods.UnityUi\TopiaForge.Mods.UnityUi.csproj" />
 ```
 
-The living reference is the **UI Gallery** dev mod (`mods/Robotopia.UiGallery`, F8
+The living reference is the **UI Gallery** dev mod (`mods/TopiaForge.UiGallery`, F8
 in-game): every widget, both schemes, all accessibility modes.
 
 ## Quickstart
 
 ```csharp
-public sealed class MyMod : IRobotopiaMod
+public sealed class MyMod : ITopiaForgeMod
 {
     private UiHost? ui;
 
     public void OnLoad(IModContext context)
     {
-        ui = QwUi.For(context);                       // wires mod id, data dir, logger
+        ui = TopiaForgeUi.For(context);                       // wires mod id, data dir, logger
 
         var window = ui.Window("settings", "MY MOD");  // draggable, persists its rect
-        window.Content.Label("Hello from the brand.", QwTextStyle.Body);
+        window.Content.Label("Hello from the brand.", TopiaForgeTextStyle.Body);
         window.Content.Toggle("Enable the thing", true, v => { });
-        window.Content.Button("DO IT", () => ui.Toast("Done.", QwTone.Success));
+        window.Content.Button("DO IT", () => ui.Toast("Done.", TopiaForgeTone.Success));
 
-        ui.Hotkey(QwKey.F7, window.Toggle);            // dual input-backend hotkey
+        ui.Hotkey(TopiaForgeKey.F7, window.Toggle);            // dual input-backend hotkey
     }
 
     public void OnUnload()
@@ -45,17 +45,17 @@ position persistence are all built into the window. `Dispose` the host in `OnUnl
 
 | Scheme | Use for | Look |
 |---|---|---|
-| `QwScheme.Paper` | Full-screen tools, windows, dialogs, menus | Warm paper surfaces, ink text — the launcher look |
-| `QwScheme.Hud` | Gameplay overlays drawn over the world | Translucent dark panels, paper text, bright accents |
+| `TopiaForgeScheme.Paper` | Full-screen tools, windows, dialogs, menus | Warm paper surfaces, ink text — the launcher look |
+| `TopiaForgeScheme.Hud` | Gameplay overlays drawn over the world | Translucent dark panels, paper text, bright accents |
 
 Both resolve from one semantic role set (`Surface`, `Primary`, `Accent`, `Danger`, …) so
 they read as one brand. **Never hardcode hex colors** — take colors from
-`QwTone` (labels/bars/badges accept tones) or the resolved theme
+`TopiaForgeTone` (labels/bars/badges accept tones) or the resolved theme
 (`host.Theme(scheme)`); custom colors passed to `SetColor` are automatically re-toned in
 high-contrast mode.
 
 The brand-orange `Primary` is constant everywhere. A mod may override the *accent* only
-(`QwUiOptions.Accent` / `host.SetAccent`); on Paper the kit auto-darkens it until it
+(`TopiaForgeUiOptions.Accent` / `host.SetAccent`); on Paper the kit auto-darkens it until it
 reads (≥ 4.5:1).
 
 ## Widgets (container factories)
@@ -68,8 +68,8 @@ Containers (`Column`, `Row`, `Stack`, `Grid`, panels, window content) expose fac
 
 Two method families, one convention:
 
-- **Build-time chainers** return the widget: `.Dock(QwCorner.TopLeft)`, `.Size(w,h)`,
-  `.Fixed/FixedHeight/Flex/FillWidth`, `.Tone(QwTone.Success)`,
+- **Build-time chainers** return the widget: `.Dock(TopiaForgeCorner.TopLeft)`, `.Size(w,h)`,
+  `.Fixed/FixedHeight/Flex/FillWidth`, `.Tone(TopiaForgeTone.Success)`,
   `.Thresholds(warn, crit)`, `.Tooltip("…")`, `.Dynamic()`, `.Free()`.
 - **Runtime setters** return void and **dirty-check**: `SetText`, `SetFraction`,
   `SetVisible`, `SetEnabled`, `SetColor`, `SetSelected`… Call them every frame; they
@@ -88,10 +88,10 @@ optional corner chip (`SetBadge`). Hover strengthens the ring, press reuses the 
 sticker motion, and `.Tooltip("…")` adds hover details after the standard 450 ms.
 
 ```csharp
-var grid = pane.Scroll().Content.Grid(118f, 148f, QwGap.Sm);
+var grid = pane.Scroll().Content.Grid(118f, 148f, TopiaForgeGap.Sm);
 var card = grid.Card("Tree Model", () => Spawn(item))
-               .Tooltip("Tree Model\n@robotopia/tree-model");
-card.SetBadge("UGC", QwTone.Accent);
+               .Tooltip("Tree Model\n@topiaforge/tree-model");
+card.SetBadge("UGC", TopiaForgeTone.Accent);
 card.SetPreviewTexture(thumbnail);      // null shows the placeholder icon
 ```
 
@@ -102,11 +102,11 @@ destroy them when your feature tears down.
 
 ## Shop pane & window
 
-`QwShopPane` is a ready-made shop: balance readout over a card grid of SDK `ShopItem`s
+`TopiaForgeShopPane` is a ready-made shop: balance readout over a card grid of SDK `ShopItem`s
 (price badges, affordability dimming, per-run purchase caps with MAX badges, toast
 feedback). The pane owns presentation and the purchase *transaction* (through the SDK's
 `ShopTransactions` arbiter, debiting an `IShopWallet`); what a purchase *does* stays in
-your mod — subscribe to `Purchased` and switch on the item id. `QwShopWindow` hosts the
+your mod — subscribe to `Purchased` and switch on the item id. `TopiaForgeShopWindow` hosts the
 pane in a standard window (ESC/X close, cursor lease, drag/persist), which makes a
 complete shop about ten lines:
 
@@ -121,7 +121,7 @@ var shop = ui.ShopWindow("shop", "SUPPLY DROP", catalog, wallet);
 shop.Pane.CanPurchase = item => item.Id != "mymod.heal" || hp < maxHp;  // optional host gate
 shop.Pane.Purchased  += item => Apply(item.Id);        // wallet already debited
 shop.Closed          += ResumeRound;                   // fires for ESC and the X alike
-ui.Hotkey(QwKey.F6, shop.Toggle);
+ui.Hotkey(TopiaForgeKey.F6, shop.Toggle);
 ```
 
 Call `shop.Tick()` (or `Pane.Tick()`) per frame while open — it is dirty-checked and
@@ -137,10 +137,10 @@ wiring. The gallery's SHOP tab exercises every state.
 
 ```csharp
 var hud   = ui.HudLayer("myhud");                       // dark scheme, raycast off
-var panel = hud.Scaled.Panel(QwPanelStyle.HudPanel)
-                .Dock(QwCorner.TopLeft).Size(380, 200);
-var col   = panel.Column(QwGap.Sm, QwGap.Md);
-var wave  = col.Label(QwTextStyle.Numeral);
+var panel = hud.Scaled.Panel(TopiaForgePanelStyle.HudPanel)
+                .Dock(TopiaForgeCorner.TopLeft).Size(380, 200);
+var col   = panel.Column(TopiaForgeGap.Sm, TopiaForgeGap.Md);
+var wave  = col.Label(TopiaForgeTextStyle.Numeral);
 var hp    = col.StatBar("INTEGRITY").Thresholds(warn: 0.5f, crit: 0.25f);
 
 void OnUpdate(float dt)
@@ -169,34 +169,34 @@ void OnUpdate(float dt)
 - **Modals** (`ui.Modal.Confirm/Destructive/ConfirmHud/Custom`): scrim + dialog card,
   OutBack entrance, ESC cancels; modals beat windows on the dismiss stack. Use
   `Destructive` for anything irreversible.
-- **Toasts** (`ui.Toast(text, tone)` / `QwToasts`): queued, max four visible, top-right.
+- **Toasts** (`ui.Toast(text, tone)` / `TopiaForgeToasts`): queued, max four visible, top-right.
 - **Layers/sorting**: canvases are allocated inside bands — HUD < windows < modals <
   toasts < debug, all above the game's UI. Never set `Canvas.sortingOrder` yourself.
-- **Hotkeys** (`ui.Hotkey(QwKey.F7, action)`): polled through whichever input backend
+- **Hotkeys** (`ui.Hotkey(TopiaForgeKey.F7, action)`): polled through whichever input backend
   the game runs; letter keys are suppressed while a text field has focus. Pair with
   `Keybind(...)` fields for rebinding.
-- **Callback isolation**: button/input/list/hotkey callbacks and public QwUi events are
+- **Callback isolation**: button/input/list/hotkey callbacks and public TopiaForgeUi events are
   invoked independently; one throwing consumer is logged and cannot starve later subscribers.
 - **Host lifetime**: after `UiHost.Dispose`, creation, theme, toast, modal, accent, and
   hotkey operations throw `ObjectDisposedException` instead of leaking process-global state.
 - **Cursor**: windows/modals lease it automatically. For custom gameplay modals hold a
-  `QwCursorLease` — it re-asserts the unlock every frame (the game re-locks per frame).
+  `TopiaForgeCursorLease` — it re-asserts the unlock every frame (the game re-locks per frame).
 - **ESC limitation**: BepInEx UI cannot consume the key before the game sees it; the
   dismiss stack closes only the topmost surface per press.
 
 ## Accessibility
 
-Player-wide settings are live-applied through `QwTheme` (no rebuilds — widgets
+Player-wide settings are live-applied through `TopiaForgeTheme` (no rebuilds — widgets
 re-tint in place):
 
-- `QwTheme.HighContrast` — re-tones both schemes; custom `SetColor` values are
+- `TopiaForgeTheme.HighContrast` — re-tones both schemes; custom `SetColor` values are
   emphasized automatically.
-- `QwTheme.UiScale` (0.75–1.5) — canvas-level scaling.
-- `QwTheme.ReducedMotion` — transitions become instant, pulses/punches stop.
-- `QwTheme.MotionScale` (0–2) — player-wide motion intensity.
+- `TopiaForgeTheme.UiScale` (0.75–1.5) — canvas-level scaling.
+- `TopiaForgeTheme.ReducedMotion` — transitions become instant, pulses/punches stop.
+- `TopiaForgeTheme.MotionScale` (0–2) — player-wide motion intensity.
 
 The manager's Settings tab owns those process-wide values. A mod must not mutate them.
-Pass mod-specific preferences through `QwUiOptions.AccessibilityProfile`, or call
+Pass mod-specific preferences through `TopiaForgeUiOptions.AccessibilityProfile`, or call
 `host.SetAccessibilityProfile(...)`. High contrast and reduced motion can only
 strengthen the player's global choices; UI scale composes and clamps to 0.75–1.5;
 motion intensity multiplies the global value. Read `host.EffectiveHighContrast`,
@@ -215,15 +215,15 @@ You must: call setters with raw values instead of building strings per frame (us
 event, keep per-frame work inside `.Dynamic()` subtrees, and never `Destroy`+rebuild on
 a timer.
 
-`QwDebugOverlay.Toggle()` shows live frame time, font tier, input backend, theme state,
+`TopiaForgeDebugOverlay.Toggle()` shows live frame time, font tier, input backend, theme state,
 and tween/lease/canvas counters.
 
 ## Fonts & the brand bundle
 
 Text is TextMeshPro. Fonts resolve through a tiered chain, logged at init:
 
-1. **Brand bundle** (`QuantumWorks Body SDF` and `QuantumWorks Display SDF`) — embedded inside
-   `Robotopia.Mods.UnityUi.dll`; built by `robotopia unity build-ui-bundle` from
+1. **Brand bundle** (`TopiaForge Body SDF` and `TopiaForge Display SDF`) — embedded inside
+   `TopiaForge.Mods.UnityUi.dll`; built by `topiaforge unity build-ui-bundle` from
    `tools/unity-ui-bundle` with Unity 6000.0.23f1. The committed bundle and provenance manifest contain the
    neutral-named generated derivatives of the attributed, unmodified Quicksand and
    Audiowide source fonts from that pinned editor. The bundle targets `StandaloneWindows64`; on native
@@ -232,13 +232,13 @@ Text is TextMeshPro. Fonts resolve through a tiered chain, logged at init:
 3. The game's own TMP default.
 4. Safe-mode banner (kit UI still functions; text is the only casualty).
 
-If players report wrong-looking fonts, check the `[QwUi]` init line in the BepInEx log
+If players report wrong-looking fonts, check the `[TopiaForgeUi]` init line in the BepInEx log
 for the resolved tier.
 
 ## Versioning
 
-Mods bind to `Robotopia.Mods.UnityUi` by simple assembly name and the loader's copy
+Mods bind to `TopiaForge.Mods.UnityUi` by simple assembly name and the loader's copy
 wins, so the public API is **additive-only within a major version**
-(`AssemblyVersion` stays 1.0.0.0 across 1.x). A `MissingMethodException` naming a Qw
-type means the installed loader is older than the kit your mod compiled against —
+(`AssemblyVersion` stays 1.0.0.0 across 1.x). A `MissingMethodException` naming a
+TopiaForge UI type means the installed loader is older than the kit your mod compiled against —
 update the loader.

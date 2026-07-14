@@ -1,0 +1,62 @@
+{
+  "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+  "schemaVersion": 3,
+  "name": "io.github.furroxide.topiaforge.zombies",
+  "displayName": "Zombies",
+  "version": "0.12.1",
+  "author": {
+    "name": "TopiaForge"
+  },
+  "description": "Wave survival, the Robotopia way: don't just shoot the infected robots — JACK IN and talk to one. Aim at a robot and open a channel: the world freezes while you TYPE or SPEAK to it and its own LLM brain answers in its own words and decides — talk it down, scare it off, or genuinely persuade it to switch sides and fight the swarm for you. Freezing costs an uplink charge and the horde keeps massing while you talk, so every conversation is a real gamble against the zapper. Converted allies are a Civ-style relationship: keep them loyal or watch them waver and defect. Q broadcasts a deterministic stand-down for offline/panic crowd control. Between waves, kills convert to CREDITS you spend at FIELD REQUISITIONS — repairs, plating, zapper and uplink upgrades — and the next-wave countdown holds while you browse. Plus the v0.6 core: readable archetypes, headshots, a charged piercing alt-fire, and combat juice.",
+  "entryAssembly": "TopiaForge.Zombies.dll",
+  "entryType": "TopiaForge.Zombies.ZombiesMod",
+  "vpmDependencies": {
+    "io.github.furroxide.topiaforge.worlds": ">=0.5.4",
+    "io.github.furroxide.topiaforge.robotkit": ">=0.6.0",
+    "io.github.furroxide.topiaforge.chronos": ">=0.1.0"
+  },
+  "loadAfter": [
+    "io.github.furroxide.topiaforge.worlds",
+    "io.github.furroxide.topiaforge.robotkit",
+    "io.github.furroxide.topiaforge.chronos"
+  ],
+  "supportedGameVersionRange": "0.0.2227",
+  "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
+  "supportedSdkVersionRange": ">=0.1.1 <0.2.0",
+  "category": "Gameplay",
+  "tags": [
+    "zombies",
+    "gamemode",
+    "wave-survival",
+    "robots",
+    "zapper",
+    "archetypes",
+    "combo",
+    "headshots",
+    "ai",
+    "persuasion",
+    "conversation",
+    "llm",
+    "voice",
+    "diplomacy"
+  ],
+  "license": "NOASSERTION",
+  "permissions": [
+    "world-service",
+    "robot-spawning",
+    "input",
+    "physics",
+    "hud",
+    "remote-ai",
+    "player-token",
+    "microphone",
+    "speech-to-text"
+  ],
+  "worldGamemodes": [
+    {
+      "id": "io.github.furroxide.topiaforge.zombies.survival",
+      "name": "Zombies",
+      "description": "Survive escalating waves of infected robots with a built-in zapper."
+    }
+  ]
+}

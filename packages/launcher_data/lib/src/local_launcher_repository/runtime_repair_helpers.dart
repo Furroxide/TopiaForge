@@ -93,7 +93,7 @@ extension LocalLauncherRuntimeRepair on LocalLauncherRepository {
             'Installed or repaired BepInEx ${LocalLauncherRepository._bepInExVersion}.',
           );
           actions.add(
-            'Installed or repaired Robotopia loader ${LocalLauncherRepository._loaderVersion}.',
+            'Installed or repaired TopiaForge loader ${LocalLauncherRepository._loaderVersion}.',
           );
           if (layout.kind == GameInstallLayout.linuxProton) {
             actions.add(
@@ -226,17 +226,17 @@ extension LocalLauncherRuntimeRepair on LocalLauncherRepository {
       p.join(
         _repositoryRoot.path,
         'src',
-        'Robotopia.ModManager',
+        'TopiaForge.ModManager',
         'bin',
         'Release',
         'netstandard2.1',
       ),
     );
     final loaderDlls = [
-      'Robotopia.ModManager.dll',
-      'Robotopia.ModManager.Core.dll',
-      'Robotopia.Mods.Abstractions.dll',
-      'Robotopia.Mods.UnityUi.dll',
+      'TopiaForge.ModManager.dll',
+      'TopiaForge.ModManager.Core.dll',
+      'TopiaForge.Mods.Abstractions.dll',
+      'TopiaForge.Mods.UnityUi.dll',
     ];
     if (FileSystemEntity.typeSync(loaderSource.path, followLinks: false) !=
             FileSystemEntityType.directory ||
@@ -252,7 +252,7 @@ extension LocalLauncherRuntimeRepair on LocalLauncherRepository {
         const LauncherIssue(
           severity: IssueSeverity.error,
           message:
-              'Built loader DLLs were not found. Run dotnet build RobotopiaModManager.slnx -c Release.',
+              'Built loader DLLs were not found. Run dotnet build TopiaForge.slnx -c Release.',
         ),
       );
       return;
@@ -267,7 +267,7 @@ extension LocalLauncherRuntimeRepair on LocalLauncherRepository {
       final source = File(p.join(loaderSource.path, dll));
       await transaction.addSource(
         source,
-        p.posix.join('BepInEx', 'plugins', 'RobotopiaModManager', dll),
+        p.posix.join('BepInEx', 'plugins', 'TopiaForge.ModManager', dll),
       );
     }
   }

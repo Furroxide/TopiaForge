@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Robotopia UGC Automerge sidecar.
+// TopiaForge UGC Automerge sidecar.
 //
 // Publishes a UgcExportProject (the exact JSON the game imports — see docs/UgcLiveSync.md) to an Automerge
 // document on a sync server, so the running game's UgcLiveSyncController (Automerge channel) and the web editor
@@ -19,7 +19,7 @@
 //     companion exporting to that folder).
 //   * --session-file <path> atomically writes the live connection values (document URL, sync URL, scene,
 //     editor URL suffix, lastPublishedUtc) as JSON so the launcher/CLI can auto-detect them without parsing
-//     stdout. The same values are also printed on a single `ROBOTOPIA_UGC_SESSION {json}` line.
+//     stdout. The same values are also printed on a single `TOPIAFORGE_UGC_SESSION {json}` line.
 //   * Heavy deps are imported lazily so --help / --check work before `npm ci`.
 
 import { newestProjectFile, readProject } from './project_file.mjs';
@@ -60,7 +60,7 @@ const DEFAULT_SYNC = 'https://automerge-repo-sync-server-main.onrender.com';
 
 function printHelp() {
   process.stdout.write(
-    'Robotopia UGC Automerge sidecar\n\n' +
+    'TopiaForge UGC Automerge sidecar\n\n' +
       'Publish a UgcExportProject to an Automerge document the game can live-sync.\n\n' +
       'Usage:\n' +
       '  node index.mjs --file <project.json> [--sync <url>] [--doc <automerge-url>] [--scene <id>] [--session-file <path>]\n' +

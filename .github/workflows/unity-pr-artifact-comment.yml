@@ -31,7 +31,7 @@ jobs:
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
-            const marker = '<!-- robotopia-unity-pr-artifacts -->';
+            const marker = '<!-- topiaforge-unity-pr-artifacts -->';
             const { owner, repo } = context.repo;
             const run = context.payload.workflow_run;
 
@@ -87,7 +87,7 @@ jobs:
             });
 
             const wanted = [
-              ['robotopia-vpm-index', 'VPM package listing'],
+              ['topiaforge-vpm-index', 'VPM package listing'],
             ];
 
             const rows = wanted.map(([name, label]) => {

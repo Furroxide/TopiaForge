@@ -14,7 +14,7 @@ void main() {
   late String newestEditorPath;
 
   setUp(() {
-    root = Directory.systemTemp.createTempSync('robotopia-unity-environment-');
+    root = Directory.systemTemp.createTempSync('topiaforge-unity-environment-');
     dataRoot = Directory(p.join(root.path, 'data'))..createSync();
     repositoryRoot = Directory(p.join(root.path, 'repo'))..createSync();
     releaseEditorPath = p.join(root.path, '6000.0.23f1', 'Unity');
@@ -75,7 +75,7 @@ void main() {
     expect(unity.detail, contains('6000.2.10f1'));
     expect(
       unity.detail,
-      contains(RobotopiaUnityCompatibility.requiredEditorDisplay),
+      contains(RobotopiaGameUnityCompatibility.requiredEditorDisplay),
     );
   });
 
@@ -83,9 +83,9 @@ void main() {
     const configuredVersion = '6000.0.31f1';
     final configuredPath = p.join(root.path, configuredVersion, 'Unity');
     final project = Directory(p.join(root.path, 'project'))..createSync();
-    File(p.join(project.path, 'robotopia.project.json')).writeAsStringSync(
+    File(p.join(project.path, 'topiaforge.project.json')).writeAsStringSync(
       jsonEncode({
-        'schemaVersion': 1,
+        'schemaVersion': 2,
         'id': 'example.unity',
         'name': 'Unity Example',
         'unityCompanion': {'enabled': true, 'unityVersion': configuredVersion},

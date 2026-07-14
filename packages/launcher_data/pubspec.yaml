@@ -1,5 +1,5 @@
 name: launcher_data
-description: Local filesystem repositories for the QuantumWorks standalone launcher.
+description: Local filesystem repositories for the TopiaForge standalone launcher.
 version: 0.1.1
 publish_to: none
 

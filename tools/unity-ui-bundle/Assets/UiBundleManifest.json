@@ -1,9 +1,9 @@
 {
-  "bundle": "quantumworks-ui",
+  "bundle": "topiaforge-ui",
   "editorVersion": "6000.0.23f1",
   "assets": [
-    "Assets/FontAssets/QuantumWorks Body SDF.asset",
-    "Assets/FontAssets/QuantumWorks Display SDF.asset",
+    "Assets/FontAssets/TopiaForge Body SDF.asset",
+    "Assets/FontAssets/TopiaForge Display SDF.asset",
     "Assets/UiBundleManifest.json"
   ]
 }

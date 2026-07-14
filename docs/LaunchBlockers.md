@@ -29,20 +29,20 @@ manual evidence unavailable to this audit. No required check is silently skipped
 | --- | --- | --- |
 | Whole-repository component and contract inventory | PASS | All source, app, package, mod, template, tool, schema, test, documentation, and workflow surfaces are mapped in `ArchitectureInventory.md`. |
 | C# Release solution | PASS | 20 projects; zero build warnings or errors on SDK `10.0.301` / runtime `10.0.9`. |
-| C# regression harness | PASS | Complete `Robotopia.ModManager.Tests` harness passed. |
+| C# regression harness | PASS | Complete `TopiaForge.ModManager.Tests` harness passed. |
 | C# boundaries and public SDK surface | PASS | Unity-free Core, Unity/BepInEx runtime isolation, strict audit, generated API baseline, and bounded production-read scans passed. |
 | Dart formatting and analyzers | PASS | 254 Dart files checked; domain, data, UI, app, and CLI analyzers report no issues. |
 | Dart domain/data tests | PASS | 147 domain and 187 data tests passed. |
 | Flutter UI/app tests | PASS | 2 shared-UI and 46 launcher tests passed, including BLoC lifecycle, scaling, contrast, focus, install confirmation, safe mode, recovery, and Xcode payload/logging configuration. |
 | CLI tests | PASS | 126 tests passed, including packaging, registry, Unity probing, UGC, release metadata, final-archive validation, ad-hoc/Developer ID signing separation, and fail-closed signing behavior. |
-| C#/Dart contract parity | PASS | SemVer 2.0, build mapping, compatibility aliases, unknown fields, dependencies, pins, conflicts, load order, and state fixtures agree. |
+| C#/Dart contract parity | PASS | SemVer 2.0, build mapping, canonical fields, unknown fields, dependencies, pins, conflicts, load order, and state fixtures agree. |
 | Sidecar install/runtime/security | PASS | Lockfile `npm ci`, syntax checks, 16 tests, production dependency tree, and audit passed with zero vulnerabilities. |
 | Archive, UGC, diagnostic, repair, and process hardening | PASS | Adversarial traversal/link/collision/size/race/rollback/redaction/timeout regressions passed. |
 | First-party mods | PASS | All 13 mods validated and packed twice byte-identically; archives were inspected directly. UiGallery is excluded from the normal player payload. |
 | C# author templates | PASS | All seven template families scaffolded, validated, packed twice, and inspected; defaults remain deliberately non-publishable. |
 | VPM and canonical ecosystem payload | PASS | Three VPM packages and the 12-mod player payload built twice byte-identically with no missing, extra, linked, or mismatched entries. |
-| Exact-Unity QwUi build | PASS | Unity `6000.0.23f1`; two builds matched SHA-256 `05df3a1533919de3ca5f2dd7c6e7dd41e67163174719339ed7e2c3ab3c012f25`. |
-| Exact-Unity representative world build | PASS | Two builds matched SHA-256 `8239f0592fbf5ca212cebe5ad8cfb3097f46e2024059b677fdec6ffb1b3b7932`. |
+| Exact-Unity TopiaForgeUi build | PASS | Unity `6000.0.23f1`; two builds matched SHA-256 `3cc6624f2a3a5fabc83c4fde49b32f859869e1d1e202afdaf91a888089f9fedb`. |
+| Exact-Unity representative world build | PASS | Two builds matched SHA-256 `f6e6a9802eb043eb5b81d3d519eead7cbb47f348d4c1d110747ec73378464bc9`. |
 | Exact-Unity lifecycle smoke | PASS | Sixteen repeated create/dispose and scene-transition cycles returned allocator, tween, cursor, hotkey, modal, theme, and callback state to baseline. |
 | Game compatibility | PASS | Build `2227`; 217 bindings, 195 statically verifiable, 22 explicitly dynamic/in-game-only, zero indeterminate findings. |
 | Public build freshness | PASS | Both audited platform records still identify build `2227`; CI/release now fail if the public latest manifest changes. |
@@ -93,7 +93,7 @@ bindings are inherently dynamic and therefore belong to the in-game acceptance g
   Owner: project/game owner and IP/trademark counsel.
 
   Exit criteria: retain written authority or an approved clean-room/non-affiliation basis for the Robotopia and
-  QuantumWorks names, game injection, compatibility extraction/baselines, registry claims, web-derived art, adapted
+  TopiaForge names, game injection, compatibility extraction/baselines, registry claims, web-derived art, adapted
   icons, fonts, and custom-world content. Remove or replace any item that lacks a distributable rights basis and
   record provenance, transformation, hash, license, and approver for retained assets.
 
@@ -112,7 +112,7 @@ bindings are inherently dynamic and therefore belong to the in-game acceptance g
 
   Owner: backend/game owner, privacy/legal, security, and product.
 
-  Current state: canonical descriptive capabilities are present; `ai` is only a deprecated alias; Zombies live-brain
+  Current state: canonical descriptive capabilities are present; `remote-ai` is the sole remote-inference label; Zombies live-brain
   and voice defaults are off; no token, remote-AI, microphone, or STT activity occurs without explicit configuration.
 
   Exit criteria: authorize the backend use; document destination, purpose, authentication, consent, cost, retention,
@@ -164,7 +164,7 @@ bindings are inherently dynamic and therefore belong to the in-game acceptance g
 
   Exit criteria: on build `2227`, test startup/shutdown, repeated scenes, safe mode, reloads, enable/disable,
   dependency order, package inbox, collision isolation, partial failures, restart-required state, save compatibility,
-  all 13 mod flows, QwUi-only UI, dirty updates, and resource teardown. Verify all 22 dynamic GameCompat bindings and
+  all 13 mod flows, TopiaForgeUi-only UI, dirty updates, and resource teardown. Verify all 22 dynamic GameCompat bindings and
   record profiler evidence of no steady-state allocation regressions or task/callback leaks.
 
 - [ ] **P0-HOST-01 — Configure and prove the protected hosted release path.**
@@ -234,7 +234,7 @@ bindings are inherently dynamic and therefore belong to the in-game acceptance g
 
 ## P2 conditional gates and frozen v1 scope
 
-- [x] **P2-UPDATE-01 — Launcher upgrades are manual-only.** `manual-releases.json` format 1 carries only HTTPS URLs,
+- [x] **P2-UPDATE-01 — Launcher upgrades are manual-only.** `manual-releases.json` format 2 carries only HTTPS URLs,
   hashes, sizes, and `manualOnly: true`; no replacement strategy is advertised. A future automatic updater requires a
   separate signed-metadata, bounded-extraction, rollback, and recovery review.
 - [x] **P2-REGISTRY-01 — Official community submissions remain closed.** Official indexes contain first-party entries

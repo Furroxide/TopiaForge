@@ -1,11 +1,11 @@
 {
-  "name": "robotopia-ugc-automerge-sidecar",
+  "name": "topiaforge-ugc-automerge-sidecar",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Publishes a Robotopia UgcExportProject to an Automerge document so the running game (and the web editor) can live-sync it. The authoring/writer side of the optional Automerge channel; the game already reads Automerge natively.",
+  "description": "Publishes a TopiaForge UGC export project to an Automerge document so Robotopia and the web editor can live-sync it. The authoring/writer side of the optional Automerge channel; the game already reads Automerge natively.",
   "bin": {
-    "robotopia-ugc-publish": "index.mjs"
+    "topiaforge-ugc-publish": "index.mjs"
   },
   "scripts": {
     "start": "node index.mjs",

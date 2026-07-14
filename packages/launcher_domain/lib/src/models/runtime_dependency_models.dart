@@ -1,6 +1,6 @@
 part of '../models.dart';
 
-class RobotopiaRuntimeVersions {
+class TopiaForgeRuntimeVersions {
   static const loaderVersion = '0.2.0';
   static const sdkVersion = '0.1.3';
 }
@@ -17,11 +17,14 @@ class ModDependency {
   final bool optional;
 
   factory ModDependency.fromJson(Map<String, Object?> json) {
+    if (json.containsKey('version')) {
+      throw const FormatException(
+        'Dependency version aliases are not supported; use versionRange.',
+      );
+    }
     return ModDependency(
       id: (json['id'] as String?) ?? '',
-      versionRange: VersionRange.parse(
-        (json['versionRange'] as String?) ?? (json['version'] as String?),
-      ),
+      versionRange: VersionRange.parse(json['versionRange'] as String?),
       optional: (json['optional'] as bool?) ?? false,
     );
   }

@@ -150,12 +150,7 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
     final gameCodeSha = (await sha256.bind(gameCode.openRead()).first)
         .toString();
     final cacheFile = File(
-      p.join(
-        gameDir.path,
-        'BepInEx',
-        'RobotopiaModManager',
-        'compat-status.json',
-      ),
+      p.join(gameDir.path, 'BepInEx', 'TopiaForge', 'compat-status.json'),
     );
 
     if (!force && cacheFile.existsSync()) {
@@ -250,22 +245,19 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
   }
 
   String? _resolveExtractorExe() {
-    final executableDir = File(Platform.resolvedExecutable).absolute.parent;
     final candidates = <String>[
-      // 1. bundled in the package payload root (consumer install)
+      // 1. Bundled in the package payload root.
       ..._extractorCandidates(_repositoryRoot.path),
-      // 2. legacy Windows bundle location beside the launcher executable
-      ..._extractorCandidates(executableDir.path),
-      // 3. dev dist payload
+      // 2. Developer distribution payload.
       ..._extractorCandidates(
-        p.join(_repositoryRoot.path, 'dist', 'RobotopiaModManager'),
+        p.join(_repositoryRoot.path, 'dist', 'TopiaForge'),
       ),
-      // 4. dev source build
+      // 3. Developer source build.
       ..._extractorCandidates(
         p.join(
           _repositoryRoot.path,
           'src',
-          'Robotopia.GameCompat.Extractor',
+          'TopiaForge.GameCompat.Extractor',
           'bin',
           'Release',
           'net10.0',
@@ -282,8 +274,8 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
 
   List<String> _extractorCandidates(String directory) {
     return [
-      p.join(directory, 'Robotopia.GameCompat.Extractor'),
-      p.join(directory, 'Robotopia.GameCompat.Extractor.exe'),
+      p.join(directory, 'TopiaForge.GameCompat.Extractor'),
+      p.join(directory, 'TopiaForge.GameCompat.Extractor.exe'),
     ];
   }
 
@@ -301,13 +293,13 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
 
   Future<ComponentState> _detectLoader(Directory gameDir) async {
     const loaderDlls = [
-      'Robotopia.ModManager.dll',
-      'Robotopia.ModManager.Core.dll',
-      'Robotopia.Mods.Abstractions.dll',
-      'Robotopia.Mods.UnityUi.dll',
+      'TopiaForge.ModManager.dll',
+      'TopiaForge.ModManager.Core.dll',
+      'TopiaForge.Mods.Abstractions.dll',
+      'TopiaForge.Mods.UnityUi.dll',
     ];
     final pluginDir = Directory(
-      p.join(gameDir.path, 'BepInEx', 'plugins', 'RobotopiaModManager'),
+      p.join(gameDir.path, 'BepInEx', 'plugins', 'TopiaForge.ModManager'),
     );
     final installed = [
       for (final dll in loaderDlls) File(p.join(pluginDir.path, dll)),
@@ -324,7 +316,7 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
       p.join(
         _repositoryRoot.path,
         'src',
-        'Robotopia.ModManager',
+        'TopiaForge.ModManager',
         'bin',
         'Release',
         'netstandard2.1',

@@ -21,9 +21,9 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
 
   PackageSource _localSource() {
     return PackageSource(
-      id: 'robotopia.local',
+      id: 'io.github.furroxide.topiaforge.local',
       name: 'Bundled Local Packages',
-      // Derived from the built .robotopiamod packages in dist/, not a hand-maintained file.
+      // Derived from the built .topiaforgemod packages in dist/, not a hand-maintained file.
       url: Uri.file(p.join(_repositoryRoot.path, 'dist')).toString(),
       builtIn: true,
     );
@@ -59,7 +59,7 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
   }
 
   Future<List<RegistryMod>> _loadRegistrySource(PackageSource source) async {
-    // A local source can point at a DIRECTORY of .robotopiamod packages: derive the catalog
+    // A local source can point at a DIRECTORY of .topiaforgemod packages: derive the catalog
     // straight from the packages (manifest + sha read from each file) so there is no separate
     // metadata file that can drift out of sync with the packages on disk.
     final directory = _resolveDirectorySource(source);
@@ -136,7 +136,7 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
 
     final latestById = <String, RegistryMod>{};
     final packageFiles = directory.listSync().whereType<File>().where(
-      (file) => file.path.toLowerCase().endsWith('.robotopiamod'),
+      (file) => file.path.toLowerCase().endsWith('.topiaforgemod'),
     );
     for (final file in packageFiles) {
       try {
@@ -236,11 +236,26 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
     PackageSource source,
     Uri baseUri,
   ) {
-    return (decoded['mods'] as List? ?? const []).whereType<Map>().map((item) {
+    if (!decoded.containsKey('mods')) {
+      return const <RegistryMod>[];
+    }
+    if (decoded['formatVersion'] != ModRegistryFormat.indexFormatVersion) {
+      throw FormatException(
+        'TopiaForge registry indexes must use formatVersion '
+        '${ModRegistryFormat.indexFormatVersion}.',
+      );
+    }
+    final entries = decoded['mods'];
+    if (entries is! List) {
+      throw const FormatException('Registry index mods must be a JSON array.');
+    }
+    return entries.whereType<Map>().map((item) {
       final json = item.map((key, value) => MapEntry(key.toString(), value));
       final parsed = RegistryMod.fromJson(json);
       final localPath = json['localPath'] as String?;
-      final packageBaseUri = localPath != null && source.id == 'robotopia.local'
+      final packageBaseUri =
+          localPath != null &&
+              source.id == 'io.github.furroxide.topiaforge.local'
           ? Uri.file(_repositoryRoot.path)
           : baseUri;
       return RegistryMod(
@@ -278,7 +293,7 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
                 versionEntry.key,
                 versionJson,
               )
-            : _normalizeManifestAliases(manifestJson);
+            : manifestJson;
         final rawUrl =
             (versionJson['downloadUrl'] as String?) ??
             (versionJson['url'] as String?) ??
@@ -313,24 +328,21 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
     String version,
     Map<String, Object?> versionJson,
   ) {
-    return _normalizeManifestAliases({
+    return {
       ...versionJson,
-      'schemaVersion': versionJson['schemaVersion'] ?? 2,
+      'schemaVersion': versionJson['schemaVersion'] ?? 3,
       'name': versionJson['name'] ?? packageId,
       'displayName':
           versionJson['displayName'] ?? packageJson['displayName'] ?? packageId,
       'version': versionJson['version'] ?? version,
-    });
-  }
-
-  Map<String, Object?> _normalizeManifestAliases(Map<String, Object?> json) {
-    return json;
+    };
   }
 
   Future<_PackageReadResult> _readPackage(
     String packageReference, {
     required String expectedSha256,
   }) async {
+    requireCanonicalTopiaForgePackageReference(packageReference);
     final packageUri = Uri.tryParse(packageReference);
     if (packageUri?.scheme == 'https' && expectedSha256.trim().isEmpty) {
       throw StateError('Remote packages require a SHA-256 hash.');
@@ -347,13 +359,13 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
     final manifestFile = archive.entries.firstWhere(
       (file) =>
           file.isFile &&
-          file.name.replaceAll('\\', '/') == 'robotopia.mod.json',
-      orElse: () => throw StateError('Package is missing robotopia.mod.json.'),
+          file.name.replaceAll('\\', '/') == 'topiaforge.mod.json',
+      orElse: () => throw StateError('Package is missing topiaforge.mod.json.'),
     );
     final manifestBytes = _readDeveloperArchiveEntryBounded(
       manifestFile,
       maxBytes: _maxDeveloperManifestBytes,
-      label: 'robotopia.mod.json',
+      label: 'topiaforge.mod.json',
     );
     final manifest = ModManifest.fromJson(
       jsonDecode(utf8.decode(manifestBytes)) as Map<String, Object?>,

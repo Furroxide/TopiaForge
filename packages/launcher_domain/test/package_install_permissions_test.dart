@@ -4,7 +4,7 @@ import 'package:test/test.dart';
 void main() {
   test('install plan aggregates root and dependency permissions', () {
     final dependency = ModManifest(
-      schemaVersion: 2,
+      schemaVersion: 3,
       id: 'dependency.mod',
       name: 'Dependency',
       version: '1.0.0',
@@ -15,7 +15,7 @@ void main() {
       permissions: const ['filesystem', 'network'],
     );
     final root = ModManifest(
-      schemaVersion: 2,
+      schemaVersion: 3,
       id: 'root.mod',
       name: 'Root',
       version: '1.0.0',

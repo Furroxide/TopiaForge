@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <Import Project="robotopia.dev.props" Condition="Exists('robotopia.dev.props')" />
+  <Import Project="topiaforge.dev.props" Condition="Exists('topiaforge.dev.props')" />
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
     <LangVersion>latest</LangVersion>

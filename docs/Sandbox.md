@@ -1,11 +1,11 @@
 # Sandbox — the freeform creator gamemode
 
-`mods/Robotopia.Sandbox` turns the Open Sandbox arena into Robotopia's answer to Garry's Mod sandbox:
+`mods/TopiaForge.Sandbox` turns the Open Sandbox arena into Robotopia's answer to Garry's Mod sandbox:
 an open creator stage where you spawn the game's own props and robots, throw them around with the
 Gravity Gun, and reset the stage with one click.
 
-The split follows the Zombies pattern: **Robotopia Worlds** owns the Open Sandbox world (the `UgcPlay`
-scene plus a generated arena) and registers the `robotopia.worlds.sandbox` gamemode; **Robotopia.Sandbox**
+The split follows the Zombies pattern: **TopiaForge Worlds** owns the Open Sandbox world (the `UgcPlay`
+scene plus a generated arena) and registers the `io.github.furroxide.topiaforge.worlds.sandbox` gamemode; **TopiaForge.Sandbox**
 attaches the gameplay layer — spawn menu, tools, HUD — to any session running that gamemode, and tears
 everything it spawned down when the session ends.
 
@@ -18,7 +18,7 @@ Launch **Sandbox** from the in-game GAMEMODES menu (or set it as the Worlds auto
 | `Q` | Toggle the spawn menu |
 | `Z` | Undo the last spawn |
 | `F` | Freeze/unfreeze the spawned prop under the crosshair |
-| Right mouse (hold) | Gravity Gun grab (from `robotopia.gravitygun`) |
+| Right mouse (hold) | Gravity Gun grab (from `io.github.furroxide.topiaforge.gravitygun`) |
 
 All three hotkeys are rebindable from the spawn menu's TOOLS tab (persisted to the mod config).
 
@@ -104,7 +104,7 @@ unreachable it degrades silently to the plain greeting.
 
 ## The arena
 
-`mods/Robotopia.Worlds/SandboxArenaBuilder.cs` generates a gm_construct-lite stage centred on the
+`mods/TopiaForge.Worlds/SandboxArenaBuilder.cs` generates a gm_construct-lite stage centred on the
 player spawn: a 200×200 ground with boundary walls, a spawn platform, ramps, a block staircase up to a
 lookout, pillars, cover blocks, and three tinted colour-zone pads for orientation. All of it is static
 primitive geometry parented under the arena root, so the existing `UnloadArena` teardown is unchanged.
@@ -113,17 +113,17 @@ primitive geometry parented under the arena root, so the existing `UnloadArena` 
 ## Architecture
 
 ```
-Robotopia.Worlds                        Robotopia.Sandbox
+TopiaForge.Worlds                        TopiaForge.Sandbox
 ────────────────                        ─────────────────
-Open Sandbox world + arena              SandboxMod (IRobotopiaMod)
-"Sandbox" gamemode + menu entry          └─ SessionChanged(gamemode == robotopia.worlds.sandbox)
+Open Sandbox world + arena              SandboxMod (ITopiaForgeMod)
+"Sandbox" gamemode + menu entry          └─ SessionChanged(gamemode == io.github.furroxide.topiaforge.worlds.sandbox)
 WorldSession lifecycle                       └─ SandboxController (per session)
 IWorldPauseMenuService                           ├─ PropCatalog   — UGC asset map reflection + primitives
                                                  ├─ PropSpawner   — crosshair placement + physics prep
                                                  ├─ SpawnRegistry — LIFO undo, freeze, counts, cap, cleanup
-                                                 ├─ Ui/SpawnMenuWindow (QwUi Paper window, Q)
+                                                 ├─ Ui/SpawnMenuWindow (TopiaForgeUi Paper window, Q)
                                                  │   └─ Ui/RobotRosterTab — the ROBOTS tab (pooled rows)
-                                                 ├─ Ui/SandboxHud      (QwUi HUD layer)
+                                                 ├─ Ui/SandboxHud      (TopiaForgeUi HUD layer)
                                                  ├─ RobotProgramDirector — pure request/parse for PROGRAM
                                                  ├─ RobotChat + Ui/RobotChatWindow — the PROGRAM chat flow
                                                  └─ RobotAmbience — greetings, banter, delivery reactions
@@ -132,7 +132,7 @@ IWorldPauseMenuService                           ├─ PropCatalog   — UGC as
 - **Session-scoped**: the controller (and its UiHost, hotkeys, and everything spawned) is created on a
   matching `SessionChanged` and disposed on `SessionEnded` — vanilla pause-menu exit, a superseding
   launch, and mod unload all funnel through the same teardown.
-- **Dependencies**: hard `vpmDependencies` on `robotopia.worlds >= 0.5.4` and `robotopia.robotkit
+- **Dependencies**: hard `vpmDependencies` on `io.github.furroxide.topiaforge.worlds >= 0.5.4` and `io.github.furroxide.topiaforge.robotkit
   >= 0.8.0` (robot programming — including wander/flee and the reprogram courier — is core to the
   mode). The Gravity Gun stays soft (`loadAfter`): it simply grabs whatever rigidbodies exist.
 - **Spawn cap**: `maxSpawnedObjects` (default 200) refuses further spawns with a toast instead of
@@ -140,7 +140,7 @@ IWorldPauseMenuService                           ├─ PropCatalog   — UGC as
 
 ## Game bindings
 
-Clean-room reflection into `GameCode` is declared in `bindings/robotopia.sandbox.gamebindings.json`
+Clean-room reflection into `GameCode` is declared in `bindings/io.github.furroxide.topiaforge.sandbox.gamebindings.json`
 and validated against `baselines/gamecode.surface.baseline.json` by the test suite:
 
 - `UgcImportHostSceneController.BuiltInAssetMap` → the scene's `UgcBuiltInAssetMap`
@@ -151,7 +151,7 @@ and validated against `baselines/gamecode.surface.baseline.json` by the test sui
 
 Everything degrades: if any symbol is missing the catalog stays primitives-only with a single warning.
 
-## Config (`robotopia.sandbox` config json)
+## Config (`io.github.furroxide.topiaforge.sandbox` config json)
 
 `spawnMenuKey` ("Q"), `undoKey` ("Z"), `freezeKey` ("F"), `spawnDistanceMax` (40), `maxSpawnedObjects`
 (200), `defaultRobotBrainMode` ("Dormant"), `showHud` (true), `chatMaxTurns` (12), `chatTemperature`
@@ -160,13 +160,13 @@ Everything degrades: if any symbol is missing the catalog stays primitives-only 
 
 ## Verification
 
-Build + tests per AGENTS.md, then `robotopia dev-install`, launch the game, install the package
+Build + tests per AGENTS.md, then `topiaforge dev-install`, launch the game, install the package
 inbox (F10), and launch Sandbox from the GAMEMODES menu. Expect in `manager.log`:
 
 - `Sandbox gamemode content loaded (spawn menu, tools, robots).` (boot)
 - `Sandbox session started in 'UgcPlay' — press Q for the spawn menu.` (launch)
 - `Sandbox prop catalog loaded: N UGC assets + primitives.` (first menu use once the scene is up)
-- `World session ended (…): robotopia.worlds.sandbox …` (exit — confirms teardown ran)
+- `World session ended (…): io.github.furroxide.topiaforge.worlds.sandbox …` (exit — confirms teardown ran)
 
 For robot programming: spawn a marker pad and a dormant robot, PROGRAM → "follow me" — the robot
 replies, the chat closes itself, and it chases you (`Sandbox programmed '<name>': FOLLOW PLAYER` in the

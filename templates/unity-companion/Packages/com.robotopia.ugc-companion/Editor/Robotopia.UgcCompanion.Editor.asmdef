@@ -1,7 +1,0 @@
-{
-  "name": "Robotopia.UgcCompanion.Editor",
-  "references": ["Robotopia.UgcCompanion.Runtime"],
-  "includePlatforms": ["Editor"],
-  "excludePlatforms": [],
-  "autoReferenced": true
-}

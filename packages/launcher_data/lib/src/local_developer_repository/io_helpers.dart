@@ -38,7 +38,7 @@ extension LocalDeveloperIoHelpers on LocalDeveloperRepository {
         ? Directory(startPath).absolute
         : File(startPath).absolute.parent;
     while (true) {
-      final projectFile = File(p.join(current.path, 'robotopia.project.json'));
+      final projectFile = File(p.join(current.path, 'topiaforge.project.json'));
       _recoverDeveloperAtomicBackupIfMissing(projectFile);
       if (projectFile.existsSync()) {
         return current;
@@ -55,58 +55,77 @@ extension LocalDeveloperIoHelpers on LocalDeveloperRepository {
     final root = _findProjectRoot(projectPath);
     if (root == null) {
       throw StateError(
-        'robotopia.project.json was not found from $projectPath',
+        'topiaforge.project.json was not found from $projectPath',
       );
     }
     return root;
   }
 
   Future<DeveloperProject> _readProject(String root) async {
-    final file = File(p.join(root, 'robotopia.project.json'));
-    return DeveloperProject.fromJson(
-      jsonDecode(
-            utf8.decode(
-              await _readDeveloperFileBounded(
-                file,
-                maxBytes: _maxDeveloperManifestBytes,
-                label: 'robotopia.project.json',
-              ),
-            ),
-          )
-          as Map<String, Object?>,
+    final file = File(p.join(root, 'topiaforge.project.json'));
+    final decoded = jsonDecode(
+      utf8.decode(
+        await _readDeveloperFileBounded(
+          file,
+          maxBytes: _maxDeveloperManifestBytes,
+          label: 'topiaforge.project.json',
+        ),
+      ),
     );
+    if (decoded is! Map<String, Object?>) {
+      throw const FormatException('topiaforge.project.json must be an object.');
+    }
+    if (decoded.containsKey('gameVersionRange') ||
+        decoded.containsKey('loaderVersionRange')) {
+      throw const FormatException(
+        'Retired project version-range keys are not supported.',
+      );
+    }
+    final project = DeveloperProject.fromJson(decoded);
+    if (project.schemaVersion != 2) {
+      throw const FormatException(
+        'topiaforge.project.json must use schemaVersion 2.',
+      );
+    }
+    return project;
   }
 
   Future<void> _writeProject(String root, DeveloperProject project) async {
     _writeDeveloperTextAtomic(
-      File(p.join(root, 'robotopia.project.json')),
+      File(p.join(root, 'topiaforge.project.json')),
       _prettyJson(project.toJson()),
     );
   }
 
   Future<DeveloperLock?> _readLock(String root) async {
-    final file = File(p.join(root, 'robotopia.lock.json'));
+    final file = File(p.join(root, 'topiaforge.lock.json'));
     _recoverDeveloperAtomicBackupIfMissing(file);
     if (!file.existsSync()) {
       return null;
     }
-    return DeveloperLock.fromJson(
+    final lock = DeveloperLock.fromJson(
       jsonDecode(
             utf8.decode(
               await _readDeveloperFileBounded(
                 file,
                 maxBytes: _maxDeveloperCatalogBytes,
-                label: 'robotopia.lock.json',
+                label: 'topiaforge.lock.json',
               ),
             ),
           )
           as Map<String, Object?>,
     );
+    if (lock.schemaVersion != 2) {
+      throw const FormatException(
+        'topiaforge.lock.json must use schemaVersion 2.',
+      );
+    }
+    return lock;
   }
 
   Future<void> _writeLock(String root, DeveloperLock lock) async {
     _writeDeveloperTextAtomic(
-      File(p.join(root, 'robotopia.lock.json')),
+      File(p.join(root, 'topiaforge.lock.json')),
       _prettyJson(lock.toJson()),
     );
   }
@@ -123,14 +142,14 @@ extension LocalDeveloperIoHelpers on LocalDeveloperRepository {
       p.join(
         _repositoryRoot.path,
         'src',
-        'Robotopia.Mods.Abstractions',
-        'Robotopia.Mods.Abstractions.csproj',
+        'TopiaForge.Mods.Abstractions',
+        'TopiaForge.Mods.Abstractions.csproj',
       ),
       from: root,
     );
     await File(p.join(root, '$assembly.csproj')).writeAsString('''
 <Project Sdk="Microsoft.NET.Sdk">
-  <Import Project="robotopia.dev.props" Condition="Exists('robotopia.dev.props')" />
+  <Import Project="topiaforge.dev.props" Condition="Exists('topiaforge.dev.props')" />
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
     <LangVersion>latest</LangVersion>
@@ -144,11 +163,11 @@ extension LocalDeveloperIoHelpers on LocalDeveloperRepository {
 </Project>
 ''');
     await File(p.join(root, '${_typeName(id)}Mod.cs')).writeAsString('''
-using Robotopia.Mods;
+using TopiaForge.Mods;
 
 namespace $assembly
 {
-    public sealed class ${_typeName(id)}Mod : IRobotopiaMod
+    public sealed class ${_typeName(id)}Mod : ITopiaForgeMod
     {
         public void OnLoad(IModContext context)
         {
@@ -174,22 +193,26 @@ namespace $assembly
       _copyDirectory(
         _companionTemplateDir,
         Directory(
-          p.join(companion.path, 'Packages', 'com.robotopia.ugc-companion'),
+          p.join(
+            companion.path,
+            'Packages',
+            'io.github.furroxide.topiaforge.ugc-companion',
+          ),
         ),
       );
     }
 
     await File(p.join(companion.path, 'README.md')).writeAsString(
       '# $name Unity Companion\n\n'
-      'Open this folder as a Unity project, or copy `Packages/com.robotopia.ugc-companion` into an existing '
-      'Unity project. Use **Robotopia → UGC Live Sync** to author UGC content and live-sync it into the '
+      'Open this folder as a Unity project, or copy `Packages/io.github.furroxide.topiaforge.ugc-companion` into an existing '
+      'Unity project. Use **TopiaForge → UGC Live Sync** to author UGC content and live-sync it into the '
       'running game with no restart. See docs/UgcLiveSync.md for the full workflow.\n',
     );
 
-    // A sample of the runtime config the game mod reads (config/robotopia.ugc.livesync.json). Copy it there and
+    // A sample of the runtime config the game mod reads (config/topiaforge.ugc.livesync.json). Copy it there and
     // set the watch folder to share content between the Unity companion and the game.
     _writeDeveloperTextAtomic(
-      File(p.join(companion.path, 'robotopia.ugc.livesync.sample.json')),
+      File(p.join(companion.path, 'topiaforge.ugc.livesync.sample.json')),
       _prettyJson(const UgcLiveSyncSettings().toRuntimeConfig()),
     );
   }
@@ -197,9 +220,9 @@ namespace $assembly
   Future<void> _ensureProjectGitignore(String root) async {
     final file = File(p.join(root, '.gitignore'));
     final entries = [
-      '.robotopia/packages/',
-      '.robotopia/cache/',
-      'robotopia.dev.props',
+      '.topiaforge/packages/',
+      '.topiaforge/cache/',
+      'topiaforge.dev.props',
     ];
     final existing = file.existsSync()
         ? utf8.decode(
@@ -228,7 +251,7 @@ namespace $assembly
       for (final assembly in package.apiAssemblies) {
         final hintPath = p.join(
           root,
-          '.robotopia',
+          '.topiaforge',
           'packages',
           package.id,
           package.version,
@@ -242,7 +265,7 @@ namespace $assembly
     </Reference>''');
       }
     }
-    _writeDeveloperTextAtomic(File(p.join(root, 'robotopia.dev.props')), '''
+    _writeDeveloperTextAtomic(File(p.join(root, 'topiaforge.dev.props')), '''
 <Project>
   <ItemGroup>
 ${references.join('\n')}
@@ -276,7 +299,7 @@ ${references.join('\n')}
 
   Future<String> _findUnityEditor(DeveloperProject? project) async {
     final editors = await _scanUnityEditors();
-    return RobotopiaUnityCompatibility.selectEditor(
+    return RobotopiaGameUnityCompatibility.selectEditor(
           editors,
           configuredVersion: project?.unityCompanion.unityVersion ?? '',
         )?.path ??
@@ -320,7 +343,7 @@ ${references.join('\n')}
 
   String _typeName(String id) {
     final name = _assemblyName(id);
-    return name.isEmpty ? 'Robotopia' : name;
+    return name.isEmpty ? 'TopiaForge' : name;
   }
 
   String _safeName(String raw) =>
@@ -331,17 +354,17 @@ ${references.join('\n')}
 }
 
 String _findDeveloperRepoRoot(String? workingDirectory) {
-  return _findQuantumWorksRoot(workingDirectory);
+  return _findTopiaForgeRoot(workingDirectory);
 }
 
-String _findQuantumWorksRoot(String? workingDirectory) {
+String _findTopiaForgeRoot(String? workingDirectory) {
   // Tests inject workingDirectory instead of mutating the process-global
   // Directory.current, which is shared across concurrent test isolates.
   final cwd = workingDirectory != null
       ? Directory(workingDirectory).absolute
       : Directory.current.absolute;
-  for (final seed in _quantumWorksRootSeeds(cwd)) {
-    final root = _walkUpForQuantumWorksRoot(seed);
+  for (final seed in _topiaForgeRootSeeds(cwd)) {
+    final root = _walkUpForTopiaForgeRoot(seed);
     if (root != null) {
       return root.path;
     }
@@ -349,8 +372,8 @@ String _findQuantumWorksRoot(String? workingDirectory) {
   return cwd.path;
 }
 
-Iterable<Directory> _quantumWorksRootSeeds(Directory workingDirectory) sync* {
-  final configured = Platform.environment['ROBOTOPIA_REPOSITORY_ROOT'];
+Iterable<Directory> _topiaForgeRootSeeds(Directory workingDirectory) sync* {
+  final configured = Platform.environment['TOPIAFORGE_REPOSITORY_ROOT'];
   if (configured != null && configured.trim().isNotEmpty) {
     yield Directory(configured).absolute;
   }
@@ -373,14 +396,14 @@ Directory? _macResourcesRoot(Directory executableDir) {
     return null;
   }
   return Directory(
-    p.join(contentsDir.path, 'Resources', 'QuantumWorks'),
+    p.join(contentsDir.path, 'Resources', 'TopiaForge'),
   ).absolute;
 }
 
-Directory? _walkUpForQuantumWorksRoot(Directory seed) {
+Directory? _walkUpForTopiaForgeRoot(Directory seed) {
   var current = seed.absolute;
   while (true) {
-    if (_isQuantumWorksRoot(current)) {
+    if (_isTopiaForgeRoot(current)) {
       return current;
     }
     final parent = current.parent;
@@ -391,8 +414,8 @@ Directory? _walkUpForQuantumWorksRoot(Directory seed) {
   }
 }
 
-bool _isQuantumWorksRoot(Directory directory) {
-  if (File(p.join(directory.path, 'RobotopiaModManager.slnx')).existsSync()) {
+bool _isTopiaForgeRoot(Directory directory) {
+  if (File(p.join(directory.path, 'TopiaForge.slnx')).existsSync()) {
     return true;
   }
   return Directory(p.join(directory.path, 'tools')).existsSync() &&

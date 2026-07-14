@@ -59,19 +59,19 @@ void main() {
 Directory _writeSidecar(Directory root) {
   final directory = Directory(p.join(root.path, 'sidecar'))..createSync();
   const package = {
-    'name': 'robotopia-sidecar',
+    'name': 'topiaforge-sidecar',
     'version': '1.0.0',
     'engines': {'node': '>=20'},
     'dependencies': {'safe-package': '1.0.0'},
   };
   final lock = {
-    'name': 'robotopia-sidecar',
+    'name': 'topiaforge-sidecar',
     'version': '1.0.0',
     'lockfileVersion': 3,
     'requires': true,
     'packages': {
       '': {
-        'name': 'robotopia-sidecar',
+        'name': 'topiaforge-sidecar',
         'version': '1.0.0',
         'engines': {'node': '>=20'},
         'dependencies': {'safe-package': '1.0.0'},

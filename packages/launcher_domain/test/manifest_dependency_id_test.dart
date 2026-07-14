@@ -61,11 +61,11 @@ ModManifest _manifest(
   List<ModConflict> conflicts = const [],
   List<String> loadAfter = const [],
 }) => ModManifest(
-  schemaVersion: 2,
+  schemaVersion: 3,
   id: id,
   name: id,
   version: '1.0.0',
-  author: const ModAuthor(name: 'QuantumWorks'),
+  author: const ModAuthor(name: 'TopiaForge'),
   entryAssembly: '$id.dll',
   entryType: '$id.Entry',
   dependencies: dependencies,
@@ -76,6 +76,6 @@ ModManifest _manifest(
 
 RegistryMod _registry(ModManifest manifest) => RegistryMod(
   manifest: manifest,
-  downloadUrl: 'file:///${manifest.id}.robotopiamod',
+  downloadUrl: 'file:///${manifest.id}.topiaforgemod',
   packageSha256: List.filled(64, 'a').join(),
 );

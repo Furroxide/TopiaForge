@@ -178,14 +178,17 @@ void main() {
   });
 
   group('VersionRange.parse', () {
-    test('preserves legacy partial-version range shorthands', () {
-      expect(VersionRange.parse('1').toString(), '1.0.0');
-      expect(VersionRange.parse('1.2').toString(), '1.2.0');
+    test('requires complete SemVer bounds while retaining wildcards', () {
+      for (final value in ['1', '1.2', '>=1 <2.1']) {
+        expect(
+          () => VersionRange.parse(value),
+          throwsFormatException,
+          reason: value,
+        );
+      }
 
-      final range = VersionRange.parse('>=1 <2.1');
-      expect(range.toString(), '>=1.0.0 <2.1.0');
-      expect(range.allows('1.9.9'), isTrue);
-      expect(range.allows('2.1.0'), isFalse);
+      expect(VersionRange.parse('1.x').allows('1.9.9'), isTrue);
+      expect(VersionRange.parse('1.2.x').allows('1.2.9'), isTrue);
     });
 
     test('uses prerelease precedence and ignores build metadata', () {

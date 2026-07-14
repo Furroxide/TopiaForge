@@ -1,0 +1,12 @@
+{
+  "name": "io.github.furroxide.topiaforge.vpm-resolver",
+  "version": "0.1.0",
+  "displayName": "TopiaForge VPM Resolver",
+  "description": "Editor-only, read-only recovery bridge for TopiaForge (VPM) packages. On project open it performs bounded checks for missing or mismatched locked packages and directs the author to the hardened TopiaForge launcher/CLI. It never downloads, extracts, selects versions, or changes Packages/.",
+  "license": "NOASSERTION",
+  "unity": "2022.3",
+  "keywords": ["robotopia", "topiaforge", "vpm", "resolver"],
+  "author": {
+    "name": "TopiaForge"
+  }
+}

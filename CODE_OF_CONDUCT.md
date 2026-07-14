@@ -1,6 +1,6 @@
 # Community Code of Conduct
 
-Robotopia's community should be welcoming, technically honest, and safe for people with different backgrounds and
+TopiaForge's community should be welcoming, technically honest, and safe for people with different backgrounds and
 experience levels.
 
 Participants must communicate respectfully, critique work rather than people, respect privacy and attribution, avoid

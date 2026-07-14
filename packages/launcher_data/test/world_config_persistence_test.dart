@@ -10,7 +10,7 @@ void main() {
   test('launch preserves runtime-owned world config fields', () async {
     final root = Directory.systemTemp.createTempSync('world-config-merge-');
     addTearDown(() => root.deleteSync(recursive: true));
-    final gameRoot = Directory(p.join(root.path, 'Robotopia'))..createSync();
+    final gameRoot = Directory(p.join(root.path, 'TopiaForge'))..createSync();
     final repositoryRoot = Directory(p.join(root.path, 'repo'))..createSync();
     final dataRoot = Directory(p.join(root.path, 'data'));
     _createGame(gameRoot);
@@ -35,9 +35,9 @@ void main() {
           p.join(
             gameRoot.path,
             'BepInEx',
-            'RobotopiaModManager',
+            'TopiaForge',
             'config',
-            'robotopia.worlds.json',
+            'topiaforge.worlds.json',
           ),
         )..writeAsStringSync(
           jsonEncode({
@@ -103,17 +103,17 @@ void _createRuntimeSources(Directory repositoryRoot) {
     p.join(
       repositoryRoot.path,
       'src',
-      'Robotopia.ModManager',
+      'TopiaForge.ModManager',
       'bin',
       'Release',
       'netstandard2.1',
     ),
   )..createSync(recursive: true);
   for (final name in [
-    'Robotopia.ModManager.dll',
-    'Robotopia.ModManager.Core.dll',
-    'Robotopia.Mods.Abstractions.dll',
-    'Robotopia.Mods.UnityUi.dll',
+    'TopiaForge.ModManager.dll',
+    'TopiaForge.ModManager.Core.dll',
+    'TopiaForge.Mods.Abstractions.dll',
+    'TopiaForge.Mods.UnityUi.dll',
   ]) {
     File(p.join(loader.path, name)).writeAsStringSync('');
   }

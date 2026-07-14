@@ -1,11 +1,11 @@
-# Robotopia Performance Fixes mod
+# TopiaForge Performance Fixes mod
 
-`robotopia.perffixes` fixes **root causes** of stutter and wasted CPU in the base game **without changing
+`io.github.furroxide.topiaforge.perffixes` fixes **root causes** of stutter and wasted CPU in the base game **without changing
 anything you can see or play**. Unlike the [Performance](Performance.md) mod (which trades fidelity for
 FPS by lowering settings), every fix here is **behavior-identical** — the game does exactly the same work,
 just more cheaply. It is safe to run on its own, on top of vanilla, with no graphics change.
 
-All fixes default **on**; each can be toggled independently in `config/robotopia.perffixes.json`.
+All fixes default **on**; each can be toggled independently in `config/topiaforge.perffixes.json`.
 
 ## The fixes
 
@@ -43,9 +43,9 @@ the mod.
 
 ## Build & install
 ```
-dotnet build mods/Robotopia.PerfFixes/Robotopia.PerfFixes.csproj -c Release
+dotnet build mods/TopiaForge.PerfFixes/TopiaForge.PerfFixes.csproj -c Release
 ```
-`robotopia dev-install` stages it to the game's `package-inbox`; install from the F10 overlay on next
+`topiaforge dev-install` stages it to the game's `package-inbox`; install from the F10 overlay on next
 launch.
 
 ## Deferred (vetted but not shipped)

@@ -24,9 +24,9 @@ packages/**/[Bb]uild/
 # Generated distributables and local package caches
 /dist/
 /out/
-/.robotopia/packages/
-/.robotopia/cache/
-robotopia.dev.props
+/.topiaforge/packages/
+/.topiaforge/cache/
+topiaforge.dev.props
 /Directory.Build.local.props
 
 # Local game/runtime installs. The bundled third-party runtime under

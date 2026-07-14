@@ -6,9 +6,9 @@ const _maxDeveloperArchiveEntryBytes = 1024 * 1024 * 1024;
 const _maxDeveloperArchiveExpandedBytes = 2 * 1024 * 1024 * 1024;
 const _maxDeveloperManifestBytes = 1024 * 1024;
 const _maxDeveloperCatalogBytes = 16 * 1024 * 1024;
-const _maxLegacyMigrationEntries = 8192;
-const _maxLegacyMigrationFileBytes = 512 * 1024 * 1024;
-const _maxLegacyMigrationBytes = 2 * 1024 * 1024 * 1024;
+const _maxTemplateCopyEntries = 8192;
+const _maxTemplateCopyFileBytes = 512 * 1024 * 1024;
+const _maxTemplateCopyBytes = 2 * 1024 * 1024 * 1024;
 
 SafeZipArchive _decodeDeveloperArchive(
   List<int> bytes, {

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "project": "BepInEx",
   "version": "5.4.23.5",
   "sourceRepository": "https://github.com/BepInEx/BepInEx",

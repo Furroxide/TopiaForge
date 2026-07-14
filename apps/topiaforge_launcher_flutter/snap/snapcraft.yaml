@@ -1,0 +1,35 @@
+name: topiaforge
+version: 1.0.0
+summary: TopiaForge launcher for Robotopia
+description: Desktop launcher and mod manager for Robotopia.
+
+confinement: strict
+base: core22
+grade: stable
+
+slots:
+  dbus-topiaforge:
+    interface: dbus
+    bus: session
+    name: io.github.furroxide.topiaforge.launcher
+
+plugs:
+  desktop:
+    interface: desktop
+    desktop-file-ids:
+      - io.github.furroxide.topiaforge.launcher
+
+apps:
+  topiaforge:
+    command: topiaforge_launcher
+    common-id: io.github.furroxide.topiaforge.launcher
+    extensions: [gnome] # gnome includes the libraries required by flutter
+    plugs:
+    - network
+    slots:
+      - dbus-topiaforge
+parts:
+  topiaforge_launcher:
+    source: .
+    plugin: flutter
+    flutter-target: lib/main.dart # The main entry-point file of the application

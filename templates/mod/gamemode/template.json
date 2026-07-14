@@ -8,10 +8,10 @@
     "tags": ["gameplay", "gamemode"],
     "permissions": ["world-service", "robot-spawning", "hud"],
     "vpmDependencies": {
-      "robotopia.worlds": ">=0.3.0",
-      "robotopia.robotkit": ">=0.6.0"
+      "io.github.furroxide.topiaforge.worlds": ">=0.3.0",
+      "io.github.furroxide.topiaforge.robotkit": ">=0.6.0"
     },
-    "loadAfter": ["robotopia.worlds", "robotopia.robotkit"],
+    "loadAfter": ["io.github.furroxide.topiaforge.worlds", "io.github.furroxide.topiaforge.robotkit"],
     "worldGamemodes": [
       {
         "id": "{{MOD_ID}}.mode",

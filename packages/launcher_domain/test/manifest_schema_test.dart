@@ -6,12 +6,12 @@ import 'package:launcher_domain/launcher_domain.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test('checked-in manifests satisfy schema v2', () {
+  test('checked-in manifests satisfy schema v3', () {
     final root = _repoRoot();
     final schemaJson =
         jsonDecode(
               File(
-                _join(root.path, ['schemas', 'robotopia.mod.schema.json']),
+                _join(root.path, ['schemas', 'topiaforge.mod.schema.json']),
               ).readAsStringSync(),
             )
             as Map<String, Object?>;
@@ -20,7 +20,7 @@ void main() {
       ...Directory(_join(root.path, ['mods']))
           .listSync(recursive: true)
           .whereType<File>()
-          .where((file) => file.path.endsWith('robotopia.mod.json')),
+          .where((file) => file.path.endsWith('topiaforge.mod.json')),
     ];
 
     expect(manifestFiles, isNotEmpty);
@@ -99,7 +99,7 @@ JsonSchema _manifestSchema() {
   return JsonSchema.create(
     jsonDecode(
           File(
-            _join(root.path, ['schemas', 'robotopia.mod.schema.json']),
+            _join(root.path, ['schemas', 'topiaforge.mod.schema.json']),
           ).readAsStringSync(),
         )
         as Map<String, Object?>,
@@ -107,7 +107,7 @@ JsonSchema _manifestSchema() {
 }
 
 Map<String, Object?> _validManifest() => {
-  'schemaVersion': 2,
+  'schemaVersion': 3,
   'name': 'sample.schema-parity',
   'displayName': 'Schema parity',
   'version': '1.2.3',
@@ -119,14 +119,12 @@ Map<String, Object?> _validManifest() => {
 Directory _repoRoot() {
   var directory = Directory.current.absolute;
   while (true) {
-    if (File(
-      _join(directory.path, ['RobotopiaModManager.slnx']),
-    ).existsSync()) {
+    if (File(_join(directory.path, ['TopiaForge.slnx'])).existsSync()) {
       return directory;
     }
     final parent = directory.parent;
     if (parent.path == directory.path) {
-      throw StateError('Could not locate RobotopiaModManager.slnx.');
+      throw StateError('Could not locate TopiaForge.slnx.');
     }
     directory = parent;
   }

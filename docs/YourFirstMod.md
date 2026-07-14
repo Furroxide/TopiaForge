@@ -5,7 +5,7 @@ A start-to-finish walkthrough: from nothing to a mod running inside Robotopia. T
 ## Prerequisites
 
 - **Robotopia installed** (the launcher detects the standard install location).
-- **The `robotopia` CLI** — extract the release zip and add its root folder to `PATH`
+- **The `topiaforge` CLI** — extract the release zip and add its root folder to `PATH`
   (see [Modding.md → Install the CLI](Modding.md#install-the-cli)).
 - **.NET SDK 10.0.301** — the repository-pinned tool required to build mods. Node.js and Unity are optional and only used for
   UGC live-sync authoring; you don't need them today.
@@ -13,7 +13,7 @@ A start-to-finish walkthrough: from nothing to a mod running inside Robotopia. T
 ## 1. Check your machine
 
 ```sh
-robotopia doctor
+topiaforge doctor
 ```
 
 ```text
@@ -28,17 +28,17 @@ Other:
 ```
 
 `[ X ]` on optional rows is fine — only the **.NET SDK** row must be `[OK ]`. If something is missing,
-`robotopia setup` applies the safe fixes automatically and tells you exactly what to install by hand.
+`topiaforge setup` applies the safe fixes automatically and tells you exactly what to install by hand.
 
 ## 2. Create the mod
 
 ```sh
-robotopia new mod yourname.firstmod --name "First Mod" --author "You" --license MIT
+topiaforge new mod yourname.firstmod --name "First Mod" --author "You" --license MIT
 ```
 
 ```text
 Created C:\...\yourname.firstmod
-Next: edit robotopia.mod.json (or use `robotopia mod set|add|remove`), then validate with `robotopia check package ...`.
+Next: edit topiaforge.mod.json (or use `topiaforge mod set|add|remove`), then validate with `topiaforge check package ...`.
 ```
 
 You get a complete, buildable project — no renaming or find-and-replace needed:
@@ -47,21 +47,21 @@ You get a complete, buildable project — no renaming or find-and-replace needed
 yourname.firstmod/
 ├── .gitignore                 # ignores bin/, obj/, build artifacts
 ├── README.md
-├── robotopia.mod.json         # the manifest ($schema included, so your editor autocompletes it)
-├── robotopia.project.json     # dependency management (robotopia add package / restore)
+├── topiaforge.mod.json         # the manifest ($schema included, so your editor autocompletes it)
+├── topiaforge.project.json     # dependency management (topiaforge add package / restore)
 ├── YournameFirstmod.csproj
 └── YournameFirstmodMod.cs     # the entry point: logs load, scene, and update events
 ```
 
 Pick a different starting point with `--template gameplay|gamemode|service|ui|asset|world`
-(`robotopia list templates` describes each).
+(`topiaforge list templates` describes each).
 
 ## 3. Validate and pack
 
 From inside `yourname.firstmod/`:
 
 ```sh
-robotopia check package .
+topiaforge check package .
 ```
 
 ```text
@@ -69,44 +69,44 @@ First Mod 0.1.0 (yourname.firstmod)
 ```
 
 No issues listed means the manifest and layout are valid. Now build it into an installable package —
-`pack` compiles the C# project and zips it into a `.robotopiamod`:
+`pack` compiles the C# project and zips it into a `.topiaforgemod`:
 
 ```sh
-robotopia pack
+topiaforge pack
 ```
 
 ```text
-C:\...\yourname.firstmod-0.1.0.robotopiamod
+C:\...\yourname.firstmod-0.1.0.topiaforgemod
 ```
 
 ## 4. Install and run
 
 ```sh
-robotopia install        # packs the current folder and installs it into the detected game
-robotopia launch
+topiaforge install        # packs the current folder and installs it into the detected game
+topiaforge launch
 ```
 
 If the game isn't auto-detected, set the `ROBOTOPIA_GAME_DIR` environment variable to your game folder and
-retry (`robotopia doctor` shows what was detected). [Troubleshooting.md](Troubleshooting.md) covers the
+retry (`topiaforge doctor` shows what was detected). [Troubleshooting.md](Troubleshooting.md) covers the
 per-platform paths, shell pitfalls, and `--game-dir`.
 
 ## 5. See it in game
 
-In the main menu, click the **QuantumWorks** button or press **F10** to open the mod manager. Your mod is
+In the main menu, click the **TopiaForge** button or press **F10** to open the mod manager. Your mod is
 listed and enabled; its log line ("Loaded") shows in the mod's log view.
 
 ## 6. Iterate
 
 1. Edit `YournameFirstmodMod.cs` — say, change the log message.
-2. `robotopia install` again (rebuilds and reinstalls).
-3. `robotopia restart` — restarts the game with the new build.
+2. `topiaforge install` again (rebuilds and reinstalls).
+3. `topiaforge restart` — restarts the game with the new build.
 
 Manage the manifest without hand-editing JSON — every change is validated before it's written:
 
 ```sh
-robotopia mod set version 0.2.0
-robotopia mod add tag physics
-robotopia mod add dependency robotopia.worlds@">=0.3.0"
+topiaforge mod set version 0.2.0
+topiaforge mod add tag physics
+topiaforge mod add dependency io.github.furroxide.topiaforge.worlds@">=0.3.0"
 ```
 
 ## 7. Publish it

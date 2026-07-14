@@ -1,0 +1,1059 @@
+{
+  "schemaVersion": 2,
+  "modId": "io.github.furroxide.topiaforge.robotkit",
+  "modName": "TopiaForge RobotKit",
+  "bindings": [
+    {
+      "id": "robotkit.type.robotbody.detection",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "RobotBody",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Robot body component detection (parent walk, prefab scoring)",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:18"
+    },
+    {
+      "id": "robotkit.type.agentstate",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "AgentState",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Brain dormancy (enum for Standby state)",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:19"
+    },
+    {
+      "id": "robotkit.type.damagetype",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "DamageType",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Robot damage pipeline (damage type enum conversion)",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:20"
+    },
+    {
+      "id": "robotkit.enum.agentstate.standby",
+      "kind": "EnumValue",
+      "assembly": "GameCode",
+      "declaringType": "AgentState",
+      "member": "Standby",
+      "matchMode": "ValueContract",
+      "criticality": "Degraded",
+      "feature": "Brain dormancy (initial state for controlled robot)",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:131",
+      "contractValue": "Standby"
+    },
+    {
+      "id": "robotkit.field.llmagent.initialstate",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "LLMAgent",
+      "member": "initialState",
+      "matchMode": "DynamicInstance",
+      "criticality": "Degraded",
+      "feature": "Brain dormancy configuration",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:132",
+      "returnType": "AgentState"
+    },
+    {
+      "id": "robotkit.field.llmagent.state",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "LLMAgent",
+      "member": "state",
+      "matchMode": "DynamicInstance",
+      "criticality": "Degraded",
+      "feature": "Brain dormancy configuration",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:133",
+      "returnType": "AgentState"
+    },
+    {
+      "id": "robotkit.field.llmagent.llmdisabled",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "LLMAgent",
+      "member": "llmDisabled",
+      "matchMode": "DynamicInstance",
+      "criticality": "Degraded",
+      "feature": "Brain dormancy (LLM disable flag)",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:137",
+      "returnType": "System.Boolean"
+    },
+    {
+      "id": "robotkit.method.llmagent.enabletestmode",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "LLMAgent",
+      "member": "EnableTestMode",
+      "matchMode": "DynamicInstance",
+      "criticality": "Degraded",
+      "feature": "Brain dormancy (fallback LLM disable)",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:139",
+      "parameters": [
+        {
+          "type": "System.Boolean",
+          "constrained": false
+        }
+      ],
+      "returnType": "System.Void"
+    },
+    {
+      "id": "robotkit.type.killed.marker",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "Killed",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Optional",
+      "feature": "Dead robot detection (Killed component marker)",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:164"
+    },
+    {
+      "id": "robotkit.type.health.damagepipeline",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "Health",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Critical",
+      "feature": "Robot damage pipeline",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:170"
+    },
+    {
+      "id": "robotkit.enum.damagetype.normal",
+      "kind": "EnumValue",
+      "assembly": "GameCode",
+      "declaringType": "DamageType",
+      "member": "Normal",
+      "matchMode": "ValueContract",
+      "criticality": "Critical",
+      "feature": "Robot damage pipeline",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:178",
+      "expectedOrdinal": 0
+    },
+    {
+      "id": "robotkit.enum.damagetype.fire",
+      "kind": "EnumValue",
+      "assembly": "GameCode",
+      "declaringType": "DamageType",
+      "member": "Fire",
+      "matchMode": "ValueContract",
+      "criticality": "Critical",
+      "feature": "Robot damage pipeline",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:178",
+      "expectedOrdinal": 1
+    },
+    {
+      "id": "robotkit.enum.damagetype.electricity",
+      "kind": "EnumValue",
+      "assembly": "GameCode",
+      "declaringType": "DamageType",
+      "member": "Electricity",
+      "matchMode": "ValueContract",
+      "criticality": "Critical",
+      "feature": "Robot damage pipeline",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:178",
+      "expectedOrdinal": 2
+    },
+    {
+      "id": "robotkit.enum.damagetype.poison",
+      "kind": "EnumValue",
+      "assembly": "GameCode",
+      "declaringType": "DamageType",
+      "member": "Poison",
+      "matchMode": "ValueContract",
+      "criticality": "Critical",
+      "feature": "Robot damage pipeline",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:178",
+      "expectedOrdinal": 3
+    },
+    {
+      "id": "robotkit.enum.damagetype.water",
+      "kind": "EnumValue",
+      "assembly": "GameCode",
+      "declaringType": "DamageType",
+      "member": "Water",
+      "matchMode": "ValueContract",
+      "criticality": "Critical",
+      "feature": "Robot damage pipeline",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:178",
+      "expectedOrdinal": 4
+    },
+    {
+      "id": "robotkit.method.health.damage",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "Health",
+      "member": "Damage",
+      "matchMode": "PredicateOverload",
+      "criticality": "Critical",
+      "feature": "Robot damage pipeline (native hurt/death/ragdoll)",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:179",
+      "parameters": [
+        {
+          "type": "System.Single",
+          "constrained": true
+        },
+        {
+          "type": "DamageType",
+          "constrained": true
+        },
+        {
+          "type": "System.String",
+          "constrained": false
+        }
+      ],
+      "returnType": "System.Void"
+    },
+    {
+      "id": "robotkit.type.robotbody.emote",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "RobotBody",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Optional",
+      "feature": "Robot emote animation",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:202"
+    },
+    {
+      "id": "robotkit.method.robotbody.startemote",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "RobotBody",
+      "member": "StartEmote",
+      "matchMode": "PredicateOverload",
+      "criticality": "Optional",
+      "feature": "Robot emote animation (fire-and-forget)",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:210",
+      "parameters": [
+        {
+          "type": "System.String",
+          "constrained": false
+        },
+        {
+          "type": "System.Threading.CancellationToken",
+          "constrained": false
+        }
+      ],
+      "returnType": "Cysharp.Threading.Tasks.UniTask"
+    },
+    {
+      "id": "robotkit.property.robotroot.body",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "AgentHead",
+      "member": "Body",
+      "matchMode": "DynamicInstance",
+      "criticality": "Optional",
+      "feature": "Robot root resolution (Body property)",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:224",
+      "returnType": "RobotBody"
+    },
+    {
+      "id": "robotkit.property.robotroot.maybebody",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "AgentHead",
+      "member": "MaybeBody",
+      "matchMode": "DynamicInstance",
+      "criticality": "Optional",
+      "feature": "Robot root resolution (MaybeBody fallback)",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:225",
+      "returnType": "RobotBody"
+    },
+    {
+      "id": "robotkit.type.robotbody.rootwalk",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "RobotBody",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Optional",
+      "feature": "Robot root resolution (parent walk)",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:232"
+    },
+    {
+      "id": "robotkit.type.walksession",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "WalkSession",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Native robot locomotion and pathfinding",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:44"
+    },
+    {
+      "id": "robotkit.type.agenthead",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "AgentHead",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Native robot locomotion (walk subject)",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:45"
+    },
+    {
+      "id": "robotkit.type.actiontarget",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "ActionTarget",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Native robot locomotion (walk target)",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:46"
+    },
+    {
+      "id": "robotkit.type.locomotioncontroller",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "LocomotionController",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Native robot locomotion (control state and speeds)",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:47"
+    },
+    {
+      "id": "robotkit.type.robopath.pathfinder",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "RoboPath.Pathfinder",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Robot reachability and walkability sampling",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:48"
+    },
+    {
+      "id": "robotkit.type.robopath.goal",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "RoboPath.Goal",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Pathfinding goal specification",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:49"
+    },
+    {
+      "id": "robotkit.type.robopath.pathfindsettings",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "RoboPath.PathFindSettings",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Pathfinding configuration (agent footprint)",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:50"
+    },
+    {
+      "id": "robotkit.method.walksession.walk",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "WalkSession",
+      "member": "Walk",
+      "matchMode": "PredicateOverload",
+      "criticality": "Critical",
+      "feature": "Native robot walk start",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:106",
+      "parameters": [
+        {
+          "type": "AgentHead",
+          "constrained": true
+        },
+        {
+          "type": "ActionTarget",
+          "constrained": false
+        },
+        {
+          "type": "TaskGraph",
+          "constrained": false
+        },
+        {
+          "type": "System.Threading.CancellationToken",
+          "constrained": false
+        },
+        {
+          "type": "System.Boolean",
+          "constrained": false
+        },
+        {
+          "type": "System.Single",
+          "constrained": false
+        },
+        {
+          "type": "System.Single",
+          "constrained": false
+        },
+        {
+          "type": "System.TimeSpan",
+          "constrained": false
+        },
+        {
+          "type": "System.Func`2[UnityEngine.Vector3,System.Boolean]",
+          "constrained": false
+        },
+        {
+          "type": "System.Boolean",
+          "constrained": false
+        },
+        {
+          "type": "System.Boolean",
+          "constrained": false
+        }
+      ],
+      "returnType": "Cysharp.Threading.Tasks.UniTask<ActionSuccess>"
+    },
+    {
+      "id": "robotkit.method.agenthead.mostrelevanthead",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "AgentHead",
+      "member": "MostRelevantHead",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Robot head resolution (walk subject)",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:111",
+      "parameters": [
+        {
+          "type": "UnityEngine.GameObject",
+          "constrained": true
+        }
+      ],
+      "returnType": "AgentHead"
+    },
+    {
+      "id": "robotkit.ctor.actiontarget.fromobject",
+      "kind": "Constructor",
+      "assembly": "GameCode",
+      "declaringType": "ActionTarget",
+      "member": ".ctor",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Walk target from game object",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:114",
+      "parameters": [
+        {
+          "type": "UnityEngine.GameObject",
+          "constrained": true
+        },
+        {
+          "type": "System.String",
+          "constrained": true
+        }
+      ]
+    },
+    {
+      "id": "robotkit.ctor.actiontarget.fromposition",
+      "kind": "Constructor",
+      "assembly": "GameCode",
+      "declaringType": "ActionTarget",
+      "member": ".ctor",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Walk target from position",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:115",
+      "parameters": [
+        {
+          "type": "UnityEngine.Vector3",
+          "constrained": true
+        },
+        {
+          "type": "System.String",
+          "constrained": true
+        }
+      ]
+    },
+    {
+      "id": "robotkit.property.locomotioncontroller.isincontrol",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "LocomotionController",
+      "member": "IsInControl",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Robot control state check (must be in AgentSync)",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:117",
+      "returnType": "System.Boolean"
+    },
+    {
+      "id": "robotkit.method.locomotioncontroller.forceragdoll",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "LocomotionController",
+      "member": "ForceRagdoll",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Force ragdoll state",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:118",
+      "parameters": [],
+      "returnType": "System.Void"
+    },
+    {
+      "id": "robotkit.method.locomotioncontroller.receiveforce",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "LocomotionController",
+      "member": "ReceiveForce",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Apply impulse force to robot",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:119",
+      "parameters": [
+        {
+          "type": "UnityEngine.Vector3",
+          "constrained": true
+        },
+        {
+          "type": "UnityEngine.ForceMode",
+          "constrained": true
+        }
+      ],
+      "returnType": "System.Void"
+    },
+    {
+      "id": "robotkit.field.locomotioncontroller.walkspeed",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "LocomotionController",
+      "member": "walkSpeed",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Robot gait speed override (walk)",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:121",
+      "returnType": "System.Single"
+    },
+    {
+      "id": "robotkit.field.locomotioncontroller.runningspeed",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "LocomotionController",
+      "member": "runningSpeed",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Robot gait speed override (run)",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:122",
+      "returnType": "System.Single"
+    },
+    {
+      "id": "robotkit.field.locomotioncontroller.sprintingspeed",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "LocomotionController",
+      "member": "sprintingSpeed",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Robot gait speed override (sprint)",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:123",
+      "returnType": "System.Single"
+    },
+    {
+      "id": "robotkit.field.locomotioncontroller.turnspeed",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "LocomotionController",
+      "member": "turnSpeed",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Robot turn speed override",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:124",
+      "returnType": "System.Single"
+    },
+    {
+      "id": "robotkit.type.pathfinder.scenesingleton",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "Pathfinder",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Optional",
+      "feature": "Scene pathfinder singleton detection",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:166"
+    },
+    {
+      "id": "robotkit.method.robopath.pathfinder.pathfind",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "RoboPath.Pathfinder",
+      "member": "Pathfind",
+      "matchMode": "PredicateOverload",
+      "criticality": "Optional",
+      "feature": "Reachability pathfinding (static entry)",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:197",
+      "parameters": [
+        {
+          "type": "UnityEngine.Vector3",
+          "constrained": true
+        },
+        {
+          "type": "RoboPath.Goal",
+          "constrained": true
+        },
+        {
+          "type": "RoboPath.PathFindSettings",
+          "constrained": false
+        },
+        {
+          "type": "TaskGraph",
+          "constrained": false
+        },
+        {
+          "type": "System.Threading.CancellationToken",
+          "constrained": false
+        },
+        {
+          "type": "UnityEngine.GameObject",
+          "constrained": false
+        }
+      ],
+      "returnType": "Cysharp.Threading.Tasks.UniTask<RoboPath.Path>"
+    },
+    {
+      "id": "robotkit.method.robopath.pathfinder.createsampler",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "RoboPath.Pathfinder",
+      "member": "CreateSampler",
+      "matchMode": "PredicateOverload",
+      "criticality": "Optional",
+      "feature": "Walkability sampler creation",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:204",
+      "parameters": [
+        {
+          "type": "RoboPath.PathFindSettings",
+          "constrained": false
+        },
+        {
+          "type": "RoboPath.Goal",
+          "constrained": true
+        },
+        {
+          "type": "UnityEngine.GameObject",
+          "constrained": false
+        }
+      ],
+      "returnType": "IPathSampler"
+    },
+    {
+      "id": "robotkit.ctor.robopath.goal.fromposition",
+      "kind": "Constructor",
+      "assembly": "GameCode",
+      "declaringType": "RoboPath.Goal",
+      "member": ".ctor",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Pathfinding goal construction",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:210",
+      "parameters": [
+        {
+          "type": "UnityEngine.Vector3",
+          "constrained": true
+        },
+        {
+          "type": "System.Single",
+          "constrained": true
+        },
+        {
+          "type": "System.Single",
+          "constrained": true
+        },
+        {
+          "type": "System.Func<UnityEngine.Vector3, System.Boolean>",
+          "constrained": true
+        }
+      ]
+    },
+    {
+      "id": "robotkit.method.locomotioncontroller.getpathfindsettings",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "LocomotionController",
+      "member": "GetPathFindSettings",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Read prefab pathfind configuration",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:215",
+      "parameters": [],
+      "returnType": "RoboPath.PathFindSettings"
+    },
+    {
+      "id": "robotkit.field.pathfindsettings.maxystep",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "RoboPath.PathFindSettings",
+      "member": "maxYStep",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Pathfind default: max vertical step",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:264",
+      "returnType": "System.Single"
+    },
+    {
+      "id": "robotkit.field.pathfindsettings.maxslopeangle",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "RoboPath.PathFindSettings",
+      "member": "maxSlopeAngle",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Pathfind default: max slope",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:263",
+      "returnType": "System.Single"
+    },
+    {
+      "id": "robotkit.field.pathfindsettings.agentradius",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "RoboPath.PathFindSettings",
+      "member": "agentRadius",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Pathfind default: agent footprint (radius)",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:265",
+      "returnType": "System.Single"
+    },
+    {
+      "id": "robotkit.field.pathfindsettings.agentheight",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "RoboPath.PathFindSettings",
+      "member": "agentHeight",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Pathfind default: agent footprint (height)",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:265",
+      "returnType": "System.Single"
+    },
+    {
+      "id": "robotkit.field.pathfindsettings.minobstaclemass",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "RoboPath.PathFindSettings",
+      "member": "minObstacleMass",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Pathfind default: obstacle mass threshold",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:266",
+      "returnType": "System.Single"
+    },
+    {
+      "id": "robotkit.field.pathfindsettings.maxsamples",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "RoboPath.PathFindSettings",
+      "member": "maxSamples",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Pathfind default: max samples",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:267",
+      "returnType": "System.UInt32"
+    },
+    {
+      "id": "robotkit.field.pathfindsettings.priorityclass",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "RoboPath.PathFindSettings",
+      "member": "priorityClass",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Pathfind default: priority class",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:268",
+      "returnType": "System.Int32"
+    },
+    {
+      "id": "robotkit.field.pathfindsettings.ignoregaps",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "RoboPath.PathFindSettings",
+      "member": "ignoreGaps",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Pathfind default: gap handling",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:269",
+      "returnType": "System.Boolean"
+    },
+    {
+      "id": "robotkit.field.pathfindsettings.edgeproximitypenalty",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "RoboPath.PathFindSettings",
+      "member": "edgeProximityPenalty",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Pathfind default: edge penalty",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:270",
+      "returnType": "System.Single"
+    },
+    {
+      "id": "robotkit.field.pathfindsettings.layermask",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "RoboPath.PathFindSettings",
+      "member": "layerMask",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Pathfind default: layer mask",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:271",
+      "returnType": "System.Int32"
+    },
+    {
+      "id": "robotkit.field.pathfindsettings.ignorestatics",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "RoboPath.PathFindSettings",
+      "member": "ignoreStatics",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Pathfind default: static ignore",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:272",
+      "returnType": "System.Boolean"
+    },
+    {
+      "id": "robotkit.method.ipathsampler.sampleat",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "IPathSampler",
+      "member": "SampleAt",
+      "matchMode": "Uncheckable",
+      "criticality": "Optional",
+      "feature": "Walkability sampling",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:352",
+      "parameters": [
+        {
+          "type": "UnityEngine.Vector3",
+          "constrained": false
+        },
+        {
+          "type": "UnityEngine.Collider&",
+          "constrained": false
+        }
+      ],
+      "returnType": "IPathSampler+Sample"
+    },
+    {
+      "id": "robotkit.field.ipathsampler.sample.hit",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "IPathSampler+Sample",
+      "member": "hit",
+      "matchMode": "Uncheckable",
+      "criticality": "Optional",
+      "feature": "Walkability sampling (hit result)",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:366",
+      "returnType": "System.Nullable`1[IPathSampler+Sample+Hit]"
+    },
+    {
+      "id": "robotkit.field.ipathsampler.sample.hit.pos",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "IPathSampler+Sample+Hit",
+      "member": "pos",
+      "matchMode": "Uncheckable",
+      "criticality": "Optional",
+      "feature": "Walkability sampling (snapped position)",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:374",
+      "returnType": "UnityEngine.Vector3"
+    },
+    {
+      "id": "robotkit.method.unitask.path.getawaiter",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "Cysharp.Threading.Tasks.UniTask`1[RoboPath.Path]",
+      "member": "GetAwaiter",
+      "matchMode": "Uncheckable",
+      "criticality": "Optional",
+      "feature": "Pathfind async polling",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:416",
+      "parameters": [],
+      "returnType": "Cysharp.Threading.Tasks.UniTask`1+Awaiter[RoboPath.Path]"
+    },
+    {
+      "id": "robotkit.property.unitask.path.awaiter.iscompleted",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "Cysharp.Threading.Tasks.UniTask`1+Awaiter[RoboPath.Path]",
+      "member": "IsCompleted",
+      "matchMode": "Uncheckable",
+      "criticality": "Optional",
+      "feature": "Pathfind completion polling",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:433",
+      "returnType": "System.Boolean"
+    },
+    {
+      "id": "robotkit.method.unitask.path.awaiter.getresult",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "Cysharp.Threading.Tasks.UniTask`1+Awaiter[RoboPath.Path]",
+      "member": "GetResult",
+      "matchMode": "Uncheckable",
+      "criticality": "Optional",
+      "feature": "Pathfind result extraction",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:444",
+      "parameters": [],
+      "returnType": "RoboPath.Path"
+    },
+    {
+      "id": "robotkit.field.robopath.path.complete",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "RoboPath.Path",
+      "member": "complete",
+      "matchMode": "DynamicInstance",
+      "criticality": "Optional",
+      "feature": "Pathfind result validation (complete flag)",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:460",
+      "returnType": "System.Boolean"
+    },
+    {
+      "id": "robotkit.type.agenthead.fallback",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "AgentHead",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Optional",
+      "feature": "Robot head resolution (fallback lookup)",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:489"
+    },
+    {
+      "id": "robotkit.method.unitask.actionsuccess.getawaiter",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "Cysharp.Threading.Tasks.UniTask`1[ActionSuccess]",
+      "member": "GetAwaiter",
+      "matchMode": "Uncheckable",
+      "criticality": "Critical",
+      "feature": "Walk async polling",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:558",
+      "parameters": [],
+      "returnType": "Cysharp.Threading.Tasks.UniTask`1+Awaiter[ActionSuccess]"
+    },
+    {
+      "id": "robotkit.property.unitask.actionsuccess.awaiter.iscompleted",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "Cysharp.Threading.Tasks.UniTask`1+Awaiter[ActionSuccess]",
+      "member": "IsCompleted",
+      "matchMode": "Uncheckable",
+      "criticality": "Critical",
+      "feature": "Walk completion polling",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:591",
+      "returnType": "System.Boolean"
+    },
+    {
+      "id": "robotkit.method.unitask.actionsuccess.awaiter.getresult",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "Cysharp.Threading.Tasks.UniTask`1+Awaiter[ActionSuccess]",
+      "member": "GetResult",
+      "matchMode": "Uncheckable",
+      "criticality": "Critical",
+      "feature": "Walk result extraction",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:603",
+      "parameters": [],
+      "returnType": "ActionSuccess"
+    },
+    {
+      "id": "robotkit.type.playercontroller.lookup",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "PlayerController",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Player location (type lookup)",
+      "sourceRef": "mods/TopiaForge.RobotKit/PlayerBridge.cs:18"
+    },
+    {
+      "id": "robotkit.method.playercontroller.findplayer",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "PlayerController",
+      "member": "FindPlayer",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Player location (static finder method)",
+      "sourceRef": "mods/TopiaForge.RobotKit/PlayerBridge.cs:21",
+      "parameters": [],
+      "returnType": "PlayerController"
+    },
+    {
+      "id": "robotkit.type.playercontroller.fallbackscan",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "PlayerController",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Optional",
+      "feature": "Player location (fallback component scan)",
+      "sourceRef": "mods/TopiaForge.RobotKit/PlayerBridge.cs:38"
+    },
+    {
+      "id": "robotkit.type.health.playerdamage",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "Health",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Optional",
+      "feature": "Player damage",
+      "sourceRef": "mods/TopiaForge.RobotKit/PlayerBridge.cs:54"
+    },
+    {
+      "id": "robotkit.method.health.changehealth",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "Health",
+      "member": "ChangeHealth",
+      "matchMode": "DynamicInstance",
+      "criticality": "Optional",
+      "feature": "Player damage application",
+      "sourceRef": "mods/TopiaForge.RobotKit/PlayerBridge.cs:60",
+      "parameters": [
+        {
+          "type": "System.Single",
+          "constrained": false
+        },
+        {
+          "type": "System.String",
+          "constrained": false
+        }
+      ],
+      "returnType": "System.Void"
+    },
+    {
+      "id": "robotkit.property.playercontroller.fpscontroller",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "PlayerController",
+      "member": "FPSController",
+      "matchMode": "DynamicInstance",
+      "criticality": "Optional",
+      "feature": "Player FPS control suspension",
+      "sourceRef": "mods/TopiaForge.RobotKit/PlayerBridge.cs:66",
+      "returnType": "FirstPersonController"
+    },
+    {
+      "id": "robotkit.type.pooledspawner",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "PooledSpawner",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Optional",
+      "feature": "Robot prefab resolution from game spawner",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotPrefabResolver.cs:57"
+    },
+    {
+      "id": "robotkit.field.pooledspawner.prefabs",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "PooledSpawner",
+      "member": "prefabs",
+      "matchMode": "DynamicInstance",
+      "criticality": "Optional",
+      "feature": "Robot prefab array access",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotPrefabResolver.cs:104",
+      "returnType": "UnityEngine.GameObject[]"
+    },
+    {
+      "id": "robotkit.type.playercontroller.prefabexclusion",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "PlayerController",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Optional",
+      "feature": "Player exclusion from prefab candidates",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotPrefabResolver.cs:117"
+    }
+  ]
+}

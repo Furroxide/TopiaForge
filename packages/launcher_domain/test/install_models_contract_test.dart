@@ -13,7 +13,7 @@ void main() {
       expect(status.toJson()['gameVersion'], '0.0.2227');
     });
 
-    test('migrates missing, empty, and invalid legacy values to null', () {
+    test('normalizes missing, empty, and invalid values to null', () {
       for (final value in <Object?>[null, '', 'not-a-version']) {
         final status = GameCompatStatus.fromJson({
           'status': 'unknown',

@@ -83,10 +83,7 @@ class LauncherProfile {
     return LauncherProfile(
       id: (json['id'] as String?) ?? 'default',
       name: (json['name'] as String?) ?? 'Default',
-      // Profiles written before this flag existed used an empty set as their
-      // inheritance sentinel. Preserve that meaning during migration.
-      inheritManagerModState:
-          (json['inheritManagerModState'] as bool?) ?? enabledMods.isEmpty,
+      inheritManagerModState: json['inheritManagerModState'] == true,
       enabledMods: enabledMods,
       selectedVersions: _stringMap(json['selectedVersions']),
       configMetadata: _objectMap(json['configMetadata']),
@@ -149,8 +146,8 @@ class ProfileLaunchConfiguration {
     required this.selectedVersions,
   });
 
-  static const int schemaVersion = 1;
-  static const String environmentVariable = 'ROBOTOPIA_LAUNCH_PROFILE';
+  static const int schemaVersion = 2;
+  static const String environmentVariable = 'TOPIAFORGE_LAUNCH_PROFILE';
 
   final String profileId;
   final bool safeMode;
@@ -168,6 +165,16 @@ class ProfileLaunchConfiguration {
     }
 
     final seenIds = <String>{};
+    if (!ModManifest.isValidId(profile.worldSelection.worldId)) {
+      throw const FormatException(
+        'Profile worldId must use the safe TopiaForge id format.',
+      );
+    }
+    if (!ModManifest.isValidId(profile.worldSelection.gamemodeId)) {
+      throw const FormatException(
+        'Profile gamemodeId must use the safe TopiaForge id format.',
+      );
+    }
     final enabledMods = <String>[];
     for (final id in profile.enabledMods) {
       if (!ModManifest.isValidId(id) || !seenIds.add(id.toLowerCase())) {

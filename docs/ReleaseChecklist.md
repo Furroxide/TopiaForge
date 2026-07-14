@@ -28,15 +28,15 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
 
 ## 3. Source, contracts, and tests
 
-- [ ] `dotnet build RobotopiaModManager.slnx -c Release` passes with zero warnings/errors.
-- [ ] `dotnet run --project tests/Robotopia.ModManager.Tests/Robotopia.ModManager.Tests.csproj -c Release` passes.
+- [ ] `dotnet build TopiaForge.slnx -c Release` passes with zero warnings/errors.
+- [ ] `dotnet run --project tests/TopiaForge.ModManager.Tests/TopiaForge.ModManager.Tests.csproj -c Release` passes.
 - [ ] Strict C# audit, generated public-API baseline, and production bounded-read scan pass.
 - [ ] `dart format --output=none --set-exit-if-changed` passes for every Dart package/app.
 - [ ] Domain/data/CLI `dart analyze` and `dart test` pass.
 - [ ] UI/app `flutter analyze` and `flutter test` pass.
 - [ ] C#/Dart SemVer, manifest, compatibility, unknown-field, dependency, conflict, pin, order, and state parity passes.
 - [ ] Every non-generated Dart file is at most 500 lines; launcher state remains BLoC-only.
-- [ ] Core remains Unity-free; domain remains Flutter/filesystem/process/network/archive-free; consumer UI uses QwUi.
+- [ ] Core remains Unity-free; domain remains Flutter/filesystem/process/network/archive-free; consumer UI uses TopiaForgeUi.
 - [ ] No unresolved conflict marker, unsafe fallback, swallowed failure, duplicate unsafe archive/process path, or
       unexplained analyzer/build warning remains.
 
@@ -83,14 +83,14 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
 ## 7. Exact Unity validation
 
 - [ ] Invoke only `/Applications/Unity/Hub/Editor/6000.0.23f1/Unity.app/Contents/MacOS/Unity` locally.
-- [ ] Rebuild QwUi twice; bytes, embedded manifest, editor provenance, hashes, neutral font names, assets, and docs agree.
+- [ ] Rebuild TopiaForgeUi twice; bytes, embedded manifest, editor provenance, hashes, neutral font names, assets, and docs agree.
 - [ ] Rebuild a representative world twice; target, world manifest, companion tooling, VPM inputs, and bytes agree.
-- [ ] Run repeated QwUi create/dispose and scene-transition lifecycle smoke; all allocator/subscription state returns
+- [ ] Run repeated TopiaForgeUi create/dispose and scene-transition lifecycle smoke; all allocator/subscription state returns
       to baseline.
 - [ ] UiGallery covers loading, empty, information, warning, error, success, disabled, focus, long/scroll content,
       destructive modal, toast, scale, contrast, and reduced-motion states.
 - [ ] Authorized in-game/profiler QA validates all 13 mods, 22 dynamic bindings, lifecycle isolation, save behavior,
-      QwUi usage, accessibility propagation, and zero steady-state allocation regressions.
+      TopiaForgeUi usage, accessibility propagation, and zero steady-state allocation regressions.
 
 ## 8. Platform release archives
 
@@ -117,7 +117,7 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
 - [ ] Generate deterministic `release-bom.json`, SPDX 2.3 SBOM, and `SHA256SUMS` for the candidate SHA and exact assets.
 - [ ] BOM/SBOM include versions, toolchains, build/Unity/BepInEx provenance, licenses/notices, nested hashes, sizes, and
       expected assets; independent verification passes.
-- [ ] `manual-releases.json` format 1 is `manualOnly: true` and contains only absolute credential-free HTTPS release
+- [ ] `manual-releases.json` format 2 is `manualOnly: true` and contains only absolute credential-free HTTPS release
       and artifact URLs, SHA-256, size, and platform.
 - [ ] Required contexts protect the candidate: `Required / CI validation`, `Required / Release packages`,
       `Required / Registry validation`, and trusted-candidate `Required / Unity validation`.

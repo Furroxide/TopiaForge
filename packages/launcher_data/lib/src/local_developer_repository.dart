@@ -11,6 +11,7 @@ import 'package:path/path.dart' as p;
 import 'bounded_process.dart';
 import 'data_root.dart';
 import 'dotnet_sdk.dart';
+import 'package_contract.dart';
 import 'public_url.dart';
 import 'safe_zip_archive.dart';
 import 'secure_http.dart';
@@ -23,7 +24,6 @@ part 'local_developer_repository/data_root_repository.dart';
 part 'local_developer_repository/pack_helpers.dart';
 part 'local_developer_repository/mod_scaffolding.dart';
 part 'local_developer_repository/license_scaffolding.dart';
-part 'local_developer_repository/legacy_migration.dart';
 part 'local_developer_repository/environment_helpers.dart';
 part 'local_developer_repository/project_registry.dart';
 part 'local_developer_repository/source_helpers.dart';
@@ -56,7 +56,7 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
        _unityEditorLauncher = unityEditorLauncher,
        _dotnetSdkResolver = dotnetSdkResolver ?? resolveRepositoryDotnetSdk,
        _unityEditorProbeTimeout = unityEditorProbeTimeout,
-       super(Directory(dataRoot ?? resolveRobotopiaDataRoot()));
+       super(Directory(dataRoot ?? resolveTopiaForgeDataRoot()));
 
   final Directory _repositoryRoot;
   final DeveloperProjectResolver _resolver;
@@ -77,7 +77,7 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
         issues: const [
           LauncherIssue(
             severity: IssueSeverity.warning,
-            message: 'robotopia.project.json was not found.',
+            message: 'topiaforge.project.json was not found.',
           ),
         ],
       );
@@ -89,13 +89,13 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
       projectRoot: root.path,
       project: project,
       lock: lock,
-      generatedPropsPath: p.join(root.path, 'robotopia.dev.props'),
-      issues: project.schemaVersion == 1
+      generatedPropsPath: p.join(root.path, 'topiaforge.dev.props'),
+      issues: project.schemaVersion == 2
           ? const []
           : const [
               LauncherIssue(
                 severity: IssueSeverity.error,
-                message: 'robotopia.project.json schemaVersion must be 1.',
+                message: 'topiaforge.project.json schemaVersion must be 2.',
               ),
             ],
     );
@@ -128,7 +128,7 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
     root.createSync(recursive: true);
 
     var project = DeveloperProject(
-      schemaVersion: 1,
+      schemaVersion: 2,
       id: id,
       name: name,
       unityCompanion: withCompanion
@@ -172,7 +172,7 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
     final project = await _readProject(root.path);
     // Resolve is a build step, so its default source set stays local and
     // offline-deterministic. The official registry participates when a
-    // project opts in: `robotopia add source official <url>`.
+    // project opts in: `topiaforge add source official <url>`.
     final sources = project.packageSources.isEmpty
         ? [_localSource()]
         : project.packageSources;
@@ -193,7 +193,7 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
       projectRoot: root.path,
       project: project,
       lock: lock,
-      generatedPropsPath: p.join(root.path, 'robotopia.dev.props'),
+      generatedPropsPath: p.join(root.path, 'topiaforge.dev.props'),
       issues: [...loaded.issues, ...resolution.issues],
     );
   }
@@ -209,20 +209,14 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
   Future<DeveloperSetupResult> runSetup() => _runSetup();
 
   @override
-  Future<LegacyMigrationResult> migrateLegacyMods(
-    String gamePath,
-    String outputRoot,
-  ) => _migrateLegacyMods(gamePath, outputRoot);
-
-  @override
   Future<ModManifest> checkPackage(String packagePath) async {
-    // Accept both a packed .robotopiamod archive and an unpacked mod directory (e.g. a fresh scaffold), so
+    // Accept both a packed .topiaforgemod archive and an unpacked mod directory (e.g. a fresh scaffold), so
     // authors can validate before ever packing.
     final ModManifest manifest;
     if (FileSystemEntity.isDirectorySync(packagePath)) {
-      final file = File(p.join(packagePath, 'robotopia.mod.json'));
+      final file = File(p.join(packagePath, 'topiaforge.mod.json'));
       if (!file.existsSync()) {
-        throw StateError('robotopia.mod.json was not found in $packagePath.');
+        throw StateError('topiaforge.mod.json was not found in $packagePath.');
       }
       manifest = ModManifest.fromJson(
         jsonDecode(
@@ -230,7 +224,7 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
                 await _readDeveloperFileBounded(
                   file,
                   maxBytes: _maxDeveloperManifestBytes,
-                  label: 'robotopia.mod.json',
+                  label: 'topiaforge.mod.json',
                 ),
               ),
             )

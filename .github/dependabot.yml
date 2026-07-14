@@ -49,7 +49,7 @@ updates:
         patterns: ["*"]
 
   - package-ecosystem: pub
-    directory: /apps/robotopia_cli
+    directory: /apps/topiaforge_cli
     schedule:
       interval: weekly
     groups:
@@ -57,7 +57,7 @@ updates:
         patterns: ["*"]
 
   - package-ecosystem: pub
-    directory: /apps/robotopia_launcher_flutter
+    directory: /apps/topiaforge_launcher_flutter
     schedule:
       interval: weekly
     groups:

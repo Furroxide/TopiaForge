@@ -157,14 +157,14 @@ jobs:
 
       - name: Build two independent ecosystem payloads
         shell: bash
-        working-directory: apps/robotopia_cli
+        working-directory: apps/topiaforge_cli
         run: |
           set -euo pipefail
           test "$(dotnet --version)" = 10.0.301
           dart pub get --enforce-lockfile
           for output in "$RUNNER_TEMP/ecosystem-a" "$RUNNER_TEMP/ecosystem-b"; do
-            dart run bin/robotopia.dart pack --all --output "$output" --configuration Release
-            dart run bin/robotopia.dart unity pack-packages --output "$output/vpm"
+            dart run bin/topiaforge.dart pack --all --output "$output" --configuration Release
+            dart run bin/topiaforge.dart unity pack-packages --output "$output/vpm"
           done
 
       - name: Prove byte-for-byte deterministic ecosystem output
@@ -183,6 +183,13 @@ jobs:
           diff -u "$RUNNER_TEMP/ecosystem-a.sha256" "$RUNNER_TEMP/ecosystem-b.sha256"
           tar -cf "$RUNNER_TEMP/ecosystem-dist.tar" -C "$RUNNER_TEMP/ecosystem-a" .
 
+      - name: Reject retired names in deterministic ecosystem payloads
+        shell: bash
+        run: >-
+          python3 .github/scripts/check_topiaforge_residue.py
+          --include "$RUNNER_TEMP/ecosystem-a"
+          --include "$RUNNER_TEMP/ecosystem-b"
+
       - name: Upload canonical ecosystem payload
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -195,7 +202,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: mod-packages
-          path: ${{ runner.temp }}/ecosystem-a/*.robotopiamod
+          path: ${{ runner.temp }}/ecosystem-a/*.topiaforgemod
           if-no-files-found: error
           retention-days: ${{ inputs.artifact_retention_days }}
 
@@ -218,17 +225,17 @@ jobs:
           sdk: "3.11.1"
 
       - name: Build x64 CLI
-        working-directory: apps/robotopia_cli
+        working-directory: apps/topiaforge_cli
         run: |
           dart pub get --enforce-lockfile
-          dart compile exe bin/robotopia.dart -o "$RUNNER_TEMP/robotopia-macos-x64"
-          chmod +x "$RUNNER_TEMP/robotopia-macos-x64"
+          dart compile exe bin/topiaforge.dart -o "$RUNNER_TEMP/topiaforge-macos-x64"
+          chmod +x "$RUNNER_TEMP/topiaforge-macos-x64"
 
       - name: Upload x64 CLI
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: robotopia-macos-x64
-          path: ${{ runner.temp }}/robotopia-macos-x64
+          name: topiaforge-macos-x64
+          path: ${{ runner.temp }}/topiaforge-macos-x64
           if-no-files-found: error
           retention-days: ${{ inputs.artifact_retention_days }}
 
@@ -248,13 +255,13 @@ jobs:
         include:
           - platform: windows
             runner: windows-latest
-            asset: QuantumWorks-windows-x64.zip
+            asset: TopiaForge-windows-x64.zip
           - platform: linux
             runner: ubuntu-latest
-            asset: QuantumWorks-linux-x64.zip
+            asset: TopiaForge-linux-x64.zip
           - platform: macos
             runner: macos-15
-            asset: QuantumWorks-macos-universal.zip
+            asset: TopiaForge-macos-universal.zip
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -322,41 +329,41 @@ jobs:
 
       # Proves the Dart-native scaffold + pack pipeline works on every OS before it feeds the release payload.
       # Scaffolds inside the checkout (not RUNNER_TEMP) so the generated ProjectReference to
-      # src/Robotopia.Mods.Abstractions stays a same-drive relative path on Windows runners.
+      # src/TopiaForge.Mods.Abstractions stays a same-drive relative path on Windows runners.
       - name: Smoke test CLI scaffold and pack
         shell: bash
-        working-directory: apps/robotopia_cli
+        working-directory: apps/topiaforge_cli
         run: |
           dart pub get --enforce-lockfile
-          dart run bin/robotopia.dart new mod ci.smoke --name "CI Smoke" --dir ../../.pack-smoke
-          dart run bin/robotopia.dart pack --project ../../.pack-smoke/ci.smoke --output "$RUNNER_TEMP/pack-smoke"
+          dart run bin/topiaforge.dart new mod ci.smoke --name "CI Smoke" --dir ../../.pack-smoke
+          dart run bin/topiaforge.dart pack --project ../../.pack-smoke/ci.smoke --output "$RUNNER_TEMP/pack-smoke"
 
       - name: Download macOS x64 CLI
         if: matrix.platform == 'macos'
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: robotopia-macos-x64
+          name: topiaforge-macos-x64
           path: ${{ runner.temp }}/macos-x64-cli
 
       - name: Prepare architecture-dispatched macOS CLI
         if: matrix.platform == 'macos'
         shell: bash
-        working-directory: apps/robotopia_cli
+        working-directory: apps/topiaforge_cli
         run: |
           set -euo pipefail
           dart pub get --enforce-lockfile
-          cli_dir="$RUNNER_TEMP/robotopia-macos-cli"
+          cli_dir="$RUNNER_TEMP/topiaforge-macos-cli"
           mkdir -p "$cli_dir"
-          dart compile exe bin/robotopia.dart -o "$cli_dir/robotopia-arm64"
-          cp "$RUNNER_TEMP/macos-x64-cli/robotopia-macos-x64" \
-            "$cli_dir/robotopia-x64"
-          chmod +x "$cli_dir/robotopia-arm64" "$cli_dir/robotopia-x64"
-          test "$(lipo -archs "$cli_dir/robotopia-arm64")" = "arm64"
-          test "$(lipo -archs "$cli_dir/robotopia-x64")" = "x86_64"
-          arm_help="$("$cli_dir/robotopia-arm64" --help)"
-          x64_help="$(arch -x86_64 "$cli_dir/robotopia-x64" --help)"
-          grep -Fq 'QuantumWorks CLI' <<< "$arm_help"
-          grep -Fq 'QuantumWorks CLI' <<< "$x64_help"
+          dart compile exe bin/topiaforge.dart -o "$cli_dir/topiaforge-arm64"
+          cp "$RUNNER_TEMP/macos-x64-cli/topiaforge-macos-x64" \
+            "$cli_dir/topiaforge-x64"
+          chmod +x "$cli_dir/topiaforge-arm64" "$cli_dir/topiaforge-x64"
+          test "$(lipo -archs "$cli_dir/topiaforge-arm64")" = "arm64"
+          test "$(lipo -archs "$cli_dir/topiaforge-x64")" = "x86_64"
+          arm_help="$("$cli_dir/topiaforge-arm64" --help)"
+          x64_help="$(arch -x86_64 "$cli_dir/topiaforge-x64" --help)"
+          grep -Fq 'TopiaForge CLI' <<< "$arm_help"
+          grep -Fq 'TopiaForge CLI' <<< "$x64_help"
 
       - name: Download launcher artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -388,7 +395,7 @@ jobs:
 
       - name: Build release package
         shell: bash
-        working-directory: apps/robotopia_cli
+        working-directory: apps/topiaforge_cli
         env:
           MACOS_CERTIFICATE_P12: ${{ matrix.platform == 'macos' && secrets.MACOS_CERTIFICATE_P12 || '' }}
           MACOS_CERTIFICATE_PASSWORD: ${{ matrix.platform == 'macos' && secrets.MACOS_CERTIFICATE_PASSWORD || '' }}
@@ -413,7 +420,7 @@ jobs:
             --prebuilt-dist "$temp/prebuilt-dist"
           )
           if [ "${{ matrix.platform }}" = "macos" ]; then
-            args+=(--prebuilt-cli "$temp/robotopia-macos-cli")
+            args+=(--prebuilt-cli "$temp/topiaforge-macos-cli")
             if [ "${{ inputs.require_macos_signing }}" = "true" ]; then
               args+=(--require-macos-signing)
             fi
@@ -421,11 +428,11 @@ jobs:
           if [ "${{ matrix.platform }}" = "windows" ] && [ "${{ inputs.require_windows_signing }}" = "true" ]; then
             args+=(--require-windows-signing)
           fi
-          dart run bin/robotopia.dart "${args[@]}"
+          dart run bin/topiaforge.dart "${args[@]}"
 
       - name: Smoke test release package
         shell: bash
-        working-directory: apps/robotopia_cli
+        working-directory: apps/topiaforge_cli
         run: |
           set -euo pipefail
           workspace="${GITHUB_WORKSPACE//\\//}"
@@ -444,9 +451,19 @@ jobs:
           if [ "${{ matrix.platform }}" = "windows" ] && [ "${{ inputs.require_windows_signing }}" = "true" ]; then
             args+=(--require-windows-signature)
           fi
-          dart run bin/robotopia.dart "${args[@]}"
+          dart run bin/topiaforge.dart "${args[@]}"
         env:
           MACOS_NOTARY_TEAM_ID: ${{ matrix.platform == 'macos' && secrets.MACOS_NOTARY_TEAM_ID || '' }}
+
+      - name: Reject retired names in release package
+        shell: bash
+        run: |
+          set -euo pipefail
+          workspace="${GITHUB_WORKSPACE//\\//}"
+          python_command=python3
+          command -v "$python_command" >/dev/null 2>&1 || python_command=python
+          "$python_command" .github/scripts/check_topiaforge_residue.py \
+            --include "$workspace/release-artifacts/${{ matrix.asset }}"
 
       - name: Upload package artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

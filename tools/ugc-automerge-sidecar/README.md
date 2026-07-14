@@ -1,6 +1,6 @@
 # UGC Automerge sidecar
 
-The **writer** side of Robotopia's UGC Automerge live-sync channel. Publishes a `UgcExportProject` (the JSON the
+The **writer** side of TopiaForge's UGC Automerge live-sync channel. Publishes a `UgcExportProject` (the JSON the
 Unity companion exports; see [`docs/UgcLiveSync.md`](../../docs/UgcLiveSync.md)) to an Automerge document on a
 sync server, so the running game and the web editor can live-sync it. The game reads Automerge natively.
 
@@ -12,9 +12,9 @@ sync server, so the running game and the web editor can live-sync it. The game r
 Prefer the CLI wrapper (it finds this folder, runs the lockfile-backed `npm ci` on first use, and streams output):
 
 ```powershell
-robotopia ugc publish --file project.json --scene main
-robotopia ugc watch   ./watch-folder --scene main
-robotopia ugc check
+topiaforge ugc publish --file project.json --scene main
+topiaforge ugc watch   ./watch-folder --scene main
+topiaforge ugc check
 ```
 
 Or run directly:

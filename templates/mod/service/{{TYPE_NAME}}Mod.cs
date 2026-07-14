@@ -1,4 +1,4 @@
-using Robotopia.Mods;
+using TopiaForge.Mods;
 
 namespace {{ASSEMBLY_NAME}}
 {
@@ -6,7 +6,7 @@ namespace {{ASSEMBLY_NAME}}
     /// Publishes I{{TYPE_NAME}}Service to the shared service registry on load and withdraws it on unload, so
     /// other mods can resolve it with context.GetService&lt;I{{TYPE_NAME}}Service&gt;().
     /// </summary>
-    public sealed class {{TYPE_NAME}}Mod : IRobotopiaMod
+    public sealed class {{TYPE_NAME}}Mod : ITopiaForgeMod
     {
         private IModContext? context;
         private {{TYPE_NAME}}Service? service;

@@ -2,7 +2,7 @@ part of '../local_launcher_repository.dart';
 
 extension _PathHelpers on LocalLauncherRepository {
   Directory _managerRoot(GameInstall install) =>
-      Directory(p.join(install.path, 'BepInEx', 'RobotopiaModManager'));
+      Directory(p.join(install.path, 'BepInEx', 'TopiaForge'));
 
   Directory _packagesRoot(GameInstall install) =>
       Directory(p.join(_managerRoot(install).path, 'packages'))
@@ -177,17 +177,17 @@ String? _defaultKnownGamePath() {
 }
 
 String _findRepositoryRoot(String? workingDirectory) {
-  return _findQuantumWorksRoot(workingDirectory);
+  return _findTopiaForgeRoot(workingDirectory);
 }
 
-String _findQuantumWorksRoot(String? workingDirectory) {
+String _findTopiaForgeRoot(String? workingDirectory) {
   // Tests inject workingDirectory instead of mutating the process-global
   // Directory.current, which is shared across concurrent test isolates.
   final cwd = workingDirectory != null
       ? Directory(workingDirectory).absolute
       : Directory.current.absolute;
-  for (final seed in _quantumWorksRootSeeds(cwd)) {
-    final root = _walkUpForQuantumWorksRoot(seed);
+  for (final seed in _topiaForgeRootSeeds(cwd)) {
+    final root = _walkUpForTopiaForgeRoot(seed);
     if (root != null) {
       return root.path;
     }
@@ -195,8 +195,8 @@ String _findQuantumWorksRoot(String? workingDirectory) {
   return cwd.path;
 }
 
-Iterable<Directory> _quantumWorksRootSeeds(Directory workingDirectory) sync* {
-  final configured = Platform.environment['ROBOTOPIA_REPOSITORY_ROOT'];
+Iterable<Directory> _topiaForgeRootSeeds(Directory workingDirectory) sync* {
+  final configured = Platform.environment['TOPIAFORGE_REPOSITORY_ROOT'];
   if (configured != null && configured.trim().isNotEmpty) {
     yield Directory(configured).absolute;
   }
@@ -219,14 +219,14 @@ Directory? _macResourcesRoot(Directory executableDir) {
     return null;
   }
   return Directory(
-    p.join(contentsDir.path, 'Resources', 'QuantumWorks'),
+    p.join(contentsDir.path, 'Resources', 'TopiaForge'),
   ).absolute;
 }
 
-Directory? _walkUpForQuantumWorksRoot(Directory seed) {
+Directory? _walkUpForTopiaForgeRoot(Directory seed) {
   var current = seed.absolute;
   while (true) {
-    if (_isQuantumWorksRoot(current)) {
+    if (_isTopiaForgeRoot(current)) {
       return current;
     }
     final parent = current.parent;
@@ -237,8 +237,8 @@ Directory? _walkUpForQuantumWorksRoot(Directory seed) {
   }
 }
 
-bool _isQuantumWorksRoot(Directory directory) {
-  if (File(p.join(directory.path, 'RobotopiaModManager.slnx')).existsSync()) {
+bool _isTopiaForgeRoot(Directory directory) {
+  if (File(p.join(directory.path, 'TopiaForge.slnx')).existsSync()) {
     return true;
   }
   return Directory(p.join(directory.path, 'tools')).existsSync() &&

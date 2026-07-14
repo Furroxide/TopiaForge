@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=TopiaForge
+Comment=Desktop launcher and mod manager for Robotopia
+Exec=topiaforge
+Icon=${SNAP}/meta/gui/topiaforge.png
+Terminal=false
+Type=Application
+Categories=Entertainment;

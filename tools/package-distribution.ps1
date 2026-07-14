@@ -45,10 +45,10 @@ if ($SkipLauncher -and [string]::IsNullOrWhiteSpace($PrebuiltLauncher)) {
         "Pass -PrebuiltLauncher to reuse a complete launcher build."
 }
 
-$dart = Resolve-RobotopiaSdkCommand -Tool dart -RepositoryRoot $repo
-$cliApp = Join-Path $repo "apps/robotopia_cli"
+$dart = Resolve-TopiaForgeSdkCommand -Tool dart -RepositoryRoot $repo
+$cliApp = Join-Path $repo "apps/topiaforge_cli"
 $cliArguments = @(
-    "run", (Join-Path "bin" "robotopia.dart"),
+    "run", (Join-Path "bin" "topiaforge.dart"),
     "release", "build-package",
     "--platform", $targetPlatform,
     "--output", $OutputRoot,

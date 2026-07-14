@@ -1,0 +1,230 @@
+{
+  "schemaVersion": 2,
+  "modId": "io.github.furroxide.topiaforge.gravitygun",
+  "modName": "Gravity Gun",
+  "bindings": [
+    {
+      "id": "gravitygun.robotbody-name",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "RobotBody",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Critical",
+      "feature": "Gravity Gun: identify robot root from collider hit",
+      "sourceRef": "mods/TopiaForge.GravityGun/RobotGrabSupport.cs:13"
+    },
+    {
+      "id": "gravitygun.agenthead-name",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "AgentHead",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Critical",
+      "feature": "Gravity Gun: identify robot agent from collider hit",
+      "sourceRef": "mods/TopiaForge.GravityGun/RobotGrabSupport.cs:14"
+    },
+    {
+      "id": "gravitygun.locomotioncontroller-name",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "LocomotionController",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Critical",
+      "feature": "Gravity Gun: find robot locomotion controller",
+      "sourceRef": "mods/TopiaForge.GravityGun/RobotGrabSupport.cs:15"
+    },
+    {
+      "id": "gravitygun.robotbodypart-name",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "RobotBodyPart",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Critical",
+      "feature": "Gravity Gun: identify robot body parts",
+      "sourceRef": "mods/TopiaForge.GravityGun/RobotGrabSupport.cs:16"
+    },
+    {
+      "id": "gravitygun.llmagent-name",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "LLMAgent",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Critical",
+      "feature": "Gravity Gun: identify LLM agent robots",
+      "sourceRef": "mods/TopiaForge.GravityGun/RobotGrabSupport.cs:17"
+    },
+    {
+      "id": "gravitygun.body-prop",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "AgentHead",
+      "member": "Body",
+      "matchMode": "DynamicInstance",
+      "criticality": "Degraded",
+      "feature": "Gravity Gun: resolve robot root from component",
+      "sourceRef": "mods/TopiaForge.GravityGun/RobotGrabSupport.cs:81"
+    },
+    {
+      "id": "gravitygun.maybebody-prop",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "AgentHead",
+      "member": "MaybeBody",
+      "matchMode": "DynamicInstance",
+      "criticality": "Degraded",
+      "feature": "Gravity Gun: resolve robot root from component",
+      "sourceRef": "mods/TopiaForge.GravityGun/RobotGrabSupport.cs:81"
+    },
+    {
+      "id": "gravitygun.robotbody-fallback-name",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "RobotBody",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Degraded",
+      "feature": "Gravity Gun: fallback robot root search",
+      "sourceRef": "mods/TopiaForge.GravityGun/RobotGrabSupport.cs:88"
+    },
+    {
+      "id": "gravitygun.locomotion-prop",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "RobotBody",
+      "member": "Locomotion",
+      "matchMode": "DynamicInstance",
+      "criticality": "Degraded",
+      "feature": "Gravity Gun: find robot locomotion",
+      "sourceRef": "mods/TopiaForge.GravityGun/RobotGrabSupport.cs:94"
+    },
+    {
+      "id": "gravitygun.locomotioncontroller-children-name",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "LocomotionController",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Degraded",
+      "feature": "Gravity Gun: fallback locomotion search",
+      "sourceRef": "mods/TopiaForge.GravityGun/RobotGrabSupport.cs:101"
+    },
+    {
+      "id": "gravitygun.locomotioncontroller-parents-name",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "LocomotionController",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Degraded",
+      "feature": "Gravity Gun: fallback locomotion search",
+      "sourceRef": "mods/TopiaForge.GravityGun/RobotGrabSupport.cs:108"
+    },
+    {
+      "id": "gravitygun.cancelwalking",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "LocomotionController",
+      "member": "CancelWalking",
+      "matchMode": "PredicateOverload",
+      "criticality": "Degraded",
+      "feature": "Gravity Gun: stop robot walking before grab",
+      "sourceRef": "mods/TopiaForge.GravityGun/RobotGrabSupport.cs:42",
+      "parameters": []
+    },
+    {
+      "id": "gravitygun.dropheldifany",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "LocomotionController",
+      "member": "DropHeldItemIfAny",
+      "matchMode": "PredicateOverload",
+      "criticality": "Degraded",
+      "feature": "Gravity Gun: drop held items before grab",
+      "sourceRef": "mods/TopiaForge.GravityGun/RobotGrabSupport.cs:43",
+      "parameters": []
+    },
+    {
+      "id": "gravitygun.forceragdoll-grab",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "LocomotionController",
+      "member": "ForceRagdoll",
+      "matchMode": "PredicateOverload",
+      "criticality": "Degraded",
+      "feature": "Gravity Gun: force robot into ragdoll",
+      "sourceRef": "mods/TopiaForge.GravityGun/RobotGrabSupport.cs:44",
+      "parameters": []
+    },
+    {
+      "id": "gravitygun.enableragdoll-grab",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "LocomotionController",
+      "member": "EnableRagdoll",
+      "matchMode": "PredicateOverload",
+      "criticality": "Degraded",
+      "feature": "Gravity Gun: enable ragdoll state",
+      "sourceRef": "mods/TopiaForge.GravityGun/RobotGrabSupport.cs:46",
+      "parameters": [
+        {
+          "type": "System.Boolean",
+          "constrained": true
+        }
+      ]
+    },
+    {
+      "id": "gravitygun.currentstate-prop",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "LocomotionController",
+      "member": "CurrentState",
+      "matchMode": "DynamicInstance",
+      "criticality": "Degraded",
+      "feature": "Gravity Gun: check robot ragdoll state",
+      "sourceRef": "mods/TopiaForge.GravityGun/RobotRagdollHoldLock.cs:85"
+    },
+    {
+      "id": "gravitygun.forcesetstate",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "LocomotionController",
+      "member": "ForceSetState",
+      "matchMode": "PredicateOverload",
+      "criticality": "Degraded",
+      "feature": "Gravity Gun: force locomotion state",
+      "sourceRef": "mods/TopiaForge.GravityGun/RobotRagdollHoldLock.cs:60",
+      "parameters": [
+        {
+          "type": "System.Enum",
+          "constrained": false
+        }
+      ]
+    },
+    {
+      "id": "gravitygun.forceragdoll-lock",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "LocomotionController",
+      "member": "ForceRagdoll",
+      "matchMode": "PredicateOverload",
+      "criticality": "Degraded",
+      "feature": "Gravity Gun: force ragdoll state",
+      "sourceRef": "mods/TopiaForge.GravityGun/RobotRagdollHoldLock.cs:65",
+      "parameters": []
+    },
+    {
+      "id": "gravitygun.enableragdoll-lock",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "LocomotionController",
+      "member": "EnableRagdoll",
+      "matchMode": "PredicateOverload",
+      "criticality": "Degraded",
+      "feature": "Gravity Gun: enable ragdoll mode",
+      "sourceRef": "mods/TopiaForge.GravityGun/RobotRagdollHoldLock.cs:70",
+      "parameters": [
+        {
+          "type": "System.Boolean",
+          "constrained": true
+        }
+      ]
+    }
+  ]
+}

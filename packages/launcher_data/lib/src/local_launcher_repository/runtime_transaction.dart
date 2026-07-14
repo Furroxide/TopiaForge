@@ -1,7 +1,7 @@
 part of '../local_launcher_repository.dart';
 
-const _runtimeTransactionName = '.robotopia-runtime-transaction';
-const _runtimeRepairLockName = '.robotopia-runtime-repair.lock';
+const _runtimeTransactionName = '.topiaforge-runtime-transaction';
+const _runtimeRepairLockName = '.topiaforge-runtime-repair.lock';
 const _maxRuntimeTransactionJournalBytes = 4 * 1024 * 1024;
 
 Future<T> _withRuntimeRepairLock<T>(
@@ -82,7 +82,7 @@ class _RuntimeRepairTransaction {
         ),
       ),
     );
-    if (decoded is! Map<String, Object?> || decoded['formatVersion'] != 1) {
+    if (decoded is! Map<String, Object?> || decoded['formatVersion'] != 2) {
       throw StateError('Runtime repair journal is invalid.');
     }
     transaction.status = decoded['status'] as String? ?? '';
@@ -308,7 +308,7 @@ class _RuntimeRepairTransaction {
   Future<void> _writeJournal() => _writeJsonFileAtomic(
     _journal,
     {
-      'formatVersion': 1,
+      'formatVersion': 2,
       'status': status,
       'operations': operations.map((item) => item.toJson()).toList(),
     },

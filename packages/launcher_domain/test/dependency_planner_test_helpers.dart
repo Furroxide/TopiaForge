@@ -12,11 +12,11 @@ ModManifest _manifest(
   VersionRange sdkVersionRange = const VersionRange.any(),
 }) {
   return ModManifest(
-    schemaVersion: 2,
+    schemaVersion: 3,
     id: id,
     name: id,
     version: version,
-    author: const ModAuthor(name: 'QuantumWorks'),
+    author: const ModAuthor(name: 'TopiaForge'),
     entryAssembly: '$id.dll',
     entryType: '$id.Entry',
     dependencies: dependencies,
@@ -44,7 +44,7 @@ InstalledMod _installed(ModManifest manifest, {bool enabled = true}) {
 
 RegistryMod _registry(ModManifest manifest) => RegistryMod(
   manifest: manifest,
-  downloadUrl: 'file:///${manifest.id}-${manifest.version}.robotopiamod',
+  downloadUrl: 'file:///${manifest.id}-${manifest.version}.topiaforgemod',
   packageSha256: _validSha,
 );
 

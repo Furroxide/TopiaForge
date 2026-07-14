@@ -33,7 +33,7 @@ jobs:
       - name: Reject committed Unity build outputs
         shell: bash
         run: |
-          tracked="$(git ls-files '*.unitypackage' '*.7z' 'dist/*.robotopiamod' 'dist/vpm/*.zip' '.unity-ci/**')"
+          tracked="$(git ls-files '*.unitypackage' '*.7z' 'dist/*.topiaforgemod' 'dist/vpm/*.zip' '.unity-ci/**')"
           if [ -n "$tracked" ]; then
             echo "Generated Unity/release artifacts must not be tracked:"
             echo "$tracked"
@@ -57,15 +57,15 @@ jobs:
           sdk: "3.11.1"
 
       - name: Pack Unity packages
-        working-directory: apps/robotopia_cli
+        working-directory: apps/topiaforge_cli
         run: |
           dart pub get --enforce-lockfile
-          dart run bin/robotopia.dart unity pack-packages --output ../../dist/vpm
+          dart run bin/topiaforge.dart unity pack-packages --output ../../dist/vpm
 
       - name: Upload VPM listing artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: robotopia-vpm-index
+          name: topiaforge-vpm-index
           path: dist/vpm/**
           if-no-files-found: error
           retention-days: 14
@@ -97,16 +97,16 @@ jobs:
 
       - name: Scaffold smoke world project
         shell: bash
-        working-directory: apps/robotopia_cli
+        working-directory: apps/topiaforge_cli
         run: |
           set -euo pipefail
           workspace="${GITHUB_WORKSPACE//\\//}"
           dart pub get --enforce-lockfile
-          dart run bin/robotopia.dart new mod ci.world \
+          dart run bin/topiaforge.dart new mod ci.world \
             --template world \
             --name "CI World" \
             --dir "$workspace/.unity-ci"
-          dart run bin/robotopia.dart new unity-world CiWorld \
+          dart run bin/topiaforge.dart new unity-world CiWorld \
             --dir "$workspace/.unity-ci" \
             --mod "$workspace/.unity-ci/ci.world"
 
@@ -120,11 +120,11 @@ jobs:
           projectPath: .unity-ci/CiWorld
           unityVersion: 6000.0.23f1
           targetPlatform: StandaloneWindows64
-          buildMethod: Robotopia.WorldCompanion.Editor.WorldBundleBuilder.Build
+          buildMethod: TopiaForge.WorldCompanion.Editor.WorldBundleBuilder.Build
           customParameters: >-
-            -robotopiaModPath /github/workspace/.unity-ci/ci.world
-            -robotopiaBundleName ci-world
-            -robotopiaWorldPrefab Assets/World/World.prefab
+            -topiaforgeModPath /github/workspace/.unity-ci/ci.world
+            -topiaforgeBundleName ci-world
+            -topiaforgeWorldPrefab Assets/World/World.prefab
           manualExit: true
           versioning: None
           allowDirtyBuild: true
@@ -148,11 +148,11 @@ jobs:
           projectPath: .unity-ci/CiWorld
           unityVersion: 6000.0.23f1
           targetPlatform: StandaloneWindows64
-          buildMethod: Robotopia.WorldCompanion.Editor.WorldBundleBuilder.Build
+          buildMethod: TopiaForge.WorldCompanion.Editor.WorldBundleBuilder.Build
           customParameters: >-
-            -robotopiaModPath /github/workspace/.unity-ci/ci.world
-            -robotopiaBundleName ci-world
-            -robotopiaWorldPrefab Assets/World/World.prefab
+            -topiaforgeModPath /github/workspace/.unity-ci/ci.world
+            -topiaforgeBundleName ci-world
+            -topiaforgeWorldPrefab Assets/World/World.prefab
           manualExit: true
           versioning: None
           allowDirtyBuild: true
@@ -162,11 +162,11 @@ jobs:
 
       - name: Pack smoke world mod
         shell: bash
-        working-directory: apps/robotopia_cli
+        working-directory: apps/topiaforge_cli
         run: |
           set -euo pipefail
           workspace="${GITHUB_WORKSPACE//\\//}"
-          dart run bin/robotopia.dart pack \
+          dart run bin/topiaforge.dart pack \
             --project "$workspace/.unity-ci/ci.world" \
             --output "$workspace/dist/unity-smoke" \
             --configuration Release
@@ -174,16 +174,16 @@ jobs:
       - name: Upload smoke world artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: robotopia-unity-world-smoke
+          name: topiaforge-unity-world-smoke
           path: |
-            dist/unity-smoke/*.robotopiamod
+            dist/unity-smoke/*.topiaforgemod
             .unity-ci/ci.world/AssetBundles/*.bundle
             .unity-ci/ci.world/AssetBundles/*.manifest.json
           if-no-files-found: error
           retention-days: 14
 
-  qwui-smoke:
-    name: Rebuild and compare QwUi bundle (manual main only)
+  unity-ui-smoke:
+    name: Rebuild and compare TopiaForge UI bundle (manual main only)
     runs-on: ubuntu-latest
     timeout-minutes: 90
     needs: audit-artifacts
@@ -192,7 +192,7 @@ jobs:
       github.ref == 'refs/heads/main'
     environment: unity-validation
     steps:
-      - name: Checkout exact QwUi sources and tracked bundle
+      - name: Checkout exact TopiaForge UI sources and tracked bundle
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           lfs: true
@@ -208,12 +208,12 @@ jobs:
           projectPath: tools/unity-ui-bundle
           unityVersion: 6000.0.23f1
           targetPlatform: StandaloneWindows64
-          buildMethod: Robotopia.UiBundleBuilder.ImportEssentials
+          buildMethod: TopiaForge.UiBundleBuilder.ImportEssentials
           manualExit: true
           versioning: None
           allowDirtyBuild: true
 
-      - name: Build first QwUi bundle with the pinned editor
+      - name: Build first TopiaForge UI bundle with the pinned editor
         uses: game-ci/unity-builder@1d4ee0697f193f54668e98961d79907911f4b4f2 # v4.8.1
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
@@ -223,22 +223,22 @@ jobs:
           projectPath: tools/unity-ui-bundle
           unityVersion: 6000.0.23f1
           targetPlatform: StandaloneWindows64
-          buildMethod: Robotopia.UiBundleBuilder.Build
+          buildMethod: TopiaForge.UiBundleBuilder.Build
           manualExit: true
           versioning: None
           allowDirtyBuild: true
 
-      - name: Record first QwUi bundle and provenance
+      - name: Record first TopiaForge UI bundle and provenance
         shell: bash
         run: |
           set -euo pipefail
           sha256sum \
-            src/Robotopia.Mods.UnityUi/Assets/quantumworks-ui.bundle \
-            src/Robotopia.Mods.UnityUi/Assets/quantumworks-ui.manifest.json \
+            src/TopiaForge.Mods.UnityUi/Assets/topiaforge-ui.bundle \
+            src/TopiaForge.Mods.UnityUi/Assets/topiaforge-ui.manifest.json \
             tools/unity-ui-bundle/Assets/UiBundleManifest.json \
-            >"$RUNNER_TEMP/qwui-first.sha256"
+            >"$RUNNER_TEMP/unity-ui-first.sha256"
 
-      - name: Build second QwUi bundle with the pinned editor
+      - name: Build second TopiaForge UI bundle with the pinned editor
         uses: game-ci/unity-builder@1d4ee0697f193f54668e98961d79907911f4b4f2 # v4.8.1
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
@@ -248,18 +248,18 @@ jobs:
           projectPath: tools/unity-ui-bundle
           unityVersion: 6000.0.23f1
           targetPlatform: StandaloneWindows64
-          buildMethod: Robotopia.UiBundleBuilder.Build
+          buildMethod: TopiaForge.UiBundleBuilder.Build
           manualExit: true
           versioning: None
           allowDirtyBuild: true
 
-      - name: Verify tracked QwUi bytes and provenance are reproducible
+      - name: Verify tracked TopiaForge UI bytes and provenance are reproducible
         shell: bash
         run: |
           set -euo pipefail
-          bundle=src/Robotopia.Mods.UnityUi/Assets/quantumworks-ui.bundle
-          provenance=src/Robotopia.Mods.UnityUi/Assets/quantumworks-ui.manifest.json
-          sha256sum --check --strict "$RUNNER_TEMP/qwui-first.sha256"
+          bundle=src/TopiaForge.Mods.UnityUi/Assets/topiaforge-ui.bundle
+          provenance=src/TopiaForge.Mods.UnityUi/Assets/topiaforge-ui.manifest.json
+          sha256sum --check --strict "$RUNNER_TEMP/unity-ui-first.sha256"
           test -s "$bundle"
           test "$(jq -er '.editorVersion' "$provenance")" = 6000.0.23f1
           test "$(jq -er '.editorVersion' tools/unity-ui-bundle/Assets/UiBundleManifest.json)" = 6000.0.23f1
@@ -294,14 +294,14 @@ jobs:
       always() &&
       github.event_name == 'workflow_dispatch' &&
       github.ref == 'refs/heads/main'
-    needs: [world-smoke, qwui-smoke]
+    needs: [world-smoke, unity-ui-smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Require both protected Unity 6000.0.23f1 builds
         env:
           WORLD_RESULT: ${{ needs.world-smoke.result }}
-          QWUI_RESULT: ${{ needs.qwui-smoke.result }}
+          UNITY_UI_RESULT: ${{ needs.unity-ui-smoke.result }}
         run: |
           test "$WORLD_RESULT" = success
-          test "$QWUI_RESULT" = success
+          test "$UNITY_UI_RESULT" = success

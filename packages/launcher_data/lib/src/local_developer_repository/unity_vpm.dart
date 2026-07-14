@@ -3,13 +3,15 @@ part of '../local_developer_repository.dart';
 /// Unity-side VPM: the launcher-driven resolver + listing/repo management. Reads a project's
 /// `Packages/vpm-manifest.json`, resolves it against the subscribed listings (reusing the Unity-free
 /// [UnityVpmResolver]), and downloads + extracts the resolved packages into `Packages/`. Mirrors the existing
-/// `.robotopiamod` source model: the built-in listing is derived from `dist/vpm/index.json`, drift-proof.
+/// `.topiaforgemod` source model: the built-in listing is derived from `dist/vpm/index.json`, drift-proof.
 extension LocalDeveloperUnityVpm on LocalDeveloperRepository {
+  static const _vpmSourceFormatVersion = 2;
+
   File get _vpmSourcesFile => File(p.join(_dataRoot.path, 'vpm_sources.json'));
 
   PackageSource _defaultVpmSource() => PackageSource(
-    id: 'robotopia.vpm.local',
-    name: 'QuantumWorks (local)',
+    id: 'io.github.furroxide.topiaforge.vpm.local',
+    name: 'TopiaForge (local)',
     url: p.join(_repositoryRoot.path, 'dist', 'vpm', 'index.json'),
     builtIn: true,
   );
@@ -29,13 +31,23 @@ extension LocalDeveloperUnityVpm on LocalDeveloperRepository {
             ),
           ),
         );
-        final list = decoded is Map ? decoded['sources'] : null;
+        final list =
+            decoded is Map &&
+                decoded['formatVersion'] == _vpmSourceFormatVersion
+            ? decoded['sources']
+            : null;
         if (list is List) {
-          sources.addAll(
-            list.whereType<Map>().map(
-              (item) => PackageSource.fromJson(item.cast<String, Object?>()),
-            ),
-          );
+          final parsed = list
+              .whereType<Map>()
+              .map(
+                (item) => PackageSource.fromJson(item.cast<String, Object?>()),
+              )
+              .toList();
+          if (parsed.length != list.length ||
+              parsed.any((source) => !PackageSourceId.isValid(source.id))) {
+            throw const FormatException('Invalid VPM source id.');
+          }
+          sources.addAll(parsed);
         }
       } on Object {
         // ignore a malformed file
@@ -56,10 +68,16 @@ extension LocalDeveloperUnityVpm on LocalDeveloperRepository {
   }
 
   Future<void> _saveVpmSources(List<PackageSource> sources) async {
+    if (sources.any((source) => !PackageSourceId.isValid(source.id))) {
+      throw StateError(
+        'VPM source ids must use the safe TopiaForge source id format.',
+      );
+    }
     if (!_dataRoot.existsSync()) {
       _dataRoot.createSync(recursive: true);
     }
     final json = _prettyJson({
+      'formatVersion': _vpmSourceFormatVersion,
       'sources': sources.map((source) => source.toJson()).toList(),
     });
     _writeDeveloperTextAtomic(_vpmSourcesFile, json);
@@ -175,6 +193,9 @@ extension LocalDeveloperUnityVpm on LocalDeveloperRepository {
         );
       }
       final packageId = entry.key as String;
+      if (!VpmPackageId.isValid(packageId)) {
+        throw FormatException('invalid locked package id: "$packageId"');
+      }
       final diagnosticId = packageId.length <= 80
           ? packageId
           : '${packageId.substring(0, 80)}…';
@@ -201,6 +222,7 @@ extension LocalDeveloperUnityVpm on LocalDeveloperRepository {
     }
     for (final entry in value.entries) {
       if (entry.key is! String ||
+          !VpmPackageId.isValid(entry.key as String) ||
           entry.value is! String ||
           (entry.value as String).trim().isEmpty) {
         throw FormatException('"$label" values must be non-empty strings');
@@ -289,6 +311,11 @@ extension LocalDeveloperUnityVpm on LocalDeveloperRepository {
     String id,
     String range,
   ) async {
+    if (!VpmPackageId.isValid(id)) {
+      throw StateError(
+        'Unity package id must use the safe TopiaForge VPM id format.',
+      );
+    }
     final root = _requireUnityProjectRoot(projectPath);
     final manifestFile = File(p.join(root, 'Packages', 'vpm-manifest.json'));
     final before = _DeveloperFileSnapshot.capture(manifestFile);

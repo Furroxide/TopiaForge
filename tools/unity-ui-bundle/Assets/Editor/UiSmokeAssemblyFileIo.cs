@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace Robotopia
+namespace TopiaForge
 {
     /// <summary>Bounded, regular-file assembly reads for the exact-editor lifecycle smoke.</summary>
     internal static class UiSmokeAssemblyFileIo

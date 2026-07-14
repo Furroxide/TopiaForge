@@ -13,7 +13,7 @@ extension _LicenseScaffolding on LocalDeveloperRepository {
   }
 
   String _validateSuppliedLicense(ModManifest manifest, String text) {
-    if (manifest.license == RobotopiaScaffoldDefaults.license) {
+    if (manifest.license == TopiaForgeScaffoldDefaults.license) {
       throw StateError(
         'A custom license file requires an explicit SPDX license value.',
       );
@@ -29,11 +29,11 @@ extension _LicenseScaffolding on LocalDeveloperRepository {
 
   String _builtInScaffoldLicense(ModManifest manifest) {
     switch (manifest.license) {
-      case RobotopiaScaffoldDefaults.license:
+      case TopiaForgeScaffoldDefaults.license:
         return _unlicensedScaffoldNotice;
       case 'MIT':
         final author = manifest.author.name.trim();
-        if (author.isEmpty || author == RobotopiaScaffoldDefaults.authorName) {
+        if (author.isEmpty || author == TopiaForgeScaffoldDefaults.authorName) {
           throw StateError(
             'The MIT license template requires an explicit author name.',
           );
@@ -56,7 +56,7 @@ const _maxScaffoldLicenseBytes = 1024 * 1024;
 const _unlicensedScaffoldNotice = '''# License not selected
 
 No license has been granted for this scaffolded project. Replace the
-`NOASSERTION` value in `robotopia.mod.json`, provide the corresponding license
+`NOASSERTION` value in `topiaforge.mod.json`, provide the corresponding license
 text, and confirm the author identity before publishing or distributing it.
 ''';
 

@@ -15,8 +15,8 @@ class SafeArchivePolicy {
     this.maxPathCharacters = 1024,
   });
 
-  /// Shared policy for `.robotopiamod` and VPM package readers.
-  static const robotopiaPackage = SafeArchivePolicy(
+  /// Shared policy for `.topiaforgemod` and VPM package readers.
+  static const topiaForgePackage = SafeArchivePolicy(
     maxArchiveBytes: 512 * 1024 * 1024,
     maxEntries: 8192,
     maxEntryBytes: 1024 * 1024 * 1024,
@@ -39,7 +39,7 @@ class SafeZipArchive {
 
   factory SafeZipArchive.decode(
     List<int> bytes, {
-    SafeArchivePolicy policy = SafeArchivePolicy.robotopiaPackage,
+    SafeArchivePolicy policy = SafeArchivePolicy.topiaForgePackage,
     String label = 'Archive',
   }) {
     if (bytes.length > policy.maxArchiveBytes) {

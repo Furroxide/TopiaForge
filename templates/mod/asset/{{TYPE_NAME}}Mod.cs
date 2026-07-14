@@ -1,12 +1,12 @@
-using Robotopia.Mods;
+using TopiaForge.Mods;
 
 namespace {{ASSEMBLY_NAME}}
 {
     /// <summary>
     /// Loads an AssetBundle shipped inside this package (built by the scaffolded unity-companion project into
-    /// assets/AssetBundles) via the robotopia.assets framework service, then spawns a prefab from it.
+    /// assets/AssetBundles) via the io.github.furroxide.topiaforge.assets framework service, then spawns a prefab from it.
     /// </summary>
-    public sealed class {{TYPE_NAME}}Mod : IRobotopiaMod
+    public sealed class {{TYPE_NAME}}Mod : ITopiaForgeMod
     {
         private IModContext? context;
 

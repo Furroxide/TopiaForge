@@ -73,7 +73,7 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
     Directory versionDir,
     Map<String, Map<dynamic, dynamic>> stateById,
   ) async {
-    final manifestFile = File(p.join(versionDir.path, 'robotopia.mod.json'));
+    final manifestFile = File(p.join(versionDir.path, 'topiaforge.mod.json'));
     if (!manifestFile.existsSync()) {
       return InstalledMod(
         id: p.basename(idDir.path),
@@ -83,7 +83,7 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
         restartRequired: false,
         uninstallPending: false,
         packagePath: versionDir.path,
-        errors: const ['Missing robotopia.mod.json.'],
+        errors: const ['Missing topiaforge.mod.json.'],
       );
     }
 

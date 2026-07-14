@@ -14,7 +14,7 @@ void main() {
 
   setUp(() async {
     root = Directory.systemTemp.createTempSync('package-validation-');
-    final game = Directory(p.join(root.path, 'Robotopia'))..createSync();
+    final game = Directory(p.join(root.path, 'TopiaForge'))..createSync();
     File(p.join(game.path, 'Robotopia.exe')).writeAsStringSync('');
     Directory(
       p.join(game.path, 'Robotopia_Data', 'Managed'),
@@ -33,8 +33,8 @@ void main() {
 
   test('rejects duplicate normalized archive paths', () async {
     final archive = _validArchive()
-      ..addFile(ArchiveFile.string('ROBOTOPIA.MOD.JSON', '{}'));
-    final package = _writeArchive(root, 'duplicate.robotopiamod', archive);
+      ..addFile(ArchiveFile.string('TOPIAFORGE.MOD.JSON', '{}'));
+    final package = _writeArchive(root, 'duplicate.topiaforgemod', archive);
 
     await expectLater(
       repository.previewPackage(package.path, install),
@@ -45,11 +45,11 @@ void main() {
   });
 
   test('rejects symbolic links', () async {
-    final link = ArchiveFile.string('linked.dll', 'Robotopia.dll')
-      ..symbolicLink = 'Robotopia.dll'
+    final link = ArchiveFile.string('linked.dll', 'TopiaForge.dll')
+      ..symbolicLink = 'TopiaForge.dll'
       ..mode = 0xa1ff;
     final archive = _validArchive()..addFile(link);
-    final package = _writeArchive(root, 'symlink.robotopiamod', archive);
+    final package = _writeArchive(root, 'symlink.topiaforgemod', archive);
 
     await expectLater(
       repository.previewPackage(package.path, install),
@@ -58,8 +58,8 @@ void main() {
   });
 
   test('rejects a bare-string manifest author before install', () async {
-    final archive = _archiveWithAuthor('QuantumWorks');
-    final package = _writeArchive(root, 'string-author.robotopiamod', archive);
+    final archive = _archiveWithAuthor('TopiaForge');
+    final package = _writeArchive(root, 'string-author.topiaforgemod', archive);
 
     await expectLater(
       repository.installPackage(package.path, install),
@@ -68,6 +68,20 @@ void main() {
           (error) => error.toString().contains('author must be an object'),
         ),
       ),
+    );
+  });
+
+  test('rejects package files with a retired extension', () async {
+    final package = _writeArchive(
+      root,
+      'retired.robo'
+      'topiamod',
+      _validArchive(),
+    );
+
+    await expectLater(
+      repository.previewPackage(package.path, install),
+      throwsFormatException,
     );
   });
 
@@ -80,7 +94,7 @@ void main() {
     test('rejects non-portable archive path $unsafePath', () async {
       final archive = _validArchive()
         ..addFile(ArchiveFile.string(unsafePath, 'bad'));
-      final package = _writeArchive(root, 'unsafe-path.robotopiamod', archive);
+      final package = _writeArchive(root, 'unsafe-path.topiaforgemod', archive);
 
       await expectLater(
         repository.previewPackage(package.path, install),
@@ -97,7 +111,7 @@ void main() {
       final encoded = ZipEncoder().encode(_validArchive());
       final central = _signatureOffset(encoded, const [0x50, 0x4b, 0x01, 0x02]);
       _writeUint32(encoded, central + 24, 0x40000001);
-      final package = File(p.join(root.path, 'oversized.robotopiamod'))
+      final package = File(p.join(root.path, 'oversized.topiaforgemod'))
         ..writeAsBytesSync(encoded);
 
       await expectLater(
@@ -113,7 +127,7 @@ void main() {
     final encoded = ZipEncoder().encode(_validArchive());
     final central = _signatureOffset(encoded, const [0x50, 0x4b, 0x01, 0x02]);
     encoded[central + 8] |= 1;
-    final package = File(p.join(root.path, 'encrypted.robotopiamod'))
+    final package = File(p.join(root.path, 'encrypted.topiaforgemod'))
       ..writeAsBytesSync(encoded);
 
     await expectLater(
@@ -128,7 +142,7 @@ void main() {
     final central = _signatureOffset(encoded, const [0x50, 0x4b, 0x01, 0x02]);
     _writeUint32(encoded, local + 22, 1);
     _writeUint32(encoded, central + 24, 1);
-    final package = File(p.join(root.path, 'size-mismatch.robotopiamod'))
+    final package = File(p.join(root.path, 'size-mismatch.topiaforgemod'))
       ..writeAsBytesSync(encoded);
 
     await expectLater(
@@ -147,7 +161,7 @@ void main() {
     'uninstall rejects traversal ids before touching the filesystem',
     () async {
       final outside = Directory(
-        p.join(install.path, 'BepInEx', 'RobotopiaModManager', 'outside'),
+        p.join(install.path, 'BepInEx', 'TopiaForge', 'outside'),
       )..createSync(recursive: true);
       final sentinel = File(p.join(outside.path, 'keep.txt'))
         ..writeAsStringSync('keep');
@@ -164,12 +178,12 @@ void main() {
   test(
     'rejects an unsafe expected hash before resolving a cache path',
     () async {
-      final sentinel = File(p.join(root.path, 'escape.robotopiamod'))
+      final sentinel = File(p.join(root.path, 'escape.topiaforgemod'))
         ..writeAsStringSync('keep');
 
       await expectLater(
         repository.previewPackage(
-          'https://packages.example/mod.robotopiamod',
+          'https://packages.example/mod.topiaforgemod',
           install,
           expectedSha256: '../../escape',
         ),
@@ -186,13 +200,13 @@ void main() {
 Archive _validArchive() => Archive()
   ..addFile(
     ArchiveFile.string(
-      'robotopia.mod.json',
+      'topiaforge.mod.json',
       jsonEncode({
-        'schemaVersion': 2,
+        'schemaVersion': 3,
         'name': 'validation.mod',
         'displayName': 'Validation Mod',
         'version': '1.0.0',
-        'author': {'name': 'QuantumWorks'},
+        'author': {'name': 'TopiaForge'},
         'entryAssembly': 'Validation.dll',
         'entryType': 'Validation.Entry',
       }),
@@ -203,9 +217,9 @@ Archive _validArchive() => Archive()
 Archive _archiveWithAuthor(Object author) => Archive()
   ..addFile(
     ArchiveFile.string(
-      'robotopia.mod.json',
+      'topiaforge.mod.json',
       jsonEncode({
-        'schemaVersion': 2,
+        'schemaVersion': 3,
         'name': 'validation.mod',
         'displayName': 'Validation Mod',
         'version': '1.0.0',

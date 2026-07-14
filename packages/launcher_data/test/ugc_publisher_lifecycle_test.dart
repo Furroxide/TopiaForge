@@ -9,7 +9,7 @@ void main() {
     'stopping with no owned process preserves a detached publisher session',
     () async {
       final root = await Directory.systemTemp.createTemp(
-        'robotopia-publisher-',
+        'topiaforge-publisher-',
       );
       addTearDown(() async {
         if (await root.exists()) {

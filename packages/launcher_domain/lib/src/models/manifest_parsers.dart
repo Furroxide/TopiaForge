@@ -23,6 +23,5 @@ List<GamemodeDefinition> _gamemodeList(Object? value) {
   return value
       .whereType<Map>()
       .map((item) => GamemodeDefinition.fromJson(_objectMap(item)))
-      .where((item) => item.id.trim().isNotEmpty && item.name.trim().isNotEmpty)
       .toList(growable: false);
 }

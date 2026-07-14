@@ -13,7 +13,7 @@ void main() {
   late LocalDeveloperRepository repository;
 
   setUp(() {
-    root = Directory.systemTemp.createTempSync('robotopia-templates-');
+    root = Directory.systemTemp.createTempSync('topiaforge-templates-');
     repository = LocalDeveloperRepository(
       dataRoot: p.join(root.path, 'data'),
       repositoryRoot: repoRoot,
@@ -48,8 +48,8 @@ void main() {
     final manifest = await repository.readModManifest(workspace.projectRoot);
     final license = File(p.join(workspace.projectRoot, 'LICENSE.md'));
 
-    expect(manifest.author.name, RobotopiaScaffoldDefaults.authorName);
-    expect(manifest.license, RobotopiaScaffoldDefaults.license);
+    expect(manifest.author.name, TopiaForgeScaffoldDefaults.authorName);
+    expect(manifest.license, TopiaForgeScaffoldDefaults.license);
     expect(license.readAsStringSync(), contains('No license has been granted'));
     expect(
       manifest.validate().map((issue) => issue.message).join(' '),
@@ -135,7 +135,7 @@ void main() {
         );
 
         final manifestFile = File(
-          p.join(workspace.projectRoot, 'robotopia.mod.json'),
+          p.join(workspace.projectRoot, 'topiaforge.mod.json'),
         );
         expect(manifestFile.existsSync(), isTrue, reason: template.id);
         final manifest = ModManifest.fromJson(
@@ -191,9 +191,15 @@ void main() {
     expect(manifest.permissions, contains('world-service'));
     expect(
       manifest.dependencies.map((dependency) => dependency.id),
-      containsAll(['robotopia.worlds', 'robotopia.robotkit']),
+      containsAll([
+        'io.github.furroxide.topiaforge.worlds',
+        'io.github.furroxide.topiaforge.robotkit',
+      ]),
     );
-    expect(manifest.loadAfter, contains('robotopia.worlds'));
+    expect(
+      manifest.loadAfter,
+      contains('io.github.furroxide.topiaforge.worlds'),
+    );
     expect(manifest.worldGamemodes, hasLength(1));
     expect(manifest.worldGamemodes.first.id, 'test.waves.mode');
     expect(manifest.worldGamemodes.first.name, 'Waves');
@@ -214,7 +220,7 @@ void main() {
         permissions: const ['time'],
         dependencies: [
           ModDependency(
-            id: 'robotopia.chronos',
+            id: 'io.github.furroxide.topiaforge.chronos',
             versionRange: VersionRange.parse('>=0.1.0'),
           ),
         ],
@@ -232,7 +238,7 @@ void main() {
     expect(manifest.permissions, containsAll(['input', 'physics', 'time']));
     expect(
       manifest.dependencies.map((dependency) => dependency.id),
-      contains('robotopia.chronos'),
+      contains('io.github.furroxide.topiaforge.chronos'),
     );
     expect(manifest.conflicts.map((conflict) => conflict.id), ['other.mod']);
     expect(manifest.gameVersionRange.toString(), '>=0.1.0 <0.2.0');
@@ -252,7 +258,7 @@ void main() {
           workspace.projectRoot,
           'unity-companion',
           'Packages',
-          'com.robotopia.ugc-companion',
+          'io.github.furroxide.topiaforge.ugc-companion',
         ),
       ).existsSync(),
       isTrue,
@@ -281,7 +287,7 @@ void main() {
     }
     final aliasParent = Directory(
       '/tmp',
-    ).createTempSync('robotopia-template-alias-');
+    ).createTempSync('topiaforge-template-alias-');
     addTearDown(() {
       if (aliasParent.existsSync()) {
         aliasParent.deleteSync(recursive: true);
@@ -313,8 +319,8 @@ void main() {
         p.join(
           repoRoot,
           'src',
-          'Robotopia.Mods.Abstractions',
-          'Robotopia.Mods.Abstractions.csproj',
+          'TopiaForge.Mods.Abstractions',
+          'TopiaForge.Mods.Abstractions.csproj',
         ),
       ),
     );
@@ -349,7 +355,7 @@ void main() {
     final manifest = await repository.readModManifest(workspace.projectRoot);
     final map = manifest.toJson();
     map['version'] = '0.2.0';
-    map['legacyPackages'] = ['old.package'];
+    map['futureMetadata'] = {'enabled': true};
     final issues = await repository.updateModManifest(
       workspace.projectRoot,
       ModManifest.fromJson(map),
@@ -358,7 +364,7 @@ void main() {
 
     final reread = await repository.readModManifest(workspace.projectRoot);
     expect(reread.version, '0.2.0');
-    expect(reread.legacyPackages, ['old.package']);
+    expect(reread.extraFields['futureMetadata'], {'enabled': true});
   });
 
   test('ensureUgcCompanionPackage copies and is idempotent', () async {
@@ -369,7 +375,7 @@ void main() {
       p.join(
         project.path,
         'Packages',
-        'com.robotopia.ugc-companion',
+        'io.github.furroxide.topiaforge.ugc-companion',
         'Editor',
         'UgcCompanionSeed.cs',
       ),
@@ -400,7 +406,7 @@ void main() {
     );
     final seed =
         jsonDecode(File(path).readAsStringSync()) as Map<String, Object?>;
-    expect(p.basename(path), 'RobotopiaUgcCompanion.json');
+    expect(p.basename(path), 'TopiaForgeUgcCompanion.json');
     expect(seed['watchFolder'], r'C:\ugc-watch');
     expect(seed['projectName'], 'Seed World');
     expect(seed['sceneId'], 'main');

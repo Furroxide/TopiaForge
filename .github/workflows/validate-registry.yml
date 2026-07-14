@@ -32,14 +32,14 @@ jobs:
           sdk: "3.11.1"
 
       - name: Restore CLI packages
-        working-directory: apps/robotopia_cli
+        working-directory: apps/topiaforge_cli
         run: dart pub get --enforce-lockfile
 
       # Validate every published version, package hash, packaged manifest,
       # dependency range, and declared license file. This remains fork-safe:
       # it receives no secrets and the checkout token is not persisted.
       - name: Validate registry entries
-        working-directory: apps/robotopia_cli
+        working-directory: apps/topiaforge_cli
         shell: bash
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -50,7 +50,7 @@ jobs:
           if [[ -n "$BASE_SHA" ]]; then
             git -C ../.. archive "$BASE_SHA" registry | tar -x -C "$previous"
           fi
-          dart run robotopia registry validate \
+          dart run topiaforge registry validate \
             --entries ../../registry \
             --mods ../../mods \
             --publication \

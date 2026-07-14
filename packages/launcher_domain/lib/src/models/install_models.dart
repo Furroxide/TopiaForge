@@ -276,24 +276,6 @@ class RegistryMod {
   }
 }
 
-class LegacyMod {
-  const LegacyMod({
-    required this.id,
-    required this.name,
-    required this.path,
-    required this.kind,
-    this.canMigrate = false,
-    this.details = '',
-  });
-
-  final String id;
-  final String name;
-  final String path;
-  final String kind;
-  final bool canMigrate;
-  final String details;
-}
-
 class RepairReport {
   const RepairReport({required this.actions, required this.issues});
 
@@ -323,7 +305,6 @@ class LauncherSnapshot {
     required this.registryMods,
     required this.packageSources,
     required this.worldCatalog,
-    required this.legacyMods,
     required this.recentLog,
     this.gameInstall,
     this.launcherUpdates = const LauncherUpdateSettings(),
@@ -339,7 +320,6 @@ class LauncherSnapshot {
   final List<RegistryMod> registryMods;
   final List<PackageSource> packageSources;
   final WorldCatalog worldCatalog;
-  final List<LegacyMod> legacyMods;
   final String recentLog;
   final LauncherUpdateSettings launcherUpdates;
 

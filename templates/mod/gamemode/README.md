@@ -4,14 +4,14 @@ A world gamemode mod ({{MOD_ID}}) that registers with the Worlds service and app
 
 ## Quick start
 
-1. Validate the project: `robotopia check package .`
-2. Build and package: `robotopia pack`
-3. Install into the game: `robotopia install`
-4. Play: `robotopia launch` — the gamemode appears under **GAMEMODES**.
+1. Validate the project: `topiaforge check package .`
+2. Build and package: `topiaforge pack`
+3. Install into the game: `topiaforge install`
+4. Play: `topiaforge launch` — the gamemode appears under **GAMEMODES**.
 
 ## What to edit next
 
 - `{{TYPE_NAME}}Mod.cs` — the gamemode lifecycle (start, tick, end conditions).
-- `robotopia.mod.json` — the `worldGamemodes` entry defines the menu id/name/description (`robotopia mod add gamemode id:Name:desc`); depends on `robotopia.worlds` and `robotopia.robotkit`.
+- `topiaforge.mod.json` — the `worldGamemodes` entry defines the menu id/name/description (`topiaforge mod add gamemode id:Name:desc`); depends on `io.github.furroxide.topiaforge.worlds` and `io.github.furroxide.topiaforge.robotkit`.
 
-New to modding? Follow `docs/YourFirstMod.md` in the QuantumWorks repository; see `docs/RobotKit.md` for robots and standard agents.
+New to modding? Follow `docs/YourFirstMod.md` in the TopiaForge repository; see `docs/RobotKit.md` for robots and standard agents.

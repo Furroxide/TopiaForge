@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 2,
+  "modId": "io.github.furroxide.topiaforge.perffixes",
+  "modName": "TopiaForge Performance Fixes",
+  "bindings": [
+    {
+      "id": "perffixes.patchutil-typebyname",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "unknown",
+      "matchMode": "Uncheckable",
+      "criticality": "Critical",
+      "feature": "PerfFixes: dynamic patching of game methods",
+      "sourceRef": "mods/TopiaForge.PerfFixes/PatchUtil.cs:46"
+    },
+    {
+      "id": "perffixes.camerautils-trygetmaincamera",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "CameraUtils",
+      "member": "TryGetMainCamera",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Degraded",
+      "feature": "Camera.main caching per-frame optimization",
+      "sourceRef": "mods/TopiaForge.PerfFixes/Appliers/CameraMainCacheApplier.cs:50"
+    },
+    {
+      "id": "perffixes.collisioneventproxy-oncollisionenter",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "CollisionEventProxy",
+      "member": "OnCollisionEnter",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Degraded",
+      "feature": "Pooled collision-proxy dispatch (GC reduction)",
+      "sourceRef": "mods/TopiaForge.PerfFixes/Appliers/CollisionProxyApplier.cs:48",
+      "parameters": [
+        {
+          "type": "UnityEngine.Collision",
+          "constrained": true
+        }
+      ]
+    },
+    {
+      "id": "perffixes.collisioneventproxy-oncollisionexit",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "CollisionEventProxy",
+      "member": "OnCollisionExit",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Degraded",
+      "feature": "Pooled collision-proxy dispatch (GC reduction)",
+      "sourceRef": "mods/TopiaForge.PerfFixes/Appliers/CollisionProxyApplier.cs:50",
+      "parameters": [
+        {
+          "type": "UnityEngine.Collision",
+          "constrained": true
+        }
+      ]
+    },
+    {
+      "id": "perffixes.icollisioneventreceiver",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "ICollisionEventReceiver",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Collision event dispatch integration",
+      "sourceRef": "mods/TopiaForge.PerfFixes/Appliers/CollisionProxyApplier.cs:94"
+    }
+  ]
+}

@@ -1,7 +1,7 @@
-# QuantumWorks UI brand bundle builder
+# TopiaForge UI brand bundle builder
 
-This tiny Unity project builds `quantumworks-ui.bundle` — the brand AssetBundle
-(TextMeshPro font assets + brand sprites) that `Robotopia.Mods.UnityUi` embeds into its
+This tiny Unity project builds `topiaforge-ui.bundle` — the brand AssetBundle
+(TextMeshPro font assets + brand sprites) that `TopiaForge.Mods.UnityUi` embeds into its
 DLL and loads at runtime. It also doubles as an editor harness for visual QA of the kit.
 
 ## Editor version rule (hard requirement)
@@ -20,13 +20,13 @@ serialized by the same editor version as the shipped player. Headless install vi
 unityhub -- --headless install --version 6000.0.23f1 --changeset 1c4764c07fb4
 ```
 
-`robotopia unity build-ui-bundle` auto-detects eligible editors and hard-fails on
+`topiaforge unity build-ui-bundle` auto-detects eligible editors and hard-fails on
 anything else.
 
 ## Prerequisites on macOS/Linux
 
 - The bundle currently targets `StandaloneWindows64`, so the editor needs the **Windows Build Support (Mono)**
-  module installed via Unity Hub. The native macOS runtime is supported, but it may use QwUi's documented
+  module installed via Unity Hub. The native macOS runtime is supported, but it may use TopiaForgeUi's documented
   OS/game-font fallback when this Windows-targeted brand bundle cannot load.
 - The editor must have an activated Unity license (batchmode fails without one).
 - Headless Linux boxes need a display for the build (no `-nographics` — TMP font baking
@@ -39,9 +39,9 @@ The build script bakes the static SDF TMP font assets itself (idempotent — an 
 committed `Assets/FontAssets/*.asset` is reused after its derivative object/family
 names are normalized; delete it only to re-bake the atlas):
 
-- `QuantumWorks Body SDF` — 1024×1024, SDFAA, padding 9, static; ASCII + Latin-1
+- `TopiaForge Body SDF` — 1024×1024, SDFAA, padding 9, static; ASCII + Latin-1
   Supplement + Latin Extended-A + typographic punctuation.
-- `QuantumWorks Display SDF` — 512×512, same settings (display headings).
+- `TopiaForge Display SDF` — 512×512, same settings (display headings).
 - Bold renders via TMP faux-bold (the variable TTF imports only its default instance),
   which the kit selects automatically when no dedicated bold asset ships.
 
@@ -51,25 +51,24 @@ Commit the baked `.asset` files (+ `.meta`) together with the rebuilt bundle.
 
 ## Building the bundle
 
-From `apps/robotopia_cli` (or anywhere inside the repo):
+From `apps/topiaforge_cli` (or anywhere inside the repo):
 
 ```sh
-dart run bin/robotopia.dart unity build-ui-bundle             # auto-detects an eligible editor
-dart run bin/robotopia.dart unity build-ui-bundle --unity "C:\Program Files\Unity\Hub\Editor\6000.0.23f1\Editor\Unity.exe"
-dart run bin/robotopia.dart unity build-ui-bundle --rebuild   # also rebuilds Robotopia.Mods.UnityUi
+dart run bin/topiaforge.dart unity build-ui-bundle             # auto-detects an eligible editor
+dart run bin/topiaforge.dart unity build-ui-bundle --unity "C:\Program Files\Unity\Hub\Editor\6000.0.23f1\Editor\Unity.exe"
+dart run bin/topiaforge.dart unity build-ui-bundle --rebuild   # also rebuilds TopiaForge.Mods.UnityUi
 ```
 
-Or in-editor: **QuantumWorks → Build UI Bundle**. (`tools/build-ui-bundle.ps1` remains
-as a deprecated wrapper that forwards to the CLI.)
+Or in-editor: **TopiaForge → Build UI Bundle**.
 
 The build stamps provenance into `Assets/UiBundleManifest.json`, verifies the required
-assets are labeled `quantumworks-ui`, builds LZ4 for StandaloneWindows64, and copies the
-result to `src/Robotopia.Mods.UnityUi/Assets/quantumworks-ui.bundle` (+ a SHA256
+assets are labeled `topiaforge-ui`, builds LZ4 for StandaloneWindows64, and copies the
+result to `src/TopiaForge.Mods.UnityUi/Assets/topiaforge-ui.bundle` (+ a SHA256
 provenance json). Rebuild the .NET solution afterwards so the embedded resource updates.
 
 ## Lifecycle smoke
 
-After the Release SDK/UI assemblies exist, run `Robotopia.UiLifecycleSmoke.Run` in
+After the Release SDK/UI assemblies exist, run `TopiaForge.UiLifecycleSmoke.Run` in
 batch mode with `-robotopiaManagedDir <game Data/Managed>`. The harness enters play
 mode, creates and disposes 16 hosts with windows, modals, hotkeys, tweens, profile
 changes, and clears, then fails unless canvases, allocator capacity, cursor leases,

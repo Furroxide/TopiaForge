@@ -12,7 +12,7 @@ import {
 } from '../session_file.mjs';
 
 test('bounded session reads reject links, bad UTF-8, and oversized input', (t) => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'robotopia-session-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'topiaforge-session-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const safe = path.join(root, 'safe.json');
   fs.writeFileSync(safe, '{"publisherLeaseToken":"token"}', { mode: 0o600 });
@@ -38,7 +38,7 @@ test('bounded session reads reject links, bad UTF-8, and oversized input', (t) =
 });
 
 test('session reads detect same-name replacement races', (t) => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'robotopia-session-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'topiaforge-session-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const target = path.join(root, 'session.json');
   const replacement = path.join(root, 'replacement.json');
@@ -64,7 +64,7 @@ test('session reads detect same-name replacement races', (t) => {
 });
 
 test('replaces an existing session file through the Windows retry path', (t) => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'robotopia-session-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'topiaforge-session-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const target = path.join(root, 'session.json');
   fs.writeFileSync(target, '{"old":true}');
@@ -98,7 +98,7 @@ test('replaces an existing session file through the Windows retry path', (t) => 
 });
 
 test('cleans the temporary file when replacement fails', (t) => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'robotopia-session-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'topiaforge-session-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const target = path.join(root, 'session.json');
   const messages = [];
@@ -150,7 +150,7 @@ test('announces a publisher only after its session lease is established', () => 
   );
   assert.equal(
     announcements[0],
-    'ROBOTOPIA_UGC_SESSION {"documentUrl":"automerge:public"}\n',
+    'TOPIAFORGE_UGC_SESSION {"documentUrl":"automerge:public"}\n',
   );
   assert.doesNotMatch(announcements[0], /private-token/);
 });

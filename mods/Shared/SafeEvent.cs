@@ -1,6 +1,6 @@
 using System;
 
-namespace Robotopia.Mods.Internal
+namespace TopiaForge.Mods.Internal
 {
     /// <summary>
     /// Dispatches first-party mod events one subscriber at a time. A consumer callback is an
@@ -85,13 +85,13 @@ namespace Robotopia.Mods.Internal
                 catch (Exception reportingFailure)
                 {
                     FallbackToConsole(
-                        "Robotopia event subscriber failed ('" + subscriberFailure.Message
+                        "TopiaForge event subscriber failed ('" + subscriberFailure.Message
                         + "') and its error reporter also failed ('" + reportingFailure.Message + "').");
                     return;
                 }
             }
 
-            FallbackToConsole("Robotopia event subscriber failed: " + subscriberFailure.Message);
+            FallbackToConsole("TopiaForge event subscriber failed: " + subscriberFailure.Message);
         }
 
         private static void FallbackToConsole(string message)

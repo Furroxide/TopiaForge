@@ -1,6 +1,6 @@
 # Game Compatibility — detecting breaking changes in game updates
 
-Robotopia mods don't compile against `GameCode.dll`. Every hook into the game is **reflection by name** —
+TopiaForge mods don't compile against `GameCode.dll`. Every hook into the game is **reflection by name** —
 `Type.GetType("RobotBody, GameCode")`, `GetMethod("Damage")`, `Enum.ToObject(DamageType, (int)x)`,
 `component.GetType().GetField("initialState")`. There are ~200 such bindings across the mods. Each is guarded
 (`throwOnError:false` + `try/catch`), so when a game update renames, removes, re-signs, or **re-orders** one of
@@ -9,17 +9,17 @@ error, no CI failure, no signal to the player. This subsystem turns that silent 
 reviewable signal.
 
 It is deliberately **separate from `SdkSurfaceTests`**, which only guards the SDK's *own* Unity-free contract
-(the interfaces and enums in `Robotopia.Mods.Abstractions`). That test never touches the game. This one does.
+(the interfaces and enums in `TopiaForge.Mods.Abstractions`). That test never touches the game. This one does.
 
 ## The pieces
 
 | Piece | Path | What it is |
 | --- | --- | --- |
 | Binding manifests | `bindings/<mod-id>.gamebindings.json` | One per mod. The declarative single source of truth for every game symbol that mod reflectively depends on. |
-| Surface library | `src/Robotopia.GameCompat.Surface` | Unity-free, GameCode-free core: manifest + snapshot models, canonical JSON, and the pure differ. Referenced by the extractor **and** the test harness. |
-| Extractor tool | `src/Robotopia.GameCompat.Extractor` | net10.0 console tool. Reads the real `GameCode.dll` via `MetadataLoadContext` (metadata only — no Unity, no code execution) and produces/verifies a surface snapshot. |
+| Surface library | `src/TopiaForge.GameCompat.Surface` | Unity-free, GameCode-free core: manifest + snapshot models, canonical JSON, and the pure differ. Referenced by the extractor **and** the test harness. |
+| Extractor tool | `src/TopiaForge.GameCompat.Extractor` | net10.0 console tool. Reads the real `GameCode.dll` via `MetadataLoadContext` (metadata only — no Unity, no code execution) and produces/verifies a surface snapshot. |
 | Surface baseline | `baselines/gamecode.surface.baseline.json` | The checked-in, known-good snapshot of the exact game surface the mods use, captured from a real install. |
-| Offline CI gate | `tests/Robotopia.ModManager.Tests/GameCompatTests.cs` | Runs in the existing hand-rolled harness. Deterministic, no DLL needed. |
+| Offline CI gate | `tests/TopiaForge.ModManager.Tests/GameCompatTests.cs` | Runs in the existing hand-rolled harness. Deterministic, no DLL needed. |
 
 ## A binding, and its match modes
 
@@ -71,13 +71,13 @@ brand-new game update; the offline gate cannot, because CI has no DLL.
 
 ```
 # resolve every binding against the installed game (+ diff vs baseline); exit 1 if a critical binding is broken
-dotnet run --project src/Robotopia.GameCompat.Extractor -- verify
+dotnet run --project src/TopiaForge.GameCompat.Extractor -- verify
 
 # offline source-vs-manifest drift check (no DLL): every "X, GameCode" literal must be a declared binding
-dotnet run --project src/Robotopia.GameCompat.Extractor -- audit
+dotnet run --project src/TopiaForge.GameCompat.Extractor -- audit
 
 # snapshot the current surface to a file
-dotnet run --project src/Robotopia.GameCompat.Extractor -- extract --out surface.json
+dotnet run --project src/TopiaForge.GameCompat.Extractor -- extract --out surface.json
 ```
 
 Managed-dir resolution order: `--managed <dir>`, `$RobotopiaManagedDir`, `$RobotopiaGameDir\Robotopia_Data\Managed`,
@@ -93,7 +93,7 @@ rubber stamp:
 3. Run `gamecompat baseline`. It **prints the surface diff vs the previous baseline** — review it as the changelog
    of what the game changed — then writes the new baseline. It **refuses** to write a partial capture (any
    `unreadable` type), so a baseline poisoned by an incomplete Managed dir can't be committed.
-4. Re-run the tests (`dotnet run --project tests/Robotopia.ModManager.Tests`) — the gate should be green.
+4. Re-run the tests (`dotnet run --project tests/TopiaForge.ModManager.Tests`) — the gate should be green.
 5. Commit the manifest changes **and** the baseline **and** the mod code together. The old baseline stays in
    history, so `git diff` of two baselines is itself a record of how the game's reflected surface moved.
 

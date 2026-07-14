@@ -1,0 +1,28 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TopiaForge.GameCompat.Surface/TopiaForge.GameCompat.Surface.csproj" />
+    <Project Path="src/TopiaForge.GameCompat.Extractor/TopiaForge.GameCompat.Extractor.csproj" />
+    <Project Path="src/TopiaForge.ModManager.Core/TopiaForge.ModManager.Core.csproj" />
+    <Project Path="src/TopiaForge.ModManager/TopiaForge.ModManager.csproj" />
+    <Project Path="src/TopiaForge.Mods.Abstractions/TopiaForge.Mods.Abstractions.csproj" />
+    <Project Path="src/TopiaForge.Mods.UnityUi/TopiaForge.Mods.UnityUi.csproj" />
+  </Folder>
+  <Folder Name="/mods/">
+    <Project Path="mods/TopiaForge.Assets/TopiaForge.Assets.csproj" />
+    <Project Path="mods/TopiaForge.Chronos/TopiaForge.Chronos.csproj" />
+    <Project Path="mods/TopiaForge.GravityGun/TopiaForge.GravityGun.csproj" />
+    <Project Path="mods/TopiaForge.NoFeedbackUrl/TopiaForge.NoFeedbackUrl.csproj" />
+    <Project Path="mods/TopiaForge.Performance/TopiaForge.Performance.csproj" />
+    <Project Path="mods/TopiaForge.PerfFixes/TopiaForge.PerfFixes.csproj" />
+    <Project Path="mods/TopiaForge.Prompts/TopiaForge.Prompts.csproj" />
+    <Project Path="mods/TopiaForge.RobotKit/TopiaForge.RobotKit.csproj" />
+    <Project Path="mods/TopiaForge.Sandbox/TopiaForge.Sandbox.csproj" />
+    <Project Path="mods/TopiaForge.UgcLiveSync/TopiaForge.UgcLiveSync.csproj" />
+    <Project Path="mods/TopiaForge.UiGallery/TopiaForge.UiGallery.csproj" />
+    <Project Path="mods/TopiaForge.Worlds/TopiaForge.Worlds.csproj" />
+    <Project Path="mods/TopiaForge.Zombies/TopiaForge.Zombies.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TopiaForge.ModManager.Tests/TopiaForge.ModManager.Tests.csproj" />
+  </Folder>
+</Solution>
