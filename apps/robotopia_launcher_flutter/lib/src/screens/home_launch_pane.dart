@@ -10,7 +10,11 @@ class _HeroLaunchPane extends StatelessWidget {
     final install = state.gameInstall!;
     final profile = state.selectedProfile;
     final safeMode = profile?.launchSettings.safeMode == true;
-    final modCount = state.resolution.orderedMods.length;
+    final modCount = safeMode
+        ? 0
+        : profile != null && !profile.inheritManagerModState
+        ? profile.enabledMods.length
+        : state.resolution.orderedMods.length;
 
     final (String headline, String subline) = state.isBusy
         ? ('Working on it…', state.statusMessage)

@@ -1,4 +1,0 @@
-updates:
-  baseUrl: https://furroxide.github.io/quantum-works/
-  channel: release
-  output: build/desktop-updater

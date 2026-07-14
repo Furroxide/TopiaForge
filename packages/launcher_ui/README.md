@@ -1,39 +1,32 @@
-<!--
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
+# Robotopia launcher UI
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/tools/pub/writing-package-pages).
+Shared Flutter theme, motion policy, brand assets, and reusable desktop widgets
+for the Robotopia launcher. Application state stays in `LauncherBloc`; this
+package contains presentation primitives only and performs no filesystem,
+process, archive, or network work.
 
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/to/develop-packages).
--->
-
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
-
-## Features
-
-TODO: List what your package can do. Maybe include images, gifs, or videos.
-
-## Getting started
-
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
-
-## Usage
-
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder.
+## Use
 
 ```dart
-const like = 'sample';
+import 'package:flutter/material.dart';
+import 'package:launcher_ui/launcher_ui.dart';
+
+MaterialApp(
+  theme: buildQuantumWorksTheme(),
+  home: const BorderedPane(
+    child: EmptyStatePanel(
+      icon: Icons.extension_off,
+      title: 'No mods installed',
+      message: 'Install a .robotopiamod package to begin.',
+    ),
+  ),
+);
 ```
 
-## Additional information
+Use Material icons for common commands, preserve keyboard and screen-reader
+semantics, and obtain motion duration through the reduced-motion helpers.
+Screens remain responsible for dispatching events rather than mutating state or
+performing IO.
 
-TODO: Tell users more about the package: where to find more information, how to
-contribute to the package, how to file issues, what response they can expect
-from the package authors, and more.
+Run `flutter analyze` and `flutter test` from this directory after changes.
+The package is private to this repository and is not published to pub.dev.

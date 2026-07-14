@@ -1,23 +1,35 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:launcher_ui/launcher_ui.dart';
 import 'package:robotopia_launcher_flutter/src/launcher_app.dart';
+import 'package:robotopia_launcher_flutter/src/launcher_bloc.dart';
+import 'package:robotopia_launcher_flutter/src/launcher_event.dart';
+import 'package:robotopia_launcher_flutter/src/launcher_section.dart';
+import 'package:robotopia_launcher_flutter/src/launcher_state.dart';
+import 'package:robotopia_launcher_flutter/src/screens.dart';
 
 part 'widget_test_fakes.dart';
+part 'widget_test_developer_fake_helpers.dart';
+part 'widget_test_publisher_fake.dart';
+part 'widget_lifecycle_test_cases.dart';
+part 'widget_install_test_cases.dart';
+part 'widget_accessibility_test_cases.dart';
+part 'widget_profile_launch_test_cases.dart';
 part 'widget_test_snapshots.dart';
-
-// The Developer screen's ListView scrollable (stable across rebuilds). Scoped by key so it never resolves to a
-// pane's internal TextField scrollable, which the lazy ListView disposes as content scrolls off-screen.
-Finder _devScrollable() => find
-    .descendant(
-      of: find.byKey(const Key('developer-scroll')),
-      matching: find.byType(Scrollable),
-    )
-    .first;
+part 'widget_ugc_test_cases.dart';
 
 void main() {
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
+  registerUgcWidgetTests();
+  registerUgcBlocTests();
+  registerLauncherLifecycleTests();
+  registerInstallConfirmationWidgetTests();
+  registerAccessibilityWidgetTests();
 
   // Home's GlowButton pulses on a repeating AnimationController, which would
   // deadlock pumpAndSettle. Running the suite with reduced motion keeps every
@@ -50,6 +62,25 @@ void main() {
     );
   });
 
+  testWidgets('settings expose only the safe manual launcher update path', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      RobotopiaLauncherApp(repository: _FakeLauncherRepository()),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Manual only'), findsOneWidget);
+    expect(
+      find.textContaining('Automatic self-update is disabled'),
+      findsOneWidget,
+    );
+    expect(find.text('Enable launcher updates'), findsNothing);
+  });
+
   // Home stacks the hero, profiles, and discover zones vertically; the
   // default 800x600 test window clips the lower zones, so home tests run in a
   // taller viewport to keep every target tappable.
@@ -63,6 +94,8 @@ void main() {
     await tester.pumpWidget(RobotopiaLauncherApp(repository: repository));
     await tester.pumpAndSettle();
   }
+
+  _registerProfileLaunchWidgetTests(pumpHome);
 
   testWidgets('home launch pad renders ready state and update pill', (
     tester,
@@ -246,45 +279,6 @@ void main() {
       tester.getTopLeft(find.text('Framework Mod')).dy,
       lessThan(tester.getTopLeft(find.text('Gameplay Mod')).dy),
     );
-  });
-
-  testWidgets('profile card play button launches that profile', (tester) async {
-    final repository = _FakeLauncherRepository(
-      snapshot: _readySnapshot(
-        profiles: [
-          LauncherProfile.defaultProfile(),
-          const LauncherProfile(id: 'coop', name: 'Co-op'),
-        ],
-      ),
-    );
-    await pumpHome(tester, repository);
-
-    expect(find.text('Jump back in'), findsOneWidget);
-    expect(find.text('Play'), findsNWidgets(2));
-    // Selected profile is listed first, so the last Play belongs to Co-op.
-    await tester.tap(find.text('Play').last);
-    await tester.pumpAndSettle();
-
-    expect(repository.launchedProfileIds, ['coop']);
-  });
-
-  testWidgets('profile card play auto-repairs before launch', (tester) async {
-    final repository = _FakeLauncherRepository(
-      snapshot: _readySnapshot(
-        needsRepair: true,
-        profiles: [
-          LauncherProfile.defaultProfile(),
-          const LauncherProfile(id: 'coop', name: 'Co-op'),
-        ],
-      ),
-    );
-    await pumpHome(tester, repository);
-
-    await tester.tap(find.text('Play').last);
-    await tester.pumpAndSettle();
-
-    expect(repository.installOrRepairRuntimeCount, 1);
-    expect(repository.launchedProfileIds, ['coop']);
   });
 
   testWidgets('setup screen keeps launch configuration', (tester) async {

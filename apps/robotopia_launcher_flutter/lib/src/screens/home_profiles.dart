@@ -16,10 +16,13 @@ class _JumpBackInRow extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 12,
+          runSpacing: 4,
           children: [
             Text('Jump back in', style: Theme.of(context).textTheme.titleLarge),
-            const Spacer(),
             TextButton.icon(
               onPressed: () => _add(
                 context,
@@ -32,7 +35,13 @@ class _JumpBackInRow extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         SizedBox(
-          height: 148,
+          height:
+              148 +
+              84 *
+                  (MediaQuery.textScalerOf(
+                        context,
+                      ).scale(1).clamp(1.0, 2.0).toDouble() -
+                      1),
           child: ListView(
             scrollDirection: Axis.horizontal,
             children: [
@@ -63,8 +72,11 @@ class _ProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textScale = MediaQuery.textScalerOf(
+      context,
+    ).scale(1).clamp(1.0, 2.0).toDouble();
     final safeMode = profile.launchSettings.safeMode;
-    final modsLabel = profile.enabledMods.isEmpty
+    final modsLabel = profile.inheritManagerModState
         ? 'Current mod setup'
         : '${profile.enabledMods.length} '
               '${profile.enabledMods.length == 1 ? 'mod' : 'mods'}';
@@ -75,7 +87,7 @@ class _ProfileCard extends StatelessWidget {
       padding: const EdgeInsets.only(right: 12, bottom: 8),
       child: HoverLift(
         child: Container(
-          width: 236,
+          width: 236 + 100 * (textScale - 1),
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
           decoration: BoxDecoration(
             color: QuantumWorksPalette.surface,

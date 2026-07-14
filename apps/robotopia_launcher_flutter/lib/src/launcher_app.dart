@@ -5,9 +5,9 @@ import 'package:launcher_ui/launcher_ui.dart';
 
 import 'launcher_bloc.dart';
 import 'launcher_event.dart';
+import 'launcher_keyboard_navigation.dart';
 import 'launcher_section.dart';
 import 'launcher_state.dart';
-import 'launcher_update_controller.dart';
 import 'screens.dart';
 
 class RobotopiaLauncherApp extends StatelessWidget {
@@ -32,6 +32,7 @@ class RobotopiaLauncherApp extends StatelessWidget {
           title: 'QuantumWorks',
           debugShowCheckedModeBanner: false,
           theme: buildQuantumWorksTheme(),
+          highContrastTheme: buildQuantumWorksHighContrastTheme(),
           home: const LauncherShell(),
         ),
       ),
@@ -48,15 +49,24 @@ class LauncherShell extends StatelessWidget {
       builder: (context, state) {
         final visibleSections = state.visibleSections;
         final selectedIndex = visibleSections.indexOf(state.section);
-        return LauncherUpdateControllerHost(
-          settings: state.launcherUpdates,
+        final media = MediaQuery.of(context);
+        final compactNavigation = media.textScaler.scale(1) > 1.3;
+        return LauncherKeyboardNavigation(
+          currentSection: state.section,
+          visibleSections: visibleSections,
+          onSectionSelected: (section) => context.read<LauncherBloc>().add(
+            LauncherSectionSelected(section),
+          ),
           child: Scaffold(
             body: QuantumWorksBackdrop(
               child: Row(
                 children: [
                   NavigationRail(
-                    minWidth: 86,
-                    labelType: NavigationRailLabelType.all,
+                    minWidth: compactNavigation ? 64 : 86,
+                    scrollable: true,
+                    labelType: compactNavigation
+                        ? NavigationRailLabelType.none
+                        : NavigationRailLabelType.all,
                     selectedIndex: selectedIndex < 0 ? null : selectedIndex,
                     onDestinationSelected: (index) => context
                         .read<LauncherBloc>()
@@ -73,7 +83,6 @@ class LauncherShell extends StatelessWidget {
                         _TopBar(state: state),
                         if (state.isBusy)
                           const LinearProgressIndicator(minHeight: 3),
-                        const LauncherUpdateBanner(),
                         Expanded(child: LauncherBody(state: state)),
                         _StatusBar(state: state),
                       ],
@@ -160,8 +169,8 @@ class _TopBar extends StatelessWidget {
     final bloc = context.read<LauncherBloc>();
     final selectedProfile = state.selectedProfile;
     return Container(
-      height: 72,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      constraints: const BoxConstraints(minHeight: 72),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: const BoxDecoration(
         color: Color(0xEEFFF7E9),
         border: Border(
@@ -177,18 +186,22 @@ class _TopBar extends StatelessWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final compact = constraints.maxWidth < 760;
+          final textScale = MediaQuery.textScalerOf(context).scale(1);
+          final compact = constraints.maxWidth < 760 || textScale > 1.3;
+          final iconOnlyActions = constraints.maxWidth < 520 || textScale > 1.7;
           return Row(
             children: [
-              QuantumWorksLogo(height: compact ? 30 : 40),
-              SizedBox(width: compact ? 8 : 22),
+              if (!iconOnlyActions) ...[
+                QuantumWorksLogo(height: compact ? 30 : 40),
+                SizedBox(width: compact ? 8 : 22),
+              ],
               Expanded(
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: ConstrainedBox(
                     constraints: BoxConstraints(maxWidth: compact ? 180 : 220),
                     child: Container(
-                      height: 40,
+                      constraints: const BoxConstraints(minHeight: 40),
                       padding: const EdgeInsets.symmetric(horizontal: 10),
                       decoration: BoxDecoration(
                         color: QuantumWorksPalette.surface,
@@ -236,33 +249,47 @@ class _TopBar extends StatelessWidget {
                   ),
                 ),
               ),
-              Tooltip(
-                message: 'Refresh launcher state',
-                child: IconButton(
-                  onPressed: state.isBusy
-                      ? null
-                      : () => bloc.add(const LauncherRefreshRequested()),
-                  icon: const Icon(Icons.refresh),
+              if (!iconOnlyActions)
+                Tooltip(
+                  message: 'Refresh launcher state',
+                  child: IconButton(
+                    onPressed: state.isBusy
+                        ? null
+                        : () => bloc.add(const LauncherRefreshRequested()),
+                    icon: const Icon(Icons.refresh),
+                  ),
                 ),
-              ),
               const SizedBox(width: 8),
-              FilledButton.icon(
-                onPressed: state.canStartLaunchFlow && !state.isBusy
-                    ? () => bloc.add(const GameLaunchRequested())
-                    : null,
-                style: FilledButton.styleFrom(
-                  backgroundColor: QuantumWorksPalette.discord,
-                  disabledBackgroundColor: QuantumWorksPalette.surfaceTint,
-                  foregroundColor: QuantumWorksPalette.white,
-                  disabledForegroundColor: QuantumWorksPalette.faintText,
+              if (iconOnlyActions)
+                Tooltip(
+                  message: selectedProfile?.launchSettings.safeMode == true
+                      ? 'Launch Robotopia in safe mode'
+                      : 'Launch Robotopia',
+                  child: IconButton.filled(
+                    onPressed: state.canStartLaunchFlow && !state.isBusy
+                        ? () => bloc.add(const GameLaunchRequested())
+                        : null,
+                    icon: const Icon(Icons.play_arrow),
+                  ),
+                )
+              else
+                FilledButton.icon(
+                  onPressed: state.canStartLaunchFlow && !state.isBusy
+                      ? () => bloc.add(const GameLaunchRequested())
+                      : null,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: QuantumWorksPalette.discord,
+                    disabledBackgroundColor: QuantumWorksPalette.surfaceTint,
+                    foregroundColor: QuantumWorksPalette.white,
+                    disabledForegroundColor: QuantumWorksPalette.faintText,
+                  ),
+                  icon: const Icon(Icons.play_arrow),
+                  label: Text(
+                    selectedProfile?.launchSettings.safeMode == true
+                        ? 'Launch Safe'
+                        : 'Launch',
+                  ),
                 ),
-                icon: const Icon(Icons.play_arrow),
-                label: Text(
-                  selectedProfile?.launchSettings.safeMode == true
-                      ? 'Launch Safe'
-                      : 'Launch',
-                ),
-              ),
             ],
           );
         },
@@ -318,46 +345,50 @@ class _StatusBar extends StatelessWidget {
         : needsRepair
         ? 'Repair the runtime now.'
         : null;
-    return Container(
-      height: 34,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: const BoxDecoration(
-        color: Color(0xEEFFF7E9),
-        border: Border(
-          top: BorderSide(color: QuantumWorksPalette.borderStrong, width: 2),
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 34),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        decoration: const BoxDecoration(
+          color: Color(0xEEFFF7E9),
+          border: Border(
+            top: BorderSide(color: QuantumWorksPalette.borderStrong, width: 2),
+          ),
         ),
-      ),
-      child: Row(
-        children: [
-          StatusPill(
-            label: label,
-            tone: tone,
-            icon: icon,
-            tooltip: tooltip,
-            onPressed: action,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              state.statusMessage,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall,
+        child: Row(
+          children: [
+            StatusPill(
+              label: label,
+              tone: tone,
+              icon: icon,
+              tooltip: tooltip,
+              onPressed: action,
             ),
-          ),
-          if (state.errorMessage != null)
-            Flexible(
+            const SizedBox(width: 10),
+            Expanded(
               child: Text(
-                state.errorMessage!,
+                state.statusMessage,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: QuantumWorksPalette.danger,
-                  fontSize: 12,
-                ),
+                style: Theme.of(context).textTheme.bodySmall,
               ),
             ),
-        ],
+            if (state.errorMessage != null)
+              Flexible(
+                child: Text(
+                  state.errorMessage!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: QuantumWorksPalette.danger,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

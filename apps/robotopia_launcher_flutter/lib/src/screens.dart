@@ -1,6 +1,3 @@
-import 'dart:io';
-
-import 'package:desktop_updater/desktop_updater.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -11,12 +8,13 @@ import 'launcher_bloc.dart';
 import 'launcher_event.dart';
 import 'launcher_section.dart';
 import 'launcher_state.dart';
-import 'launcher_update_controller.dart';
 
 part 'screens/browse_profiles_screen.dart';
 part 'screens/developer_screen.dart';
 part 'screens/developer_environment_pane.dart';
 part 'screens/developer_packages_pane.dart';
+part 'screens/developer_ugc_actions_pane.dart';
+part 'screens/developer_ugc_form_sync.dart';
 part 'screens/developer_ugc_pane.dart';
 part 'screens/diagnostics_settings_screen.dart';
 part 'screens/home_discovery.dart';

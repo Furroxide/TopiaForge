@@ -42,22 +42,7 @@ class _UgcLiveSyncPaneState extends State<_UgcLiveSyncPane> {
   @override
   void didUpdateWidget(covariant _UgcLiveSyncPane oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Reload the fields when the active project changes (e.g. after scan/create), but leave in-progress edits
-    // untouched within the same project.
-    final root = widget.state.developerWorkspace?.projectRoot ?? '';
-    if (root != _projectRoot) {
-      _projectRoot = root;
-      final settings = widget.state.ugcLiveSync;
-      _watchFolder.text = settings.watchFolder;
-      _editorUrl.text = settings.editorUrl.isNotEmpty
-          ? settings.editorUrl
-          : settings.documentUrl;
-      _sceneId.text = settings.sceneId;
-      setState(() {
-        _transport = settings.transport;
-        _autoConnect = settings.autoConnectOnStart;
-      });
-    }
+    _syncFormFromState(oldWidget.state);
   }
 
   @override
@@ -135,11 +120,13 @@ class _UgcLiveSyncPaneState extends State<_UgcLiveSyncPane> {
           const SizedBox(height: 10),
           _diagnostics(state),
           const SizedBox(height: 12),
-          if (!hasProject)
+          if (!hasProject) ...[
             const Text(
               'Create or scan a developer project to configure UGC live sync.',
-            )
-          else ...[
+            ),
+            const SizedBox(height: 12),
+            _detachedActions(state, busy),
+          ] else ...[
             const Text(
               'Author UGC content in the Unity companion and hot-reload it into the running game. Connection '
               'values are auto-detected: starting the publisher captures the live document URL and deploys it for you.',
@@ -382,56 +369,6 @@ class _UgcLiveSyncPaneState extends State<_UgcLiveSyncPane> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _actions(LauncherState state, bool busy, bool hasInstall) {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: [
-        FilledButton.icon(
-          onPressed: busy || !hasInstall
-              ? null
-              : () => _add(context, const DeveloperUgcGoLive()),
-          icon: const Icon(Icons.rocket_launch_outlined),
-          label: const Text('Go Live'),
-        ),
-        OutlinedButton.icon(
-          onPressed: busy ? null : _save,
-          icon: const Icon(Icons.save_outlined),
-          label: const Text('Save'),
-        ),
-        OutlinedButton.icon(
-          onPressed: busy || !hasInstall
-              ? null
-              : () => _add(context, const DeveloperUgcConfigDeployed()),
-          icon: const Icon(Icons.cloud_upload_outlined),
-          label: const Text('Deploy to game'),
-        ),
-        OutlinedButton.icon(
-          onPressed: busy
-              ? null
-              : () => _add(context, const DeveloperWatchFolderOpened()),
-          icon: const Icon(Icons.folder_open),
-          label: const Text('Open watch folder'),
-        ),
-        OutlinedButton.icon(
-          onPressed: busy
-              ? null
-              : () => _add(context, const DeveloperUgcPublishToggled()),
-          icon: Icon(
-            state.ugcPublisherRunning
-                ? Icons.stop_circle_outlined
-                : Icons.podcasts,
-          ),
-          label: Text(
-            state.ugcPublisherRunning
-                ? 'Stop Automerge publisher'
-                : 'Publish via Automerge',
-          ),
-        ),
-      ],
     );
   }
 

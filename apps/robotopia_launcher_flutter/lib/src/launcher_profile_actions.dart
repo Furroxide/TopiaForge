@@ -52,7 +52,17 @@ extension LauncherProfileActions on LauncherBloc {
     final id = 'profile-${DateTime.now().millisecondsSinceEpoch}';
     final profiles = [
       ...state.profiles,
-      LauncherProfile(id: id, name: 'New Profile'),
+      LauncherProfile(
+        id: id,
+        name: 'New Profile',
+        enabledMods: {
+          for (final mod in state.installedMods.where((mod) => mod.enabled))
+            mod.id,
+        },
+        selectedVersions: {
+          for (final mod in state.installedMods) mod.id: mod.version,
+        },
+      ),
     ];
     await _repository.saveProfiles(profiles, id);
     emit(

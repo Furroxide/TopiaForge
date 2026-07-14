@@ -60,11 +60,18 @@ class ModsScreen extends StatelessWidget {
           ),
         ),
         if (state.installPlan != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-            child: _InstallPlanPane(state: state),
+          Flexible(
+            flex: 2,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: SingleChildScrollView(
+                primary: false,
+                child: _InstallPlanPane(state: state),
+              ),
+            ),
           ),
         Expanded(
+          flex: state.installPlan == null ? 1 : 3,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
             child: Row(
@@ -107,6 +114,7 @@ class _ModList extends StatelessWidget {
   Widget build(BuildContext context) {
     return BorderedPane(
       padding: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
       child: state.filteredMods.isEmpty
           ? const EmptyStatePanel(
               icon: Icons.extension_off,
@@ -214,6 +222,12 @@ class _InstallPlanPane extends StatelessWidget {
                   .map((dependency) => dependency.id)
                   .join(', '),
             ),
+          _keyValue(
+            'Declared capabilities',
+            plan.requiredPermissions.isEmpty
+                ? 'None declared'
+                : plan.requiredPermissions.join(', '),
+          ),
           if (plan.installActions.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
@@ -228,7 +242,14 @@ class _InstallPlanPane extends StatelessWidget {
           FilledButton.icon(
             onPressed: plan.hasBlockingIssues || state.isBusy
                 ? null
-                : () => _add(context, const PreviewedPackageInstalled()),
+                : () => _confirm(
+                    context,
+                    title: 'Install ${plan.manifest.name}?',
+                    message: _installConfirmationMessage(plan),
+                    confirmLabel: 'Install',
+                    action: () =>
+                        _add(context, const PreviewedPackageInstalled()),
+                  ),
             icon: const Icon(Icons.check),
             label: const Text('Install Plan'),
           ),
@@ -238,18 +259,35 @@ class _InstallPlanPane extends StatelessWidget {
   }
 }
 
+String _installConfirmationMessage(PackageInstallPlan plan) {
+  final actions = plan.installActions.length;
+  final capabilities = plan.requiredPermissions.isEmpty
+      ? 'No runtime capabilities are declared.'
+      : 'Declared runtime capabilities: ${plan.requiredPermissions.join(', ')}.';
+  return 'This will install or enable $actions package${actions == 1 ? '' : 's'}. '
+      '$capabilities Only install packages from authors you trust.';
+}
+
 Widget _installActionTile(PackageInstallAction action) {
   return Padding(
     padding: const EdgeInsets.only(bottom: 6),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(action.root ? Icons.archive : Icons.account_tree, size: 16),
+        Icon(
+          action.enableOnly
+              ? Icons.play_arrow
+              : action.root
+              ? Icons.archive
+              : Icons.account_tree,
+          size: 16,
+        ),
         const SizedBox(width: 6),
         Expanded(
           child: Text(
             [
               '${action.name} ${action.version}',
+              if (action.enableOnly) 'enable installed dependency',
               if (action.sourceName.isNotEmpty) action.sourceName,
               if (action.isRemote) 'remote',
               if (action.packageSha256.isNotEmpty) 'sha256 ready',

@@ -12,9 +12,11 @@ class LauncherState {
     required this.installedMods,
     required this.registryMods,
     required this.packageSources,
+    required this.sourceStatuses,
     required this.worldCatalog,
     required this.legacyMods,
     required this.recentLog,
+    required this.launcherLog,
     required this.resolution,
     required this.launcherUpdates,
     this.gameInstall,
@@ -52,9 +54,11 @@ class LauncherState {
     installedMods: const [],
     registryMods: const [],
     packageSources: const [],
+    sourceStatuses: const [],
     worldCatalog: WorldCatalog.fallback(),
     legacyMods: const [],
     recentLog: '',
+    launcherLog: '',
     resolution: const DependencyResolutionResult(
       orderedMods: [],
       issues: [],
@@ -72,9 +76,11 @@ class LauncherState {
   final List<InstalledMod> installedMods;
   final List<RegistryMod> registryMods;
   final List<PackageSource> packageSources;
+  final List<PackageSourceStatus> sourceStatuses;
   final WorldCatalog worldCatalog;
   final List<LegacyMod> legacyMods;
   final String recentLog;
+  final String launcherLog;
   final DependencyResolutionResult resolution;
   final LauncherUpdateSettings launcherUpdates;
   final String? selectedModId;
@@ -198,9 +204,11 @@ class LauncherState {
     List<InstalledMod>? installedMods,
     List<RegistryMod>? registryMods,
     List<PackageSource>? packageSources,
+    List<PackageSourceStatus>? sourceStatuses,
     WorldCatalog? worldCatalog,
     List<LegacyMod>? legacyMods,
     String? recentLog,
+    String? launcherLog,
     DependencyResolutionResult? resolution,
     LauncherUpdateSettings? launcherUpdates,
     String? selectedModId,
@@ -221,6 +229,7 @@ class LauncherState {
     EnvironmentReport? developerEnvironment,
     DeveloperSetupResult? developerSetup,
     UgcLiveSyncStatusSnapshot? ugcStatus,
+    bool clearUgcStatus = false,
     List<UgcSceneRef>? ugcScenes,
     List<String>? ugcSidecarLog,
     String? ugcCapturedDocumentUrl,
@@ -242,9 +251,11 @@ class LauncherState {
       installedMods: installedMods ?? this.installedMods,
       registryMods: registryMods ?? this.registryMods,
       packageSources: packageSources ?? this.packageSources,
+      sourceStatuses: sourceStatuses ?? this.sourceStatuses,
       worldCatalog: worldCatalog ?? this.worldCatalog,
       legacyMods: legacyMods ?? this.legacyMods,
       recentLog: recentLog ?? this.recentLog,
+      launcherLog: launcherLog ?? this.launcherLog,
       resolution: resolution ?? this.resolution,
       launcherUpdates: launcherUpdates ?? this.launcherUpdates,
       selectedModId: clearSelectedMod
@@ -266,7 +277,7 @@ class LauncherState {
       developerMode: developerMode ?? this.developerMode,
       developerEnvironment: developerEnvironment ?? this.developerEnvironment,
       developerSetup: developerSetup ?? this.developerSetup,
-      ugcStatus: ugcStatus ?? this.ugcStatus,
+      ugcStatus: clearUgcStatus ? null : ugcStatus ?? this.ugcStatus,
       ugcScenes: ugcScenes ?? this.ugcScenes,
       ugcSidecarLog: ugcSidecarLog ?? this.ugcSidecarLog,
       ugcCapturedDocumentUrl:

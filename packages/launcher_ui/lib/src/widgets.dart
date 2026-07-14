@@ -192,36 +192,46 @@ class EmptyStatePanel extends StatelessWidget {
               ),
             BorderedPane(
               padding: const EdgeInsets.fromLTRB(28, 30, 28, 26),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 62,
-                    height: 62,
-                    decoration: BoxDecoration(
-                      color: QuantumWorksPalette.surfaceTint,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: QuantumWorksPalette.launch,
-                        width: 3,
+              child: SingleChildScrollView(
+                primary: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 62,
+                      height: 62,
+                      decoration: BoxDecoration(
+                        color: QuantumWorksPalette.surfaceTint,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: QuantumWorksPalette.launch,
+                          width: 3,
+                        ),
+                      ),
+                      child: Icon(
+                        icon,
+                        size: 32,
+                        color: QuantumWorksPalette.text,
                       ),
                     ),
-                    child: Icon(icon, size: 32, color: QuantumWorksPalette.text),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleLarge,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    message,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                  if (action != null) ...[const SizedBox(height: 20), action!],
-                ],
+                    const SizedBox(height: 16),
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleLarge,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      message,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                      textAlign: TextAlign.center,
+                    ),
+                    if (action != null) ...[
+                      const SizedBox(height: 20),
+                      action!,
+                    ],
+                  ],
+                ),
               ),
             ),
           ],
@@ -278,22 +288,21 @@ class BorderedPane extends StatelessWidget {
     required this.child,
     this.padding = const EdgeInsets.all(12),
     this.accentColor = QuantumWorksPalette.borderStrong,
+    this.clipBehavior = Clip.none,
   });
 
   final Widget child;
   final EdgeInsetsGeometry padding;
   final Color accentColor;
+  final Clip clipBehavior;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final borderRadius = BorderRadius.circular(28);
+    final paddedChild = Padding(padding: padding, child: child);
+    return DecoratedBox(
       decoration: BoxDecoration(
-        color: QuantumWorksPalette.surface,
-        border: Border.all(
-          color: accentColor.withValues(alpha: 0.52),
-          width: 3,
-        ),
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: borderRadius,
         boxShadow: [
           BoxShadow(
             color: accentColor.withValues(alpha: 0.18),
@@ -307,7 +316,18 @@ class BorderedPane extends StatelessWidget {
           ),
         ],
       ),
-      child: Padding(padding: padding, child: child),
+      child: Material(
+        color: QuantumWorksPalette.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: borderRadius,
+          side: BorderSide(
+            color: accentColor.withValues(alpha: 0.52),
+            width: 3,
+          ),
+        ),
+        clipBehavior: clipBehavior,
+        child: paddedChild,
+      ),
     );
   }
 }

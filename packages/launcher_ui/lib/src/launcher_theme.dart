@@ -65,6 +65,7 @@ ThemeData buildQuantumWorksTheme() {
 
   return ThemeData(
     useMaterial3: true,
+    splashFactory: InkRipple.splashFactory,
     brightness: Brightness.light,
     colorScheme: colorScheme,
     fontFamily: QuantumWorksBrandFonts.body,
@@ -194,7 +195,10 @@ ThemeData buildQuantumWorksTheme() {
         borderRadius: BorderRadius.circular(28),
         side: const BorderSide(color: QuantumWorksPalette.launch, width: 3),
       ),
-      titleTextStyle: _displayStyle(fontSize: 22, color: QuantumWorksPalette.text),
+      titleTextStyle: _displayStyle(
+        fontSize: 22,
+        color: QuantumWorksPalette.text,
+      ),
       contentTextStyle: const TextStyle(
         color: QuantumWorksPalette.text,
         fontSize: 14,
@@ -212,7 +216,44 @@ ThemeData buildQuantumWorksTheme() {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(26),
-        side: const BorderSide(color: QuantumWorksPalette.borderStrong, width: 2),
+        side: const BorderSide(
+          color: QuantumWorksPalette.borderStrong,
+          width: 2,
+        ),
+      ),
+    ),
+  );
+}
+
+ThemeData buildQuantumWorksHighContrastTheme() {
+  final base = buildQuantumWorksTheme();
+  return base.copyWith(
+    scaffoldBackgroundColor: QuantumWorksPalette.white,
+    canvasColor: QuantumWorksPalette.white,
+    focusColor: QuantumWorksPalette.accentDark,
+    hoverColor: const Color(0x332D3748),
+    colorScheme: base.colorScheme.copyWith(
+      primary: QuantumWorksPalette.darkPanel,
+      onPrimary: QuantumWorksPalette.white,
+      secondary: QuantumWorksPalette.accentDark,
+      onSecondary: QuantumWorksPalette.white,
+      surface: QuantumWorksPalette.white,
+      onSurface: QuantumWorksPalette.text,
+      outline: QuantumWorksPalette.darkPanel,
+      outlineVariant: QuantumWorksPalette.mutedText,
+    ),
+    dividerTheme: const DividerThemeData(
+      color: QuantumWorksPalette.darkPanel,
+      thickness: 2,
+      space: 2,
+    ),
+    navigationRailTheme: base.navigationRailTheme.copyWith(
+      indicatorColor: QuantumWorksPalette.white,
+      selectedIconTheme: const IconThemeData(
+        color: QuantumWorksPalette.darkPanel,
+      ),
+      unselectedIconTheme: const IconThemeData(
+        color: QuantumWorksPalette.darkPanel,
       ),
     ),
   );
@@ -325,7 +366,10 @@ ButtonStyle _outlinedButtonStyle() {
       if (states.contains(WidgetState.disabled)) {
         return const BorderSide(color: QuantumWorksPalette.surfaceTint);
       }
-      return const BorderSide(color: QuantumWorksPalette.borderStrong, width: 2);
+      return const BorderSide(
+        color: QuantumWorksPalette.borderStrong,
+        width: 2,
+      );
     }),
     textStyle: const WidgetStatePropertyAll(
       TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
@@ -338,7 +382,9 @@ ButtonStyle _outlinedButtonStyle() {
 
 ButtonStyle _textButtonStyle() {
   return ButtonStyle(
-    foregroundColor: const WidgetStatePropertyAll(QuantumWorksPalette.launchDark),
+    foregroundColor: const WidgetStatePropertyAll(
+      QuantumWorksPalette.launchDark,
+    ),
     textStyle: const WidgetStatePropertyAll(
       TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
     ),

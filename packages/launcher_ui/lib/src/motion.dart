@@ -214,7 +214,9 @@ class StaggeredReveal extends StatelessWidget {
       return child;
     }
     final duration = Duration(milliseconds: 320 + 60 * index);
-    final delayFraction = index == 0 ? 0.0 : (60.0 * index) / (320 + 60 * index);
+    final delayFraction = index == 0
+        ? 0.0
+        : (60.0 * index) / (320 + 60 * index);
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
       duration: duration,

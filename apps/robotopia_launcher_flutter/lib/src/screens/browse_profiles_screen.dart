@@ -20,6 +20,7 @@ class BrowseScreen extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
             child: BorderedPane(
               padding: EdgeInsets.zero,
+              clipBehavior: Clip.antiAlias,
               child: registryMods.isEmpty
                   ? const EmptyStatePanel(
                       icon: Icons.travel_explore,
@@ -178,6 +179,7 @@ class _ProfilesList extends StatelessWidget {
   Widget build(BuildContext context) {
     return BorderedPane(
       padding: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
       child: ListView.separated(
         itemCount: state.profiles.length,
         separatorBuilder: (context, index) => const Divider(),
@@ -222,14 +224,16 @@ class _ProfileDetail extends StatelessWidget {
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Safe mode'),
-                  subtitle: const Text('Disables all mods before launch.'),
+                  subtitle: const Text(
+                    'Temporarily bypasses all mods for each launch.',
+                  ),
                   value: selected.launchSettings.safeMode,
                   onChanged: (enabled) =>
                       _add(context, SafeModeToggled(enabled)),
                 ),
                 _keyValue(
                   'Enabled mods',
-                  selected.enabledMods.isEmpty
+                  selected.inheritManagerModState
                       ? 'Uses manager state'
                       : selected.enabledMods.length.toString(),
                 ),

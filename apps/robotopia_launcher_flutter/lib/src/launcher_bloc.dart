@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
+import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 
@@ -10,6 +10,7 @@ import 'launcher_section.dart';
 import 'launcher_state.dart';
 
 part 'launcher_bloc_actions.dart';
+part 'launcher_event_dispatch.dart';
 part 'launcher_game_install_actions.dart';
 part 'launcher_profile_actions.dart';
 part 'launcher_developer_ugc_actions.dart';
@@ -20,104 +21,63 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
   LauncherBloc(this._repository, {DeveloperRepository? developerRepository})
     : _developerRepository = developerRepository,
       super(LauncherState.initial()) {
-    on<LauncherStarted>(_onLoad);
-    on<LauncherRefreshRequested>(_onLoad);
-    on<LauncherSectionSelected>(_onSectionSelected);
-    on<ModSelected>(_onModSelected);
-    on<ModSearchChanged>(_onModSearchChanged);
-    on<ProfileSelected>(_onProfileSelected);
-    on<ProfileLaunchRequested>(_onProfileLaunchRequested);
-    on<ProfileCreated>(_onProfileCreated);
-    on<SelectedProfileDuplicated>(_onSelectedProfileDuplicated);
-    on<SelectedProfileDeleted>(_onSelectedProfileDeleted);
-    on<SafeModeToggled>(_onSafeModeToggled);
-    on<WorldSelectionChanged>(_onWorldSelectionChanged);
-    on<KnownInstallDetected>(_onKnownInstallDetected);
-    on<GameDirectorySelected>(_onGameDirectorySelected);
-    on<RuntimeRepaired>(_onRuntimeRepaired);
-    on<PackagePreviewRequested>(_onPackagePreviewRequested);
-    on<PreviewedPackageInstalled>(_onPreviewedPackageInstalled);
-    on<InboxPackagesInstalled>(_onInboxPackagesInstalled);
-    on<SelectedModEnabledChanged>(_onSelectedModEnabledChanged);
-    on<AllModsDisabled>(_onAllModsDisabled);
-    on<SelectedModUninstalled>(_onSelectedModUninstalled);
-    on<GameLaunchRequested>(_onGameLaunchRequested);
-    on<GameRestartRequested>(_onGameRestartRequested);
-    on<DiagnosticBundleRequested>(_onDiagnosticBundleRequested);
-    on<RecheckGameCompatRequested>(_onRecheckGameCompat);
-    on<SelectedProfileExported>(_onSelectedProfileExported);
-    on<ProfileImported>(_onProfileImported);
-    on<PackageSourceAdded>(_onPackageSourceAdded);
-    on<PackageSourceEnabledChanged>(_onPackageSourceEnabledChanged);
-    on<PackageSourceRemoved>(_onPackageSourceRemoved);
-    on<PackageSourcesRefreshed>(_onLoad);
-    on<LauncherUpdateSettingsChanged>(_onLauncherUpdateSettingsChanged);
-    on<GameFolderOpened>(_onGameFolderOpened);
-    on<DataFolderOpened>(_onDataFolderOpened);
-    on<DeveloperWorkspaceRefreshed>(_onDeveloperWorkspaceRefreshed);
-    on<DeveloperProjectResolved>(_onDeveloperProjectResolved);
-    on<DeveloperDoctorRequested>(_onDeveloperDoctorRequested);
-    on<DeveloperSampleProjectCreated>(_onDeveloperSampleProjectCreated);
-    on<DeveloperUgcSettingsSaved>(_onDeveloperUgcSettingsSaved);
-    on<DeveloperUgcConfigDeployed>(_onDeveloperUgcConfigDeployed);
-    on<DeveloperWatchFolderOpened>(_onDeveloperWatchFolderOpened);
-    on<DeveloperUgcPublishToggled>(_onDeveloperUgcPublishToggled);
-    on<DeveloperUgcStatusRefreshed>(_onDeveloperUgcStatusRefreshed);
-    on<DeveloperUgcGoLive>(_onDeveloperUgcGoLive);
-    on<DeveloperUgcSidecarOutput>(_onDeveloperUgcSidecarOutput);
-    on<DeveloperModeToggled>(_onDeveloperModeToggled);
-    on<DeveloperEnvironmentChecked>(_onDeveloperEnvironmentChecked);
-    on<DeveloperSetupRequested>(_onDeveloperSetupRequested);
-    on<DeveloperProjectPacked>(_onDeveloperProjectPacked);
-    on<DeveloperProjectInstalledToGame>(_onDeveloperProjectInstalledToGame);
-    on<DeveloperProjectFolderOpened>(_onDeveloperProjectFolderOpened);
-    on<DeveloperToolLinkOpened>(_onDeveloperToolLinkOpened);
-    on<DeveloperModProjectCreated>(_onDeveloperModProjectCreated);
-    on<DeveloperProjectsRefreshed>(_onDeveloperProjectsRefreshed);
-    on<DeveloperProjectAdded>(_onDeveloperProjectAdded);
-    on<DeveloperProjectRemoved>(_onDeveloperProjectRemoved);
-    on<DeveloperProjectOpenedInUnity>(_onDeveloperProjectOpenedInUnity);
-    on<DeveloperProjectManaged>(_onDeveloperProjectManaged);
-    on<DeveloperUnityProjectCreated>(_onDeveloperUnityProjectCreated);
-    on<DeveloperUnityResolved>(_onDeveloperUnityResolved);
-    on<DeveloperUnityPackageAdded>(_onDeveloperUnityPackageAdded);
-    on<DeveloperUnityPackageRemoved>(_onDeveloperUnityPackageRemoved);
-    on<DeveloperUnityRepoAdded>(_onDeveloperUnityRepoAdded);
-    on<DeveloperUnityRepoRemoved>(_onDeveloperUnityRepoRemoved);
+    on<LauncherEvent>(_dispatchEvent, transformer: sequential());
+    _ugcPublisherSub = _repository.ugcPublisherEvents.listen((event) {
+      if (isClosed) {
+        return;
+      }
+      switch (event) {
+        case UgcPublisherOutput(:final sessionId, :final line):
+          add(DeveloperUgcSidecarOutput(line, sessionId));
+        case UgcPublisherExited(:final sessionId, :final exitCode):
+          add(DeveloperUgcPublisherExited(sessionId, exitCode));
+      }
+    });
   }
 
   final LauncherRepository _repository;
   final DeveloperRepository? _developerRepository;
   final DependencyPlanner _dependencyPlanner = const DependencyPlanner();
 
-  // The Automerge publisher (Node sidecar) when running in watch mode from the launcher.
-  Process? _ugcPublisher;
-
-  // The publisher's piped stdout/stderr line subscriptions, tracked so they can be cancelled when the publisher
-  // stops or the bloc closes (otherwise they could call add() on a closed bloc).
-  StreamSubscription<String>? _ugcStdoutSub;
-  StreamSubscription<String>? _ugcStderrSub;
+  StreamSubscription<UgcPublisherEvent>? _ugcPublisherSub;
 
   // True while a "Go Live" is waiting for the publisher to report its live document URL before launching the game
   // (so the game auto-connects to the real document, not an empty one).
   bool _ugcGoLivePending = false;
+  int? _ugcPublisherSessionId;
+  Completer<void>? _ugcMutationLock;
 
   String get dataRoot => _repository.dataRoot;
 
-  // Cancels and clears the publisher stream subscriptions. Safe to call repeatedly.
-  void _cancelUgcPublisherStreams() {
-    _ugcStdoutSub?.cancel();
-    _ugcStderrSub?.cancel();
-    _ugcStdoutSub = null;
-    _ugcStderrSub = null;
+  Future<T> _withUgcMutation<T>(Future<T> Function() run) async {
+    while (_ugcMutationLock != null) {
+      final pending = _ugcMutationLock!;
+      await pending.future;
+    }
+    final lock = Completer<void>();
+    _ugcMutationLock = lock;
+    try {
+      return await run();
+    } finally {
+      _ugcMutationLock = null;
+      lock.complete();
+    }
   }
 
   @override
-  Future<void> close() async {
-    _cancelUgcPublisherStreams();
-    _ugcPublisher?.kill();
-    _ugcPublisher = null;
-    return super.close();
+  Future<void> close() {
+    final publisherSubscription = _ugcPublisherSub;
+    _ugcPublisherSub = null;
+    // Initiate both stream shutdowns synchronously so no new publisher output
+    // or UI events can enter while pending handlers finish. Repository
+    // disposal then owns sidecar shutdown instead of racing a handler with a
+    // duplicate stop request.
+    final publisherClose = publisherSubscription?.cancel();
+    final blocClose = super.close();
+    return Future.wait<void>([
+      ?publisherClose,
+      blocClose,
+    ]).whenComplete(_repository.dispose);
   }
 
   Future<void> _onLoad(LauncherEvent event, Emitter<LauncherState> emit) async {
@@ -127,10 +87,10 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     });
   }
 
-  void _onSectionSelected(
+  Future<void> _onSectionSelected(
     LauncherSectionSelected event,
     Emitter<LauncherState> emit,
-  ) {
+  ) async {
     emit(state.copyWith(section: event.section));
     // Auto-populate the Developer cockpit the first time it's opened.
     if (event.section == LauncherSection.developer &&
@@ -177,7 +137,10 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     Emitter<LauncherState> emit,
   ) async {
     final settings = state.launcherUpdates.copyWith(
-      enabled: event.enabled,
+      // Preserve the serialized contract without allowing a stale setting or
+      // synthetic event to reactivate an updater that cannot yet verify
+      // owner-signed metadata and fully bound extraction.
+      enabled: false,
       checkAutomatically: event.checkAutomatically,
       channel: event.channel,
     );
@@ -185,20 +148,22 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     emit(
       state.copyWith(
         launcherUpdates: settings,
-        statusMessage:
-            'Launcher updates set to ${settings.channel.name} channel.',
+        statusMessage: 'Launcher updates require a manual package download.',
       ),
     );
   }
 
-  void _onModSelected(ModSelected event, Emitter<LauncherState> emit) {
+  Future<void> _onModSelected(
+    ModSelected event,
+    Emitter<LauncherState> emit,
+  ) async {
     emit(state.copyWith(selectedModId: event.modId));
   }
 
-  void _onModSearchChanged(
+  Future<void> _onModSearchChanged(
     ModSearchChanged event,
     Emitter<LauncherState> emit,
-  ) {
+  ) async {
     emit(state.copyWith(modSearch: event.query));
   }
 
@@ -375,9 +340,7 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     if (selected == null) {
       return;
     }
-    await File(event.path).writeAsString(
-      const JsonEncoder.withIndent('  ').convert(selected.toJson()),
-    );
+    await _repository.exportProfile(selected, event.path);
     emit(state.copyWith(statusMessage: 'Exported profile to ${event.path}.'));
   }
 
@@ -385,12 +348,10 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     ProfileImported event,
     Emitter<LauncherState> emit,
   ) async {
-    final decoded =
-        jsonDecode(await File(event.path).readAsString())
-            as Map<String, Object?>;
-    final profile = LauncherProfile.fromJson(
-      decoded,
-    ).copyWith(id: 'profile-${DateTime.now().millisecondsSinceEpoch}');
+    final imported = await _repository.importProfile(event.path);
+    final profile = imported.copyWith(
+      id: 'profile-${DateTime.now().millisecondsSinceEpoch}',
+    );
     final profiles = [...state.profiles, profile];
     await _repository.saveProfiles(profiles, profile.id);
     emit(
@@ -427,10 +388,16 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
       installedMods: snapshot.installedMods,
       registryMods: snapshot.registryMods,
       packageSources: snapshot.packageSources,
+      sourceStatuses: snapshot.sourceStatuses,
       worldCatalog: snapshot.worldCatalog,
       legacyMods: snapshot.legacyMods,
       recentLog: snapshot.recentLog,
-      resolution: _dependencyPlanner.resolveInstalled(snapshot.installedMods),
+      launcherLog: snapshot.launcherLog,
+      resolution: _dependencyPlanner.resolveInstalled(
+        snapshot.installedMods,
+        gameVersion: snapshot.gameInstall?.gameVersion,
+        requireKnownGameVersion: true,
+      ),
       launcherUpdates: snapshot.launcherUpdates,
       selectedModId: selected,
       clearSelectedMod: selected == null,
