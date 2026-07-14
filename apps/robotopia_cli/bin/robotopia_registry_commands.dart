@@ -86,10 +86,16 @@ extension _RegistryCommands on _RobotopiaCli {
     if (changelog.startsWith('@')) {
       final changelogFile = File(changelog.substring(1));
       if (!changelogFile.existsSync()) {
-        stderr.writeln('Changelog file does not exist: ${changelog.substring(1)}');
+        stderr.writeln(
+          'Changelog file does not exist: ${changelog.substring(1)}',
+        );
         return 1;
       }
-      changelog = changelogFile.readAsStringSync().trim();
+      changelog = readBoundedTextFileSync(
+        changelogFile,
+        maxBytes: CliFileLimits.changelog,
+        allowEmpty: true,
+      ).trim();
     }
 
     final outputDir =
@@ -101,7 +107,9 @@ extension _RegistryCommands on _RobotopiaCli {
               : p.join(root, 'registry');
         })();
 
-    final package = readModPackage(packageFile.readAsBytesSync());
+    final package = readModPackage(
+      readBoundedRegularFileSync(packageFile, maxBytes: CliFileLimits.package),
+    );
     final entryPath = p.join(
       outputDir,
       '${package.manifest.id.toLowerCase()}.json',
@@ -111,7 +119,10 @@ extension _RegistryCommands on _RobotopiaCli {
     if (entryFile.existsSync()) {
       try {
         existing = RegistryEntryFile.fromJson(
-          jsonDecode(entryFile.readAsStringSync()) as Map<String, Object?>,
+          readBoundedJsonObjectSync(
+            entryFile,
+            maxBytes: CliFileLimits.registryEntry,
+          ),
         );
       } on Object {
         stderr.writeln(
@@ -146,21 +157,16 @@ extension _RegistryCommands on _RobotopiaCli {
     );
     stdout.writeln('');
     stdout.writeln('Next steps:');
-    stdout.writeln(
-      '  1. Host the exact packed file at: $url',
-    );
+    stdout.writeln('  1. Host the exact packed file at: $url');
     stdout.writeln(
       '     (a GitHub Release asset works well; never replace a published file '
       '— the sha256 is pinned)',
     );
+    stdout.writeln('  2. Publish this entry from your own static registry.');
     stdout.writeln(
-      '  2. Fork furroxide/quantum-works and add the file under registry/.',
+      '  3. Validate and install that self-hosted source before announcing it.',
     );
-    stdout.writeln(
-      '  3. Open a pull request. CI re-downloads the package and checks the '
-      'sha256, manifest, and dependencies.',
-    );
-    stdout.writeln('  Guide: docs/PublishingYourMod.md');
+    stdout.writeln('  Guide: docs/PublishingYourMod.md (self-hosting).');
     return 0;
   }
 
@@ -172,7 +178,7 @@ extension _RegistryCommands on _RobotopiaCli {
     if (entries == null) {
       throw UsageError(
         'Usage: robotopia registry validate [--entries dir] [--mods dir] '
-        '[--only file]... [--offline]',
+        '[--only file]... [--offline] [--publication --previous-entries dir]',
       );
     }
     final mods =
@@ -185,6 +191,8 @@ extension _RegistryCommands on _RobotopiaCli {
         modsDirectory: mods,
         onlyFiles: _options(args, '--only'),
         download: !args.contains('--offline'),
+        publication: args.contains('--publication'),
+        previousEntriesDirectory: _option(args, '--previous-entries') ?? '',
       ),
     );
 
@@ -212,7 +220,7 @@ extension _RegistryCommands on _RobotopiaCli {
       '  robotopia registry add-entry <pkg> --url <https url> [--changelog text|@file]',
     );
     stdout.writeln(
-      '      Create or update registry/<id>.json for an official-registry PR.',
+      '      Create or update an entry for a self-hosted registry.',
     );
     stdout.writeln(
       '  robotopia registry index (--repository owner/name | --dir packages) --output path',
@@ -221,9 +229,11 @@ extension _RegistryCommands on _RobotopiaCli {
       '      Build an index.json (options: --entries, --changelogs, --base-url,',
     );
     stdout.writeln('      --include-prerelease).');
-    stdout.writeln('  robotopia registry validate [--only file] [--offline]');
     stdout.writeln(
-      '      Check registry entry files the same way the official CI does.',
+      '  robotopia registry validate [--only file] [--offline] [--publication --previous-entries dir]',
+    );
+    stdout.writeln(
+      '      Check self-hosted entries; publication mode enforces closed official intake and append-only history.',
     );
     stdout.writeln('');
     stdout.writeln(

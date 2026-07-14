@@ -28,12 +28,7 @@ extension _NewCommands on _RobotopiaCli {
               orElse: () => projects.last,
             )
             .path;
-        await _worldLink([
-          '--project',
-          projectPath,
-          '--mod',
-          pairedMod,
-        ]);
+        await _worldLink(['--project', projectPath, '--mod', pairedMod]);
       }
       if (args.contains('--live-sync')) {
         final projectPath = projects
@@ -162,11 +157,13 @@ extension _NewCommands on _RobotopiaCli {
             sceneId: _option(args, '--scene') ?? '',
           )
         : null;
+    final licenseText = _readLicenseText(args);
 
     return ModScaffoldOptions(
       template: _option(args, '--template') ?? 'minimal',
       description: _option(args, '--description'),
       license: _option(args, '--license'),
+      licenseText: licenseText,
       category: _option(args, '--category'),
       authorName: _option(args, '--author'),
       authorEmail: _option(args, '--author-email'),
@@ -176,10 +173,14 @@ extension _NewCommands on _RobotopiaCli {
       screenshots: _options(args, '--screenshot'),
       loadAfter: _options(args, '--load-after'),
       apiAssemblies: _options(args, '--api-assembly'),
-      dependencies: _options(args, '--dependency').map(parseDependency).toList(),
-      optionalDependencies: _options(args, '--optional-dependency')
-          .map((spec) => parseDependency(spec, optional: true))
-          .toList(),
+      dependencies: _options(
+        args,
+        '--dependency',
+      ).map(parseDependency).toList(),
+      optionalDependencies: _options(
+        args,
+        '--optional-dependency',
+      ).map((spec) => parseDependency(spec, optional: true)).toList(),
       conflicts: _options(args, '--conflict').map(parseConflict).toList(),
       gamemodes: _options(args, '--gamemode').map(parseGamemode).toList(),
       entryAssembly: _option(args, '--entry-assembly'),
@@ -192,6 +193,21 @@ extension _NewCommands on _RobotopiaCli {
       source: _option(args, '--source'),
       includeUnityCompanion: args.contains('--unity-companion'),
       liveSync: liveSync,
+    );
+  }
+
+  String? _readLicenseText(List<String> args) {
+    final rawPath = _option(args, '--license-file');
+    if (rawPath == null) return null;
+    if (_option(args, '--license') == null) {
+      throw UsageError(
+        '--license-file requires an explicit --license SPDX expression.',
+      );
+    }
+    final path = p.normalize(p.absolute(rawPath));
+    return readBoundedTextFileSync(
+      File(path),
+      maxBytes: CliFileLimits.manifest,
     );
   }
 }

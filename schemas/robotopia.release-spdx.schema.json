@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/furroxide/quantum-works/main/schemas/robotopia.release-spdx.schema.json",
+  "title": "Robotopia SPDX 2.3 release SBOM",
+  "type": "object",
+  "required": ["spdxVersion", "dataLicense", "SPDXID", "name", "documentNamespace", "creationInfo", "documentDescribes", "packages", "files", "relationships"],
+  "properties": {
+    "$schema": { "type": "string", "format": "uri" },
+    "spdxVersion": { "const": "SPDX-2.3" },
+    "dataLicense": { "const": "CC0-1.0" },
+    "SPDXID": { "const": "SPDXRef-DOCUMENT" },
+    "name": { "type": "string", "minLength": 1 },
+    "documentNamespace": { "type": "string", "format": "uri" },
+    "creationInfo": { "type": "object" },
+    "documentDescribes": { "type": "array", "minItems": 1 },
+    "packages": { "type": "array", "minItems": 1 },
+    "files": { "type": "array", "minItems": 1 },
+    "relationships": { "type": "array", "minItems": 1 }
+  }
+}

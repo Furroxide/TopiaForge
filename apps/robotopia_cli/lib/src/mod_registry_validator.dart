@@ -10,6 +10,8 @@ class ModRegistryValidationOptions {
     this.modsDirectory = '',
     this.onlyFiles = const [],
     this.download = true,
+    this.publication = false,
+    this.previousEntriesDirectory = '',
   });
 
   final String entriesDirectory;
@@ -23,6 +25,8 @@ class ModRegistryValidationOptions {
   final List<String> onlyFiles;
 
   final bool download;
+  final bool publication;
+  final String previousEntriesDirectory;
 }
 
 class RegistryFileReport {
@@ -72,8 +76,7 @@ class ModRegistryValidator {
 
     final firstParty = _firstPartyManifests(options.modsDirectory);
     final files =
-        directory
-            .listSync()
+        listBoundedDirectorySync(directory)
             .whereType<File>()
             .where(
               (file) =>
@@ -82,6 +85,18 @@ class ModRegistryValidator {
             )
             .toList()
           ..sort((a, b) => a.path.compareTo(b.path));
+    final globalIssues = <LauncherIssue>[
+      if (options.publication && files.isNotEmpty)
+        const LauncherIssue(
+          severity: IssueSeverity.error,
+          message:
+              'Official community registry intake is closed for the initial release; use a self-hosted registry.',
+        ),
+      ...validateRegistryPublicationHistory(
+        entriesDirectory: options.entriesDirectory,
+        previousEntriesDirectory: options.previousEntriesDirectory,
+      ),
+    ];
 
     // First pass: parse + structural issues, and collect the known version
     // set for dependency resolution.
@@ -102,7 +117,10 @@ class ModRegistryValidator {
       final RegistryEntryFile entry;
       try {
         entry = RegistryEntryFile.fromJson(
-          jsonDecode(file.readAsStringSync()) as Map<String, Object?>,
+          readBoundedJsonObjectSync(
+            file,
+            maxBytes: CliFileLimits.registryEntry,
+          ),
         );
       } on Object {
         issues.add(
@@ -115,6 +133,22 @@ class ModRegistryValidator {
       }
       parsed[name] = entry;
       issues.addAll(entry.validate());
+      for (final version in entry.versions) {
+        final manifest = version.manifest;
+        if (manifest == null) continue;
+        for (final finding in [
+          ...manifest.validate(),
+          ...validateManifestPublicationLicense(manifest),
+        ]) {
+          issues.add(
+            LauncherIssue(
+              severity: IssueSeverity.error,
+              subjectId: '${entry.id}@${version.version}',
+              message: 'Manifest publication finding: ${finding.message}',
+            ),
+          );
+        }
+      }
       issues.addAll(
         _entryPlacementIssues(
           entry,
@@ -134,16 +168,13 @@ class ModRegistryValidator {
     // Second pass: dependency resolvability against the merged registry.
     for (final entry in parsed.entries) {
       final file = entry.value;
-      final latest = file.sortedVersions.isEmpty
-          ? null
-          : file.sortedVersions.first;
-      final manifest = latest?.manifest;
-      if (manifest == null) {
-        continue;
+      for (final version in file.sortedVersions) {
+        final manifest = version.manifest;
+        if (manifest == null) continue;
+        reports[entry.key]!.addAll(
+          _dependencyIssues(manifest, knownVersions, firstParty),
+        );
       }
-      reports[entry.key]!.addAll(
-        _dependencyIssues(manifest, knownVersions, firstParty),
-      );
     }
 
     // Third pass: download checks.
@@ -165,6 +196,7 @@ class ModRegistryValidator {
         for (final entry in reports.entries)
           RegistryFileReport(fileName: entry.key, issues: entry.value),
       ],
+      globalIssues: globalIssues,
     );
   }
 
@@ -198,7 +230,9 @@ class ModRegistryValidator {
         final isFirstParty = firstParty.containsKey(depId);
         issues.add(
           LauncherIssue(
-            severity: isFirstParty ? IssueSeverity.warning : IssueSeverity.error,
+            severity: isFirstParty
+                ? IssueSeverity.warning
+                : IssueSeverity.error,
             subjectId: manifest.id,
             message:
                 'No known version of "${dependency.id}" satisfies '
@@ -259,6 +293,12 @@ class ModRegistryValidator {
         ),
       );
     }
+    issues.addAll(
+      validateManifestPublicationLicense(
+        package.manifest,
+        packageEntries: package.entryNames,
+      ),
+    );
     final inline = version.manifest;
     if (inline != null &&
         _canonicalJson(inline.toJson()) !=
@@ -286,14 +326,19 @@ class ModRegistryValidator {
       return const {};
     }
     final result = <String, ModManifest>{};
-    for (final modDir in directory.listSync().whereType<Directory>()) {
+    for (final modDir in listBoundedDirectorySync(
+      directory,
+    ).whereType<Directory>()) {
       final manifestFile = File(p.join(modDir.path, 'robotopia.mod.json'));
       if (!manifestFile.existsSync()) {
         continue;
       }
       try {
         final manifest = ModManifest.fromJson(
-          jsonDecode(manifestFile.readAsStringSync()) as Map<String, Object?>,
+          readBoundedJsonObjectSync(
+            manifestFile,
+            maxBytes: CliFileLimits.manifest,
+          ),
         );
         if (manifest.id.trim().isNotEmpty) {
           result[manifest.id.toLowerCase()] = manifest;
@@ -313,7 +358,9 @@ class ModRegistryValidator {
     if (onlyFiles.isEmpty) {
       return allNames;
     }
-    final wanted = onlyFiles.map((path) => p.basename(path).toLowerCase()).toSet();
+    final wanted = onlyFiles
+        .map((path) => p.basename(path).toLowerCase())
+        .toSet();
     return allNames.where((name) => wanted.contains(name.toLowerCase()));
   }
 }
@@ -323,13 +370,24 @@ class ModRegistryValidator {
 Future<List<int>> _fetchPackageBytes(Uri uri) async {
   final isLoopback =
       uri.host == '127.0.0.1' || uri.host == 'localhost' || uri.host == '::1';
-  if (uri.scheme != 'https' && !(uri.scheme == 'http' && isLoopback)) {
+  if ((uri.scheme != 'https' && !(uri.scheme == 'http' && isLoopback)) ||
+      uri.userInfo.isNotEmpty ||
+      uri.hasQuery ||
+      uri.hasFragment) {
     throw StateError('Only https package URLs are allowed.');
   }
   final client = HttpClient();
+  client.connectionTimeout = const Duration(seconds: 15);
+  client.idleTimeout = const Duration(seconds: 30);
   try {
     final request = await client.getUrl(uri);
-    final response = await request.close();
+    request.followRedirects = false;
+    final response = await request.close().timeout(const Duration(seconds: 30));
+    if (response.isRedirect) {
+      throw StateError(
+        'Package URL redirects are not allowed; submit the final HTTPS URL.',
+      );
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError('HTTP ${response.statusCode}');
     }

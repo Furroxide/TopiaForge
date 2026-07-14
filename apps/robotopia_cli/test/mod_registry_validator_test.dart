@@ -11,10 +11,12 @@ import 'package:test/test.dart';
 void main() {
   late Directory temp;
   late Directory entries;
+  Future<List<int>> Function(Uri uri)? fetchBytes;
 
   setUp(() async {
     temp = await Directory.systemTemp.createTemp('robotopia-validator-test-');
     entries = Directory(p.join(temp.path, 'registry'))..createSync();
+    fetchBytes = null;
   });
 
   tearDown(() async {
@@ -28,7 +30,7 @@ void main() {
     List<String> onlyFiles = const [],
     String modsDirectory = '',
   }) {
-    return ModRegistryValidator().validate(
+    return ModRegistryValidator(fetchBytes: fetchBytes).validate(
       ModRegistryValidationOptions(
         entriesDirectory: entries.path,
         modsDirectory: modsDirectory,
@@ -125,29 +127,21 @@ void main() {
     expect(result.ok, isTrue);
   });
 
-  group('download checks against a loopback server', () {
-    late HttpServer server;
+  group('download checks against an injected HTTPS package host', () {
     late Map<String, List<int>> hosted;
 
-    setUp(() async {
+    setUp(() {
       hosted = {};
-      server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-      server.listen((request) {
-        final bytes = hosted[request.uri.path];
+      fetchBytes = (uri) async {
+        final bytes = hosted[uri.path];
         if (bytes == null) {
-          request.response.statusCode = HttpStatus.notFound;
-        } else {
-          request.response.add(bytes);
+          throw HttpException('HTTP 404', uri: uri);
         }
-        request.response.close();
-      });
+        return bytes;
+      };
     });
 
-    tearDown(() async {
-      await server.close(force: true);
-    });
-
-    String hostedUrl(String path) => 'http://127.0.0.1:${server.port}$path';
+    String hostedUrl(String path) => 'https://mods.example.test$path';
 
     test('matching bytes pass; wrong sha and 404 fail', () async {
       final goodBytes = _packageBytes(id: 'author.good', version: '1.0.0');
@@ -201,8 +195,8 @@ void main() {
         url: hostedUrl('/good.robotopiamod'),
         mutate: (json) {
           final versions = (json['versions'] as List).cast<Map>();
-          final manifest =
-              (versions.first['manifest'] as Map).cast<String, Object?>();
+          final manifest = (versions.first['manifest'] as Map)
+              .cast<String, Object?>();
           manifest['description'] = 'Sneakily edited after add-entry.';
         },
       );
@@ -255,6 +249,8 @@ Map<String, Object?> _manifestJson({
     'displayName': id,
     'version': version,
     'author': {'name': 'Tester'},
+    'license': 'MIT',
+    'licenseFiles': ['LICENSE'],
     'entryAssembly': 'Mod.dll',
     'entryType': 'Test.Mod',
     if (dependencies.isNotEmpty) 'vpmDependencies': dependencies,
@@ -275,6 +271,7 @@ List<int> _packageBytes({
         ),
       ),
     )
+    ..addFile(ArchiveFile.string('LICENSE', 'MIT test fixture license'))
     ..addFile(ArchiveFile.string('Mod.dll', 'dll-bytes-$id-$version'));
   return ZipEncoder().encode(archive);
 }

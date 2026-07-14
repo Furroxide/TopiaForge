@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
+import 'atomic_output.dart';
+
 part 'launcher_update_github_client.dart';
 part 'launcher_update_index_helpers.dart';
 
@@ -13,27 +15,21 @@ class LauncherUpdateIndexConfig {
     required this.repository,
     required this.outputDirectory,
     String? baseUrl,
-    this.appName = _appName,
-    this.packageId = _packageId,
-    this.minimumUpdaterVersion = _minimumUpdaterVersion,
   }) : baseUrl = baseUrl ?? _defaultBaseUrl(repository);
 
   final String repository;
   final String outputDirectory;
   final String baseUrl;
-  final String appName;
-  final String packageId;
-  final String minimumUpdaterVersion;
 }
 
 class LauncherUpdateIndexResult {
   const LauncherUpdateIndexResult({
     required this.itemCount,
-    required this.appArchiveUrl,
+    required this.manualReleasesUrl,
   });
 
   final int itemCount;
-  final String appArchiveUrl;
+  final String manualReleasesUrl;
 }
 
 class LauncherUpdateIndexBuilder {
@@ -50,93 +46,80 @@ class LauncherUpdateIndexBuilder {
     LauncherUpdateIndexConfig config,
   ) async {
     _validateRepository(config.repository);
-    final output = Directory(config.outputDirectory);
     final baseUri = _normalizeBaseUri(config.baseUrl);
     final generatedAt = _clock().toUtc().toIso8601String();
     final releases = await _client.listReleases(config.repository);
-    final channelsIndex = _emptyChannelsIndex();
-    final versionsIndex = <String, dynamic>{};
-    final items = <Map<String, Object?>>[];
+    final output = createAtomicStagingDirectory(config.outputDirectory);
 
-    for (final release in releases) {
-      if (release.draft) {
-        continue;
+    try {
+      final candidates = <_ManualReleaseCandidate>[];
+      for (final release in releases) {
+        if (release.draft || release.prerelease) continue;
+        final version = _releaseVersion(release);
+        if (version == null || version.version.contains('-')) continue;
+        if (_releaseChannel(release) != 'release') continue;
+        candidates.add(
+          _ManualReleaseCandidate(release: release, version: version),
+        );
       }
-      final version = _releaseVersion(release);
-      if (version == null) {
-        continue;
+      if (candidates.isEmpty) {
+        throw StateError(
+          'No published stable release is available for manual-releases.json.',
+        );
       }
-
-      final channel = _releaseChannel(release);
-      final mandatory = _isMandatoryRelease(release);
-      final platformAssets = _assetsByPlatform(release.assets);
+      candidates.sort(
+        (left, right) => _compareVersionSort(
+          right.version.releaseLabel,
+          left.version.releaseLabel,
+        ),
+      );
+      final selected = candidates.first;
+      final platformAssets = _assetsByPlatform(selected.release.assets);
+      final missing = _platforms
+          .where((platform) => !platformAssets.containsKey(platform))
+          .toList();
+      if (missing.isNotEmpty) {
+        throw StateError(
+          'Latest stable release ${selected.release.tagName} is missing '
+          'production assets for: ${missing.join(', ')}.',
+        );
+      }
+      final platforms = <String, Object?>{};
       for (final platform in _platforms) {
-        final asset = platformAssets[platform];
-        if (asset == null) {
-          continue;
-        }
-
-        final artifact = await _assetDigest(asset);
-        final versionPath = _safePathSegment(version.releaseLabel);
-        final descriptorPath =
-            'releases/$versionPath/$channel/$platform/release.json';
-        final descriptorUrl = baseUri.resolve(descriptorPath).toString();
-        final descriptor = _descriptor(
-          config: config,
-          generatedAt: generatedAt,
-          version: version,
-          platform: platform,
-          channel: channel,
-          asset: asset,
-          artifact: artifact,
-        );
-
-        await _writeJsonFile(_outputPath(output, descriptorPath), descriptor);
-
-        items.add(
-          _archiveItem(
-            version: version,
-            platform: platform,
-            channel: channel,
-            mandatory: mandatory,
-            releaseUrl: descriptorUrl,
-          ),
-        );
-        _addIndexEntry(
-          channelsIndex: channelsIndex,
-          versionsIndex: versionsIndex,
-          channel: channel,
-          version: version.releaseLabel,
-          platform: platform,
-          releaseUrl: descriptorUrl,
-          artifactUrl: asset.browserDownloadUrl,
-          tagName: release.tagName,
-          publishedAt: release.publishedAt,
-        );
+        final asset = platformAssets[platform]!;
+        final digest = await _assetDigest(asset);
+        platforms[platform] = {
+          'url': asset.browserDownloadUrl,
+          'sha256': digest.sha256,
+          'size': digest.length,
+        };
       }
+      await output.create(recursive: true);
+      final catalog = <String, Object?>{
+        r'$schema':
+            'https://raw.githubusercontent.com/furroxide/quantum-works/main/schemas/robotopia.manual-releases.schema.json',
+        'formatVersion': 1,
+        'manualOnly': true,
+        'generatedAt': generatedAt,
+        'releaseUrl':
+            'https://github.com/${config.repository}/releases/tag/${Uri.encodeComponent(selected.release.tagName)}',
+        'platforms': platforms,
+      };
+      await _writeJsonFile(
+        p.join(output.path, 'manual-releases.json'),
+        catalog,
+      );
+      await File(p.join(output.path, '.nojekyll')).writeAsString('');
+
+      publishAtomicDirectory(output, config.outputDirectory);
+      return LauncherUpdateIndexResult(
+        itemCount: platforms.length,
+        manualReleasesUrl: baseUri.resolve('manual-releases.json').toString(),
+      );
+    } on Object {
+      deleteAtomicStagingDirectory(output);
+      rethrow;
     }
-
-    items.sort(_compareArchiveItems);
-    _setLatestChannelVersions(channelsIndex);
-    await output.create(recursive: true);
-
-    final archive = <String, Object?>{
-      'schemaVersion': 3,
-      'appName': config.appName,
-      'generatedAt': generatedAt,
-      'sourceRepository': 'https://github.com/${config.repository}',
-      'channels': channelsIndex,
-      'versions': versionsIndex,
-      'items': items,
-    };
-    await _writeJsonFile(p.join(output.path, 'app-archive.json'), archive);
-    await _writeJsonFile(p.join(output.path, 'index.json'), archive);
-    await File(p.join(output.path, '.nojekyll')).writeAsString('');
-
-    return LauncherUpdateIndexResult(
-      itemCount: items.length,
-      appArchiveUrl: baseUri.resolve('app-archive.json').toString(),
-    );
   }
 
   Future<_AssetDigest> _assetDigest(GitHubAsset asset) async {
@@ -146,10 +129,22 @@ class LauncherUpdateIndexBuilder {
         .bind(
           stream.map((chunk) {
             length += chunk.length;
+            if (length > _maxManualReleaseAssetBytes) {
+              throw StateError(
+                '${asset.name} exceeds the manual release asset size limit.',
+              );
+            }
             return chunk;
           }),
         )
         .single;
     return _AssetDigest(sha256: digest.toString(), length: length);
   }
+}
+
+class _ManualReleaseCandidate {
+  const _ManualReleaseCandidate({required this.release, required this.version});
+
+  final GitHubRelease release;
+  final _ReleaseVersion version;
 }

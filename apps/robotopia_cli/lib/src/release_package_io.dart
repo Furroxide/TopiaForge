@@ -1,13 +1,30 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
 
+import 'release_archive_policy.dart';
 import 'release_package_models.dart';
 
 class ReleaseProcessRunner {
   const ReleaseProcessRunner();
+
+  Future<ProcessResult> runResult(
+    String executable,
+    List<String> arguments, {
+    String? workingDirectory,
+    Map<String, String>? environment,
+    bool runInShell = false,
+  }) {
+    return Process.run(
+      executable,
+      arguments,
+      workingDirectory: workingDirectory,
+      environment: releaseChildEnvironment(environment),
+      includeParentEnvironment: false,
+      runInShell: runInShell,
+    );
+  }
 
   Future<void> runChecked(
     String executable,
@@ -15,15 +32,33 @@ class ReleaseProcessRunner {
     String? workingDirectory,
     Map<String, String>? environment,
     bool runInShell = false,
+    Set<String> redactedValueOptions = const {},
   }) async {
-    stdout.writeln('> $executable ${arguments.join(' ')}');
-    final process = await Process.start(
-      executable,
-      arguments,
-      workingDirectory: workingDirectory,
-      environment: environment,
-      runInShell: runInShell,
+    stdout.writeln(
+      formatCommandForLog(
+        executable,
+        arguments,
+        redactedValueOptions: redactedValueOptions,
+      ),
     );
+    late Process process;
+    try {
+      process = await Process.start(
+        executable,
+        arguments,
+        workingDirectory: workingDirectory,
+        environment: releaseChildEnvironment(environment),
+        includeParentEnvironment: false,
+        runInShell: runInShell,
+      );
+    } on ProcessException catch (error) {
+      if (redactedValueOptions.isEmpty) {
+        rethrow;
+      }
+      throw StateError(
+        '$executable could not be started (OS error ${error.errorCode}).',
+      );
+    }
     final out = stdout.addStream(process.stdout);
     final err = stderr.addStream(process.stderr);
     final code = await process.exitCode;
@@ -33,11 +68,79 @@ class ReleaseProcessRunner {
     }
   }
 
+  String formatCommandForLog(
+    String executable,
+    List<String> arguments, {
+    Set<String> redactedValueOptions = const {},
+  }) {
+    final redacted = _redactCommandArguments(arguments, redactedValueOptions);
+    return '> $executable ${redacted.join(' ')}';
+  }
+
   Future<bool> commandExists(String executable) async {
     final command = Platform.isWindows ? 'where' : 'which';
-    final result = await Process.run(command, [executable]);
+    final result = await runResult(command, [executable]);
     return result.exitCode == 0;
   }
+
+  List<String> _redactCommandArguments(
+    List<String> arguments,
+    Set<String> redactedValueOptions,
+  ) {
+    final redacted = <String>[];
+    var redactNext = false;
+    for (final argument in arguments) {
+      if (redactNext) {
+        redacted.add(_redactedArgument);
+        redactNext = false;
+        continue;
+      }
+      final equals = argument.indexOf('=');
+      if (equals > 0) {
+        final option = argument.substring(0, equals);
+        if (redactedValueOptions.contains(option)) {
+          redacted.add('$option=$_redactedArgument');
+          continue;
+        }
+      }
+      redacted.add(argument);
+      redactNext = redactedValueOptions.contains(argument);
+    }
+    return redacted;
+  }
+}
+
+Map<String, String> releaseChildEnvironment(Map<String, String>? overrides) {
+  final result = Map<String, String>.of(Platform.environment);
+  if (overrides != null) {
+    result.addAll(overrides);
+  }
+  for (final name in result.keys.toList(growable: false)) {
+    if (_releaseSensitiveEnvironmentNames.contains(name) ||
+        _looksSensitiveEnvironmentName(name)) {
+      result.remove(name);
+    }
+  }
+  return result;
+}
+
+bool _looksSensitiveEnvironmentName(String name) {
+  final normalized = name.toUpperCase();
+  return normalized.contains('TOKEN') ||
+      normalized.contains('SECRET') ||
+      normalized.contains('PASSWORD') ||
+      normalized.contains('PASSWD') ||
+      normalized.contains('CREDENTIAL') ||
+      normalized.contains('PRIVATE_KEY') ||
+      normalized.contains('ACCESS_KEY') ||
+      normalized.contains('AUTHORIZATION') ||
+      normalized == 'API_KEY' ||
+      normalized.endsWith('_API_KEY') ||
+      normalized == 'DATABASE_URL' ||
+      normalized.endsWith('_DATABASE_URL') ||
+      normalized.endsWith('_DB_URL') ||
+      normalized == 'SSH_AUTH_SOCK' ||
+      RegExp(r'(^|_)PAT($|_)').hasMatch(normalized);
 }
 
 class ReleaseFileOps {
@@ -57,18 +160,56 @@ class ReleaseFileOps {
     }
   }
 
-  void copyDirectory(Directory source, Directory destination) {
-    if (!source.existsSync()) {
+  void copyDirectory(
+    Directory source,
+    Directory destination, {
+    Set<String> excludedNames = const {},
+    Set<String> excludedNamePrefixes = const {},
+  }) {
+    if (!_isRealSourceDirectory(source)) {
       return;
     }
+    _copyDirectory(
+      source,
+      destination,
+      sourceRoot: source.absolute.path,
+      excludedNames: excludedNames,
+      excludedNamePrefixes: excludedNamePrefixes,
+    );
+  }
+
+  void _copyDirectory(
+    Directory source,
+    Directory destination, {
+    required String sourceRoot,
+    required Set<String> excludedNames,
+    required Set<String> excludedNamePrefixes,
+  }) {
     destination.createSync(recursive: true);
-    for (final entity in source.listSync(recursive: true, followLinks: false)) {
-      final relative = p.relative(entity.path, from: source.path);
-      final target = p.join(destination.path, relative);
+    final normalizedExclusions = excludedNames
+        .map((name) => name.toLowerCase())
+        .toSet();
+    final normalizedPrefixes = excludedNamePrefixes
+        .map((name) => name.toLowerCase())
+        .toSet();
+    for (final entity in source.listSync(followLinks: false)) {
+      final name = p.basename(entity.path);
+      final normalizedName = name.toLowerCase();
+      if (normalizedExclusions.contains(normalizedName) ||
+          normalizedPrefixes.any(normalizedName.startsWith)) {
+        continue;
+      }
+      final target = p.join(destination.path, name);
       if (entity is Directory) {
-        Directory(target).createSync(recursive: true);
+        _copyDirectory(
+          entity,
+          Directory(target),
+          sourceRoot: sourceRoot,
+          excludedNames: normalizedExclusions,
+          excludedNamePrefixes: normalizedPrefixes,
+        );
       } else if (entity is Link) {
-        _copyLink(entity, target);
+        _copyLink(entity, target, sourceRoot);
       } else if (entity is File) {
         File(target).parent.createSync(recursive: true);
         entity.copySync(target);
@@ -77,16 +218,22 @@ class ReleaseFileOps {
   }
 
   void copyDirectoryContents(Directory source, Directory destination) {
-    if (!source.existsSync()) {
+    if (!_isRealSourceDirectory(source)) {
       return;
     }
     destination.createSync(recursive: true);
     for (final entity in source.listSync(followLinks: false)) {
       final target = p.join(destination.path, p.basename(entity.path));
       if (entity is Directory) {
-        copyDirectory(entity, Directory(target));
+        _copyDirectory(
+          entity,
+          Directory(target),
+          sourceRoot: source.absolute.path,
+          excludedNames: const {},
+          excludedNamePrefixes: const {},
+        );
       } else if (entity is Link) {
-        _copyLink(entity, target);
+        _copyLink(entity, target, source.absolute.path);
       } else if (entity is File) {
         entity.copySync(target);
       }
@@ -94,6 +241,10 @@ class ReleaseFileOps {
   }
 
   void copyFileIfExists(String source, String destination) {
+    if (FileSystemEntity.typeSync(source, followLinks: false) ==
+        FileSystemEntityType.link) {
+      throw StateError('Refusing to copy a linked release file: $source');
+    }
     final file = File(source);
     if (!file.existsSync()) {
       return;
@@ -103,6 +254,10 @@ class ReleaseFileOps {
   }
 
   Future<void> copyMacBundle(String source, String destination) async {
+    _archivePolicy.validateSourceLinks(
+      Directory(source),
+      allowContainedLinks: true,
+    );
     deleteIfExists(destination);
     if (Platform.isMacOS &&
         await processRunner.commandExists('/usr/bin/ditto')) {
@@ -124,30 +279,19 @@ class ReleaseFileOps {
     File destination,
     ReleasePackagePlatform platform,
   ) async {
-    deleteIfExists(destination.path);
+    final allowContainedLinks = platform == ReleasePackagePlatform.macos;
+    _archivePolicy.validateSourceLinks(
+      source,
+      allowContainedLinks: allowContainedLinks,
+    );
     destination.parent.createSync(recursive: true);
-    if (platform == ReleasePackagePlatform.macos && Platform.isMacOS) {
-      await processRunner.runChecked('/usr/bin/ditto', [
-        '-c',
-        '-k',
-        '--sequesterRsrc',
-        '--rsrc',
-        '.',
-        destination.path,
-      ], workingDirectory: source.path);
-      return;
-    }
-    if (platform == ReleasePackagePlatform.linux &&
-        await processRunner.commandExists('zip')) {
-      await processRunner.runChecked('zip', [
-        '-q',
-        '-r',
-        destination.path,
-        '.',
-      ], workingDirectory: source.path);
-      return;
-    }
-    _writeDartZip(source, destination);
+    // One writer on every host keeps entry ordering, timestamps, permissions,
+    // and metadata byte-for-byte reproducible across release runners.
+    _archivePolicy.writeDartZip(
+      source,
+      destination,
+      allowContainedLinks: allowContainedLinks,
+    );
   }
 
   Future<void> extractPlatformZip(
@@ -155,106 +299,55 @@ class ReleaseFileOps {
     Directory destination,
     ReleasePackagePlatform platform,
   ) async {
-    destination.createSync(recursive: true);
-    if (platform == ReleasePackagePlatform.macos && Platform.isMacOS) {
-      await processRunner.runChecked('/usr/bin/ditto', [
-        '-x',
-        '-k',
-        archiveFile.path,
-        destination.path,
-      ]);
-      return;
-    }
-    if (platform == ReleasePackagePlatform.linux &&
-        await processRunner.commandExists('unzip')) {
-      await processRunner.runChecked('unzip', [
-        '-q',
-        archiveFile.path,
-        '-d',
-        destination.path,
-      ]);
-      return;
-    }
-    _extractDartZip(archiveFile, destination);
+    _archivePolicy.extractDartZip(
+      archiveFile,
+      destination,
+      allowContainedLinks: platform == ReleasePackagePlatform.macos,
+    );
   }
 
-  void _copyLink(Link source, String destination) {
+  void _copyLink(Link source, String destination, String sourceRoot) {
+    _archivePolicy.validateLink(source, Directory(sourceRoot));
     File(destination).parent.createSync(recursive: true);
     try {
       Link(destination).createSync(source.targetSync(), recursive: true);
-    } on FileSystemException {
-      final resolved = File(source.resolveSymbolicLinksSync());
-      if (resolved.existsSync()) {
-        resolved.copySync(destination);
-      }
+    } on FileSystemException catch (error) {
+      throw StateError(
+        'Could not preserve the contained release link ${source.path}: '
+        '${error.message}',
+      );
     }
   }
 
-  void _writeDartZip(Directory source, File destination) {
-    final archive = Archive();
-    for (final entity in source.listSync(recursive: true, followLinks: false)) {
-      final relative = p.relative(entity.path, from: source.path);
-      final name = _zipName(relative);
-      if (entity is Directory) {
-        archive.addFile(
-          ArchiveFile.directory(name)..mode = _mode(entity.statSync(), 0x1ed),
-        );
-      } else if (entity is Link) {
-        archive.addFile(
-          ArchiveFile.symlink(name, entity.targetSync())..mode = 0x1ff,
-        );
-      } else if (entity is File) {
-        archive.addFile(
-          ArchiveFile.bytes(name, entity.readAsBytesSync())
-            ..mode = _mode(entity.statSync(), 0x1a4),
-        );
-      }
+  bool _isRealSourceDirectory(Directory source) {
+    final type = FileSystemEntity.typeSync(source.path, followLinks: false);
+    if (type == FileSystemEntityType.notFound) {
+      return false;
     }
-    destination.writeAsBytesSync(ZipEncoder().encode(archive));
-  }
-
-  void _extractDartZip(File archiveFile, Directory destination) {
-    final archive = ZipDecoder().decodeBytes(archiveFile.readAsBytesSync());
-    for (final entry in archive.files) {
-      _rejectUnsafeArchiveName(entry.name);
-      final output = p.normalize(p.join(destination.path, entry.name));
-      if (!p.isWithin(destination.path, output) && output != destination.path) {
-        throw StateError('Zip entry escapes the target: ${entry.name}');
-      }
-      if (entry.isDirectory) {
-        Directory(output).createSync(recursive: true);
-      } else if (entry.isSymbolicLink) {
-        File(output).parent.createSync(recursive: true);
-        Link(output).createSync(entry.symbolicLink!, recursive: true);
-      } else {
-        final bytes = entry.readBytes() ?? const <int>[];
-        File(output)
-          ..parent.createSync(recursive: true)
-          ..writeAsBytesSync(bytes);
-        if (!Platform.isWindows && (entry.unixPermissions & 0x49) != 0) {
-          Process.runSync('chmod', ['+x', output]);
-        }
-      }
+    if (type != FileSystemEntityType.directory) {
+      throw StateError(
+        'Release source must be a real directory: ${source.path}',
+      );
     }
-  }
-
-  int _mode(FileStat stat, int fallback) {
-    final mode = stat.mode & 0x1ff;
-    return mode == 0 ? fallback : mode;
-  }
-
-  String _zipName(String relativePath) =>
-      p.posix.joinAll(p.split(relativePath));
-
-  void _rejectUnsafeArchiveName(String name) {
-    if (name.split('/').any((segment) => segment == '..')) {
-      throw StateError('Zip entry has a path-traversal segment: $name');
-    }
-    if (p.isAbsolute(name)) {
-      throw StateError('Zip entry must be relative: $name');
-    }
+    return true;
   }
 }
+
+const _archivePolicy = ReleaseArchivePolicy();
+const _redactedArgument = '<redacted>';
+const _releaseSensitiveEnvironmentNames = {
+  'GITHUB_TOKEN',
+  'GH_TOKEN',
+  'MACOS_CERTIFICATE_P12',
+  'MACOS_CERTIFICATE_PASSWORD',
+  'MACOS_DEVELOPER_ID_APPLICATION',
+  'MACOS_NOTARY_APPLE_ID',
+  'MACOS_NOTARY_PASSWORD',
+  'MACOS_NOTARY_TEAM_ID',
+  'ROBOTOPIA_REFS_TOKEN',
+  'WINDOWS_CERTIFICATE_PFX',
+  'WINDOWS_CERTIFICATE_PASSWORD',
+};
 
 String releaseWarning(String message) => 'Warning: $message';
 

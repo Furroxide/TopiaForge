@@ -134,7 +134,7 @@ extension _RobotopiaEnvironmentCommands on _RobotopiaCli {
 
     for (final config in ['Release', 'Debug']) {
       final binDir =
-          '$root/src/Robotopia.GameCompat.Extractor/bin/$config/net8.0';
+          '$root/src/Robotopia.GameCompat.Extractor/bin/$config/net10.0';
       for (final name in [
         'Robotopia.GameCompat.Extractor.exe',
         'Robotopia.GameCompat.Extractor',
@@ -146,17 +146,49 @@ extension _RobotopiaEnvironmentCommands on _RobotopiaCli {
       }
     }
 
+    late final DotnetSdkSelection dotnet;
     try {
-      return await Process.run('dotnet', [
-        'run',
-        '--project',
-        '$root/src/Robotopia.GameCompat.Extractor',
-        '-c',
-        'Release',
-        '--',
-        ...verifyArgs,
-      ], workingDirectory: root);
-    } catch (_) {
+      dotnet = await resolveRepositoryDotnetSdk(Directory(root));
+    } on Object catch (error) {
+      stderr.writeln(
+        'GameCompat could not select the repository .NET SDK: '
+        '${_environmentErrorMessage(error)}',
+      );
+      return null;
+    }
+    try {
+      final run = await runBoundedProcess(
+        dotnet.executable,
+        [
+          'run',
+          '--project',
+          '$root/src/Robotopia.GameCompat.Extractor',
+          '-c',
+          'Release',
+          '--',
+          ...verifyArgs,
+        ],
+        workingDirectory: root,
+        timeout: _environmentDotnetTimeout,
+        maxStdoutBytes: _environmentDotnetOutputLimit ~/ 2,
+        maxStderrBytes: _environmentDotnetOutputLimit ~/ 2,
+      );
+      return ProcessResult(0, run.exitCode, run.stdout, run.stderr);
+    } on BoundedProcessException catch (error) {
+      stderr.writeln(
+        _environmentBoundedProcessFailure(
+          'GameCompat dotnet run',
+          dotnet.executable,
+          error,
+        ),
+      );
+      return null;
+    } on Object catch (error) {
+      stderr.writeln(
+        'GameCompat could not start the verified .NET host '
+        '${dotnet.executable}: '
+        '${_environmentErrorMessage(error)}',
+      );
       return null;
     }
   }
@@ -260,12 +292,32 @@ extension _RobotopiaEnvironmentCommands on _RobotopiaCli {
 
     if (!args.contains('--skip-build')) {
       stdout.writeln('Building RobotopiaModManager.slnx ($configuration)...');
-      final build = await Process.run('dotnet', [
-        'build',
-        p.join(repoRoot, 'RobotopiaModManager.slnx'),
-        '-c',
-        configuration,
-      ], workingDirectory: repoRoot);
+      final dotnet = await resolveRepositoryDotnetSdk(Directory(repoRoot));
+      late final BoundedProcessResult build;
+      try {
+        build = await runBoundedProcess(
+          dotnet.executable,
+          [
+            'build',
+            p.join(repoRoot, 'RobotopiaModManager.slnx'),
+            '-c',
+            configuration,
+          ],
+          workingDirectory: repoRoot,
+          timeout: _environmentDotnetTimeout,
+          maxStdoutBytes: _environmentDotnetOutputLimit ~/ 2,
+          maxStderrBytes: _environmentDotnetOutputLimit ~/ 2,
+        );
+      } on BoundedProcessException catch (error) {
+        stderr.writeln(
+          _environmentBoundedProcessFailure(
+            'Robotopia solution build',
+            dotnet.executable,
+            error,
+          ),
+        );
+        return 1;
+      }
       if (build.exitCode != 0) {
         stderr.writeln('${build.stdout}\n${build.stderr}'.trim());
         return 1;
@@ -344,3 +396,30 @@ extension _RobotopiaEnvironmentCommands on _RobotopiaCli {
     return false;
   }
 }
+
+String _environmentErrorMessage(Object error) =>
+    error is StateError ? error.message : error.toString();
+
+String _environmentBoundedProcessFailure(
+  String operation,
+  String executable,
+  BoundedProcessException error,
+) => switch (error.failure) {
+  BoundedProcessFailure.timeout =>
+    '$operation timed out after ${_environmentDotnetTimeout.inMinutes} minutes '
+        'and was terminated: $executable.',
+  BoundedProcessFailure.stdoutLimitExceeded ||
+  BoundedProcessFailure.stderrLimitExceeded =>
+    '$operation exceeded the '
+        '${_environmentDotnetOutputLimit ~/ (1024 * 1024)} MiB combined '
+        'output limit and was terminated: $executable.',
+  BoundedProcessFailure.outputReadFailed =>
+    '$operation output could not be read; the process was terminated: '
+        '$executable.',
+  BoundedProcessFailure.terminationFailed =>
+    '$operation exceeded a safety bound and could not be terminated: '
+        '$executable.',
+};
+
+const _environmentDotnetTimeout = Duration(minutes: 10);
+const _environmentDotnetOutputLimit = 16 * 1024 * 1024;

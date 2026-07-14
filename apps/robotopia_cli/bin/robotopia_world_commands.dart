@@ -13,7 +13,7 @@ extension _WorldCommands on _RobotopiaCli {
         'Usage: robotopia world link|build|play ...\n'
         '  robotopia world link --project <unityProj> --mod <modDir> [--bundle name] [--prefab assetPath]\n'
         '  robotopia world build [--project <unityProj|name>] [--mod <modDir>] [--bundle name] [--unity Unity.exe] [--dry-run]\n'
-        '  robotopia world play [--project <unityProj|name>] [--mod <modDir>] [--configuration cfg]',
+        '  robotopia world play [--project <unityProj|name>] [--mod <modDir>] [--bundle name] [--unity Unity.exe] [--configuration cfg]',
       ),
     };
   }
@@ -42,8 +42,10 @@ extension _WorldCommands on _RobotopiaCli {
         '`robotopia new mod --template world`.',
       );
     }
-    final manifest =
-        jsonDecode(manifestFile.readAsStringSync()) as Map<String, Object?>;
+    final manifest = readBoundedJsonObjectSync(
+      manifestFile,
+      maxBytes: CliFileLimits.manifest,
+    );
     final modId = (manifest['name'] as String?) ?? p.basename(mod);
 
     final config = await developerRepository.writeWorldAuthoringConfig(
@@ -113,19 +115,22 @@ extension _WorldCommands on _RobotopiaCli {
     final mod = modRaw.isEmpty
         ? ''
         : p.normalize(p.isAbsolute(modRaw) ? modRaw : p.join(project, modRaw));
-    final bundle =
-        _option(args, '--bundle') ?? (config?.bundleName ?? '');
+    final bundle = _option(args, '--bundle') ?? (config?.bundleName ?? '');
     final editors = await developerRepository.listUnityEditors();
     final eligible = editors
         .where((editor) => WorldBundleEditorGate.isEligible(editor.version))
         .toList();
 
     stdout.writeln('Unity project: $project');
-    stdout.writeln('Paired mod:    ${mod.isEmpty ? '(none — run world link)' : mod}');
-    stdout.writeln('Bundle name:   ${bundle.isEmpty ? '(none)' : bundle}');
-    stdout.writeln('World prefab:  ${config?.worldPrefab ?? WorldAuthoringConfig.defaultWorldPrefab}');
     stdout.writeln(
-      'Build editor:  ${eligible.isEmpty ? '(none eligible — need 6000.0.x, patch <= ${WorldBundleEditorGate.maxPatch})' : '${eligible.first.version} at ${eligible.first.path}'}',
+      'Paired mod:    ${mod.isEmpty ? '(none — run world link)' : mod}',
+    );
+    stdout.writeln('Bundle name:   ${bundle.isEmpty ? '(none)' : bundle}');
+    stdout.writeln(
+      'World prefab:  ${config?.worldPrefab ?? WorldAuthoringConfig.defaultWorldPrefab}',
+    );
+    stdout.writeln(
+      'Build editor:  ${eligible.isEmpty ? '(none eligible — need Unity ${RobotopiaUnityCompatibility.requiredEditorVersion})' : '${eligible.first.version} at ${eligible.first.path}'}',
     );
     return mod.isEmpty || bundle.isEmpty ? 1 : 0;
   }
@@ -164,8 +169,9 @@ extension _WorldCommands on _RobotopiaCli {
       p.isAbsolute(modRaw) ? modRaw : p.join(project, modRaw),
     );
     final configuration = _option(args, '--configuration') ?? 'Release';
-    final hasProjectFile =
-        File(p.join(mod, 'robotopia.project.json')).existsSync();
+    final hasProjectFile = File(
+      p.join(mod, 'robotopia.project.json'),
+    ).existsSync();
     final packagePath = hasProjectFile
         ? await developerRepository.packProject(
             mod,

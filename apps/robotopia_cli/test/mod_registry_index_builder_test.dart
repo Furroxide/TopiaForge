@@ -151,9 +151,7 @@ void main() {
       reason: 'sorted by id',
     );
     expect(mods.first['origin'], 'community');
-    final community = RegistryMod.fromJson(
-      mods.first.cast<String, Object?>(),
-    );
+    final community = RegistryMod.fromJson(mods.first.cast<String, Object?>());
     expect(community.manifest.version, '1.1.0');
     expect((mods.first['history'] as List), hasLength(1));
   });
@@ -247,6 +245,8 @@ Map<String, Object?> _manifestJson({
     'displayName': id,
     'version': version,
     'author': {'name': 'Tester'},
+    'license': 'MIT',
+    'licenseFiles': ['LICENSE'],
     'entryAssembly': 'Mod.dll',
     'entryType': 'Test.Mod',
   };
@@ -260,6 +260,7 @@ List<int> _packageBytes({required String id, required String version}) {
         jsonEncode(_manifestJson(id: id, version: version)),
       ),
     )
+    ..addFile(ArchiveFile.string('LICENSE', 'MIT test fixture license'))
     ..addFile(ArchiveFile.string('Mod.dll', 'dll-bytes-$id-$version'));
   return ZipEncoder().encode(archive);
 }

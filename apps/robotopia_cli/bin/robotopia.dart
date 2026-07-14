@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -6,11 +7,15 @@ import 'package:launcher_data/launcher_data.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 import 'package:robotopia/src/launcher_update_index_builder.dart';
+import 'package:robotopia/src/bounded_file_reader.dart';
 import 'package:robotopia/src/mod_registry_index_builder.dart';
 import 'package:robotopia/src/release_package_builder.dart';
 import 'package:robotopia/src/release_package_models.dart';
 import 'package:robotopia/src/release_package_validator.dart';
 import 'package:robotopia/src/registry_entry_builder.dart';
+import 'package:robotopia/src/release_metadata.dart';
+import 'package:robotopia/src/release_policy.dart';
+import 'package:robotopia/src/ugc_live_sync_transitions.dart';
 
 part 'robotopia_check_commands.dart';
 part 'robotopia_environment_commands.dart';
@@ -20,6 +25,7 @@ part 'robotopia_new_commands.dart';
 part 'robotopia_registry_commands.dart';
 part 'robotopia_release_commands.dart';
 part 'robotopia_update_commands.dart';
+part 'robotopia_ugc_sidecar.dart';
 part 'robotopia_ugc_dev_commands.dart';
 part 'robotopia_ugc_unity_commands.dart';
 part 'robotopia_ui_bundle_commands.dart';
@@ -265,8 +271,7 @@ class _RobotopiaCli {
     final modsDir = Directory(p.join(repoRoot, 'mods'));
     if (modsDir.existsSync()) {
       projectDirs.addAll(
-        modsDir
-            .listSync()
+        listBoundedDirectorySync(modsDir)
             .whereType<Directory>()
             .where(
               (dir) =>
@@ -277,9 +282,10 @@ class _RobotopiaCli {
     }
     final packed = <String>[];
     for (final dir in projectDirs) {
-      final manifest =
-          jsonDecode(File(p.join(dir, 'robotopia.mod.json')).readAsStringSync())
-              as Map<String, Object?>;
+      final manifest = readBoundedJsonObjectSync(
+        File(p.join(dir, 'robotopia.mod.json')),
+        maxBytes: CliFileLimits.manifest,
+      );
       final name = (manifest['name'] as String?) ?? p.basename(dir);
       if (!includeDevMods && manifest['category'] == 'DevTool') {
         stdout.writeln(
@@ -291,7 +297,7 @@ class _RobotopiaCli {
       // Drop any previously packed versions of this id so no superseded
       // build can be installed by mistake.
       final safeId = name.replaceAll(RegExp('[^A-Za-z0-9_.-]'), '_');
-      for (final stale in output.listSync().whereType<File>()) {
+      for (final stale in listBoundedDirectorySync(output).whereType<File>()) {
         final staleName = p.basename(stale.path);
         if (staleName.startsWith('$safeId-') &&
             staleName.endsWith('.robotopiamod')) {
@@ -304,7 +310,14 @@ class _RobotopiaCli {
         outputDir: output.path,
         configuration: configuration,
       );
-      final sha = sha256.convert(File(package).readAsBytesSync()).toString();
+      final sha = sha256
+          .convert(
+            readBoundedRegularFileSync(
+              File(package),
+              maxBytes: CliFileLimits.package,
+            ),
+          )
+          .toString();
       stdout.writeln('Packed $name (${manifest['version']}) sha256=$sha');
       packed.add(package);
     }

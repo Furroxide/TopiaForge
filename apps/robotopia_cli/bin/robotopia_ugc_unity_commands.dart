@@ -23,10 +23,13 @@ extension _RobotopiaUgcCommands on _RobotopiaCli {
       );
       stdout.writeln('      [--project path] [--no-deploy]');
       stdout.writeln(
+        '  robotopia ugc cleanup [--project path]  Stop live sync and clear transient connection state.',
+      );
+      stdout.writeln(
         '  robotopia ugc dev [--project path|name] [--new name [--dir path]] [--watch folder]',
       );
       stdout.writeln(
-        '      [--scene id] [--scene-name n] [--environment env] [--transport localFolder|automerge]',
+        '      [--scene id] [--scene-name n] [--environment env] [--transport localFolder|automerge] [--doc url]',
       );
       stdout.writeln('      [--update-companion] [--launch-game] [--dry-run]');
       stdout.writeln('  robotopia ugc go-live');
@@ -45,6 +48,9 @@ extension _RobotopiaUgcCommands on _RobotopiaCli {
     if (sub == 'go-live') {
       return _ugcGoLive(args.skip(1).toList());
     }
+    if (sub == 'cleanup' || sub == 'stop') {
+      return _ugcCleanup(args.skip(1).toList());
+    }
 
     final sidecar = _findSidecar();
     if (sidecar == null) {
@@ -53,7 +59,7 @@ extension _RobotopiaUgcCommands on _RobotopiaCli {
       );
       return 1;
     }
-    final sidecarDir = File(sidecar).parent.path;
+    final sidecarDir = sidecar.directory;
 
     final forward = <String>[];
     switch (sub) {
@@ -76,28 +82,13 @@ extension _RobotopiaUgcCommands on _RobotopiaCli {
     }
 
     try {
-      if (!Directory('$sidecarDir/node_modules').existsSync() &&
-          sub != 'check') {
-        stdout.writeln('Installing sidecar dependencies (npm install)...');
-        final install = await Process.start(
-          'npm',
-          ['install', '--no-fund', '--no-audit'],
-          workingDirectory: sidecarDir,
-          mode: ProcessStartMode.inheritStdio,
-          runInShell: true,
-        );
-        final installCode = await install.exitCode;
-        if (installCode != 0) {
-          stderr.writeln('npm install failed (exit $installCode).');
-          return installCode;
-        }
-      }
+      await sidecar.prepare(requireDependencies: sub != 'check');
 
       final process = await Process.start(
         'node',
-        [sidecar, ...forward],
+        [sidecar.scriptPath, ...forward],
+        workingDirectory: sidecarDir,
         mode: ProcessStartMode.inheritStdio,
-        runInShell: true,
       );
       return process.exitCode;
     } on ProcessException catch (error) {
@@ -161,13 +152,159 @@ extension _RobotopiaUgcCommands on _RobotopiaCli {
     final base =
         workspace.project?.unityCompanion.liveSync ??
         const UgcLiveSyncSettings();
-    final settings = _withAutoConnect(base);
+    var settings = _withAutoConnect(base);
     if (settings.transport == 'automerge' && settings.documentUrl.isEmpty) {
-      stdout.writeln(
-        'Tip: run `robotopia ugc watch <folder>` to obtain a live document URL, then re-run go-live.',
-      );
+      final session = await _readPublisherSession();
+      final connected = session == null
+          ? null
+          : UgcLiveSyncTransitions.connectPublisherSession(settings, session);
+      if (connected == null) {
+        stderr.writeln(
+          'No active Automerge publisher session was found. Run '
+          '`robotopia ugc watch <folder> --session-file '
+          '${p.join(developerRepository.developerDataRoot, 'ugc-session.json')}` '
+          'or `robotopia ugc dev`, then retry.',
+        );
+        return 1;
+      }
+      settings = connected;
     }
     return _launchGameWithLiveSync(settings);
+  }
+
+  Future<Map<String, Object?>?> _readPublisherSession() async {
+    final file = File(
+      p.join(developerRepository.developerDataRoot, 'ugc-session.json'),
+    );
+    if (!await file.exists()) {
+      return null;
+    }
+    try {
+      return readBoundedJsonObjectSync(file, maxBytes: CliFileLimits.session);
+    } on Object {
+      return null;
+    }
+  }
+
+  // Stops the live game session (if running), clears captured Automerge state, and leaves durable authoring
+  // preferences such as watch folder and scene intact.
+  Future<int> _ugcCleanup(List<String> args) async {
+    final projectOptionIndex = args.indexOf('--project');
+    if (projectOptionIndex >= 0 &&
+        (projectOptionIndex + 1 >= args.length ||
+            args[projectOptionIndex + 1].startsWith('--'))) {
+      throw UsageError('Usage: robotopia ugc cleanup [--project path]');
+    }
+    final projectPath = _option(args, '--project');
+
+    DeveloperWorkspace? workspace;
+    var settings = const UgcLiveSyncSettings();
+    if (projectPath != null) {
+      workspace = await developerRepository.loadDeveloperWorkspace(
+        projectPath: projectPath,
+      );
+      final project = workspace.project;
+      if (project == null) {
+        throw StateError('Robotopia project was not found at $projectPath.');
+      }
+      settings = project.unityCompanion.liveSync;
+    } else {
+      try {
+        workspace = await developerRepository.loadDeveloperWorkspace();
+        settings = workspace.project?.unityCompanion.liveSync ?? settings;
+      } on Object {
+        // The repository preserves the deployed runtime config when there is
+        // no discoverable developer project, using these defaults only if no
+        // valid deployed config exists either.
+      }
+    }
+
+    final launcher = LocalLauncherRepository();
+    final failures = <String>[];
+    String errorMessage(Object error) =>
+        error is StateError ? error.message : error.toString();
+
+    // Revoke the session lease first. Detached CLI publishers are not owned by
+    // this repository instance, so deleting the lease is their stop signal.
+    try {
+      await launcher.stopUgcPublisher(waitForExit: true);
+      stdout.writeln('Stopped the repository-owned Automerge publisher.');
+    } on Object catch (error) {
+      failures.add('owned publisher cleanup: ${errorMessage(error)}');
+    }
+    try {
+      await launcher.revokeUgcPublisherSession();
+      stdout.writeln('Revoked the shared Automerge publisher session.');
+    } on Object catch (error) {
+      failures.add('publisher session cleanup: ${errorMessage(error)}');
+    }
+
+    final project = workspace?.project;
+    if (project != null) {
+      try {
+        await developerRepository.updateUgcLiveSync(
+          workspace!.projectRoot,
+          _withoutTransientUgcState(settings),
+        );
+        stdout.writeln(
+          'Cleared transient live-sync state from ${workspace.projectRoot}/robotopia.project.json.',
+        );
+      } on Object catch (error) {
+        failures.add('project cleanup: ${errorMessage(error)}');
+      }
+    }
+
+    GameInstall? install;
+    try {
+      install = await launcher.detectKnownInstall();
+    } on Object catch (error) {
+      failures.add('game install detection: ${errorMessage(error)}');
+    }
+    if (install == null) {
+      try {
+        install = (await launcher.loadSnapshot()).gameInstall;
+      } on Object catch (error) {
+        failures.add('saved game install lookup: ${errorMessage(error)}');
+      }
+    }
+
+    if (install == null) {
+      stdout.writeln(
+        'No Robotopia install detected — skipped game-side live-sync cleanup.',
+      );
+    } else {
+      try {
+        final report = await launcher.cleanupUgcLiveSync(install, settings);
+        stdout.writeln(
+          'Requested UGC live-sync stop via ${report.commandPath}.',
+        );
+        stdout.writeln('Deployed cleanup config to ${report.configPath}.');
+        if (report.statusFileDeleted) {
+          stdout.writeln('Removed stale live-sync status.');
+        }
+        if (report.sessionFileDeleted) {
+          stdout.writeln('Removed stale Automerge publisher session.');
+        }
+      } on Object catch (error) {
+        failures.add('game-side cleanup: ${errorMessage(error)}');
+      }
+    }
+
+    for (final failure in failures) {
+      stderr.writeln('UGC cleanup failed ($failure).');
+    }
+    return failures.isEmpty ? 0 : 1;
+  }
+
+  UgcLiveSyncSettings _withoutTransientUgcState(UgcLiveSyncSettings settings) {
+    return UgcLiveSyncSettings(
+      transport: settings.transport,
+      watchFolder: settings.watchFolder,
+      syncServerUrl: settings.syncServerUrl,
+      sceneId: settings.sceneId,
+      maxSnapshotBytes: settings.maxSnapshotBytes,
+      debounceMilliseconds: settings.debounceMilliseconds,
+    );
   }
 
   UgcLiveSyncSettings _withAutoConnect(
@@ -245,20 +382,5 @@ extension _RobotopiaUgcCommands on _RobotopiaCli {
       Directory(folder).createSync(recursive: true);
     }
     return p.normalize(p.absolute(folder));
-  }
-}
-
-String? _findSidecar() {
-  var dir = Directory.current.absolute;
-  while (true) {
-    final candidate = File('${dir.path}/tools/ugc-automerge-sidecar/index.mjs');
-    if (candidate.existsSync()) {
-      return candidate.path;
-    }
-    final parent = dir.parent;
-    if (parent.path == dir.path) {
-      return null;
-    }
-    dir = parent;
   }
 }

@@ -1,0 +1,55 @@
+{
+  "$schema": "../schemas/robotopia.release-policy.schema.json",
+  "schemaVersion": 1,
+  "toolchains": {
+    "dotnetSdk": "10.0.301",
+    "dotnetRuntime": "10.0.9",
+    "dart": "3.11.1",
+    "flutter": "3.41.4",
+    "nodeMinimum": "20.0.0",
+    "unity": "6000.0.23f1"
+  },
+  "gameBuild": {
+    "id": 2227,
+    "metadataFile": ".github/robotopia-game-build.json",
+    "requireLatestAtRelease": true
+  },
+  "projectLicense": {
+    "spdxExpression": "OWNER_DECISION_REQUIRED",
+    "licenseFile": null,
+    "decisionStatus": "blocked"
+  },
+  "thirdPartyProvenance": [
+    "third_party/BepInEx/provenance.json"
+  ],
+  "versioning": {
+    "productVersion": "0.1.1",
+    "componentVersionsAreIndependent": true,
+    "rollback": "none-initial-release"
+  },
+  "artifactPolicy": {
+    "platformArchives": [
+      "QuantumWorks-linux-x64.zip",
+      "QuantumWorks-macos-universal.zip",
+      "QuantumWorks-windows-x64.zip"
+    ],
+    "generatedMetadata": [
+      "release-bom.json",
+      "release-sbom.spdx.json",
+      "SHA256SUMS"
+    ],
+    "canonicalEcosystemPayload": true
+  },
+  "bepInEx": {
+    "version": "5.4.23.5",
+    "provenanceFile": "third_party/BepInEx/provenance.json",
+    "unityDoorstopVersion": "4.5.0",
+    "unityDoorstopCommit": "33dab9a6733862eb81869ff08431d9478b28784b"
+  },
+  "publication": {
+    "mode": "draft-only",
+    "allowTagCreation": false,
+    "allowAssetReplacement": false,
+    "requireImmutableReleasesBeforeManualPublish": true
+  }
+}

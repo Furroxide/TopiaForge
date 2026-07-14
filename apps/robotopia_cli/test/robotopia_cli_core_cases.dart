@@ -93,6 +93,37 @@ void _coreCliTests(_CliTestHarness Function() currentHarness) {
     );
   });
 
+  test('custom license file scaffolding is bounded and repeatable', () async {
+    const licenseText = 'Custom test grant.\nAll rights reserved.\n';
+    final source = File(p.join(currentHarness().temp.path, 'CUSTOM-LICENSE'))
+      ..writeAsStringSync(licenseText);
+    final parents = [
+      p.join(currentHarness().temp.path, 'first'),
+      p.join(currentHarness().temp.path, 'second'),
+    ];
+    for (final parent in parents) {
+      Directory(parent).createSync();
+      final result = await currentHarness().runCli([
+        'new',
+        'mod',
+        'author.custom',
+        '--dir',
+        parent,
+        '--author',
+        'Tester',
+        '--license',
+        'LicenseRef-Custom',
+        '--license-file',
+        source.path,
+      ]);
+      expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
+      expect(
+        File(p.join(parent, 'author.custom', 'LICENSE.md')).readAsStringSync(),
+        licenseText,
+      );
+    }
+  });
+
   test(
     'scaffolds a gamemode mod with flag overrides that passes check package',
     () async {

@@ -1,11 +1,15 @@
 import 'dart:io';
 
+import 'package:launcher_data/launcher_data.dart';
 import 'package:path/path.dart' as p;
 
 import 'release_package_io.dart';
 import 'release_package_macos.dart';
 import 'release_package_models.dart';
 import 'release_package_payload.dart';
+import 'release_package_windows.dart';
+import 'release_policy.dart';
+import 'release_ecosystem_payload.dart';
 
 class ReleasePackageBuilder {
   ReleasePackageBuilder({
@@ -15,8 +19,13 @@ class ReleasePackageBuilder {
     this.configuration = 'Release',
     this.prebuiltLauncher = '',
     this.prebuiltCli = '',
+    this.prebuiltDist = '',
     this.rebuildRuntimePayload = true,
+    this.requireMacSigning = false,
+    this.requireWindowsSigning = false,
+    this.isAotExecutable = _isAotExecutable,
     this.processRunner = const ReleaseProcessRunner(),
+    this.dotnetSdkResolver = resolveRepositoryDotnetSdk,
   }) : fileOps = ReleaseFileOps(processRunner: processRunner);
 
   final String repositoryRoot;
@@ -25,8 +34,13 @@ class ReleasePackageBuilder {
   final String configuration;
   final String prebuiltLauncher;
   final String prebuiltCli;
+  final String prebuiltDist;
   final bool rebuildRuntimePayload;
+  final bool requireMacSigning;
+  final bool requireWindowsSigning;
+  final bool isAotExecutable;
   final ReleaseProcessRunner processRunner;
+  final RepositoryDotnetSdkResolver dotnetSdkResolver;
   final ReleaseFileOps fileOps;
 
   Future<String> build() async {
@@ -41,6 +55,7 @@ class ReleasePackageBuilder {
     stageRoot.createSync(recursive: true);
 
     if (rebuildRuntimePayload) {
+      await const BepInExProvenanceVerifier().verify(repositoryRoot);
       await _rebuildRuntimePayload();
     } else {
       stderr.writeln(
@@ -63,19 +78,29 @@ class ReleasePackageBuilder {
   }
 
   Future<void> _rebuildRuntimePayload() async {
-    await processRunner.runChecked('dotnet', [
+    final dotnet = await dotnetSdkResolver(Directory(repositoryRoot));
+    await processRunner.runChecked(dotnet.executable, [
       'build',
       p.join(repositoryRoot, 'RobotopiaModManager.slnx'),
       '-c',
       configuration,
     ], workingDirectory: repositoryRoot);
 
+    if (prebuiltDist.trim().isNotEmpty) {
+      const PrebuiltEcosystemPayload().validate(
+        repositoryRoot: repositoryRoot,
+        path: prebuiltDist,
+      );
+      return;
+    }
+
     final cliApp = p.join(repositoryRoot, 'apps', 'robotopia_cli');
-    await processRunner.runChecked('dart', [
+    await _runDart([
       'pub',
       'get',
+      '--enforce-lockfile',
     ], workingDirectory: cliApp);
-    await processRunner.runChecked('dart', [
+    await _runDart([
       'run',
       p.join('bin', 'robotopia.dart'),
       'pack',
@@ -85,7 +110,7 @@ class ReleasePackageBuilder {
       '--configuration',
       configuration,
     ], workingDirectory: cliApp);
-    await processRunner.runChecked('dart', [
+    await _runDart([
       'run',
       p.join('bin', 'robotopia.dart'),
       'unity',
@@ -100,6 +125,12 @@ class ReleasePackageBuilder {
     await _payloadWriter.copyCommonPayload(stageRoot.path);
     if (rebuildRuntimePayload) {
       await _payloadWriter.copyLoaderRuntime(stageRoot.path);
+    }
+    if (platform == ReleasePackagePlatform.windows) {
+      await WindowsPackageSigner(
+        processRunner: processRunner,
+        requireTrustedSignature: requireWindowsSigning,
+      ).signIfConfigured(stageRoot.path);
     }
   }
 
@@ -125,6 +156,7 @@ class ReleasePackageBuilder {
     }
     await MacPackageSigner(
       processRunner: processRunner,
+      requireTrustedSignature: requireMacSigning,
     ).signIfConfigured(appBundle, stageRoot.path);
     await _writeMacCliShim(stageRoot.path);
   }
@@ -134,21 +166,14 @@ class ReleasePackageBuilder {
       await _copyPrebuiltLauncher(stageRoot);
       return;
     }
-    if (!await processRunner.commandExists('flutter')) {
-      stderr.writeln(
-        releaseWarning(
-          'Flutter not found on PATH; skipping launcher GUI build.',
-        ),
-      );
-      return;
-    }
+    final flutter = await _resolveFlutterCommand();
 
     final launcherApp = p.join(
       repositoryRoot,
       'apps',
       'robotopia_launcher_flutter',
     );
-    await processRunner.runChecked('flutter', [
+    await processRunner.runChecked(flutter, [
       'build',
       platform.id,
       '--release',
@@ -165,7 +190,7 @@ class ReleasePackageBuilder {
       final appBundle = _findAppBundle(source.path);
       if (appBundle == null) {
         throw StateError(
-          'Prebuilt macOS launcher must be a .app bundle or contain one: ${source.path}',
+          'Prebuilt macOS launcher must be QuantumWorks.app or contain it: ${source.path}',
         );
       }
       await fileOps.copyMacBundle(
@@ -234,6 +259,17 @@ class ReleasePackageBuilder {
 
   Future<void> _buildCli(String destinationRoot) async {
     final destination = p.join(destinationRoot, platform.cliFileName);
+    if (platform == ReleasePackagePlatform.macos) {
+      if (prebuiltCli.trim().isEmpty) {
+        throw StateError(
+          'A universal macOS release requires --prebuilt-cli to point to a '
+          'directory containing robotopia-arm64 and robotopia-x64. Dart AOT '
+          'executables cannot be combined safely with lipo.',
+        );
+      }
+      await _copyMacCliPair(destinationRoot);
+      return;
+    }
     if (prebuiltCli.trim().isNotEmpty) {
       if (!File(prebuiltCli).existsSync()) {
         throw StateError('Prebuilt CLI was not found: $prebuiltCli');
@@ -244,11 +280,12 @@ class ReleasePackageBuilder {
     }
 
     final cliApp = p.join(repositoryRoot, 'apps', 'robotopia_cli');
-    await processRunner.runChecked('dart', [
+    await _runDart([
       'pub',
       'get',
+      '--enforce-lockfile',
     ], workingDirectory: cliApp);
-    await processRunner.runChecked('dart', [
+    await _runDart([
       'compile',
       'exe',
       p.join('bin', 'robotopia.dart'),
@@ -257,6 +294,81 @@ class ReleasePackageBuilder {
     ], workingDirectory: cliApp);
     await fileOps.setExecutableBit(destination);
   }
+
+  Future<void> _copyMacCliPair(String destinationRoot) async {
+    final source = Directory(prebuiltCli);
+    if (!source.existsSync()) {
+      throw StateError(
+        'The macOS prebuilt CLI must be a directory containing '
+        'robotopia-arm64 and robotopia-x64. Dart AOT executables cannot be '
+        'combined safely with lipo.',
+      );
+    }
+    for (final name in const [macCliArm64FileName, macCliX64FileName]) {
+      final input = File(p.join(source.path, name));
+      if (!input.existsSync()) {
+        throw StateError('The macOS prebuilt CLI is missing $name.');
+      }
+      final output = p.join(destinationRoot, name);
+      input.copySync(output);
+      await fileOps.setExecutableBit(output);
+    }
+
+    final dispatcher = File(p.join(destinationRoot, platform.cliFileName));
+    dispatcher.writeAsStringSync(_macCliDispatcherScript, flush: true);
+    await fileOps.setExecutableBit(dispatcher.path);
+  }
+
+  Future<void> _runDart(
+    List<String> arguments, {
+    required String workingDirectory,
+  }) async {
+    final command = await _resolveDartCommand();
+    await processRunner.runChecked(
+      command,
+      arguments,
+      workingDirectory: workingDirectory,
+    );
+  }
+
+  Future<String> _resolveDartCommand() async {
+    if (!isAotExecutable) {
+      return Platform.resolvedExecutable;
+    }
+    final projectDart = _projectSdkCommand('dart');
+    if (File(projectDart).existsSync()) {
+      return projectDart;
+    }
+    if (await processRunner.commandExists('dart')) {
+      return 'dart';
+    }
+    throw StateError(
+      'Dart was not found at $projectDart or on PATH. '
+      'Follow docs/ContributorSetup.md to select Flutter 3.41.4 with FVM.',
+    );
+  }
+
+  Future<String> _resolveFlutterCommand() async {
+    final projectFlutter = _projectSdkCommand('flutter');
+    if (File(projectFlutter).existsSync()) {
+      return projectFlutter;
+    }
+    if (await processRunner.commandExists('flutter')) {
+      return 'flutter';
+    }
+    throw StateError(
+      'Flutter was not found at $projectFlutter or on PATH. '
+      'Follow docs/ContributorSetup.md to select Flutter 3.41.4 with FVM.',
+    );
+  }
+
+  String _projectSdkCommand(String tool) => p.join(
+    repositoryRoot,
+    '.fvm',
+    'flutter_sdk',
+    'bin',
+    Platform.isWindows ? '$tool.bat' : tool,
+  );
 
   Future<void> _writeMacCliShim(String stageRoot) async {
     final shim = File(p.join(stageRoot, 'robotopia'));
@@ -273,20 +385,12 @@ exec "\$DIR/QuantumWorks.app/Contents/Resources/QuantumWorks/robotopia" "\$@"
 
   String? _findAppBundle(String root) {
     final asFile = Directory(root);
-    if (root.endsWith('.app') && asFile.existsSync()) {
+    if (p.basename(root) == _macAppBundleName && asFile.existsSync()) {
       return root;
     }
-    final preferred = Directory(p.join(root, 'QuantumWorks.app'));
+    final preferred = Directory(p.join(root, _macAppBundleName));
     if (preferred.existsSync()) {
       return preferred.path;
-    }
-    if (!Directory(root).existsSync()) {
-      return null;
-    }
-    for (final dir in Directory(root).listSync().whereType<Directory>()) {
-      if (dir.path.endsWith('.app')) {
-        return dir.path;
-      }
     }
     return null;
   }
@@ -307,5 +411,19 @@ exec "\$DIR/QuantumWorks.app/Contents/Resources/QuantumWorks/robotopia" "\$@"
     rebuildRuntimePayload: rebuildRuntimePayload,
     fileOps: fileOps,
     processRunner: processRunner,
+    distSourceRoot: prebuiltDist,
+    dotnetSdkResolver: dotnetSdkResolver,
   );
 }
+
+const _macAppBundleName = 'QuantumWorks.app';
+const _macCliDispatcherScript = '''#!/bin/sh
+set -eu
+DIR="\$(CDPATH= cd -- "\$(dirname -- "\$0")" && pwd)"
+case "\$(uname -m)" in
+  arm64) exec "\$DIR/robotopia-arm64" "\$@" ;;
+  x86_64) exec "\$DIR/robotopia-x64" "\$@" ;;
+  *) echo "Unsupported macOS architecture: \$(uname -m)" >&2; exit 64 ;;
+esac
+''';
+const _isAotExecutable = bool.fromEnvironment('dart.vm.product');

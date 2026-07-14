@@ -10,17 +10,19 @@ Write-Warning "tools/install-local.ps1 is deprecated; use 'robotopia dev-install
 
 $repo = Resolve-Path (Join-Path $PSScriptRoot "..")
 $cliApp = Join-Path $repo "apps/robotopia_cli"
+. (Join-Path $PSScriptRoot "flutter-sdk.ps1")
+$dart = Resolve-RobotopiaSdkCommand -Tool dart -RepositoryRoot $repo
 
 Push-Location $cliApp
 try {
-    & dart pub get
+    & $dart pub get
     if ($LASTEXITCODE -ne 0) { throw "dart pub get failed (exit $LASTEXITCODE)." }
 
-    $args = @("run", (Join-Path "bin" "robotopia.dart"), "dev-install", "--configuration", $Configuration)
+    $commandArguments = @("run", (Join-Path "bin" "robotopia.dart"), "dev-install", "--configuration", $Configuration)
     if ($GameDir -ne "") {
-        $args += @("--game-dir", $GameDir)
+        $commandArguments += @("--game-dir", $GameDir)
     }
-    & dart @args
+    & $dart @commandArguments
     if ($LASTEXITCODE -ne 0) { throw "robotopia dev-install failed (exit $LASTEXITCODE)." }
 }
 finally {

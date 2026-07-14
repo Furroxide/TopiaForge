@@ -1,0 +1,137 @@
+# Initial release checklist
+
+Use this checklist from a clean, frozen release candidate. A checked box requires a command log, artifact, or reviewed
+QA record from the exact candidate SHA. Warnings, failures, and unavailable checks need an explicit disposition; they
+are never silently waived. Candidate-specific open items are in [`LaunchBlockers.md`](LaunchBlockers.md).
+
+## 1. Scope, policy, and ownership
+
+- [x] Product version is `0.1.1`; components/mods version independently; initial release has no rollback target.
+- [x] Game support is build `2227` only (`0.0.2227`); public-latest drift is release-fatal.
+- [x] Unity is exactly `6000.0.23f1`; no fallback editor is accepted.
+- [x] Launcher upgrades are manual; custom worlds are Windows/Proton-only; official community submissions are closed.
+- [x] Remote AI, player-token, microphone, and STT features default off and declare descriptive capabilities.
+- [ ] Owner/legal approves the project and inbound license; replace `OWNER_DECISION_REQUIRED` and `NOASSERTION`.
+- [ ] Owner/legal approves game/brand/art/font/compatibility/injection rights and all third-party dispositions.
+- [ ] Privacy/backend/security owners approve remote data flows, retention, consent, cost, abuse, and incident policy.
+- [ ] Security/product owners approve first-party package trust, origin, revocation, and installed-user recovery.
+- [ ] Public security, support, release-note, and incident owners are named and monitored.
+
+## 2. Candidate and toolchains
+
+- [ ] Review and commit the remediation without discarding unrelated user work; freeze one candidate SHA.
+- [ ] Create a protected, annotated `v0.1.1` tag on that SHA through the approved administrator process.
+- [ ] Confirm `global.json` resolves exactly .NET SDK `10.0.301` with roll-forward disabled and runtime `10.0.9`.
+- [ ] Confirm Dart `3.11.1`, Flutter `3.41.4`, Node 20+, and Unity `6000.0.23f1` on every applicable runner.
+- [ ] Probe the public latest-build manifest and verify both pinned build-2227 archive paths and SHA-256 values.
+- [ ] Confirm all LFS objects, immutable BepInEx inputs, UnityDoorstop source, and managed references are present.
+
+## 3. Source, contracts, and tests
+
+- [ ] `dotnet build RobotopiaModManager.slnx -c Release` passes with zero warnings/errors.
+- [ ] `dotnet run --project tests/Robotopia.ModManager.Tests/Robotopia.ModManager.Tests.csproj -c Release` passes.
+- [ ] Strict C# audit, generated public-API baseline, and production bounded-read scan pass.
+- [ ] `dart format --output=none --set-exit-if-changed` passes for every Dart package/app.
+- [ ] Domain/data/CLI `dart analyze` and `dart test` pass.
+- [ ] UI/app `flutter analyze` and `flutter test` pass.
+- [ ] C#/Dart SemVer, manifest, compatibility, unknown-field, dependency, conflict, pin, order, and state parity passes.
+- [ ] Every non-generated Dart file is at most 500 lines; launcher state remains BLoC-only.
+- [ ] Core remains Unity-free; domain remains Flutter/filesystem/process/network/archive-free; consumer UI uses QwUi.
+- [ ] No unresolved conflict marker, unsafe fallback, swallowed failure, duplicate unsafe archive/process path, or
+      unexplained analyzer/build warning remains.
+
+## 4. Security and untrusted inputs
+
+- [ ] Archive tests cover traversal, links/special files, Unicode/case folding, Windows device/ADS names, malformed
+      ZIP/ZIP64, decompression bounds, deterministic output, atomic replacement, interruption, and rollback.
+- [ ] Runtime repair rejects links/special files, preserves modes, stages atomically, and restores on failure.
+- [ ] UGC inspection uses strict bounded UTF-8/JSON/gzip, typed issues, stable regular files, deterministic selection,
+      structural validation, race detection, and surfaced errors.
+- [ ] Diagnostics enforce 4 MiB/log and 16 MiB total caps, streaming tails, link rejection, secret redaction,
+      truncation metadata, hashes, and atomic ZIP replacement.
+- [ ] Sidecar setup uses the checked-in lockfile, `npm ci --ignore-scripts --no-fund --no-audit`, trusted regular
+      paths, no shell, bounded/coalesced output, timeouts, and restrictive session permissions.
+- [ ] Download/registry/update paths require bounded reads, timeouts, HTTPS, no URL credentials/query/fragment,
+      digest validation, partial-download recovery, atomic writes, and rollback.
+- [ ] Install/update confirmation shows source, SHA-256, aggregate dependency capabilities, and arbitrary-code risk.
+- [ ] Credentials exposed to any inherited Xcode scheme-pre-action log are revoked/rotated; affected logs are removed
+      under the approved retention policy; a sanitized-launch sentinel build contains no credential values.
+
+## 5. Sidecar and repository hygiene
+
+- [ ] Sidecar `npm ci`, every-module syntax check, 16 tests, production dependency tree, and `npm audit` pass.
+- [ ] actionlint passes every workflow; all external actions are pinned to full commit SHA values.
+- [ ] PSScriptAnalyzer `1.25.0`, PowerShell parser, bash syntax, and shellcheck pass for repository-owned scripts.
+- [ ] JSON, YAML, JSON Schema, Markdown-link, Git LFS, binary-attribute, conflict-marker, and LF audits pass.
+- [ ] Immutable vendored BepInEx files match provenance even where upstream line endings or lint exceptions differ.
+
+## 6. Mods, templates, registry, and ecosystem payload
+
+- [ ] All 13 first-party source manifests and packages validate; every mod is packed twice byte-identically and the
+      resulting archive is inspected for manifest, assembly, license paths, links, names, and collisions.
+- [ ] All seven C# templates scaffold, validate, build/package twice, and retain safe non-publishable defaults.
+- [ ] Explicit `--author`/`--license` scaffolding is tested; MIT/Apache text is generated only after selection and
+      other expressions require safe repeatable `--license-file` inputs.
+- [ ] Three VPM packages/listings build twice and pass direct manifest, license, notice, target, and hash inspection.
+- [ ] One canonical deterministic `ecosystem-dist` contains exactly 12 player mods plus three VPM packages; UiGallery
+      remains validated but absent from normal payloads; every platform consumes identical nested bytes.
+- [ ] Strict registry schema/semantic/dependency/license/package/all-version validation passes.
+- [ ] Merge-base/index comparison proves append-only history: no deletion, rename, reorder, mutation, downgrade, or
+      conflicting duplicate; only unique strictly newer versions are prepended.
+- [ ] Official Pages index contains first-party entries only; self-hosted registry workflows remain documented.
+
+## 7. Exact Unity validation
+
+- [ ] Invoke only `/Applications/Unity/Hub/Editor/6000.0.23f1/Unity.app/Contents/MacOS/Unity` locally.
+- [ ] Rebuild QwUi twice; bytes, embedded manifest, editor provenance, hashes, neutral font names, assets, and docs agree.
+- [ ] Rebuild a representative world twice; target, world manifest, companion tooling, VPM inputs, and bytes agree.
+- [ ] Run repeated QwUi create/dispose and scene-transition lifecycle smoke; all allocator/subscription state returns
+      to baseline.
+- [ ] UiGallery covers loading, empty, information, warning, error, success, disabled, focus, long/scroll content,
+      destructive modal, toast, scale, contrast, and reduced-motion states.
+- [ ] Authorized in-game/profiler QA validates all 13 mods, 22 dynamic bindings, lifecycle isolation, save behavior,
+      QwUi usage, accessibility propagation, and zero steady-state allocation regressions.
+
+## 8. Platform release archives
+
+- [ ] Build Windows x64, Linux x64, and macOS universal independently with `fail-fast: false` from the frozen SHA.
+- [ ] Directly inspect final extracted archives for missing/extra/duplicate/linked entries, case collisions, modes,
+      executability, hashes, notices, runtime assets, nested payload equality, secrets, and update metadata.
+- [ ] Windows executables have approved Authenticode SHA-256 signatures and HTTPS RFC 3161 timestamps and pass
+      `signtool verify /pa /all /tw` after final extraction.
+- [ ] macOS launcher, GameCompat, and frameworks are universal; Dart AOT ships separate runnable arm64/x64 executables
+      behind the dispatcher (never `lipo` Dart AOT executables).
+- [ ] The explicitly non-distributable macOS technical dry run passes direct launch and embedded-CLI smoke tests. Its
+      ad-hoc signature omits hardened runtime because ad-hoc code has no common Team ID; publication mode rejects it.
+- [ ] Every macOS Mach-O is Developer ID/expected-Team signed; the app is notarized, stapled, quarantined, and passes
+      deep/strict codesign, `stapler validate`, and Gatekeeper after final extraction on arm64 and Intel.
+- [ ] Linux executable modes, native launcher/CLI, and Windows-game-under-Proton discovery/path/process/repair/custom-
+      world assumptions pass on a clean host.
+- [ ] Clean-machine install, repair, profiles, dependency preview, normal/safe-mode launch, failure recovery,
+      diagnostics, manual update, and uninstall pass for each supported platform.
+- [ ] Native visual/accessibility QA covers all screens and state families at 800x600, 100–200% text scale, high
+      contrast, reduced motion, keyboard-only/focus, screen reader, long paths, and no-overflow behavior.
+
+## 9. Release metadata and protected publication
+
+- [ ] Generate deterministic `release-bom.json`, SPDX 2.3 SBOM, and `SHA256SUMS` for the candidate SHA and exact assets.
+- [ ] BOM/SBOM include versions, toolchains, build/Unity/BepInEx provenance, licenses/notices, nested hashes, sizes, and
+      expected assets; independent verification passes.
+- [ ] `manual-releases.json` format 1 is `manualOnly: true` and contains only absolute credential-free HTTPS release
+      and artifact URLs, SHA-256, size, and platform.
+- [ ] Required contexts protect the candidate: `Required / CI validation`, `Required / Release packages`,
+      `Required / Registry validation`, and trusted-candidate `Required / Unity validation`.
+- [ ] Fork PR validation is secretless. Release, signing, Unity-license, attestation, and Pages privileges exist only in
+      protected trusted workflows/environments with required reviewers.
+- [ ] Pages builds in an unprivileged temporary tree; the no-checkout deploy job has only Pages/OIDC write authority.
+- [ ] Publication validates everything before creating/resuming an exact matching draft; same-name/different-digest
+      assets fail; exact reruns are no-ops; no clobber/tag creation/tag mutation/automatic publication exists.
+- [ ] GitHub reports every uploaded size/digest/state complete; an authorized owner reviews notes, BOM/SBOM, checksums,
+      signatures, notarization, native/in-game QA, and all blocker dispositions before manually publishing.
+
+## 10. Final decision
+
+- [ ] Rerun [`LaunchBlockers.md`](LaunchBlockers.md) against the frozen SHA: every P0 closed, every P1 closed or given a
+      dated owner disposition, zero critical/high defects, zero unexplained warnings/failures/flakes, and zero skips.
+- [ ] Record an explicit **SHIP** decision by the project owner and release manager. Until then, the decision is
+      **NO-SHIP**.

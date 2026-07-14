@@ -6,7 +6,12 @@ import 'package:path/path.dart' as p;
 import 'package:robotopia/src/launcher_update_index_builder.dart';
 import 'package:robotopia/src/registry_entry_builder.dart';
 
+import 'atomic_output.dart';
+import 'bounded_file_reader.dart';
+
 part 'mod_registry_validator.dart';
+part 'mod_registry_collection_policy.dart';
+part 'registry_publication_policy.dart';
 
 /// Builds the published mod-registry `index.json`.
 ///
@@ -65,9 +70,11 @@ class ModRegistryIndexResult {
 }
 
 class ModRegistryIndexBuilder {
-  ModRegistryIndexBuilder({GitHubReleaseClient? client, DateTime Function()? clock})
-    : _client = client,
-      _clock = clock ?? DateTime.now;
+  ModRegistryIndexBuilder({
+    GitHubReleaseClient? client,
+    DateTime Function()? clock,
+  }) : _client = client,
+       _clock = clock ?? DateTime.now;
 
   final GitHubReleaseClient? _client;
   final DateTime Function() _clock;
@@ -91,13 +98,19 @@ class ModRegistryIndexBuilder {
       firstPartyIds: firstParty.keys.toSet(),
     );
 
-    final mods = [
-      ...firstParty.values.map((versions) => _indexEntry(versions, 'first-party')),
-      ...community,
-    ]..sort((a, b) => a.manifest.id.toLowerCase().compareTo(b.manifest.id.toLowerCase()));
+    final mods =
+        [
+          ...firstParty.values.map(
+            (versions) => _indexEntry(versions, 'first-party'),
+          ),
+          ...community,
+        ]..sort(
+          (a, b) => a.manifest.id.toLowerCase().compareTo(
+            b.manifest.id.toLowerCase(),
+          ),
+        );
 
-    final output = Directory(config.outputDirectory);
-    await output.create(recursive: true);
+    final output = createAtomicStagingDirectory(config.outputDirectory);
     final indexPath = p.join(output.path, 'index.json');
     final index = <String, Object?>{
       r'$schema': ModRegistryFormat.canonicalIndexSchemaUrl,
@@ -109,14 +122,19 @@ class ModRegistryIndexBuilder {
       'mods': mods.map((entry) => entry.toJson()).toList(),
     };
     final json = const JsonEncoder.withIndent('  ').convert(index);
-    await File(indexPath).writeAsString('$json\n');
-    await File(p.join(output.path, '.nojekyll')).writeAsString('');
-
-    return ModRegistryIndexResult(
-      firstPartyCount: firstParty.length,
-      communityCount: community.length,
-      indexPath: indexPath,
-    );
+    try {
+      await File(indexPath).writeAsString('$json\n');
+      await File(p.join(output.path, '.nojekyll')).writeAsString('');
+      publishAtomicDirectory(output, config.outputDirectory);
+      return ModRegistryIndexResult(
+        firstPartyCount: firstParty.length,
+        communityCount: community.length,
+        indexPath: p.join(config.outputDirectory, 'index.json'),
+      );
+    } on Object {
+      deleteAtomicStagingDirectory(output);
+      rethrow;
+    }
   }
 
   /// Collected versions per lowercase mod id, newest release first (GitHub
@@ -151,19 +169,18 @@ class ModRegistryIndexBuilder {
             'mod package: ${error.message}',
           );
         }
-        final id = package.manifest.id.toLowerCase();
-        final versions = byId.putIfAbsent(id, () => []);
-        if (versions.any(
-          (item) => item.manifest.version == package.manifest.version,
-        )) {
-          continue;
-        }
-        versions.add(
+        _requirePublicHttpsUrl(
+          asset.browserDownloadUrl,
+          label: 'release asset ${asset.name}',
+        );
+        _addCollectedVersion(
+          byId,
           _CollectedVersion(
             manifest: package.manifest,
             downloadUrl: asset.browserDownloadUrl,
             packageSha256: package.sha256Hex,
             publishedAt: release.publishedAt,
+            sourceLabel: '${release.tagName}/${asset.name}',
           ),
         );
       }
@@ -184,12 +201,9 @@ class ModRegistryIndexBuilder {
         ? null
         : _normalizeAbsoluteBase(config.baseUrl);
     final files =
-        directory
-            .listSync()
+        listBoundedDirectorySync(directory)
             .whereType<File>()
-            .where(
-              (file) => file.path.toLowerCase().endsWith('.robotopiamod'),
-            )
+            .where((file) => file.path.toLowerCase().endsWith('.robotopiamod'))
             .toList()
           ..sort((a, b) => a.path.compareTo(b.path));
 
@@ -197,7 +211,9 @@ class ModRegistryIndexBuilder {
     for (final file in files) {
       final ModPackageSummary package;
       try {
-        package = readModPackage(file.readAsBytesSync());
+        package = readModPackage(
+          readBoundedRegularFileSync(file, maxBytes: CliFileLimits.package),
+        );
       } on StateError catch (error) {
         throw StateError(
           '${p.basename(file.path)} is not a valid mod package: '
@@ -205,13 +221,15 @@ class ModRegistryIndexBuilder {
         );
       }
       final fileName = p.basename(file.path);
-      byId.putIfAbsent(package.manifest.id.toLowerCase(), () => []).add(
+      _addCollectedVersion(
+        byId,
         _CollectedVersion(
           manifest: package.manifest,
           downloadUrl: baseUri == null
               ? fileName
               : baseUri.resolve(Uri.encodeComponent(fileName)).toString(),
           packageSha256: package.sha256Hex,
+          sourceLabel: file.path,
         ),
       );
     }
@@ -229,7 +247,9 @@ class ModRegistryIndexBuilder {
     if (!directory.existsSync()) {
       return;
     }
-    for (final modDir in directory.listSync().whereType<Directory>()) {
+    for (final modDir in listBoundedDirectorySync(
+      directory,
+    ).whereType<Directory>()) {
       final manifestFile = File(p.join(modDir.path, 'robotopia.mod.json'));
       final changelogFile = File(p.join(modDir.path, 'CHANGELOG.md'));
       if (!manifestFile.existsSync() || !changelogFile.existsSync()) {
@@ -237,7 +257,10 @@ class ModRegistryIndexBuilder {
       }
       final Object? decoded;
       try {
-        decoded = jsonDecode(manifestFile.readAsStringSync());
+        decoded = readBoundedJsonObjectSync(
+          manifestFile,
+          maxBytes: CliFileLimits.manifest,
+        );
       } on FormatException {
         continue;
       }
@@ -249,7 +272,11 @@ class ModRegistryIndexBuilder {
       if (versions == null || versions.isEmpty) {
         continue;
       }
-      _latestOf(versions).changelog = changelogFile.readAsStringSync().trim();
+      _latestOf(versions).changelog = readBoundedTextFileSync(
+        changelogFile,
+        maxBytes: CliFileLimits.changelog,
+        allowEmpty: true,
+      ).trim();
     }
   }
 
@@ -265,8 +292,7 @@ class ModRegistryIndexBuilder {
       return const [];
     }
     final files =
-        directory
-            .listSync()
+        listBoundedDirectorySync(directory)
             .whereType<File>()
             .where((file) => file.path.toLowerCase().endsWith('.json'))
             .toList()
@@ -279,7 +305,10 @@ class ModRegistryIndexBuilder {
       final RegistryEntryFile entry;
       try {
         entry = RegistryEntryFile.fromJson(
-          jsonDecode(file.readAsStringSync()) as Map<String, Object?>,
+          readBoundedJsonObjectSync(
+            file,
+            maxBytes: CliFileLimits.registryEntry,
+          ),
         );
       } on Object {
         throw StateError('Registry entry $name is not valid JSON.');
@@ -293,6 +322,12 @@ class ModRegistryIndexBuilder {
           seenIds: seenIds,
         ),
       ].where((issue) => issue.isBlocking).toList();
+      for (final version in entry.versions) {
+        final manifest = version.manifest;
+        if (manifest == null) continue;
+        issues.addAll(manifest.validate());
+        issues.addAll(validateManifestPublicationLicense(manifest));
+      }
       if (issues.isNotEmpty) {
         final details = issues.map((issue) => issue.message).join(' ');
         throw StateError(
@@ -311,6 +346,7 @@ class ModRegistryIndexBuilder {
           packageSha256: latest.packageSha256,
           changelog: latest.changelog,
           origin: 'community',
+          extraFields: latest.extraFields,
           history: [
             for (final version in versions.skip(1))
               RegistryVersionRef(
@@ -318,6 +354,7 @@ class ModRegistryIndexBuilder {
                 downloadUrl: version.downloadUrl,
                 packageSha256: version.packageSha256,
                 changelog: version.changelog,
+                extraFields: version.extraFields,
               ),
           ],
         ),
@@ -331,10 +368,10 @@ class ModRegistryIndexBuilder {
     String origin,
   ) {
     final latest = _latestOf(versions);
-    final history =
-        versions.where((item) => !identical(item, latest)).toList()..sort(
-          (a, b) => _versionOf(b.manifest).compareTo(_versionOf(a.manifest)),
-        );
+    final history = versions.where((item) => !identical(item, latest)).toList()
+      ..sort(
+        (a, b) => _versionOf(b.manifest).compareTo(_versionOf(a.manifest)),
+      );
     return RegistryIndexEntry(
       manifest: latest.manifest,
       downloadUrl: latest.downloadUrl,
@@ -357,7 +394,9 @@ class ModRegistryIndexBuilder {
   _CollectedVersion _latestOf(List<_CollectedVersion> versions) {
     var latest = versions.first;
     for (final candidate in versions.skip(1)) {
-      if (_versionOf(candidate.manifest).compareTo(_versionOf(latest.manifest)) >
+      if (_versionOf(
+            candidate.manifest,
+          ).compareTo(_versionOf(latest.manifest)) >
           0) {
         latest = candidate;
       }
@@ -367,7 +406,7 @@ class ModRegistryIndexBuilder {
 
   SemanticVersion _versionOf(ModManifest manifest) {
     return SemanticVersion.tryParse(manifest.version) ??
-        const SemanticVersion(0, 0, 0);
+        SemanticVersion(0, 0, 0);
   }
 
   Future<List<int>> _readAssetBytes(
@@ -392,27 +431,9 @@ class ModRegistryIndexBuilder {
     final normalized = baseUrl.trim().endsWith('/')
         ? baseUrl.trim()
         : '${baseUrl.trim()}/';
-    final uri = Uri.parse(normalized);
-    if (!uri.hasScheme || uri.host.isEmpty) {
-      throw ArgumentError.value(baseUrl, 'baseUrl', 'Must be an absolute URL.');
-    }
+    final uri = _requirePublicHttpsUrl(normalized, label: 'baseUrl');
     return uri;
   }
-}
-
-class _CollectedVersion {
-  _CollectedVersion({
-    required this.manifest,
-    required this.downloadUrl,
-    required this.packageSha256,
-    this.publishedAt = '',
-  });
-
-  final ModManifest manifest;
-  final String downloadUrl;
-  final String packageSha256;
-  final String publishedAt;
-  String changelog = '';
 }
 
 /// Placement rules that only make sense relative to the whole registry

@@ -23,7 +23,7 @@
     "displayName": { "type": "string", "minLength": 1 },
     "version": {
       "type": "string",
-      "pattern": "^[0-9]+(\\.[0-9]+){0,2}([-+][0-9A-Za-z_.-]+)?$"
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
     },
     "author": {
       "type": "object",
@@ -36,12 +36,40 @@
       }
     },
     "description": { "type": "string" },
-    "license": { "type": "string" },
-    "entryAssembly": { "type": "string", "minLength": 1 },
+    "license": {
+      "type": "string",
+      "minLength": 1,
+      "description": "SPDX license expression. Public registry submissions must use a concrete expression; placeholders such as Unspecified and NOASSERTION are rejected at publication time."
+    },
+    "licenseFiles": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "description": "Package-relative license or notice files that accompany the declared SPDX expression.",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 240,
+        "pattern": "^(?!/)(?!.*\\\\)(?!.*:)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*[. ](?:/|$))[^\\u0000-\\u001F]+$"
+      }
+    },
+    "entryAssembly": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*:)(?!.*[\\u0000-\\u001F])(?!.*(?:^|/)(?:\\.{1,2}|[Cc][Oo][Nn]|[Pp][Rr][Nn]|[Aa][Uu][Xx]|[Nn][Uu][Ll]|[Cc][Oo][Mm][1-9]|[Ll][Pp][Tt][1-9])(?:\\.|/|$))(?!.*[. ](?:/|$))(?!.*//).+$"
+    },
     "entryType": { "type": "string", "minLength": 1 },
     "vpmDependencies": {
       "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$"
+      },
       "additionalProperties": { "type": "string" }
+    },
+    "dependencies": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/dependency" }
     },
     "optionalDependencies": {
       "type": "array",
@@ -53,9 +81,13 @@
     },
     "loadAfter": {
       "type": "array",
-      "items": { "type": "string" }
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$"
+      }
     },
     "supportedGameVersionRange": { "type": "string" },
+    "gameVersion": { "type": "string" },
     "supportedLoaderVersionRange": { "type": "string" },
     "supportedSdkVersionRange": { "type": "string" },
     "category": { "type": "string" },
@@ -105,7 +137,10 @@
       "required": ["id"],
       "additionalProperties": true,
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$"
+        },
         "version": { "type": "string" },
         "versionRange": { "type": "string" },
         "optional": { "type": "boolean" }
@@ -116,7 +151,10 @@
       "required": ["id"],
       "additionalProperties": true,
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$"
+        },
         "version": { "type": "string" },
         "versionRange": { "type": "string" },
         "reason": { "type": "string" }
