@@ -1,8 +1,10 @@
 import 'dart:convert';
 
-import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
+import 'package:launcher_data/launcher_data.dart';
 import 'package:launcher_domain/launcher_domain.dart';
+
+import 'spdx_expression.dart';
 
 /// What [readModPackage] extracted from a `.robotopiamod` zip.
 class ModPackageSummary {
@@ -25,43 +27,28 @@ class ModPackageSummary {
 /// message on any structural problem.
 ModPackageSummary readModPackage(List<int> bytes) {
   final sha = sha256.convert(bytes).toString();
-  final Archive archive;
-  try {
-    archive = ZipDecoder().decodeBytes(bytes);
-  } on Object {
-    throw StateError('The file is not a readable zip archive.');
-  }
-
-  final entryNames = <String>[];
-  for (final file in archive.files) {
-    final normalized = file.name.replaceAll('\\', '/');
-    if (normalized.startsWith('/') ||
-        RegExp(r'^[A-Za-z]:/').hasMatch(normalized) ||
-        normalized.split('/').contains('..')) {
-      throw StateError(
-        'Package contains a path outside the install directory: ${file.name}',
-      );
-    }
-    if (file.isFile) {
-      entryNames.add(normalized);
-    }
-  }
-
-  final manifestFile = archive.files
-      .where(
-        (file) =>
-            file.isFile &&
-            file.name.replaceAll('\\', '/') == 'robotopia.mod.json',
-      )
-      .firstOrNull;
-  if (manifestFile == null) {
+  final archive = SafeZipArchive.decode(bytes, label: 'Package');
+  final entryNames = [
+    for (final entry in archive.entries)
+      if (entry.isFile) entry.name,
+  ];
+  final manifestFile = archive.entryNamed('robotopia.mod.json');
+  if (manifestFile == null || !manifestFile.isFile) {
     throw StateError('Package is missing robotopia.mod.json.');
   }
 
   final ModManifest manifest;
   try {
     manifest = ModManifest.fromJson(
-      jsonDecode(utf8.decode(manifestFile.content as List<int>))
+      jsonDecode(
+            utf8.decode(
+              manifestFile.readBytes(
+                maxBytes: 1024 * 1024,
+                label: 'robotopia.mod.json',
+              ),
+              allowMalformed: false,
+            ),
+          )
           as Map<String, Object?>,
     );
   } on Object {
@@ -95,7 +82,7 @@ class RegistryEntryBuildResult {
 
 /// Builds (or updates) the `registry/<id>.json` entry for [package].
 ///
-/// The official registry holds manifests to the zero-finding bar: any
+/// Registry publication holds manifests to the zero-finding bar: any
 /// validation issue on the manifest — warnings included — blocks the entry.
 /// Re-publishing an already-listed version is refused; released packages are
 /// immutable, so a changed build must bump its version instead.
@@ -116,12 +103,18 @@ RegistryEntryBuildResult buildRegistryEntry({
         severity: IssueSeverity.error,
         subjectId: manifest.id,
         message:
-            'The official registry requires a manifest with zero validation '
+            'Registry publication requires a manifest with zero validation '
             'findings (${manifestIssues.length} found). Fix them with '
             '`robotopia check package` and repack.',
       ),
     );
   }
+  issues.addAll(
+    validateManifestPublicationLicense(
+      manifest,
+      packageEntries: package.entryNames,
+    ),
+  );
 
   if (package.byteLength > ModRegistryFormat.maxPackageBytes) {
     issues.add(
@@ -170,6 +163,7 @@ RegistryEntryBuildResult buildRegistryEntry({
 
   final entry = RegistryEntryFile(
     id: manifest.id,
+    extraFields: existing?.extraFields ?? const {},
     homepage: existing?.homepage.isNotEmpty == true
         ? existing!.homepage
         : manifest.homepage,
@@ -192,9 +186,64 @@ RegistryEntryBuildResult buildRegistryEntry({
   );
 }
 
-extension _FirstOrNull<T> on Iterable<T> {
-  T? get firstOrNull {
-    final iterator = this.iterator;
-    return iterator.moveNext() ? iterator.current : null;
+/// Registry-publication licensing gate. The manifest carries a concrete SPDX
+/// expression and names every package-relative license/notice file; the
+/// hosted package must contain those exact regular-file entries.
+List<LauncherIssue> validateManifestPublicationLicense(
+  ModManifest manifest, {
+  Iterable<String>? packageEntries,
+}) {
+  final issues = <LauncherIssue>[];
+  final spdxIssue = SpdxExpressionValidator.validate(manifest.license);
+  if (spdxIssue != null) {
+    issues.add(
+      LauncherIssue(
+        severity: IssueSeverity.error,
+        subjectId: manifest.id,
+        message: spdxIssue,
+      ),
+    );
   }
+  if (manifest.licenseFiles.isEmpty) {
+    issues.add(
+      LauncherIssue(
+        severity: IssueSeverity.error,
+        subjectId: manifest.id,
+        message:
+            'licenseFiles must list the license/notice files included in the package.',
+      ),
+    );
+    return issues;
+  }
+  final normalized = manifest.licenseFiles
+      .map((value) => value.trim())
+      .toList();
+  if (normalized.toSet().length != normalized.length ||
+      normalized.any((value) => !isSafePackageRelativePath(value))) {
+    issues.add(
+      LauncherIssue(
+        severity: IssueSeverity.error,
+        subjectId: manifest.id,
+        message: 'licenseFiles contains a duplicate or unsafe package path.',
+      ),
+    );
+  }
+  if (packageEntries != null) {
+    final entries = packageEntries
+        .map((value) => value.replaceAll('\\', '/'))
+        .toSet();
+    for (final file in normalized) {
+      if (!entries.contains(file)) {
+        issues.add(
+          LauncherIssue(
+            severity: IssueSeverity.error,
+            subjectId: manifest.id,
+            message:
+                'Declared license file is missing from the package: $file.',
+          ),
+        );
+      }
+    }
+  }
+  return issues;
 }

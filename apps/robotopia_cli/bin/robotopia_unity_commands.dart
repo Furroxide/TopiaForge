@@ -12,8 +12,23 @@ extension _RobotopiaUnityCommands on _RobotopiaCli {
 
     switch (sub) {
       case 'pack-packages':
+        final packageDirectories = _options(args, '--package');
+        final explicitPackages = packageDirectories.isNotEmpty;
+        if (explicitPackages &&
+            (_option(args, '--repo-id') == null ||
+                _option(args, '--repo-name') == null ||
+                _option(args, '--author') == null)) {
+          throw UsageError(
+            'Community VPM packaging requires --repo-id, --repo-name, and '
+            '--author with one or more --package <dir> options.',
+          );
+        }
         final summary = await developerRepository.packUnityPackages(
           outputDir: _option(args, '--output') ?? '',
+          packageDirectories: packageDirectories,
+          repositoryId: _option(args, '--repo-id') ?? '',
+          repositoryName: _option(args, '--repo-name') ?? '',
+          repositoryAuthor: _option(args, '--author') ?? '',
         );
         summary.forEach(stdout.writeln);
         return 0;
@@ -107,11 +122,17 @@ extension _RobotopiaUnityCommands on _RobotopiaCli {
       case 'new-repo':
         stdout.writeln(
           'Run `robotopia unity pack-packages` to (re)generate dist/vpm/index.json from your com.robotopia.* '
-          'packages, then subscribe with `robotopia unity add-repo <path-to-index.json>`.',
+          'packages. Community authors pass one or more `--package <dir>` options plus `--repo-id`, '
+          '`--repo-name`, `--author`, and `--output`, then subscribe with '
+          '`robotopia unity add-repo <path-to-index.json>`.',
         );
         return 0;
       default:
         stdout.writeln('Usage:');
+        stdout.writeln(
+          '  robotopia unity pack-packages [--output path] [--package dir ... '
+          '--repo-id id --repo-name name --author author]',
+        );
         stdout.writeln(
           '  robotopia unity new-package <id> [--name Name] [--dir path]',
         );

@@ -59,7 +59,7 @@ extension _RobotopiaCheckCommands on _RobotopiaCli {
         return 1;
       }
       manifest = ModManifest.fromJson(
-        jsonDecode(await file.readAsString()) as Map<String, Object?>,
+        readBoundedJsonObjectSync(file, maxBytes: CliFileLimits.manifest),
       );
     } else {
       final file = File(path);
@@ -67,7 +67,9 @@ extension _RobotopiaCheckCommands on _RobotopiaCli {
         stderr.writeln('Package file does not exist: $path');
         return 1;
       }
-      package = readModPackage(await file.readAsBytes());
+      package = readModPackage(
+        readBoundedRegularFileSync(file, maxBytes: CliFileLimits.package),
+      );
       manifest = package.manifest;
     }
 
@@ -128,7 +130,7 @@ extension _RobotopiaCheckCommands on _RobotopiaCli {
     final RegistryEntryFile entry;
     try {
       entry = RegistryEntryFile.fromJson(
-        jsonDecode(file.readAsStringSync()) as Map<String, Object?>,
+        readBoundedJsonObjectSync(file, maxBytes: CliFileLimits.registryEntry),
       );
     } on Object {
       return const [
@@ -185,7 +187,10 @@ extension _RobotopiaCheckCommands on _RobotopiaCli {
 
   /// Dry-run dependency resolution against the configured package sources.
   /// Returns true when the plan has blocking issues.
-  Future<bool> _printResolvePlan(List<String> args, ModManifest manifest) async {
+  Future<bool> _printResolvePlan(
+    List<String> args,
+    ModManifest manifest,
+  ) async {
     final available = await developerRepository.loadConfiguredRegistryMods(
       projectPath: _option(args, '--project'),
     );

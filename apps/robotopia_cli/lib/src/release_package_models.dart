@@ -1,5 +1,3 @@
-import 'dart:io';
-
 enum ReleasePackagePlatform {
   windows('windows'),
   linux('linux'),
@@ -23,6 +21,9 @@ enum ReleasePackagePlatform {
   }
 }
 
+const macCliArm64FileName = 'robotopia-arm64';
+const macCliX64FileName = 'robotopia-x64';
+
 extension ReleasePackagePlatformPaths on ReleasePackagePlatform {
   String get archiveName => switch (this) {
     ReleasePackagePlatform.windows => 'QuantumWorks-windows-x64.zip',
@@ -30,10 +31,10 @@ extension ReleasePackagePlatformPaths on ReleasePackagePlatform {
     ReleasePackagePlatform.macos => 'QuantumWorks-macos-universal.zip',
   };
 
-  String get dotnetRuntimeId => switch (this) {
-    ReleasePackagePlatform.windows => 'win-x64',
-    ReleasePackagePlatform.linux => 'linux-x64',
-    ReleasePackagePlatform.macos => _processIsArm64 ? 'osx-arm64' : 'osx-x64',
+  List<String> get gameCompatExtractorRuntimeIds => switch (this) {
+    ReleasePackagePlatform.windows => const ['win-x64'],
+    ReleasePackagePlatform.linux => const ['linux-x64'],
+    ReleasePackagePlatform.macos => const ['osx-x64', 'osx-arm64'],
   };
 
   String get cliFileName =>
@@ -47,16 +48,4 @@ extension ReleasePackagePlatformPaths on ReleasePackagePlatform {
   String get bepInExBundleName => this == ReleasePackagePlatform.macos
       ? 'macos_universal_5.4.23.5'
       : 'win_x64_5.4.23.5';
-}
-
-bool get _processIsArm64 {
-  final arch = Platform.version.toLowerCase();
-  final envArch =
-      Platform.environment['PROCESSOR_ARCHITECTURE'] ??
-      Platform.environment['HOSTTYPE'] ??
-      '';
-  return arch.contains('arm64') ||
-      arch.contains('aarch64') ||
-      envArch.toLowerCase().contains('arm64') ||
-      envArch.toLowerCase().contains('aarch64');
 }

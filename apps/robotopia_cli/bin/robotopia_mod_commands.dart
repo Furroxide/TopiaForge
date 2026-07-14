@@ -100,9 +100,9 @@ extension _RobotopiaModCommands on _RobotopiaCli {
         );
       }
       final next = switch (part) {
-        'major' => SemanticVersion(parsed.major + 1, 0, 0),
-        'minor' => SemanticVersion(parsed.major, parsed.minor + 1, 0),
-        _ => SemanticVersion(parsed.major, parsed.minor, parsed.patch + 1),
+        'major' => parsed.incrementMajor(),
+        'minor' => parsed.incrementMinor(),
+        _ => parsed.incrementPatch(),
       };
       from = current;
       to = next.toString();
@@ -204,9 +204,9 @@ extension _RobotopiaModCommands on _RobotopiaCli {
       case 'optional-dependency':
         final (id, range) = _splitSpec(value);
         return _mutateManifest(args, (map) {
-          final items = _jsonMapList(map['optionalDependencies'])
-              .where((item) => item['id'] != id)
-              .toList();
+          final items = _jsonMapList(
+            map['optionalDependencies'],
+          ).where((item) => item['id'] != id).toList();
           if (add) {
             items.add(
               ModDependency(
@@ -225,9 +225,9 @@ extension _RobotopiaModCommands on _RobotopiaCli {
       case 'conflict':
         final (id, range) = _splitSpec(value);
         return _mutateManifest(args, (map) {
-          final items = _jsonMapList(map['conflicts'])
-              .where((item) => item['id'] != id)
-              .toList();
+          final items = _jsonMapList(
+            map['conflicts'],
+          ).where((item) => item['id'] != id).toList();
           if (add) {
             items.add(ModConflict(id: id, versionRange: range).toJson());
           }
@@ -240,9 +240,9 @@ extension _RobotopiaModCommands on _RobotopiaCli {
       case 'gamemode':
         final gamemode = _parseGamemodeSpec(value);
         return _mutateManifest(args, (map) {
-          final items = _jsonMapList(map['worldGamemodes'])
-              .where((item) => item['id'] != gamemode.id)
-              .toList();
+          final items = _jsonMapList(
+            map['worldGamemodes'],
+          ).where((item) => item['id'] != gamemode.id).toList();
           if (add) {
             items.add(gamemode.toJson());
           }
@@ -285,10 +285,7 @@ extension _RobotopiaModCommands on _RobotopiaCli {
     if (at < 0) {
       return (spec, const VersionRange.any());
     }
-    return (
-      spec.substring(0, at),
-      VersionRange.parse(spec.substring(at + 1)),
-    );
+    return (spec.substring(0, at), VersionRange.parse(spec.substring(at + 1)));
   }
 
   GamemodeDefinition _parseGamemodeSpec(String spec) {
@@ -309,6 +306,9 @@ extension _RobotopiaModCommands on _RobotopiaCli {
       value is List ? value.map((item) => item.toString()).toList() : const [];
 
   List<Map<String, Object?>> _jsonMapList(Object? value) => value is List
-      ? value.whereType<Map>().map((item) => item.cast<String, Object?>()).toList()
+      ? value
+            .whereType<Map>()
+            .map((item) => item.cast<String, Object?>())
+            .toList()
       : const [];
 }

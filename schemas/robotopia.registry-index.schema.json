@@ -53,7 +53,10 @@
       "additionalProperties": true,
       "required": ["version", "downloadUrl", "packageSha256"],
       "properties": {
-        "version": { "type": "string" },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+        },
         "downloadUrl": { "type": "string" },
         "packageSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "changelog": { "type": "string" },

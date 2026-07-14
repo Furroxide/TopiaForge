@@ -1,165 +1,23 @@
 part of 'launcher_update_index_builder.dart';
 
-const _appName = 'QuantumWorks';
-const _packageId = 'com.quantumworks.robotopia.launcher';
-const _minimumUpdaterVersion = '2.4.2';
-const _channels = ['release', 'beta', 'nightly'];
 const _platforms = ['windows', 'macos', 'linux'];
-
-Map<String, Object?> _descriptor({
-  required LauncherUpdateIndexConfig config,
-  required String generatedAt,
-  required _ReleaseVersion version,
-  required String platform,
-  required String channel,
-  required GitHubAsset asset,
-  required _AssetDigest artifact,
-}) {
-  final descriptor = <String, Object?>{
-    'schemaVersion': 3,
-    'packageId': config.packageId,
-    'appName': _descriptorAppName(config.appName, platform),
-    'version': version.version,
-  };
-  if (version.buildNumber != null) {
-    descriptor['buildNumber'] = version.buildNumber;
-  }
-  descriptor.addAll({
-    'platform': platform,
-    'channel': channel,
-    'artifact': <String, Object?>{
-      'kind': 'zip',
-      'url': asset.browserDownloadUrl,
-      'sha256': artifact.sha256,
-      'length': artifact.length,
-    },
-    'install': <String, Object?>{
-      'strategy': platform == 'macos'
-          ? 'wholeBundleReplace'
-          : 'wholeDirectoryReplace',
-    },
-    'minimumUpdaterVersion': config.minimumUpdaterVersion,
-    'generatedAt': generatedAt,
-  });
-  return descriptor;
-}
-
-String _descriptorAppName(String appName, String platform) {
-  if (platform == 'macos' && !appName.endsWith('.app')) {
-    return '$appName.app';
-  }
-  return appName;
-}
-
-Map<String, Object?> _archiveItem({
-  required _ReleaseVersion version,
-  required String platform,
-  required String channel,
-  required bool mandatory,
-  required String releaseUrl,
-}) {
-  final item = <String, Object?>{'version': version.version};
-  if (version.buildNumber != null) {
-    item['buildNumber'] = version.buildNumber;
-  }
-  item.addAll({
-    'platform': platform,
-    'channel': channel,
-    'mandatory': mandatory,
-    'release': releaseUrl,
-  });
-  return item;
-}
-
-Map<String, Map<String, dynamic>> _emptyChannelsIndex() {
-  return {
-    for (final channel in _channels)
-      channel: {'latest': <String, dynamic>{}, 'versions': <String, dynamic>{}},
-  };
-}
-
-void _addIndexEntry({
-  required Map<String, Map<String, dynamic>> channelsIndex,
-  required Map<String, dynamic> versionsIndex,
-  required String channel,
-  required String version,
-  required String platform,
-  required String releaseUrl,
-  required String artifactUrl,
-  required String tagName,
-  required String publishedAt,
-}) {
-  final channelVersions = channelsIndex[channel]!['versions'] as Map;
-  final channelVersion = _mapAt(channelVersions, version);
-  channelVersion[platform] = _indexPlatformEntry(
-    releaseUrl: releaseUrl,
-    artifactUrl: artifactUrl,
-    tagName: tagName,
-    publishedAt: publishedAt,
-  );
-
-  final versionChannels = _mapAt(versionsIndex, version);
-  final versionChannel = _mapAt(versionChannels, channel);
-  versionChannel[platform] = _indexPlatformEntry(
-    releaseUrl: releaseUrl,
-    artifactUrl: artifactUrl,
-    tagName: tagName,
-    publishedAt: publishedAt,
-  );
-}
-
-Map<String, dynamic> _mapAt(Map<dynamic, dynamic> parent, String key) {
-  final existing = parent[key];
-  if (existing is Map<String, dynamic>) {
-    return existing;
-  }
-  final value = <String, dynamic>{};
-  parent[key] = value;
-  return value;
-}
-
-Map<String, Object?> _indexPlatformEntry({
-  required String releaseUrl,
-  required String artifactUrl,
-  required String tagName,
-  required String publishedAt,
-}) {
-  return {
-    'release': releaseUrl,
-    'artifact': artifactUrl,
-    'tagName': tagName,
-    'publishedAt': publishedAt,
-  };
-}
-
-void _setLatestChannelVersions(
-  Map<String, Map<String, dynamic>> channelsIndex,
-) {
-  for (final channel in channelsIndex.keys) {
-    final versions = channelsIndex[channel]!['versions'] as Map;
-    if (versions.isEmpty) {
-      continue;
-    }
-    final sorted = versions.keys.cast<String>().toList()
-      ..sort(_compareVersionSort);
-    final latest = sorted.last;
-    final latestVersion = _ReleaseVersion.fromLabel(latest);
-    channelsIndex[channel]!['latest'] = {
-      'version': latestVersion.version,
-      if (latestVersion.buildNumber != null)
-        'buildNumber': latestVersion.buildNumber,
-      'platforms': versions[latest],
-    };
-  }
-}
+const _maxManualReleaseAssetBytes = 4 * 1024 * 1024 * 1024;
 
 Map<String, GitHubAsset> _assetsByPlatform(List<GitHubAsset> assets) {
   final result = <String, GitHubAsset>{};
   for (final asset in assets) {
     final platform = _assetPlatform(asset.name);
-    if (platform == null || result.containsKey(platform)) {
+    if (platform == null) {
       continue;
     }
+    final existing = result[platform];
+    if (existing != null) {
+      throw StateError(
+        'Release has multiple production assets for $platform: '
+        '${existing.name} and ${asset.name}.',
+      );
+    }
+    _requirePublicHttpsUri(asset.browserDownloadUrl, label: asset.name);
     result[platform] = asset;
   }
   return result;
@@ -225,31 +83,6 @@ String _releaseChannel(GitHubRelease release) {
   return 'release';
 }
 
-bool _isMandatoryRelease(GitHubRelease release) {
-  return RegExp(
-    r'^\s*mandatory-update:\s*true\b',
-    caseSensitive: false,
-    multiLine: true,
-  ).hasMatch(release.body);
-}
-
-int _compareArchiveItems(
-  Map<String, Object?> left,
-  Map<String, Object?> right,
-) {
-  return _compareMany([
-    left['channel'].toString().compareTo(right['channel'].toString()),
-    left['platform'].toString().compareTo(right['platform'].toString()),
-    _compareVersionSort(
-      left['version'].toString(),
-      right['version'].toString(),
-    ),
-    (left['buildNumber'] as int? ?? 0).compareTo(
-      right['buildNumber'] as int? ?? 0,
-    ),
-  ]);
-}
-
 int _compareVersionSort(String left, String right) {
   final leftKey = _VersionSortKey.parse(left);
   final rightKey = _VersionSortKey.parse(right);
@@ -272,10 +105,6 @@ int _compareMany(List<int> values) {
   return 0;
 }
 
-String _outputPath(Directory output, String descriptorPath) {
-  return p.joinAll([output.path, ...descriptorPath.split('/')]);
-}
-
 Future<void> _writeJsonFile(String path, Object? value) async {
   final file = File(path);
   await file.parent.create(recursive: true);
@@ -283,17 +112,27 @@ Future<void> _writeJsonFile(String path, Object? value) async {
   await file.writeAsString('$json\n');
 }
 
-String _safePathSegment(String value) {
-  return value.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-}
-
 Uri _normalizeBaseUri(String baseUrl) {
   final normalized = baseUrl.trim().endsWith('/')
       ? baseUrl.trim()
       : '${baseUrl.trim()}/';
-  final uri = Uri.parse(normalized);
-  if (!uri.hasScheme || uri.host.isEmpty) {
-    throw ArgumentError.value(baseUrl, 'baseUrl', 'Must be an absolute URL.');
+  return _requirePublicHttpsUri(normalized, label: 'baseUrl');
+}
+
+Uri _requirePublicHttpsUri(String value, {required String label}) {
+  final uri = Uri.tryParse(value.trim());
+  if (uri == null ||
+      !uri.isAbsolute ||
+      uri.scheme != 'https' ||
+      uri.host.isEmpty ||
+      uri.userInfo.isNotEmpty ||
+      uri.hasQuery ||
+      uri.hasFragment) {
+    throw ArgumentError.value(
+      value,
+      label,
+      'Must be an absolute HTTPS URL without credentials, query, or fragment.',
+    );
   }
   return uri;
 }
@@ -321,19 +160,6 @@ void _validateRepository(String repository) {
 
 class _ReleaseVersion {
   const _ReleaseVersion({required this.version, required this.buildNumber});
-
-  factory _ReleaseVersion.fromLabel(String label) {
-    final match = RegExp(
-      r'^(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)(?:\+(\d+))?$',
-    ).firstMatch(label);
-    if (match == null) {
-      return _ReleaseVersion(version: label, buildNumber: null);
-    }
-    return _ReleaseVersion(
-      version: match.group(1)!,
-      buildNumber: int.tryParse(match.group(2) ?? ''),
-    );
-  }
 
   final String version;
   final int? buildNumber;

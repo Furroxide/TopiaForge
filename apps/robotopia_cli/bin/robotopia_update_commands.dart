@@ -44,7 +44,7 @@ extension _RobotopiaUpdateCommands on _RobotopiaCli {
         ),
       );
       stdout.writeln('Wrote ${result.itemCount} launcher update entries.');
-      stdout.writeln('Archive: ${result.appArchiveUrl}');
+      stdout.writeln('Manual releases: ${result.manualReleasesUrl}');
       return 0;
     } finally {
       client.close();

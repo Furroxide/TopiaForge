@@ -187,6 +187,8 @@ extension _RobotopiaUgcDevCommands on _RobotopiaCli {
       final documentUrl = await _startAutomergePublisher(watch, liveSettings);
       if (documentUrl != null) {
         liveSettings = _withAutoConnect(liveSettings, documentUrl: documentUrl);
+      } else {
+        liveSettings = UgcLiveSyncTransitions.localFallback(liveSettings);
       }
     }
 
@@ -274,7 +276,7 @@ extension _RobotopiaUgcDevCommands on _RobotopiaCli {
       );
       return null;
     }
-    final sidecarDir = File(sidecar).parent.path;
+    final sidecarDir = sidecar.directory;
     final sessionFile = File(
       p.join(developerRepository.developerDataRoot, 'ugc-session.json'),
     );
@@ -283,26 +285,13 @@ extension _RobotopiaUgcDevCommands on _RobotopiaCli {
     }
     sessionFile.parent.createSync(recursive: true);
 
+    late Process publisher;
     try {
-      if (!Directory(p.join(sidecarDir, 'node_modules')).existsSync()) {
-        stdout.writeln('Installing sidecar dependencies (npm install)...');
-        final install = await Process.run(
-          'npm',
-          ['install', '--no-fund', '--no-audit'],
-          workingDirectory: sidecarDir,
-          runInShell: true,
-        );
-        if (install.exitCode != 0) {
-          stdout.writeln(
-            'Warning: npm install failed (exit ${install.exitCode}); staying on the local channel.',
-          );
-          return null;
-        }
-      }
-      await Process.start(
+      await sidecar.prepare(requireDependencies: true);
+      publisher = await Process.start(
         'node',
         [
-          sidecar,
+          sidecar.scriptPath,
           '--watch',
           watchFolder,
           '--sync',
@@ -311,12 +300,12 @@ extension _RobotopiaUgcDevCommands on _RobotopiaCli {
           '--session-file',
           sessionFile.path,
         ],
+        workingDirectory: sidecarDir,
         mode: ProcessStartMode.detached,
-        runInShell: true,
       );
-    } on ProcessException catch (error) {
+    } on Object catch (error) {
       stdout.writeln(
-        'Warning: could not run Node.js (${error.message}); staying on the local channel. Install Node 20+.',
+        'Warning: could not start the UGC sidecar ($error); staying on the local channel. Install Node 20+.',
       );
       return null;
     }
@@ -324,28 +313,56 @@ extension _RobotopiaUgcDevCommands on _RobotopiaCli {
     stdout.writeln(
       'Started Automerge publisher; waiting for the document URL...',
     );
+    var malformedReads = 0;
     for (var attempt = 0; attempt < 60; attempt++) {
       await Future<void>.delayed(const Duration(seconds: 1));
       if (!sessionFile.existsSync()) {
         continue;
       }
       try {
-        final session =
-            jsonDecode(await sessionFile.readAsString())
-                as Map<String, Object?>;
+        final session = readBoundedJsonObjectSync(
+          sessionFile,
+          maxBytes: CliFileLimits.session,
+        );
         final documentUrl = (session['documentUrl'] as String?) ?? '';
+        final publisherPid = (session['publisherPid'] as num?)?.toInt() ?? 0;
+        final leaseToken =
+            (session['publisherLeaseToken'] as String?)?.trim() ?? '';
+        if (publisherPid != publisher.pid || leaseToken.isEmpty) {
+          stdout.writeln(
+            'Warning: the publisher session was replaced or malformed; staying on the local channel.',
+          );
+          await _stopDetachedPublisher(publisher);
+          return null;
+        }
         if (documentUrl.isNotEmpty) {
           stdout.writeln('Live document: $documentUrl');
           return documentUrl;
         }
       } on Object {
-        // Partial write — retry.
+        malformedReads += 1;
+        if (malformedReads >= 3) {
+          stdout.writeln(
+            'Warning: the publisher wrote an invalid session file; staying on the local channel.',
+          );
+          await _stopDetachedPublisher(publisher);
+          return null;
+        }
       }
     }
     stdout.writeln(
       'Warning: the publisher did not report a document URL within 60s; the game config keeps the local channel. '
       'Check `robotopia ugc check` and re-run.',
     );
+    await _stopDetachedPublisher(publisher);
     return null;
+  }
+
+  Future<void> _stopDetachedPublisher(Process publisher) async {
+    publisher.kill(ProcessSignal.sigkill);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    // Do not compare-then-delete the shared lease here: a replacement can land
+    // between those operations. The dead PID makes this stale lease invalid,
+    // and an explicit cleanup or the next publisher safely revokes it.
   }
 }

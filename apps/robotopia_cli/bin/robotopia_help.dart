@@ -88,7 +88,7 @@ extension _HelpCommand on _RobotopiaCli {
       '  robotopia doctor [--strict]           Read-only toolchain, project, and game-compat audit.',
     );
     stdout.writeln(
-      '  robotopia new mod <id> [--template t] Scaffold a mod project (see `robotopia list templates`).',
+      '  robotopia new mod <id> [--template t] [--license SPDX --license-file path] Scaffold a mod project.',
     );
     stdout.writeln(
       '  robotopia list templates              List the available mod templates.',
@@ -175,6 +175,9 @@ extension _HelpCommand on _RobotopiaCli {
       '  robotopia ugc status                  Show live-sync status.',
     );
     stdout.writeln(
+      '  robotopia ugc cleanup                 Stop live sync and clear transient state.',
+    );
+    stdout.writeln(
       '  robotopia ugc go-live                 Promote the current UGC session.',
     );
     stdout.writeln('');
@@ -198,6 +201,9 @@ extension _HelpCommand on _RobotopiaCli {
       '                                        list, repos, add-repo, pack-packages).',
     );
     stdout.writeln(
+      '  robotopia unity pack-packages --package <dir> ...  Build a community VPM listing.',
+    );
+    stdout.writeln(
       '  robotopia unity build-ui-bundle       Rebuild the embedded QuantumWorks brand bundle (repo maintainers).',
     );
     stdout.writeln(
@@ -206,13 +212,13 @@ extension _HelpCommand on _RobotopiaCli {
     stdout.writeln('');
     stdout.writeln('Publish & registry:');
     stdout.writeln(
-      '  robotopia registry add-entry <pkg> --url <url>  Create your registry/<id>.json entry for a PR.',
+      '  robotopia registry add-entry <pkg> --url <url>  Create an entry for a local or self-hosted registry.',
     );
     stdout.writeln(
-      '  robotopia registry index ...          Build a registry index.json (official or self-hosted).',
+      '  robotopia registry index ...          Build a local or self-hosted registry index.json.',
     );
     stdout.writeln(
-      '  robotopia registry validate           Check registry entries the way the official CI does.',
+      '  robotopia registry validate           Validate local/self-hosted entries; official submissions are closed.',
     );
     stdout.writeln('');
     stdout.writeln('Maintenance:');
@@ -224,6 +230,12 @@ extension _HelpCommand on _RobotopiaCli {
     );
     stdout.writeln(
       '  robotopia release test-package ...    Smoke-test a release zip (CI maintainers).',
+    );
+    stdout.writeln(
+      '  robotopia release validate-policy ... Check catalog, pins, licensing, and provenance.',
+    );
+    stdout.writeln(
+      '  robotopia release build-metadata ...  Build deterministic BOM, SBOM, and checksums.',
     );
     stdout.writeln('');
     stdout.writeln(

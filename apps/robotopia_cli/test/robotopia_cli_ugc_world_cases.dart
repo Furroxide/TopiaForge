@@ -89,6 +89,132 @@ void _ugcAndWorldCliTests(_CliTestHarness Function() currentHarness) {
     },
   );
 
+  test('ugc cleanup rejects a missing explicit project value', () async {
+    final result = await currentHarness().runCli([
+      'ugc',
+      'cleanup',
+      '--project',
+    ]);
+
+    expect(result.exitCode, 2);
+    expect(
+      result.stderr.toString(),
+      contains('Usage: robotopia ugc cleanup [--project path]'),
+    );
+  });
+
+  test('ugc cleanup surfaces an invalid explicit project', () async {
+    final missingProject = p.join(
+      currentHarness().temp.path,
+      'missing-project',
+    );
+    final result = await currentHarness().runCli([
+      'ugc',
+      'cleanup',
+      '--project',
+      missingProject,
+    ]);
+
+    expect(result.exitCode, 1);
+    expect(result.stderr.toString(), contains(missingProject));
+    expect(result.stderr.toString(), isNot(contains('No Robotopia install')));
+  });
+
+  test(
+    'ugc cleanup discovers the project and revokes state without a game install',
+    () async {
+      final created = await currentHarness().runCli([
+        'new',
+        'mod',
+        't.cleanup',
+        '--dir',
+        currentHarness().temp.path,
+      ]);
+      expect(
+        created.exitCode,
+        0,
+        reason: '${created.stdout}\n${created.stderr}',
+      );
+      final projectDir = p.join(currentHarness().temp.path, 't.cleanup');
+      final watchDir = p.join(currentHarness().temp.path, 'watch');
+
+      final setup = await currentHarness().runCli([
+        'ugc',
+        'setup',
+        '--transport',
+        'automerge',
+        '--watch',
+        watchDir,
+        '--sync',
+        'https://sync.example.test',
+        '--doc',
+        'automerge:abc123',
+        '--scene',
+        'main',
+        '--auto-connect',
+        '--debounce',
+        '375',
+        '--max-snapshot',
+        '123456',
+        '--no-deploy',
+        '--project',
+        projectDir,
+      ]);
+      expect(setup.exitCode, 0, reason: '${setup.stdout}\n${setup.stderr}');
+
+      final projectFile = File(p.join(projectDir, 'robotopia.project.json'));
+      final projectJson =
+          jsonDecode(projectFile.readAsStringSync()) as Map<String, Object?>;
+      final companion = (projectJson['unityCompanion'] as Map)
+          .cast<String, Object?>();
+      final liveSync = (companion['liveSync'] as Map).cast<String, Object?>();
+      liveSync['editorUrl'] = 'https://editor.example.test/project/abc123';
+      projectFile.writeAsStringSync(
+        const JsonEncoder.withIndent('  ').convert(projectJson),
+      );
+
+      final sessionFile = File(
+        p.join(currentHarness().temp.path, 'data', 'ugc-session.json'),
+      )..createSync(recursive: true);
+      sessionFile.writeAsStringSync(
+        jsonEncode(const {
+          'publisherLeaseToken': 'stale-publisher',
+          'documentUrl': 'automerge:abc123',
+        }),
+      );
+
+      final result = await currentHarness().runCli(
+        ['ugc', 'cleanup'],
+        workingDirectory: projectDir,
+        environment: {
+          'ROBOTOPIA_GAME_DIR': p.join(
+            currentHarness().temp.path,
+            'missing-game',
+          ),
+        },
+      );
+
+      expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
+      expect(result.stdout.toString(), contains('skipped game-side'));
+      expect(sessionFile.existsSync(), isFalse);
+
+      final cleaned =
+          jsonDecode(projectFile.readAsStringSync()) as Map<String, Object?>;
+      final cleanedLiveSync =
+          (((cleaned['unityCompanion'] as Map)['liveSync'] as Map))
+              .cast<String, Object?>();
+      expect(cleanedLiveSync['transport'], 'automerge');
+      expect(cleanedLiveSync['watchFolder'], watchDir);
+      expect(cleanedLiveSync['syncServerUrl'], 'https://sync.example.test');
+      expect(cleanedLiveSync['sceneId'], 'main');
+      expect(cleanedLiveSync['debounceMilliseconds'], 375);
+      expect(cleanedLiveSync['maxSnapshotBytes'], 123456);
+      expect(cleanedLiveSync, isNot(contains('editorUrl')));
+      expect(cleanedLiveSync, isNot(contains('documentUrl')));
+      expect(cleanedLiveSync, isNot(contains('autoConnectOnStart')));
+    },
+  );
+
   test('prints help for the update index command', () async {
     final result = await Process.run(Platform.resolvedExecutable, [
       'run',
@@ -299,7 +425,38 @@ void _ugcAndWorldCliTests(_CliTestHarness Function() currentHarness) {
       expect(result.exitCode, 1);
       final errText = result.stderr.toString();
       expect(errText, contains('6000.5.1f1'));
-      expect(errText, contains('6000.0.x'));
+      expect(errText, contains('6000.0.23f1'));
+    },
+  );
+
+  test(
+    'unity build-ui-bundle verifies the binary inside an eligible folder',
+    () async {
+      final editorDir = Directory(
+        p.join(
+          currentHarness().temp.path,
+          'Hub',
+          'Editor',
+          '6000.0.23f1',
+          'Editor',
+        ),
+      )..createSync(recursive: true);
+      final fakeEditor = File(p.join(editorDir.path, 'Unity.exe'));
+      File(Platform.resolvedExecutable).copySync(fakeEditor.path);
+      if (!Platform.isWindows) {
+        final chmod = await Process.run('chmod', ['+x', fakeEditor.path]);
+        expect(chmod.exitCode, 0, reason: chmod.stderr.toString());
+      }
+
+      final result = await currentHarness().runCli([
+        'unity',
+        'build-ui-bundle',
+        '--unity',
+        fakeEditor.path,
+      ]);
+
+      expect(result.exitCode, 1);
+      expect(result.stderr.toString(), contains('failed with exit code'));
     },
   );
 
