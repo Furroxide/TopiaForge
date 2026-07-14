@@ -28,8 +28,11 @@ namespace Robotopia.RobotKit
                             return player;
                         }
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        // The named API is a compatibility optimization; the component scan below remains the
+                        // authoritative fallback. Report the contract failure once so build drift is visible.
+                        RobotKitDiagnostics.ReportOnce("player lookup", ex);
                     }
                 }
             }

@@ -7,8 +7,9 @@ namespace Robotopia.Sandbox.Ui
     /// <summary>
     /// The PROGRAM chat panel: a Paper window where the operator talks a robot into a program. The RobotChat
     /// coordinator owns the flow and every key (ESC/Tab/V/Return); this window only renders state and offers
-    /// SEND/LEAVE clicks (Zombies ConversationModal discipline). Shows the robot's reply with the 2 Hz thinking
-    /// ellipsis, the current-program badge, the REC/VOICE/TYPE input badge, and hint variants by voice availability.
+    /// SEND/LEAVE clicks and deterministic quick-program controls (Zombies ConversationModal discipline). Shows the
+    /// robot's reply with the 2 Hz thinking ellipsis, the current-program badge, the REC/VOICE/TYPE input badge, and
+    /// hint variants by voice availability.
     /// </summary>
     internal sealed class RobotChatWindow : IDisposable
     {
@@ -20,9 +21,27 @@ namespace Robotopia.Sandbox.Ui
         private readonly QwLabel turn;
         private readonly QwBadge inputMode;
         private readonly QwInputField input;
+        private readonly QwButton followMe;
+        private readonly QwButton idle;
+        private readonly QwButton setFree;
         private readonly QwButton send;
         private readonly QwLabel hint;
         private bool suppressClosedEvent;
+        private bool renderStateValid;
+        private bool renderedThinking;
+        private int renderedThinkingDots = -1;
+        private string renderedReply = string.Empty;
+        private string renderedProgramDescription = string.Empty;
+        private string renderedInteractionVerb = string.Empty;
+        private bool renderedHasProgram;
+        private string renderedStatus = string.Empty;
+        private int renderedTurn = -1;
+        private int renderedMaxTurns = -1;
+        private bool renderedVoiceAvailable;
+        private string renderedVoiceKey = string.Empty;
+        private string thinkingOneDot = string.Empty;
+        private string thinkingTwoDots = string.Empty;
+        private string thinkingThreeDots = string.Empty;
 
         public RobotChatWindow(UiHost ui, RobotChat chat)
         {
@@ -49,6 +68,11 @@ namespace Robotopia.Sandbox.Ui
             status = statusRow.Label(QwTextStyle.Caption).Tone(QwTone.Muted);
             turn = statusRow.Label(QwTextStyle.Caption).Tone(QwTone.Warning).NoWrap();
 
+            var quickRow = column.Row(QwGap.Sm);
+            followMe = quickRow.Button("FOLLOW ME", chat.FollowMeFromHud, QwButtonStyle.Outline);
+            idle = quickRow.Button("IDLE", chat.IdleFromHud, QwButtonStyle.Outline);
+            setFree = quickRow.Button("SET FREE", chat.SetFreeFromHud, QwButtonStyle.Ghost);
+
             input = column.Input("Tell it what to do…", string.Empty, _ => { });
             input.OnSubmit(text => chat.SubmitFromHud(text));
 
@@ -62,7 +86,13 @@ namespace Robotopia.Sandbox.Ui
 
         public void Show(string robotName)
         {
-            window.SetTitle("TALKING TO " + robotName.ToUpperInvariant());
+            window.SetTitle(chat.InteractionVerb + " " + robotName.ToUpperInvariant());
+            // Cache the three animation frames once per open. Tick then only swaps stable strings at 2 Hz.
+            thinkingOneDot = robotName + " is thinking.";
+            thinkingTwoDots = robotName + " is thinking..";
+            thinkingThreeDots = robotName + " is thinking...";
+            renderStateValid = false;
+            renderedThinkingDots = -1;
             input.SetText(string.Empty);
             suppressClosedEvent = false;
             window.Show();
@@ -84,15 +114,9 @@ namespace Robotopia.Sandbox.Ui
         /// <summary>Per-frame render of the chat's state (the chat owns the flow; this only displays it).</summary>
         public void Tick()
         {
-            reply.SetText(chat.Thinking
-                ? chat.RobotName + " is thinking" + Ellipsis()
-                : (string.IsNullOrEmpty(chat.Reply)
-                    ? "Say what you want it to do — or just chat."
-                    : "\"" + chat.Reply + "\""));
-
-            program.Set("PROGRAM: " + chat.ProgramDescription, chat.HasProgram ? QwTone.Success : QwTone.Neutral);
-            status.SetText(chat.Status.ToUpperInvariant());
-            turn.SetText("TURN " + Mathf.Min(chat.Turn + 1, chat.MaxTurns) + "/" + chat.MaxTurns);
+            RenderReply();
+            RenderProgram();
+            RenderStatusAndTurn();
 
             var voiceMode = chat.VoiceMode;
             inputMode.Set(
@@ -102,10 +126,13 @@ namespace Robotopia.Sandbox.Ui
             var canType = !voiceMode && !chat.Thinking && !chat.Closing;
             input.SetEnabled(canType);
             send.SetEnabled(canType);
+            var quickControlsEnabled = chat.QuickControlsEnabled;
+            followMe.SetEnabled(quickControlsEnabled);
+            idle.SetEnabled(quickControlsEnabled);
+            setFree.SetEnabled(quickControlsEnabled);
 
-            hint.SetText(chat.VoiceAvailable
-                ? "ENTER SEND  //  TAB TYPE/VOICE  //  HOLD " + chat.VoiceKeyName + " TALK  //  ESC LEAVE"
-                : "ENTER SEND  //  ESC LEAVE");
+            RenderHint();
+            renderStateValid = true;
         }
 
         public void Dispose()
@@ -114,10 +141,91 @@ namespace Robotopia.Sandbox.Ui
             window.Close();
         }
 
-        private static string Ellipsis()
+        private void RenderReply()
         {
-            var dots = 1 + (Mathf.FloorToInt(Time.unscaledTime * 2f) % 3);
-            return new string('.', dots);
+            var thinking = chat.Thinking;
+            if (thinking)
+            {
+                var dots = 1 + (Mathf.FloorToInt(Time.unscaledTime * 2f) % 3);
+                if (!renderStateValid || !renderedThinking || dots != renderedThinkingDots)
+                {
+                    reply.SetText(dots == 1
+                        ? thinkingOneDot
+                        : dots == 2
+                            ? thinkingTwoDots
+                            : thinkingThreeDots);
+                }
+
+                renderedThinkingDots = dots;
+            }
+            else
+            {
+                var currentReply = chat.Reply;
+                if (!renderStateValid || renderedThinking
+                    || !string.Equals(renderedReply, currentReply, StringComparison.Ordinal))
+                {
+                    reply.SetText(string.IsNullOrEmpty(currentReply)
+                        ? "Say what you want it to do — or just chat."
+                        : "\"" + currentReply + "\"");
+                }
+
+                renderedReply = currentReply;
+            }
+
+            renderedThinking = thinking;
+        }
+
+        private void RenderProgram()
+        {
+            var description = chat.ProgramDescription;
+            var verb = chat.InteractionVerb;
+            var hasProgram = chat.HasProgram;
+            if (!renderStateValid
+                || !string.Equals(renderedProgramDescription, description, StringComparison.Ordinal)
+                || !string.Equals(renderedInteractionVerb, verb, StringComparison.Ordinal)
+                || renderedHasProgram != hasProgram)
+            {
+                program.Set(verb + ": " + description, hasProgram ? QwTone.Success : QwTone.Neutral);
+                renderedProgramDescription = description;
+                renderedInteractionVerb = verb;
+                renderedHasProgram = hasProgram;
+            }
+        }
+
+        private void RenderStatusAndTurn()
+        {
+            var currentStatus = chat.Status;
+            if (!renderStateValid || !string.Equals(renderedStatus, currentStatus, StringComparison.Ordinal))
+            {
+                status.SetText(currentStatus.ToUpperInvariant());
+                renderedStatus = currentStatus;
+            }
+
+            var maxTurns = chat.MaxTurns;
+            var currentTurn = Mathf.Min(chat.Turn + 1, maxTurns);
+            if (!renderStateValid || renderedTurn != currentTurn || renderedMaxTurns != maxTurns)
+            {
+                turn.SetText("TURN " + currentTurn + "/" + maxTurns);
+                renderedTurn = currentTurn;
+                renderedMaxTurns = maxTurns;
+            }
+        }
+
+        private void RenderHint()
+        {
+            var voiceAvailable = chat.VoiceAvailable;
+            var voiceKey = chat.VoiceKeyName;
+            if (renderStateValid && renderedVoiceAvailable == voiceAvailable
+                && string.Equals(renderedVoiceKey, voiceKey, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            hint.SetText(voiceAvailable
+                ? "ENTER SEND  //  TAB TYPE/VOICE  //  HOLD " + voiceKey + " TALK  //  ESC LEAVE"
+                : "ENTER SEND  //  ESC LEAVE");
+            renderedVoiceAvailable = voiceAvailable;
+            renderedVoiceKey = voiceKey;
         }
     }
 }

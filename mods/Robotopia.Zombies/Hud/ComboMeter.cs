@@ -13,8 +13,6 @@ namespace Robotopia.Zombies
     internal sealed class ComboMeter
     {
         private const string MultiplierPrefix = "x";
-        private static readonly Color ComboOrange = new Color(1f, 0.50f, 0.12f, 1f);
-
         private readonly HudContext context;
         private readonly QwPanel panel;
         private readonly QwProgressBar tierBar;
@@ -51,24 +49,24 @@ namespace Robotopia.Zombies
             tierBar.SetFraction(controller.ComboTierProgress);
             decayBar.SetFraction(controller.ComboWindowRemaining);
 
-            var pulse = 1f + (0.12f * QwTheme.EffectiveMotion * Mathf.Sin(Time.time * 8f));
+            var pulse = 1f + (0.12f * context.Ui.EffectiveMotion * Mathf.Sin(Time.time * 8f));
             label.Rect.localScale = new Vector3(pulse, pulse, 1f);
             label.SetText(MultiplierPrefix, controller.ComboMultiplier);
-            label.SetColor(ComboColor(controller.ComboMultiplier));
+            label.SetTone(ComboTone(controller.ComboMultiplier));
         }
 
-        private static Color ComboColor(int multiplier)
+        private static QwTone ComboTone(int multiplier)
         {
             switch (multiplier)
             {
                 case 2:
-                    return HudPalette.Cyan;
+                    return QwTone.Accent;
                 case 3:
-                    return HudPalette.Amber;
+                    return QwTone.Warning;
                 case 4:
-                    return ComboOrange;
+                    return QwTone.Primary;
                 default:
-                    return multiplier >= 5 ? HudPalette.Danger : HudPalette.Text;
+                    return multiplier >= 5 ? QwTone.Danger : QwTone.Neutral;
             }
         }
 

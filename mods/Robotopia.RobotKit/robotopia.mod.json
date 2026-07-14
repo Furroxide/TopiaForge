@@ -11,6 +11,8 @@
   "entryAssembly": "Robotopia.RobotKit.dll",
   "entryType": "Robotopia.RobotKit.RobotKitMod",
   "vpmDependencies": {},
+  "supportedGameVersionRange": "0.0.2227",
+  "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
   "supportedSdkVersionRange": ">=0.1.0 <0.2.0",
   "category": "Framework",
   "tags": [
@@ -28,12 +30,15 @@
     "stt",
     "objectives"
   ],
-  "license": "Unspecified",
+  "license": "NOASSERTION",
   "permissions": [
     "robot-spawning",
     "navigation",
     "physics",
-    "ai",
-    "network"
+    "network",
+    "remote-ai",
+    "player-token",
+    "microphone",
+    "speech-to-text"
   ]
 }

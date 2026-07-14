@@ -40,7 +40,7 @@ namespace Robotopia.UiGallery.Pages
             drive.Button("FLOATER", () =>
             {
                 var world = RandomWorldPoint();
-                floaters?.Push(world, "+125", new Color(0.3f, 0.9f, 0.5f, 1f));
+                floaters?.Push(world, "+125", QwTone.Success);
             }, QwButtonStyle.Outline);
             drive.Button("SPEECH", () =>
             {
@@ -79,7 +79,7 @@ namespace Robotopia.UiGallery.Pages
         {
             if (hud != null)
             {
-                Object.Destroy(hud.Go);
+                hud.Destroy();
                 hud = null;
                 integrity = null;
                 pips = null;
@@ -87,6 +87,11 @@ namespace Robotopia.UiGallery.Pages
                 floaters = null;
                 speech = null;
             }
+        }
+
+        public static void Reset()
+        {
+            DestroyHud();
         }
 
         private static Vector3 RandomWorldPoint()

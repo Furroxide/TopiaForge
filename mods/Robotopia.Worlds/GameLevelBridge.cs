@@ -15,7 +15,7 @@ namespace Robotopia.Worlds
     /// bare arena. All access is reflective and defensive so a missing/renamed game symbol degrades
     /// gracefully rather than crashing the game.
     /// </summary>
-    internal sealed class GameLevelBridge
+    internal sealed class GameLevelBridge : IDisposable
     {
         private const BindingFlags PublicStatic = BindingFlags.Public | BindingFlags.Static;
         private const BindingFlags AnyInstance = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
@@ -35,6 +35,8 @@ namespace Robotopia.Worlds
         private readonly Type? ugcLaunchRequestType;
         private readonly Type? ugcLastRunType;
         private readonly Type? playerControllerType;
+        private readonly MainThreadDispatchQueue<AsyncLoadOutcome> loadOutcomes =
+            new MainThreadDispatchQueue<AsyncLoadOutcome>();
 
         public GameLevelBridge(IModLogger logger)
         {
@@ -107,7 +109,7 @@ namespace Robotopia.Worlds
         }
 
         /// <summary>Launches a real level the same way the game's menu does (correct play state).</summary>
-        public bool LaunchLevel(object checkpointAsset)
+        public bool LaunchLevel(object checkpointAsset, Action<string>? onFailure = null)
         {
             try
             {
@@ -137,7 +139,7 @@ namespace Robotopia.Worlds
                 // UniTask publishes no UnobservedTaskException for a dropped task, so the scene could fail to load
                 // while WorldsService still reports "Loaded ...". Observing it makes that failure visible.
                 var loadTask = method.Invoke(null, new[] { (object)false, checkpointAsset });
-                ObserveAsyncLoad(loadTask, sceneName!);
+                ObserveAsyncLoad(loadTask, sceneName!, onFailure);
 
                 logger.Info("Worlds dispatched the game loader for scene '" + sceneName + "'.");
                 return true;
@@ -154,7 +156,7 @@ namespace Robotopia.Worlds
         /// instead of being swallowed (UniTask raises no UnobservedTaskException for a discarded task). Best-effort
         /// and reflective: if the UniTask/Task plumbing cannot be reached we degrade to the dispatch log alone.
         /// </summary>
-        private void ObserveAsyncLoad(object? loadTask, string sceneName)
+        private void ObserveAsyncLoad(object? loadTask, string sceneName, Action<string>? onFailure)
         {
             if (loadTask == null)
             {
@@ -165,14 +167,14 @@ namespace Robotopia.Worlds
             {
                 // Preferred: convert the UniTask to a System.Threading.Tasks.Task (UniTaskExtensions.AsTask) and
                 // attach a plain continuation, keeping the result inspection in ordinary, non-reflective code.
-                if (TryObserveViaTask(loadTask, sceneName))
+                if (TryObserveViaTask(loadTask, sceneName, onFailure))
                 {
                     return;
                 }
 
                 // Fallback: drive the awaitable contract directly (GetAwaiter/IsCompleted/GetResult/OnCompleted),
                 // which UniTask must implement to be awaitable even if AsTask is renamed/absent in this build.
-                if (TryObserveViaAwaiter(loadTask, sceneName))
+                if (TryObserveViaAwaiter(loadTask, sceneName, onFailure))
                 {
                     return;
                 }
@@ -186,7 +188,7 @@ namespace Robotopia.Worlds
             }
         }
 
-        private bool TryObserveViaTask(object loadTask, string sceneName)
+        private bool TryObserveViaTask(object loadTask, string sceneName, Action<string>? onFailure)
         {
             var uniTaskType = loadTask.GetType();
             var extensionsType = uniTaskType.Assembly.GetType("Cysharp.Threading.Tasks.UniTaskExtensions");
@@ -196,16 +198,22 @@ namespace Robotopia.Worlds
                 return false;
             }
 
-            // The default scheduler runs the continuation off the main thread; it only logs (thread-safe).
-            task.ContinueWith(completed => ReportLoadOutcome(
-                completed.IsFaulted,
-                completed.IsCanceled,
-                completed.Exception?.GetBaseException()?.Message,
-                sceneName));
+            // Completion may run on any scheduler. Queue only immutable outcome data here; logging and the
+            // generation-bound failure callback are delivered by DrainAsyncLoadOutcomes on Unity's main thread.
+            _ = task.ContinueWith(
+                completed => QueueLoadOutcome(
+                    completed.IsFaulted,
+                    completed.IsCanceled,
+                    completed.Exception?.GetBaseException()?.Message,
+                    sceneName,
+                    onFailure),
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
             return true;
         }
 
-        private bool TryObserveViaAwaiter(object loadTask, string sceneName)
+        private bool TryObserveViaAwaiter(object loadTask, string sceneName, Action<string>? onFailure)
         {
             var getAwaiter = loadTask.GetType().GetMethod("GetAwaiter", AnyInstance, null, Type.EmptyTypes, null);
             var awaiter = getAwaiter?.Invoke(loadTask, null);
@@ -227,15 +235,15 @@ namespace Robotopia.Worlds
                 try
                 {
                     getResult.Invoke(awaiter, null);
-                    ReportLoadOutcome(false, false, null, sceneName);
+                    QueueLoadOutcome(false, false, null, sceneName, onFailure);
                 }
                 catch (TargetInvocationException ex)
                 {
-                    ReportLoadOutcome(true, false, (ex.InnerException ?? ex).Message, sceneName);
+                    QueueLoadOutcome(true, false, (ex.InnerException ?? ex).Message, sceneName, onFailure);
                 }
                 catch (Exception ex)
                 {
-                    ReportLoadOutcome(true, false, ex.Message, sceneName);
+                    QueueLoadOutcome(true, false, ex.Message, sceneName, onFailure);
                 }
             };
 
@@ -246,7 +254,8 @@ namespace Robotopia.Worlds
                 return true;
             }
 
-            // UniTask continuations resume on the Unity main thread (PlayerLoop); the continuation only logs.
+            // UniTask normally resumes in the Unity PlayerLoop, but the awaitable contract does not guarantee
+            // that to this reflective bridge. The continuation therefore only queues an outcome as well.
             var onCompleted = awaiterType.GetMethod("OnCompleted", AnyInstance, null, new[] { typeof(Action) }, null)
                 ?? awaiterType.GetMethod("UnsafeOnCompleted", AnyInstance, null, new[] { typeof(Action) }, null);
             if (onCompleted == null)
@@ -258,15 +267,43 @@ namespace Robotopia.Worlds
             return true;
         }
 
-        private void ReportLoadOutcome(bool faulted, bool canceled, string? error, string sceneName)
+        private void QueueLoadOutcome(
+            bool faulted,
+            bool canceled,
+            string? error,
+            string sceneName,
+            Action<string>? onFailure)
         {
+            loadOutcomes.TryEnqueue(new AsyncLoadOutcome(faulted, canceled, error, sceneName, onFailure));
+        }
+
+        /// <summary>
+        /// Delivers async loader completions on the caller's thread. WorldsService invokes this from its Unity
+        /// update tick before consuming the generation-aware transition tracker.
+        /// </summary>
+        public void DrainAsyncLoadOutcomes()
+        {
+            loadOutcomes.Drain(ReportLoadOutcome);
+        }
+
+        private void ReportLoadOutcome(AsyncLoadOutcome outcome)
+        {
+            var faulted = outcome.Faulted;
+            var canceled = outcome.Canceled;
+            var error = outcome.Error;
+            var sceneName = outcome.SceneName;
+            var onFailure = outcome.OnFailure;
             if (faulted)
             {
-                logger.Warn("Worlds level load FAILED after dispatch for scene '" + sceneName + "': "
-                    + (string.IsNullOrEmpty(error) ? "unknown error" : error));
+                var message = "Scene '" + sceneName + "' failed after dispatch: "
+                    + (string.IsNullOrEmpty(error) ? "unknown error" : error);
+                NotifyFailure(onFailure, message);
+                logger.Warn("Worlds level load FAILED after dispatch: " + message);
             }
             else if (canceled)
             {
+                var message = "Scene '" + sceneName + "' load was canceled after dispatch.";
+                NotifyFailure(onFailure, message);
                 logger.Warn("Worlds level load was canceled after dispatch for scene '" + sceneName + "'.");
             }
             else
@@ -275,8 +312,30 @@ namespace Robotopia.Worlds
             }
         }
 
+        public void Dispose()
+        {
+            loadOutcomes.Dispose();
+        }
+
+        private void NotifyFailure(Action<string>? onFailure, string message)
+        {
+            if (onFailure == null)
+            {
+                return;
+            }
+
+            try
+            {
+                onFailure(message);
+            }
+            catch (Exception ex)
+            {
+                logger.Warn("Worlds load-failure callback failed: " + ex.Message);
+            }
+        }
+
         /// <summary>Loads a scene by name through the game's async loader when no checkpoint asset is known.</summary>
-        public bool LoadSceneByName(string sceneName)
+        public bool LoadSceneByName(string sceneName, Action<string>? onFailure = null)
         {
             if (string.IsNullOrWhiteSpace(sceneName))
             {
@@ -293,7 +352,7 @@ namespace Robotopia.Worlds
 
                 // Capture and observe the returned UniTask so an async load fault is logged, not swallowed.
                 var loadTask = method.Invoke(null, new object[] { sceneName, CancellationToken.None });
-                ObserveAsyncLoad(loadTask, sceneName);
+                ObserveAsyncLoad(loadTask, sceneName, onFailure);
                 return true;
             }
             catch (Exception ex)
@@ -308,14 +367,14 @@ namespace Robotopia.Worlds
         /// scene (which spawns a real player) with any UGC content import suppressed. Returns true on dispatch;
         /// the caller layers the arena geometry on once the scene finishes loading.
         /// </summary>
-        public bool LaunchOpenSandbox()
+        public bool LaunchOpenSandbox(Action<string>? onFailure = null)
         {
             try
             {
                 // Suppress the UGC importer first so the play scene comes up empty (no past creation loaded),
                 // then load it. The scene's own bootstrap spawns the player; we only need a clean stage.
                 SuppressUgcImport();
-                return LoadSceneByName(SandboxSceneName);
+                return LoadSceneByName(SandboxSceneName, onFailure);
             }
             catch (Exception ex)
             {
@@ -448,34 +507,37 @@ namespace Robotopia.Worlds
         /// </summary>
         private void SuppressUgcImport()
         {
-            try
+            if (Robotopia.Mods.GameBridge.UgcNoOpLaunchRequest.TryQueue(
+                ugcLastRunType,
+                ugcLaunchRequestType,
+                "RobotopiaWorldsSandbox",
+                message => logger.Debug("Worlds sandbox: " + message)))
             {
-                if (ugcLastRunType == null || ugcLaunchRequestType == null)
-                {
-                    return;
-                }
-
-                var values = Activator.CreateInstance(ugcLastRunType);
-                if (values == null)
-                {
-                    return;
-                }
-
-                // An empty temp folder guarantees the importer discovers no export files, so nothing is imported.
-                var emptyImportFolder = Path.Combine(Path.GetTempPath(), "RobotopiaWorldsSandbox");
-                Directory.CreateDirectory(emptyImportFolder);
-                ugcLastRunType.GetField("Mode")?.SetValue(values, "SelectedFile");
-                ugcLastRunType.GetField("ImportFolderPath")?.SetValue(values, emptyImportFolder);
-                ugcLastRunType.GetField("SelectedExportFilePath")?.SetValue(values, string.Empty);
-
-                var create = ugcLaunchRequestType.GetMethod("Create", PublicStatic, null, new[] { ugcLastRunType }, null);
-                create?.Invoke(null, new[] { values });
                 logger.Debug("Worlds sandbox: queued a no-op UGC launch request to suppress content import.");
             }
-            catch (Exception ex)
+        }
+
+        private sealed class AsyncLoadOutcome
+        {
+            public AsyncLoadOutcome(
+                bool faulted,
+                bool canceled,
+                string? error,
+                string sceneName,
+                Action<string>? onFailure)
             {
-                logger.Debug("Worlds sandbox: could not suppress the UGC import (continuing anyway): " + ex.Message);
+                Faulted = faulted;
+                Canceled = canceled;
+                Error = error;
+                SceneName = sceneName;
+                OnFailure = onFailure;
             }
+
+            public bool Faulted { get; }
+            public bool Canceled { get; }
+            public string? Error { get; }
+            public string SceneName { get; }
+            public Action<string>? OnFailure { get; }
         }
     }
 

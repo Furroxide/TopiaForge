@@ -26,9 +26,10 @@ namespace Robotopia.UiGallery
 
         public void OnUnload()
         {
+            gallery?.Dispose();
+            gallery = null;
             ui?.Dispose();
             ui = null;
-            gallery = null;
         }
     }
 }

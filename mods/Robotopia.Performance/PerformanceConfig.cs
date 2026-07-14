@@ -191,21 +191,25 @@ namespace Robotopia.Performance
 
             // Small-mesh culling: 0 = off. Cap well below the point where it would cull visibly large
             // objects (Unity's own UI tops out around 20%).
+            if (!IsFinite(GpuSmallMeshScreenPercentage)) GpuSmallMeshScreenPercentage = 0f;
             if (GpuSmallMeshScreenPercentage < 0f) GpuSmallMeshScreenPercentage = 0f;
             if (GpuSmallMeshScreenPercentage > 20f) GpuSmallMeshScreenPercentage = 20f;
 
+            if (!IsFinite(FixedDeltaTime)) FixedDeltaTime = 0f;
             if (FixedDeltaTime != 0f)
             {
                 if (FixedDeltaTime < 0.005f) FixedDeltaTime = 0.005f; // never below 200 Hz
                 if (FixedDeltaTime > 0.05f) FixedDeltaTime = 0.05f;   // never below 20 Hz
             }
 
+            if (!IsFinite(LodBias)) LodBias = 0f;
             if (LodBias < 0f) LodBias = 0f;
             if (LodBias > 2f) LodBias = 2f;
 
             if (ShadowRefreshRate < 0) ShadowRefreshRate = 0;
             if (ShadowRefreshRate > 16) ShadowRefreshRate = 16;
 
+            if (!IsFinite(PathfindBudgetMs)) PathfindBudgetMs = 0f;
             if (PathfindBudgetMs != 0f)
             {
                 // The game field is [Range(0.01, 16.666)]; that's editor-only, so clamp reflective writes
@@ -213,6 +217,11 @@ namespace Robotopia.Performance
                 if (PathfindBudgetMs < 0.01f) PathfindBudgetMs = 0.01f;
                 if (PathfindBudgetMs > 16.666666f) PathfindBudgetMs = 16.666666f;
             }
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
         }
     }
 }

@@ -1,0 +1,9 @@
+{
+  "bundle": "robotopia-representative-world.bundle",
+  "worldPrefab": "Assets/World/World.prefab",
+  "editorVersion": "6000.0.23f1",
+  "sha256": "8239f0592fbf5ca212cebe5ad8cfb3097f46e2024059b677fdec6ffb1b3b7932",
+  "assets": [
+    "Assets/World/World.prefab"
+  ]
+}

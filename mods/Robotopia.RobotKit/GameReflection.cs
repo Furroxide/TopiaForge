@@ -52,8 +52,9 @@ namespace Robotopia.RobotKit
             {
                 return target.GetType().GetField(fieldName, InstanceFlags)?.GetValue(target);
             }
-            catch
+            catch (Exception ex)
             {
+                RobotKitDiagnostics.ReportOnce("field read: " + fieldName, ex);
                 return null;
             }
         }
@@ -64,8 +65,9 @@ namespace Robotopia.RobotKit
             {
                 return target.GetType().GetProperty(propertyName, InstanceFlags)?.GetValue(target, null);
             }
-            catch
+            catch (Exception ex)
             {
+                RobotKitDiagnostics.ReportOnce("property read: " + propertyName, ex);
                 return null;
             }
         }
@@ -83,8 +85,9 @@ namespace Robotopia.RobotKit
                 field.SetValue(target, value);
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                RobotKitDiagnostics.ReportOnce("field write: " + fieldName, ex);
                 return false;
             }
         }
@@ -145,8 +148,9 @@ namespace Robotopia.RobotKit
 
                 return snapshot;
             }
-            catch
+            catch (Exception ex)
             {
+                RobotKitDiagnostics.ReportOnce("native brain snapshot", ex);
                 return null;
             }
         }
@@ -268,8 +272,9 @@ namespace Robotopia.RobotKit
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                RobotKitDiagnostics.ReportOnce("default native agent state", ex);
             }
 
             return null;
@@ -293,8 +298,9 @@ namespace Robotopia.RobotKit
 
                 return HasComponent(root, "RobotBody");
             }
-            catch
+            catch (Exception ex)
             {
+                RobotKitDiagnostics.ReportOnce("robot-body inspection", ex);
                 return false;
             }
         }

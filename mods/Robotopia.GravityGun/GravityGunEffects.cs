@@ -179,7 +179,7 @@ namespace Robotopia.GravityGun
             renderer.renderMode = ParticleSystemRenderMode.Billboard;
             if (particleMaterial != null)
             {
-                renderer.material = particleMaterial;
+                renderer.sharedMaterial = particleMaterial;
             }
 
             system.Play();
@@ -203,7 +203,7 @@ namespace Robotopia.GravityGun
             renderer.endWidth = 0.035f;
             if (beamMaterial != null)
             {
-                renderer.material = beamMaterial;
+                renderer.sharedMaterial = beamMaterial;
             }
 
             gameObject.SetActive(false);

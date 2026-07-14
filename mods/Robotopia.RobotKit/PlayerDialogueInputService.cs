@@ -49,6 +49,14 @@ namespace Robotopia.RobotKit
                 return VoiceCapture.Unavailable();
             }
 
+            for (var index = 0; index < active.Count; index++)
+            {
+                if (!active[index].IsComplete)
+                {
+                    return VoiceCapture.Unavailable();
+                }
+            }
+
             var device = PickDevice();
             var clip = Microphone.Start(device, true, ClipSeconds, SampleRate);
             if (clip == null)
@@ -104,8 +112,9 @@ namespace Robotopia.RobotKit
             {
                 serviceCts.Cancel();
             }
-            catch
+            catch (Exception ex)
             {
+                logger.Debug("RobotKit voice service cancellation failed during unload: " + ex.Message);
             }
 
             for (var index = 0; index < active.Count; index++)
@@ -239,10 +248,19 @@ namespace Robotopia.RobotKit
                 try
                 {
                     cts?.Cancel();
+                }
+                catch (Exception ex)
+                {
+                    logger?.Debug("Voice transcription cancellation failed: " + ex.Message);
+                }
+
+                try
+                {
                     cts?.Dispose();
                 }
-                catch
+                catch (Exception ex)
                 {
+                    logger?.Debug("Voice transcription cleanup failed: " + ex.Message);
                 }
 
                 cts = null;
@@ -252,6 +270,11 @@ namespace Robotopia.RobotKit
             // Poll the in-flight transcription; called by the service tick.
             public void Pump()
             {
+                if (recording && Time.realtimeSinceStartup - recordStartTime >= MaxRecordSeconds)
+                {
+                    Stop();
+                }
+
                 if (complete || sttTask == null || !sttTask.IsCompleted)
                 {
                     return;
@@ -262,8 +285,9 @@ namespace Robotopia.RobotKit
                 {
                     transcript = sttTask.Status == TaskStatus.RanToCompletion ? sttTask.Result : null;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    logger?.Debug("Voice transcription completion failed: " + ex.Message);
                     transcript = null;
                 }
 
@@ -335,8 +359,9 @@ namespace Robotopia.RobotKit
                         Microphone.End(device);
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    logger?.Debug("Voice microphone cleanup failed: " + ex.Message);
                 }
             }
 

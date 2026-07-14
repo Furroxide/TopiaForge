@@ -26,6 +26,13 @@ namespace Robotopia.Zombies
         private readonly QwInputField input;
         private readonly QwButton send;
         private readonly QwLabel hint;
+        private string lastTitleTarget = string.Empty;
+        private string lastReplyTarget = string.Empty;
+        private string lastReplyText = string.Empty;
+        private string lastStatus = string.Empty;
+        private bool hasReplyState;
+        private bool lastThinking;
+        private int lastThinkingDots = -1;
 
         public ConversationModal(HudContext context, QwContainer parent)
         {
@@ -99,25 +106,42 @@ namespace Robotopia.Zombies
         {
             var controller = context.Controller;
 
-            title.SetText("CHANNEL OPEN // " + controller.ConversationTargetName.ToUpperInvariant());
+            var targetName = controller.ConversationTargetName;
+            if (!string.Equals(lastTitleTarget, targetName, System.StringComparison.Ordinal))
+            {
+                lastTitleTarget = targetName;
+                title.SetText("CHANNEL OPEN // " + targetName.ToUpperInvariant());
+            }
 
             var windowFraction = Mathf.Clamp01(controller.ConversationWindowFraction);
             timer.SetFraction(windowFraction);
             timer.SetTone(windowFraction < 0.25f ? QwTone.Danger : QwTone.Accent);
 
-            reply.SetText(controller.ConversationThinking
-                ? controller.ConversationTargetName + " is thinking" + Ellipsis()
-                : (string.IsNullOrEmpty(controller.ConversationReply)
-                    ? "Open channel. Make a case."
-                    : "\"" + controller.ConversationReply + "\""));
-            status.SetText(controller.ConversationStatus.ToUpperInvariant());
-            turn.SetText("TURN " + Mathf.Min(controller.ConversationTurn + 1, controller.ConversationMaxTurns) + "/" + controller.ConversationMaxTurns);
+            UpdateReply(controller, targetName);
+
+            var statusText = controller.ConversationStatus;
+            if (!string.Equals(lastStatus, statusText, System.StringComparison.Ordinal))
+            {
+                lastStatus = statusText;
+                status.SetText(statusText.ToUpperInvariant());
+            }
+
+            turn.SetText(
+                "TURN ",
+                Mathf.Min(controller.ConversationTurn + 1, controller.ConversationMaxTurns),
+                "/",
+                controller.ConversationMaxTurns);
 
             var disposition = Mathf.Clamp01(controller.ConversationDisposition);
             var threshold = Mathf.Clamp01(controller.ConversationConvertThreshold);
             persuasion.SetFraction(disposition);
             persuasion.SetTone(disposition >= threshold ? QwTone.Success : QwTone.Warning);
-            persuasion.SetLabel("PERSUASION  " + Mathf.RoundToInt(disposition * 100f) + "%  //  CONVERT " + Mathf.RoundToInt(threshold * 100f) + "%");
+            persuasion.SetLabel(
+                "PERSUASION  ",
+                Mathf.RoundToInt(disposition * 100f),
+                "%  //  CONVERT ",
+                Mathf.RoundToInt(threshold * 100f),
+                "%");
 
             var voiceMode = controller.ConversationVoiceMode;
             inputMode.Set(
@@ -139,10 +163,36 @@ namespace Robotopia.Zombies
             input.SetText(string.Empty);
         }
 
-        private static string Ellipsis()
+        private void UpdateReply(ZombiesController controller, string targetName)
         {
-            var dots = 1 + (Mathf.FloorToInt(Time.unscaledTime * 2f) % 3);
-            return new string('.', dots);
+            var thinking = controller.ConversationThinking;
+            var replyText = controller.ConversationReply;
+            var dots = thinking ? 1 + (Mathf.FloorToInt(Time.unscaledTime * 2f) % 3) : 0;
+            if (hasReplyState &&
+                thinking == lastThinking &&
+                dots == lastThinkingDots &&
+                string.Equals(lastReplyTarget, targetName, System.StringComparison.Ordinal) &&
+                string.Equals(lastReplyText, replyText, System.StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            hasReplyState = true;
+            lastThinking = thinking;
+            lastThinkingDots = dots;
+            lastReplyTarget = targetName;
+            lastReplyText = replyText;
+            if (thinking)
+            {
+                var ellipsis = dots == 1 ? "." : dots == 2 ? ".." : "...";
+                reply.SetText(targetName + " is thinking" + ellipsis);
+            }
+            else
+            {
+                reply.SetText(string.IsNullOrEmpty(replyText)
+                    ? "Open channel. Make a case."
+                    : "\"" + replyText + "\"");
+            }
         }
     }
 }

@@ -17,7 +17,7 @@ namespace Robotopia.Prompts
 
         public void OnUnload()
         {
-            registry?.UnregisterOwner(context?.ModId ?? string.Empty);
+            registry?.Dispose();
             registry = null;
 
             if (context != null)

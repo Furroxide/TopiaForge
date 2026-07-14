@@ -25,24 +25,24 @@ namespace Robotopia.Zombies
             speech = context.Hud.SpeechBubbles(SpeechCapacity);
         }
 
-        public void PushFloater(Vector3 world, string text, Color color)
+        public void PushFloater(Vector3 world, string text, QwTone tone)
         {
             if (string.IsNullOrEmpty(text))
             {
                 return;
             }
 
-            floaters.Push(world, text, color, Mathf.Max(0.05f, context.Config.FloatingNumberRiseSeconds));
+            floaters.Push(world, text, tone, Mathf.Max(0.05f, context.Config.FloatingNumberRiseSeconds));
         }
 
-        public void PushSpeech(Vector3 world, string text, Color color)
+        public void PushSpeech(Vector3 world, string text, QwTone tone)
         {
             if (string.IsNullOrEmpty(text))
             {
                 return;
             }
 
-            speech.Push(world, text, color, Mathf.Max(0.2f, context.Config.SpeechBubbleSeconds));
+            speech.Push(world, text, tone, Mathf.Max(0.2f, context.Config.SpeechBubbleSeconds));
         }
 
         public void Clear()

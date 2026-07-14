@@ -69,6 +69,8 @@ namespace Robotopia.RobotKit
             catch (Exception ex)
             {
                 logger.Debug("RobotKit brain query could not start: " + ex.Message);
+                handle.Cts?.Dispose();
+                handle.Cts = null;
                 handle.CompleteUnavailable();
             }
 
@@ -98,8 +100,9 @@ namespace Robotopia.RobotKit
                 {
                     result = task.Status == TaskStatus.RanToCompletion ? task.Result : BrainQueryResult.Unavailable;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    logger.Debug("RobotKit brain query completion failed: " + ex.Message);
                     result = BrainQueryResult.Unavailable;
                 }
 
@@ -111,7 +114,14 @@ namespace Robotopia.RobotKit
 
         public void OnSceneChanged()
         {
-            // The signed-in user (and therefore the token) may change between scenes; re-read it next access.
+            // The signed-in user (and therefore the token) may change between scenes. Old-scene requests cannot
+            // have a valid consumer after the robots are gone, so cancel them rather than occupying the cap.
+            for (var index = 0; index < pending.Count; index++)
+            {
+                CancelPending(pending[index], "scene change");
+            }
+
+            pending.Clear();
             client.InvalidateToken();
         }
 
@@ -127,18 +137,42 @@ namespace Robotopia.RobotKit
             {
                 serviceCts.Cancel();
             }
-            catch
+            catch (Exception ex)
             {
+                logger.Debug("RobotKit brain service cancellation failed during unload: " + ex.Message);
             }
 
             foreach (var query in pending)
             {
-                query.CompleteUnavailable();
-                query.Cts?.Dispose();
+                CancelPending(query, "unload");
             }
 
             pending.Clear();
             serviceCts.Dispose();
+        }
+
+        private void CancelPending(PendingQuery query, string reason)
+        {
+            try
+            {
+                query.Cts?.Cancel();
+            }
+            catch (Exception ex)
+            {
+                logger.Debug("RobotKit brain query cancellation failed during " + reason + ": " + ex.Message);
+            }
+
+            try
+            {
+                query.Cts?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                logger.Debug("RobotKit brain query cleanup failed during " + reason + ": " + ex.Message);
+            }
+
+            query.Cts = null;
+            query.CompleteUnavailable();
         }
 
         private void LogAvailabilityOnce()

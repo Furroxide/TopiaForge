@@ -35,8 +35,17 @@ namespace Robotopia.Sandbox
         [DataMember(Name = "showHud")]
         public bool ShowHud { get; set; } = true;
 
+        // Remote programming conversations are opt-in because they read the player's Robotopia token and call
+        // RoboAPI. Deterministic roster actions (FOLLOW ME / IDLE) remain available while this is off.
+        [DataMember(Name = "conversationEnabled")]
+        public bool ConversationEnabled { get; set; }
+
+        // Microphone capture and remote speech-to-text are a separate explicit opt-in.
+        [DataMember(Name = "voiceInputEnabled")]
+        public bool VoiceInputEnabled { get; set; }
+
         // Programming chat: how many exchanges before the robot loses interest, its reply sampling temperature,
-        // and the push-to-talk key while the chat is in voice mode.
+        // and the push-to-talk key while the explicitly enabled chat is in voice mode.
         [DataMember(Name = "chatMaxTurns")]
         public int ChatMaxTurns { get; set; } = 12;
 
@@ -135,6 +144,8 @@ namespace Robotopia.Sandbox
             MaxSpawnedObjects = 200;
             DefaultRobotBrainMode = "Dormant";
             ShowHud = true;
+            ConversationEnabled = false;
+            VoiceInputEnabled = false;
             ChatMaxTurns = 12;
             ChatTemperature = 0.6f;
             VoiceKey = "V";

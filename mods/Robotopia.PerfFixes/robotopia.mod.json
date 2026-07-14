@@ -11,6 +11,8 @@
   "entryAssembly": "Robotopia.PerfFixes.dll",
   "entryType": "Robotopia.PerfFixes.PerfFixesMod",
   "vpmDependencies": {},
+  "supportedGameVersionRange": "0.0.2227",
+  "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
   "supportedSdkVersionRange": ">=0.1.0 <0.2.0",
   "category": "Performance",
   "tags": [
@@ -21,7 +23,7 @@
     "optimization",
     "harmony"
   ],
-  "license": "Unspecified",
+  "license": "NOASSERTION",
   "permissions": [
     "harmony-patch",
     "physics-settings"

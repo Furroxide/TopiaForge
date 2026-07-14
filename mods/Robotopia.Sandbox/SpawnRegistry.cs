@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Robotopia.Mods;
+using Robotopia.Mods.Internal;
 using UnityEngine;
 
 namespace Robotopia.Sandbox
@@ -41,6 +42,7 @@ namespace Robotopia.Sandbox
 
         private readonly List<SpawnedEntry> entries = new List<SpawnedEntry>();
         private readonly int maxObjects;
+        private readonly IModLogger logger;
 
         /// <summary>
         /// Raised whenever an entry leaves the registry for any reason (undo, cleanup, or pruning a spawn that died
@@ -48,9 +50,10 @@ namespace Robotopia.Sandbox
         /// </summary>
         public event System.Action<SpawnedEntry>? EntryRemoved;
 
-        public SpawnRegistry(int maxObjects)
+        public SpawnRegistry(int maxObjects, IModLogger logger)
         {
             this.maxObjects = maxObjects;
+            this.logger = logger;
         }
 
         public int PropCount
@@ -166,7 +169,7 @@ namespace Robotopia.Sandbox
             {
                 var entry = entries[index];
                 entries.RemoveAt(index);
-                EntryRemoved?.Invoke(entry);
+                RaiseRemoved(entry);
                 if (!entry.IsAlive)
                 {
                     continue;
@@ -242,7 +245,7 @@ namespace Robotopia.Sandbox
             var removed = 0;
             foreach (var entry in entries)
             {
-                EntryRemoved?.Invoke(entry);
+                RaiseRemoved(entry);
                 if (!entry.IsAlive)
                 {
                     continue;
@@ -292,10 +295,18 @@ namespace Robotopia.Sandbox
             {
                 if (!entries[index].IsAlive)
                 {
-                    EntryRemoved?.Invoke(entries[index]);
+                    RaiseRemoved(entries[index]);
                     entries.RemoveAt(index);
                 }
             }
+        }
+
+        private void RaiseRemoved(SpawnedEntry entry)
+        {
+            SafeEvent.Invoke(
+                EntryRemoved,
+                entry,
+                exception => logger.Warn("Sandbox spawn-removal subscriber failed: " + exception.Message));
         }
     }
 }

@@ -21,7 +21,21 @@ namespace Robotopia.GravityGun
 
         public Vector3 Position => GetCenter();
 
-        public bool IsAlive => bodies.Any(body => body.IsAlive);
+        public bool IsAlive
+        {
+            get
+            {
+                for (var i = 0; i < bodies.Count; i++)
+                {
+                    if (bodies[i].IsAlive)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+        }
 
         public static HeldRigidbodyGroup? Capture(IEnumerable<Rigidbody> sourceBodies, GravityGunConfig config, string name)
         {
@@ -70,8 +84,20 @@ namespace Robotopia.GravityGun
 
         private Vector3 GetCenter()
         {
-            var liveBodies = bodies.Where(body => body.IsAlive).Select(body => body.Body).ToList();
-            return liveBodies.Count == 0 ? Vector3.zero : AverageCenter(liveBodies);
+            var total = Vector3.zero;
+            var count = 0;
+            for (var i = 0; i < bodies.Count; i++)
+            {
+                if (!bodies[i].IsAlive)
+                {
+                    continue;
+                }
+
+                total += bodies[i].Body.worldCenterOfMass;
+                count++;
+            }
+
+            return count == 0 ? Vector3.zero : total / count;
         }
 
         private static Vector3 AverageCenter(IEnumerable<Rigidbody> rigidbodies)

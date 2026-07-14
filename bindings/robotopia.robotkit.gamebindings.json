@@ -235,7 +235,7 @@
           "constrained": false
         }
       ],
-      "returnType": "System.Void"
+      "returnType": "Cysharp.Threading.Tasks.UniTask"
     },
     {
       "id": "robotkit.property.robotroot.body",
@@ -397,7 +397,7 @@
           "constrained": false
         }
       ],
-      "returnType": "Cysharp.Threading.Tasks.UniTask`1[ActionSuccess]"
+      "returnType": "Cysharp.Threading.Tasks.UniTask<ActionSuccess>"
     },
     {
       "id": "robotkit.method.agenthead.mostrelevanthead",
@@ -600,7 +600,7 @@
           "constrained": false
         }
       ],
-      "returnType": "Cysharp.Threading.Tasks.UniTask`1[RoboPath.Path]"
+      "returnType": "Cysharp.Threading.Tasks.UniTask<RoboPath.Path>"
     },
     {
       "id": "robotkit.method.robopath.pathfinder.createsampler",
@@ -1009,7 +1009,7 @@
           "constrained": false
         }
       ],
-      "returnType": "System.Boolean"
+      "returnType": "System.Void"
     },
     {
       "id": "robotkit.property.playercontroller.fpscontroller",

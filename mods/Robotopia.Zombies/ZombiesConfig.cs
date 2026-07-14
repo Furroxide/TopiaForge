@@ -1,4 +1,5 @@
 using System.Runtime.Serialization;
+using Robotopia.Mods;
 
 namespace Robotopia.Zombies
 {
@@ -10,11 +11,11 @@ namespace Robotopia.Zombies
             SeedDefaults();
         }
 
-        // World/level the Zombies gamemode launches in. Blank lets Robotopia Worlds pick a default playable
-        // level (the first real, checkpoint-backed scene). Set it to a world id from the Worlds catalog.json
-        // (e.g. "robotopia.level.firstlevel") to pin a specific level.
+        // World/level the Zombies gamemode launches in. Defaults to the generated Open Sandbox so the wave
+        // arena gets the framework HDRP sky/exposure/sun. Set it to a world id from the Worlds catalog.json
+        // (e.g. "robotopia.level.firstlevel") to opt into a specific level.
         [DataMember(Name = "targetWorldId")]
-        public string TargetWorldId { get; set; } = string.Empty;
+        public string TargetWorldId { get; set; } = WellKnownIds.OpenSandboxWorldId;
 
         [DataMember(Name = "startingCountdownSeconds")]
         public float StartingCountdownSeconds { get; set; }
@@ -515,7 +516,7 @@ namespace Robotopia.Zombies
 
         private void SeedDefaults()
         {
-            TargetWorldId = string.Empty;
+            TargetWorldId = WellKnownIds.OpenSandboxWorldId;
             StartingCountdownSeconds = 3f;
             InterWaveDelaySeconds = 8f;
             BaseZombiesPerWave = 5;
@@ -593,7 +594,9 @@ namespace Robotopia.Zombies
             BeamJitterAmplitude = 0.12f;
 
             OverrideEnabled = true;
-            UseLiveBrain = true;
+            // Remote AI is explicit opt-in. A fresh or migrated config must not read the player token or call
+            // RoboAPI merely because the gameplay mod was installed.
+            UseLiveBrain = false;
             OverrideKey = "E";
             BroadcastKey = "Q";
             OverrideCharges = 3;
@@ -630,8 +633,8 @@ namespace Robotopia.Zombies
             OverrideResistRunt = 0.15f;
 
             SuperhotMode = false;
-            ConversationEnabled = true;
-            UseVoiceInput = true;
+            ConversationEnabled = false;
+            UseVoiceInput = false;
             JackInKey = "E";
             VoiceKey = "V";
             ToggleInputModeKey = "Tab";
@@ -675,6 +678,10 @@ namespace Robotopia.Zombies
 
         public void Normalize()
         {
+            TargetWorldId = string.IsNullOrWhiteSpace(TargetWorldId)
+                ? WellKnownIds.OpenSandboxWorldId
+                : TargetWorldId.Trim();
+
             StartingCountdownSeconds = Clamp(StartingCountdownSeconds, 0.5f, 20f);
             InterWaveDelaySeconds = Clamp(InterWaveDelaySeconds, 1f, 60f);
             BaseZombiesPerWave = Clamp(BaseZombiesPerWave, 1, 200);

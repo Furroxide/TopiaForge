@@ -7,9 +7,15 @@ namespace Robotopia.UiGallery.Pages
     {
         public static void Build(QwContainer page)
         {
+            var host = page.Host;
             page.SectionHeader("MOTION SETTINGS");
-            page.Slider("Motion intensity", 0f, 2f, QwTheme.MotionScale, value => QwTheme.MotionScale = value);
-            page.Label("0 disables pulses and punches (the accessibility contract every HUD inherits).", QwTextStyle.Caption).Tone(QwTone.Muted);
+            page.Slider(
+                "Motion intensity",
+                0f,
+                2f,
+                host.AccessibilityProfile.MotionIntensity,
+                value => SetMotionIntensity(host, value));
+            page.Label("0 disables this host's pulses and punches without mutating another mod's UI.", QwTextStyle.Caption).Tone(QwTone.Muted);
 
             page.SectionHeader("PRESETS");
             var target = page.Panel(QwPanelStyle.Card);
@@ -28,6 +34,16 @@ namespace Robotopia.UiGallery.Pages
             var pulseBadge = pulseRow.Badge("REACTOR CRITICAL", QwTone.Danger);
             QwMotion.Pulse(pulseBadge, frequency: 2f, alphaAmplitude: 0.25f, scaleAmplitude: 0.04f);
             pulseRow.Label("Breathing pulse — amplitude follows the motion slider.", QwTextStyle.Caption).Tone(QwTone.Muted);
+        }
+
+        private static void SetMotionIntensity(UiHost host, float value)
+        {
+            var current = host.AccessibilityProfile;
+            host.SetAccessibilityProfile(new QwAccessibilityProfile(
+                current.HighContrast,
+                current.UiScale,
+                current.ReducedMotion,
+                value));
         }
     }
 }

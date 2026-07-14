@@ -179,10 +179,10 @@
       "returnType": ""
     },
     {
-      "id": "ugc.method.assetMap.setRuntimeOverride",
+      "id": "ugc.method.runtimeAssetConfig.setRuntimeOverride",
       "kind": "Method",
       "assembly": "GameCode",
-      "declaringType": "UgcBuiltInAssetMap",
+      "declaringType": "UgcRuntimeAssetConfig",
       "member": "SetRuntimeOverride",
       "matchMode": "DynamicInstance",
       "criticality": "Optional",
@@ -205,10 +205,10 @@
       "returnType": ""
     },
     {
-      "id": "ugc.method.assetMap.clearRuntimeOverrides",
+      "id": "ugc.method.runtimeAssetConfig.clearRuntimeOverrides",
       "kind": "Method",
       "assembly": "GameCode",
-      "declaringType": "UgcBuiltInAssetMap",
+      "declaringType": "UgcRuntimeAssetConfig",
       "member": "ClearRuntimeOverrides",
       "matchMode": "DynamicInstance",
       "criticality": "Optional",
@@ -283,16 +283,16 @@
       "sourceRef": "mods/Robotopia.UgcLiveSync/UgcGameBridge.cs:364"
     },
     {
-      "id": "ugc.property.importHost.builtInAssetMap",
+      "id": "ugc.property.importHost.runtimeAssetConfig",
       "kind": "Property",
       "assembly": "GameCode",
       "declaringType": "UgcImportHostSceneController",
-      "member": "BuiltInAssetMap",
+      "member": "RuntimeAssetConfig",
       "matchMode": "StaticFullName",
-      "criticality": "Degraded",
-      "feature": "Get asset map from import controller",
+      "criticality": "Critical",
+      "feature": "Get runtime asset config from import controller",
       "sourceRef": "mods/Robotopia.UgcLiveSync/UgcGameBridge.cs:381",
-      "returnType": "UgcBuiltInAssetMap"
+      "returnType": "UgcRuntimeAssetConfig"
     },
     {
       "id": "ugc.property.importHost.sceneRoot",
@@ -329,20 +329,20 @@
       "sourceRef": "mods/Robotopia.UgcLiveSync/UgcGameBridge.cs:390",
       "parameters": [
         {
-          "type": "System.Object",
-          "constrained": false
+          "type": "UgcSceneRoot",
+          "constrained": true
         },
         {
-          "type": "System.Object",
-          "constrained": false
+          "type": "UgcRuntimeAssetConfig",
+          "constrained": true
         },
         {
-          "type": "System.Object",
-          "constrained": false
+          "type": "UgcEnvironmentPrefabMap",
+          "constrained": true
         },
         {
-          "type": "System.Object",
-          "constrained": false
+          "type": "UnityEngine.MonoBehaviour",
+          "constrained": true
         }
       ]
     },
@@ -366,7 +366,7 @@
           "constrained": true
         }
       ],
-      "returnType": "System.Object"
+      "returnType": "UgcExportProject"
     },
     {
       "id": "ugc.method.exportProject.resolveScene",
@@ -384,7 +384,7 @@
           "constrained": true
         }
       ],
-      "returnType": "System.Object"
+      "returnType": "UgcExportScene"
     },
     {
       "id": "ugc.method.differ.diff",
@@ -410,7 +410,7 @@
           "constrained": true
         }
       ],
-      "returnType": "System.Object"
+      "returnType": "System.Collections.Generic.IReadOnlyList<UgcScenePatch>"
     },
     {
       "id": "ugc.method.importHost.importProject",

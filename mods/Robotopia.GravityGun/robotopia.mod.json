@@ -11,6 +11,8 @@
   "entryAssembly": "Robotopia.GravityGun.dll",
   "entryType": "Robotopia.GravityGun.GravityGunMod",
   "vpmDependencies": {},
+  "supportedGameVersionRange": "0.0.2227",
+  "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
   "supportedSdkVersionRange": ">=0.1.0 <0.2.0",
   "category": "Gameplay",
   "tags": [
@@ -19,7 +21,7 @@
     "particles",
     "robots"
   ],
-  "license": "Unspecified",
+  "license": "NOASSERTION",
   "permissions": [
     "input",
     "physics",

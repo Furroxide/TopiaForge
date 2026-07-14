@@ -42,19 +42,4 @@ namespace Robotopia.Zombies
             widget.Rect.pivot = new Vector2(0.5f, 0.5f);
         }
     }
-
-    /// <summary>
-    /// Gameplay-semantic HUD colors ported verbatim from the legacy Neon palette. These
-    /// feed the kit's SetColor setters, which already apply high-contrast emphasis, so
-    /// the old HudColor() re-toning is free.
-    /// </summary>
-    internal static class HudPalette
-    {
-        public static readonly Color Cyan = new Color(0.20f, 0.92f, 1f, 1f);
-        public static readonly Color Amber = new Color(1f, 0.74f, 0.20f, 1f);
-        public static readonly Color Violet = new Color(0.66f, 0.50f, 1f, 1f);
-        public static readonly Color Danger = new Color(1f, 0.24f, 0.20f, 1f);
-        public static readonly Color Text = new Color(0.92f, 0.98f, 1f, 1f);
-        public static readonly Color TextMuted = new Color(0.58f, 0.72f, 0.82f, 1f);
-    }
 }

@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace Robotopia.GravityGun
@@ -6,7 +5,6 @@ namespace Robotopia.GravityGun
     internal sealed class GravityGunModel
     {
         private readonly GameObject root;
-        private readonly List<Renderer> glowRenderers = new List<Renderer>();
         private readonly Material bodyMaterial;
         private readonly Material metalMaterial;
         private readonly Material glowMaterial;
@@ -28,13 +26,13 @@ namespace Robotopia.GravityGun
             CreatePart("Grip", PrimitiveType.Cube, new Vector3(0.035f, -0.2f, -0.11f), new Vector3(0.11f, 0.32f, 0.11f), Quaternion.Euler(12f, 0f, -8f), bodyMaterial);
             CreatePart("Barrel", PrimitiveType.Cylinder, new Vector3(0f, 0.025f, 0.3f), new Vector3(0.055f, 0.38f, 0.055f), Quaternion.Euler(90f, 0f, 0f), metalMaterial);
             CreatePart("Muzzle", PrimitiveType.Cylinder, new Vector3(0f, 0.025f, 0.7f), new Vector3(0.09f, 0.075f, 0.09f), Quaternion.Euler(90f, 0f, 0f), metalMaterial);
-            CreatePart("Core", PrimitiveType.Sphere, new Vector3(0f, 0.035f, 0.13f), new Vector3(0.13f, 0.13f, 0.13f), Quaternion.identity, glowMaterial, true);
+            CreatePart("Core", PrimitiveType.Sphere, new Vector3(0f, 0.035f, 0.13f), new Vector3(0.13f, 0.13f, 0.13f), Quaternion.identity, glowMaterial);
 
             for (var i = 0; i < 6; i++)
             {
                 var angle = i * Mathf.PI * 2f / 6f;
                 var position = new Vector3(Mathf.Cos(angle) * 0.095f, 0.025f + Mathf.Sin(angle) * 0.095f, 0.42f);
-                CreatePart("CoilNode" + i, PrimitiveType.Sphere, position, new Vector3(0.045f, 0.045f, 0.045f), Quaternion.identity, glowMaterial, true);
+                CreatePart("CoilNode" + i, PrimitiveType.Sphere, position, new Vector3(0.045f, 0.045f, 0.045f), Quaternion.identity, glowMaterial);
             }
         }
 
@@ -84,8 +82,7 @@ namespace Robotopia.GravityGun
             Vector3 localPosition,
             Vector3 localScale,
             Quaternion localRotation,
-            Material material,
-            bool isGlow = false)
+            Material material)
         {
             var part = GameObject.CreatePrimitive(primitive);
             part.name = name;
@@ -103,11 +100,7 @@ namespace Robotopia.GravityGun
             var renderer = part.GetComponent<Renderer>();
             if (renderer != null)
             {
-                renderer.material = material;
-                if (isGlow)
-                {
-                    glowRenderers.Add(renderer);
-                }
+                renderer.sharedMaterial = material;
             }
         }
 
@@ -115,13 +108,6 @@ namespace Robotopia.GravityGun
         {
             glowMaterial.color = color;
             glowMaterial.SetColor("_EmissionColor", color);
-            for (var i = 0; i < glowRenderers.Count; i++)
-            {
-                if (glowRenderers[i] != null)
-                {
-                    glowRenderers[i].material.color = color;
-                }
-            }
         }
 
         private static Material CreateMaterial(string name, Color color, bool emission)

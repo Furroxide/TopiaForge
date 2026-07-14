@@ -11,6 +11,8 @@ namespace Robotopia.UiGallery.Pages
     /// </summary>
     internal static class ShopPage
     {
+        private static QwShopWindow? window;
+
         public static void Build(QwContainer page)
         {
             page.SectionHeader("SHOP PANE");
@@ -50,12 +52,17 @@ namespace Robotopia.UiGallery.Pages
 
             page.SectionHeader("SHOP WINDOW");
             page.Label("The ten-line consumer path: the same pane hosted in a standard kit window.", QwTextStyle.Caption).Tone(QwTone.Muted);
-            QwShopWindow? window = null;
             page.Button("OPEN SHOP WINDOW", () =>
             {
                 window ??= page.Host.ShopWindow("gallery-shop", "GALLERY SHOP", catalog, wallet);
                 window.Show();
             }, QwButtonStyle.Outline);
+        }
+
+        public static void Reset()
+        {
+            window?.Window.Destroy();
+            window = null;
         }
     }
 }

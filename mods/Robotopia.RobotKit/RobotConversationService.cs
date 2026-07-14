@@ -35,6 +35,10 @@ namespace Robotopia.RobotKit
                 active.Add(conversation);
                 LogAvailabilityOnce();
             }
+            else
+            {
+                conversation.End();
+            }
 
             return conversation;
         }

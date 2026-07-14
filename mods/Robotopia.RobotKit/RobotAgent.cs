@@ -440,8 +440,9 @@ namespace Robotopia.RobotKit
                 {
                     walkCts.Cancel();
                 }
-                catch
+                catch (System.Exception ex)
                 {
+                    logger.Debug("RobotKit native walk cancellation failed: " + ex.Message);
                 }
             }
         }
@@ -462,8 +463,9 @@ namespace Robotopia.RobotKit
                 {
                     walkCts.Cancel();
                 }
-                catch
+                catch (System.Exception ex)
                 {
+                    logger.Debug("RobotKit native walk cleanup cancellation failed: " + ex.Message);
                 }
 
                 walkCts.Dispose();

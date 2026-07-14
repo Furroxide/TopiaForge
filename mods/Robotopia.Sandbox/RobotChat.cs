@@ -13,7 +13,7 @@ namespace Robotopia.Sandbox
     /// (Zombies conversation discipline). The robot's previous program is remembered and restored when the operator
     /// leaves without programming anything new.
     /// </summary>
-    internal sealed class RobotChat : IDisposable
+    internal sealed partial class RobotChat : IDisposable
     {
         private enum InputMode
         {
@@ -47,6 +47,9 @@ namespace Robotopia.Sandbox
             new System.Collections.Generic.List<string>();
         private string selfTargetName = string.Empty;
         private int processedTurns;
+        private string lastOperatorText = string.Empty;
+        private RobotObjective? describedProgram;
+        private string describedProgramText = "NONE";
         private string reply = string.Empty;
         private string status = string.Empty;
         private InputMode inputMode;
@@ -85,15 +88,31 @@ namespace Robotopia.Sandbox
         public int MaxTurns => conversation?.MaxTurns ?? config.ChatMaxTurns;
         public bool VoiceMode => inputMode == InputMode.Voice;
         public bool VoiceRecording => voiceCapture != null && voiceCapture.IsRecording;
-        public bool VoiceAvailable => dialogueInput != null && dialogueInput.IsVoiceAvailable;
+        public bool VoiceAvailable => config.VoiceInputEnabled && dialogueInput != null && dialogueInput.IsVoiceAvailable;
         public string VoiceKeyName => config.VoiceKey;
         public bool Closing => acceptedProgram != null || acceptedAutonomous;
-        public bool HasProgram => acceptedProgram != null || (agent != null && objectives.GetObjective(agent) != null);
-        public string ProgramDescription =>
-            acceptedProgram?.Describe()
-            ?? (agent != null ? objectives.GetObjective(agent)?.Objective.Describe() : null)
-            ?? previousProgram?.Describe()
-            ?? "NONE";
+        public bool QuickControlsEnabled => open && conversation != null && !conversation.IsThinking && voiceCapture == null && !Closing;
+        public string InteractionVerb => previousBrainMode == RobotBrainMode.Autonomous ? "REPROGRAM" : "PROGRAM";
+        public bool HasProgram => acceptedAutonomous || ResolveDisplayedProgram() != null;
+        public string ProgramDescription
+        {
+            get
+            {
+                if (acceptedAutonomous)
+                {
+                    return "AUTONOMOUS";
+                }
+
+                var objective = ResolveDisplayedProgram();
+                if (!ReferenceEquals(objective, describedProgram))
+                {
+                    describedProgram = objective;
+                    describedProgramText = objective?.Describe() ?? "NONE";
+                }
+
+                return describedProgramText;
+            }
+        }
 
         /// <summary>Opens the chat with a robot. False (with a toast) when the brain backend is unavailable.</summary>
         public bool Begin(IRobotAgent target, string displayName, string ownTargetName)
@@ -150,6 +169,9 @@ namespace Robotopia.Sandbox
                 config.ChatTemperature));
 
             processedTurns = 0;
+            lastOperatorText = string.Empty;
+            describedProgram = null;
+            describedProgramText = "NONE";
             reply = string.Empty;
             status = "Say what you want it to do.";
             acceptedProgram = null;
@@ -198,38 +220,6 @@ namespace Robotopia.Sandbox
 
             DrainTurn();
             window?.Tick();
-        }
-
-        /// <summary>SEND click / Enter in the input field.</summary>
-        public void SubmitFromHud(string text)
-        {
-            if (!open || conversation == null || conversation.IsThinking || Closing
-                || string.IsNullOrWhiteSpace(text))
-            {
-                return;
-            }
-
-            conversation.Submit(text);
-            window?.ClearInput();
-            status = string.Empty;
-        }
-
-        /// <summary>LEAVE click or the window being dismissed (ESC / close button).</summary>
-        public void LeaveFromHud()
-        {
-            if (!open)
-            {
-                return;
-            }
-
-            // A dismissal while the acceptance line is lingering still applies the accepted program.
-            if (Closing)
-            {
-                Close(applyProgram: true, restorePrevious: false);
-                return;
-            }
-
-            Close(applyProgram: false, restorePrevious: true);
         }
 
         public void Dispose()
@@ -308,7 +298,8 @@ namespace Robotopia.Sandbox
                 programTarget,
                 offeredTargets,
                 offeredRobotTargets,
-                string.IsNullOrWhiteSpace(selfTargetName) ? null : selfTargetName);
+                string.IsNullOrWhiteSpace(selfTargetName) ? null : selfTargetName,
+                lastOperatorText);
             if (result.IsChat)
             {
                 status = result.Problem ?? string.Empty;
@@ -328,74 +319,6 @@ namespace Robotopia.Sandbox
             }
 
             closeAt = Time.unscaledTime + ExitLingerSeconds;
-        }
-
-        private void ReadInput()
-        {
-            if (Input.GetKeyDown(KeyCode.Tab) && VoiceAvailable)
-            {
-                ToggleInputMode();
-            }
-
-            // While the mic is actively recording, keep draining it even if voice availability drops mid-record.
-            if (voiceCapture != null && voiceCapture.IsRecording)
-            {
-                ReadVoiceInput();
-                return;
-            }
-
-            if (inputMode == InputMode.Voice && VoiceAvailable)
-            {
-                ReadVoiceInput();
-            }
-        }
-
-        private void ReadVoiceInput()
-        {
-            var voiceKey = ParseKey(config.VoiceKey, KeyCode.V);
-
-            if (voiceCapture == null && Input.GetKeyDown(voiceKey) && dialogueInput != null
-                && conversation != null && !conversation.IsThinking && !Closing)
-            {
-                voiceCapture = dialogueInput.BeginVoiceCapture();
-                status = "Listening…";
-                return;
-            }
-
-            if (voiceCapture == null)
-            {
-                return;
-            }
-
-            if (voiceCapture.IsRecording && Input.GetKeyUp(voiceKey))
-            {
-                voiceCapture.Stop();
-                status = "Transcribing…";
-                return;
-            }
-
-            if (voiceCapture.IsComplete)
-            {
-                var heard = voiceCapture.Found ? voiceCapture.Text : string.Empty;
-                var why = voiceCapture.Error;
-                voiceCapture = null;
-                if (!string.IsNullOrWhiteSpace(heard) && conversation != null)
-                {
-                    conversation.Submit(heard);
-                    status = string.Empty;
-                }
-                else
-                {
-                    status = string.IsNullOrEmpty(why)
-                        ? "Didn't catch that — try again."
-                        : "Didn't catch that (" + why + ") — try again.";
-                }
-            }
-        }
-
-        private void ToggleInputMode()
-        {
-            inputMode = inputMode == InputMode.Text ? InputMode.Voice : InputMode.Text;
         }
 
         private void Close(bool applyProgram, bool restorePrevious)
@@ -419,6 +342,9 @@ namespace Robotopia.Sandbox
             offeredRobotTargets.Clear();
             selfTargetName = string.Empty;
             processedTurns = 0;
+            lastOperatorText = string.Empty;
+            describedProgram = null;
+            describedProgramText = "NONE";
             open = false;
 
             window?.Hide();
@@ -461,52 +387,5 @@ namespace Robotopia.Sandbox
             }
         }
 
-        // Per-turn "who/what/where/doing-what" lines for every offered target, from the robot's current position —
-        // the ground truth that lets it follow another robot, answer "where is X?", or reason about what the rest
-        // of the fleet is up to instead of guessing at names.
-        private System.Collections.Generic.IReadOnlyList<string> DescribeOfferedTargets()
-        {
-            var described = new System.Collections.Generic.List<string>(offeredTargets.Count);
-            var observer = agent;
-            if (observer == null || !observer.IsAlive)
-            {
-                return described;
-            }
-
-            var from = observer.Position;
-            foreach (var name in offeredTargets)
-            {
-                if (!objectives.TryGetTargetInfo(name, out var info))
-                {
-                    continue;
-                }
-
-                var snapshot = objectives.TryResolveTarget(name, out var resolved)
-                    ? resolved
-                    : (RobotTargetSnapshot?)null;
-
-                // Robot targets also carry their current activity ("currently: FOLLOW PLAYER (moving)").
-                string? activity = null;
-                if (info.Kind == RobotTargetKind.Robot)
-                {
-                    var other = findRobotByTargetName?.Invoke(name);
-                    if (other != null && other.IsAlive)
-                    {
-                        activity = RobotProgramDirector.DescribeActivity(other.BrainMode, objectives.GetObjective(other));
-                    }
-                }
-
-                described.Add(name + ": " + RobotTargetFacts.Describe(info, snapshot, from, activity));
-            }
-
-            return described;
-        }
-
-        private static KeyCode ParseKey(string value, KeyCode fallback)
-        {
-            return Enum.TryParse<KeyCode>(value, ignoreCase: true, out var parsed) && parsed != KeyCode.None
-                ? parsed
-                : fallback;
-        }
     }
 }

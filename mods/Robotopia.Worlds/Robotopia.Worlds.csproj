@@ -3,10 +3,21 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>Robotopia.Worlds</AssemblyName>
     <RootNamespace>Robotopia.Worlds</RootNamespace>
+    <Version>0.6.0</Version>
+    <AssemblyVersion>0.6.0.0</AssemblyVersion>
+    <FileVersion>0.6.0.0</FileVersion>
+    <InformationalVersion>0.6.0</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Robotopia.Mods.Abstractions\Robotopia.Mods.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\Robotopia.Mods.UnityUi\Robotopia.Mods.UnityUi.csproj" />
+  </ItemGroup>
+
+  <!-- Shared clean-room game-reflection helpers (source-linked so the request shape lives in one place). -->
+  <ItemGroup>
+    <Compile Include="..\Shared\UgcNoOpLaunchRequest.cs" Link="Shared\UgcNoOpLaunchRequest.cs" />
+    <Compile Include="..\Shared\SafeEvent.cs" Link="Shared\SafeEvent.cs" />
   </ItemGroup>
 
   <ItemGroup>

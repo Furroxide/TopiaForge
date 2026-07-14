@@ -17,6 +17,9 @@ namespace Robotopia.UgcLiveSync
     [DataContract]
     public sealed class UgcLiveSyncStatusFile
     {
+        public const int MaxAvailableScenes = 128;
+        public const int MaxFileBytes = 64 * 1024;
+
         public UgcLiveSyncStatusFile()
         {
             SeedDefaults();
@@ -105,10 +108,26 @@ namespace Robotopia.UgcLiveSync
                 }
             }
 
-            var next = new string[scenes.Length + 1];
-            Array.Copy(scenes, next, scenes.Length);
-            next[scenes.Length] = scene;
+            var nextLength = Math.Min(MaxAvailableScenes, scenes.Length + 1);
+            var next = new string[nextLength];
+            var sourceOffset = scenes.Length >= MaxAvailableScenes ? scenes.Length - (MaxAvailableScenes - 1) : 0;
+            var copyCount = Math.Min(scenes.Length, nextLength - 1);
+            Array.Copy(scenes, sourceOffset, next, 0, copyCount);
+            next[next.Length - 1] = scene;
             AvailableScenes = next;
+        }
+
+        /// <summary>Clears live-session fields after a stop; optionally clears historical applied-scene data too.</summary>
+        public void ClearLiveSession(bool clearHistory)
+        {
+            WatchFolder = string.Empty;
+            ConnectedDocumentUrl = string.Empty;
+            SceneId = string.Empty;
+            if (clearHistory)
+            {
+                AvailableScenes = Array.Empty<string>();
+                LastAppliedUtc = string.Empty;
+            }
         }
 
         /// <summary>Serializes to JSON using the same serializer the runtime config uses.</summary>
@@ -125,7 +144,8 @@ namespace Robotopia.UgcLiveSync
         {
             var serializer = new DataContractJsonSerializer(typeof(UgcLiveSyncStatusFile));
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json ?? string.Empty));
-            return (UgcLiveSyncStatusFile)serializer.ReadObject(stream)!;
+            return serializer.ReadObject(stream) as UgcLiveSyncStatusFile
+                ?? throw new InvalidDataException("UGC live-sync status JSON produced no status object.");
         }
 
         /// <summary>Derives the status-file path from the runtime config file path (sibling, <c>*.status.json</c>).</summary>
@@ -155,14 +175,44 @@ namespace Robotopia.UgcLiveSync
                 Directory.CreateDirectory(directory);
             }
 
-            var temp = statusFilePath + ".tmp";
-            File.WriteAllText(temp, ToJson());
-            if (File.Exists(statusFilePath))
+            var json = ToJson();
+            var bytes = new UTF8Encoding(false, true).GetBytes(json);
+            if (bytes.Length > MaxFileBytes)
             {
-                File.Delete(statusFilePath);
+                throw new InvalidDataException("UGC live-sync status exceeds " + MaxFileBytes + " bytes.");
             }
 
-            File.Move(temp, statusFilePath);
+            var temp = statusFilePath + ".tmp-" + Guid.NewGuid().ToString("N");
+            try
+            {
+                using (var stream = new FileStream(
+                    temp,
+                    FileMode.CreateNew,
+                    FileAccess.Write,
+                    FileShare.None,
+                    81920,
+                    FileOptions.WriteThrough))
+                {
+                    stream.Write(bytes, 0, bytes.Length);
+                    stream.Flush(flushToDisk: true);
+                }
+
+                if (File.Exists(statusFilePath))
+                {
+                    File.Replace(temp, statusFilePath, null);
+                }
+                else
+                {
+                    File.Move(temp, statusFilePath);
+                }
+            }
+            finally
+            {
+                if (File.Exists(temp))
+                {
+                    File.Delete(temp);
+                }
+            }
         }
     }
 }
