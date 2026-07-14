@@ -5,27 +5,29 @@ name: Validate registry entries
 # any trust decision.
 on:
   pull_request:
-    paths:
-      - "registry/**"
-      - "schemas/robotopia.registry-entry.schema.json"
-      - "schemas/robotopia.registry-index.schema.json"
-      - ".github/workflows/validate-registry.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: registry-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
+    name: Required / Registry validation
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Dart
-        uses: dart-lang/setup-dart@v1
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
         with:
           sdk: "3.11.1"
 
@@ -33,25 +35,23 @@ jobs:
         working-directory: apps/robotopia_cli
         run: dart pub get --enforce-lockfile
 
-      # Structural checks run for every entry file; the expensive download +
-      # sha verification runs only for the files this PR changed.
+      # Validate every published version, package hash, packaged manifest,
+      # dependency range, and declared license file. This remains fork-safe:
+      # it receives no secrets and the checkout token is not persisted.
       - name: Validate registry entries
-        shell: bash
         working-directory: apps/robotopia_cli
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          args=()
-          if [[ -n "${GITHUB_BASE_REF:-}" ]]; then
-            mapfile -t changed < <(git -C ../.. diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" -- 'registry/*.json')
-            if [[ ${#changed[@]} -eq 0 ]]; then
-              echo "No entry files changed; running structural checks only."
-              args+=(--offline)
-            else
-              for file in "${changed[@]}"; do
-                args+=(--only "$(basename "$file")")
-              done
-            fi
+          set -euo pipefail
+          previous="$RUNNER_TEMP/previous-registry"
+          mkdir -p "$previous"
+          if [[ -n "$BASE_SHA" ]]; then
+            git -C ../.. archive "$BASE_SHA" registry | tar -x -C "$previous"
           fi
           dart run robotopia registry validate \
             --entries ../../registry \
             --mods ../../mods \
-            "${args[@]}"
+            --publication \
+            --previous-entries "$previous/registry"

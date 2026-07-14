@@ -1,17 +1,18 @@
-name: Publish release packages
+name: Prepare signed release draft
 
 on:
   pull_request:
     types: [closed]
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# Publication is globally serialized. Dynamic ref-based groups allow two
+# candidates to race and mutate the same release/tag namespace.
 concurrency:
-  group: release-${{ github.event.pull_request.number || github.ref_name }}
+  group: robotopia-release-publication
   cancel-in-progress: false
 
 env:
@@ -19,109 +20,88 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
-  preflight:
-    name: Verify release inputs
+  resolve-release:
+    name: Validate reviewed release policy
     if: >-
       (github.event_name == 'workflow_dispatch' &&
       github.ref == 'refs/heads/main') ||
       (github.event.pull_request.merged == true &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
       startsWith(github.event.pull_request.head.ref, 'release/'))
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Probe Robotopia managed refs
-        shell: pwsh
-        env:
-          ROBOTOPIA_REFS_SOURCE: ${{ vars.ROBOTOPIA_REFS_SOURCE }}
-          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-          ROBOTOPIA_REFS_URL: ${{ secrets.ROBOTOPIA_REFS_URL }}
-          ROBOTOPIA_REFS_SHA256: ${{ secrets.ROBOTOPIA_REFS_SHA256 }}
-          ROBOTOPIA_REFS_TOKEN: ${{ secrets.ROBOTOPIA_REFS_TOKEN }}
-        run: ./tools/restore-robotopia-managed-refs.ps1 -Probe
-
-  release-metadata:
-    name: Resolve release metadata
-    needs: preflight
-    runs-on: ubuntu-latest
+    timeout-minutes: 20
     outputs:
       version: ${{ steps.metadata.outputs.version }}
       tag: ${{ steps.metadata.outputs.tag }}
       target_sha: ${{ steps.metadata.outputs.target_sha }}
+      notes_file: ${{ steps.metadata.outputs.notes_file }}
     steps:
-      - name: Checkout merged release
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@v4
+      - name: Checkout exact trusted release commit
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          lfs: true
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
 
-      - name: Checkout workflow ref
-        if: github.event_name != 'pull_request'
-        uses: actions/checkout@v4
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
         with:
-          fetch-depth: 0
+          sdk: "3.11.1"
 
-      - name: Validate release versions
+      - name: Restore release validator
+        working-directory: apps/robotopia_cli
+        run: dart pub get --enforce-lockfile
+
+      - name: Resolve catalog entry
         id: metadata
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
-          read_version() {
-            awk -F': *' '$1 == "version" { print $2; exit }' "$1" |
-              tr -d '"' |
-              tr -d "'"
-          }
-
-          release_version="$(read_version apps/robotopia_cli/pubspec.yaml)"
-          if [[ -z "$release_version" ]]; then
-            echo "::error::Could not read apps/robotopia_cli/pubspec.yaml version."
+          set -euo pipefail
+          version=$(jq -er '.versioning.productVersion' release/release-policy.json)
+          entry=$(jq -ec --arg version "$version" '.releases[] | select(.version == $version)' release/catalog.json)
+          tag=$(jq -er '.tag' <<<"$entry")
+          notes_file=$(jq -er '.notesFile' <<<"$entry")
+          test -s "$notes_file"
+          if [[ "$EVENT_NAME" == pull_request && "$HEAD_REF" != "release/$version" ]]; then
+            echo "::error::Merged release branch '$HEAD_REF' must be release/$version."
             exit 1
           fi
-          release_base="${release_version%%+*}"
-
-          check_version() {
-            local file="$1"
-            local version
-            version="$(read_version "$file")"
-            local base="${version%%+*}"
-            if [[ "$base" != "$release_base" ]]; then
-              echo "::error::$file version '$version' does not match release version '$release_base'."
-              exit 1
-            fi
-          }
-
-          check_version apps/robotopia_launcher_flutter/pubspec.yaml
-          check_version packages/launcher_domain/pubspec.yaml
-          check_version packages/launcher_data/pubspec.yaml
-          check_version packages/launcher_ui/pubspec.yaml
-
-          if [[ "$EVENT_NAME" == "pull_request" && "$HEAD_REF" != "release/$release_base" ]]; then
-            echo "::error::Merged release PR branch '$HEAD_REF' must be release/$release_base."
-            exit 1
-          fi
-
-          tag="v$release_base"
-          target_sha="$(git rev-parse HEAD)"
+          target_sha=$(git rev-parse HEAD)
           {
-            echo "version=$release_base"
+            echo "version=$version"
             echo "tag=$tag"
             echo "target_sha=$target_sha"
-          } >> "$GITHUB_OUTPUT"
-          echo "Resolved $tag at $target_sha."
+            echo "notes_file=$notes_file"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Enforce complete release policy and provenance
+        working-directory: apps/robotopia_cli
+        run: >-
+          dart run robotopia release validate-policy
+          --version "${{ steps.metadata.outputs.version }}"
+
+      - name: Require the pinned game build to still be latest
+        shell: pwsh
+        run: >-
+          ./tools/restore-robotopia-managed-refs.ps1
+          -Source public -Probe -RequireLatest
 
   build-packages:
-    name: Build release packages
-    needs: release-metadata
+    name: Build signed release candidates
+    needs: resolve-release
     permissions:
       contents: read
     uses: ./.github/workflows/release-package-build.yml
     with:
+      source_sha: ${{ needs.resolve-release.outputs.target_sha }}
       fail_on_missing_refs: true
       artifact_retention_days: 30
+      require_macos_signing: true
+      require_windows_signing: true
     secrets:
       ROBOTOPIA_REFS_URL: ${{ secrets.ROBOTOPIA_REFS_URL }}
       ROBOTOPIA_REFS_SHA256: ${{ secrets.ROBOTOPIA_REFS_SHA256 }}
@@ -132,132 +112,75 @@ jobs:
       MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
       MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
       MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+      WINDOWS_CERTIFICATE_PFX: ${{ secrets.WINDOWS_CERTIFICATE_PFX }}
+      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
 
-  publish-release:
-    name: Publish GitHub Release assets
-    needs:
-      - release-metadata
-      - build-packages
+  prepare-draft:
+    name: Reconcile immutable GitHub draft
+    needs: [resolve-release, build-packages]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       actions: read
       contents: write
-    outputs:
-      tag: ${{ needs.release-metadata.outputs.tag }}
+    environment:
+      name: release
     steps:
-      - name: Checkout release commit
-        uses: actions/checkout@v4
+      - name: Checkout exact release commit
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
-          fetch-depth: 0
-          ref: ${{ needs.release-metadata.outputs.target_sha }}
+          lfs: true
+          persist-credentials: false
+          ref: ${{ needs.resolve-release.outputs.target_sha }}
 
-      - name: Create or validate release tag
-        shell: bash
-        env:
-          TAG: ${{ needs.release-metadata.outputs.tag }}
-          TARGET_SHA: ${{ needs.release-metadata.outputs.target_sha }}
-        run: |
-          git fetch --tags --force
-          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
-            actual_sha="$(git rev-list -n 1 "$TAG")"
-            if [[ "$actual_sha" != "$TARGET_SHA" ]]; then
-              echo "::error::$TAG points at $actual_sha, expected $TARGET_SHA."
-              exit 1
-            fi
-            echo "$TAG already points at $TARGET_SHA."
-            exit 0
-          fi
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
+        with:
+          sdk: "3.11.1"
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$TAG" -m "QuantumWorks ${TAG#v}" "$TARGET_SHA"
-          git push origin "refs/tags/$TAG"
+      - name: Restore release metadata builder
+        working-directory: apps/robotopia_cli
+        run: dart pub get --enforce-lockfile
 
-      - name: Download release packages
-        uses: actions/download-artifact@v4
+      - name: Download platform archives
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: release-assets
           pattern: QuantumWorks-*.zip
           merge-multiple: true
 
-      - name: Download mod packages
-        uses: actions/download-artifact@v4
+      - name: Download canonical mod packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: mod-packages
-          path: mod-packages
+          path: release-assets
 
-      - name: Create or update GitHub Release
+      - name: Generate and verify BOM, SBOM, and checksums
+        working-directory: apps/robotopia_cli
+        run: |
+          set -euo pipefail
+          dart run robotopia release build-metadata \
+            --version "${{ needs.resolve-release.outputs.version }}" \
+            --target-sha "${{ needs.resolve-release.outputs.target_sha }}" \
+            --assets ../../release-assets
+          dart run robotopia release verify-metadata \
+            --version "${{ needs.resolve-release.outputs.version }}" \
+            --target-sha "${{ needs.resolve-release.outputs.target_sha }}" \
+            --assets ../../release-assets
+
+      - name: Create or resume matching draft without tag or clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.release-metadata.outputs.tag }}
-        run: |
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --title "$TAG" --notes "QuantumWorks release $TAG"
-          fi
-          gh release upload "$TAG" release-assets/*.zip --clobber
-          # Standalone mod packages back the registry index's download URLs.
-          gh release upload "$TAG" mod-packages/*.robotopiamod --clobber
-
-  deploy-index:
-    name: Deploy launcher update + mod registry indexes
-    needs:
-      - release-metadata
-      - publish-release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    # A Pages deploy replaces the whole site, so every deploy (here and in
-    # deploy-launcher-updates.yml) must build BOTH indexes, and the two
-    # workflows serialize on the shared "pages" group.
-    concurrency:
-      group: pages
-      cancel-in-progress: false
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Checkout release commit
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.release-metadata.outputs.target_sha }}
-
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-
-      - name: Set up Dart
-        uses: dart-lang/setup-dart@v1
-        with:
-          sdk: "3.11.1"
-
-      - name: Restore CLI packages
-        working-directory: apps/robotopia_cli
-        run: dart pub get --enforce-lockfile
-
-      - name: Build launcher update index
-        working-directory: apps/robotopia_cli
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LAUNCHER_UPDATE_BASE_URL: ${{ vars.LAUNCHER_UPDATE_BASE_URL }}
-        run: dart run robotopia updates index --repository "$GITHUB_REPOSITORY" --output "../../_site"
-
-      - name: Build mod registry index
-        working-directory: apps/robotopia_cli
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >-
-          dart run robotopia registry index
-          --repository "$GITHUB_REPOSITORY"
-          --entries ../../registry
-          --changelogs ../../mods
-          --output ../../_site/registry
+          ./tools/publish-release-draft.sh
+          "$GITHUB_REPOSITORY"
+          "${{ needs.resolve-release.outputs.tag }}"
+          "${{ needs.resolve-release.outputs.target_sha }}"
+          "QuantumWorks ${{ needs.resolve-release.outputs.version }}"
+          "${{ needs.resolve-release.outputs.notes_file }}"
+          release-assets
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Explain the manual publication boundary
+        run: |
+          echo 'A verified draft was prepared. This workflow does not create a tag or publish the release.'
+          echo 'An authorized owner must review/sign off, enable GitHub immutable releases, and publish manually.'

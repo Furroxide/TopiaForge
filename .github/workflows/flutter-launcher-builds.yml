@@ -8,6 +8,11 @@ on:
         required: false
         type: number
         default: 14
+      source_sha:
+        description: "Exact commit to build."
+        required: false
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       artifact_retention_days:
@@ -23,6 +28,7 @@ jobs:
   build:
     name: Build ${{ matrix.platform }} launcher
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -35,10 +41,13 @@ jobs:
             runner: macos-15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
 
       - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: "3.41.4"
           cache: true
@@ -56,6 +65,27 @@ jobs:
         run: |
           flutter pub get --enforce-lockfile
           flutter build "$LAUNCHER_PLATFORM" --release
+
+      - name: Verify macOS launcher entitlements
+        if: matrix.platform == 'macos'
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="apps/robotopia_launcher_flutter/build/macos/Build/Products/Release/QuantumWorks.app"
+          entitlements="$(codesign -d --entitlements - "$app" 2>&1)"
+          if grep -Fq 'com.apple.security.app-sandbox' <<< "$entitlements"; then
+            echo '::error::The launcher cannot perform install/repair or launch work while App Sandbox is enabled.'
+            exit 1
+          fi
+          if grep -Fq 'com.apple.security.get-task-allow' <<< "$entitlements"; then
+            echo '::error::The release launcher must not carry the debug get-task-allow entitlement.'
+            exit 1
+          fi
+          signature="$(codesign -d --verbose=4 "$app" 2>&1)"
+          if ! grep -Eq 'flags=.*runtime' <<< "$signature"; then
+            echo '::error::The release launcher must enable the hardened runtime.'
+            exit 1
+          fi
 
       - name: Pack launcher artifact
         shell: bash
@@ -92,7 +122,7 @@ jobs:
           esac
 
       - name: Upload launcher artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: launcher-${{ matrix.platform }}
           path: ${{ runner.temp }}/launcher-artifact/launcher-${{ matrix.platform }}.tar

@@ -25,9 +25,73 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
+  csharp-tests:
+    name: Build and test C# runtime, SDK, and mods
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: "10.0.301"
+
+      - name: Verify exact .NET SDK
+        run: test "$(dotnet --version)" = 10.0.301
+
+      - name: Install managed-reference archive dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y p7zip-full
+
+      - name: Resolve Robotopia refs cache key
+        id: refs-cache
+        shell: pwsh
+        env:
+          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
+        run: ./tools/restore-robotopia-managed-refs.ps1 -Source public -CacheKeyOnly
+
+      - name: Cache Robotopia managed refs
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/robotopia-managed-refs-cache
+          key: ${{ steps.refs-cache.outputs.key }}
+
+      - name: Restore Robotopia managed refs
+        shell: pwsh
+        env:
+          ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
+          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
+        run: ./tools/restore-robotopia-managed-refs.ps1 -Source public -RequireLatest
+
+      - name: Verify formatting
+        run: |
+          dotnet restore RobotopiaModManager.slnx
+          dotnet format RobotopiaModManager.slnx --verify-no-changes --no-restore
+
+      - name: Build solution
+        run: dotnet build RobotopiaModManager.slnx -c Release --no-restore
+
+      - name: Run test harness
+        run: >-
+          dotnet run
+          --project tests/Robotopia.ModManager.Tests/Robotopia.ModManager.Tests.csproj
+          -c Release
+
+      - name: Audit game-binding coverage
+        run: >-
+          dotnet run
+          --project src/Robotopia.GameCompat.Extractor/Robotopia.GameCompat.Extractor.csproj
+          -c Release -- audit --strict
+
   dart-tests:
     name: Analyze and test Dart packages
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -37,18 +101,20 @@ jobs:
           - apps/robotopia_cli
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Set up Dart
-        uses: dart-lang/setup-dart@v1
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
         with:
           sdk: "3.11.1"
 
       - name: Set up .NET
         if: matrix.package == 'apps/robotopia_cli'
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: "10.0.301"
 
       - name: Analyze
         working-directory: ${{ matrix.package }}
@@ -58,6 +124,9 @@ jobs:
           else
             dart pub get
           fi
+          targets=(lib test)
+          if [[ -d bin ]]; then targets+=(bin); fi
+          dart format --output=none --set-exit-if-changed "${targets[@]}"
           dart analyze --fatal-infos
 
       - name: Test
@@ -67,12 +136,15 @@ jobs:
   flutter-tests:
     name: Analyze and test Flutter packages
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: "3.41.4"
           cache: true
@@ -81,6 +153,7 @@ jobs:
         working-directory: packages/launcher_ui
         run: |
           flutter pub get
+          dart format --output=none --set-exit-if-changed lib test
           flutter analyze
           flutter test
 
@@ -88,18 +161,22 @@ jobs:
         working-directory: apps/robotopia_launcher_flutter
         run: |
           flutter pub get --enforce-lockfile
+          dart format --output=none --set-exit-if-changed lib test
           flutter analyze
           flutter test
 
   sidecar-checks:
     name: Validate UGC Automerge sidecar
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
           cache: npm
@@ -108,33 +185,139 @@ jobs:
       - name: Restore and check sidecar
         working-directory: tools/ugc-automerge-sidecar
         run: |
-          npm ci --no-audit --no-fund
-          node --check index.mjs
+          node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 20 ? 0 : 1)'
+          npm ci --ignore-scripts --no-audit --no-fund
+          find . -path ./node_modules -prune -o -name '*.mjs' -print0 |
+            xargs -0 -n1 node --check
           npm test
+          npm ls --omit=dev
+          npm audit --omit=dev --audit-level=moderate
           output="$(node index.mjs --check)"
           echo "$output"
           grep -F "deps        : installed" <<< "$output"
+
+  repository-audits:
+    name: Validate workflows and repository file hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+          lfs: true
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: "1.24.x"
+          cache: false
+
+      - name: Lint GitHub Actions workflows
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          actionlint
+
+      - name: Parse JSON and YAML
+        shell: bash
+        run: |
+          set -euo pipefail
+          git ls-files -z '*.json' | xargs -0 -r -n1 jq empty
+          mapfile -t yaml_files < <(git ls-files '*.yml' '*.yaml')
+          ruby -e '
+            require "yaml"
+            ARGV.each { |file| YAML.safe_load(File.read(file), aliases: true) }
+          ' "${yaml_files[@]}"
+
+      - name: Parse PowerShell and shell scripts
+        shell: pwsh
+        run: |
+          $failed = $false
+          foreach ($file in (git ls-files '*.ps1')) {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $file,
+              [ref]$null,
+              [ref]$errors
+            ) | Out-Null
+            foreach ($error in $errors) {
+              Write-Error "$file`: $($error.Message)"
+              $failed = $true
+            }
+          }
+          if ($failed) { exit 1 }
+          foreach ($file in (git ls-files '*.sh' '*.bash')) {
+            & bash -n $file
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          foreach ($file in (git ls-files '.githooks/*')) {
+            if ((Get-Content -LiteralPath $file -TotalCount 1) -match '^#!.*\b(sh|bash)\b') {
+              & sh -n $file
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            }
+          }
+
+      - name: Analyze PowerShell safety and correctness
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 `
+            -Repository PSGallery -Scope CurrentUser -Force
+          $findings = @(Invoke-ScriptAnalyzer -Path tools -Recurse `
+            -Settings .github/PSScriptAnalyzerSettings.psd1)
+          $findings | Format-Table -AutoSize
+          if ($findings.Count -ne 0) { exit 1 }
+
+      - name: Reject conflict markers and oversized Dart sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep -nE '^(<<<<<<< |>>>>>>> )' -- ':!*.lock'; then
+            echo 'Unresolved conflict marker found.' >&2
+            exit 1
+          fi
+          failed=0
+          while IFS= read -r file; do
+            case "$file" in
+              *.g.dart|*.freezed.dart|*/generated_plugin_registrant.dart) continue ;;
+            esac
+            lines=$(wc -l < "$file")
+            if (( lines > 500 )); then
+              echo "$file has $lines lines (maximum: 500)." >&2
+              failed=1
+            fi
+          done < <(git ls-files '*.dart')
+          exit "$failed"
+
+      - name: Verify Git LFS objects
+        run: git lfs fsck
+
+      - name: Verify local Markdown links and anchors
+        run: ruby tools/check-markdown-links.rb
 
   # Scaffold + validate + pack every mod template so template rot is caught
   # on the PR that causes it, not at the next release.
   template-matrix:
     name: Template ${{ matrix.template }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         template: [minimal, gameplay, gamemode, service, ui, asset, world]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: "10.0.301"
 
       - name: Set up Dart
-        uses: dart-lang/setup-dart@v1
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
         with:
           sdk: "3.11.1"
 
@@ -154,7 +337,7 @@ jobs:
 
       - name: Cache Robotopia managed refs
         if: matrix.template == 'ui'
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/robotopia-managed-refs-cache
           key: ${{ steps.refs-cache.outputs.key }}
@@ -165,7 +348,7 @@ jobs:
         env:
           ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-        run: ./tools/restore-robotopia-managed-refs.ps1 -Source public
+        run: ./tools/restore-robotopia-managed-refs.ps1 -Source public -RequireLatest
 
       # Scaffolds inside the checkout (not RUNNER_TEMP) so the generated
       # ProjectReference to src/Robotopia.Mods.Abstractions stays a relative
@@ -185,3 +368,30 @@ jobs:
             --output "$RUNNER_TEMP/ci-pack" | tail -1)
           echo "Packed: $package"
           dart run bin/robotopia.dart check package "$package"
+
+  required-ci:
+    name: Required / CI validation
+    if: always()
+    needs:
+      - csharp-tests
+      - dart-tests
+      - flutter-tests
+      - sidecar-checks
+      - repository-audits
+      - template-matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Enforce all validation jobs
+        env:
+          CSHARP: ${{ needs.csharp-tests.result }}
+          DART: ${{ needs.dart-tests.result }}
+          FLUTTER: ${{ needs.flutter-tests.result }}
+          SIDECAR: ${{ needs.sidecar-checks.result }}
+          REPOSITORY: ${{ needs.repository-audits.result }}
+          TEMPLATES: ${{ needs.template-matrix.result }}
+        run: |
+          set -euo pipefail
+          for result in "$CSHARP" "$DART" "$FLUTTER" "$SIDECAR" "$REPOSITORY" "$TEMPLATES"; do
+            test "$result" = success
+          done

@@ -1,0 +1,65 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      dotnet:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /tools/ugc-automerge-sidecar
+    schedule:
+      interval: weekly
+    groups:
+      sidecar:
+        patterns: ["*"]
+
+  - package-ecosystem: pub
+    directory: /packages/launcher_domain
+    schedule:
+      interval: weekly
+    groups:
+      launcher-domain:
+        patterns: ["*"]
+
+  - package-ecosystem: pub
+    directory: /packages/launcher_data
+    schedule:
+      interval: weekly
+    groups:
+      launcher-data:
+        patterns: ["*"]
+
+  - package-ecosystem: pub
+    directory: /packages/launcher_ui
+    schedule:
+      interval: weekly
+    groups:
+      launcher-ui:
+        patterns: ["*"]
+
+  - package-ecosystem: pub
+    directory: /apps/robotopia_cli
+    schedule:
+      interval: weekly
+    groups:
+      cli:
+        patterns: ["*"]
+
+  - package-ecosystem: pub
+    directory: /apps/robotopia_launcher_flutter
+    schedule:
+      interval: weekly
+    groups:
+      launcher-app:
+        patterns: ["*"]

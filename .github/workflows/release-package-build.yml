@@ -3,6 +3,10 @@ name: Release package build
 on:
   workflow_call:
     inputs:
+      source_sha:
+        description: "Exact commit to package."
+        required: true
+        type: string
       fail_on_missing_refs:
         description: "Fail when managed-reference secrets are unavailable."
         required: false
@@ -13,6 +17,16 @@ on:
         required: false
         type: number
         default: 14
+      require_macos_signing:
+        description: "Require Developer ID signing and notarization for macOS."
+        required: false
+        type: boolean
+        default: false
+      require_windows_signing:
+        description: "Require Authenticode signing and timestamping for Windows."
+        required: false
+        type: boolean
+        default: false
     secrets:
       ROBOTOPIA_REFS_URL:
         required: false
@@ -32,6 +46,10 @@ on:
         required: false
       MACOS_NOTARY_TEAM_ID:
         required: false
+      WINDOWS_CERTIFICATE_PFX:
+        required: false
+      WINDOWS_CERTIFICATE_PASSWORD:
+        required: false
 
 permissions:
   contents: read
@@ -46,15 +64,21 @@ jobs:
     uses: ./.github/workflows/flutter-launcher-builds.yml
     with:
       artifact_retention_days: ${{ inputs.artifact_retention_days }}
+      source_sha: ${{ inputs.source_sha }}
 
   preflight:
     name: Verify release package inputs
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       refs_available: ${{ steps.refs.outputs.available }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          lfs: true
+          persist-credentials: false
 
       - name: Probe Robotopia managed refs
         id: refs
@@ -69,7 +93,7 @@ jobs:
         run: |
           $failOnMissing = [System.Convert]::ToBoolean($env:FAIL_ON_MISSING_REFS)
           try {
-            ./tools/restore-robotopia-managed-refs.ps1 -Probe
+            ./tools/restore-robotopia-managed-refs.ps1 -Probe -RequireLatest
             "available=true" >> $env:GITHUB_OUTPUT
           }
           catch {
@@ -80,17 +104,116 @@ jobs:
             Write-Warning "Robotopia managed refs are unavailable; skipping release package dry run. $($_.Exception.Message)"
           }
 
+  canonical-ecosystem:
+    name: Build deterministic mod and VPM payload once
+    needs: preflight
+    if: needs.preflight.outputs.refs_available == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout exact source with LFS payloads
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          lfs: true
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: "10.0.301"
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
+        with:
+          sdk: "3.11.1"
+
+      - name: Install archive dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y p7zip-full
+
+      - name: Resolve Robotopia refs cache key
+        id: refs-cache
+        shell: pwsh
+        env:
+          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
+        run: ./tools/restore-robotopia-managed-refs.ps1 -Source public -CacheKeyOnly
+
+      - name: Cache Robotopia managed refs
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/robotopia-managed-refs-cache
+          key: ${{ steps.refs-cache.outputs.key }}
+
+      - name: Restore latest pinned Robotopia refs
+        shell: pwsh
+        env:
+          ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
+          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
+        run: >-
+          ./tools/restore-robotopia-managed-refs.ps1
+          -Source public -RequireLatest
+
+      - name: Build two independent ecosystem payloads
+        shell: bash
+        working-directory: apps/robotopia_cli
+        run: |
+          set -euo pipefail
+          test "$(dotnet --version)" = 10.0.301
+          dart pub get --enforce-lockfile
+          for output in "$RUNNER_TEMP/ecosystem-a" "$RUNNER_TEMP/ecosystem-b"; do
+            dart run bin/robotopia.dart pack --all --output "$output" --configuration Release
+            dart run bin/robotopia.dart unity pack-packages --output "$output/vpm"
+          done
+
+      - name: Prove byte-for-byte deterministic ecosystem output
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest() {
+            local root=$1 output=$2
+            (
+              cd "$root"
+              find . -type f -print0 | sort -z | xargs -0 sha256sum
+            ) >"$output"
+          }
+          manifest "$RUNNER_TEMP/ecosystem-a" "$RUNNER_TEMP/ecosystem-a.sha256"
+          manifest "$RUNNER_TEMP/ecosystem-b" "$RUNNER_TEMP/ecosystem-b.sha256"
+          diff -u "$RUNNER_TEMP/ecosystem-a.sha256" "$RUNNER_TEMP/ecosystem-b.sha256"
+          tar -cf "$RUNNER_TEMP/ecosystem-dist.tar" -C "$RUNNER_TEMP/ecosystem-a" .
+
+      - name: Upload canonical ecosystem payload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ecosystem-dist
+          path: ${{ runner.temp }}/ecosystem-dist.tar
+          if-no-files-found: error
+          retention-days: ${{ inputs.artifact_retention_days }}
+
+      - name: Upload canonical registry packages
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mod-packages
+          path: ${{ runner.temp }}/ecosystem-a/*.robotopiamod
+          if-no-files-found: error
+          retention-days: ${{ inputs.artifact_retention_days }}
+
   macos-cli-x64:
     name: Build macOS x64 CLI
     needs: preflight
     if: needs.preflight.outputs.refs_available == 'true'
     runs-on: macos-15-intel
+    timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
 
       - name: Set up Dart
-        uses: dart-lang/setup-dart@v1
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
         with:
           sdk: "3.11.1"
 
@@ -102,7 +225,7 @@ jobs:
           chmod +x "$RUNNER_TEMP/robotopia-macos-x64"
 
       - name: Upload x64 CLI
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: robotopia-macos-x64
           path: ${{ runner.temp }}/robotopia-macos-x64
@@ -113,10 +236,12 @@ jobs:
     name: Build ${{ matrix.platform }} package
     needs:
       - preflight
+      - canonical-ecosystem
       - macos-cli-x64
       - build-launchers
     if: needs.preflight.outputs.refs_available == 'true'
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -132,15 +257,19 @@ jobs:
             asset: QuantumWorks-macos-universal.zip
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          lfs: true
+          persist-credentials: false
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: "10.0.301"
 
       - name: Set up Dart
-        uses: dart-lang/setup-dart@v1
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
         with:
           sdk: "3.11.1"
 
@@ -175,7 +304,7 @@ jobs:
         run: ./tools/restore-robotopia-managed-refs.ps1 -CacheKeyOnly
 
       - name: Cache Robotopia managed refs
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/robotopia-managed-refs-cache
           key: ${{ steps.refs-cache.outputs.key }}
@@ -189,7 +318,7 @@ jobs:
           ROBOTOPIA_REFS_URL: ${{ secrets.ROBOTOPIA_REFS_URL }}
           ROBOTOPIA_REFS_SHA256: ${{ secrets.ROBOTOPIA_REFS_SHA256 }}
           ROBOTOPIA_REFS_TOKEN: ${{ secrets.ROBOTOPIA_REFS_TOKEN }}
-        run: ./tools/restore-robotopia-managed-refs.ps1
+        run: ./tools/restore-robotopia-managed-refs.ps1 -RequireLatest
 
       # Proves the Dart-native scaffold + pack pipeline works on every OS before it feeds the release payload.
       # Scaffolds inside the checkout (not RUNNER_TEMP) so the generated ProjectReference to
@@ -202,31 +331,35 @@ jobs:
           dart run bin/robotopia.dart new mod ci.smoke --name "CI Smoke" --dir ../../.pack-smoke
           dart run bin/robotopia.dart pack --project ../../.pack-smoke/ci.smoke --output "$RUNNER_TEMP/pack-smoke"
 
-      - name: Prepare macOS universal CLI
+      - name: Download macOS x64 CLI
         if: matrix.platform == 'macos'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: robotopia-macos-x64
           path: ${{ runner.temp }}/macos-x64-cli
 
-      - name: Combine macOS CLI architectures
+      - name: Prepare architecture-dispatched macOS CLI
         if: matrix.platform == 'macos'
         shell: bash
         working-directory: apps/robotopia_cli
         run: |
+          set -euo pipefail
           dart pub get --enforce-lockfile
-          dart compile exe bin/robotopia.dart -o "$RUNNER_TEMP/robotopia-macos-arm64"
-          chmod +x "$RUNNER_TEMP/robotopia-macos-arm64"
-          chmod +x "$RUNNER_TEMP/macos-x64-cli/robotopia-macos-x64"
-          lipo -create \
-            "$RUNNER_TEMP/macos-x64-cli/robotopia-macos-x64" \
-            "$RUNNER_TEMP/robotopia-macos-arm64" \
-            -output "$RUNNER_TEMP/robotopia-macos-universal"
-          chmod +x "$RUNNER_TEMP/robotopia-macos-universal"
-          lipo -archs "$RUNNER_TEMP/robotopia-macos-universal"
+          cli_dir="$RUNNER_TEMP/robotopia-macos-cli"
+          mkdir -p "$cli_dir"
+          dart compile exe bin/robotopia.dart -o "$cli_dir/robotopia-arm64"
+          cp "$RUNNER_TEMP/macos-x64-cli/robotopia-macos-x64" \
+            "$cli_dir/robotopia-x64"
+          chmod +x "$cli_dir/robotopia-arm64" "$cli_dir/robotopia-x64"
+          test "$(lipo -archs "$cli_dir/robotopia-arm64")" = "arm64"
+          test "$(lipo -archs "$cli_dir/robotopia-x64")" = "x86_64"
+          arm_help="$("$cli_dir/robotopia-arm64" --help)"
+          x64_help="$(arch -x86_64 "$cli_dir/robotopia-x64" --help)"
+          grep -Fq 'QuantumWorks CLI' <<< "$arm_help"
+          grep -Fq 'QuantumWorks CLI' <<< "$x64_help"
 
       - name: Download launcher artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: launcher-${{ matrix.platform }}
           path: ${{ runner.temp }}/launcher-artifact
@@ -239,6 +372,20 @@ jobs:
           mkdir -p "$temp/prebuilt-launcher"
           tar -xf "$temp/launcher-artifact/launcher-${{ matrix.platform }}.tar" -C "$temp/prebuilt-launcher"
 
+      - name: Download canonical ecosystem payload
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ecosystem-dist
+          path: ${{ runner.temp }}/ecosystem-artifact
+
+      - name: Extract canonical ecosystem payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          temp="${RUNNER_TEMP//\\//}"
+          mkdir -p "$temp/prebuilt-dist"
+          tar -xf "$temp/ecosystem-artifact/ecosystem-dist.tar" -C "$temp/prebuilt-dist"
+
       - name: Build release package
         shell: bash
         working-directory: apps/robotopia_cli
@@ -249,6 +396,9 @@ jobs:
           MACOS_NOTARY_APPLE_ID: ${{ matrix.platform == 'macos' && secrets.MACOS_NOTARY_APPLE_ID || '' }}
           MACOS_NOTARY_PASSWORD: ${{ matrix.platform == 'macos' && secrets.MACOS_NOTARY_PASSWORD || '' }}
           MACOS_NOTARY_TEAM_ID: ${{ matrix.platform == 'macos' && secrets.MACOS_NOTARY_TEAM_ID || '' }}
+          WINDOWS_CERTIFICATE_PFX: ${{ matrix.platform == 'windows' && secrets.WINDOWS_CERTIFICATE_PFX || '' }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ matrix.platform == 'windows' && secrets.WINDOWS_CERTIFICATE_PASSWORD || '' }}
+          WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL }}
         run: |
           set -euo pipefail
           workspace="${GITHUB_WORKSPACE//\\//}"
@@ -260,9 +410,16 @@ jobs:
             --output "$workspace/release-artifacts"
             --configuration Release
             --prebuilt-launcher "$temp/prebuilt-launcher"
+            --prebuilt-dist "$temp/prebuilt-dist"
           )
           if [ "${{ matrix.platform }}" = "macos" ]; then
-            args+=(--prebuilt-cli "$temp/robotopia-macos-universal")
+            args+=(--prebuilt-cli "$temp/robotopia-macos-cli")
+            if [ "${{ inputs.require_macos_signing }}" = "true" ]; then
+              args+=(--require-macos-signing)
+            fi
+          fi
+          if [ "${{ matrix.platform }}" = "windows" ] && [ "${{ inputs.require_windows_signing }}" = "true" ]; then
+            args+=(--require-windows-signing)
           fi
           dart run bin/robotopia.dart "${args[@]}"
 
@@ -276,28 +433,59 @@ jobs:
             release test-package
             --platform "${{ matrix.platform }}"
             --zip "$workspace/release-artifacts/${{ matrix.asset }}"
+            --run-embedded-cli
           )
           if [ "${{ matrix.platform }}" = "macos" ]; then
             args+=(--require-mac-universal)
+            if [ "${{ inputs.require_macos_signing }}" = "true" ]; then
+              args+=(--require-macos-trust --expected-mac-team-id "$MACOS_NOTARY_TEAM_ID")
+            fi
+          fi
+          if [ "${{ matrix.platform }}" = "windows" ] && [ "${{ inputs.require_windows_signing }}" = "true" ]; then
+            args+=(--require-windows-signature)
           fi
           dart run bin/robotopia.dart "${args[@]}"
+        env:
+          MACOS_NOTARY_TEAM_ID: ${{ matrix.platform == 'macos' && secrets.MACOS_NOTARY_TEAM_ID || '' }}
 
       - name: Upload package artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ matrix.asset }}
           path: release-artifacts/${{ matrix.asset }}
           if-no-files-found: error
           retention-days: ${{ inputs.artifact_retention_days }}
 
-      # One canonical byte-set for the mod registry: per-platform packs are
-      # byte-different, so only the linux leg's dist/ feeds the release assets
-      # the registry index hashes and links.
-      - name: Upload mod packages artifact
-        if: matrix.platform == 'linux'
-        uses: actions/upload-artifact@v4
-        with:
-          name: mod-packages
-          path: dist/*.robotopiamod
-          if-no-files-found: error
-          retention-days: ${{ inputs.artifact_retention_days }}
+  required-release-build:
+    name: Required / Complete release build
+    if: always()
+    needs:
+      - build-launchers
+      - preflight
+      - canonical-ecosystem
+      - macos-cli-x64
+      - build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Enforce all applicable release jobs
+        env:
+          FAIL_ON_MISSING_REFS: ${{ inputs.fail_on_missing_refs }}
+          REFS_AVAILABLE: ${{ needs.preflight.outputs.refs_available }}
+          LAUNCHERS_RESULT: ${{ needs.build-launchers.result }}
+          PREFLIGHT_RESULT: ${{ needs.preflight.result }}
+          ECOSYSTEM_RESULT: ${{ needs.canonical-ecosystem.result }}
+          MACOS_CLI_RESULT: ${{ needs.macos-cli-x64.result }}
+          PACKAGE_RESULT: ${{ needs.build.result }}
+        run: |
+          set -euo pipefail
+          test "$LAUNCHERS_RESULT" = success
+          test "$PREFLIGHT_RESULT" = success
+          if [[ "$REFS_AVAILABLE" != true ]]; then
+            [[ "$FAIL_ON_MISSING_REFS" == false ]] || exit 1
+            echo 'Managed refs unavailable; optional package legs were skipped.'
+            exit 0
+          fi
+          test "$ECOSYSTEM_RESULT" = success
+          test "$MACOS_CLI_RESULT" = success
+          test "$PACKAGE_RESULT" = success
