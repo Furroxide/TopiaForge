@@ -1,6 +1,8 @@
 {
   "name": "Robotopia.WorldCompanion.Editor",
-  "references": [],
+  "references": [
+    "Unity.RenderPipelines.HighDefinition.Runtime"
+  ],
   "includePlatforms": ["Editor"],
   "excludePlatforms": [],
   "autoReferenced": true

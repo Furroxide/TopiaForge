@@ -16,9 +16,13 @@ Blender (.fbx/.gltf)  →  Unity world project  →  world prefab  →  AssetBun
 
 ## Prerequisites
 
-- `robotopia doctor` — .NET SDK 8+ (build/pack) and, for bundle builds, a **Unity 6000.0.x editor
-  with patch ≤ 31** (the game player is 6000.0.31f1; bundles from newer editor streams may not load).
+- `robotopia doctor` — the repository-pinned .NET SDK 10.0.301 (build/pack) and, for bundle builds, **Unity 6000.0.23f1
+  (1c4764c07fb4)**. Unity-authored bundles must be serialized by the same editor version as the game player.
   Doctor warns when your installed editors don't qualify and prints the Hub install hint.
+
+The current world builder targets `StandaloneWindows64`. Authoring can run on Windows, macOS, or Linux when
+that Unity module is installed, but the resulting custom-world bundles are currently supported only by the
+Windows player (natively or through Proton/Wine), not the native macOS player.
 
 ## Scaffold and pair (once)
 
@@ -92,6 +96,30 @@ props, robots all work inside your world).
   `UnregisterWorld` during a live session ends it cleanly.
 - Placement failure falls back to the generated sandbox arena rather than stranding the player.
 
+### Gamemode pause actions
+
+Gamemodes can add session-scoped commands to the QwUi pause companion. Always keep and dispose the
+registration when the session ends. Mark irreversible or progress-resetting commands as destructive so
+the provider shows the standard confirmation before invoking the callback:
+
+```csharp
+var pause = context.GetService<IWorldPauseMenuService>();
+var cleanup = pause?.RegisterAction(new WorldPauseAction(
+    "my.gamemode.reset",
+    "RESET RUN",
+    ResetRun,
+    closePauseMenu: true,
+    order: 0,
+    destructive: true));
+
+// Session end / mod unload:
+cleanup?.Dispose();
+```
+
+Worlds only inspects and rewires the game's existing exit button; Robotopia-owned pause visuals are
+created through QwUi, inherit theme/accessibility settings, use allocator-managed canvas ordering, and
+surface callback failures as diagnostics plus an error toast.
+
 ## Command reference
 
 | Command | What it does |
@@ -99,14 +127,14 @@ props, robots all work inside your world).
 | `robotopia new unity-world <name> [--dir Path]` | Scaffold the Unity authoring project (add `--mod <modDir>` to pair it in the same step). |
 | `robotopia world link --project <unityProj> --mod <modDir> [--bundle name] [--prefab assetPath]` | Pair an existing Unity project with the mod that ships its bundle (writes `robotopia.world.json`). |
 | `robotopia world build [--project <unityProj\|name>] [--mod <modDir>] [--bundle name] [--unity Unity.exe] [--dry-run]` | Headless bundle build into `<mod>/AssetBundles/`; `--dry-run` prints the resolved project/mod/bundle/editor without launching Unity. |
-| `robotopia world play [--project <unityProj\|name>] [--mod <modDir>] [--configuration cfg]` | Build → pack → install → launch, one command. |
+| `robotopia world play [--project <unityProj\|name>] [--mod <modDir>] [--bundle name] [--unity Unity.exe] [--configuration cfg]` | Build → pack → install → launch, one command. |
 
 Ready to ship the world to other players? See [PublishingYourMod.md](PublishingYourMod.md).
 
 ## Troubleshooting
 
-- **"No eligible Unity editor"** — install 6000.0.31f1 (Hub → Installs → Archive, or headless:
-  `"Unity Hub.exe" -- --headless install --version 6000.0.31f1 --changeset a206c360e2a8`).
+- **"No eligible Unity editor"** — install 6000.0.23f1 (Hub → Installs → Archive, or headless:
+  `"Unity Hub.exe" -- --headless install --version 6000.0.23f1 --changeset 1c4764c07fb4`).
 - **Validation: custom component** — a script from your project/package is on the prefab; replace it
   with native components or move behaviour into the mod's C# (attach at runtime).
 - **World loads but looks washed out** — no global Volume and `ApplyDefaultEnvironment = false`; use

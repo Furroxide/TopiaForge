@@ -3,6 +3,7 @@
   "version": "0.1.1",
   "displayName": "Robotopia UGC Companion",
   "description": "Author UGC level content in the Unity Editor and live-sync it into the running Robotopia game with no restart. Tag GameObjects with UGC markers, then enable Live Sync to export the scene to the game's watch folder on every save/change.",
+  "license": "NOASSERTION",
   "unity": "2022.3",
   "keywords": ["robotopia", "ugc", "livesync", "creator"],
   "author": {

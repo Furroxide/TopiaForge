@@ -17,6 +17,7 @@ namespace Robotopia.UgcCompanion.Editor
     {
         private const string PrefPrefix = "Robotopia.UgcCompanion.";
         private const string SeedPath = "ProjectSettings/RobotopiaUgcCompanion.json";
+        private const int MaxSeedBytes = 64 * 1024;
 
         [Serializable]
         private sealed class Seed
@@ -36,15 +37,24 @@ namespace Robotopia.UgcCompanion.Editor
         {
             try
             {
-                if (!File.Exists(SeedPath))
+                string json;
+                try
                 {
-                    return;
+                    json = UgcCompanionSeedFileIo.ReadStableUtf8(
+                        SeedPath,
+                        MaxSeedBytes,
+                        "Robotopia UGC companion seed");
+                }
+                catch (FileNotFoundException)
+                {
+                    return; // The optional one-shot seed has not been created.
                 }
 
-                var seed = JsonUtility.FromJson<Seed>(File.ReadAllText(SeedPath));
-                if (seed == null || string.IsNullOrEmpty(seed.watchFolder))
+                var seed = JsonUtility.FromJson<Seed>(json);
+                if (seed == null || string.IsNullOrEmpty(seed.watchFolder) || string.IsNullOrEmpty(seed.seededUtc))
                 {
-                    return;
+                    throw new InvalidDataException(
+                        "UGC companion seed must contain non-empty watchFolder and seededUtc values.");
                 }
 
                 if (!string.IsNullOrEmpty(seed.appliedUtc) && seed.appliedUtc == seed.seededUtc)
@@ -76,7 +86,12 @@ namespace Robotopia.UgcCompanion.Editor
                 EditorPrefs.SetBool(PrefPrefix + "liveSync", seed.liveSync);
 
                 seed.appliedUtc = seed.seededUtc;
-                File.WriteAllText(SeedPath, JsonUtility.ToJson(seed, prettyPrint: true));
+                UgcCompanionSeedFileIo.RewriteAtomicUtf8(
+                    SeedPath,
+                    json,
+                    JsonUtility.ToJson(seed, prettyPrint: true),
+                    MaxSeedBytes,
+                    "Robotopia UGC companion seed");
 
                 // Open after the editor finishes loading so the window exists and reads the seeded prefs.
                 EditorApplication.delayCall += UgcDevDaemon.OpenAndReload;
@@ -85,7 +100,8 @@ namespace Robotopia.UgcCompanion.Editor
             }
             catch (Exception ex)
             {
-                Debug.LogWarning("[UGC Companion] Could not apply live-sync seed: " + ex.Message);
+                Debug.LogError("[UGC Companion] Could not apply live-sync seed safely: " + ex);
+                throw new InvalidOperationException("UGC companion seed application failed.", ex);
             }
         }
     }

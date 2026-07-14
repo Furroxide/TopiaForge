@@ -1,6 +1,7 @@
-# VCC-style: VPM packages are restored from vpm-manifest.json, so don't commit them — except the resolver,
-# which must be present for a freshly-cloned project to self-restore on open.
+# VCC-style: VPM packages are restored from vpm-manifest.json, so don't commit them — except the read-only
+# recovery bridge, which detects missing packages and directs a fresh clone to the hardened launcher/CLI.
 /com.robotopia.ugc-companion/
+/vpm-resolver-repos.json
 !/com.robotopia.vpm-resolver/
 !/.gitignore
 !/manifest.json

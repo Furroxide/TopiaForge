@@ -7,7 +7,7 @@ A start-to-finish walkthrough: from nothing to a mod running inside Robotopia. T
 - **Robotopia installed** (the launcher detects the standard install location).
 - **The `robotopia` CLI** — extract the release zip and add its root folder to `PATH`
   (see [Modding.md → Install the CLI](Modding.md#install-the-cli)).
-- **.NET SDK 8+** — the only tool required to build mods. Node.js and Unity are optional and only used for
+- **.NET SDK 10.0.301** — the repository-pinned tool required to build mods. Node.js and Unity are optional and only used for
   UGC live-sync authoring; you don't need them today.
 
 ## 1. Check your machine
@@ -33,7 +33,7 @@ Other:
 ## 2. Create the mod
 
 ```sh
-robotopia new mod yourname.firstmod --name "First Mod" --author "You"
+robotopia new mod yourname.firstmod --name "First Mod" --author "You" --license MIT
 ```
 
 ```text
@@ -111,8 +111,9 @@ robotopia mod add dependency robotopia.worlds@">=0.3.0"
 
 ## 7. Publish it
 
-Worth sharing? Publish it to the official registry so it shows up in everyone's launcher: validate to zero
-findings, pack, host the file, and open a registry PR. The full walkthrough is
+Worth sharing? Publish a self-hosted registry or package source: validate to zero findings, pack, host the immutable
+file, generate an index, and test its public URL. Official community submissions are closed for the initial release.
+The full walkthrough is
 [PublishingYourMod.md](PublishingYourMod.md).
 
 ## Where next

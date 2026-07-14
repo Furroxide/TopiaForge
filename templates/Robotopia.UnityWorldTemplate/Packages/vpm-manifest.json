@@ -5,13 +5,17 @@
     "com.robotopia.world-companion": "^0.1.0"
   },
   "locked": {
+    "com.robotopia.vpm-resolver": {
+      "version": "0.1.0"
+    },
     "com.robotopia.ugc-companion": {
-      "version": "0.1.0",
-      "dependencies": {}
+      "version": "0.1.1",
+      "dependencies": {
+        "com.robotopia.vpm-resolver": "0.1.0"
+      }
     },
     "com.robotopia.world-companion": {
-      "version": "0.1.0",
-      "dependencies": {}
+      "version": "0.1.0"
     }
   }
 }
