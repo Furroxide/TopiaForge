@@ -5,10 +5,11 @@ using Robotopia.Mods;
 
 namespace Robotopia.Prompts
 {
-    internal sealed class PromptOverrideRegistry : IPromptOverrideRegistry
+    internal sealed class PromptOverrideRegistry : IPromptOverrideRegistry, IDisposable
     {
         private readonly object gate = new object();
         private readonly List<Entry> entries = new List<Entry>();
+        private bool disposed;
 
         public IReadOnlyList<PromptOverride> Overrides
         {
@@ -60,6 +61,11 @@ namespace Robotopia.Prompts
 
             lock (gate)
             {
+                if (disposed)
+                {
+                    throw new ObjectDisposedException(nameof(PromptOverrideRegistry));
+                }
+
                 RemoveMatchingLocked(e =>
                     string.Equals(e.Override.ModId, promptOverride.ModId, StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(e.Override.PromptId, promptOverride.PromptId, StringComparison.OrdinalIgnoreCase));
@@ -106,6 +112,20 @@ namespace Robotopia.Prompts
             lock (gate)
             {
                 RemoveMatchingLocked(e => string.Equals(e.Override.ModId, ownerModId, StringComparison.OrdinalIgnoreCase));
+            }
+        }
+
+        public void Dispose()
+        {
+            lock (gate)
+            {
+                if (disposed)
+                {
+                    return;
+                }
+
+                disposed = true;
+                RemoveMatchingLocked(_ => true);
             }
         }
 

@@ -29,24 +29,21 @@ namespace Robotopia.Zombies
         private ConversationModal? conversation;
         private GameOverModal? gameOver;
         private ShopModal? shopModal;
-
         public void Initialize(ZombiesController controller, ZombiesConfig config)
         {
             this.controller = controller;
             this.config = config;
-            QwTheme.HighContrast = config.HudHighContrast;
-            QwTheme.MotionScale = config.HudMotionIntensity;
             BuildUi();
         }
 
-        public void PushSpeech(Vector3 world, string text, Color color)
+        public void PushSpeech(Vector3 world, string text, QwTone tone)
         {
-            worldLabels?.PushSpeech(world, text, color);
+            worldLabels?.PushSpeech(world, text, tone);
         }
 
-        public void PushFloater(Vector3 world, string text, Color color)
+        public void PushFloater(Vector3 world, string text, QwTone tone)
         {
-            worldLabels?.PushFloater(world, text, color);
+            worldLabels?.PushFloater(world, text, tone);
         }
 
         public void FlashHitMarker(ZombieHitKind kind)
@@ -64,7 +61,7 @@ namespace Robotopia.Zombies
             reticle?.SetChargeFraction(fraction);
         }
 
-        public void ShowBanner(string text, Color color)
+        public void ShowBanner(string text, QwTone tone)
         {
             if (banner == null)
             {
@@ -77,7 +74,7 @@ namespace Robotopia.Zombies
                 return;
             }
 
-            banner.SetColor(color);
+            banner.SetTone(tone);
             banner.Show(text);
         }
 
@@ -156,7 +153,13 @@ namespace Robotopia.Zombies
             // The behaviour has no IModContext (it only receives controller + config),
             // so the host is created from explicit options; kit logging keeps its
             // process-wide sinks.
-            ui = QwUi.Create(new QwUiOptions { OwnerId = "robotopia.zombies" });
+            ui = QwUi.Create(new QwUiOptions
+            {
+                OwnerId = "robotopia.zombies",
+                AccessibilityProfile = new QwAccessibilityProfile(
+                    highContrast: config.HudHighContrast,
+                    motionIntensity: config.HudMotionIntensity),
+            });
             hud = ui.HudLayer("zombies");
             hud.Go.name = "RobotopiaZombiesHudCanvas";
             hud.Go.transform.SetParent(transform, false);

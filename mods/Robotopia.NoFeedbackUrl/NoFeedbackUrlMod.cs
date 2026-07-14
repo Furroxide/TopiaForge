@@ -1,6 +1,5 @@
 using System;
 using System.Reflection;
-using System.Runtime.Serialization;
 using HarmonyLib;
 using Robotopia.Mods;
 
@@ -94,10 +93,4 @@ namespace Robotopia.NoFeedbackUrl
         }
     }
 
-    [DataContract]
-    public sealed class NoFeedbackUrlConfig
-    {
-        [DataMember(Name = "hasSeenFirstLaunch")]
-        public bool HasSeenFirstLaunch { get; set; }
-    }
 }

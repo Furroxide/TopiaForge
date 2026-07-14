@@ -3,7 +3,7 @@
   "schemaVersion": 2,
   "name": "robotopia.sandbox",
   "displayName": "Sandbox",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "author": {
     "name": "QuantumWorks"
   },
@@ -11,7 +11,7 @@
   "entryAssembly": "Robotopia.Sandbox.dll",
   "entryType": "Robotopia.Sandbox.SandboxMod",
   "vpmDependencies": {
-    "robotopia.worlds": ">=0.4.0",
+    "robotopia.worlds": ">=0.5.4",
     "robotopia.robotkit": ">=0.8.0"
   },
   "loadAfter": [
@@ -19,7 +19,9 @@
     "robotopia.robotkit",
     "robotopia.gravitygun"
   ],
-  "supportedSdkVersionRange": ">=0.1.0 <0.2.0",
+  "supportedGameVersionRange": "0.0.2227",
+  "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
+  "supportedSdkVersionRange": ">=0.1.2 <0.2.0",
   "category": "Gameplay",
   "tags": [
     "sandbox",
@@ -33,13 +35,17 @@
     "conversation",
     "objectives"
   ],
-  "license": "Unspecified",
+  "license": "NOASSERTION",
   "permissions": [
     "world-service",
     "robot-spawning",
     "input",
     "physics",
     "hud",
-    "ai"
+    "network",
+    "remote-ai",
+    "player-token",
+    "microphone",
+    "speech-to-text"
   ]
 }

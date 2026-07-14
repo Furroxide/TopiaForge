@@ -180,7 +180,7 @@
       "feature": "Skip performance logging startup via prefix patch",
       "sourceRef": "mods/Robotopia.Performance/Appliers/PatchApplier.cs:70",
       "parameters": [],
-      "returnType": "System.Void",
+      "returnType": "Cysharp.Threading.Tasks.UniTask",
       "contractValue": ""
     },
     {

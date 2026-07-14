@@ -9,8 +9,9 @@ namespace Robotopia.Assets
     internal sealed class AssetBundleService : IAssetBundleService, IDisposable
     {
         private readonly IModLogger logger;
-        private readonly Dictionary<string, AssetBundleHandle> cachedHandles = new Dictionary<string, AssetBundleHandle>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, AssetBundleHandle> cachedHandles = new Dictionary<string, AssetBundleHandle>(StringComparer.Ordinal);
         private readonly List<AssetBundleHandle> transientHandles = new List<AssetBundleHandle>();
+        private bool disposed;
 
         public AssetBundleService(IModLogger logger)
         {
@@ -19,6 +20,11 @@ namespace Robotopia.Assets
 
         public AssetBundleLoadResult LoadBundle(AssetBundleLoadRequest request)
         {
+            if (disposed)
+            {
+                return AssetBundleLoadResult.Fail("AssetBundle service is disposed.");
+            }
+
             if (request == null)
             {
                 return AssetBundleLoadResult.Fail("AssetBundleLoadRequest is required.");
@@ -48,7 +54,16 @@ namespace Robotopia.Assets
                     return AssetBundleLoadResult.Success(existing);
                 }
 
-                UnloadHandle(existing, unloadAllLoadedObjects: false);
+                if (existing.HasOwnerOtherThan(request.OwnerModId))
+                {
+                    return AssetBundleLoadResult.Fail("Cannot reload a cached AssetBundle while another mod is using it.");
+                }
+
+                if (!TryUnloadHandle(existing, unloadAllLoadedObjects: false))
+                {
+                    return AssetBundleLoadResult.Fail("Could not unload the cached AssetBundle before reloading it.");
+                }
+
                 cachedHandles.Remove(fullPath);
             }
 
@@ -82,6 +97,11 @@ namespace Robotopia.Assets
 
         public AssetLoadResult LoadAsset(IAssetBundleHandle bundle, string assetName, Type assetType)
         {
+            if (disposed)
+            {
+                return AssetLoadResult.Fail("AssetBundle service is disposed.");
+            }
+
             if (!TryGetNativeBundle(bundle, out var nativeBundle, out var error))
             {
                 return AssetLoadResult.Fail(error);
@@ -126,6 +146,11 @@ namespace Robotopia.Assets
 
         public SpawnAssetResult SpawnAsset(object prefab)
         {
+            if (disposed)
+            {
+                return SpawnAssetResult.Fail("AssetBundle service is disposed.");
+            }
+
             if (prefab == null)
             {
                 return SpawnAssetResult.Fail("Prefab is required.");
@@ -165,14 +190,30 @@ namespace Robotopia.Assets
 
         public IReadOnlyList<string> GetAllAssetNames(IAssetBundleHandle bundle)
         {
-            return TryGetNativeBundle(bundle, out var nativeBundle, out _)
-                ? nativeBundle.GetAllAssetNames()
-                : Array.Empty<string>();
+            if (disposed)
+            {
+                return Array.Empty<string>();
+            }
+
+            if (!TryGetNativeBundle(bundle, out var nativeBundle, out _))
+            {
+                return Array.Empty<string>();
+            }
+
+            try
+            {
+                return nativeBundle.GetAllAssetNames();
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "Failed to list AssetBundle contents.");
+                return Array.Empty<string>();
+            }
         }
 
         public void UnloadOwner(string ownerModId, bool unloadAllLoadedObjects = false)
         {
-            if (string.IsNullOrWhiteSpace(ownerModId))
+            if (disposed || string.IsNullOrWhiteSpace(ownerModId))
             {
                 return;
             }
@@ -180,9 +221,8 @@ namespace Robotopia.Assets
             foreach (var handle in cachedHandles.Values.Concat(transientHandles).ToList())
             {
                 handle.RemoveOwner(ownerModId);
-                if (handle.OwnerModIds.Count == 0)
+                if (handle.OwnerCount == 0 && TryUnloadHandle(handle, unloadAllLoadedObjects))
                 {
-                    UnloadHandle(handle, unloadAllLoadedObjects);
                     cachedHandles.Remove(handle.FullPath);
                     transientHandles.Remove(handle);
                 }
@@ -191,50 +231,23 @@ namespace Robotopia.Assets
 
         public void Dispose()
         {
+            if (disposed)
+            {
+                return;
+            }
+
+            disposed = true;
             foreach (var handle in cachedHandles.Values.Concat(transientHandles).ToList())
             {
-                UnloadHandle(handle, unloadAllLoadedObjects: true);
+                TryUnloadHandle(handle, unloadAllLoadedObjects: true);
             }
 
             cachedHandles.Clear();
             transientHandles.Clear();
         }
 
-        private static bool TryResolvePackagePath(string packagePath, string relativePath, out string fullPath, out string error)
-        {
-            fullPath = string.Empty;
-            error = string.Empty;
-
-            if (string.IsNullOrWhiteSpace(packagePath))
-            {
-                error = "Package path is required.";
-                return false;
-            }
-
-            if (string.IsNullOrWhiteSpace(relativePath))
-            {
-                error = "AssetBundle relative path is required.";
-                return false;
-            }
-
-            if (Path.IsPathRooted(relativePath))
-            {
-                error = "AssetBundle path must be package-relative.";
-                return false;
-            }
-
-            var root = Path.GetFullPath(packagePath);
-            fullPath = Path.GetFullPath(Path.Combine(root, relativePath));
-            var rootPrefix = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
-            if (!fullPath.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
-            {
-                error = "AssetBundle path escapes the mod package directory.";
-                fullPath = string.Empty;
-                return false;
-            }
-
-            return true;
-        }
+        private static bool TryResolvePackagePath(string packagePath, string relativePath, out string fullPath, out string error) =>
+            AssetBundlePathPolicy.TryResolve(packagePath, relativePath, out fullPath, out error);
 
         private static bool TryGetNativeBundle(IAssetBundleHandle handle, out UnityEngine.AssetBundle bundle, out string error)
         {
@@ -263,15 +276,24 @@ namespace Robotopia.Assets
             return false;
         }
 
-        private static void UnloadHandle(AssetBundleHandle handle, bool unloadAllLoadedObjects)
+        private bool TryUnloadHandle(AssetBundleHandle handle, bool unloadAllLoadedObjects)
         {
             if (!handle.IsLoaded)
             {
-                return;
+                return true;
             }
 
-            handle.NativeBundle.Unload(unloadAllLoadedObjects);
-            handle.MarkUnloaded();
+            try
+            {
+                handle.NativeBundle.Unload(unloadAllLoadedObjects);
+                handle.MarkUnloaded();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "Failed to unload AssetBundle '" + Path.GetFileName(handle.FullPath) + "'.");
+                return false;
+            }
         }
 
         private sealed class AssetBundleHandle : IAssetBundleHandle
@@ -288,7 +310,10 @@ namespace Robotopia.Assets
             public UnityEngine.AssetBundle NativeBundle { get; }
             public object Bundle => NativeBundle;
             public IReadOnlyList<string> OwnerModIds => owners.OrderBy(o => o, StringComparer.OrdinalIgnoreCase).ToList();
-            public bool IsLoaded { get; private set; } = true;
+            public bool IsLoaded => isLoaded && NativeBundle != null;
+            public int OwnerCount => owners.Count;
+
+            private bool isLoaded = true;
 
             public void AddOwner(string ownerModId)
             {
@@ -300,9 +325,22 @@ namespace Robotopia.Assets
                 owners.Remove(ownerModId);
             }
 
+            public bool HasOwnerOtherThan(string ownerModId)
+            {
+                foreach (var owner in owners)
+                {
+                    if (!owner.Equals(ownerModId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
             public void MarkUnloaded()
             {
-                IsLoaded = false;
+                isLoaded = false;
                 owners.Clear();
             }
         }

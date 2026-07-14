@@ -83,7 +83,9 @@ namespace Robotopia.Zombies
 
             var hitFlash = Mathf.Clamp01(1f - ((Time.time - crosshairHitTime) / HitFlashSeconds));
             var baseColor = ReticleColor();
-            var color = hitFlash > 0f ? Color.Lerp(baseColor, Color.white, hitFlash) : baseColor;
+            var color = hitFlash > 0f
+                ? Color.Lerp(baseColor, context.Theme.ToneColor(QwTone.Neutral), hitFlash)
+                : baseColor;
 
             SetTick(ticks[0], 0f, gap + (TickLength * 0.5f), TickThickness, TickLength, color);
             SetTick(ticks[1], 0f, -gap - (TickLength * 0.5f), TickThickness, TickLength, color);
@@ -114,7 +116,9 @@ namespace Robotopia.Zombies
             var isKill = markerKind == ZombieHitKind.Kill || markerKind == ZombieHitKind.HeadshotKill;
             var headshot = markerKind == ZombieHitKind.Headshot || markerKind == ZombieHitKind.HeadshotKill;
             var radius = Mathf.Lerp(18f, isKill ? 42f : 30f, t);
-            var color = isKill ? HudPalette.Danger : (headshot ? HudPalette.Amber : HudPalette.Text);
+            var color = context.Theme.ToneColor(isKill
+                ? QwTone.Danger
+                : headshot ? QwTone.Warning : QwTone.Neutral);
             color.a = 1f - t;
 
             markers[0].SetPosition(-radius, radius);
@@ -131,13 +135,13 @@ namespace Robotopia.Zombies
         {
             if (chargeFraction >= 1f)
             {
-                return HudPalette.Amber;
+                return context.Theme.ToneColor(QwTone.Warning);
             }
 
             var controller = context.Controller;
-            return controller.OverrideHudEnabled && controller.OverrideAimingHijackable
-                ? HudPalette.Violet
-                : HudPalette.Cyan;
+            return context.Theme.ToneColor(controller.OverrideHudEnabled && controller.OverrideAimingHijackable
+                ? QwTone.Primary
+                : QwTone.Accent);
         }
 
         private static void SetTick(QwImage image, float x, float y, float width, float height, Color color)

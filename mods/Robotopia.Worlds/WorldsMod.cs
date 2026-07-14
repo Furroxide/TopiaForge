@@ -1,5 +1,6 @@
 using System;
 using Robotopia.Mods;
+using Robotopia.Mods.UnityUi;
 using UnityEngine.SceneManagement;
 
 namespace Robotopia.Worlds
@@ -14,6 +15,7 @@ namespace Robotopia.Worlds
         private WorldsConfig? config;
         private WorldsService? service;
         private PauseMenuBridge? pauseBridge;
+        private UiHost? ui;
         private bool pendingAutoLoad;
         private float autoLoadWait;
 
@@ -25,18 +27,27 @@ namespace Robotopia.Worlds
 
             service = new WorldsService(context.Logger, context.Paths.DataPath);
             service.EndSessionOnMenuScene = config.EndSessionOnMenuScene;
+            var sceneCoordinator = context.GetService<ISceneCoordinator>();
+            if (sceneCoordinator != null)
+            {
+                service.AttachSceneCoordinator(sceneCoordinator, context.ModId);
+            }
+
             service.DiscoverBuiltIns();
-            // The world id stays blank; the sandbox gamemode always routes to LoadOpenSandbox (the clean
-            // UgcPlay scene + generated arena), so no world pin is needed here. The Robotopia.Sandbox mod
-            // layers the actual creator gameplay (spawn menu, tools) onto this session.
+            // Pin the entry to the Open Sandbox world: world routing is keyed on the world id (a blank id
+            // would resolve to the first checkpoint level, i.e. the campaign tutorial), and an explicit world
+            // selection with the Sandbox gamemode is honoured. The Robotopia.Sandbox mod layers the actual
+            // creator gameplay (spawn menu, tools) onto this session.
             service.RegisterMenuEntry(new GamemodeMenuEntry(
                 "robotopia.worlds.sandbox.menu",
                 "Sandbox",
                 "Freeform creator sandbox: an open arena with a spawn menu for props and robots.",
-                WorldsService.SandboxGamemodeId));
+                WorldsService.SandboxGamemodeId,
+                WorldsService.OpenSandboxWorldId));
             service.WriteCatalog();
 
-            pauseBridge = new PauseMenuBridge(service, context.Logger, config.InterceptPauseMenu);
+            ui = QwUi.For(context);
+            pauseBridge = new PauseMenuBridge(service, context.Logger, ui, config.InterceptPauseMenu);
 
             var registry = context.GetService<IModServiceRegistry>();
             registry?.Register<IWorldGamemodeService>(context.ModId, service);
@@ -58,6 +69,8 @@ namespace Robotopia.Worlds
 
             pauseBridge?.Dispose();
             pauseBridge = null;
+            ui?.Dispose();
+            ui = null;
             service?.Dispose();
             service = null;
             config = null;
@@ -67,6 +80,7 @@ namespace Robotopia.Worlds
 
         private void OnUpdate(float deltaTime)
         {
+            service?.UpdateTransition();
             pauseBridge?.Update(deltaTime);
 
             if (!pendingAutoLoad || service == null || config == null || context == null)
@@ -126,7 +140,11 @@ namespace Robotopia.Worlds
 
             if (route.Kind == WorldAutoLoadRouteKind.LaunchMenuEntry)
             {
-                return service.LaunchMenuEntry(route.MenuEntryId, route.PreferSceneReplacement, route.AllowAdditiveFallback);
+                return service.LaunchMenuEntry(
+                    route.MenuEntryId,
+                    route.PreferSceneReplacement,
+                    route.AllowAdditiveFallback,
+                    route.Priority);
             }
 
             return service.Load(route.Request!);

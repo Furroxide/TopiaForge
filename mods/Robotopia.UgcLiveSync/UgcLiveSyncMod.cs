@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using Robotopia.Mods;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -14,6 +15,7 @@ namespace Robotopia.UgcLiveSync
     public sealed class UgcLiveSyncMod : IRobotopiaMod
     {
         private const float AutoConnectMaxWaitSeconds = 12f;
+        private const float CommandPollIntervalSeconds = 0.35f;
 
         private IModContext? context;
         private UgcLiveSyncConfig? config;
@@ -22,9 +24,11 @@ namespace Robotopia.UgcLiveSync
         private GameObject? overlayObject;
         private bool pendingAutoConnect;
         private float autoConnectWait;
+        private readonly UgcCommandPollGate commandPoll = new UgcCommandPollGate(CommandPollIntervalSeconds);
 
         // Status handshake the launcher/CLI reads (game → launcher). Rewritten on every status transition.
         private string statusFilePath = string.Empty;
+        private string commandFilePath = string.Empty;
         private UgcLiveSyncStatusFile? status;
         private UgcLiveSyncStatus lastWrittenStatus = UgcLiveSyncStatus.Idle;
         private string lastWrittenTarget = string.Empty;
@@ -36,9 +40,17 @@ namespace Robotopia.UgcLiveSync
             context.SaveConfig(config);
 
             var bridge = new UgcGameBridge(context.Logger);
-            service = new UgcLiveSyncService(bridge, context.Logger) { CurrentMaxBytes = config.MaxSnapshotBytes };
+            service = new UgcLiveSyncService(bridge, context.Logger)
+            {
+                CurrentMaxBytes = config.MaxSnapshotBytes,
+                // Scene-transition arbitration: play-scene loads yield to a live world/gamemode session
+                // (an automatic connect defers and attaches when the play scene arrives on its own).
+                SceneCoordinator = context.GetService<ISceneCoordinator>(),
+                SceneOwnerId = context.ModId
+            };
 
             statusFilePath = UgcLiveSyncStatusFile.PathForConfig(context.Paths.ConfigPath);
+            commandFilePath = UgcLiveSyncCommandFile.PathForConfig(context.Paths.ConfigPath);
             status = new UgcLiveSyncStatusFile
             {
                 DefaultWatchFolder = bridge.GetDefaultWatchFolder(),
@@ -57,6 +69,7 @@ namespace Robotopia.UgcLiveSync
 
             pendingAutoConnect = config.AutoConnectOnStart;
             autoConnectWait = AutoConnectMaxWaitSeconds;
+            commandPoll.Reset();
 
             context.Update += OnUpdate;
             context.SceneLoaded += OnSceneLoaded;
@@ -97,6 +110,11 @@ namespace Robotopia.UgcLiveSync
 
         private void OnUpdate(float deltaTime)
         {
+            if (commandPoll.Tick(Time.unscaledDeltaTime))
+            {
+                HandleCommandFile();
+            }
+
             service?.Pump(deltaTime);
             TickAutoConnect(deltaTime);
             MaybeWriteStatus();
@@ -133,7 +151,7 @@ namespace Robotopia.UgcLiveSync
                 return;
             }
 
-            var target = service.CurrentSession?.Target ?? string.Empty;
+            var target = (service.CurrentSession ?? service.PendingSession)?.Target ?? string.Empty;
             if (service.Status != lastWrittenStatus
                 || !string.Equals(target, lastWrittenTarget, StringComparison.Ordinal))
             {
@@ -153,22 +171,22 @@ namespace Robotopia.UgcLiveSync
             status.ModVersion = context?.Version?.ToString() ?? status.ModVersion;
             status.UpdatedUtc = DateTime.UtcNow.ToString("o", System.Globalization.CultureInfo.InvariantCulture);
 
-            var session = service.CurrentSession;
+            var session = service.CurrentSession ?? service.PendingSession;
             if (session != null)
             {
-                if (session.Transport == UgcSyncTransport.Automerge)
-                {
-                    status.ConnectedDocumentUrl = session.Target;
-                }
-                else
-                {
-                    status.WatchFolder = session.Target;
-                }
-
-                if (!string.IsNullOrEmpty(session.SceneId))
-                {
-                    status.SceneId = session.SceneId;
-                }
+                // Assign both mutually-exclusive targets so a direct transport switch cannot leave stale
+                // connection data in the launcher handshake when no intermediate idle status was written.
+                status.ConnectedDocumentUrl = session.Transport == UgcSyncTransport.Automerge
+                    ? session.Target
+                    : string.Empty;
+                status.WatchFolder = session.Transport == UgcSyncTransport.LocalFolder
+                    ? session.Target
+                    : string.Empty;
+                status.SceneId = session.SceneId;
+            }
+            else
+            {
+                status.ClearLiveSession(clearHistory: false);
             }
 
             try
@@ -182,6 +200,88 @@ namespace Robotopia.UgcLiveSync
 
             lastWrittenStatus = service.Status;
             lastWrittenTarget = session?.Target ?? string.Empty;
+        }
+
+        private void HandleCommandFile()
+        {
+            if (string.IsNullOrEmpty(commandFilePath) || !File.Exists(commandFilePath))
+            {
+                return;
+            }
+
+            UgcLiveSyncCommandFile command;
+            try
+            {
+                command = UgcLiveSyncCommandFile.ReadFrom(commandFilePath);
+            }
+            catch (Exception ex)
+            {
+                context?.Logger.Warn("UGC live sync: ignoring malformed command file: " + ex.Message);
+                TryDeleteCommandFile();
+                return;
+            }
+
+            TryDeleteCommandFile();
+            if (command.SchemaVersion != UgcLiveSyncCommandFile.CurrentSchemaVersion)
+            {
+                context?.Logger.Warn("UGC live sync: unsupported command schema version "
+                    + command.SchemaVersion + ".");
+                return;
+            }
+
+            if (!command.IsFresh(DateTime.UtcNow))
+            {
+                context?.Logger.Warn("UGC live sync: ignored a stale or invalidly dated command file.");
+                return;
+            }
+
+            if (!command.IsStop)
+            {
+                context?.Logger.Warn("UGC live sync: unknown command '" + command.Command + "'.");
+                return;
+            }
+
+            pendingAutoConnect = false;
+            service?.Stop();
+            if (command.Cleanup)
+            {
+                ClearRuntimeLiveConfig();
+                status?.ClearLiveSession(clearHistory: true);
+            }
+
+            context?.Logger.Info("UGC live sync command: stopped active session"
+                + (command.Cleanup ? " and cleared live connection state." : "."));
+            WriteStatus();
+        }
+
+        private void ClearRuntimeLiveConfig()
+        {
+            if (config == null)
+            {
+                return;
+            }
+
+            config.AutoConnectOnStart = false;
+            config.EditorUrl = string.Empty;
+            config.DocumentUrl = string.Empty;
+            // The launcher/CLI writes the cleaned durable config before publishing this command. Do not save
+            // this stale startup snapshot back over that file: watch folder, scene, limits, or future fields may
+            // have changed while the game was running. These assignments only stop in-process reconnect state.
+        }
+
+        private void TryDeleteCommandFile()
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(commandFilePath) && File.Exists(commandFilePath))
+                {
+                    File.Delete(commandFilePath);
+                }
+            }
+            catch (Exception ex)
+            {
+                context?.Logger.Debug("UGC live sync: could not delete command file: " + ex.Message);
+            }
         }
 
         // Holds the auto-connect until the menu scene is reached (a clean transition, not a race against boot),
@@ -203,7 +303,12 @@ namespace Robotopia.UgcLiveSync
 
             pendingAutoConnect = false;
 
-            var request = new UgcLiveSyncRequest(
+            // Automatic priority: this connect was not a direct user action, so a needed play-scene load
+            // yields to whoever holds the scene (e.g. the Worlds auto-launcher, which fires on this same
+            // "menu reached" trigger and runs earlier in the frame). The session still starts — it just
+            // defers the scene load and attaches when the UGC play scene arrives on its own.
+            var request = UgcLiveSyncRequest.WithPriority(
+                SceneTransitionPriority.Automatic,
                 watchFolder: config.WatchFolder,
                 editorUrl: config.EditorUrl,
                 documentUrl: config.DocumentUrl,

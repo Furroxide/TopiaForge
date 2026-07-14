@@ -3,7 +3,7 @@
   "schemaVersion": 2,
   "name": "robotopia.worlds",
   "displayName": "Robotopia Worlds",
-  "version": "0.5.4",
+  "version": "0.6.0",
   "author": {
     "name": "QuantumWorks"
   },
@@ -11,7 +11,9 @@
   "entryAssembly": "Robotopia.Worlds.dll",
   "entryType": "Robotopia.Worlds.WorldsMod",
   "vpmDependencies": {},
-  "supportedSdkVersionRange": ">=0.1.0 <0.2.0",
+  "supportedGameVersionRange": "0.0.2227",
+  "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
+  "supportedSdkVersionRange": ">=0.1.3 <0.2.0",
   "category": "Framework",
   "tags": [
     "worlds",
@@ -19,9 +21,10 @@
     "sdk",
     "sandbox"
   ],
-  "license": "Unspecified",
+  "license": "NOASSERTION",
   "permissions": [
     "scene-management",
-    "world-service"
+    "world-service",
+    "hud"
   ]
 }

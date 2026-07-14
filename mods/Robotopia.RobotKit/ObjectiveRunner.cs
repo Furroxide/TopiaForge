@@ -30,6 +30,7 @@ namespace Robotopia.RobotKit
         private readonly Func<float> random01;                       // [0,1) — wander legs, flee escape angles
         private readonly Func<object, IRobotAgent?>? resolveAgent;   // live object -> agent, for Reprogram delivery
         private readonly Action<IRobotAgent, RobotObjective>? deliver; // (recipient, payload); service closes over the sender
+        private readonly Action<Exception>? reportFailure;
 
         private RobotObjectiveState state;
         private int waypointIndex;
@@ -50,7 +51,8 @@ namespace Robotopia.RobotKit
             Func<float> now,
             Func<float>? random01 = null,
             Func<object, IRobotAgent?>? resolveAgent = null,
-            Action<IRobotAgent, RobotObjective>? deliver = null)
+            Action<IRobotAgent, RobotObjective>? deliver = null,
+            Action<Exception>? reportFailure = null)
         {
             this.agent = agent;
             Objective = objective;
@@ -59,6 +61,7 @@ namespace Robotopia.RobotKit
             this.random01 = random01 ?? (() => 0.5f);
             this.resolveAgent = resolveAgent;
             this.deliver = deliver;
+            this.reportFailure = reportFailure;
             state = objective.Kind == RobotObjectiveKind.Idle ? RobotObjectiveState.Idle : RobotObjectiveState.Seeking;
         }
 
@@ -80,9 +83,23 @@ namespace Robotopia.RobotKit
             }
 
             state = RobotObjectiveState.Cancelled;
-            if (agent.IsAlive)
+            try
             {
-                agent.Stop();
+                if (agent.IsAlive)
+                {
+                    agent.Stop();
+                }
+            }
+            catch (Exception exception)
+            {
+                try
+                {
+                    reportFailure?.Invoke(exception);
+                }
+                catch
+                {
+                    // Cancellation must stay safe even if an advisory logger is broken.
+                }
             }
         }
 

@@ -57,6 +57,14 @@ namespace Robotopia.UiGallery.Pages
             var pips = page.PipRow();
             pips.SetCount(6);
             pips.SetFilled(3, 0.6f);
+
+            page.SectionHeader("SYSTEM STATES");
+            page.Label("LOADING  Discovering installed packages…", QwTextStyle.Label).Tone(QwTone.Accent);
+            page.Label("EMPTY  No compatible mods found in this source.", QwTextStyle.Body).Tone(QwTone.Muted);
+            page.Label("WARNING  Restart required before these changes take effect.", QwTextStyle.Body)
+                .Tone(QwTone.Warning);
+            page.Label("ERROR  Package validation failed; open Diagnostics for details.", QwTextStyle.Body)
+                .Tone(QwTone.Danger);
         }
 
         private static void Noop()

@@ -7,6 +7,7 @@ namespace Robotopia.Zombies
     public sealed class ZombiesMod : IRobotopiaMod
     {
         public const string GamemodeId = "robotopia.zombies.survival";
+        private const string MenuEntryId = "robotopia.zombies.menu";
 
         private IModContext? context;
         private ZombiesConfig? config;
@@ -33,7 +34,7 @@ namespace Robotopia.Zombies
                 "Zombies",
                 "Survive escalating waves of infected robots with a built-in zapper."));
             worlds.RegisterMenuEntry(new GamemodeMenuEntry(
-                "robotopia.zombies.menu",
+                MenuEntryId,
                 "Zombies",
                 "Survive escalating waves of infected robots with a built-in zapper.",
                 GamemodeId,
@@ -62,6 +63,11 @@ namespace Robotopia.Zombies
             {
                 worlds.SessionChanged -= OnSessionChanged;
                 worlds.SessionEnded -= OnSessionEnded;
+                if (worlds is IWorldRegistrationService registrations)
+                {
+                    registrations.UnregisterMenuEntry(MenuEntryId);
+                    registrations.UnregisterGamemode(GamemodeId);
+                }
             }
 
             StopController();
@@ -102,13 +108,16 @@ namespace Robotopia.Zombies
             };
             controller.Start(session);
 
-            // Surface a run restart in the vanilla pause menu while our session runs. The vanilla exit
+            // Surface a confirmed run restart in the QwUi pause companion while our session runs. The vanilla exit
             // button needs no interceptor: the default (end the session, then exit) is exactly what we want.
             var pauseMenu = context.GetService<IWorldPauseMenuService>();
             restartPauseAction = pauseMenu?.RegisterAction(new WorldPauseAction(
                 "robotopia.zombies.restart",
                 "RESTART RUN",
-                () => controller?.Restart()));
+                () => controller?.Restart(),
+                closePauseMenu: true,
+                order: 0,
+                destructive: true));
         }
 
         private void OnSessionEnded(WorldSessionEnd end)

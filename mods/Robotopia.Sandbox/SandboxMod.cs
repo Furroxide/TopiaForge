@@ -86,14 +86,17 @@ namespace Robotopia.Sandbox
             controller = new SandboxController(context, config);
             controller.Start(session);
 
-            // Surface the big red button in the vanilla pause menu too, so a cluttered stage can be reset
+            // Surface the big red button in the QwUi pause companion too, so a cluttered stage can be reset
             // without opening the spawn menu. The vanilla exit needs no interceptor: end-session-then-exit
             // (the Worlds default) already tears the sandbox down via SessionEnded below.
             var pauseMenu = context.GetService<IWorldPauseMenuService>();
             cleanupPauseAction = pauseMenu?.RegisterAction(new WorldPauseAction(
                 "robotopia.sandbox.cleanup",
                 "CLEAN UP EVERYTHING",
-                () => controller?.CleanUpEverything()));
+                () => controller?.CleanUpEverything(),
+                closePauseMenu: true,
+                order: 0,
+                destructive: true));
         }
 
         private void OnSessionEnded(WorldSessionEnd end)

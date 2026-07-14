@@ -27,6 +27,9 @@ namespace Robotopia.UgcLiveSync
         private string editorUrl = string.Empty;
         private string watchFolder = string.Empty;
         private string lastMessage = "Ready.";
+        private UgcLiveSyncStatus? renderedStatus;
+        private UgcSyncTransport? renderedTransport;
+        private string renderedTarget = string.Empty;
 
         public void Initialize(IUgcLiveSyncService service, UgcLiveSyncConfig config, IModContext context)
         {
@@ -35,11 +38,11 @@ namespace Robotopia.UgcLiveSync
             editorUrl = config.EditorUrl ?? string.Empty;
             watchFolder = config.WatchFolder ?? string.Empty;
 
-            service.SessionStarted += s => lastMessage = "Session started: " + s.Transport + " -> " + s.Target;
-            service.SnapshotImported += i => lastMessage = "Imported '" + i.SceneName + "' (" + i.EntityCount + " entities)";
-            service.PatchApplied += i => lastMessage = (i.IsFullRebuild ? "Full rebuild: " : "Patched: ") + i.SceneName + " (" + i.EntityCount + ")";
-            service.SyncError += e => lastMessage = "Error (" + e.Phase + "): " + e.Message;
-            service.SessionStopped += _ => lastMessage = "Session stopped.";
+            service.SessionStarted += OnSessionStarted;
+            service.SnapshotImported += OnSnapshotImported;
+            service.PatchApplied += OnPatchApplied;
+            service.SyncError += OnSyncError;
+            service.SessionStopped += OnSessionStopped;
 
             ui = QwUi.For(context);
             BuildUi();
@@ -61,7 +64,7 @@ namespace Robotopia.UgcLiveSync
 
             if (window != null && window.IsOpen)
             {
-                statusLabel?.SetText("STATUS  " + service.Status + SessionSuffix());
+                RenderStatus();
                 if (feedLabel != null)
                 {
                     feedLabel.SetText(lastMessage);
@@ -72,9 +75,19 @@ namespace Robotopia.UgcLiveSync
 
         private void OnDestroy()
         {
+            if (service != null)
+            {
+                service.SessionStarted -= OnSessionStarted;
+                service.SnapshotImported -= OnSnapshotImported;
+                service.PatchApplied -= OnPatchApplied;
+                service.SyncError -= OnSyncError;
+                service.SessionStopped -= OnSessionStopped;
+            }
+
             ui?.Dispose();
             ui = null;
             window = null;
+            service = null;
         }
 
         private void BuildUi()
@@ -128,11 +141,45 @@ namespace Robotopia.UgcLiveSync
             feedLabel = content.Label(lastMessage, QwTextStyle.Caption).Tone(QwTone.Muted);
         }
 
-        private string SessionSuffix()
+        private void RenderStatus()
         {
-            var session = service?.CurrentSession;
-            return session == null ? string.Empty : "  //  " + session.Transport + " -> " + session.Target;
+            if (service == null || statusLabel == null)
+            {
+                return;
+            }
+
+            var session = service.CurrentSession;
+            var transport = session?.Transport;
+            var target = session?.Target ?? string.Empty;
+            if (renderedStatus == service.Status
+                && renderedTransport == transport
+                && string.Equals(renderedTarget, target, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            renderedStatus = service.Status;
+            renderedTransport = transport;
+            renderedTarget = target;
+            statusLabel.SetText(session == null
+                ? "STATUS  " + service.Status
+                : "STATUS  " + service.Status + "  //  " + session.Transport + " -> " + target);
         }
+
+        private void OnSessionStarted(UgcSyncSession session) =>
+            lastMessage = "Session started: " + session.Transport + " -> " + session.Target;
+
+        private void OnSnapshotImported(UgcSnapshotInfo info) =>
+            lastMessage = "Imported '" + info.SceneName + "' (" + info.EntityCount + " entities)";
+
+        private void OnPatchApplied(UgcSnapshotInfo info) =>
+            lastMessage = (info.IsFullRebuild ? "Full rebuild: " : "Patched: ")
+                + info.SceneName + " (" + info.EntityCount + ")";
+
+        private void OnSyncError(UgcSyncError error) =>
+            lastMessage = "Error (" + error.Phase + "): " + error.Message;
+
+        private void OnSessionStopped(UgcSyncSession session) => lastMessage = "Session stopped.";
 
         private void StopSession()
         {

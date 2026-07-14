@@ -30,19 +30,17 @@ namespace Robotopia.Sandbox
 
     /// <summary>
     /// The spawn menu's prop list: the game's own built-in UGC asset catalog (the same assets the in-game
-    /// creator places), read reflectively from <c>UgcBuiltInAssetMap</c>, plus guaranteed primitive shapes so
+    /// creator places), read reflectively from <c>UgcRuntimeAssetConfig</c>, plus guaranteed primitive shapes so
     /// the menu is never empty. All game access is clean-room reflection and degrades to primitives-only.
     /// </summary>
     internal sealed class PropCatalog
     {
-        private const BindingFlags AnyInstance = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
-
         private readonly IModLogger logger;
         private readonly Func<object, bool>? isRobotPrefab;
         private readonly Type? importHostType;
-        private readonly Type? assetMapType;
+        private readonly Type? assetConfigType;
         private readonly List<SandboxPropDefinition> items = new List<SandboxPropDefinition>();
-        private object? assetMap;
+        private object? assetConfig;
         private MethodInfo? tryGetPrefab;
         private bool ugcLoaded;
         private bool ugcFailureLogged;
@@ -52,7 +50,7 @@ namespace Robotopia.Sandbox
             this.logger = logger;
             this.isRobotPrefab = isRobotPrefab;
             importHostType = Type.GetType("UgcImportHostSceneController, GameCode", throwOnError: false);
-            assetMapType = Type.GetType("UgcBuiltInAssetMap, GameCode", throwOnError: false);
+            assetConfigType = Type.GetType("UgcRuntimeAssetConfig, GameCode", throwOnError: false);
             AppendPrimitives();
         }
 
@@ -75,26 +73,32 @@ namespace Robotopia.Sandbox
 
             try
             {
-                assetMap = ResolveAssetMap();
-                if (assetMap == null)
+                assetConfig = ResolveAssetConfig();
+                if (assetConfig == null)
                 {
                     return false;
                 }
 
-                var entries = assetMapType?.GetField("entries", AnyInstance)?.GetValue(assetMap) as Array;
-                if (entries == null || entries.Length == 0)
+                var assetIds = assetConfigType?.GetMethod(
+                    "GetCompatibilityOnlyAssetIds",
+                    BindingFlags.Public | BindingFlags.Instance)?.Invoke(assetConfig, null) as IEnumerable<string>;
+                if (assetIds == null)
                 {
                     return false;
                 }
 
-                tryGetPrefab = assetMapType?.GetMethod(
+                tryGetPrefab = assetConfigType?.GetMethod(
                     "TryGetPrefab",
                     BindingFlags.Public | BindingFlags.Instance,
                     null,
                     new[] { typeof(string), typeof(GameObject).MakeByRefType() },
                     null);
+                if (tryGetPrefab == null)
+                {
+                    return false;
+                }
 
-                var added = ReadEntries(entries);
+                var added = ReadAssetIds(assetIds);
                 if (added > 0)
                 {
                     ugcLoaded = true;
@@ -153,13 +157,13 @@ namespace Robotopia.Sandbox
 
             try
             {
-                if (assetMap == null || tryGetPrefab == null)
+                if (assetConfig == null || tryGetPrefab == null)
                 {
                     return false;
                 }
 
                 var arguments = new object?[] { definition.Id, null };
-                if (!(tryGetPrefab.Invoke(assetMap, arguments) is bool found) || !found)
+                if (!(tryGetPrefab.Invoke(assetConfig, arguments) is bool found) || !found)
                 {
                     return false;
                 }
@@ -179,25 +183,25 @@ namespace Robotopia.Sandbox
             }
         }
 
-        private object? ResolveAssetMap()
+        private object? ResolveAssetConfig()
         {
-            // Preferred: the sandbox scene's own import host carries the map the game would use there.
+            // Preferred: the sandbox scene's own import host carries the runtime config the game uses there.
             if (importHostType != null)
             {
                 var host = UnityEngine.Object.FindAnyObjectByType(importHostType);
                 var fromHost = host == null
                     ? null
-                    : importHostType.GetProperty("BuiltInAssetMap", BindingFlags.Public | BindingFlags.Instance)?.GetValue(host);
+                    : importHostType.GetProperty("RuntimeAssetConfig", BindingFlags.Public | BindingFlags.Instance)?.GetValue(host);
                 if (fromHost != null)
                 {
                     return fromHost;
                 }
             }
 
-            // Fallback: the map is a ScriptableObject loaded with the scene; find any loaded instance.
-            if (assetMapType != null)
+            // Fallback: the config is a ScriptableObject loaded with the scene; find any loaded instance.
+            if (assetConfigType != null)
             {
-                var all = Resources.FindObjectsOfTypeAll(assetMapType);
+                var all = Resources.FindObjectsOfTypeAll(assetConfigType);
                 if (all != null && all.Length > 0)
                 {
                     return all[0];
@@ -207,31 +211,14 @@ namespace Robotopia.Sandbox
             return null;
         }
 
-        private int ReadEntries(Array entries)
+        private int ReadAssetIds(IEnumerable<string> assetIds)
         {
-            // The nested Entry type is not part of the compat baseline, so its shape is discovered from the
-            // first live element: the asset id is the string field starting with '@' (creator ids look like
-            // "@robotopia/tree-model"), falling back to the first string field.
-            FieldInfo[]? entryFields = null;
-            FieldInfo? idField = null;
             var added = 0;
             var filteredRobots = 0;
 
-            foreach (var entry in entries)
+            foreach (var id in assetIds)
             {
-                if (entry == null)
-                {
-                    continue;
-                }
-
-                entryFields ??= entry.GetType().GetFields(AnyInstance);
-                idField ??= PickIdField(entryFields, entry);
-                if (idField == null)
-                {
-                    break;
-                }
-
-                if (!(idField.GetValue(entry) is string id) || string.IsNullOrWhiteSpace(id))
+                if (string.IsNullOrWhiteSpace(id))
                 {
                     continue;
                 }
@@ -258,7 +245,7 @@ namespace Robotopia.Sandbox
 
         private bool IsRobotEntry(string id)
         {
-            if (isRobotPrefab == null || assetMap == null || tryGetPrefab == null)
+            if (isRobotPrefab == null || assetConfig == null || tryGetPrefab == null)
             {
                 return false;
             }
@@ -266,7 +253,7 @@ namespace Robotopia.Sandbox
             try
             {
                 var arguments = new object?[] { id, null };
-                if (!(tryGetPrefab.Invoke(assetMap, arguments) is bool found) || !found
+                if (!(tryGetPrefab.Invoke(assetConfig, arguments) is bool found) || !found
                     || !(arguments[1] is GameObject prefab))
                 {
                     return false;
@@ -278,26 +265,6 @@ namespace Robotopia.Sandbox
             {
                 return false;
             }
-        }
-
-        private static FieldInfo? PickIdField(FieldInfo[] fields, object sample)
-        {
-            FieldInfo? firstString = null;
-            foreach (var field in fields)
-            {
-                if (field.FieldType != typeof(string))
-                {
-                    continue;
-                }
-
-                firstString ??= field;
-                if (field.GetValue(sample) is string value && value.StartsWith("@", StringComparison.Ordinal))
-                {
-                    return field;
-                }
-            }
-
-            return firstString;
         }
 
         private static string DisplayNameFromId(string id)

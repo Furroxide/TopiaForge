@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Robotopia.Mods;
+using Robotopia.Mods.UnityUi;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -357,11 +358,11 @@ namespace Robotopia.Zombies
 
             if (count <= 0)
             {
-                hud?.ShowBanner("BROADCAST · no targets", new Color(0.75f, 0.75f, 0.8f, 1f));
+                hud?.ShowBanner("BROADCAST · no targets", QwTone.Muted);
                 return;
             }
 
-            hud?.ShowBanner("BROADCAST · " + OverrideLabel(command), new Color(0.7f, 0.55f, 1f, 1f));
+            hud?.ShowBanner("BROADCAST · " + OverrideLabel(command), QwTone.Primary);
 
             if (BrainAvailable)
             {
@@ -371,19 +372,19 @@ namespace Robotopia.Zombies
             }
         }
 
-        public void PushOverrideSpeech(Vector3 world, string text, Color color)
+        public void PushOverrideSpeech(Vector3 world, string text, QwTone tone)
         {
-            hud?.PushSpeech(world, text, color);
+            hud?.PushSpeech(world, text, tone);
         }
 
-        public void ShowOverrideBanner(string text, Color color)
+        public void ShowOverrideBanner(string text, QwTone tone)
         {
-            hud?.ShowBanner(text, color);
+            hud?.ShowBanner(text, tone);
         }
 
         public void ShowOverrideHint(string text)
         {
-            hud?.ShowBanner(text, new Color(0.8f, 0.8f, 0.85f, 1f));
+            hud?.ShowBanner(text, QwTone.Muted);
         }
 
         // HUD pass-throughs for the override charge/cooldown/command display.
@@ -466,7 +467,7 @@ namespace Robotopia.Zombies
             shopping = true;
             shopFreeze = timeControl?.Freeze("zombies-shop");
             robots?.SetPlayerControlsEnabled(false);
-            hud?.ShowBanner("REQUISITIONS OPEN", new Color(1f, 0.85f, 0.4f, 1f));
+            hud?.ShowBanner("REQUISITIONS OPEN", QwTone.Warning);
         }
 
         // The single teardown path (button, ESC, restart, dispose, scene swap). Idempotent; releases the
@@ -490,7 +491,7 @@ namespace Robotopia.Zombies
 
             if (!aborted)
             {
-                hud?.ShowBanner("REQUISITIONS CLOSED", new Color(0.9f, 0.8f, 0.55f, 1f));
+                hud?.ShowBanner("REQUISITIONS CLOSED", QwTone.Muted);
             }
         }
 
@@ -628,7 +629,7 @@ namespace Robotopia.Zombies
             robots?.SetPlayerControlsEnabled(false);
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
-            hud?.ShowBanner("CHANNEL OPEN · " + target.ChassisName, new Color(0.45f, 0.85f, 1f, 1f));
+            hud?.ShowBanner("CHANNEL OPEN · " + target.ChassisName, QwTone.Accent);
             return true;
         }
 
@@ -703,7 +704,7 @@ namespace Robotopia.Zombies
             if (trimmed.Length > 0)
             {
                 lastRobotReply = trimmed;
-                hud?.PushSpeech(conversingTarget.HeadAnchorWorld, ClampReply(trimmed), new Color(0.85f, 0.95f, 1f, 1f));
+                hud?.PushSpeech(conversingTarget.HeadAnchorWorld, ClampReply(trimmed), QwTone.Neutral);
             }
             else if (decision == ConversationDecision.Unknown)
             {
@@ -962,7 +963,7 @@ namespace Robotopia.Zombies
 
             if (exit != ConversationExit.Aborted)
             {
-                hud?.ShowBanner("CHANNEL CLOSED", new Color(0.6f, 0.75f, 0.9f, 1f));
+                hud?.ShowBanner("CHANNEL CLOSED", QwTone.Muted);
             }
         }
 
@@ -1234,7 +1235,7 @@ namespace Robotopia.Zombies
             wallet.Earn(Mathf.RoundToInt(awarded * config.ShopCreditsPerScore));
 
             var floaterText = comboMultiplier > 1 ? "+" + awarded + " x" + comboMultiplier : "+" + awarded;
-            hud?.PushFloater(zombie.HeadAnchorWorld, floaterText, new Color(0.4f, 1f, 0.5f, 1f));
+            hud?.PushFloater(zombie.HeadAnchorWorld, floaterText, QwTone.Success);
 
             if (comboMultiplier > previousMultiplier && comboMultiplier >= 2)
             {
@@ -1258,8 +1259,7 @@ namespace Robotopia.Zombies
 
             var headshot = kind == ZombieHitKind.Headshot || kind == ZombieHitKind.HeadshotKill;
             var text = headshot ? damage + "!" : damage.ToString();
-            var color = headshot ? new Color(1f, 0.85f, 0.2f, 1f) : new Color(1f, 1f, 1f, 1f);
-            hud.PushFloater(worldPoint, text, color);
+            hud.PushFloater(worldPoint, text, headshot ? QwTone.Warning : QwTone.Neutral);
             hud.FlashHitMarker(kind);
             hud.FlashCrosshairHit();
         }
@@ -1299,14 +1299,7 @@ namespace Robotopia.Zombies
             context.Logger.Info("Zombies returning to the main menu. Final score: " + score + ".");
             // The menu scene wants a usable pointer; leave the cursor unlocked from the game-over screen.
             ReflectionUtil.LoadScene(GameScenes.MainMenuSceneName, context.Logger);
-            if (SessionEnded != null)
-            {
-                SessionEnded.Invoke();
-            }
-            else
-            {
-                Dispose();
-            }
+            NotifySessionEnded();
         }
 
         public void Restart()
@@ -1336,6 +1329,26 @@ namespace Robotopia.Zombies
             context.Logger.Info("Zombies session restarted.");
         }
 
+        private void NotifySessionEnded()
+        {
+            var callback = SessionEnded;
+            if (callback == null)
+            {
+                Dispose();
+                return;
+            }
+
+            try
+            {
+                callback();
+            }
+            catch (Exception ex)
+            {
+                context.Logger.Error(ex, "Zombies session-end callback failed; disposing the controller locally.");
+                Dispose();
+            }
+        }
+
         public void Dispose()
         {
             if (disposed)
@@ -1344,6 +1357,7 @@ namespace Robotopia.Zombies
             }
 
             disposed = true;
+            SessionEnded = null;
             EndConversation(ConversationExit.Aborted);
             CloseShop(aborted: true);
             ReleaseSuperhotMode();
@@ -1381,14 +1395,7 @@ namespace Robotopia.Zombies
             if (GameScenes.IsNonGameplayScene(scene.name))
             {
                 context.Logger.Info("Zombies ending its session: non-gameplay scene '" + scene.name + "' loaded.");
-                if (SessionEnded != null)
-                {
-                    SessionEnded.Invoke();
-                }
-                else
-                {
-                    Dispose();
-                }
+                NotifySessionEnded();
 
                 return;
             }
@@ -1421,7 +1428,7 @@ namespace Robotopia.Zombies
 
             superhotDriverLease = timeControl.SetDriver("zombies-superhot", new SuperhotTimeDriver());
             superhotExemptLease = timeControl.ExemptPlayer("zombies-superhot");
-            hud?.ShowBanner("SUPERHOT", new Color(1f, 0.3f, 0.35f, 1f));
+            hud?.ShowBanner("SUPERHOT", QwTone.Danger);
         }
 
         private void ReleaseSuperhotMode()
@@ -1632,7 +1639,7 @@ namespace Robotopia.Zombies
             packKind = ZombieKind.Grunt;
             packRemaining = 0;
             state = ZombiesState.Spawning;
-            hud?.ShowBanner("WAVE " + wave, new Color(0.5f, 0.95f, 1f, 1f));
+            hud?.ShowBanner("WAVE " + wave, QwTone.Accent);
             context.Logger.Info("Zombies wave " + wave + " started with " + remainingToSpawn + " infected robots.");
         }
 
@@ -1644,7 +1651,7 @@ namespace Robotopia.Zombies
             pendingPlacement = null;
             packKind = ZombieKind.Grunt;
             packRemaining = 0;
-            hud?.ShowBanner("WAVE CLEAR", new Color(0.45f, 1f, 0.55f, 1f));
+            hud?.ShowBanner("WAVE CLEAR", QwTone.Success);
             context.Logger.Info("Zombies wave " + wave + " cleared. Score: " + score + ".");
         }
 
@@ -1847,7 +1854,7 @@ namespace Robotopia.Zombies
                 query.Result.TryGet("bark", out var bark) && !string.IsNullOrEmpty(bark))
             {
                 var max = config.BarkMaxChars;
-                hud?.ShowBanner(bark.Length > max ? bark.Substring(0, max) : bark, new Color(0.8f, 0.6f, 1f, 1f));
+                hud?.ShowBanner(bark.Length > max ? bark.Substring(0, max) : bark, QwTone.Primary);
             }
         }
 
@@ -1890,18 +1897,18 @@ namespace Robotopia.Zombies
             }
         }
 
-        private static Color ComboBannerColor(int multiplier)
+        private static QwTone ComboBannerColor(int multiplier)
         {
             switch (multiplier)
             {
                 case 2:
-                    return new Color(0.5f, 0.95f, 1f, 1f);
+                    return QwTone.Accent;
                 case 3:
-                    return new Color(1f, 0.85f, 0.2f, 1f);
+                    return QwTone.Warning;
                 case 4:
-                    return new Color(1f, 0.55f, 0.15f, 1f);
+                    return QwTone.Primary;
                 default:
-                    return new Color(1f, 0.3f, 0.25f, 1f);
+                    return QwTone.Danger;
             }
         }
 

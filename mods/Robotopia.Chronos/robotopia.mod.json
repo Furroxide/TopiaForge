@@ -11,6 +11,8 @@
   "entryAssembly": "Robotopia.Chronos.dll",
   "entryType": "Robotopia.Chronos.ChronosMod",
   "vpmDependencies": {},
+  "supportedGameVersionRange": "0.0.2227",
+  "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
   "supportedSdkVersionRange": ">=0.1.0 <0.2.0",
   "category": "Framework",
   "tags": [
@@ -24,7 +26,7 @@
     "sdk",
     "chronos"
   ],
-  "license": "Unspecified",
+  "license": "NOASSERTION",
   "permissions": [
     "time",
     "input",

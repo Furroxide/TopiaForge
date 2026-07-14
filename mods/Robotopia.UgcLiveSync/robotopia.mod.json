@@ -3,7 +3,7 @@
   "schemaVersion": 2,
   "name": "robotopia.ugc.livesync",
   "displayName": "Robotopia UGC Live Sync",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": {
     "name": "QuantumWorks"
   },
@@ -11,7 +11,9 @@
   "entryAssembly": "Robotopia.UgcLiveSync.dll",
   "entryType": "Robotopia.UgcLiveSync.UgcLiveSyncMod",
   "vpmDependencies": {},
-  "supportedSdkVersionRange": ">=0.1.0 <0.2.0",
+  "supportedGameVersionRange": "0.0.2227",
+  "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
+  "supportedSdkVersionRange": ">=0.1.3 <0.2.0",
   "category": "Framework",
   "tags": [
     "ugc",
@@ -20,7 +22,7 @@
     "creator",
     "unity"
   ],
-  "license": "Unspecified",
+  "license": "NOASSERTION",
   "permissions": [
     "scene-management",
     "ugc-livesync",

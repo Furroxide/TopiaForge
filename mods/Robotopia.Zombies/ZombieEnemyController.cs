@@ -1,4 +1,5 @@
 using Robotopia.Mods;
+using Robotopia.Mods.UnityUi;
 using UnityEngine;
 
 namespace Robotopia.Zombies
@@ -26,14 +27,14 @@ namespace Robotopia.Zombies
         private static readonly RobotColor WaverTint = new RobotColor(1f, 0.65f, 0.25f, 1f);
 
         // Override-feedback colours (HUD speech bubbles / banners).
-        private static readonly Color AllyColor = new Color(0.3f, 0.95f, 1f, 1f);
-        private static readonly Color EnrageColor = new Color(1f, 0.35f, 0.3f, 1f);
-        private static readonly Color FrozenColor = new Color(0.7f, 0.85f, 1f, 1f);
-        private static readonly Color FleeColor = new Color(1f, 0.9f, 0.45f, 1f);
-        private static readonly Color WaverColor = new Color(1f, 0.7f, 0.3f, 1f);
-        private static readonly Color ShrugColor = new Color(0.8f, 0.8f, 0.85f, 1f);
-        private static readonly Color ThinkingColor = new Color(0.85f, 0.85f, 0.95f, 0.9f);
-        private static readonly Color BarkColor = new Color(0.95f, 0.95f, 0.7f, 1f);
+        private const QwTone AllyColor = QwTone.Success;
+        private const QwTone EnrageColor = QwTone.Danger;
+        private const QwTone FrozenColor = QwTone.Accent;
+        private const QwTone FleeColor = QwTone.Warning;
+        private const QwTone WaverColor = QwTone.Warning;
+        private const QwTone ShrugColor = QwTone.Muted;
+        private const QwTone ThinkingColor = QwTone.Faint;
+        private const QwTone BarkColor = QwTone.Neutral;
 
         // Stuck-zombie reaper (defense-in-depth against a soft-locked wave): if a zombie that should be chasing has
         // not covered StuckMoveDistance of ground in StuckTimeout seconds while still well outside attack range, it

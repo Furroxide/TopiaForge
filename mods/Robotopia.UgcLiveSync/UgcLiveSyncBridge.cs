@@ -17,6 +17,15 @@ namespace Robotopia.UgcLiveSync
         /// <summary>True when a UGC import host controller exists in the active scene and can receive content.</summary>
         bool IsImportControllerReady();
 
+        /// <summary>Name of the game's UGC play scene (what <see cref="EnsurePlaySceneLoaded"/> loads).</summary>
+        string PlaySceneName { get; }
+
+        /// <summary>
+        /// True when <paramref name="sceneName"/> is Unity's active scene. This lets the Unity-free service
+        /// distinguish a resolving single-mode transition from an unrelated additive scene notification.
+        /// </summary>
+        bool IsActiveScene(string sceneName);
+
         /// <summary>Loads the game's UGC play scene (content import suppressed) so a controller becomes available.</summary>
         bool EnsurePlaySceneLoaded();
 
@@ -40,11 +49,16 @@ namespace Robotopia.UgcLiveSync
         UgcApplyOutcome ApplyLocalSnapshot(byte[] bytes, string sceneId, string label);
 
         /// <summary>
-        /// Starts the game's native Automerge live controller against the given document/sync server by loading
-        /// the UGC play scene with a live launch request. <paramref name="onRevision"/> is invoked (on the Unity
-        /// main thread) for each imported revision, best-effort.
+        /// Queues the game's native Automerge live controller request. When <paramref name="loadPlayScene"/> is
+        /// true, this also loads the UGC play scene; when false, the request stays armed for a later transition.
+        /// <paramref name="onRevision"/> runs on the Unity main thread for each imported revision, best-effort.
         /// </summary>
-        bool StartAutomerge(string documentUrl, string syncServerUrl, string sceneId, System.Action<UgcApplyOutcome> onRevision);
+        bool StartAutomerge(
+            string documentUrl,
+            string syncServerUrl,
+            string sceneId,
+            bool loadPlayScene,
+            System.Action<UgcApplyOutcome> onRevision);
 
         /// <summary>Stops the native Automerge controller (destroys its GameObject) and detaches callbacks.</summary>
         void StopAutomerge();

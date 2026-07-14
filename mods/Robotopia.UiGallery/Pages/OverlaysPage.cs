@@ -54,5 +54,11 @@ namespace Robotopia.UiGallery.Pages
             window.Content.Button("CLOSE", window.Close, QwButtonStyle.Ghost);
             return window;
         }
+
+        public static void Reset()
+        {
+            demoWindow?.Destroy();
+            demoWindow = null;
+        }
     }
 }

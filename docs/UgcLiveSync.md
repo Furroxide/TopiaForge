@@ -66,7 +66,7 @@ The mod builds a `UgcPlayLaunchRequest` (`Mode = LiveAutomerge`, `LiveDocumentUr
 `LiveSceneId`) and loads `UgcPlay`. The scene's `UgcImportPlayBootstrap` consumes the request and
 starts the game's own `UgcLiveSyncController` against the editor's document. This makes the existing
 **web editor** interoperate unchanged. Writing the Automerge document *from Unity* is an optional
-Node-sidecar extension (see [below](#optional-automerge-writer-node-sidecar)).
+Node-sidecar extension (see [below](#automerge-writer-node-sidecar)).
 
 **Editor URL form:** `https://<host>/?project=<automerge-doc-id-or-url>&scene=<sceneId>`. The
 `project` query param is normalized to an `automerge:`-prefixed document id; the sync server must be a
@@ -216,6 +216,14 @@ via `IModContext.LoadConfig`. Keys (mirrored by the Dart launcher/CLI domain mod
 Asset overrides are **not** configured here (they need a live `UnityEngine.GameObject` prefab) — register them
 programmatically via `IUgcLiveSyncService.RegisterAssetOverride`.
 
+**Auto-connect yields to a live world session.** `autoConnectOnStart` connects with
+`SceneTransitionPriority.Automatic` (see the *Scene Coordination* section of [Modding.md](Modding.md)): if a
+world/gamemode session is live or still loading when the connect fires — e.g. the Worlds auto-launcher was
+configured on the same start — the UGC play scene is **not** loaded over it. The session still starts in the
+`WaitingForScene` state and attaches automatically the next time the UGC play scene comes up (for example when
+the player launches the Sandbox). Explicit connects from the in-game overlay are user-initiated and load the
+play scene immediately.
+
 ---
 
 ## Security model
@@ -223,8 +231,10 @@ programmatically via `IUgcLiveSyncService.RegisterAssetOverride`.
 - The **watch folder** is read as arbitrary JSON. The mod validates each snapshot before applying it
   (size cap `maxSnapshotBytes`, gzip/UTF-8 sniff, parse guard) and **rejects + logs** bad input rather
   than crashing the game. The previous good snapshot is retained so the next valid write recovers.
-- The **editor / sync URL** is an arbitrary `wss://` network endpoint. The Automerge channel is
-  **opt-in** and the URL is surfaced to the user (config or the in-game panel), never silently dialed.
+- The **sync URL** must be an absolute `https://` or `wss://` endpoint. Plaintext schemes,
+  embedded credentials, fragments, malformed escapes, and oversized URLs are rejected before an
+  existing healthy session is stopped. The Automerge channel is **opt-in** and the endpoint is
+  surfaced to the user (config or the in-game panel), never silently dialed.
 - The manifest declares descriptive `permissions`: `scene-management`, `ugc-livesync`,
   `filesystem-watch`, `network`.
 
@@ -260,7 +270,8 @@ using the official [`@automerge/automerge-repo`](https://github.com/automerge/au
 game reads that document natively. The local-folder channel needs none of this — the sidecar is only for
 web-editor parity / remote collaboration.
 
-Run it via the CLI (which locates the sidecar, runs `npm install` on first use, and streams output):
+Run it via the CLI (which verifies Node 20+, locates the trusted sidecar, and runs the checked-in lockfile with
+`npm ci --ignore-scripts --no-fund --no-audit` on first use):
 
 ```powershell
 # One-shot publish (prints the document URL to paste into the in-game UGC Live "Automerge" field):
@@ -292,9 +303,12 @@ The QuantumWorks launcher's **UGC Live Sync** pane is a cockpit that removes the
 - **Go Live** runs the whole pipeline in one click: ensure the sidecar deps, start the publisher (capturing the
   document URL), deploy the config with auto-connect, and launch the game — which connects on the menu scene via
   the mod's `TickAutoConnect`.
+- **Clean Up Live Sync** stops the launcher publisher, writes a one-shot stop command for the running game,
+  clears captured Automerge connection state, removes stale status/session files, and disables auto-connect
+  while preserving watch-folder and scene preferences.
 
 Terminal equivalents: `robotopia ugc status [--watch folder]` (prints the handshake + watch-folder scenes) and
-`robotopia ugc go-live`.
+`robotopia ugc go-live`; use `robotopia ugc cleanup` to stop and clear transient live state.
 
 ## CLI: `ugc setup` and `ugc dev` (one-command authoring loop)
 
@@ -340,12 +354,13 @@ live store is still machine-global EditorPrefs — when switching between projec
 | Command | What it does |
 |---|---|
 | `robotopia ugc setup [--transport localFolder\|automerge] [--watch folder] [--sync url] [--doc url] [--scene id] [--auto-connect\|--no-auto-connect] [--debounce ms] [--max-snapshot bytes] [--project path] [--no-deploy]` | Persist live-sync settings to `robotopia.project.json` and deploy the game runtime config in one shot. |
-| `robotopia ugc dev [--project path\|name] [--new name [--dir path]] [--watch folder] [--scene id] [--scene-name n] [--environment env] [--transport localFolder\|automerge] [--update-companion] [--launch-game] [--dry-run]` | Resolve/create the Unity world project, seed the companion, deploy the game config, and launch Unity connected; `--dry-run` prints the resolved plan with no side effects. |
+| `robotopia ugc dev [--project path\|name] [--new name [--dir path]] [--watch folder] [--scene id] [--scene-name n] [--environment env] [--transport localFolder\|automerge] [--doc url] [--update-companion] [--launch-game] [--dry-run]` | Resolve/create the Unity world project, seed the companion, deploy the game config, and launch Unity connected; `--dry-run` prints the resolved plan with no side effects. |
 | `robotopia ugc check [--watch folder] [--sync url]` | Verify Node + sidecar deps + resolved config without connecting. |
 | `robotopia ugc status [--watch folder]` | Print the game's status handshake and the watch folder's scenes. |
 | `robotopia ugc publish --file <project.json> [--sync url] [--doc url] [--scene id] [--session-file path]` | One-shot publish of an export JSON to an Automerge document (prints the document URL). |
 | `robotopia ugc watch <folder> [--sync url] [--doc url] [--scene id] [--session-file path]` | Watch an export folder and re-publish on every change. |
 | `robotopia ugc go-live` | Deploy the project's live-sync config with auto-connect on and launch the game. |
+| `robotopia ugc cleanup [--project path]` | Request the running game to stop live sync, clear transient Automerge state, and deploy a non-auto-connect config. |
 
 Ready to ship the mod that carries your content? See [PublishingYourMod.md](PublishingYourMod.md).
 

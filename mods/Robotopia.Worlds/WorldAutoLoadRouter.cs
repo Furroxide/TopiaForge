@@ -18,6 +18,7 @@ namespace Robotopia.Worlds
             string menuEntryId,
             bool preferSceneReplacement,
             bool allowAdditiveFallback,
+            SceneTransitionPriority priority,
             string warning)
         {
             Kind = kind;
@@ -25,6 +26,7 @@ namespace Robotopia.Worlds
             MenuEntryId = menuEntryId;
             PreferSceneReplacement = preferSceneReplacement;
             AllowAdditiveFallback = allowAdditiveFallback;
+            Priority = priority;
             Warning = warning;
         }
 
@@ -33,6 +35,7 @@ namespace Robotopia.Worlds
         public string MenuEntryId { get; }
         public bool PreferSceneReplacement { get; }
         public bool AllowAdditiveFallback { get; }
+        public SceneTransitionPriority Priority { get; }
         public string Warning { get; }
 
         public static WorldAutoLoadRoute LoadSelection(WorldLoadRequest request, string warning = "")
@@ -43,6 +46,7 @@ namespace Robotopia.Worlds
                 string.Empty,
                 request.PreferSceneReplacement,
                 request.AllowAdditiveFallback,
+                request.Priority,
                 warning);
         }
 
@@ -50,6 +54,7 @@ namespace Robotopia.Worlds
             string menuEntryId,
             bool preferSceneReplacement,
             bool allowAdditiveFallback,
+            SceneTransitionPriority priority,
             string warning = "")
         {
             return new WorldAutoLoadRoute(
@@ -58,6 +63,7 @@ namespace Robotopia.Worlds
                 menuEntryId,
                 preferSceneReplacement,
                 allowAdditiveFallback,
+                priority,
                 warning);
         }
     }
@@ -78,9 +84,10 @@ namespace Robotopia.Worlds
 
             if (hasSelectedWorld && IsRegisteredWorld(worlds, worldId))
             {
-                return WorldAutoLoadRoute.LoadSelection(new WorldLoadRequest(
+                return WorldAutoLoadRoute.LoadSelection(WorldLoadRequest.WithPriority(
                     worldId,
                     gamemodeId,
+                    SceneTransitionPriority.Automatic,
                     preferSceneReplacement,
                     allowAdditiveFallback));
             }
@@ -100,13 +107,15 @@ namespace Robotopia.Worlds
                         entry.Id,
                         preferSceneReplacement,
                         allowAdditiveFallback,
+                        SceneTransitionPriority.Automatic,
                         warning);
                 }
             }
 
-            return WorldAutoLoadRoute.LoadSelection(new WorldLoadRequest(
+            return WorldAutoLoadRoute.LoadSelection(WorldLoadRequest.WithPriority(
                 worldId,
                 gamemodeId,
+                SceneTransitionPriority.Automatic,
                 preferSceneReplacement,
                 allowAdditiveFallback), warning);
         }

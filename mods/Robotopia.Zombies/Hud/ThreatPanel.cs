@@ -19,6 +19,11 @@ namespace Robotopia.Zombies
         private readonly QwLabel? credits;
         private readonly QwStatBar integrity;
         private readonly QwStatBar zapper;
+        private int lastHostiles = int.MinValue;
+        private int lastIncoming = int.MinValue;
+        private int lastAllies = int.MinValue;
+        private int lastWavering = int.MinValue;
+        private string lastState = string.Empty;
 
         public ThreatPanel(HudContext context, QwContainer parent)
         {
@@ -66,23 +71,33 @@ namespace Robotopia.Zombies
         {
             var controller = context.Controller;
             wave.SetText("WAVE ", controller.Wave);
-            score.SetText(controller.Score.ToString("N0"));
+            score.SetNumber(controller.Score, "N0");
 
             var allies = controller.ConvertedAllyCount;
-            var line = "HOSTILES " + controller.HostileCount + "  //  INCOMING " + controller.RemainingToSpawn;
-            if (allies > 0)
+            var hostiles = controller.HostileCount;
+            var incoming = controller.RemainingToSpawn;
+            var wavering = controller.WaveringAllyCount;
+            if (hostiles != lastHostiles || incoming != lastIncoming || allies != lastAllies || wavering != lastWavering)
             {
-                line += "  //  ALLIES " + allies;
-                if (controller.WaveringAllyCount > 0)
+                var line = "HOSTILES " + hostiles + "  //  INCOMING " + incoming;
+                if (allies > 0)
                 {
-                    line += " (" + controller.WaveringAllyCount + " WAVERING)";
+                    line += "  //  ALLIES " + allies;
+                    if (wavering > 0)
+                    {
+                        line += " (" + wavering + " WAVERING)";
+                    }
                 }
+
+                lastHostiles = hostiles;
+                lastIncoming = incoming;
+                lastAllies = allies;
+                lastWavering = wavering;
+                threat.SetText(line);
             }
 
-            threat.SetText(line);
-
             controller.GetArchetypeTally(out var grunts, out var sprinters, out var brutes, out var runts);
-            tally.SetText("GRUNT " + grunts + "   SPRINTER " + sprinters + "   BRUTE " + brutes + "   RUNT " + runts);
+            tally.SetText("GRUNT ", grunts, "   SPRINTER ", sprinters, "   BRUTE ", brutes, "   RUNT ", runts);
 
             var integrityFraction = controller.MaxPlayerIntegrity > 0f
                 ? controller.PlayerIntegrity / controller.MaxPlayerIntegrity
@@ -91,7 +106,13 @@ namespace Robotopia.Zombies
             integrity.SetLabel("INTEGRITY ", Mathf.CeilToInt(controller.PlayerIntegrity));
 
             zapper.SetFraction(controller.ZapperReadyFraction);
-            state.SetText(controller.StateText.ToUpperInvariant());
+            var stateText = controller.StateText;
+            if (!string.Equals(lastState, stateText, System.StringComparison.Ordinal))
+            {
+                lastState = stateText;
+                state.SetText(stateText.ToUpperInvariant());
+            }
+
             credits?.SetText("CREDITS ", controller.Credits);
         }
     }

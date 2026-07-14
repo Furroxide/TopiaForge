@@ -46,8 +46,10 @@ A small HUD (top-left) tracks live prop/robot counts and the hotkey hints.
 
 Dormant robots are **fully programmable from a clean slate by talking to them**. Walk up to one and use
 its **PROGRAM** prompt (or hit PROGRAM on the ROBOTS tab): a chat window opens (typed text, or
-push-to-talk voice — Tab toggles, hold `V` to talk) and the robot answers in character. Chat freely, or
-give it a task:
+push-to-talk voice — Tab toggles, hold `V` to talk) and the robot answers in character. The window also
+offers deterministic **FOLLOW ME**, **IDLE**, and **SET FREE** actions that do not spend a brain turn;
+SET FREE clears mod control and returns the robot to its native autonomous brain. Chat freely, or give
+it a task:
 
 > "follow me" · "go to the red marker" · "patrol between here and the blue marker" · "wander around
 > here" · "run away from me" · "tell ROBOT 2 to follow me" · "stop"
@@ -63,7 +65,10 @@ a move, a wave as it heads off), a free native garnish that spends no LLM output
 accepts a task (any action other than `CHAT`) it says so, **leaves the chat on
 its own, and goes to do it** — the window closes and the program runs until you re-program it. The
 parse is gated deterministically: an action with no real target degrades back to chat with a nudge, so
-the robot can never be programmed against a place its brain invented.
+the robot can never be programmed against a place its brain invented. If the brain returns `FOLLOW`
+without its structured target, the parser may recover a single unambiguous known target from the
+operator's original wording (for example, “follow me” resolves to `PLAYER`); ambiguous or unknown names
+still degrade to chat.
 
 **Robots reprogramming robots.** A `REPROGRAM` decision carries two more closed-set fields — the task
 (`IDLE/GO_TO/FOLLOW/PATROL/WANDER/FLEE`, never another REPROGRAM) and that task's target (which may be
@@ -127,7 +132,7 @@ IWorldPauseMenuService                           ├─ PropCatalog   — UGC as
 - **Session-scoped**: the controller (and its UiHost, hotkeys, and everything spawned) is created on a
   matching `SessionChanged` and disposed on `SessionEnded` — vanilla pause-menu exit, a superseding
   launch, and mod unload all funnel through the same teardown.
-- **Dependencies**: hard `vpmDependencies` on `robotopia.worlds >= 0.4.0` and `robotopia.robotkit
+- **Dependencies**: hard `vpmDependencies` on `robotopia.worlds >= 0.5.4` and `robotopia.robotkit
   >= 0.8.0` (robot programming — including wander/flee and the reprogram courier — is core to the
   mode). The Gravity Gun stays soft (`loadAfter`): it simply grabs whatever rigidbodies exist.
 - **Spawn cap**: `maxSpawnedObjects` (default 200) refuses further spawns with a toast instead of

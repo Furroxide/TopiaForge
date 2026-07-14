@@ -2,10 +2,12 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Threading;
 using Robotopia.Mods;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Robotopia.UgcLiveSync
 {
@@ -19,7 +21,7 @@ namespace Robotopia.UgcLiveSync
     /// </summary>
     internal sealed class UgcGameBridge : IUgcLiveSyncBridge
     {
-        private const string PlaySceneName = "UgcPlay";
+        private const string UgcPlaySceneName = "UgcPlay";
         private const BindingFlags PublicStatic = BindingFlags.Public | BindingFlags.Static;
         private const BindingFlags PublicInstance = BindingFlags.Public | BindingFlags.Instance;
 
@@ -99,31 +101,25 @@ namespace Robotopia.UgcLiveSync
             return FindImportController() != null;
         }
 
+        public string PlaySceneName => UgcPlaySceneName;
+
+        public bool IsActiveScene(string sceneName)
+        {
+            return string.Equals(
+                SceneManager.GetActiveScene().name,
+                sceneName ?? string.Empty,
+                StringComparison.OrdinalIgnoreCase);
+        }
+
         public bool EnsurePlaySceneLoaded()
         {
             // Build a no-op launch request (empty import folder => nothing imported), then load the play scene so
             // its bootstrap spawns a player and creates the import host. Our watcher drives the content afterwards.
-            try
-            {
-                if (lastRunType != null && launchRequestType != null)
-                {
-                    var values = Activator.CreateInstance(lastRunType);
-                    if (values != null)
-                    {
-                        var emptyFolder = Path.Combine(Path.GetTempPath(), "RobotopiaUgcLiveSync");
-                        Directory.CreateDirectory(emptyFolder);
-                        lastRunType.GetField("Mode")?.SetValue(values, "SelectedFile");
-                        lastRunType.GetField("ImportFolderPath")?.SetValue(values, emptyFolder);
-                        lastRunType.GetField("SelectedExportFilePath")?.SetValue(values, string.Empty);
-                        launchRequestType.GetMethod("Create", PublicStatic, null, new[] { lastRunType }, null)
-                            ?.Invoke(null, new[] { values });
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.Debug("UGC live sync: could not queue a no-op launch request: " + ex.Message);
-            }
+            Robotopia.Mods.GameBridge.UgcNoOpLaunchRequest.TryQueue(
+                lastRunType,
+                launchRequestType,
+                "RobotopiaUgcLiveSync",
+                message => logger.Debug("UGC live sync: " + message));
 
             return LoadPlayScene();
         }
@@ -141,14 +137,14 @@ namespace Robotopia.UgcLiveSync
                 return;
             }
 
-            var assetMap = GetAssetMap();
-            if (assetMap == null)
+            var assetConfig = GetRuntimeAssetConfig();
+            if (assetConfig == null)
             {
-                logger.Debug("UGC live sync: no built-in asset map available; overrides will not apply.");
+                logger.Debug("UGC live sync: no runtime asset config available; overrides will not apply.");
                 return;
             }
 
-            var setOverride = assetMap.GetType().GetMethod("SetRuntimeOverride", PublicInstance);
+            var setOverride = assetConfig.GetType().GetMethod("SetRuntimeOverride", PublicInstance);
             if (setOverride == null)
             {
                 return;
@@ -170,7 +166,7 @@ namespace Robotopia.UgcLiveSync
 
                 try
                 {
-                    setOverride.Invoke(assetMap, new object?[] { item.AssetId, prefab, offset });
+                    setOverride.Invoke(assetConfig, new object?[] { item.AssetId, prefab, offset });
                 }
                 catch (Exception ex)
                 {
@@ -183,8 +179,8 @@ namespace Robotopia.UgcLiveSync
         {
             try
             {
-                var assetMap = GetAssetMap();
-                assetMap?.GetType().GetMethod("ClearRuntimeOverrides", PublicInstance)?.Invoke(assetMap, null);
+                var assetConfig = GetRuntimeAssetConfig();
+                assetConfig?.GetType().GetMethod("ClearRuntimeOverrides", PublicInstance)?.Invoke(assetConfig, null);
             }
             catch (Exception ex)
             {
@@ -250,7 +246,12 @@ namespace Robotopia.UgcLiveSync
                 wasFirst);
         }
 
-        public bool StartAutomerge(string documentUrl, string syncServerUrl, string sceneId, Action<UgcApplyOutcome> onRevision)
+        public bool StartAutomerge(
+            string documentUrl,
+            string syncServerUrl,
+            string sceneId,
+            bool loadPlayScene,
+            Action<UgcApplyOutcome> onRevision)
         {
             if (lastRunType == null || launchRequestType == null)
             {
@@ -276,7 +277,7 @@ namespace Robotopia.UgcLiveSync
                 automergeOnRevision = onRevision;
                 automergeSceneId = sceneId ?? string.Empty;
                 automergePending = true;
-                return LoadPlayScene();
+                return !loadPlayScene || LoadPlayScene();
             }
             catch (Exception ex)
             {
@@ -287,25 +288,35 @@ namespace Robotopia.UgcLiveSync
 
         public void StopAutomerge()
         {
+            var hadAutomergeRequest = automergePending || automergeOnRevision != null;
             automergeOnRevision = null;
             automergePending = false;
 
-            if (liveControllerType == null)
+            if (liveControllerType != null)
             {
-                return;
-            }
-
-            try
-            {
-                if (UnityEngine.Object.FindAnyObjectByType(liveControllerType) is Component controller)
+                try
                 {
-                    // No public Stop exists; the live loop is cancelled by the GameObject's lifetime token.
-                    UnityEngine.Object.Destroy(controller.gameObject);
+                    if (UnityEngine.Object.FindAnyObjectByType(liveControllerType) is Component controller)
+                    {
+                        // No public Stop exists; the live loop is cancelled by the GameObject's lifetime token.
+                        UnityEngine.Object.Destroy(controller.gameObject);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.Debug("UGC live sync: could not stop the Automerge controller: " + ex.Message);
                 }
             }
-            catch (Exception ex)
+
+            if (hadAutomergeRequest)
             {
-                logger.Debug("UGC live sync: could not stop the Automerge controller: " + ex.Message);
+                // UgcPlayLaunchRequest is process-wide. Overwrite the live request after stop so a later,
+                // unrelated UgcPlay load cannot resurrect the old document connection.
+                Robotopia.Mods.GameBridge.UgcNoOpLaunchRequest.TryQueue(
+                    lastRunType,
+                    launchRequestType,
+                    "RobotopiaUgcLiveSyncStopped",
+                    message => logger.Debug("UGC live sync stop: " + message));
             }
         }
 
@@ -346,13 +357,13 @@ namespace Robotopia.UgcLiveSync
                     return false;
                 }
 
-                method.Invoke(null, new object[] { PlaySceneName, CancellationToken.None });
-                logger.Info("UGC live sync: dispatched load of scene '" + PlaySceneName + "'.");
+                method.Invoke(null, new object[] { UgcPlaySceneName, CancellationToken.None });
+                logger.Info("UGC live sync: dispatched load of scene '" + UgcPlaySceneName + "'.");
                 return true;
             }
             catch (Exception ex)
             {
-                logger.Warn("UGC live sync: could not load scene '" + PlaySceneName + "': " + ex.Message);
+                logger.Warn("UGC live sync: could not load scene '" + UgcPlaySceneName + "': " + ex.Message);
                 return false;
             }
         }
@@ -370,7 +381,7 @@ namespace Robotopia.UgcLiveSync
             }
         }
 
-        private object? GetAssetMap()
+        private object? GetRuntimeAssetConfig()
         {
             var controller = FindImportController();
             if (controller == null)
@@ -378,17 +389,35 @@ namespace Robotopia.UgcLiveSync
                 return null;
             }
 
-            return importHostType?.GetProperty("BuiltInAssetMap", PublicInstance)?.GetValue(controller);
+            return importHostType?.GetProperty("RuntimeAssetConfig", PublicInstance)?.GetValue(controller);
         }
 
         private object NewPatcher(object controller)
         {
             var sceneRoot = importHostType!.GetProperty("SceneRoot", PublicInstance)?.GetValue(controller);
-            var assetMap = importHostType.GetProperty("BuiltInAssetMap", PublicInstance)?.GetValue(controller);
+            var runtimeAssetConfig = importHostType.GetProperty("RuntimeAssetConfig", PublicInstance)?.GetValue(controller);
             var environmentMap = importHostType.GetProperty("EnvironmentPrefabMap", PublicInstance)?.GetValue(controller);
+            if (sceneRoot == null || runtimeAssetConfig == null || environmentMap == null)
+            {
+                throw new InvalidOperationException(
+                    "UGC live sync: import host has not initialized its scene root, runtime asset config, or environment map.");
+            }
 
-            patcherCtor ??= patcherType!.GetConstructors()[0];
-            return patcherCtor.Invoke(new[] { sceneRoot, assetMap, environmentMap, controller });
+            var arguments = new[] { sceneRoot, runtimeAssetConfig, environmentMap, controller };
+            patcherCtor ??= Array.Find(
+                patcherType!.GetConstructors(),
+                constructor =>
+                {
+                    var parameters = constructor.GetParameters();
+                    return parameters.Length == arguments.Length
+                        && parameters.Select((parameter, index) => parameter.ParameterType.IsInstanceOfType(arguments[index])).All(matches => matches);
+                });
+            if (patcherCtor == null)
+            {
+                throw new InvalidOperationException("UGC live sync: no compatible scene patcher constructor was found.");
+            }
+
+            return patcherCtor.Invoke(arguments);
         }
 
         private void EnsureLocalMembers()

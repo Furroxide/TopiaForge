@@ -27,6 +27,7 @@ namespace Robotopia.RobotKit
         private readonly float groundProbeDepth;
         private readonly object? settingsBox;
         private readonly object? sampler;
+        private readonly IModLogger logger;
 
         private readonly List<Vector3> ringPoints = new List<Vector3>();
         private int nextCandidate;
@@ -42,9 +43,11 @@ namespace Robotopia.RobotKit
         public ReachableSpawnSearch(
             ReachableSpawnRequest request,
             object? settingsBox,
-            System.Random random)
+            System.Random random,
+            IModLogger logger)
         {
             this.settingsBox = settingsBox;
+            this.logger = logger;
             heightOffset = request.HeightOffset;
 
             var origin = new Vector3(request.Origin.X, request.Origin.Y, request.Origin.Z);
@@ -226,8 +229,9 @@ namespace Robotopia.RobotKit
                 {
                     cts.Cancel();
                 }
-                catch
+                catch (Exception ex)
                 {
+                    logger.Debug("RobotKit reachable-spawn cancellation failed: " + ex.Message);
                 }
 
                 cts.Dispose();

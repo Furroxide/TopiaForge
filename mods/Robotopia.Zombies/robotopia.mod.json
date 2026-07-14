@@ -3,7 +3,7 @@
   "schemaVersion": 2,
   "name": "robotopia.zombies",
   "displayName": "Zombies",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "author": {
     "name": "QuantumWorks"
   },
@@ -11,7 +11,7 @@
   "entryAssembly": "Robotopia.Zombies.dll",
   "entryType": "Robotopia.Zombies.ZombiesMod",
   "vpmDependencies": {
-    "robotopia.worlds": ">=0.3.0",
+    "robotopia.worlds": ">=0.5.4",
     "robotopia.robotkit": ">=0.6.0",
     "robotopia.chronos": ">=0.1.0"
   },
@@ -20,7 +20,9 @@
     "robotopia.robotkit",
     "robotopia.chronos"
   ],
-  "supportedSdkVersionRange": ">=0.1.0 <0.2.0",
+  "supportedGameVersionRange": "0.0.2227",
+  "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
+  "supportedSdkVersionRange": ">=0.1.1 <0.2.0",
   "category": "Gameplay",
   "tags": [
     "zombies",
@@ -38,14 +40,17 @@
     "voice",
     "diplomacy"
   ],
-  "license": "Unspecified",
+  "license": "NOASSERTION",
   "permissions": [
     "world-service",
     "robot-spawning",
     "input",
     "physics",
     "hud",
-    "ai"
+    "remote-ai",
+    "player-token",
+    "microphone",
+    "speech-to-text"
   ],
   "worldGamemodes": [
     {

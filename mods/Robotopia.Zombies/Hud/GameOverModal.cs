@@ -54,7 +54,7 @@ namespace Robotopia.Zombies
         {
             var controller = context.Controller;
             wave.SetText("WAVE REACHED  ", controller.Wave);
-            score.SetText("FINAL SCORE  " + controller.Score.ToString("N0"));
+            score.SetNumber("FINAL SCORE  ", controller.Score, "N0");
         }
     }
 }

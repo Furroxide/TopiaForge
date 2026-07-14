@@ -48,9 +48,16 @@ namespace Robotopia.Performance
             appliers.Add(new PatchApplier(config, logger, harmony));
             appliers.Add(new NavTuningApplier(config, logger));
 
-            foreach (var applier in appliers)
+            for (var i = 0; i < appliers.Count;)
             {
-                Guard(() => applier.Apply(), applier, "Apply");
+                var applier = appliers[i];
+                if (Guard(applier.Apply, applier, "Apply"))
+                {
+                    i++;
+                    continue;
+                }
+
+                DisableApplier(i, applier, "Apply");
             }
 
             context.Update += OnUpdate;
@@ -70,7 +77,7 @@ namespace Robotopia.Performance
             for (var i = appliers.Count - 1; i >= 0; i--)
             {
                 var applier = appliers[i];
-                Guard(() => applier.Revert(), applier, "Revert");
+                Guard(applier.Revert, applier, "Revert");
             }
 
             try
@@ -89,32 +96,75 @@ namespace Robotopia.Performance
 
         private void OnUpdate(float deltaTime)
         {
-            for (var i = 0; i < appliers.Count; i++)
+            for (var i = appliers.Count - 1; i >= 0; i--)
             {
                 var applier = appliers[i];
-                Guard(() => applier.OnUpdate(deltaTime), applier, "Update");
+                if (!GuardUpdate(applier, deltaTime))
+                {
+                    DisableApplier(i, applier, "Update");
+                }
             }
         }
 
         private void OnSceneLoaded(string sceneName)
         {
-            for (var i = 0; i < appliers.Count; i++)
+            for (var i = appliers.Count - 1; i >= 0; i--)
             {
                 var applier = appliers[i];
-                Guard(() => applier.OnSceneLoaded(sceneName), applier, "SceneLoaded");
+                if (!GuardSceneLoaded(applier, sceneName))
+                {
+                    DisableApplier(i, applier, "SceneLoaded");
+                }
             }
         }
 
-        private void Guard(Action action, IPerfApplier applier, string phase)
+        private bool Guard(Action action, IPerfApplier applier, string phase)
         {
             try
             {
                 action();
+                return true;
             }
             catch (Exception ex)
             {
                 context?.Logger.Error(ex, $"Performance: applier '{applier.Name}' failed during {phase}.");
+                return false;
             }
+        }
+
+        private bool GuardUpdate(IPerfApplier applier, float deltaTime)
+        {
+            try
+            {
+                applier.OnUpdate(deltaTime);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                context?.Logger.Error(ex, $"Performance: applier '{applier.Name}' failed during Update.");
+                return false;
+            }
+        }
+
+        private bool GuardSceneLoaded(IPerfApplier applier, string sceneName)
+        {
+            try
+            {
+                applier.OnSceneLoaded(sceneName);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                context?.Logger.Error(ex, $"Performance: applier '{applier.Name}' failed during SceneLoaded.");
+                return false;
+            }
+        }
+
+        private void DisableApplier(int index, IPerfApplier applier, string failedPhase)
+        {
+            Guard(applier.Revert, applier, "failure cleanup");
+            appliers.RemoveAt(index);
+            context?.Logger.Warn($"Performance: disabled applier '{applier.Name}' after {failedPhase} failure.");
         }
     }
 }

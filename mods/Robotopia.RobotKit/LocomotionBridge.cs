@@ -125,9 +125,10 @@ namespace Robotopia.RobotKit
 
                 resolveOk = walkMethod != null && actionTargetFromObject != null && actionTargetFromPosition != null;
             }
-            catch
+            catch (Exception ex)
             {
                 resolveOk = false;
+                RobotKitDiagnostics.ReportOnce("locomotion contract discovery", ex);
             }
 
             return resolveOk;
@@ -170,8 +171,9 @@ namespace Robotopia.RobotKit
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                RobotKitDiagnostics.ReportOnce("pathfinder scene discovery", ex);
             }
 
             return false;
@@ -218,9 +220,10 @@ namespace Robotopia.RobotKit
 
                 pathfindOk = pathfindStatic != null && goalFromPosition != null;
             }
-            catch
+            catch (Exception ex)
             {
                 pathfindOk = false;
+                RobotKitDiagnostics.ReportOnce("pathfinder contract discovery", ex);
             }
 
             return pathfindOk;
@@ -241,8 +244,9 @@ namespace Robotopia.RobotKit
                 var locomotion = robot.GetComponentInChildren(LocomotionType, true);
                 return locomotion != null ? getPathFindSettingsMethod.Invoke(locomotion, Array.Empty<object>()) : null;
             }
-            catch
+            catch (Exception ex)
             {
+                RobotKitDiagnostics.ReportOnce("pathfinder settings read", ex);
                 return null;
             }
         }
@@ -272,8 +276,9 @@ namespace Robotopia.RobotKit
                 SetField(box, "ignoreStatics", false);
                 return box;
             }
-            catch
+            catch (Exception ex)
             {
+                RobotKitDiagnostics.ReportOnce("default pathfinder settings construction", ex);
                 return null;
             }
 
@@ -304,8 +309,9 @@ namespace Robotopia.RobotKit
             {
                 return goalFromPosition.Invoke(new object?[] { position, minStopDistance, 0f, null });
             }
-            catch
+            catch (Exception ex)
             {
+                RobotKitDiagnostics.ReportOnce("pathfinder goal construction", ex);
                 return null;
             }
         }
@@ -330,8 +336,9 @@ namespace Robotopia.RobotKit
             {
                 return createSamplerMethod.Invoke(cachedPathfinder, new object?[] { settings, goal, null });
             }
-            catch
+            catch (Exception ex)
             {
+                RobotKitDiagnostics.ReportOnce("walkability sampler construction", ex);
                 return null;
             }
         }
@@ -380,8 +387,9 @@ namespace Robotopia.RobotKit
 
                 return false;
             }
-            catch
+            catch (Exception ex)
             {
+                RobotKitDiagnostics.ReportOnce("walkability sampling", ex);
                 return false;
             }
         }
@@ -416,8 +424,9 @@ namespace Robotopia.RobotKit
                 var getAwaiter = task.GetType().GetMethod("GetAwaiter", BindingFlags.Public | BindingFlags.Instance);
                 return getAwaiter?.Invoke(task, null);
             }
-            catch
+            catch (Exception ex)
             {
+                RobotKitDiagnostics.ReportOnce("pathfind dispatch", ex);
                 return null;
             }
         }
@@ -447,8 +456,9 @@ namespace Robotopia.RobotKit
                 {
                     path = pathAwaiterGetResult?.Invoke(awaiter, null);
                 }
-                catch
+                catch (Exception ex)
                 {
+                    RobotKitDiagnostics.ReportOnce("pathfind completion", ex);
                     return PathPoll.Unreachable; // cancellation / fault
                 }
 
@@ -460,14 +470,14 @@ namespace Robotopia.RobotKit
                 pathCompleteField ??= path.GetType().GetField("complete", BindingFlags.Public | BindingFlags.Instance);
                 return pathCompleteField?.GetValue(path) is true ? PathPoll.Reachable : PathPoll.Unreachable;
             }
-            catch
+            catch (Exception ex)
             {
+                RobotKitDiagnostics.ReportOnce("pathfind result inspection", ex);
                 return PathPoll.Unreachable;
             }
         }
 
         // Resolve the AgentHead that drives this robot (needed as the WalkSession subject). Prefer the native
-        // MostRelevantHead resolver; fall back to a child component lookup.
         public static object? ResolveHead(GameObject robot)
         {
             if (!EnsureReflection())
@@ -482,8 +492,9 @@ namespace Robotopia.RobotKit
                     return head;
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                RobotKitDiagnostics.ReportOnce("native agent-head resolution", ex);
             }
 
             return GameReflection.FindComponent(robot, "AgentHead");
@@ -503,8 +514,9 @@ namespace Robotopia.RobotKit
                 var locomotion = robot.GetComponentInChildren(LocomotionType, true);
                 return locomotion != null && isInControlProp.GetValue(locomotion) is true;
             }
-            catch
+            catch (Exception ex)
             {
+                RobotKitDiagnostics.ReportOnce("locomotion control-state read", ex);
                 return false;
             }
         }
@@ -558,8 +570,9 @@ namespace Robotopia.RobotKit
                 var getAwaiter = task.GetType().GetMethod("GetAwaiter", BindingFlags.Public | BindingFlags.Instance);
                 return getAwaiter?.Invoke(task, null);
             }
-            catch
+            catch (Exception ex)
             {
+                RobotKitDiagnostics.ReportOnce("native walk dispatch", ex);
                 return null;
             }
         }
@@ -575,8 +588,9 @@ namespace Robotopia.RobotKit
 
                 return actionTargetFromPosition?.Invoke(new object[] { targetPosition, "target" });
             }
-            catch
+            catch (Exception ex)
             {
+                RobotKitDiagnostics.ReportOnce("walk target construction", ex);
                 return null;
             }
         }
@@ -605,15 +619,17 @@ namespace Robotopia.RobotKit
                 {
                     awaiterGetResult?.Invoke(awaiter, null);
                 }
-                catch
+                catch (Exception ex)
                 {
                     // Cancellation/retry/fault all complete the walk; the caller restarts as appropriate.
+                    RobotKitDiagnostics.ReportOnce("native walk completion", ex);
                 }
 
                 return WalkPoll.Done;
             }
-            catch
+            catch (Exception ex)
             {
+                RobotKitDiagnostics.ReportOnce("walk result inspection", ex);
                 return WalkPoll.Done;
             }
         }
@@ -651,8 +667,9 @@ namespace Robotopia.RobotKit
                     turnSpeedField?.SetValue(locomotion, turnSpeed);
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                RobotKitDiagnostics.ReportOnce("locomotion speed override", ex);
             }
         }
 
@@ -682,8 +699,9 @@ namespace Robotopia.RobotKit
                     action(locomotion);
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                RobotKitDiagnostics.ReportOnce("locomotion action", ex);
             }
         }
     }

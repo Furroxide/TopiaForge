@@ -1,6 +1,5 @@
 using Robotopia.Mods.UnityUi;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace Robotopia.Zombies
 {
@@ -28,13 +27,8 @@ namespace Robotopia.Zombies
             title = panel.Label("UPLINK", QwTextStyle.Caption).Tone(QwTone.Muted).AlignCenter();
             HudContext.Place(title, 18f, 8f, 524f, 18f);
 
-            pips = panel.PipRow();
+            pips = panel.PipRow().AlignCenter();
             HudContext.Place(pips, 190f, 30f, 180f, 14f);
-            var pipLayout = pips.Go.GetComponent<HorizontalLayoutGroup>();
-            if (pipLayout != null)
-            {
-                pipLayout.childAlignment = TextAnchor.MiddleCenter;
-            }
 
             jack = panel.Label(QwTextStyle.Heading).AlignCenter();
             HudContext.Place(jack, 18f, 48f, 250f, 28f);
@@ -63,27 +57,27 @@ namespace Robotopia.Zombies
             pips.SetCount(maxCharges);
             pips.SetFilled(controller.OverrideCharges, controller.OverrideRegenFraction);
 
-            title.SetText("UPLINK  " + controller.OverrideCharges + "/" + maxCharges);
+            title.SetText("UPLINK  ", controller.OverrideCharges, "/", maxCharges);
 
             if (!controller.ConversationAvailable)
             {
                 jack.SetText("E  JACK-IN OFFLINE");
-                jack.SetColor(HudPalette.TextMuted);
+                jack.SetTone(QwTone.Muted);
             }
             else if (controller.OverrideAimingHijackable && controller.OverrideCharges > 0)
             {
                 jack.SetText("E  JACK IN");
-                jack.SetColor(HudPalette.Cyan);
+                jack.SetTone(QwTone.Accent);
             }
             else
             {
                 jack.SetText(controller.OverrideCharges > 0 ? "E  AIM A ROBOT" : "E  NO CHARGE");
-                jack.SetColor(HudPalette.TextMuted);
+                jack.SetTone(QwTone.Muted);
             }
 
             var broadcastReady = controller.BroadcastReadyFraction >= 1f;
             broadcast.SetText(broadcastReady ? "Q  STAND-DOWN" : "Q  RECHARGING");
-            broadcast.SetColor(broadcastReady ? HudPalette.Violet : HudPalette.TextMuted);
+            broadcast.SetTone(broadcastReady ? QwTone.Primary : QwTone.Muted);
 
             var pressureValue = Mathf.Clamp01(controller.Pressure);
             pressure.SetVisible(pressureValue > 0.02f);

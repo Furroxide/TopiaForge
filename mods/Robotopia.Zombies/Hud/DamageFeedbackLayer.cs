@@ -12,9 +12,6 @@ namespace Robotopia.Zombies
     /// </summary>
     internal sealed class DamageFeedbackLayer
     {
-        private static readonly Color FlashColor = new Color(0.9f, 0.03f, 0.03f, 1f);
-        private static readonly Color VignetteColor = new Color(0.8f, 0.02f, 0.03f, 1f);
-        private static readonly Color WedgeColor = new Color(1f, 0.18f, 0.16f, 1f);
         private const float LowPulseFrequency = 7.5f;
         private const float CriticalPulseFrequency = 12.6f;
         private const float HighContrastMaxAlpha = 0.72f;
@@ -36,13 +33,13 @@ namespace Robotopia.Zombies
             var stack = parent.Stack("DamageFeedback").Dynamic();
 
             flash = stack.FreeImage("DamageFlash").Stretch();
-            flash.SetColor(FlashColor);
+            flash.SetTone(QwTone.Danger);
             flash.SetAlpha(0f);
 
             for (var index = 0; index < edges.Length; index++)
             {
                 edges[index] = stack.FreeImage("Vignette" + index);
-                edges[index].SetColor(VignetteColor);
+                edges[index].SetTone(QwTone.Danger);
                 edges[index].SetAlpha(0f);
             }
 
@@ -55,7 +52,7 @@ namespace Robotopia.Zombies
             HudContext.CenterAnchor(wedge);
             wedge.Rect.anchoredPosition = new Vector2(0f, 160f);
             wedge.SetSize(52f, 16f);
-            wedge.SetColor(WedgeColor);
+            wedge.SetTone(QwTone.Danger);
             wedge.SetAlpha(0f);
         }
 
@@ -99,8 +96,11 @@ namespace Robotopia.Zombies
             {
                 var intensity = (config.LowIntegrityVignetteThreshold - fraction) / config.LowIntegrityVignetteThreshold;
                 var frequency = fraction < config.CriticalIntegrityThreshold ? CriticalPulseFrequency : LowPulseFrequency;
-                var pulse = Mathf.Lerp(0.65f, 1f, 0.5f + (0.5f * Mathf.Sin(Time.time * frequency * QwTheme.EffectiveMotion)));
-                edgeAlpha = Mathf.Lerp(0f, config.HudHighContrast ? HighContrastMaxAlpha : StandardMaxAlpha, intensity) * pulse;
+                var pulse = Mathf.Lerp(0.65f, 1f, 0.5f + (0.5f * Mathf.Sin(Time.time * frequency * context.Ui.EffectiveMotion)));
+                edgeAlpha = Mathf.Lerp(
+                    0f,
+                    context.Ui.EffectiveHighContrast ? HighContrastMaxAlpha : StandardMaxAlpha,
+                    intensity) * pulse;
             }
 
             for (var index = 0; index < edges.Length; index++)

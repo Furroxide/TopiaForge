@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Robotopia.Mods;
+using Robotopia.Mods.Internal;
 
 namespace Robotopia.RobotKit
 {
@@ -147,6 +148,16 @@ namespace Robotopia.RobotKit
         public IRobotObjectiveHandle SetObjective(IRobotAgent agent, RobotObjective objective)
         {
             var program = objective ?? RobotObjective.Idle();
+            if (agent == null)
+            {
+                return new CancelledObjectiveHandle(program);
+            }
+
+            if (!TryGetAgentId(agent, out var agentId))
+            {
+                return new CancelledObjectiveHandle(program);
+            }
+
             var runner = new ObjectiveRunner(
                 agent,
                 program,
@@ -154,32 +165,28 @@ namespace Robotopia.RobotKit
                 now,
                 random01,
                 resolveAgent,
-                (recipient, payload) => DeliverProgram(agent, recipient, payload));
+                (recipient, payload) => DeliverProgram(agent, recipient, payload),
+                exception => logger.Warn("Robot objective cancellation cleanup failed: " + exception.Message));
 
-            if (agent == null)
+            if (runners.TryGetValue(agentId, out var previous))
             {
-                runner.Cancel();
+                TryCancel(previous, "replacing an objective");
+            }
+
+            if (disposed || !TryIsAlive(agent, out var alive) || !alive)
+            {
+                TryCancel(runner, "rejecting an objective for an unavailable agent");
                 return runner;
             }
 
-            if (runners.TryGetValue(agent.Id, out var previous))
-            {
-                previous.Cancel();
-            }
-
-            if (disposed || !agent.IsAlive)
-            {
-                runner.Cancel();
-                return runner;
-            }
-
-            runners[agent.Id] = runner;
+            runners[agentId] = runner;
             return runner;
         }
 
         public IRobotObjectiveHandle? GetObjective(IRobotAgent agent)
         {
-            if (agent == null || !runners.TryGetValue(agent.Id, out var runner))
+            if (agent == null || !TryGetAgentId(agent, out var agentId)
+                || !runners.TryGetValue(agentId, out var runner))
             {
                 return null;
             }
@@ -189,13 +196,14 @@ namespace Robotopia.RobotKit
 
         public void ClearObjective(IRobotAgent agent)
         {
-            if (agent == null || !runners.TryGetValue(agent.Id, out var runner))
+            if (agent == null || !TryGetAgentId(agent, out var agentId)
+                || !runners.TryGetValue(agentId, out var runner))
             {
                 return;
             }
 
-            runner.Cancel();
-            runners.Remove(agent.Id);
+            TryCancel(runner, "clearing an objective");
+            runners.Remove(agentId);
         }
 
         // Advance every live objective and drop those whose robot is gone or that were cancelled elsewhere. Call
@@ -220,9 +228,17 @@ namespace Robotopia.RobotKit
 
             foreach (var runner in stepBuffer)
             {
-                if (!runner.IsCancelled && runner.AgentAlive)
+                try
                 {
-                    runner.Step();
+                    if (!runner.IsCancelled && runner.AgentAlive)
+                    {
+                        runner.Step();
+                    }
+                }
+                catch (Exception exception)
+                {
+                    logger.Warn("Robot objective tick failed; the faulty objective was cancelled: " + exception.Message);
+                    TryCancel(runner, "isolating a failed objective");
                 }
             }
 
@@ -230,7 +246,22 @@ namespace Robotopia.RobotKit
             List<string>? dead = null;
             foreach (var pair in runners)
             {
-                if (pair.Value.IsCancelled || !pair.Value.AgentAlive)
+                var remove = pair.Value.IsCancelled;
+                if (!remove)
+                {
+                    try
+                    {
+                        remove = !pair.Value.AgentAlive;
+                    }
+                    catch (Exception exception)
+                    {
+                        logger.Warn("Robot objective liveness check failed; the faulty objective was removed: "
+                            + exception.Message);
+                        remove = true;
+                    }
+                }
+
+                if (remove)
                 {
                     (dead ??= new List<string>()).Add(pair.Key);
                 }
@@ -250,20 +281,10 @@ namespace Robotopia.RobotKit
         private void DeliverProgram(IRobotAgent sender, IRobotAgent recipient, RobotObjective payload)
         {
             SetObjective(recipient, payload);
-            var handler = ProgramDelivered;
-            if (handler == null)
-            {
-                return;
-            }
-
-            try
-            {
-                handler(new RobotProgramDelivery(sender, recipient, payload));
-            }
-            catch (Exception exception)
-            {
-                logger.Warn("A ProgramDelivered subscriber threw: " + exception.Message);
-            }
+            SafeEvent.Invoke(
+                ProgramDelivered,
+                new RobotProgramDelivery(sender, recipient, payload),
+                exception => logger.Warn("A ProgramDelivered subscriber threw: " + exception.Message));
         }
 
         public void OnSceneChanged()
@@ -271,7 +292,7 @@ namespace Robotopia.RobotKit
             // The robots and the things targets pointed at are gone; objectives are session-only by design.
             foreach (var runner in runners.Values)
             {
-                runner.Cancel();
+                TryCancel(runner, "clearing objectives for a scene change");
             }
 
             runners.Clear();
@@ -288,7 +309,7 @@ namespace Robotopia.RobotKit
             disposed = true;
             foreach (var runner in runners.Values)
             {
-                runner.Cancel();
+                TryCancel(runner, "disposing the objective service");
             }
 
             runners.Clear();
@@ -298,6 +319,68 @@ namespace Robotopia.RobotKit
         private static string Normalize(string name)
         {
             return name.Trim().ToUpperInvariant();
+        }
+
+        private bool TryGetAgentId(IRobotAgent agent, out string agentId)
+        {
+            agentId = string.Empty;
+            try
+            {
+                agentId = agent.Id;
+            }
+            catch (Exception exception)
+            {
+                logger.Warn("Robot objective rejected an agent whose id getter failed: " + exception.Message);
+                return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(agentId))
+            {
+                return true;
+            }
+
+            logger.Warn("Robot objective rejected an agent with a blank id.");
+            return false;
+        }
+
+        private bool TryIsAlive(IRobotAgent agent, out bool alive)
+        {
+            alive = false;
+            try
+            {
+                alive = agent.IsAlive;
+                return true;
+            }
+            catch (Exception exception)
+            {
+                logger.Warn("Robot objective rejected an agent whose liveness getter failed: " + exception.Message);
+                return false;
+            }
+        }
+
+        private void TryCancel(ObjectiveRunner runner, string operation)
+        {
+            try
+            {
+                runner.Cancel();
+            }
+            catch (Exception exception)
+            {
+                logger.Warn("Robot objective failed while " + operation + ": " + exception.Message);
+            }
+        }
+
+        private sealed class CancelledObjectiveHandle : IRobotObjectiveHandle
+        {
+            public CancelledObjectiveHandle(RobotObjective objective)
+            {
+                Objective = objective;
+            }
+
+            public RobotObjective Objective { get; }
+            public RobotObjectiveState State => RobotObjectiveState.Cancelled;
+            public int WaypointIndex => 0;
+            public void Cancel() { }
         }
     }
 }

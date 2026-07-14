@@ -11,6 +11,8 @@
   "entryAssembly": "Robotopia.Performance.dll",
   "entryType": "Robotopia.Performance.PerformanceMod",
   "vpmDependencies": {},
+  "supportedGameVersionRange": "0.0.2227",
+  "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
   "supportedSdkVersionRange": ">=0.1.0 <0.2.0",
   "category": "Performance",
   "tags": [
@@ -21,7 +23,7 @@
     "quality",
     "tweaks"
   ],
-  "license": "Unspecified",
+  "license": "NOASSERTION",
   "permissions": [
     "render-settings",
     "quality-settings",

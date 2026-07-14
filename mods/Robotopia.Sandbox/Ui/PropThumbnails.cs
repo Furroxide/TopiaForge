@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Robotopia.Mods;
+using Robotopia.Mods.Internal;
 using Robotopia.Mods.UnityUi;
 using UnityEngine;
 using UnityEngine.Rendering.HighDefinition;
@@ -133,6 +134,8 @@ namespace Robotopia.Sandbox.Ui
                 UnityEngine.Object.Destroy(rig);
                 rig = null;
             }
+
+            Ready = null;
         }
 
         private bool BeginCapture(SandboxPropDefinition definition)
@@ -145,6 +148,8 @@ namespace Robotopia.Sandbox.Ui
                     return false;
                 }
 
+                // Own the clone immediately so any sanitize/framing exception tears it down in the catch path.
+                capture = clone;
                 Sanitize(clone);
                 clone.transform.SetParent(rig!.transform, worldPositionStays: false);
                 clone.transform.localPosition = Vector3.zero;
@@ -153,6 +158,7 @@ namespace Robotopia.Sandbox.Ui
                 if (!TryComputeBounds(clone, out var bounds))
                 {
                     UnityEngine.Object.Destroy(clone);
+                    capture = null;
                     return false;
                 }
 
@@ -170,7 +176,6 @@ namespace Robotopia.Sandbox.Ui
                     light.enabled = true;
                 }
 
-                capture = clone;
                 captureId = definition.Id;
                 return true;
             }
@@ -225,7 +230,11 @@ namespace Robotopia.Sandbox.Ui
                 };
                 Graphics.CopyTexture(target, 0, 0, texture, 0, 0);
                 cache[id] = texture;
-                Ready?.Invoke(id, texture);
+                SafeEvent.Invoke(
+                    Ready,
+                    id,
+                    texture,
+                    exception => logger.Warn("Sandbox thumbnail subscriber failed: " + exception.Message));
             }
             catch (Exception ex)
             {

@@ -225,6 +225,11 @@ mod (detect range in your own component, then call `IRobotAgentService.DamagePla
 
 ## Robot brain queries (`IRobotBrainQueryService`)
 
+The services in this section can use the player's Robotopia token and send prompts, conversation history, facts, or
+microphone audio to the game's remote backend. First-party consumers keep remote AI and voice off by default. Read
+[PrivacyAndCapabilities.md](PrivacyAndCapabilities.md) before exposing any of these services: manifests must declare
+the canonical capabilities, activation must be explicit, and deterministic/offline behavior must remain complete.
+
 RobotKit also publishes a second service: **ask a robot's LLM brain a structured question** and get a
 machine-readable answer back, proxied through the game's own RoboAPI backend (the same inference the native
 robots think with — `llama-3.3-70b` via `/agent/check3`). This is the reusable "talk to the brain" primitive
@@ -377,7 +382,8 @@ against a place the model invented. `Robotopia.Sandbox`'s PROGRAM verb is the re
 
 Captures what the player *says* to a robot the same two ways the **base game** does (verified by decompile): typed
 text, or **push-to-talk voice** transcribed through `/agent/stt` (16 kHz mono PCM16-LE, gzipped — the only format
-the backend accepts). RobotKit **0.6.0+**.
+the backend accepts). RobotKit **0.6.0+**. Voice capture must remain disabled until the player explicitly enables it;
+the capability labels are disclosure rather than an operating-system permission grant.
 
 ```csharp
 public interface IPlayerDialogueInputService
@@ -480,7 +486,7 @@ delivers), the messenger stops in the terminal `Delivered` state, and `ProgramDe
   the Sandbox filters this out) applies the payload to itself; its courier handle then reads `Cancelled` rather
   than `Delivered`, since the delivery replaced it.
 
-`Robotopia.Sandbox` (v0.3.0) is the reference consumer: every spawned prop/robot registers itself as a target, the
+`Robotopia.Sandbox` (v0.3.1) is the reference consumer: every spawned prop/robot registers itself as a target, the
 PROGRAM verb turns an LLM conversation turn into `SetObjective` (REPROGRAM decisions become couriers), and its
 ambience layer subscribes to `ProgramDelivered` for hand-over toasts and emotes.
 

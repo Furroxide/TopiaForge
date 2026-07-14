@@ -48,7 +48,7 @@ namespace Robotopia.Sandbox
         {
             this.context = context;
             this.config = config;
-            registry = new SpawnRegistry(config.MaxSpawnedObjects);
+            registry = new SpawnRegistry(config.MaxSpawnedObjects, context.Logger);
             robots = context.GetService<IRobotAgentService>();
             // Robots are not props: the catalog filters robot prefabs out of the UGC list (they live in the
             // NPC spawner instead). No RobotKit -> no filter; the catalog then lists everything as before.
@@ -63,7 +63,7 @@ namespace Robotopia.Sandbox
 
         public bool RobotsAvailable => robots != null && robots.IsAvailable;
 
-        /// <summary>True when spawned dormant robots can be talked into programs (RobotKit chat services present).</summary>
+        /// <summary>True when the player opted into remote programming and RobotKit chat services are present.</summary>
         public bool ProgrammingAvailable => chat != null;
 
         internal static string[] MarkerLabels
@@ -137,9 +137,10 @@ namespace Robotopia.Sandbox
                     return null;
                 });
 
-                if (conversations != null)
+                if (config.ConversationEnabled && conversations != null)
                 {
-                    chat = new RobotChat(context, config, ui, robots, conversations, objectives, dialogueInput,
+                    chat = new RobotChat(context, config, ui, robots, conversations, objectives,
+                        config.VoiceInputEnabled ? dialogueInput : null,
                         registry.FindRobotByTargetName);
                 }
 

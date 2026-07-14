@@ -34,6 +34,7 @@ namespace Robotopia.RobotKit
         public RobotAgentService(IModLogger logger)
         {
             this.logger = logger;
+            RobotKitDiagnostics.Configure(logger);
             prefabResolver = new RobotPrefabResolver(logger);
         }
 
@@ -221,7 +222,11 @@ namespace Robotopia.RobotKit
         {
             // The search self-completes in its constructor when the service is gone or there is no navigation, so a
             // caller can always poll the returned handle without special-casing those paths.
-            var search = new ReachableSpawnSearch(request ?? new ReachableSpawnRequest(Vec3.Zero), ResolvePathFindSettings(), random);
+            var search = new ReachableSpawnSearch(
+                request ?? new ReachableSpawnRequest(Vec3.Zero),
+                ResolvePathFindSettings(),
+                random,
+                logger);
             if (!disposed && !search.IsComplete)
             {
                 searches.Add(search);
@@ -334,6 +339,7 @@ namespace Robotopia.RobotKit
             }
 
             incubator = null;
+            RobotKitDiagnostics.Clear(logger);
         }
 
         private void CancelSearches()

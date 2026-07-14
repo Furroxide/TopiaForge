@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using Robotopia.Mods;
 
 namespace Robotopia.Sandbox
@@ -173,8 +174,10 @@ namespace Robotopia.Sandbox
                 {
                     new BrainOutputField(
                         TargetField,
-                        "The known target your action applies to. For REPROGRAM this is the robot you walk to " +
-                        "and reprogram. NONE when you chose CHAT, IDLE, or AUTONOMOUS — or WANDER right here.",
+                        "The known target your action applies to. Use a real known target for GO_TO, FOLLOW, " +
+                        "PATROL, FLEE, and for the REPROGRAM recipient; never use NONE for those accepted " +
+                        "actions. Use PLAYER when the operator means themselves (follow me, stay with me, " +
+                        "follow the player). NONE only for CHAT, IDLE, AUTONOMOUS, or WANDER right here.",
                         BrainFieldType.String,
                         targetOptions),
                     new BrainOutputField(
@@ -244,7 +247,8 @@ namespace Robotopia.Sandbox
             string? programTarget,
             IReadOnlyList<string> knownTargets,
             IReadOnlyList<string> robotTargets,
-            string? selfTargetName)
+            string? selfTargetName,
+            string? operatorText = null)
         {
             var action = (decision ?? string.Empty).Trim().ToUpperInvariant();
             switch (action)
@@ -254,27 +258,27 @@ namespace Robotopia.Sandbox
                 case "AUTONOMOUS":
                     return ProgramParseResult.Autonomous();
                 case "WANDER":
-                {
-                    // No/NONE target roams right here; a known target anchors the roam to it. A name the model
-                    // invented degrades to chat rather than silently wandering somewhere unintended.
-                    if (IsNone(target))
                     {
-                        return ProgramParseResult.Program(RobotObjective.Wander());
+                        // No/NONE target roams right here; a known target anchors the roam to it. A name the model
+                        // invented degrades to chat rather than silently wandering somewhere unintended.
+                        if (IsNone(target))
+                        {
+                            return ProgramParseResult.Program(RobotObjective.Wander());
+                        }
+
+                        var anchor = ResolveTarget(target, knownTargets);
+                        return anchor == null
+                            ? ProgramParseResult.Chat("It needs a target it knows to wander near — or just \"wander here\".")
+                            : ProgramParseResult.Program(RobotObjective.Wander(anchor));
                     }
 
-                    var anchor = ResolveTarget(target, knownTargets);
-                    return anchor == null
-                        ? ProgramParseResult.Chat("It needs a target it knows to wander near — or just \"wander here\".")
-                        : ProgramParseResult.Program(RobotObjective.Wander(anchor));
-                }
-
                 case "FLEE":
-                {
-                    var threat = ResolveTarget(target, knownTargets);
-                    return threat == null
-                        ? ProgramParseResult.Chat("It needs a real target to run from — name one it knows.")
-                        : ProgramParseResult.Program(RobotObjective.Flee(threat));
-                }
+                    {
+                        var threat = ResolveTarget(target, knownTargets);
+                        return threat == null
+                            ? ProgramParseResult.Chat("It needs a real target to run from — name one it knows.")
+                            : ProgramParseResult.Program(RobotObjective.Flee(threat));
+                    }
 
                 case "REPROGRAM":
                     return ParseReprogram(target, program, programTarget, knownTargets, robotTargets, selfTargetName);
@@ -288,6 +292,11 @@ namespace Robotopia.Sandbox
             }
 
             var resolved = ResolveTarget(target, knownTargets);
+            if (resolved == null && action == "FOLLOW" && IsNone(target))
+            {
+                resolved = InferFollowTarget(operatorText, knownTargets);
+            }
+
             if (resolved == null)
             {
                 return ProgramParseResult.Chat("It needs a real target — place a marker or name one it knows.");
@@ -447,6 +456,172 @@ namespace Robotopia.Sandbox
             }
 
             return null;
+        }
+
+        private static string? InferFollowTarget(string? operatorText, IReadOnlyList<string> knownTargets)
+        {
+            if (string.IsNullOrWhiteSpace(operatorText) || knownTargets == null || knownTargets.Count == 0)
+            {
+                return null;
+            }
+
+            var text = NormalizePhrase(operatorText);
+            if (text.Length == 0 || !HasFollowIntent(text))
+            {
+                return null;
+            }
+
+            var matches = new List<TargetMatch>();
+            var player = ResolveTarget("PLAYER", knownTargets);
+            if (player != null && MentionsOperatorAsFollowTarget(text))
+            {
+                AddTargetMatch(matches, player, "ME");
+            }
+
+            foreach (var known in knownTargets)
+            {
+                var phrase = NormalizePhrase(known);
+                if (phrase.Length > 0 && ContainsWholePhrase(text, phrase))
+                {
+                    AddTargetMatch(matches, known, phrase);
+                }
+            }
+
+            return PickUnambiguousTarget(matches);
+        }
+
+        private static bool HasFollowIntent(string normalizedText)
+        {
+            // Recovery is deliberately narrower than general language understanding: it only repairs a
+            // FOLLOW/NONE model response when the operator text reads like a direct movement instruction.
+            // Descriptive questions such as "what is behind X?" must stay chat, never become a program.
+            return StartsWithWholePhrase(normalizedText, "FOLLOW")
+                || StartsWithWholePhrase(normalizedText, "PLEASE FOLLOW")
+                || StartsWithWholePhrase(normalizedText, "GO FOLLOW")
+                || StartsWithWholePhrase(normalizedText, "STAY WITH")
+                || StartsWithWholePhrase(normalizedText, "STICK WITH")
+                || StartsWithWholePhrase(normalizedText, "KEEP UP WITH")
+                || StartsWithWholePhrase(normalizedText, "STAY CLOSE TO")
+                || StartsWithWholePhrase(normalizedText, "KEEP CLOSE TO")
+                || StartsWithWholePhrase(normalizedText, "RIGHT BEHIND")
+                || StartsWithWholePhrase(normalizedText, "STAY RIGHT BEHIND")
+                || StartsWithWholePhrase(normalizedText, "KEEP RIGHT BEHIND")
+                || ContainsWholePhrase(normalizedText, "CAN YOU FOLLOW")
+                || ContainsWholePhrase(normalizedText, "COULD YOU FOLLOW")
+                || ContainsWholePhrase(normalizedText, "WOULD YOU FOLLOW")
+                || ContainsWholePhrase(normalizedText, "I WANT YOU TO FOLLOW")
+                || ContainsWholePhrase(normalizedText, "I NEED YOU TO FOLLOW");
+        }
+
+        private static bool MentionsOperatorAsFollowTarget(string normalizedText)
+        {
+            return ContainsWholePhrase(normalizedText, "ME")
+                || ContainsWholePhrase(normalizedText, "MYSELF")
+                || ContainsWholePhrase(normalizedText, "OPERATOR")
+                || ContainsWholePhrase(normalizedText, "HUMAN");
+        }
+
+        private static void AddTargetMatch(List<TargetMatch> matches, string target, string phrase)
+        {
+            if (string.IsNullOrWhiteSpace(target) || string.IsNullOrWhiteSpace(phrase))
+            {
+                return;
+            }
+
+            foreach (var match in matches)
+            {
+                if (string.Equals(match.Target, target, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+            }
+
+            matches.Add(new TargetMatch(target, phrase));
+        }
+
+        private static string? PickUnambiguousTarget(List<TargetMatch> matches)
+        {
+            if (matches.Count == 0)
+            {
+                return null;
+            }
+
+            if (matches.Count == 1)
+            {
+                return matches[0].Target;
+            }
+
+            matches.Sort((left, right) => right.Phrase.Length.CompareTo(left.Phrase.Length));
+            var best = matches[0];
+            for (var index = 1; index < matches.Count; index++)
+            {
+                var other = matches[index];
+                if (best.Phrase.Length == other.Phrase.Length || !ContainsWholePhrase(best.Phrase, other.Phrase))
+                {
+                    return null;
+                }
+            }
+
+            return best.Target;
+        }
+
+        private static bool ContainsWholePhrase(string text, string phrase)
+        {
+            if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(phrase))
+            {
+                return false;
+            }
+
+            return (" " + text + " ").IndexOf(" " + phrase + " ", StringComparison.Ordinal) >= 0;
+        }
+
+        private static bool StartsWithWholePhrase(string text, string phrase)
+        {
+            return string.Equals(text, phrase, StringComparison.Ordinal)
+                || text.StartsWith(phrase + " ", StringComparison.Ordinal);
+        }
+
+        private static string NormalizePhrase(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            var normalized = new StringBuilder(value!.Length);
+            var pendingSpace = false;
+            foreach (var ch in value)
+            {
+                if (char.IsLetterOrDigit(ch))
+                {
+                    if (pendingSpace && normalized.Length > 0)
+                    {
+                        normalized.Append(' ');
+                    }
+
+                    normalized.Append(char.ToUpperInvariant(ch));
+                    pendingSpace = false;
+                }
+                else
+                {
+                    pendingSpace = normalized.Length > 0;
+                }
+            }
+
+            return normalized.ToString();
+        }
+
+        private readonly struct TargetMatch
+        {
+            public TargetMatch(string target, string phrase)
+            {
+                Target = target;
+                Phrase = phrase;
+            }
+
+            public string Target { get; }
+
+            public string Phrase { get; }
         }
     }
 }
