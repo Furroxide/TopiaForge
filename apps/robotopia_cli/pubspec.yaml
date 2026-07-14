@@ -1,6 +1,6 @@
 name: robotopia
 description: Command-line developer tools for QuantumWorks mods.
-version: 0.1.0
+version: 0.1.1
 publish_to: none
 
 environment:

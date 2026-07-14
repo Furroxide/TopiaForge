@@ -1,0 +1,145 @@
+name: Unity PR Artifacts
+
+on:
+  pull_request:
+    branches:
+      - main
+      - dev
+      - "release/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unity-pr-artifacts-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  audit-artifacts:
+    name: Audit generated artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reject committed Unity build outputs
+        shell: bash
+        run: |
+          tracked="$(git ls-files '*.unitypackage' '*.7z' 'dist/*.robotopiamod' 'dist/vpm/*.zip' '.unity-ci/**')"
+          if [ -n "$tracked" ]; then
+            echo "Generated Unity/release artifacts must not be tracked:"
+            echo "$tracked"
+            exit 1
+          fi
+
+  vpm-packages:
+    name: Build VPM package listing
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: audit-artifacts
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: "3.11.1"
+
+      - name: Pack Unity packages
+        working-directory: apps/robotopia_cli
+        run: |
+          dart pub get --enforce-lockfile
+          dart run bin/robotopia.dart unity pack-packages --output ../../dist/vpm
+
+      - name: Upload VPM listing artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: robotopia-vpm-index
+          path: dist/vpm/**
+          if-no-files-found: error
+          retention-days: 14
+
+  world-smoke:
+    name: Build Unity world smoke package (manual main only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    needs: audit-artifacts
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: "3.11.1"
+
+      - name: Scaffold smoke world project
+        shell: bash
+        working-directory: apps/robotopia_cli
+        run: |
+          set -euo pipefail
+          workspace="${GITHUB_WORKSPACE//\\//}"
+          dart pub get --enforce-lockfile
+          dart run bin/robotopia.dart new mod ci.world \
+            --template world \
+            --name "CI World" \
+            --dir "$workspace/.unity-ci"
+          dart run bin/robotopia.dart new unity-world CiWorld \
+            --dir "$workspace/.unity-ci" \
+            --mod "$workspace/.unity-ci/ci.world"
+
+      - name: Build world bundle
+        uses: game-ci/unity-builder@1d4ee0697f193f54668e98961d79907911f4b4f2 # v4.8.1
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: .unity-ci/CiWorld
+          unityVersion: 6000.0.23f1
+          targetPlatform: StandaloneWindows64
+          buildMethod: Robotopia.WorldCompanion.Editor.WorldBundleBuilder.Build
+          customParameters: >-
+            -robotopiaModPath /github/workspace/.unity-ci/ci.world
+            -robotopiaBundleName ci-world
+            -robotopiaWorldPrefab Assets/World/World.prefab
+          manualExit: true
+          versioning: None
+          allowDirtyBuild: true
+
+      - name: Pack smoke world mod
+        shell: bash
+        working-directory: apps/robotopia_cli
+        run: |
+          set -euo pipefail
+          workspace="${GITHUB_WORKSPACE//\\//}"
+          dart run bin/robotopia.dart pack \
+            --project "$workspace/.unity-ci/ci.world" \
+            --output "$workspace/dist/unity-smoke" \
+            --configuration Release
+
+      - name: Upload smoke world artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: robotopia-unity-world-smoke
+          path: |
+            dist/unity-smoke/*.robotopiamod
+            .unity-ci/ci.world/AssetBundles/*.bundle
+            .unity-ci/ci.world/AssetBundles/*.manifest.json
+          if-no-files-found: error
+          retention-days: 14

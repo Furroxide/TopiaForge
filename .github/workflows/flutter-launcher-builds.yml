@@ -1,0 +1,100 @@
+name: Flutter launcher builds
+
+on:
+  workflow_call:
+    inputs:
+      artifact_retention_days:
+        description: "Number of days to retain launcher artifacts."
+        required: false
+        type: number
+        default: 14
+  workflow_dispatch:
+    inputs:
+      artifact_retention_days:
+        description: "Number of days to retain launcher artifacts."
+        required: false
+        type: number
+        default: 14
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }} launcher
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            runner: windows-latest
+          - platform: linux
+            runner: ubuntu-latest
+          - platform: macos
+            runner: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.4"
+          cache: true
+
+      - name: Install Linux desktop dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+
+      - name: Build launcher
+        working-directory: apps/robotopia_launcher_flutter
+        env:
+          LAUNCHER_PLATFORM: ${{ matrix.platform }}
+        run: |
+          flutter pub get --enforce-lockfile
+          flutter build "$LAUNCHER_PLATFORM" --release
+
+      - name: Pack launcher artifact
+        shell: bash
+        env:
+          LAUNCHER_PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          artifact_dir="${RUNNER_TEMP//\\//}/launcher-artifact"
+          mkdir -p "$artifact_dir"
+          case "$LAUNCHER_PLATFORM" in
+            windows)
+              release_dir="apps/robotopia_launcher_flutter/build/windows/x64/runner/Release"
+              if [ ! -d "$release_dir" ]; then
+                release_dir="apps/robotopia_launcher_flutter/build/windows/runner/Release"
+              fi
+              tar -cf "$artifact_dir/launcher-windows.tar" -C "$release_dir" .
+              ;;
+            linux)
+              release_dir="apps/robotopia_launcher_flutter/build/linux/x64/release/bundle"
+              if [ ! -d "$release_dir" ]; then
+                release_dir="apps/robotopia_launcher_flutter/build/linux/release/bundle"
+              fi
+              tar -cf "$artifact_dir/launcher-linux.tar" -C "$release_dir" .
+              ;;
+            macos)
+              release_dir="apps/robotopia_launcher_flutter/build/macos/Build/Products/Release"
+              app_name="QuantumWorks.app"
+              if [ ! -d "$release_dir/$app_name" ]; then
+                echo "::error::Could not locate QuantumWorks.app in $release_dir."
+                exit 1
+              fi
+              tar -cf "$artifact_dir/launcher-macos.tar" -C "$release_dir" "$app_name"
+              ;;
+          esac
+
+      - name: Upload launcher artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: launcher-${{ matrix.platform }}
+          path: ${{ runner.temp }}/launcher-artifact/launcher-${{ matrix.platform }}.tar
+          if-no-files-found: error
+          retention-days: ${{ inputs.artifact_retention_days || 14 }}

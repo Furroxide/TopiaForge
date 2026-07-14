@@ -10,8 +10,6 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
@@ -20,6 +18,10 @@ concurrency:
 jobs:
   build-index:
     runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      pages: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,10 +31,12 @@ jobs:
 
       - name: Set up Dart
         uses: dart-lang/setup-dart@v1
+        with:
+          sdk: "3.11.1"
 
       - name: Restore CLI packages
         working-directory: apps/robotopia_cli
-        run: dart pub get
+        run: dart pub get --enforce-lockfile
 
       - name: Build launcher update index
         working-directory: apps/robotopia_cli
@@ -62,6 +66,9 @@ jobs:
   deploy:
     needs: build-index
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
