@@ -97,6 +97,9 @@ File _createPackage(
   List<Map<String, Object?>> dependencies = const [],
   List<Map<String, Object?>> worldGamemodes = const [],
   List<String> apiAssemblies = const [],
+  String? gameVersionRange,
+  String? loaderVersionRange,
+  String? sdkVersionRange,
 }) {
   final package = File(p.join(root.path, '$id-$version.robotopiamod'));
   final archive = Archive()
@@ -110,6 +113,9 @@ File _createPackage(
             dependencies: dependencies,
             worldGamemodes: worldGamemodes,
             apiAssemblies: apiAssemblies,
+            gameVersionRange: gameVersionRange,
+            loaderVersionRange: loaderVersionRange,
+            sdkVersionRange: sdkVersionRange,
           ),
         ),
       ),
@@ -128,6 +134,9 @@ Map<String, Object?> _manifestJson(
   List<Map<String, Object?>> dependencies = const [],
   List<Map<String, Object?>> worldGamemodes = const [],
   List<String> apiAssemblies = const [],
+  String? gameVersionRange,
+  String? loaderVersionRange,
+  String? sdkVersionRange,
 }) => {
   'schemaVersion': 2,
   'name': id,
@@ -136,6 +145,9 @@ Map<String, Object?> _manifestJson(
   'author': {'name': 'QuantumWorks'},
   'entryAssembly': '${_assemblyName(id)}.dll',
   'entryType': '$id.Entry',
+  'supportedGameVersionRange': ?gameVersionRange,
+  'supportedLoaderVersionRange': ?loaderVersionRange,
+  'supportedSdkVersionRange': ?sdkVersionRange,
   if (dependencies.isNotEmpty)
     'vpmDependencies': {
       for (final item in dependencies)

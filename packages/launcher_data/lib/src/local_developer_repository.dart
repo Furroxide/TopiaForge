@@ -1,37 +1,70 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 
+import 'bounded_process.dart';
+import 'data_root.dart';
+import 'dotnet_sdk.dart';
+import 'public_url.dart';
+import 'safe_zip_archive.dart';
+import 'secure_http.dart';
+import 'ugc_sidecar_runtime.dart';
+
 part 'local_developer_repository/io_helpers.dart';
+part 'local_developer_repository/template_copy.dart';
+part 'local_developer_repository/archive_safety.dart';
+part 'local_developer_repository/data_root_repository.dart';
 part 'local_developer_repository/pack_helpers.dart';
 part 'local_developer_repository/mod_scaffolding.dart';
+part 'local_developer_repository/license_scaffolding.dart';
+part 'local_developer_repository/legacy_migration.dart';
 part 'local_developer_repository/environment_helpers.dart';
 part 'local_developer_repository/project_registry.dart';
 part 'local_developer_repository/source_helpers.dart';
+part 'local_developer_repository/package_restore.dart';
 part 'local_developer_repository/unity_vpm.dart';
+part 'local_developer_repository/unity_package_scaffolding.dart';
+part 'local_developer_repository/unity_vpm_network.dart';
+part 'local_developer_repository/vpm_restore.dart';
+part 'local_developer_repository/unity_vpm_packaging.dart';
 part 'local_developer_repository/world_authoring.dart';
+part 'local_developer_repository/world_bundle_attestation.dart';
 
-class LocalDeveloperRepository implements DeveloperRepository {
+class LocalDeveloperRepository extends _DeveloperDataRootRepository {
   LocalDeveloperRepository({
     String? dataRoot,
     String? repositoryRoot,
     String? workingDirectory,
     DeveloperProjectResolver resolver = const DeveloperProjectResolver(),
-  }) : _dataRoot = Directory(dataRoot ?? _defaultDeveloperDataRoot()),
-       _repositoryRoot = Directory(
-         repositoryRoot ?? _findDeveloperRepoRoot(workingDirectory)),
-       _resolver = resolver;
+    UnityEditorScanner? unityEditorScanner,
+    UnityEditorVersionProbe? unityEditorVersionProbe,
+    UnityEditorLauncher? unityEditorLauncher,
+    RepositoryDotnetSdkResolver? dotnetSdkResolver,
+    Duration unityEditorProbeTimeout = const Duration(seconds: 5),
+  }) : _repositoryRoot = Directory(
+         repositoryRoot ?? _findDeveloperRepoRoot(workingDirectory),
+       ),
+       _resolver = resolver,
+       _unityEditorScanner = unityEditorScanner,
+       _unityEditorVersionProbe = unityEditorVersionProbe,
+       _unityEditorLauncher = unityEditorLauncher,
+       _dotnetSdkResolver = dotnetSdkResolver ?? resolveRepositoryDotnetSdk,
+       _unityEditorProbeTimeout = unityEditorProbeTimeout,
+       super(Directory(dataRoot ?? resolveRobotopiaDataRoot()));
 
-  final Directory _dataRoot;
   final Directory _repositoryRoot;
   final DeveloperProjectResolver _resolver;
-
-  @override
-  String get developerDataRoot => _dataRoot.path;
+  final UnityEditorScanner? _unityEditorScanner;
+  final UnityEditorVersionProbe? _unityEditorVersionProbe;
+  final UnityEditorLauncher? _unityEditorLauncher;
+  final RepositoryDotnetSdkResolver _dotnetSdkResolver;
+  final Duration _unityEditorProbeTimeout;
 
   @override
   Future<DeveloperWorkspace> loadDeveloperWorkspace({
@@ -179,67 +212,7 @@ class LocalDeveloperRepository implements DeveloperRepository {
   Future<LegacyMigrationResult> migrateLegacyMods(
     String gamePath,
     String outputRoot,
-  ) async {
-    final legacyRoot = Directory(p.join(gamePath, 'Mods'));
-    final created = <String>[];
-    final issues = <LauncherIssue>[];
-    Directory(outputRoot).createSync(recursive: true);
-    if (!legacyRoot.existsSync()) {
-      return LegacyMigrationResult(
-        outputRoot: outputRoot,
-        createdProjects: created,
-        issues: const [
-          LauncherIssue(
-            severity: IssueSeverity.warning,
-            message: 'Robotopia/Mods folder was not found.',
-          ),
-        ],
-      );
-    }
-
-    for (final entity in legacyRoot.listSync()) {
-      if (entity is File && entity.path.toLowerCase().endsWith('.dll')) {
-        created.add(await _migrateLegacyDll(entity, outputRoot));
-      } else if (entity is Directory) {
-        final manifest = File(p.join(entity.path, 'robotopia.mod.json'));
-        if (manifest.existsSync()) {
-          created.add(await _migrateLegacyFolder(entity, outputRoot));
-        } else {
-          issues.add(
-            LauncherIssue(
-              severity: IssueSeverity.warning,
-              message:
-                  '${p.basename(entity.path)} has no robotopia.mod.json and needs manual migration.',
-            ),
-          );
-        }
-      }
-    }
-    return LegacyMigrationResult(
-      outputRoot: outputRoot,
-      createdProjects: created,
-      issues: issues,
-    );
-  }
-
-  /// Registry mods from the project's configured package sources (or the
-  /// bundled local source when no project/sources exist). Failed sources are
-  /// skipped, mirroring [resolveDeveloperProject]'s non-blocking behavior.
-  /// Deliberately not on [DeveloperRepository] yet — the CLI consumes the
-  /// concrete type, and widening the interface breaks external fakes.
-  Future<List<RegistryMod>> loadConfiguredRegistryMods({
-    String? projectPath,
-  }) async {
-    final root = _findProjectRoot(projectPath ?? Directory.current.path);
-    var sources = [_localSource()];
-    if (root != null) {
-      final project = await _readProject(root.path);
-      if (project.packageSources.isNotEmpty) {
-        sources = project.packageSources;
-      }
-    }
-    return (await _loadRegistryModsGuarded(sources)).mods;
-  }
+  ) => _migrateLegacyMods(gamePath, outputRoot);
 
   @override
   Future<ModManifest> checkPackage(String packagePath) async {
@@ -252,7 +225,16 @@ class LocalDeveloperRepository implements DeveloperRepository {
         throw StateError('robotopia.mod.json was not found in $packagePath.');
       }
       manifest = ModManifest.fromJson(
-        jsonDecode(await file.readAsString()) as Map<String, Object?>,
+        jsonDecode(
+              utf8.decode(
+                await _readDeveloperFileBounded(
+                  file,
+                  maxBytes: _maxDeveloperManifestBytes,
+                  label: 'robotopia.mod.json',
+                ),
+              ),
+            )
+            as Map<String, Object?>,
       );
     } else {
       manifest = (await _readPackage(packagePath, expectedSha256: '')).manifest;
@@ -380,22 +362,6 @@ class LocalDeveloperRepository implements DeveloperRepository {
     );
   }
 
-  /// Packs a bare mod directory (a `robotopia.mod.json` with no
-  /// `robotopia.project.json`), e.g. the first-party mods under `mods/`.
-  Future<String> packModDirectory(
-    String projectDir, {
-    String outputDir = '',
-    String configuration = 'Release',
-  }) {
-    return _packModProject(
-      Directory(projectDir).absolute,
-      outputDir: outputDir,
-      configuration: configuration,
-    );
-  }
-
-  // ---- VCC-style multi-project registry + Unity detect/open (helpers in project_registry.dart) ----
-
   @override
   Future<List<RegisteredProject>> listProjects() => _readRegistry();
 
@@ -428,8 +394,6 @@ class LocalDeveloperRepository implements DeveloperRepository {
   @override
   Future<String> openProjectInUnity(String projectPath) =>
       _openInUnity(projectPath);
-
-  // ---- Unity-side VPM (VPM-compatible resolver + listings; helpers in unity_vpm.dart) ----
 
   @override
   Future<List<VpmResolvedPackage>> resolveUnityProject(
@@ -471,8 +435,6 @@ class LocalDeveloperRepository implements DeveloperRepository {
     required String id,
     String name = '',
   }) => _createUnityPackage(parentDirectory, id, name);
-
-  // ---- Custom-world authoring (pairing config + headless bundle build; helpers in world_authoring.dart) ----
 
   @override
   Future<WorldAuthoringConfig?> readWorldAuthoringConfig(

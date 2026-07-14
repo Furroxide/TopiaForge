@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:launcher_data/launcher_data.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
@@ -39,13 +40,13 @@ void main() {
   }
 
   group('WorldBundleEditorGate.isEligible', () {
-    test('accepts the game player stream up to the pinned patch', () {
+    test('accepts only the game player editor version', () {
       expect(WorldBundleEditorGate.isEligible('6000.0.23f1'), isTrue);
-      expect(WorldBundleEditorGate.isEligible('6000.0.31f1'), isTrue);
-      expect(WorldBundleEditorGate.isEligible('6000.0.0f1'), isTrue);
     });
 
-    test('rejects newer patches, other streams, and junk', () {
+    test('rejects other patches, streams, and junk', () {
+      expect(WorldBundleEditorGate.isEligible('6000.0.31f1'), isFalse);
+      expect(WorldBundleEditorGate.isEligible('6000.0.0f1'), isFalse);
       expect(WorldBundleEditorGate.isEligible('6000.0.32f1'), isFalse);
       expect(WorldBundleEditorGate.isEligible('6000.5.1f1'), isFalse);
       expect(WorldBundleEditorGate.isEligible('2022.3.10f1'), isFalse);
@@ -124,5 +125,161 @@ void main() {
       expect(result.success, isFalse);
       expect(result.errorMessage, contains('bundle name'));
     });
+
+    test('rejects a project pinned to a different Unity editor', () async {
+      final project = createUnityProjectShape('WrongProjectEditor');
+      File(
+        p.join(project.path, 'ProjectSettings', 'ProjectVersion.txt'),
+      ).writeAsStringSync('m_EditorVersion: 6000.0.31f1\n');
+      final mod = createModShape('t.wrong-project-editor');
+
+      final result = await repository.buildWorldBundle(
+        unityProjectPath: project.path,
+        modPath: mod.path,
+        bundleName: 'wrong-project-editor',
+      );
+
+      expect(result.success, isFalse);
+      expect(result.errorMessage, contains('pinned to Unity 6000.0.31f1'));
+    });
+
+    test('rejects an explicit editor from a different Unity version', () async {
+      final project = createUnityProjectShape('WrongExplicitEditor');
+      File(
+        p.join(project.path, 'ProjectSettings', 'ProjectVersion.txt'),
+      ).writeAsStringSync('m_EditorVersion: 6000.0.23f1\n');
+      final mod = createModShape('t.wrong-explicit-editor');
+      final editor = File(
+        p.join(tempDir.path, '6000.0.31f1', 'Editor', 'Unity'),
+      )..createSync(recursive: true);
+
+      final result = await repository.buildWorldBundle(
+        unityProjectPath: project.path,
+        modPath: mod.path,
+        bundleName: 'wrong-explicit-editor',
+        unityExePath: editor.path,
+      );
+
+      expect(result.success, isFalse);
+      expect(result.errorMessage, contains('No eligible Unity editor'));
+    });
+
+    test('probes an explicit editor instead of trusting its folder', () async {
+      final project = createUnityProjectShape('SpoofedExplicitEditor');
+      File(
+        p.join(project.path, 'ProjectSettings', 'ProjectVersion.txt'),
+      ).writeAsStringSync('m_EditorVersion: 6000.0.23f1\n');
+      final mod = createModShape('t.spoofed-explicit-editor');
+      final editor = File(
+        p.join(tempDir.path, '6000.0.23f1', 'Editor', 'Unity'),
+      )..createSync(recursive: true);
+      final probingRepository = LocalDeveloperRepository(
+        dataRoot: p.join(tempDir.path, 'data'),
+        repositoryRoot: tempDir.path,
+        unityEditorVersionProbe: (_) async => '6000.0.31f1',
+      );
+
+      final result = await probingRepository.buildWorldBundle(
+        unityProjectPath: project.path,
+        modPath: mod.path,
+        bundleName: 'spoofed-explicit-editor',
+        unityExePath: editor.path,
+      );
+
+      expect(result.success, isFalse);
+      expect(result.errorMessage, contains('No eligible Unity editor'));
+    });
+
+    test('times out a hung explicit editor version probe', () async {
+      final project = createUnityProjectShape('HungEditorProbe');
+      File(
+        p.join(project.path, 'ProjectSettings', 'ProjectVersion.txt'),
+      ).writeAsStringSync('m_EditorVersion: 6000.0.23f1\n');
+      final mod = createModShape('t.hung-editor-probe');
+      final editor = File(p.join(tempDir.path, 'hung', 'Unity'))
+        ..createSync(recursive: true);
+      final probingRepository = LocalDeveloperRepository(
+        dataRoot: p.join(tempDir.path, 'data'),
+        repositoryRoot: tempDir.path,
+        unityEditorVersionProbe: (_) =>
+            Future.delayed(const Duration(seconds: 1), () => '6000.0.23f1'),
+        unityEditorProbeTimeout: const Duration(milliseconds: 10),
+      );
+
+      final result = await probingRepository.buildWorldBundle(
+        unityProjectPath: project.path,
+        modPath: mod.path,
+        bundleName: 'hung-editor-probe',
+        unityExePath: editor.path,
+      );
+
+      expect(result.success, isFalse);
+      expect(result.errorMessage, contains('No eligible Unity editor'));
+    });
+  });
+
+  test('world output attestation verifies provenance and rejects links', () {
+    final mod = createModShape('AttestedWorld');
+    final assets = Directory(p.join(mod.path, 'AssetBundles'))..createSync();
+    final bundle = File(p.join(assets.path, 'attested.bundle'))
+      ..writeAsStringSync('bundle bytes');
+    final digest = sha256.convert(bundle.readAsBytesSync()).toString();
+    final manifest = File(p.join(assets.path, 'attested.manifest.json'))
+      ..writeAsStringSync(
+        jsonEncode({
+          'bundle': 'attested.bundle',
+          'worldPrefab': 'Assets/World/World.prefab',
+          'editorVersion': '6000.0.23f1',
+          'sha256': digest,
+          'assets': ['Assets/World/World.prefab'],
+        }),
+      );
+
+    final attested = repository.attestWorldBundleOutput(
+      modPath: mod.path,
+      bundleName: 'attested',
+      worldPrefab: 'Assets/World/World.prefab',
+    );
+    expect(attested.sha256, digest);
+    expect(attested.sizeBytes, bundle.lengthSync());
+    expect(
+      () => repository.attestWorldBundleOutput(
+        modPath: mod.path,
+        bundleName: '../attested',
+        worldPrefab: 'Assets/World/World.prefab',
+      ),
+      throwsStateError,
+    );
+
+    manifest.writeAsStringSync(
+      jsonEncode({
+        'bundle': 'attested.bundle',
+        'worldPrefab': 'Assets/World/World.prefab',
+        'editorVersion': '6000.0.31f1',
+        'sha256': digest,
+        'assets': ['Assets/World/World.prefab'],
+      }),
+    );
+    expect(
+      () => repository.attestWorldBundleOutput(
+        modPath: mod.path,
+        bundleName: 'attested',
+        worldPrefab: 'Assets/World/World.prefab',
+      ),
+      throwsStateError,
+    );
+
+    if (!Platform.isWindows) {
+      manifest.deleteSync();
+      Link(manifest.path).createSync(bundle.path);
+      expect(
+        () => repository.attestWorldBundleOutput(
+          modPath: mod.path,
+          bundleName: 'attested',
+          worldPrefab: 'Assets/World/World.prefab',
+        ),
+        throwsStateError,
+      );
+    }
   });
 }

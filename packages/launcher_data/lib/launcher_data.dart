@@ -1,6 +1,7 @@
 library;
 
+export 'src/bounded_process.dart';
+export 'src/dotnet_sdk.dart';
 export 'src/local_developer_repository.dart';
 export 'src/local_launcher_repository.dart';
-
-// TODO: Export any libraries intended for clients of this package.
+export 'src/safe_zip_archive.dart';

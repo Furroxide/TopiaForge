@@ -19,6 +19,9 @@ void main() {
     repoRoot = Directory(p.join(root.path, 'repo'))..createSync();
     launcherDir = Directory(p.join(root.path, 'launcher'))..createSync();
     _createMacGame(launcherDir);
+    File(
+      p.join(launcherDir.path, 'installed-build.json'),
+    ).writeAsStringSync('{"id":"2227"}');
     _createRuntimeSources(repoRoot);
     repository = LocalLauncherRepository(
       dataRoot: p.join(root.path, 'data'),
@@ -39,16 +42,30 @@ void main() {
     expect(install!.layout, GameInstallLayout.macAppBundle);
     expect(
       install.executablePath,
-      p.join(launcherDir.path, 'Robotopia.app', 'Contents', 'MacOS',
-          'robotopia'),
+      p.join(
+        launcherDir.path,
+        'Robotopia.app',
+        'Contents',
+        'MacOS',
+        'robotopia',
+      ),
     );
     expect(install.canLaunch, isTrue);
     // The bundle fixture includes the managed assemblies, so no warning.
-    expect(
-      install.issues.where((issue) => issue.isBlocking),
-      isEmpty,
-    );
+    expect(install.issues.where((issue) => issue.isBlocking), isEmpty);
     expect(install.bepInExStatus, ComponentState.missing);
+    expect(install.gameVersion, '0.0.2227');
+    expect(install.gameVersionLabel, 'build 2227');
+  });
+
+  test('prefers a bundle marker over the launcher-directory marker', () async {
+    File(
+      p.join(launcherDir.path, 'Robotopia.app', 'installed-build.json'),
+    ).writeAsStringSync('{"id":2228}');
+
+    final install = await repository.detectKnownInstall();
+
+    expect(install?.gameVersion, '0.0.2228');
   });
 
   test('repair installs the macOS BepInEx bundle beside the app', () async {

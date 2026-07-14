@@ -4,30 +4,17 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
   Future<List<InstalledMod>> _loadInstalledMods(GameInstall install) async {
     final packages = <InstalledMod>[];
     final state = await _readManagerState(install);
-    final stateById = <String, Map<dynamic, dynamic>>{};
-    for (final item in (state['mods'] as List).whereType<Map>()) {
-      final id = item['id'] as String?;
-      if (id != null) {
-        stateById[id.toLowerCase()] = item;
+    final stateById = _stateByModId(state);
+    final catalog = await _loadInstalledVersionCatalog(
+      install,
+      stateById: stateById,
+    );
+    for (final entry in catalog.entries) {
+      final versions = entry.value;
+      if (versions.isEmpty) {
+        continue;
       }
-    }
-
-    final root = _packagesRoot(install);
-    if (!root.existsSync()) {
-      return packages;
-    }
-
-    for (final idDir in root.listSync().whereType<Directory>()) {
-      final versions = <InstalledMod>[];
-      for (final versionDir in idDir.listSync().whereType<Directory>()) {
-        versions.add(_readInstalledVersion(idDir, versionDir, stateById));
-      }
-      packages.add(
-        _pickCurrentVersion(
-          versions,
-          stateById[p.basename(idDir.path).toLowerCase()],
-        ),
-      );
+      packages.add(_pickCurrentVersion(versions, stateById[entry.key]));
     }
 
     packages.sort(
@@ -36,11 +23,56 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
     return packages;
   }
 
-  InstalledMod _readInstalledVersion(
+  Future<Map<String, List<InstalledMod>>> _loadInstalledVersionCatalog(
+    GameInstall install, {
+    Map<String, Map<dynamic, dynamic>>? stateById,
+  }) async {
+    final effectiveState =
+        stateById ?? _stateByModId(await _readManagerState(install));
+    final catalog = <String, List<InstalledMod>>{};
+    final root = _packagesRoot(install);
+    if (!root.existsSync()) {
+      return catalog;
+    }
+
+    for (final idDir
+        in root.listSync(followLinks: false).whereType<Directory>()) {
+      final key = p.basename(idDir.path).toLowerCase();
+      final versions = catalog.putIfAbsent(key, () => <InstalledMod>[]);
+      for (final versionDir
+          in idDir.listSync(followLinks: false).whereType<Directory>()) {
+        versions.add(
+          await _readInstalledVersion(idDir, versionDir, effectiveState),
+        );
+      }
+      versions.sort((left, right) {
+        final leftVersion = SemanticVersion.tryParse(left.version);
+        final rightVersion = SemanticVersion.tryParse(right.version);
+        if (leftVersion == null || rightVersion == null) {
+          return left.version.compareTo(right.version);
+        }
+        return leftVersion.compareTo(rightVersion);
+      });
+    }
+    return catalog;
+  }
+
+  Map<String, Map<dynamic, dynamic>> _stateByModId(Map<String, Object?> state) {
+    final result = <String, Map<dynamic, dynamic>>{};
+    for (final item in (state['mods'] as List).whereType<Map>()) {
+      final id = item['id'] as String?;
+      if (id != null && ModManifest.isValidId(id)) {
+        result[id.toLowerCase()] = item;
+      }
+    }
+    return result;
+  }
+
+  Future<InstalledMod> _readInstalledVersion(
     Directory idDir,
     Directory versionDir,
     Map<String, Map<dynamic, dynamic>> stateById,
-  ) {
+  ) async {
     final manifestFile = File(p.join(versionDir.path, 'robotopia.mod.json'));
     if (!manifestFile.existsSync()) {
       return InstalledMod(
@@ -57,9 +89,28 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
 
     try {
       final manifest = ModManifest.fromJson(
-        jsonDecode(manifestFile.readAsStringSync()) as Map<String, Object?>,
+        jsonDecode(
+              utf8.decode(
+                await _readLauncherFileBounded(
+                  manifestFile,
+                  _maxLauncherManifestBytes,
+                ),
+              ),
+            )
+            as Map<String, Object?>,
       );
       final stateItem = stateById[manifest.id.toLowerCase()];
+      final errors = <String>[
+        ...manifest
+            .validate()
+            .where((issue) => issue.isBlocking)
+            .map((issue) => issue.message),
+        if (p.basename(idDir.path).toLowerCase() != manifest.id.toLowerCase())
+          'Package directory id does not match manifest id ${manifest.id}.',
+        if (p.basename(versionDir.path) != manifest.version)
+          'Package directory version does not match manifest version '
+              '${manifest.version}.',
+      ];
       return InstalledMod(
         id: manifest.id,
         name: manifest.name,
@@ -71,7 +122,7 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
         updatedAtUtc: (stateItem?['updatedAtUtc'] as String?) ?? '',
         packagePath: versionDir.path,
         manifest: manifest,
-        errors: manifest.validate().map((issue) => issue.message).toList(),
+        errors: errors,
       );
     } on Object catch (error) {
       return InstalledMod(
@@ -121,7 +172,9 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
       return {'mods': <Object?>[]};
     }
 
-    final decoded = jsonDecode(await file.readAsString());
+    final decoded = jsonDecode(
+      utf8.decode(await _readLauncherFileBounded(file, _maxManagerStateBytes)),
+    );
     if (decoded is Map<String, Object?> && decoded['mods'] is List) {
       return decoded;
     }
@@ -133,8 +186,7 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
     Map<String, Object?> state,
   ) async {
     final file = _managerStateFile(install);
-    await file.create(recursive: true);
-    await file.writeAsString(_prettyJson(state));
+    await _writeJsonFileAtomic(file, state);
   }
 
   void _upsertState(
@@ -172,3 +224,7 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
     state['mods'] = mods;
   }
 }
+
+const _maxLauncherManifestBytes = 1024 * 1024;
+
+const _maxManagerStateBytes = 16 * 1024 * 1024;

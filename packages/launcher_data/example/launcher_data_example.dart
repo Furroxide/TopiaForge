@@ -1,6 +1,10 @@
 import 'package:launcher_data/launcher_data.dart';
 
-void main() {
+Future<void> main() async {
   final repository = LocalLauncherRepository();
-  print('launcher data root: ${repository.dataRoot}');
+  try {
+    print('launcher data root: ${repository.dataRoot}');
+  } finally {
+    await repository.dispose();
+  }
 }

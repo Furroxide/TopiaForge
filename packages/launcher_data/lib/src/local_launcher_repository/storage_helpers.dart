@@ -2,13 +2,18 @@ part of '../local_launcher_repository.dart';
 
 extension _StorageHelpers on LocalLauncherRepository {
   Future<List<LauncherProfile>> _loadProfiles() async {
+    await _recoverAtomicBackupIfMissing(_profilesFile);
     if (!_profilesFile.existsSync()) {
       final defaults = [LauncherProfile.defaultProfile()];
       await saveProfiles(defaults, defaults.first.id);
       return defaults;
     }
 
-    final decoded = jsonDecode(await _profilesFile.readAsString());
+    final decoded = await _readJsonFileBounded(
+      _profilesFile,
+      maxBytes: _maxProfilesBytes,
+      label: 'Launcher profiles',
+    );
     final profiles = (decoded is Map ? decoded['profiles'] : null) as List?;
     final result = profiles == null
         ? <LauncherProfile>[]
@@ -24,11 +29,16 @@ extension _StorageHelpers on LocalLauncherRepository {
   }
 
   Future<List<PackageSource>> _loadPackageSources() async {
+    await _recoverAtomicBackupIfMissing(_sourcesFile);
     if (!_sourcesFile.existsSync()) {
       return _defaultPackageSources();
     }
 
-    final decoded = jsonDecode(await _sourcesFile.readAsString());
+    final decoded = await _readJsonFileBounded(
+      _sourcesFile,
+      maxBytes: _maxPackageSourcesBytes,
+      label: 'Package sources',
+    );
     final sources = (decoded is Map ? decoded['sources'] : null) as List?;
     final builtIns = _defaultPackageSources();
     final parsed = sources == null
@@ -88,33 +98,102 @@ extension _StorageHelpers on LocalLauncherRepository {
   }
 
   Future<Map<String, Object?>> _loadSettings() async {
+    await _recoverAtomicBackupIfMissing(_settingsFile);
     if (!_settingsFile.existsSync()) {
       return <String, Object?>{};
     }
 
-    final decoded = jsonDecode(await _settingsFile.readAsString());
+    final decoded = await _readJsonFileBounded(
+      _settingsFile,
+      maxBytes: _maxSettingsBytes,
+      label: 'Launcher settings',
+    );
     return decoded is Map<String, Object?> ? decoded : <String, Object?>{};
   }
 
+  Future<void> _updateSettings(
+    void Function(Map<String, Object?> settings) update,
+  ) async {
+    final previous = _settingsMutationTail;
+    final completion = Completer<void>();
+    _settingsMutationTail = completion.future;
+    await previous;
+    try {
+      final settings = await _loadSettings();
+      update(settings);
+      await _saveSettings(settings);
+    } finally {
+      completion.complete();
+    }
+  }
+
   Future<void> _saveSettings(Map<String, Object?> settings) async {
-    await _settingsFile.create(recursive: true);
-    await _settingsFile.writeAsString(_prettyJson(settings));
+    await _writeJsonFileAtomic(
+      _settingsFile,
+      settings,
+      maxBytes: _maxSettingsBytes,
+      label: 'Launcher settings',
+    );
   }
 
   Future<String> _readLauncherLog({int maxLines = 200}) async {
-    if (!_launcherLogFile.existsSync()) {
+    final type = FileSystemEntity.typeSync(
+      _launcherLogFile.path,
+      followLinks: false,
+    );
+    if (type == FileSystemEntityType.notFound) {
       return '';
     }
+    if (type != FileSystemEntityType.file) {
+      throw StateError('Launcher log is not a regular file.');
+    }
 
-    return _tail(await _launcherLogFile.readAsLines(), maxLines).join('\n');
+    return (await _readTailLinesBounded(
+      _launcherLogFile,
+      maxLines: maxLines,
+      maxBytes: _maxLauncherLogReadBytes,
+    )).join('\n');
   }
 
   Future<void> _appendLauncherLog(String message) async {
-    await _launcherLogFile.create(recursive: true);
-    await _launcherLogFile.writeAsString(
-      '${DateTime.now().toUtc().toIso8601String()} $message\n',
-      mode: FileMode.append,
-    );
+    final previous = _launcherLogMutationTail;
+    final completion = Completer<void>();
+    _launcherLogMutationTail = completion.future;
+    await previous;
+    try {
+      await _launcherLogFile.parent.create(recursive: true);
+      final type = FileSystemEntity.typeSync(
+        _launcherLogFile.path,
+        followLinks: false,
+      );
+      if (type == FileSystemEntityType.link) {
+        throw StateError('Launcher log cannot be a symbolic link.');
+      }
+      if (type != FileSystemEntityType.notFound &&
+          type != FileSystemEntityType.file) {
+        throw StateError('Launcher log is not a regular file.');
+      }
+      if (type == FileSystemEntityType.file &&
+          await _launcherLogFile.length() > _maxLauncherLogBytes) {
+        final tail = await _readTailLinesBounded(
+          _launcherLogFile,
+          maxLines: 100000,
+          maxBytes: _maxLauncherLogReadBytes,
+        );
+        await _writeFileBytesAtomic(
+          _launcherLogFile,
+          utf8.encode(tail.isEmpty ? '' : '${tail.join('\n')}\n'),
+        );
+      }
+      await _launcherLogFile.writeAsString(
+        '${DateTime.now().toUtc().toIso8601String()} '
+        '${_sanitizeLauncherLogMessage(message)}\n',
+        mode: FileMode.append,
+        flush: true,
+      );
+    } finally {
+      completion.complete();
+    }
   }
 
   Future<WorldCatalog> _loadWorldCatalog(
@@ -130,9 +209,12 @@ extension _StorageHelpers on LocalLauncherRepository {
       catalog = WorldCatalog.fallback();
     } else {
       try {
-        catalog = WorldCatalog.fromJson(
-          jsonDecode(await file.readAsString()) as Map<String, Object?>,
+        final decoded = await _readJsonFileBounded(
+          file,
+          maxBytes: _maxWorldCatalogBytes,
+          label: 'World catalog',
         );
+        catalog = WorldCatalog.fromJson(decoded as Map<String, Object?>);
       } on Object catch (error) {
         await _appendLauncherLog('World catalog read failed: $error');
         catalog = WorldCatalog.fallback();
@@ -182,7 +264,204 @@ extension _StorageHelpers on LocalLauncherRepository {
     final file = File(
       p.join(_managerConfig(install).path, 'robotopia.worlds.json'),
     );
-    await file.create(recursive: true);
-    await file.writeAsString(_prettyJson(selection.toRuntimeConfig()));
+    var existing = <String, Object?>{};
+    if (await file.exists()) {
+      try {
+        final decoded = jsonDecode(
+          utf8.decode(
+            await _readLauncherFileBounded(file, _maxWorldConfigBytes),
+          ),
+        );
+        if (decoded is Map<String, Object?>) {
+          existing = decoded;
+        } else {
+          await _appendLauncherLog(
+            'World config was not a JSON object; replacing it.',
+          );
+        }
+      } on FormatException catch (error) {
+        await _appendLauncherLog(
+          'World config was malformed and will be replaced: $error',
+        );
+      }
+    }
+    await _writeJsonFileAtomic(file, selection.mergeRuntimeConfig(existing));
+  }
+}
+
+Future<void> _recoverAtomicBackupIfMissing(File file) async {
+  if (await file.exists() || !await file.parent.exists()) {
+    return;
+  }
+  final prefix = '${p.basename(file.path)}.';
+  final candidates =
+      file.parent.listSync(followLinks: false).whereType<File>().where((
+        candidate,
+      ) {
+        final name = p.basename(candidate.path);
+        return name.startsWith(prefix) && name.endsWith('.bak');
+      }).toList()..sort(
+        (left, right) =>
+            right.statSync().modified.compareTo(left.statSync().modified),
+      );
+  for (final backup in candidates) {
+    if (FileSystemEntity.typeSync(backup.path, followLinks: false) !=
+        FileSystemEntityType.file) {
+      continue;
+    }
+    try {
+      await backup.rename(file.path);
+      for (final stale in candidates.where(
+        (candidate) => candidate != backup,
+      )) {
+        await _deleteFileBestEffort(stale);
+      }
+      return;
+    } on FileSystemException {
+      // Try the next intact backup if this one vanished or was locked.
+    }
+  }
+}
+
+Future<Object?> _readJsonFileBounded(
+  File file, {
+  required int maxBytes,
+  required String label,
+}) async {
+  final type = FileSystemEntity.typeSync(file.path, followLinks: false);
+  if (type == FileSystemEntityType.link) {
+    throw StateError('$label cannot be read through a symbolic link.');
+  }
+  if (type != FileSystemEntityType.file) {
+    throw StateError('$label does not exist: ${file.path}');
+  }
+  try {
+    return jsonDecode(
+      utf8.decode(await _readLauncherFileBounded(file, maxBytes)),
+    );
+  } on StateError {
+    rethrow;
+  } on Object catch (error) {
+    throw FormatException('$label is not valid JSON: $error');
+  }
+}
+
+Future<List<String>> _readTailLinesBounded(
+  File file, {
+  required int maxLines,
+  required int maxBytes,
+}) async {
+  if (maxLines <= 0) {
+    return const [];
+  }
+  final length = await file.length();
+  final start = length > maxBytes ? length - maxBytes : 0;
+  final bytes = BytesBuilder(copy: false);
+  await for (final chunk in file.openRead(start, length)) {
+    if (chunk.length > maxBytes - bytes.length) {
+      throw StateError('Log tail exceeded its $maxBytes-byte limit.');
+    }
+    bytes.add(chunk);
+  }
+  var text = utf8.decode(bytes.takeBytes(), allowMalformed: true);
+  if (start > 0) {
+    final firstNewline = text.indexOf('\n');
+    text = firstNewline < 0 ? '' : text.substring(firstNewline + 1);
+  }
+  return _tailStatic(const LineSplitter().convert(text), maxLines);
+}
+
+List<String> _tailStatic(List<String> lines, int maxLines) {
+  if (lines.length <= maxLines) {
+    return lines;
+  }
+  return lines.sublist(lines.length - maxLines);
+}
+
+const _maxSettingsBytes = 1024 * 1024;
+const _maxProfilesBytes = 4 * 1024 * 1024;
+const _maxPackageSourcesBytes = 1024 * 1024;
+const _maxWorldCatalogBytes = 16 * 1024 * 1024;
+const _maxLauncherLogReadBytes = 4 * 1024 * 1024;
+const _maxLauncherLogBytes = 8 * 1024 * 1024;
+const _maxLauncherLogMessageCharacters = 4096;
+
+String _sanitizeLauncherLogMessage(String message) {
+  final singleLine = message.replaceAll(RegExp(r'[\u0000-\u001f\u007f]+'), ' ');
+  return singleLine.length <= _maxLauncherLogMessageCharacters
+      ? singleLine
+      : '${singleLine.substring(0, _maxLauncherLogMessageCharacters)}…';
+}
+
+Future<void> _writeJsonFileAtomic(
+  File file,
+  Map<String, Object?> payload, {
+  int? maxBytes,
+  String label = 'JSON file',
+}) async {
+  final json = const JsonEncoder.withIndent('  ').convert(payload);
+  final bytes = utf8.encode(json);
+  if (maxBytes != null && bytes.length > maxBytes) {
+    throw StateError('$label exceeds its $maxBytes-byte limit.');
+  }
+  await _writeFileBytesAtomic(file, bytes);
+}
+
+Future<void> _writeFileBytesAtomic(File file, List<int> contents) async {
+  await file.parent.create(recursive: true);
+  final targetType = FileSystemEntity.typeSync(file.path, followLinks: false);
+  if (targetType == FileSystemEntityType.link) {
+    throw StateError('Refusing to replace symbolic link: ${file.path}');
+  }
+  if (targetType != FileSystemEntityType.notFound &&
+      targetType != FileSystemEntityType.file) {
+    throw StateError('Expected a regular file: ${file.path}');
+  }
+  final token = '$pid-${DateTime.now().microsecondsSinceEpoch}';
+  final temp = File('${file.path}.$token.tmp');
+  final backup = File('${file.path}.$token.bak');
+  var committed = false;
+  try {
+    await temp.writeAsBytes(contents, flush: true);
+    try {
+      await temp.rename(file.path);
+      committed = true;
+      return;
+    } on FileSystemException {
+      if (!await file.exists()) {
+        rethrow;
+      }
+    }
+
+    await file.rename(backup.path);
+    try {
+      await temp.rename(file.path);
+      committed = true;
+    } on Object {
+      if (!await file.exists() && await backup.exists()) {
+        await backup.rename(file.path);
+      }
+      rethrow;
+    }
+  } finally {
+    // Once the live file has been replaced, cleanup must not make callers
+    // treat the committed write as a failure. In particular, Windows uses the
+    // backup-swap branch and antivirus/file indexing can briefly retain the
+    // old file.
+    await _deleteFileBestEffort(temp);
+    if (committed) {
+      await _deleteFileBestEffort(backup);
+    }
+  }
+}
+
+Future<void> _deleteFileBestEffort(File file) async {
+  try {
+    if (await file.exists()) {
+      await file.delete();
+    }
+  } on Object {
+    // A stale temp/backup is recoverable and must not invalidate a committed
+    // live file.
   }
 }

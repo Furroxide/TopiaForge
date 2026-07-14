@@ -9,6 +9,10 @@ import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 part 'launcher_data_test_helpers.dart';
+part 'launcher_data_diagnostics_test_part.dart';
+part 'launcher_data_ugc_test_part.dart';
+part 'profile_launch_test_part.dart';
+part 'runtime_repair_security_test_part.dart';
 
 void main() {
   late Directory root;
@@ -38,6 +42,28 @@ void main() {
     }
   });
 
+  _registerUgcDataTests(
+    repository: () => repository,
+    dataRoot: () => dataRoot,
+    gameRoot: () => gameRoot,
+  );
+  _registerDiagnosticDataTests(
+    repository: () => repository,
+    dataRoot: () => dataRoot,
+    gameRoot: () => gameRoot,
+  );
+  _registerProfileLaunchTests(
+    root: () => root,
+    dataRoot: () => dataRoot,
+    repositoryRoot: () => repoRoot,
+    gameRoot: () => gameRoot,
+  );
+  _registerRuntimeRepairSecurityTests(
+    repository: () => repository,
+    repositoryRoot: () => repoRoot,
+    gameRoot: () => gameRoot,
+  );
+
   test('detects known install and repairs BepInEx plus loader', () async {
     final install = await repository.detectKnownInstall();
     expect(install, isNotNull);
@@ -49,6 +75,52 @@ void main() {
     final repaired = await repository.selectGameDirectory(gameRoot.path);
     expect(repaired.bepInExStatus, ComponentState.ready);
     expect(repaired.loaderStatus, ComponentState.ready);
+  });
+
+  test('reads canonical game build provenance independently', () async {
+    final metadata = File(p.join(gameRoot.path, 'installed-build.json'));
+    metadata.writeAsStringSync('{"id":"2227"}');
+
+    final install = await repository.selectGameDirectory(gameRoot.path);
+
+    expect(install.gameVersion, '0.0.2227');
+    expect(install.gameVersionLabel, 'build 2227');
+
+    metadata.writeAsStringSync('{"id":0}');
+    final invalid = await repository.selectGameDirectory(gameRoot.path);
+    expect(invalid.gameVersion, isNull);
+    expect(invalid.gameVersionLabel, isEmpty);
+  });
+
+  test('package install enforces the current canonical game build', () async {
+    final metadata = File(p.join(gameRoot.path, 'installed-build.json'));
+    metadata.writeAsStringSync('{"id":2227}');
+    final install = await repository.selectGameDirectory(gameRoot.path);
+    final package = _createPackage(
+      root,
+      id: 'build.bound.mod',
+      version: '1.0.0',
+      gameVersionRange: '0.0.2227',
+    );
+
+    final compatible = await repository.previewPackage(package.path, install);
+    expect(compatible.hasBlockingIssues, isFalse);
+
+    metadata.writeAsStringSync('{"id":2228}');
+    final incompatible = await repository.previewPackage(package.path, install);
+    expect(incompatible.hasBlockingIssues, isTrue);
+    await expectLater(
+      repository.installPackage(package.path, install),
+      throwsA(predicate((error) => error.toString().contains('not 0.0.2228'))),
+    );
+
+    metadata.deleteSync();
+    final unknown = await repository.previewPackage(package.path, install);
+    expect(unknown.hasBlockingIssues, isTrue);
+    expect(
+      unknown.issues.map((issue) => issue.message).join(' '),
+      contains('installed-build.json could not be verified'),
+    );
   });
 
   test(
@@ -73,7 +145,7 @@ void main() {
         contains('Automatic runtime repair could not complete.'),
       );
       expect(result.message, contains('Built loader DLLs were not found.'));
-      expect(File(p.join(gameRoot.path, 'winhttp.dll')).existsSync(), isTrue);
+      expect(File(p.join(gameRoot.path, 'winhttp.dll')).existsSync(), isFalse);
     },
   );
 
@@ -178,6 +250,48 @@ void main() {
     expect(mods.single.version, '1.1.0');
     expect(mods.single.enabled, isFalse);
     expect(mods.single.restartRequired, isTrue);
+  });
+
+  test('re-enables disabled dependencies for dependent installs', () async {
+    final install = await repository.selectGameDirectory(gameRoot.path);
+    final dependencyPackage = _createPackage(
+      root,
+      id: 'dependency.mod',
+      version: '1.0.0',
+    );
+
+    await repository.installPackage(dependencyPackage.path, install);
+    var mods = await repository.setModEnabled(install, 'dependency.mod', false);
+    expect(mods.single.enabled, isFalse);
+
+    final rootPackage = _createPackage(
+      root,
+      id: 'main.mod',
+      version: '1.0.0',
+      dependencies: [
+        {'id': 'dependency.mod', 'versionRange': '>=1.0.0'},
+      ],
+    );
+
+    final plan = await repository.previewPackage(rootPackage.path, install);
+    expect(plan.hasBlockingIssues, isFalse);
+    expect(plan.installActions.map((action) => action.modId), [
+      'dependency.mod',
+      'main.mod',
+    ]);
+    expect(plan.installActions.first.enableOnly, isTrue);
+
+    mods = await repository.installPackage(rootPackage.path, install);
+    final byId = {for (final mod in mods) mod.id: mod};
+    expect(byId['dependency.mod']!.enabled, isTrue);
+    expect(byId['main.mod']!.enabled, isTrue);
+
+    final resolution = const DependencyPlanner().resolveInstalled(mods);
+    expect(resolution.hasBlockingIssues, isFalse);
+    expect(resolution.orderedMods.map((mod) => mod.id), [
+      'dependency.mod',
+      'main.mod',
+    ]);
   });
 
   test('rejects zip traversal during preview', () async {
@@ -365,7 +479,7 @@ void main() {
 
     final snapshot = await repository.loadSnapshot();
 
-    expect(snapshot.launcherUpdates.enabled, isTrue);
+    expect(snapshot.launcherUpdates.enabled, isFalse);
     expect(snapshot.launcherUpdates.checkAutomatically, isFalse);
     expect(snapshot.launcherUpdates.channel, LauncherUpdateChannel.nightly);
   });

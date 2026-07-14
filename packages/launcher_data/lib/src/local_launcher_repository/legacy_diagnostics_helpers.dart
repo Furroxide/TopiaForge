@@ -21,7 +21,7 @@ extension _LegacyDiagnosticsHelpers on LocalLauncherRepository {
           ),
         );
       } else if (entity is Directory) {
-        mods.add(_legacyDirectoryMod(entity));
+        mods.add(await _legacyDirectoryMod(entity));
       }
     }
 
@@ -29,7 +29,7 @@ extension _LegacyDiagnosticsHelpers on LocalLauncherRepository {
     return mods;
   }
 
-  LegacyMod _legacyDirectoryMod(Directory directory) {
+  Future<LegacyMod> _legacyDirectoryMod(Directory directory) async {
     final manifestFile = File(p.join(directory.path, 'robotopia.mod.json'));
     if (!manifestFile.existsSync()) {
       return LegacyMod(
@@ -43,7 +43,15 @@ extension _LegacyDiagnosticsHelpers on LocalLauncherRepository {
 
     try {
       final manifest = ModManifest.fromJson(
-        jsonDecode(manifestFile.readAsStringSync()) as Map<String, Object?>,
+        jsonDecode(
+              utf8.decode(
+                await _readLauncherFileBounded(
+                  manifestFile,
+                  _maxLauncherManifestBytes,
+                ),
+              ),
+            )
+            as Map<String, Object?>,
       );
       return LegacyMod(
         id: manifest.id,
@@ -80,74 +88,183 @@ extension _LegacyDiagnosticsHelpers on LocalLauncherRepository {
 
     final archive = Archive();
     final included = <String>[];
-    _addDiagnosticSummary(archive, included, install, resolution, now);
-    await _addFileIfExists(
+    final entries = <DiagnosticEntryMetadata>[];
+    _addDiagnosticSummary(archive, included, entries, install, resolution, now);
+    await _addDiagnosticFileIfExists(
       archive,
       included,
+      entries,
       'launcher.log',
       _launcherLogFile,
       install.path,
     );
-    await _addFileIfExists(
+    await _addDiagnosticFileIfExists(
       archive,
       included,
+      entries,
       'manager-state.json',
       _managerStateFile(install),
       install.path,
     );
-    await _addFileIfExists(
+    await _addDiagnosticFileIfExists(
       archive,
       included,
+      entries,
       'manager.log',
       File(p.join(_managerLogs(install).path, 'manager.log')),
       install.path,
     );
-    await _addFileIfExists(
+    await _addDiagnosticFileIfExists(
       archive,
       included,
+      entries,
       'bepinex-log.txt',
       File(p.join(install.path, 'BepInEx', 'LogOutput.log')),
       install.path,
     );
+    final manifest = _prettyJson({
+      'schemaVersion': 1,
+      'hashAlgorithm': 'SHA-256',
+      'selfHashExcluded': true,
+      'entries': entries.map((entry) => entry.toJson()).toList(),
+    });
+    entries.add(
+      _addDiagnosticText(
+        archive,
+        included,
+        'diagnostic-manifest.json',
+        manifest,
+        install.path,
+      ),
+    );
 
-    await bundle.writeAsBytes(ZipEncoder().encode(archive));
+    final bytes = ZipEncoder().encode(archive);
+    if (bytes.length > _maxDiagnosticBundleBytes) {
+      throw StateError('Diagnostic bundle exceeds the 16 MB output limit.');
+    }
+    await _writeFileBytesAtomic(bundle, bytes);
     await _appendLauncherLog('Created diagnostic bundle ${bundle.path}.');
     return DiagnosticBundle(
       path: bundle.path,
       createdAtUtc: now,
       includedFiles: included,
+      entries: entries,
     );
   }
 
   void _addDiagnosticSummary(
     Archive archive,
     List<String> included,
+    List<DiagnosticEntryMetadata> entries,
     GameInstall install,
     DependencyResolutionResult resolution,
     DateTime now,
   ) {
-    void addText(String name, String content) {
-      archive.addFile(ArchiveFile.string(name, _redact(content, install.path)));
-      included.add(name);
-    }
-
-    addText(
-      'summary.json',
-      _prettyJson({
-        'createdAtUtc': now.toIso8601String(),
-        'gamePath': _redact(install.path, install.path),
-        'bepInExStatus': install.bepInExStatus.name,
-        'loaderStatus': install.loaderStatus.name,
-        'issues': install.issues.map((issue) => issue.toJson()).toList(),
-      }),
+    entries.add(
+      _addDiagnosticText(
+        archive,
+        included,
+        'summary.json',
+        _prettyJson({
+          'createdAtUtc': now.toIso8601String(),
+          'gamePath': _redact(install.path, install.path),
+          'bepInExStatus': install.bepInExStatus.name,
+          'loaderStatus': install.loaderStatus.name,
+          if (install.gameVersion != null) 'gameVersion': install.gameVersion,
+          'gameVersionLabel': install.gameVersionLabel,
+          'issues': install.issues.map((issue) => issue.toJson()).toList(),
+        }),
+        install.path,
+      ),
     );
-    addText(
-      'load-order.json',
-      _prettyJson({
-        'orderedMods': resolution.orderedMods.map((mod) => mod.id).toList(),
-        'dependencyGraph': resolution.graph,
-        'issues': resolution.issues.map((issue) => issue.toJson()).toList(),
-      }),
+    entries.add(
+      _addDiagnosticText(
+        archive,
+        included,
+        'load-order.json',
+        _prettyJson({
+          'orderedMods': resolution.orderedMods.map((mod) => mod.id).toList(),
+          'dependencyGraph': resolution.graph,
+          'issues': resolution.issues.map((issue) => issue.toJson()).toList(),
+        }),
+        install.path,
+      ),
+    );
+  }
+
+  Future<void> _addDiagnosticFileIfExists(
+    Archive archive,
+    List<String> included,
+    List<DiagnosticEntryMetadata> entries,
+    String name,
+    File file,
+    String gamePath,
+  ) async {
+    final type = FileSystemEntity.typeSync(file.path, followLinks: false);
+    if (type == FileSystemEntityType.notFound) {
+      return;
+    }
+    if (type != FileSystemEntityType.file) {
+      return;
+    }
+    final sourceBytes = await file.length();
+    final lines = await _readTailLinesBounded(
+      file,
+      maxLines: _maxDiagnosticSourceLines + 1,
+      maxBytes: _maxDiagnosticSourceBytes,
+    );
+    final reasons = <String>[];
+    if (sourceBytes > _maxDiagnosticSourceBytes) {
+      reasons.add('byteLimit');
+    }
+    if (lines.length > _maxDiagnosticSourceLines) {
+      reasons.add('lineLimit');
+      lines.removeAt(0);
+    }
+    final text = [
+      if (reasons.isNotEmpty)
+        '[earlier content omitted by diagnostic ${reasons.join(' and ')}]',
+      ...lines,
+    ].join('\n');
+    entries.add(
+      _addDiagnosticText(
+        archive,
+        included,
+        name,
+        text,
+        gamePath,
+        sourceBytes: sourceBytes,
+        truncationReasons: reasons,
+        byteLimit: _maxDiagnosticSourceBytes,
+        lineLimit: _maxDiagnosticSourceLines,
+      ),
+    );
+  }
+
+  DiagnosticEntryMetadata _addDiagnosticText(
+    Archive archive,
+    List<String> included,
+    String name,
+    String text,
+    String gamePath, {
+    int? sourceBytes,
+    List<String> truncationReasons = const [],
+    int? byteLimit,
+    int? lineLimit,
+  }) {
+    final raw = utf8.encode(text);
+    final bytes = utf8.encode(_redact(text, gamePath));
+    archive.addFile(ArchiveFile.bytes(name, bytes));
+    included.add(name);
+    return DiagnosticEntryMetadata(
+      name: name,
+      sha256: sha256.convert(bytes).toString(),
+      sourceBytes: sourceBytes ?? raw.length,
+      includedBytes: bytes.length,
+      truncated: truncationReasons.isNotEmpty,
+      truncationReasons: truncationReasons,
+      byteLimit: byteLimit,
+      lineLimit: lineLimit,
     );
   }
 
@@ -163,11 +280,20 @@ extension _LegacyDiagnosticsHelpers on LocalLauncherRepository {
     }
 
     final managerLog = File(p.join(_managerLogs(install).path, 'manager.log'));
-    if (managerLog.existsSync()) {
+    if (FileSystemEntity.typeSync(managerLog.path, followLinks: false) ==
+        FileSystemEntityType.file) {
       allLines.add('[manager]');
-      allLines.addAll(_tail(managerLog.readAsLinesSync(), maxLines));
+      allLines.addAll(
+        await _readTailLinesBounded(
+          managerLog,
+          maxLines: maxLines.clamp(0, 10000),
+          maxBytes: _maxDiagnosticSourceBytes,
+        ),
+      );
     }
 
-    return allLines.join('\n');
+    return _redact(allLines.join('\n'), install.path);
   }
 }
+
+const _maxDiagnosticBundleBytes = 16 * 1024 * 1024;

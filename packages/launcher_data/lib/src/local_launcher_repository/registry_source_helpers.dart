@@ -4,11 +4,50 @@ part of '../local_launcher_repository.dart';
 /// deduped mod list with per-source health, tolerating dead sources.
 /// (Split from storage_helpers.dart for the 500-line file cap.)
 extension _RegistrySourceHelpers on LocalLauncherRepository {
-  Future<List<RegistryMod>> _loadRegistryMods(
+  void _validatePackageSources(List<PackageSource> sources) {
+    if (sources.length > 128) {
+      throw StateError('At most 128 package sources may be configured.');
+    }
+    final ids = <String>{};
+    for (final source in sources) {
+      final id = source.id.trim();
+      if (id.isEmpty || id.length > 128) {
+        throw StateError(
+          'Package source ids must contain 1 to 128 characters.',
+        );
+      }
+      if (!ids.add(id.toLowerCase())) {
+        throw StateError('Duplicate package source id: $id');
+      }
+      final value = source.url.trim();
+      if (value.isEmpty || value.length > 4096) {
+        throw StateError(
+          'Package source URLs must contain 1 to 4096 characters.',
+        );
+      }
+      if (_isWindowsPathLike(value)) {
+        continue;
+      }
+      final uri = Uri.tryParse(value);
+      if (uri == null || !uri.hasScheme) {
+        continue;
+      }
+      if (uri.scheme == 'file') {
+        continue;
+      }
+      if (!isPublicHttpsUri(uri)) {
+        throw StateError(
+          'Remote package sources must use an absolute HTTPS URL without credentials, query, or fragment.',
+        );
+      }
+    }
+  }
+
+  Future<List<RegistryMod>> _loadRegistryCandidates(
     List<InstalledMod> installedMods,
     List<PackageSource> sources,
   ) async {
-    return (await _loadRegistryOutcome(installedMods, sources)).mods;
+    return (await _loadRegistryOutcome(installedMods, sources)).candidates;
   }
 
   Future<_RegistryLoadOutcome> _loadRegistryOutcome(
@@ -16,6 +55,7 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
     List<PackageSource> sources,
   ) async {
     final byId = <String, RegistryMod>{};
+    final byIdVersion = <String, RegistryMod>{};
     final statuses = <PackageSourceStatus>[];
     for (final source in sources.where((source) => source.enabled)) {
       try {
@@ -30,14 +70,23 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
             remote: _isRemoteSource(source),
           ),
         );
-        for (final mod in mods) {
+        for (final mod in mods.where(
+          (mod) => !mod.manifest.validate().any((issue) => issue.isBlocking),
+        )) {
           final id = mod.manifest.id.toLowerCase();
+          byIdVersion.putIfAbsent(
+            '$id@${mod.manifest.version.toLowerCase()}',
+            () => mod,
+          );
           final existing = byId[id];
           // One tile per mod id: keep the highest version. On a tie the
           // earlier source wins — the bundled local source is listed first,
           // so an equal version installs from disk instead of re-downloading.
           if (existing == null ||
-              _isNewerVersion(mod.manifest.version, existing.manifest.version)) {
+              _isNewerVersion(
+                mod.manifest.version,
+                existing.manifest.version,
+              )) {
             byId[id] = mod;
           }
         }
@@ -55,7 +104,7 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
       }
     }
 
-    final mods = byId.values.map((mod) {
+    RegistryMod withInstalledVersion(RegistryMod mod) {
       final installed = installedMods
           .where(
             (item) => item.id.toLowerCase() == mod.manifest.id.toLowerCase(),
@@ -70,8 +119,13 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
         sourceName: mod.sourceName,
         installedVersion: installed?.version,
       );
-    }).toList();
-    return _RegistryLoadOutcome(mods: mods, statuses: statuses);
+    }
+
+    return _RegistryLoadOutcome(
+      mods: byId.values.map(withInstalledVersion).toList(),
+      candidates: byIdVersion.values.map(withInstalledVersion).toList(),
+      statuses: statuses,
+    );
   }
 
   bool _isRemoteSource(PackageSource source) {
@@ -93,7 +147,38 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
       ..._flatRegistryMods(decoded, source, document.baseUri),
       ..._vpmRegistryMods(decoded, source, document.baseUri),
     ];
+    _validateRegistryModTrust(source, mods);
     return mods;
+  }
+
+  void _validateRegistryModTrust(PackageSource source, List<RegistryMod> mods) {
+    for (final mod in mods) {
+      final reference = mod.downloadUrl.trim();
+      final uri = Uri.tryParse(reference);
+      if (uri == null || !uri.hasScheme) {
+        throw StateError(
+          '${mod.manifest.id} has no absolute package download URL.',
+        );
+      }
+      if (uri.scheme == 'file') {
+        if (_isRemoteSource(source)) {
+          throw StateError(
+            '${mod.manifest.id} from a remote source points at a local file.',
+          );
+        }
+        continue;
+      }
+      if (!isPublicHttpsUri(uri)) {
+        throw StateError(
+          '${mod.manifest.id} package downloads must use an absolute HTTPS URL without credentials, query, or fragment.',
+        );
+      }
+      if (!RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(mod.packageSha256.trim())) {
+        throw StateError(
+          '${mod.manifest.id} remote package is missing a valid SHA-256 hash.',
+        );
+      }
+    }
   }
 
   // Returns the directory a source points at, or null when the source is a document (JSON/VPM
@@ -133,34 +218,41 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
       return const [];
     }
 
-    final latestById = <String, RegistryMod>{};
-    final packageFiles = directory.listSync().whereType<File>().where(
-      (file) => file.path.toLowerCase().endsWith('.robotopiamod'),
-    );
+    final byIdVersion = <String, RegistryMod>{};
+    final packageFiles =
+        directory
+            .listSync()
+            .whereType<File>()
+            .where((file) => file.path.toLowerCase().endsWith('.robotopiamod'))
+            .toList()
+          ..sort((left, right) {
+            final insensitive = left.path.toLowerCase().compareTo(
+              right.path.toLowerCase(),
+            );
+            return insensitive != 0
+                ? insensitive
+                : left.path.compareTo(right.path);
+          });
     for (final file in packageFiles) {
       try {
         final package = await _readPackage(file.path);
         final id = package.manifest.id.toLowerCase();
-        final existing = latestById[id];
-        if (existing != null &&
-            !_isNewerVersion(
-              package.manifest.version,
-              existing.manifest.version,
-            )) {
-          continue;
-        }
-        latestById[id] = RegistryMod(
-          manifest: package.manifest,
-          downloadUrl: Uri.file(file.path).toString(),
-          packageSha256: package.sha256Hex,
-          sourceId: source.id,
-          sourceName: source.name,
+        final key = '$id@${package.manifest.version.toLowerCase()}';
+        byIdVersion.putIfAbsent(
+          key,
+          () => RegistryMod(
+            manifest: package.manifest,
+            downloadUrl: Uri.file(file.path).toString(),
+            packageSha256: package.sha256Hex,
+            sourceId: source.id,
+            sourceName: source.name,
+          ),
         );
       } on Object catch (error) {
         await _appendLauncherLog('Skipped package ${file.path}: $error');
       }
     }
-    return latestById.values.toList();
+    return byIdVersion.values.toList();
   }
 
   bool _isNewerVersion(String candidate, String current) {
@@ -182,49 +274,50 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
 
   Future<_SourceDocument> _readSourceDocument(PackageSource source) async {
     if (_isWindowsPathLike(source.url)) {
+      final bytes = await _readLauncherFileBounded(
+        File(source.url),
+        _maxRegistryDocumentBytes,
+      );
       return _SourceDocument(
-        content: await File(source.url).readAsString(),
+        content: utf8.decode(bytes),
         baseUri: Uri.file(p.dirname(source.url)),
       );
     }
     final uri = Uri.tryParse(source.url);
     if (uri != null && uri.scheme == 'file') {
       final path = uri.toFilePath(windows: Platform.isWindows);
+      final bytes = await _readLauncherFileBounded(
+        File(path),
+        _maxRegistryDocumentBytes,
+      );
       return _SourceDocument(
-        content: await File(path).readAsString(),
+        content: utf8.decode(bytes),
         baseUri: Uri.file(p.dirname(path)),
       );
     }
 
     if (uri != null && uri.scheme == 'https') {
-      // Bounded so a hung host can never stall the snapshot load — a dead
-      // source degrades to a per-source failure status instead.
-      final client = HttpClient()
-        ..connectionTimeout = const Duration(seconds: 15);
-      try {
-        final response = await (await client.getUrl(
-          uri,
-        )).close().timeout(const Duration(seconds: 30));
-        if (response.statusCode < 200 || response.statusCode >= 300) {
-          throw StateError(
-            'HTTP ${response.statusCode} while reading ${source.url}.',
-          );
-        }
-        final content = await utf8
-            .decodeStream(response)
-            .timeout(const Duration(seconds: 30));
-        return _SourceDocument(content: content, baseUri: uri);
-      } finally {
-        client.close(force: true);
-      }
+      final fetched = await fetchHttpsBytes(
+        uri,
+        maxBytes: _maxRegistryDocumentBytes,
+        label: 'Package source ${source.id}',
+      );
+      return _SourceDocument(
+        content: utf8.decode(fetched.bytes),
+        baseUri: fetched.effectiveUri,
+      );
     }
 
     if (uri != null && uri.hasScheme) {
       throw StateError('Unsupported package source scheme: ${uri.scheme}');
     }
 
+    final bytes = await _readLauncherFileBounded(
+      File(source.url),
+      _maxRegistryDocumentBytes,
+    );
     return _SourceDocument(
-      content: await File(source.url).readAsString(),
+      content: utf8.decode(bytes),
       baseUri: Uri.file(p.dirname(source.url)),
     );
   }
@@ -317,7 +410,13 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
     }
     final uri = Uri.tryParse(rawUrl);
     if (uri != null && uri.hasScheme) {
-      return rawUrl;
+      if (isPublicHttpsUri(uri)) {
+        return uri.toString();
+      }
+      if (uri.scheme == 'file' && baseUri.scheme == 'file') {
+        return uri.toString();
+      }
+      throw StateError('Unsupported or unsafe package URL: $rawUrl');
     }
     if (baseUri.scheme == 'file') {
       return Uri.file(
@@ -326,9 +425,15 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
         ),
       ).toString();
     }
-    return baseUri.resolve(rawUrl).toString();
+    final resolved = baseUri.resolve(rawUrl);
+    if (!isPublicHttpsUri(resolved)) {
+      throw StateError('Remote package URLs must resolve to HTTPS.');
+    }
+    return resolved.toString();
   }
 }
+
+const _maxRegistryDocumentBytes = 16 * 1024 * 1024;
 
 class _SourceDocument {
   const _SourceDocument({required this.content, required this.baseUri});
@@ -338,9 +443,14 @@ class _SourceDocument {
 }
 
 class _RegistryLoadOutcome {
-  const _RegistryLoadOutcome({required this.mods, required this.statuses});
+  const _RegistryLoadOutcome({
+    required this.mods,
+    required this.candidates,
+    required this.statuses,
+  });
 
   final List<RegistryMod> mods;
+  final List<RegistryMod> candidates;
   final List<PackageSourceStatus> statuses;
 }
 
