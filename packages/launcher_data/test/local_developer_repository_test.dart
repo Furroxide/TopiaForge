@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:launcher_data/launcher_data.dart';
+import 'package:launcher_data/src/ugc_sidecar_runtime.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
@@ -368,7 +369,29 @@ void main() {
       p.join(repoRoot.path, 'tools', 'ugc-automerge-sidecar'),
     )..createSync(recursive: true);
     File(p.join(sidecarDir.path, 'index.mjs')).writeAsStringSync('// sidecar');
-    Directory(p.join(sidecarDir.path, 'node_modules')).createSync();
+    const package = {
+      'name': 'robotopia-sidecar',
+      'version': '1.0.0',
+      'engines': {'node': '>=20'},
+      'dependencies': <String, String>{},
+    };
+    File(
+      p.join(sidecarDir.path, 'package.json'),
+    ).writeAsStringSync(jsonEncode(package));
+    File(p.join(sidecarDir.path, 'package-lock.json')).writeAsStringSync(
+      jsonEncode({
+        ...package,
+        'lockfileVersion': 3,
+        'requires': true,
+        'packages': {'': package},
+      }),
+    );
+    final inspected = TrustedUgcSidecar.inspectDirectory(sidecarDir);
+    final nodeModules = Directory(p.join(sidecarDir.path, 'node_modules'))
+      ..createSync();
+    File(
+      p.join(nodeModules.path, '.robotopia-lock-sha256'),
+    ).writeAsStringSync(inspected.lockDigest);
 
     final result = await repository.runSetup();
 

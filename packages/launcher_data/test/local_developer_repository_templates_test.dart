@@ -39,57 +39,145 @@ void main() {
     ]);
   });
 
-  test('every template scaffolds a valid manifest with no leftover tokens', () async {
-    for (final template in await repository.listModTemplates()) {
-      final workspace = await repository.createModProject(
-        parentDirectory: p.join(root.path, template.id),
-        id: 'test.${template.id}',
-        name: 'Test ${template.id}',
-        options: ModScaffoldOptions(template: template.id),
-      );
+  test('default scaffold is explicitly non-publishable', () async {
+    final workspace = await repository.createModProject(
+      parentDirectory: root.path,
+      id: 'test.identity',
+      name: 'Identity',
+    );
+    final manifest = await repository.readModManifest(workspace.projectRoot);
+    final license = File(p.join(workspace.projectRoot, 'LICENSE.md'));
 
-      final manifestFile = File(
-        p.join(workspace.projectRoot, 'robotopia.mod.json'),
-      );
-      expect(manifestFile.existsSync(), isTrue, reason: template.id);
-      final manifest = ModManifest.fromJson(
-        jsonDecode(manifestFile.readAsStringSync()) as Map<String, Object?>,
-      );
-      expect(
-        manifest.validate().where((issue) => issue.isBlocking),
-        isEmpty,
-        reason: '${template.id}: ${manifest.validate().map((i) => i.message)}',
-      );
-      expect(manifest.id, 'test.${template.id}');
+    expect(manifest.author.name, RobotopiaScaffoldDefaults.authorName);
+    expect(manifest.license, RobotopiaScaffoldDefaults.license);
+    expect(license.readAsStringSync(), contains('No license has been granted'));
+    expect(
+      manifest.validate().map((issue) => issue.message).join(' '),
+      allOf(contains('author placeholder'), contains('Choose a license')),
+    );
+  });
 
-      // No unresolved {{TOKEN}} markers anywhere in the scaffolded text files.
-      for (final entity in Directory(
-        workspace.projectRoot,
-      ).listSync(recursive: true).whereType<File>()) {
-        if (!const {
-          '.cs',
-          '.csproj',
-          '.json',
-          '.md',
-        }.contains(p.extension(entity.path).toLowerCase())) {
-          continue;
-        }
+  test('explicit MIT and custom licenses write matching root text', () async {
+    final mit = await repository.createModProject(
+      parentDirectory: p.join(root.path, 'mit'),
+      id: 'test.mit',
+      name: 'MIT Example',
+      options: const ModScaffoldOptions(
+        authorName: 'Example Author',
+        license: 'MIT',
+      ),
+    );
+    final mitText = File(
+      p.join(mit.projectRoot, 'LICENSE.md'),
+    ).readAsStringSync();
+    expect(mitText, contains('MIT License'));
+    expect(mitText, contains('Example Author'));
+    expect(mitText, isNot(contains('{{')));
+
+    const customText = 'Example private license terms.\n';
+    final custom = await repository.createModProject(
+      parentDirectory: p.join(root.path, 'custom'),
+      id: 'test.customlicense',
+      name: 'Custom License',
+      options: const ModScaffoldOptions(
+        authorName: 'Example Author',
+        license: 'LicenseRef-Example',
+        licenseText: customText,
+      ),
+    );
+    expect(
+      File(p.join(custom.projectRoot, 'LICENSE.md')).readAsStringSync(),
+      customText,
+    );
+  });
+
+  test('custom license declarations require bounded matching text', () async {
+    await expectLater(
+      repository.createModProject(
+        parentDirectory: p.join(root.path, 'missing-text'),
+        id: 'test.missingtext',
+        name: 'Missing Text',
+        options: const ModScaffoldOptions(
+          authorName: 'Example Author',
+          license: 'LicenseRef-Example',
+        ),
+      ),
+      throwsA(
+        predicate(
+          (error) => error.toString().contains('complete license text'),
+        ),
+      ),
+    );
+    await expectLater(
+      repository.createModProject(
+        parentDirectory: p.join(root.path, 'oversized-text'),
+        id: 'test.oversizedtext',
+        name: 'Oversized Text',
+        options: ModScaffoldOptions(
+          authorName: 'Example Author',
+          license: 'LicenseRef-Example',
+          licenseText: List.filled(1024 * 1024 + 1, 'a').join(),
+        ),
+      ),
+      throwsA(predicate((error) => error.toString().contains('1 MB limit'))),
+    );
+  });
+
+  test(
+    'every template scaffolds a valid manifest with no leftover tokens',
+    () async {
+      for (final template in await repository.listModTemplates()) {
+        final workspace = await repository.createModProject(
+          parentDirectory: p.join(root.path, template.id),
+          id: 'test.${template.id}',
+          name: 'Test ${template.id}',
+          options: ModScaffoldOptions(template: template.id),
+        );
+
+        final manifestFile = File(
+          p.join(workspace.projectRoot, 'robotopia.mod.json'),
+        );
+        expect(manifestFile.existsSync(), isTrue, reason: template.id);
+        final manifest = ModManifest.fromJson(
+          jsonDecode(manifestFile.readAsStringSync()) as Map<String, Object?>,
+        );
         expect(
-          entity.readAsStringSync().contains('{{'),
-          isFalse,
-          reason: '${template.id}: ${entity.path} has unresolved tokens',
+          manifest.validate().where((issue) => issue.isBlocking),
+          isEmpty,
+          reason:
+              '${template.id}: ${manifest.validate().map((i) => i.message)}',
+        );
+        expect(manifest.id, 'test.${template.id}');
+
+        // No unresolved {{TOKEN}} markers anywhere in the scaffolded text files.
+        for (final entity in Directory(
+          workspace.projectRoot,
+        ).listSync(recursive: true).whereType<File>()) {
+          if (!const {
+            '.cs',
+            '.csproj',
+            '.json',
+            '.md',
+          }.contains(p.extension(entity.path).toLowerCase())) {
+            continue;
+          }
+          expect(
+            entity.readAsStringSync().contains('{{'),
+            isFalse,
+            reason: '${template.id}: ${entity.path} has unresolved tokens',
+          );
+        }
+
+        // The entry source and csproj exist under the substituted names.
+        final assembly = manifest.entryAssembly.replaceAll('.dll', '');
+        expect(
+          File(p.join(workspace.projectRoot, '$assembly.csproj')).existsSync(),
+          isTrue,
+          reason: template.id,
         );
       }
-
-      // The entry source and csproj exist under the substituted names.
-      final assembly = manifest.entryAssembly.replaceAll('.dll', '');
-      expect(
-        File(p.join(workspace.projectRoot, '$assembly.csproj')).existsSync(),
-        isTrue,
-        reason: template.id,
-      );
-    }
-  });
+    },
+  );
 
   test('template defaults land in the manifest (gamemode)', () async {
     final workspace = await repository.createModProject(
@@ -183,21 +271,73 @@ void main() {
     );
   });
 
-  test('live sync scaffold stores settings and implies the companion', () async {
+  test('project references survive a symlinked temporary parent', () async {
+    if (Platform.isWindows || !Directory('/tmp').existsSync()) {
+      return;
+    }
+    final canonicalTmp = Directory('/tmp').resolveSymbolicLinksSync();
+    if (p.equals(canonicalTmp, p.normalize('/tmp'))) {
+      return;
+    }
+    final aliasParent = Directory(
+      '/tmp',
+    ).createTempSync('robotopia-template-alias-');
+    addTearDown(() {
+      if (aliasParent.existsSync()) {
+        aliasParent.deleteSync(recursive: true);
+      }
+    });
+
     final workspace = await repository.createModProject(
-      parentDirectory: root.path,
-      id: 'test.live',
-      name: 'Live',
-      options: const ModScaffoldOptions(
-        liveSync: UgcLiveSyncSettings(watchFolder: r'C:\ugc-watch'),
+      parentDirectory: aliasParent.path,
+      id: 'test.alias',
+      name: 'Alias',
+    );
+    final projectFile = Directory(workspace.projectRoot)
+        .listSync()
+        .whereType<File>()
+        .singleWhere((file) => p.extension(file.path) == '.csproj')
+        .readAsStringSync();
+    final include = RegExp(
+      r'<ProjectReference Include="([^"]+)"',
+    ).firstMatch(projectFile)!.group(1)!;
+    final canonicalProjectRoot = Directory(
+      workspace.projectRoot,
+    ).resolveSymbolicLinksSync();
+    final resolvedReference = p.normalize(
+      p.join(canonicalProjectRoot, include),
+    );
+    expect(
+      resolvedReference,
+      p.normalize(
+        p.join(
+          repoRoot,
+          'src',
+          'Robotopia.Mods.Abstractions',
+          'Robotopia.Mods.Abstractions.csproj',
+        ),
       ),
     );
-    expect(workspace.project!.unityCompanion.enabled, isTrue);
-    expect(
-      workspace.project!.unityCompanion.liveSync.watchFolder,
-      r'C:\ugc-watch',
-    );
   });
+
+  test(
+    'live sync scaffold stores settings and implies the companion',
+    () async {
+      final workspace = await repository.createModProject(
+        parentDirectory: root.path,
+        id: 'test.live',
+        name: 'Live',
+        options: const ModScaffoldOptions(
+          liveSync: UgcLiveSyncSettings(watchFolder: r'C:\ugc-watch'),
+        ),
+      );
+      expect(workspace.project!.unityCompanion.enabled, isTrue);
+      expect(
+        workspace.project!.unityCompanion.liveSync.watchFolder,
+        r'C:\ugc-watch',
+      );
+    },
+  );
 
   test('updateModManifest round-trips schema fields and validates', () async {
     final workspace = await repository.createModProject(

@@ -59,13 +59,7 @@ void main() {
       expect(layout.gameRoot, Directory(tempDir.path).absolute.path);
       expect(
         layout.executablePath,
-        p.join(
-          tempDir.path,
-          'Robotopia.app',
-          'Contents',
-          'MacOS',
-          'robotopia',
-        ),
+        p.join(tempDir.path, 'Robotopia.app', 'Contents', 'MacOS', 'robotopia'),
       );
       expect(
         layout.managedDirPath,

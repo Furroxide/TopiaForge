@@ -52,6 +52,20 @@ void main() {
       File(
         p.join(templateDir.path, 'README.md'),
       ).writeAsStringSync('# Template\n');
+      File(
+        p.join(templateDir.path, '.gitignore'),
+      ).writeAsStringSync('Library/\n');
+      File(
+        p.join(templateDir.path, 'Assets', 'keep.txt'),
+      ).createSync(recursive: true);
+      for (final generated
+          in 'Library/cache.bin,Build/game.bin,Logs/editor.log,'
+                  'UserSettings/settings.asset,Generated.csproj,Generated.sln'
+              .split(',')) {
+        File(p.join(templateDir.path, generated))
+          ..createSync(recursive: true)
+          ..writeAsStringSync('generated');
+      }
       final companionDir = Directory(
         p.join(
           repoRoot.path,
@@ -95,6 +109,30 @@ void main() {
         File(p.join(created.path, 'README.md')).readAsStringSync(),
         contains('My World'),
       );
+      expect(File(p.join(created.path, '.gitignore')).existsSync(), isTrue);
+      expect(
+        File(p.join(created.path, 'Assets', 'keep.txt')).existsSync(),
+        isTrue,
+      );
+      for (final generated
+          in 'Library,Build,Logs,UserSettings,Generated.csproj,Generated.sln'
+              .split(',')) {
+        expect(
+          FileSystemEntity.typeSync(
+            p.join(created.path, generated),
+            followLinks: false,
+          ),
+          FileSystemEntityType.notFound,
+          reason: generated,
+        );
+      }
+      expect(
+        File(
+          p.join(created.path, 'Packages', 'vpm-resolver-repos.json'),
+        ).existsSync(),
+        isFalse,
+        reason: 'new projects must not embed a machine-local repository path',
+      );
 
       expect(
         () => repository.createUnityProject(
@@ -106,6 +144,69 @@ void main() {
       );
     },
   );
+
+  test(
+    'resolveUnityProject rejects malformed VPM state without replacing it',
+    () async {
+      final project = Directory(p.join(root.path, 'MalformedVpm'));
+      final packages = Directory(p.join(project.path, 'Packages'))
+        ..createSync(recursive: true);
+      final manifest = File(p.join(packages.path, 'vpm-manifest.json'));
+      const original = '{"dependencies":{"com.test.pkg":';
+      manifest.writeAsStringSync(original);
+
+      await expectLater(
+        repository.resolveUnityProject(project.path),
+        throwsA(
+          predicate(
+            (error) =>
+                error is StateError &&
+                error.message.toString().contains(
+                  'Invalid Packages/vpm-manifest.json',
+                ),
+          ),
+        ),
+      );
+
+      expect(manifest.readAsStringSync(), original);
+      expect(
+        File(p.join(packages.path, 'vpm-resolver-repos.json')).existsSync(),
+        isFalse,
+      );
+      expect(
+        packages.listSync().whereType<Directory>().where(
+          (entry) => p.basename(entry.path).startsWith('.robotopia-vpm-'),
+        ),
+        isEmpty,
+      );
+    },
+  );
+
+  test('resolveUnityProject rejects an oversized VPM manifest', () async {
+    final project = Directory(p.join(root.path, 'OversizedVpm'));
+    final packages = Directory(p.join(project.path, 'Packages'))
+      ..createSync(recursive: true);
+    final manifest = File(p.join(packages.path, 'vpm-manifest.json'));
+    const oversizedLength = 1024 * 1024 + 1;
+    manifest.writeAsBytesSync(List<int>.filled(oversizedLength, 0x20));
+
+    await expectLater(
+      repository.resolveUnityProject(project.path),
+      throwsA(
+        predicate(
+          (error) =>
+              error is StateError &&
+              error.message.toString().contains('larger than the 1 MB limit'),
+        ),
+      ),
+    );
+
+    expect(manifest.lengthSync(), oversizedLength);
+    expect(
+      File(p.join(packages.path, 'vpm-resolver-repos.json')).existsSync(),
+      isFalse,
+    );
+  });
 
   test(
     'resolveUnityProject downloads + extracts packages and writes locked',
@@ -148,6 +249,12 @@ void main() {
       File(
         p.join(proj.path, 'Packages', 'vpm-manifest.json'),
       ).writeAsStringSync('{"dependencies":{"com.test.pkg":"^1.0.0"}}');
+      final spoofed = Directory(p.join(proj.path, 'Packages', 'com.test.pkg'))
+        ..createSync();
+      File(p.join(spoofed.path, 'package.json')).writeAsStringSync(
+        jsonEncode({'name': 'com.attacker.pkg', 'version': '1.0.0'}),
+      );
+      File(p.join(spoofed.path, 'stale.txt')).writeAsStringSync('old');
 
       final resolved = await repository.resolveUnityProject(proj.path);
       expect(resolved, hasLength(1));
@@ -158,6 +265,20 @@ void main() {
           p.join(proj.path, 'Packages', 'com.test.pkg', 'package.json'),
         ).existsSync(),
         isTrue,
+      );
+      final installedManifest =
+          jsonDecode(
+                File(
+                  p.join(proj.path, 'Packages', 'com.test.pkg', 'package.json'),
+                ).readAsStringSync(),
+              )
+              as Map<String, Object?>;
+      expect(installedManifest['name'], 'com.test.pkg');
+      expect(
+        File(
+          p.join(proj.path, 'Packages', 'com.test.pkg', 'stale.txt'),
+        ).existsSync(),
+        isFalse,
       );
       final manifest =
           jsonDecode(
@@ -205,4 +326,171 @@ void main() {
       );
     },
   );
+
+  test('packUnityPackages produces deterministic zips and index', () async {
+    final packageDir = Directory(
+      p.join(repoRoot.path, 'templates', 'sample', 'com.robotopia.sample'),
+    )..createSync(recursive: true);
+    File(p.join(packageDir.path, 'z.txt')).writeAsStringSync('z');
+    File(p.join(packageDir.path, 'a.txt')).writeAsStringSync('a');
+    File(p.join(packageDir.path, '.gitkeep')).writeAsStringSync('');
+    File(p.join(packageDir.path, 'package.json')).writeAsStringSync(
+      jsonEncode({
+        'name': 'com.robotopia.sample',
+        'version': '1.2.3',
+        'displayName': 'Sample',
+      }),
+    );
+
+    final firstDir = p.join(root.path, 'first-vpm');
+    final secondDir = p.join(root.path, 'second-vpm');
+    await repository.packUnityPackages(outputDir: firstDir);
+    await repository.packUnityPackages(outputDir: secondDir);
+
+    final zipName = 'com.robotopia.sample-1.2.3.zip';
+    final firstZip = File(p.join(firstDir, zipName)).readAsBytesSync();
+    final secondZip = File(p.join(secondDir, zipName)).readAsBytesSync();
+    expect(firstZip, secondZip);
+    expect(
+      File(p.join(firstDir, 'index.json')).readAsBytesSync(),
+      File(p.join(secondDir, 'index.json')).readAsBytesSync(),
+    );
+    expect(
+      ZipDecoder().decodeBytes(firstZip).files.map((file) => file.name),
+      orderedEquals(['a.txt', 'package.json', 'z.txt']),
+    );
+  });
+
+  group('openProjectInUnity', () {
+    test(
+      'launches the exact Robotopia editor instead of the newest editor',
+      () async {
+        final project = _createUnityProject(root, 'World', '6000.0.23f1');
+        final editor23 = p.join(root.path, 'Hub', '6000.0.23f1', 'Unity.exe');
+        final editor31 = p.join(root.path, 'Hub', '6000.0.31f1', 'Unity.exe');
+        String? launchedExecutable;
+        List<String>? launchedArguments;
+        final openRepository = LocalDeveloperRepository(
+          dataRoot: dataRoot.path,
+          repositoryRoot: repoRoot.path,
+          unityEditorScanner: () async => [
+            UnityEditor(version: '6000.0.31f1', path: editor31),
+            UnityEditor(version: '6000.0.23f1', path: editor23),
+          ],
+          unityEditorLauncher: (executable, arguments) async {
+            launchedExecutable = executable;
+            launchedArguments = arguments;
+          },
+        );
+
+        final launched = await openRepository.openProjectInUnity(project.path);
+
+        expect(launched, editor23);
+        expect(launchedExecutable, editor23);
+        expect(launchedArguments, [
+          '-projectPath',
+          p.normalize(p.absolute(project.path)),
+        ]);
+      },
+    );
+
+    test(
+      'blocks Unity projects pinned to a different editor version',
+      () async {
+        final project = _createUnityProject(root, 'NewerWorld', '6000.0.31f1');
+        var launched = false;
+        final openRepository = LocalDeveloperRepository(
+          dataRoot: dataRoot.path,
+          repositoryRoot: repoRoot.path,
+          unityEditorScanner: () async => [
+            UnityEditor(
+              version: '6000.0.23f1',
+              path: p.join(root.path, 'Unity.exe'),
+            ),
+          ],
+          unityEditorLauncher: (_, _) async => launched = true,
+        );
+
+        await expectLater(
+          openRepository.openProjectInUnity(project.path),
+          throwsA(
+            predicate(
+              (error) =>
+                  error.toString().contains('pinned to Unity 6000.0.31f1'),
+            ),
+          ),
+        );
+        expect(launched, isFalse);
+      },
+    );
+
+    test('blocks when the required editor is not installed', () async {
+      final project = _createUnityProject(root, 'MissingEditor', '6000.0.23f1');
+      var launched = false;
+      final openRepository = LocalDeveloperRepository(
+        dataRoot: dataRoot.path,
+        repositoryRoot: repoRoot.path,
+        unityEditorScanner: () async => [
+          UnityEditor(
+            version: '6000.0.31f1',
+            path: p.join(root.path, 'Unity31.exe'),
+          ),
+        ],
+        unityEditorLauncher: (_, _) async => launched = true,
+      );
+
+      await expectLater(
+        openRepository.openProjectInUnity(project.path),
+        throwsA(
+          predicate(
+            (error) => error.toString().contains(
+              'Unity 6000.0.23f1 (1c4764c07fb4) is required',
+            ),
+          ),
+        ),
+      );
+      expect(launched, isFalse);
+    });
+
+    test('blocks package-only roots without ProjectVersion.txt', () async {
+      final packageRoot = Directory(p.join(root.path, 'UnityPackage'))
+        ..createSync();
+      File(p.join(packageRoot.path, 'package.json')).writeAsStringSync(
+        jsonEncode({'name': 'com.test.package', 'unity': '2022.3'}),
+      );
+      var launched = false;
+      final openRepository = LocalDeveloperRepository(
+        dataRoot: dataRoot.path,
+        repositoryRoot: repoRoot.path,
+        unityEditorScanner: () async => [
+          UnityEditor(
+            version: '6000.0.23f1',
+            path: p.join(root.path, 'Unity23.exe'),
+          ),
+        ],
+        unityEditorLauncher: (_, _) async => launched = true,
+      );
+
+      await expectLater(
+        openRepository.openProjectInUnity(packageRoot.path),
+        throwsA(
+          predicate(
+            (error) =>
+                error.toString().contains('ProjectSettings/ProjectVersion.txt'),
+          ),
+        ),
+      );
+      expect(launched, isFalse);
+    });
+  });
+}
+
+Directory _createUnityProject(Directory parent, String name, String version) {
+  final project = Directory(p.join(parent.path, name))..createSync();
+  Directory(p.join(project.path, 'Assets')).createSync();
+  Directory(p.join(project.path, 'ProjectSettings')).createSync();
+  File(
+    p.join(project.path, 'ProjectSettings', 'ProjectVersion.txt'),
+  ).writeAsStringSync('m_EditorVersion: $version\n');
+  return project;
 }

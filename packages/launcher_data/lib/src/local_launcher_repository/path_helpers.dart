@@ -20,6 +20,9 @@ extension _PathHelpers on LocalLauncherRepository {
   Directory _managerData(GameInstall install) =>
       Directory(p.join(_managerRoot(install).path, 'data'));
 
+  Directory _managerStaging(GameInstall install) =>
+      Directory(p.join(_managerRoot(install).path, 'staging'));
+
   File _managerStateFile(GameInstall install) =>
       File(p.join(_managerRoot(install).path, 'state.json'));
 
@@ -31,71 +34,111 @@ extension _PathHelpers on LocalLauncherRepository {
     ).createSync(recursive: true);
   }
 
-  void _copyRuntimeDirectory(Directory source, Directory destination) {
-    for (final entity in source.listSync(recursive: true)) {
-      final relative = p.relative(entity.path, from: source.path);
-      final target = p.join(destination.path, relative);
-      if (entity is Directory) {
-        Directory(target).createSync(recursive: true);
-      } else if (entity is File) {
-        File(target).createSync(recursive: true);
-        entity.copySync(target);
-      }
-    }
-  }
-
-  Future<void> _addFileIfExists(
-    Archive archive,
-    List<String> included,
-    String name,
-    File file,
-    String gamePath,
-  ) async {
-    if (!file.existsSync()) {
-      return;
-    }
-
-    archive.addFile(
-      ArchiveFile.string(name, _redact(await file.readAsString(), gamePath)),
-    );
-    included.add(name);
-  }
-
   String _redact(String text, String gamePath) {
     var result = text;
     final userHome =
         Platform.environment['USERPROFILE'] ?? Platform.environment['HOME'];
     if (userHome != null && userHome.isNotEmpty) {
-      result = result.replaceAll(userHome, r'%USERHOME%');
+      result = result.replaceAll(
+        RegExp(RegExp.escape(userHome), caseSensitive: false),
+        r'%USERHOME%',
+      );
     }
-    result = result.replaceAll(gamePath, r'%ROBOTOPIA_GAME%');
+    if (gamePath.trim().isNotEmpty) {
+      result = result.replaceAll(
+        RegExp(RegExp.escape(gamePath), caseSensitive: false),
+        r'%ROBOTOPIA_GAME%',
+      );
+    }
+    result = result.replaceAllMapped(
+      RegExp(
+        r'("(?:accessToken|refreshToken|idToken|sessionToken|session_token|jwt|token|password|secret|apiKey|authorization|documentUrl|connectedDocumentUrl|editorUrl)"\s*:\s*")[^"]*(")',
+        caseSensitive: false,
+      ),
+      (match) => '${match.group(1)}%REDACTED%${match.group(2)}',
+    );
+    result = result.replaceAllMapped(
+      RegExp(
+        r'([?&](?:access_token|refresh_token|id_token|session_token|token|password|secret|api_key|signature)=)[^&#\s]+',
+        caseSensitive: false,
+      ),
+      (match) => '${match.group(1)}%REDACTED%',
+    );
+    result = result.replaceAllMapped(
+      RegExp(r'(https?://)[^/@\s]+@', caseSensitive: false),
+      (match) => '${match.group(1)}%REDACTED%@',
+    );
+    result = result.replaceAllMapped(
+      RegExp(
+        r'(\bauthorization\s*[:=]\s*(?:(?:bearer|basic)\s+)?)[^\s,;]+',
+        caseSensitive: false,
+      ),
+      (match) => '${match.group(1)}%REDACTED%',
+    );
+    result = result.replaceAllMapped(
+      RegExp(
+        r'(\b(?:bearer|basic)\s+)[A-Za-z0-9._~+/=-]+',
+        caseSensitive: false,
+      ),
+      (match) => '${match.group(1)}%REDACTED%',
+    );
+    result = result.replaceAllMapped(
+      RegExp(
+        r'(\b(?:access[_-]?token|refresh[_-]?token|id[_-]?token|session(?:[_-]?token)?|token|password|secret|api[_-]?key)\s*[:=]\s*)[^\s,;]+',
+        caseSensitive: false,
+      ),
+      (match) => '${match.group(1)}%REDACTED%',
+    );
+    result = result.replaceAll(
+      RegExp(r'\beyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b'),
+      '%REDACTED_JWT%',
+    );
     return result;
   }
 
   String _prettyJson(Object? value) =>
       const JsonEncoder.withIndent('  ').convert(value);
+}
 
-  List<String> _tail(List<String> lines, int maxLines) {
-    if (lines.length <= maxLines) {
-      return lines;
-    }
-    return lines.sublist(lines.length - maxLines);
+const _maxDiagnosticSourceBytes = 2 * 1024 * 1024;
+const _maxDiagnosticSourceLines = 20000;
+const _maxRuntimeSourceFileBytes = 512 * 1024 * 1024;
+const _maxRuntimeSourceBytes = 2 * 1024 * 1024 * 1024;
+const _maxRuntimeSourceEntries = 16384;
+
+void _ensureRuntimeDirectory(Directory root, Directory directory) {
+  _requireRuntimeDirectory(root, directory, label: 'Runtime destination');
+  directory.createSync(recursive: true);
+  if (FileSystemEntity.typeSync(directory.path, followLinks: false) !=
+      FileSystemEntityType.directory) {
+    throw StateError('Runtime destination is not a regular directory.');
   }
 }
 
-String _defaultDataRoot() {
-  if (Platform.isWindows) {
-    final appData = Platform.environment['APPDATA'];
-    if (appData != null && appData.isNotEmpty) {
-      return p.join(appData, 'RobotopiaLauncher');
-    }
+void _requireRuntimeDirectory(
+  Directory root,
+  Directory directory, {
+  required String label,
+}) {
+  final rootPath = root.absolute.path;
+  var current = directory.absolute;
+  if (current.path != rootPath && !p.isWithin(rootPath, current.path)) {
+    throw StateError('$label escapes its trusted root.');
   }
-
-  final home =
-      Platform.environment['HOME'] ??
-      Platform.environment['USERPROFILE'] ??
-      Directory.current.path;
-  return p.join(home, '.robotopia_launcher');
+  while (true) {
+    final type = FileSystemEntity.typeSync(current.path, followLinks: false);
+    if (type == FileSystemEntityType.link) {
+      throw StateError('$label contains a symbolic link: ${current.path}');
+    }
+    if (type != FileSystemEntityType.notFound &&
+        type != FileSystemEntityType.directory) {
+      throw StateError('$label contains a non-directory: ${current.path}');
+    }
+    if (current.path == rootPath) {
+      return;
+    }
+    current = current.parent;
+  }
 }
 
 String? _defaultKnownGamePath() {

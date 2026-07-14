@@ -161,6 +161,74 @@ void main() {
       contains('cool.mod'),
       reason: 'healthy sources still load when one source is dead',
     );
+    final healthy = snapshot.sourceStatuses.singleWhere(
+      (status) => status.sourceId == 'robotopia.local',
+    );
+    final dead = snapshot.sourceStatuses.singleWhere(
+      (status) => status.sourceId == 'dead',
+    );
+    expect(healthy.ok, isTrue);
+    expect(healthy.modCount, 1);
+    expect(dead.ok, isFalse);
+    expect(dead.message, isNotEmpty);
+  });
+
+  test('malformed trust metadata fails only the offending source', () async {
+    _writePackage(
+      Directory(p.join(repoRoot.path, 'dist')),
+      id: 'cool.mod',
+      version: '1.0.0',
+    );
+    final unsafe = File(p.join(temp.path, 'unsafe-source.json'))
+      ..writeAsStringSync(
+        jsonEncode({
+          'mods': [
+            {
+              'manifest': {
+                'schemaVersion': 2,
+                'name': 'unsafe.mod',
+                'displayName': 'Unsafe',
+                'version': '1.0.0',
+                'entryAssembly': 'Unsafe.dll',
+                'entryType': 'Unsafe.Mod',
+              },
+              'downloadUrl': 'https://packages.example/unsafe.robotopiamod',
+            },
+          ],
+        }),
+      );
+    writeSources([
+      _localSourceJson(repoRoot),
+      _officialDisabledJson(),
+      {'id': 'unsafe', 'name': 'Unsafe', 'url': unsafe.path},
+    ]);
+
+    final snapshot = await repository().loadSnapshot();
+
+    expect(snapshot.registryMods.map((mod) => mod.manifest.id), ['cool.mod']);
+    final status = snapshot.sourceStatuses.singleWhere(
+      (item) => item.sourceId == 'unsafe',
+    );
+    expect(status.ok, isFalse);
+    expect(status.message, contains('SHA-256'));
+  });
+
+  test('oversized source documents are rejected before decoding', () async {
+    final oversized = File(p.join(temp.path, 'oversized-source.json'))
+      ..writeAsBytesSync(List<int>.filled(16 * 1024 * 1024 + 1, 0x20));
+    writeSources([
+      _localSourceJson(repoRoot),
+      _officialDisabledJson(),
+      {'id': 'oversized', 'name': 'Oversized', 'url': oversized.path},
+    ]);
+
+    final snapshot = await repository().loadSnapshot();
+    final status = snapshot.sourceStatuses.singleWhere(
+      (item) => item.sourceId == 'oversized',
+    );
+
+    expect(status.ok, isFalse);
+    expect(status.message, contains('16777216'));
   });
 }
 

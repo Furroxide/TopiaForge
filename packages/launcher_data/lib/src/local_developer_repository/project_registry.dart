@@ -1,5 +1,10 @@
 part of '../local_developer_repository.dart';
 
+typedef UnityEditorScanner = Future<List<UnityEditor>> Function();
+typedef UnityEditorVersionProbe = Future<String> Function(String executable);
+typedef UnityEditorLauncher =
+    Future<void> Function(String executable, List<String> arguments);
+
 /// VCC-style multi-project registry + Unity editor detection. The registry (`developer_projects.json` at the
 /// launcher data root) holds only metadata + a path; each project's own files stay the source of truth. Unity
 /// detection is detect-only — the launcher never installs Unity.
@@ -12,11 +17,20 @@ extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
 
   Future<List<RegisteredProject>> _readRegistry() async {
     final file = _projectsFile;
+    _recoverDeveloperAtomicBackupIfMissing(file);
     if (!file.existsSync()) {
       return <RegisteredProject>[];
     }
     try {
-      final decoded = jsonDecode(await file.readAsString());
+      final decoded = jsonDecode(
+        utf8.decode(
+          await _readDeveloperFileBounded(
+            file,
+            maxBytes: _maxDeveloperCatalogBytes,
+            label: 'Developer project registry',
+          ),
+        ),
+      );
       final list = decoded is Map ? decoded['projects'] : null;
       if (list is! List) {
         return <RegisteredProject>[];
@@ -34,19 +48,10 @@ extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
   }
 
   Future<void> _writeRegistry(List<RegisteredProject> projects) async {
-    if (!_dataRoot.existsSync()) {
-      _dataRoot.createSync(recursive: true);
-    }
-    // Atomic write (temp + rename) so a crash mid-write never truncates the registry.
     final json = _prettyJson({
       'projects': projects.map((project) => project.toJson()).toList(),
     });
-    final temp = File('${_projectsFile.path}.tmp');
-    await temp.writeAsString(json);
-    if (_projectsFile.existsSync()) {
-      await _projectsFile.delete();
-    }
-    await temp.rename(_projectsFile.path);
+    _writeDeveloperTextAtomic(_projectsFile, json);
   }
 
   Future<List<RegisteredProject>> _registerProject(String path) async {
@@ -85,7 +90,8 @@ extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
 
   // Instantiates a new Unity world project from templates/Robotopia.UnityWorldTemplate: copies the template,
   // installs the UGC companion package into Packages/, stamps the name, and registers it. Mirrors VCC's
-  // copy-template-then-resolve flow (the launcher-side VPM resolver fills locked versions in Phase 4).
+  // copy-template-then-resolve flow. The embedded package is a read-only recovery bridge; archive/network
+  // restore remains behind this repository's hardened VPM implementation.
   Future<List<RegisteredProject>> _createUnityProject({
     required String parentDirectory,
     required String name,
@@ -99,43 +105,78 @@ extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
     final templateDir = Directory(
       p.join(_repositoryRoot.path, 'templates', 'Robotopia.UnityWorldTemplate'),
     );
-    if (!templateDir.existsSync()) {
+    if (FileSystemEntity.typeSync(templateDir.path, followLinks: false) !=
+        FileSystemEntityType.directory) {
       throw StateError(
         'Unity world template not found at ${templateDir.path}.',
       );
     }
 
-    final root = Directory(p.join(parentDirectory, _safeName(name)));
-    if (root.existsSync()) {
+    final parent = Directory(parentDirectory)..createSync(recursive: true);
+    if (FileSystemEntity.typeSync(parent.path, followLinks: false) !=
+        FileSystemEntityType.directory) {
+      throw StateError(
+        'Project parent is not a regular directory: ${parent.path}',
+      );
+    }
+    final root = Directory(p.join(parent.path, _safeName(name)));
+    if (FileSystemEntity.typeSync(root.path, followLinks: false) !=
+        FileSystemEntityType.notFound) {
       throw StateError('Project already exists: ${root.path}');
     }
-    _copyDirectory(templateDir, root);
-
-    // Install the UGC companion package (the same one createModProject scaffolds) into the project's Packages/.
-    await _ensureUgcCompanionPackage(root.path);
-
-    // Point the embedded resolver at the local QuantumWorks listing so a cloned copy self-heals offline.
-    File(
-      p.join(root.path, 'Packages', 'vpm-resolver-repos.json'),
-    ).writeAsStringSync(
-      _prettyJson([p.join(_repositoryRoot.path, 'dist', 'vpm', 'index.json')]),
+    final staging = Directory(
+      '${root.path}.robotopia-new-$pid-'
+      '${DateTime.now().microsecondsSinceEpoch}',
     );
+    var installed = false;
+    try {
+      _copyDirectory(templateDir, staging, excludeUnityGenerated: true);
 
-    // Stamp the display name into the README's first heading (best-effort).
-    final readme = File(p.join(root.path, 'README.md'));
-    if (readme.existsSync()) {
-      try {
-        final lines = readme.readAsLinesSync();
-        if (lines.isNotEmpty && lines.first.startsWith('# ')) {
-          lines[0] = '# $name — Robotopia UGC World';
-          readme.writeAsStringSync('${lines.join('\n')}\n');
+      // Install the same authored companion package used by mod scaffolds.
+      await _ensureUgcCompanionPackage(staging.path);
+
+      final readme = File(p.join(staging.path, 'README.md'));
+      if (FileSystemEntity.typeSync(readme.path, followLinks: false) ==
+          FileSystemEntityType.file) {
+        try {
+          final lines = const LineSplitter().convert(
+            utf8.decode(
+              _readDeveloperFileBoundedSync(
+                readme,
+                maxBytes: _maxDeveloperManifestBytes,
+                label: 'Unity project README',
+              ),
+            ),
+          );
+          if (lines.isNotEmpty && lines.first.startsWith('# ')) {
+            lines[0] = '# $name — Robotopia UGC World';
+            _writeDeveloperTextAtomic(readme, '${lines.join('\n')}\n');
+          }
+        } on Object {
+          // Cosmetic only; a valid project does not depend on README text.
         }
-      } on Object {
-        // ignore — cosmetic
       }
-    }
 
-    return _registerProject(root.path);
+      if (FileSystemEntity.typeSync(root.path, followLinks: false) !=
+          FileSystemEntityType.notFound) {
+        throw StateError(
+          'Project target appeared while scaffolding: ${root.path}',
+        );
+      }
+      staging.renameSync(root.path);
+      installed = true;
+      return await _registerProject(root.path);
+    } on Object {
+      if (staging.existsSync()) {
+        staging.deleteSync(recursive: true);
+      }
+      if (installed &&
+          FileSystemEntity.typeSync(root.path, followLinks: false) ==
+              FileSystemEntityType.directory) {
+        root.deleteSync(recursive: true);
+      }
+      rethrow;
+    }
   }
 
   Future<List<RegisteredProject>> _unregisterProject(String path) async {
@@ -183,7 +224,15 @@ extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
       if (kind == ProjectKind.modCSharp) {
         final file = File(p.join(dir.path, 'robotopia.project.json'));
         if (file.existsSync()) {
-          final decoded = jsonDecode(file.readAsStringSync());
+          final decoded = jsonDecode(
+            utf8.decode(
+              _readDeveloperFileBoundedSync(
+                file,
+                maxBytes: _maxDeveloperManifestBytes,
+                label: 'robotopia.project.json',
+              ),
+            ),
+          );
           if (decoded is Map && decoded['name'] is String) {
             final name = (decoded['name'] as String).trim();
             if (name.isNotEmpty) return name;
@@ -192,7 +241,15 @@ extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
       } else if (kind == ProjectKind.unityPackage) {
         final file = File(p.join(dir.path, 'package.json'));
         if (file.existsSync()) {
-          final decoded = jsonDecode(file.readAsStringSync());
+          final decoded = jsonDecode(
+            utf8.decode(
+              _readDeveloperFileBoundedSync(
+                file,
+                maxBytes: _maxDeveloperManifestBytes,
+                label: 'Unity package.json',
+              ),
+            ),
+          );
           if (decoded is Map) {
             final name =
                 ((decoded['displayName'] ?? decoded['name']) as String?)
@@ -207,29 +264,27 @@ extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
     return p.basename(dir.path);
   }
 
-  // Reads the project's required Unity version from ProjectSettings/ProjectVersion.txt (Unity projects) or the
-  // package.json `unity` field (UPM packages). Empty when unknown.
+  // Reads the project's required Unity version from ProjectSettings/ProjectVersion.txt.
+  // UPM package.json `unity` is package API metadata, not a Robotopia editor pin.
   String _readUnityVersion(Directory dir) {
     final versionFile = File(
       p.join(dir.path, 'ProjectSettings', 'ProjectVersion.txt'),
     );
     if (versionFile.existsSync()) {
-      for (final line in versionFile.readAsLinesSync()) {
+      final lines = const LineSplitter().convert(
+        utf8.decode(
+          _readDeveloperFileBoundedSync(
+            versionFile,
+            maxBytes: _maxDeveloperManifestBytes,
+            label: 'Unity ProjectVersion.txt',
+          ),
+        ),
+      );
+      for (final line in lines) {
         final trimmed = line.trim();
         if (trimmed.startsWith('m_EditorVersion:')) {
           return trimmed.substring('m_EditorVersion:'.length).trim();
         }
-      }
-    }
-    final packageFile = File(p.join(dir.path, 'package.json'));
-    if (packageFile.existsSync()) {
-      try {
-        final decoded = jsonDecode(packageFile.readAsStringSync());
-        if (decoded is Map && decoded['unity'] is String) {
-          return (decoded['unity'] as String).trim();
-        }
-      } on Object {
-        // ignore
       }
     }
     return '';
@@ -238,18 +293,23 @@ extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
   // Detect-only scan of installed Unity editors via Unity Hub install roots. Windows-first (the game is
   // Windows); a best-effort macOS/Linux fallback is included. Sorted newest-first.
   Future<List<UnityEditor>> _scanUnityEditors() async {
-    final byVersion = <String, String>{};
+    final scanner = _unityEditorScanner;
+    if (scanner != null) {
+      return scanner();
+    }
 
-    void consider(String version, String exePath) {
-      if (version.isEmpty || !File(exePath).existsSync()) return;
-      byVersion.putIfAbsent(version, () => exePath);
+    final editorPaths = <String>{};
+
+    void consider(String exePath) {
+      if (!File(exePath).existsSync()) return;
+      editorPaths.add(p.canonicalize(exePath));
     }
 
     void scanHubRoot(String root, String exeRelative) {
       final dir = Directory(root);
       if (!dir.existsSync()) return;
       for (final entry in dir.listSync().whereType<Directory>()) {
-        consider(p.basename(entry.path), p.join(entry.path, exeRelative));
+        consider(p.join(entry.path, exeRelative));
       }
     }
 
@@ -273,7 +333,15 @@ extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
         );
         if (secondaryFile.existsSync()) {
           try {
-            final decoded = jsonDecode(secondaryFile.readAsStringSync());
+            final decoded = jsonDecode(
+              utf8.decode(
+                _readDeveloperFileBoundedSync(
+                  secondaryFile,
+                  maxBytes: _maxDeveloperManifestBytes,
+                  label: 'Unity Hub secondary install path',
+                ),
+              ),
+            );
             if (decoded is String && decoded.trim().isNotEmpty) {
               scanHubRoot(decoded.trim(), p.join('Editor', 'Unity.exe'));
             }
@@ -297,31 +365,55 @@ extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
       }
     }
 
-    // An explicit override always wins (version derived from its parent folder when it looks like a Hub layout).
+    final onPath = await _which(Platform.isWindows ? 'Unity.exe' : 'Unity');
+    if (onPath.isNotEmpty) {
+      consider(onPath);
+    }
+
+    // Include an explicit override even when it is outside a Unity Hub install root.
     final override = Platform.environment['UNITY_EDITOR_PATH'];
     if (override != null &&
         override.isNotEmpty &&
         File(override).existsSync()) {
-      final guessVersion = _versionFromEditorPath(override);
-      byVersion[guessVersion.isEmpty ? 'custom' : guessVersion] = override;
+      editorPaths.add(p.canonicalize(override));
     }
 
-    final editors = byVersion.entries
-        .map((entry) => UnityEditor(version: entry.key, path: entry.value))
-        .toList();
+    final editors = <UnityEditor>[];
+    for (final path in editorPaths) {
+      final version = await _probeUnityEditorVersion(path);
+      if (version.isNotEmpty) {
+        editors.add(UnityEditor(version: version, path: path));
+      }
+    }
     editors.sort((a, b) => _compareUnityVersions(b.version, a.version));
     return editors;
   }
 
-  String _versionFromEditorPath(String exePath) {
-    // …/Unity/Hub/Editor/<version>/Editor/Unity.exe → <version>
-    var dir = File(exePath).parent;
-    for (var i = 0; i < 3 && dir.path != dir.parent.path; i++) {
-      final name = p.basename(dir.path);
-      if (RegExp(r'^\d').hasMatch(name)) return name;
-      dir = dir.parent;
+  Future<String> _probeUnityEditorVersion(String executable) async {
+    try {
+      final configured = _unityEditorVersionProbe;
+      final output = configured != null
+          ? await configured(
+              executable,
+            ).timeout(_unityEditorProbeTimeout, onTimeout: () => '')
+          : await _runUnityEditorVersionProbe(executable);
+      return RegExp(
+            r'\b\d+\.\d+\.\d+[abfp]\d+\b',
+          ).firstMatch(output)?.group(0) ??
+          '';
+    } on Object {
+      return '';
     }
-    return '';
+  }
+
+  Future<String> _runUnityEditorVersionProbe(String executable) async {
+    final result = await runBoundedProcess(executable, const [
+      '-version',
+    ], timeout: _unityEditorProbeTimeout);
+    if (result.exitCode != 0) {
+      return '';
+    }
+    return '${result.stdout}\n${result.stderr}';
   }
 
   // Numeric-aware compare of Unity version strings (e.g. 6000.0.23f1 vs 2022.3.10f1) by their digit runs.
@@ -352,25 +444,53 @@ extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
       throw StateError('Project directory does not exist: $normalized');
     }
 
-    final editors = await _scanUnityEditors();
-    if (editors.isEmpty) {
+    final required = _readUnityVersion(dir);
+    if (required.isEmpty) {
       throw StateError(
-        'No installed Unity editor found. Install one via Unity Hub, '
-        'or set UNITY_EDITOR_PATH.',
+        '$normalized is not a Robotopia Unity authoring project: '
+        'ProjectSettings/ProjectVersion.txt was not found or does not contain m_EditorVersion.',
+      );
+    }
+    if (required != RobotopiaUnityCompatibility.requiredEditorVersion) {
+      throw StateError(
+        '$normalized is pinned to Unity $required, but Robotopia authoring '
+        'requires Unity ${RobotopiaUnityCompatibility.requiredEditorDisplay}.',
       );
     }
 
-    final required = _readUnityVersion(dir);
-    final chosen = editors.firstWhere(
-      (editor) => editor.version == required,
-      orElse: () => editors.first, // newest installed
-    );
+    final editors = await _scanUnityEditors();
+    UnityEditor? chosen;
+    for (final editor in editors) {
+      if (editor.version == RobotopiaUnityCompatibility.requiredEditorVersion) {
+        chosen = editor;
+        break;
+      }
+    }
+    if (chosen == null) {
+      final detected = editors.isEmpty
+          ? 'none detected'
+          : editors.map((editor) => editor.version).join(', ');
+      throw StateError(
+        'Unity ${RobotopiaUnityCompatibility.requiredEditorDisplay} is required '
+        'to open Robotopia Unity projects. Detected editors: $detected. '
+        '${RobotopiaUnityCompatibility.installHint}',
+      );
+    }
 
-    await Process.start(chosen.path, [
-      '-projectPath',
-      normalized,
-    ], mode: ProcessStartMode.detached);
+    await _startUnityEditor(chosen.path, ['-projectPath', normalized]);
     await _touchProject(normalized);
     return chosen.path;
+  }
+
+  Future<void> _startUnityEditor(
+    String executable,
+    List<String> arguments,
+  ) async {
+    final launcher = _unityEditorLauncher;
+    if (launcher != null) {
+      await launcher(executable, arguments);
+      return;
+    }
+    await Process.start(executable, arguments, mode: ProcessStartMode.detached);
   }
 }
