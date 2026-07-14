@@ -1,0 +1,73 @@
+name: Bug report
+description: Report a reproducible Robotopia ecosystem defect.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Do not include secrets, proprietary game assemblies, private session files, or unredacted diagnostic bundles.
+        Report security vulnerabilities privately through SECURITY.md.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Runtime loader / SDK
+        - Launcher
+        - CLI / packaging / registry
+        - Unity tooling / custom worlds / VPM
+        - QwUi / first-party mod
+        - Documentation / release infrastructure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Robotopia / QuantumWorks version
+      placeholder: "Game version, launcher version, package version, or commit SHA"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows
+        - macOS Apple Silicon
+        - macOS Intel
+        - Linux / Proton / Wine
+        - Unity Editor 6000.0.23f1
+        - Other / platform-independent
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Include the smallest reliable sequence and relevant configuration.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result and redacted diagnostics
+      description: Paste concise logs or drag in a redacted diagnostic bundle.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety checks
+      options:
+        - label: I removed secrets, private paths, session files, and proprietary game assemblies.
+          required: true
+        - label: I searched existing issues and the troubleshooting guide.
+          required: true

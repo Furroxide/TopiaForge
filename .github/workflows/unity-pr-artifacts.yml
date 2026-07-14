@@ -26,7 +26,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Reject committed Unity build outputs
         shell: bash
@@ -45,10 +47,12 @@ jobs:
     needs: audit-artifacts
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Set up Dart
-        uses: dart-lang/setup-dart@v1
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
         with:
           sdk: "3.11.1"
 
@@ -59,7 +63,7 @@ jobs:
           dart run bin/robotopia.dart unity pack-packages --output ../../dist/vpm
 
       - name: Upload VPM listing artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: robotopia-vpm-index
           path: dist/vpm/**
@@ -74,17 +78,20 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' &&
       github.ref == 'refs/heads/main'
+    environment: unity-validation
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: "10.0.301"
 
       - name: Set up Dart
-        uses: dart-lang/setup-dart@v1
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
         with:
           sdk: "3.11.1"
 
@@ -103,7 +110,7 @@ jobs:
             --dir "$workspace/.unity-ci" \
             --mod "$workspace/.unity-ci/ci.world"
 
-      - name: Build world bundle
+      - name: Build first world bundle
         uses: game-ci/unity-builder@1d4ee0697f193f54668e98961d79907911f4b4f2 # v4.8.1
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
@@ -122,6 +129,37 @@ jobs:
           versioning: None
           allowDirtyBuild: true
 
+      - name: Record first world bundle bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          find .unity-ci/ci.world/AssetBundles -maxdepth 1 -type f \
+            \( -name '*.bundle' -o -name '*.manifest.json' \) -print0 |
+            sort -z | xargs -0 sha256sum >"$RUNNER_TEMP/world-first.sha256"
+          test -s "$RUNNER_TEMP/world-first.sha256"
+
+      - name: Build second world bundle
+        uses: game-ci/unity-builder@1d4ee0697f193f54668e98961d79907911f4b4f2 # v4.8.1
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: .unity-ci/CiWorld
+          unityVersion: 6000.0.23f1
+          targetPlatform: StandaloneWindows64
+          buildMethod: Robotopia.WorldCompanion.Editor.WorldBundleBuilder.Build
+          customParameters: >-
+            -robotopiaModPath /github/workspace/.unity-ci/ci.world
+            -robotopiaBundleName ci-world
+            -robotopiaWorldPrefab Assets/World/World.prefab
+          manualExit: true
+          versioning: None
+          allowDirtyBuild: true
+
+      - name: Require deterministic world bundle bytes
+        run: sha256sum --check --strict "$RUNNER_TEMP/world-first.sha256"
+
       - name: Pack smoke world mod
         shell: bash
         working-directory: apps/robotopia_cli
@@ -134,7 +172,7 @@ jobs:
             --configuration Release
 
       - name: Upload smoke world artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: robotopia-unity-world-smoke
           path: |
@@ -143,3 +181,127 @@ jobs:
             .unity-ci/ci.world/AssetBundles/*.manifest.json
           if-no-files-found: error
           retention-days: 14
+
+  qwui-smoke:
+    name: Rebuild and compare QwUi bundle (manual main only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    needs: audit-artifacts
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main'
+    environment: unity-validation
+    steps:
+      - name: Checkout exact QwUi sources and tracked bundle
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          lfs: true
+          persist-credentials: false
+
+      - name: Import TextMesh Pro essentials with the pinned editor
+        uses: game-ci/unity-builder@1d4ee0697f193f54668e98961d79907911f4b4f2 # v4.8.1
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: tools/unity-ui-bundle
+          unityVersion: 6000.0.23f1
+          targetPlatform: StandaloneWindows64
+          buildMethod: Robotopia.UiBundleBuilder.ImportEssentials
+          manualExit: true
+          versioning: None
+          allowDirtyBuild: true
+
+      - name: Build first QwUi bundle with the pinned editor
+        uses: game-ci/unity-builder@1d4ee0697f193f54668e98961d79907911f4b4f2 # v4.8.1
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: tools/unity-ui-bundle
+          unityVersion: 6000.0.23f1
+          targetPlatform: StandaloneWindows64
+          buildMethod: Robotopia.UiBundleBuilder.Build
+          manualExit: true
+          versioning: None
+          allowDirtyBuild: true
+
+      - name: Record first QwUi bundle and provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum \
+            src/Robotopia.Mods.UnityUi/Assets/quantumworks-ui.bundle \
+            src/Robotopia.Mods.UnityUi/Assets/quantumworks-ui.manifest.json \
+            tools/unity-ui-bundle/Assets/UiBundleManifest.json \
+            >"$RUNNER_TEMP/qwui-first.sha256"
+
+      - name: Build second QwUi bundle with the pinned editor
+        uses: game-ci/unity-builder@1d4ee0697f193f54668e98961d79907911f4b4f2 # v4.8.1
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: tools/unity-ui-bundle
+          unityVersion: 6000.0.23f1
+          targetPlatform: StandaloneWindows64
+          buildMethod: Robotopia.UiBundleBuilder.Build
+          manualExit: true
+          versioning: None
+          allowDirtyBuild: true
+
+      - name: Verify tracked QwUi bytes and provenance are reproducible
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle=src/Robotopia.Mods.UnityUi/Assets/quantumworks-ui.bundle
+          provenance=src/Robotopia.Mods.UnityUi/Assets/quantumworks-ui.manifest.json
+          sha256sum --check --strict "$RUNNER_TEMP/qwui-first.sha256"
+          test -s "$bundle"
+          test "$(jq -er '.editorVersion' "$provenance")" = 6000.0.23f1
+          test "$(jq -er '.editorVersion' tools/unity-ui-bundle/Assets/UiBundleManifest.json)" = 6000.0.23f1
+          test "$(jq -er '.sha256' "$provenance")" = "$(sha256sum "$bundle" | awk '{print $1}')"
+          git diff --exit-code -- \
+            "$bundle" \
+            "$provenance" \
+            tools/unity-ui-bundle/Assets/UiBundleManifest.json \
+            tools/unity-ui-bundle/Assets/FontAssets
+
+  unity-validation:
+    name: Required / Unity source validation
+    if: always()
+    needs: [audit-artifacts, vpm-packages]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require all secretless Unity checks
+        env:
+          AUDIT_RESULT: ${{ needs.audit-artifacts.result }}
+          VPM_RESULT: ${{ needs.vpm-packages.result }}
+        run: |
+          test "$AUDIT_RESULT" = success
+          test "$VPM_RESULT" = success
+
+  trusted-unity-validation:
+    # `Required / Unity validation` is the exact protected manual release
+    # context. Do not add it to ordinary PR branch protection: credentialed
+    # jobs are intentionally skipped for pull requests and forks.
+    name: Required / Unity validation
+    if: >-
+      always() &&
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main'
+    needs: [world-smoke, qwui-smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require both protected Unity 6000.0.23f1 builds
+        env:
+          WORLD_RESULT: ${{ needs.world-smoke.result }}
+          QWUI_RESULT: ${{ needs.qwui-smoke.result }}
+        run: |
+          test "$WORLD_RESULT" = success
+          test "$QWUI_RESULT" = success

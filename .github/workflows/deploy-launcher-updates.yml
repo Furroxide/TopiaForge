@@ -1,36 +1,47 @@
 name: Deploy launcher update + mod registry indexes
 
 on:
+  workflow_call:
+    inputs:
+      source_sha:
+        description: "Exact trusted commit used to build both indexes."
+        required: true
+        type: string
   workflow_dispatch:
-  # Community registry merges go live without waiting for a release tag.
-  push:
-    branches: [main]
-    paths:
-      - "registry/**"
 
 permissions:
   contents: read
 
+# Pages deployment replaces the complete site. Every caller shares one static
+# lock so two refs cannot publish stale indexes out of order.
 concurrency:
-  group: pages
+  group: robotopia-pages-publication
   cancel-in-progress: false
 
 jobs:
   build-index:
+    name: Build and validate complete Pages payload
+    if: >-
+      github.event_name == 'workflow_call' ||
+      (github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
-    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    timeout-minutes: 30
     permissions:
       contents: read
       pages: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout exact source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
 
       - name: Configure Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
 
       - name: Set up Dart
-        uses: dart-lang/setup-dart@v1
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
         with:
           sdk: "3.11.1"
 
@@ -38,34 +49,51 @@ jobs:
         working-directory: apps/robotopia_cli
         run: dart pub get --enforce-lockfile
 
-      - name: Build launcher update index
+      - name: Build and validate an official first-party-only site
         working-directory: apps/robotopia_cli
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LAUNCHER_UPDATE_BASE_URL: ${{ vars.LAUNCHER_UPDATE_BASE_URL }}
-        run: dart run robotopia updates index --repository "$GITHUB_REPOSITORY" --output "../../_site"
+        run: |
+          set -euo pipefail
+          staging_root=$(mktemp -d "$GITHUB_WORKSPACE/.pages-staging.XXXXXX")
+          trap 'rm -rf "$staging_root"' EXIT
+          site="$staging_root/site"
 
-      # A Pages deploy replaces the whole site, so this workflow must always
-      # build BOTH indexes or the release workflow's registry would vanish.
-      - name: Build mod registry index
-        working-directory: apps/robotopia_cli
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: >-
-          dart run robotopia registry index
-          --repository "$GITHUB_REPOSITORY"
-          --entries ../../registry
-          --changelogs ../../mods
-          --output ../../_site/registry
+          dart run robotopia updates index \
+            --repository "$GITHUB_REPOSITORY" \
+            --output "$site"
+          dart run robotopia registry index \
+            --repository "$GITHUB_REPOSITORY" \
+            --changelogs ../../mods \
+            --output "$site/registry"
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+          test -s "$site/manual-releases.json"
+          test -s "$site/registry/index.json"
+          test ! -e "$site/index.json"
+          jq -e '.formatVersion == 1 and .manualOnly == true' \
+            "$site/manual-releases.json" >/dev/null
+          jq -e '.formatVersion == 1 and all(.mods[]; .origin == "first-party")' \
+            "$site/registry/index.json" >/dev/null
+          if find "$site" ! -type f ! -type d -print -quit | grep -q .; then
+            echo "Pages staging contains a link or special entry." >&2
+            exit 1
+          fi
+          test ! -e "$GITHUB_WORKSPACE/_site"
+          mv "$site" "$GITHUB_WORKSPACE/_site"
+          rmdir "$staging_root"
+          trap - EXIT
+
+      - name: Upload complete Pages artifact
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: _site
 
   deploy:
+    name: Publish prebuilt Pages artifact
     needs: build-index
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       pages: write
       id-token: write
@@ -73,6 +101,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # No checkout or repository code executes with Pages/OIDC authority.
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

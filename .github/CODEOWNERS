@@ -1,2 +1,19 @@
-# Community registry submissions always get maintainer review.
+# These paths define public trust, release, update, and package contracts.
+# Repository rules should require approval from this protected owner.
+/.github/workflows/ @furroxide
+/.github/robotopia-game-build.json @furroxide
+/release/ @furroxide
+/schemas/ @furroxide
 /registry/ @furroxide
+
+# Release/publishing executables and their CLI contract.
+/tools/publish-release-draft.sh @furroxide
+/tools/verify-release-tag.sh @furroxide
+/tools/package-distribution.ps1 @furroxide
+/tools/test-release-package.ps1 @furroxide
+/tools/restore-robotopia-managed-refs.ps1 @furroxide
+/apps/robotopia_cli/bin/robotopia_release_commands.dart @furroxide
+/apps/robotopia_cli/lib/src/release_*.dart @furroxide
+
+# Platform signing and sandbox authority.
+/apps/robotopia_launcher_flutter/macos/Runner/*.entitlements @furroxide

@@ -22,5 +22,18 @@ jobs:
       startsWith(github.ref, 'refs/heads/release/')
     uses: ./.github/workflows/release-package-build.yml
     with:
-      fail_on_missing_refs: false
+      source_sha: ${{ github.sha }}
+      fail_on_missing_refs: true
       artifact_retention_days: 7
+
+  required-release-packages:
+    name: Required / Release packages
+    if: always()
+    needs: build-packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Enforce successful package matrix
+        env:
+          RESULT: ${{ needs.build-packages.result }}
+        run: test "$RESULT" = success
