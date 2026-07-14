@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Robotopia.Mods;
 using Robotopia.Mods.UnityUi;
@@ -8,12 +9,13 @@ using UnityEngine.UI;
 
 namespace Robotopia.ModManager
 {
-    internal sealed class MenuButtonInjector
+    internal sealed class MenuButtonInjector : IDisposable
     {
         // The main-menu gate keeps the component scan and the broad canvas fallback out of gameplay
         // (which prevents false injection into HUD canvases).
         private readonly ManagerOverlay overlay;
         private readonly ManagerFileLogger logger;
+        private readonly List<QwButton> injectedButtons = new List<QwButton>();
         private UiHost? host;
         private string sceneName = string.Empty;
         private float nextAttemptTime;
@@ -26,8 +28,14 @@ namespace Robotopia.ModManager
 
         public void ResetForScene(string newSceneName)
         {
+            ClearInjectedUi();
             sceneName = newSceneName;
             nextAttemptTime = 0f;
+        }
+
+        public void Dispose()
+        {
+            ClearInjectedUi();
         }
 
         public void Update()
@@ -93,6 +101,7 @@ namespace Robotopia.ModManager
             });
             var parent = new QwContainer(host, QwScheme.Paper, canvas.gameObject);
             var button = parent.Button(label, onClick, QwButtonStyle.Filled);
+            injectedButtons.Add(button);
             button.Go.name = name;
 
             var rect = button.Rect;
@@ -102,6 +111,18 @@ namespace Robotopia.ModManager
             rect.anchoredPosition = new Vector2(24f, bottomOffset);
             rect.sizeDelta = new Vector2(190f, 42f);
             logger.Info("Injected '" + label + "' menu button into scene '" + sceneName + "'.");
+        }
+
+        private void ClearInjectedUi()
+        {
+            for (var index = injectedButtons.Count - 1; index >= 0; index--)
+            {
+                injectedButtons[index].Destroy();
+            }
+
+            injectedButtons.Clear();
+            host?.Dispose();
+            host = null;
         }
 
         private static Canvas? FindMenuCanvas()

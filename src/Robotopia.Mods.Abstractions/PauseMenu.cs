@@ -16,8 +16,9 @@ namespace Robotopia.Mods
         bool IsAvailable { get; }
 
         /// <summary>
-        /// Adds an action button to the vanilla pause menu while a world session is active. Returns a handle;
-        /// dispose it to remove the action. Never throws on provider-side failures.
+        /// Adds an action to the QwUi pause companion while a world session is active. Returns a handle;
+        /// dispose it to remove the action. Never throws on provider-side failures. Destructive actions are
+        /// confirmed by the provider before their callback runs.
         /// </summary>
         IDisposable RegisterAction(WorldPauseAction action);
 
@@ -33,6 +34,21 @@ namespace Robotopia.Mods
     public sealed class WorldPauseAction
     {
         public WorldPauseAction(string id, string label, Action callback, bool closePauseMenu = true, int order = 0)
+            : this(id, label, callback, closePauseMenu, order, destructive: false)
+        {
+        }
+
+        /// <summary>
+        /// Extended constructor for actions that require destructive confirmation. The original five-argument
+        /// constructor remains intact so mods compiled against earlier SDK builds keep binary compatibility.
+        /// </summary>
+        public WorldPauseAction(
+            string id,
+            string label,
+            Action callback,
+            bool closePauseMenu,
+            int order,
+            bool destructive)
         {
             if (string.IsNullOrWhiteSpace(id))
             {
@@ -49,6 +65,7 @@ namespace Robotopia.Mods
             Callback = callback ?? throw new ArgumentNullException(nameof(callback));
             ClosePauseMenu = closePauseMenu;
             Order = order;
+            Destructive = destructive;
         }
 
         public string Id { get; }
@@ -60,6 +77,9 @@ namespace Robotopia.Mods
 
         /// <summary>Sort key among registered actions; lower renders first.</summary>
         public int Order { get; }
+
+        /// <summary>Require a QwUi destructive confirmation before invoking this action.</summary>
+        public bool Destructive { get; }
     }
 
     /// <summary>Context handed to the exit interceptor when the vanilla exit-to-menu option is picked.</summary>

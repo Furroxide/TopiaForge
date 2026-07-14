@@ -1,0 +1,253 @@
+# Initial release blocker register
+
+Last audited: 2026-07-14. Product candidate: `0.1.1`. Recommendation: **NO-SHIP**.
+
+The repository-wide remediation found no remaining known local critical- or high-severity engineering defect. The
+release is nevertheless blocked by decisions, credentials, protected-host configuration, and native/in-game
+acceptance that cannot be supplied by source changes. The strict publication gates intentionally continue to reject
+the candidate until those items are closed.
+
+This register applies to the exact working tree audited on the date above. It does not attest a future commit. Close
+an item only with evidence from the frozen candidate SHA; do not treat an unavailable host, credential, or human
+review as a waived check. The repeatable procedure is in [`ReleaseChecklist.md`](ReleaseChecklist.md), and the full
+component/contract map is in [`ArchitectureInventory.md`](ArchitectureInventory.md).
+
+Priority meanings:
+
+- **P0** — required before any public release.
+- **P1** — required before general availability unless the owner records an explicit, dated, scope-limited
+  disposition.
+- **P2** — a conditional future gate; it is not a v1 blocker while the stated conservative constraint remains true.
+
+## Verification matrix
+
+`PASS` means the locally applicable gate passed on this working tree. `FAIL` is an expected hard-stop that correctly
+rejected a non-distributable candidate. `BLOCKED` requires authority, credentials, hardware, hosted configuration, or
+manual evidence unavailable to this audit. No required check is silently skipped.
+
+| Gate family | Result | Retained evidence |
+| --- | --- | --- |
+| Whole-repository component and contract inventory | PASS | All source, app, package, mod, template, tool, schema, test, documentation, and workflow surfaces are mapped in `ArchitectureInventory.md`. |
+| C# Release solution | PASS | 20 projects; zero build warnings or errors on SDK `10.0.301` / runtime `10.0.9`. |
+| C# regression harness | PASS | Complete `Robotopia.ModManager.Tests` harness passed. |
+| C# boundaries and public SDK surface | PASS | Unity-free Core, Unity/BepInEx runtime isolation, strict audit, generated API baseline, and bounded production-read scans passed. |
+| Dart formatting and analyzers | PASS | 254 Dart files checked; domain, data, UI, app, and CLI analyzers report no issues. |
+| Dart domain/data tests | PASS | 147 domain and 187 data tests passed. |
+| Flutter UI/app tests | PASS | 2 shared-UI and 46 launcher tests passed, including BLoC lifecycle, scaling, contrast, focus, install confirmation, safe mode, recovery, and Xcode payload/logging configuration. |
+| CLI tests | PASS | 126 tests passed, including packaging, registry, Unity probing, UGC, release metadata, final-archive validation, ad-hoc/Developer ID signing separation, and fail-closed signing behavior. |
+| C#/Dart contract parity | PASS | SemVer 2.0, build mapping, compatibility aliases, unknown fields, dependencies, pins, conflicts, load order, and state fixtures agree. |
+| Sidecar install/runtime/security | PASS | Lockfile `npm ci`, syntax checks, 16 tests, production dependency tree, and audit passed with zero vulnerabilities. |
+| Archive, UGC, diagnostic, repair, and process hardening | PASS | Adversarial traversal/link/collision/size/race/rollback/redaction/timeout regressions passed. |
+| First-party mods | PASS | All 13 mods validated and packed twice byte-identically; archives were inspected directly. UiGallery is excluded from the normal player payload. |
+| C# author templates | PASS | All seven template families scaffolded, validated, packed twice, and inspected; defaults remain deliberately non-publishable. |
+| VPM and canonical ecosystem payload | PASS | Three VPM packages and the 12-mod player payload built twice byte-identically with no missing, extra, linked, or mismatched entries. |
+| Exact-Unity QwUi build | PASS | Unity `6000.0.23f1`; two builds matched SHA-256 `05df3a1533919de3ca5f2dd7c6e7dd41e67163174719339ed7e2c3ab3c012f25`. |
+| Exact-Unity representative world build | PASS | Two builds matched SHA-256 `8239f0592fbf5ca212cebe5ad8cfb3097f46e2024059b677fdec6ffb1b3b7932`. |
+| Exact-Unity lifecycle smoke | PASS | Sixteen repeated create/dispose and scene-transition cycles returned allocator, tween, cursor, hotkey, modal, theme, and callback state to baseline. |
+| Game compatibility | PASS | Build `2227`; 217 bindings, 195 statically verifiable, 22 explicitly dynamic/in-game-only, zero indeterminate findings. |
+| Public build freshness | PASS | Both audited platform records still identify build `2227`; CI/release now fail if the public latest manifest changes. |
+| BepInEx/UnityDoorstop provenance | PASS | Pinned BepInEx `5.4.23.5` archives and extracted trees, UnityDoorstop commit/source, hashes, modes, and notices validate. |
+| Local macOS package structure | PASS | Universal launcher/frameworks and GameCompat, separate runnable arm64/x64 Dart AOT CLIs, canonical nested payload bytes, modes, links, notices, and deterministic archive bytes validated. |
+| Local macOS launch and Xcode development | PASS | Fresh Xcode Debug/Release code shares Team ID `34Y7669588`; the shared scheme resolves checkout payloads. A regenerated 12-mod/BepInEx technical archive passed structural, embedded-CLI, and direct five-second launch smoke after ad-hoc signing correctly omitted hardened runtime. |
+| Local macOS runtime repair | PASS | The installed build-2227 copy transactionally repaired BepInEx `5.4.23.5` and loader `0.2.0`, restored executable modes, left no transaction residue or managed links, and staged all 13 first-party packages. Package-inbox ingestion remains part of authorized in-game acceptance. |
+| Release-policy/BOM/SBOM/checksum machinery | PASS | Policy validation in technical dry-run mode and metadata build/verify regression suites passed. |
+| Repository and CI hygiene | PASS | actionlint, PSScriptAnalyzer, PowerShell/bash syntax, shellcheck, JSON, YAML, schemas, Markdown links, LFS, action pins, conflict markers, LF policy, and Dart line cap passed. |
+| Credential exposure containment | BLOCKED | An Xcode scheme pre-action printed inherited credential-shaped variables during this local audit. Repository shell phases now suppress environment listings, release children scrub secret-shaped names, and contributor guidance requires a sanitized Xcode launch; affected credentials still require owner rotation and local-log disposal. See `P0-CRED-01`. |
+| Strict distributable-release policy | FAIL | Correctly stops on `OWNER_DECISION_REQUIRED`, `NOASSERTION`, and blocked release status; see `P0-LIC-01`. |
+| Production macOS trust | FAIL | Structural/ad-hoc validation passes, but Developer ID team identity, notarization, stapling, and Gatekeeper correctly fail; see `P0-MAC-01`. |
+| Windows x64 signed package and clean-host run | BLOCKED | Requires a Windows runner, Authenticode identity, RFC 3161 timestamp service, and clean-machine QA; see `P0-WIN-01`. |
+| Linux x64 package and Proton run | BLOCKED | Flutter desktop builds are host-specific; requires Linux/Proton runners and gameplay QA; see `P0-LINUX-01`. |
+| Signed macOS arm64 and Intel clean-host runs | BLOCKED | Requires Apple credentials and quarantined clean hosts; see `P0-MAC-01`. |
+| Authorized build-2227 in-game acceptance | BLOCKED | Dynamic bindings, all mods, reloads, recovery, and profiler evidence require an authorized game environment; see `P0-GAME-01`. |
+| Native UX/accessibility acceptance | BLOCKED | Screen Recording permission prevented screenshot comparison; screen-reader and native-platform manual QA remain; see `P1-UX-01`. |
+| Project license, IP, and OSS legal approval | BLOCKED | Project-owner/legal decisions cannot be inferred; see `P0-LIC-01`, `P0-IP-01`, and `P0-OSS-01`. |
+| Privacy/backend authorization and package trust policy | BLOCKED | Remote features default off, but owner approval is still required; see `P0-PRIV-01` and `P0-TRUST-01`. |
+| GitHub rulesets, environments, secrets, tag, and attestations | BLOCKED | Repository administration and credential owners must configure and prove the trusted path; see `P0-HOST-01`. |
+| Frozen candidate hosted matrix and reviewed release record | BLOCKED | This audit intentionally leaves uncommitted changes and creates no tag/release; see `P0-CAND-01`. |
+| Independent player/author clean-machine acceptance | BLOCKED | Requires external participants and supported native hosts; see `P1-E2E-01`. |
+
+Matrix totals: **25 PASS, 2 FAIL, 11 BLOCKED, 0 SKIP**.
+
+The four informational exceptions are explained, not waived: `dotnet format` reports expected workspace-loader
+diagnostics for the intentional Unity compile/reference split while formatting 0 of 420 files; Flutter reports newer
+packages outside current compatible constraints; Node lists optional non-host native packages; and 22 GameCompat
+bindings are inherently dynamic and therefore belong to the in-game acceptance gate.
+
+## P0 blockers
+
+- [ ] **P0-LIC-01 — Approve the project/inbound license and replace the release sentinel.**
+
+  Owner: project owner and legal counsel.
+
+  Current state: `release/release-policy.json` deliberately contains `OWNER_DECISION_REQUIRED`; first-party
+  manifests use SPDX-standard `NOASSERTION`; default scaffolds contain a no-grant notice. Local validation is useful,
+  but publication validation fails by design.
+
+  Exit criteria: identify copyright holders and inbound contribution terms; approve an outbound SPDX expression;
+  add the canonical root license; update all first-party manifests/packages; confirm which independently distributed
+  artifacts must carry which text; run the strict policy, package, registry, BOM, SBOM, and archive-notice gates with
+  zero findings.
+
+- [ ] **P0-IP-01 — Approve the rights basis and public naming for game integration and assets.**
+
+  Owner: project/game owner and IP/trademark counsel.
+
+  Exit criteria: retain written authority or an approved clean-room/non-affiliation basis for the Robotopia and
+  QuantumWorks names, game injection, compatibility extraction/baselines, registry claims, web-derived art, adapted
+  icons, fonts, and custom-world content. Remove or replace any item that lacks a distributable rights basis and
+  record provenance, transformation, hash, license, and approver for retained assets.
+
+- [ ] **P0-OSS-01 — Obtain legal acceptance of the completed third-party disposition.**
+
+  Owner: open-source compliance/legal and release engineering.
+
+  Current state: BepInEx, Harmony, MonoMod, Cecil, UnityDoorstop, .NET, MetadataLoadContext, Flutter/Dart, SPDX data,
+  and font provenance/notices are mechanically verified. UnityDoorstop corresponding source and neutral renamed TMP
+  derivatives are bundled.
+
+  Exit criteria: legal review confirms the LGPL corresponding-source method, OFL derivative/font treatment, notice
+  placement, and license compatibility for the exact final BOM/SBOM bytes.
+
+- [ ] **P0-PRIV-01 — Approve remote AI, player-token, microphone, and speech-to-text behavior.**
+
+  Owner: backend/game owner, privacy/legal, security, and product.
+
+  Current state: canonical descriptive capabilities are present; `ai` is only a deprecated alias; Zombies live-brain
+  and voice defaults are off; no token, remote-AI, microphone, or STT activity occurs without explicit configuration.
+
+  Exit criteria: authorize the backend use; document destination, purpose, authentication, consent, cost, retention,
+  deletion, abuse/rate limits, transcript/history handling, incident response, and jurisdictional requirements; review
+  launcher disclosures; test signed-out, denied, offline, rate-limited, timeout, cancellation, and revocation paths.
+
+- [ ] **P0-TRUST-01 — Approve the package trust and first-party publication model.**
+
+  Owner: security, product, registry, and release owners.
+
+  Current state: the launcher discloses source, digest, aggregate capabilities, and arbitrary-code risk. Permissions
+  are explicitly descriptive, not a sandbox. Official community submissions/deployment are closed; self-hosted
+  registries remain supported.
+
+  Exit criteria: approve how first-party keys/digests and download origins are trusted, how a compromised package is
+  revoked, how installed users are warned/recovered, and who may authorize an official payload. Do not market
+  capability declarations as containment.
+
+- [ ] **P0-MAC-01 — Produce a Developer ID-signed, notarized final macOS archive.**
+
+  Owner: macOS signing owner and release QA.
+
+  Exit criteria: sign every nested Mach-O with the approved Developer ID/Team ID and hardened runtime; notarize and
+  staple the app; extract the final ZIP with quarantine metadata; pass deep/strict codesign, expected team identity,
+  `stapler validate`, and Gatekeeper on clean Apple Silicon and Intel hosts; run install, repair, launch, diagnostics,
+  and uninstall. Never weaken library validation or omit hardened runtime in a public candidate. An explicitly
+  non-distributable ad-hoc technical dry run may omit hardened runtime, and publication must continue to reject it.
+
+- [ ] **P0-WIN-01 — Produce and validate the signed Windows x64 archive.**
+
+  Owner: Windows signing owner and release QA.
+
+  Exit criteria: build from the frozen SHA on Windows; Authenticode-sign every required executable with SHA-256 and
+  an HTTPS RFC 3161 timestamp; run `signtool verify /pa /all /tw` against the final extracted ZIP; inspect hashes,
+  links, modes/notices, and runtime assets; exercise clean install/repair/profile/safe-mode/failure/diagnostics/update
+  and uninstall journeys.
+
+- [ ] **P0-LINUX-01 — Produce and validate Linux x64 and Proton behavior.**
+
+  Owner: Linux/Proton release QA.
+
+  Exit criteria: build on Linux from the frozen SHA; inspect final ZIP executable modes, links, checksums, notices,
+  and bundled payloads; run native launcher/CLI flows; exercise the documented Windows-game-under-Proton discovery,
+  path translation, process launch, runtime repair, custom-world, recovery, and uninstall paths.
+
+- [ ] **P0-GAME-01 — Complete authorized build-2227 runtime and first-party-mod acceptance.**
+
+  Owner: runtime/mod QA with authorized game access.
+
+  Exit criteria: on build `2227`, test startup/shutdown, repeated scenes, safe mode, reloads, enable/disable,
+  dependency order, package inbox, collision isolation, partial failures, restart-required state, save compatibility,
+  all 13 mod flows, QwUi-only UI, dirty updates, and resource teardown. Verify all 22 dynamic GameCompat bindings and
+  record profiler evidence of no steady-state allocation regressions or task/callback leaks.
+
+- [ ] **P0-HOST-01 — Configure and prove the protected hosted release path.**
+
+  Owner: GitHub administrator, security, and credential owners.
+
+  Exit criteria: configure required aggregate contexts (`Required / CI validation`, `Required / Release packages`,
+  `Required / Registry validation`, and trusted-candidate `Required / Unity validation`); protect release and Unity
+  environments with reviewers; inventory and scope Apple, Windows, Unity, managed-reference, Pages, and attestation
+  credentials; prove fork PRs are secretless; enable reviewed Pages and immutable-release policy; protect creation of
+  the annotated `v0.1.1` tag while forbidding mutation/deletion; retain an administrator-reviewed dry run.
+
+- [ ] **P0-CRED-01 — Rotate credentials exposed through the local Xcode build log.**
+
+  Owner: credential owners and security.
+
+  Current state: an audit build inherited credential-shaped API/GitHub variables from its parent application, and
+  Xcode's required Flutter scheme pre-action included them in its local build log. No value was written to tracked
+  repository files. Repository-owned PBX shell phases now disable environment logging, release child processes strip
+  explicit and secret-shaped variables, and contributor documentation requires reopening Xcode from a sanitized
+  context. Xcode's scheme pre-action logging itself cannot be disabled by the repository while that prepare action is
+  required.
+
+  Exit criteria: revoke and rotate every credential present in the affected audit/Xcode log; remove the affected
+  local DerivedData and task logs under the applicable retention policy; confirm the old credentials no longer work;
+  review hosted secrets for least privilege; and retain a sentinel build proving a sanitized Xcode launch does not
+  expose credentials.
+
+- [ ] **P0-CAND-01 — Freeze and attest one candidate SHA.**
+
+  Owner: release manager.
+
+  Exit criteria: review and commit the remediation; approve release notes; create the pre-protected annotated
+  `v0.1.1` tag on that exact SHA through the authorized process; run every hosted/native/Unity gate without unexplained
+  warnings or skips; generate and independently verify the candidate BOM, SPDX SBOM, `SHA256SUMS`, nested digests,
+  sizes, signatures, provenance, and manual-release index. The workflow may prepare only a matching draft and must
+  never create/mutate the tag, replace assets, or publish automatically.
+
+## P1 acceptance gates
+
+- [ ] **P1-UX-01 — Complete native visual and accessibility acceptance.**
+
+  Owner: product/accessibility QA.
+
+  Exit criteria: capture and review Home, Setup, Mods, Browse, Profiles, Diagnostics, Settings, and Developer flows on
+  every supported native host at 800x600 and larger; cover empty/loading/warning/error/destructive/recovery states,
+  keyboard-only navigation, focus restoration, 100–200% text scaling, high contrast, reduced motion, screen readers,
+  long paths, and no-overflow behavior. Local automated coverage is green, but macOS denied Screen Recording to this
+  audit, so screenshot comparison was not fabricated.
+
+- [ ] **P1-E2E-01 — Run independent clean-machine player and author journeys.**
+
+  Owner: release/community QA.
+
+  Exit criteria: a player discovers the game, installs/repairs BepInEx, installs the canonical package set, previews
+  capabilities/dependencies, launches normally and in safe mode, diagnoses a failure, updates manually, and recovers.
+  Separately, a new author uses only published docs to install prerequisites, scaffold with explicit author/license,
+  build/test/package/validate, publish to a self-hosted registry, install through the launcher, diagnose, and update.
+
+- [ ] **P1-SUPPORT-01 — Name public support and incident owners.**
+
+  Owner: project/community/security owners.
+
+  Exit criteria: approve monitored security and support contacts, response expectations, vulnerability intake,
+  takedown/escalation path, compatibility/deprecation promise, release-note owner, and launch/on-call coverage. Replace
+  placeholder destinations in public documents before publication.
+
+## P2 conditional gates and frozen v1 scope
+
+- [x] **P2-UPDATE-01 — Launcher upgrades are manual-only.** `manual-releases.json` format 1 carries only HTTPS URLs,
+  hashes, sizes, and `manualOnly: true`; no replacement strategy is advertised. A future automatic updater requires a
+  separate signed-metadata, bounded-extraction, rollback, and recovery review.
+- [x] **P2-REGISTRY-01 — Official community submissions remain closed.** Official indexes contain first-party entries
+  only. Opening submissions requires namespace ownership, moderation, malware review, transfer/dispute, yank,
+  revocation, appeal, and installed-user response governance plus tests.
+- [x] **P2-WORLDS-01 — Custom worlds are Windows/Proton-only for v1.** Do not advertise native macOS game support.
+- [x] **P2-COMPAT-01 — Build `2227` is the sole supported game build.** Numeric build `N` maps to SemVer `0.0.N`.
+  Any change in the public latest manifest stops release for a new compatibility audit; unknown constrained versions
+  block mods but never block an empty safe-mode launch.
+
+## Ship decision
+
+**NO-SHIP.** Local remediation is release-credible, but the strict policy and production trust gates correctly fail,
+and all P0/P1 evidence above must be tied to a frozen candidate. The recommendation may change only after every P0 is
+closed, each P1 is closed or receives an explicit dated disposition, the final matrix is rerun against the candidate
+SHA, and no new critical/high finding or unexplained warning remains.

@@ -8,11 +8,34 @@ namespace Robotopia.ModManager.Core
     {
         public LoadOrderResult Resolve(IEnumerable<ModPackage> packages)
         {
-            var enabled = packages
+            var candidates = packages
                 .Where(p => p.IsValid && p.IsEnabled)
-                .ToDictionary(p => p.Manifest!.Id, p => p, StringComparer.OrdinalIgnoreCase);
+                .ToList();
 
             var errors = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            var enabled = new Dictionary<string, ModPackage>(StringComparer.OrdinalIgnoreCase);
+            foreach (var group in candidates
+                .GroupBy(package => package.Manifest!.Id, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                var duplicates = group.OrderBy(package => package.PackagePath, StringComparer.OrdinalIgnoreCase).ToList();
+                if (duplicates.Count > 1)
+                {
+                    var diagnosticId = duplicates
+                        .Select(package => package.Manifest!.Id)
+                        .OrderBy(id => id, StringComparer.Ordinal)
+                        .First();
+                    AddError(
+                        errors,
+                        diagnosticId,
+                        "Multiple enabled packages declare the same mod id '" + diagnosticId + "': "
+                            + string.Join(", ", duplicates.Select(package => package.PackagePath)) + ".");
+                    continue;
+                }
+
+                enabled.Add(group.Key, duplicates[0]);
+            }
+
             foreach (var package in enabled.Values)
             {
                 var manifest = package.Manifest!;
@@ -48,7 +71,12 @@ namespace Robotopia.ModManager.Core
                 }
             }
 
-            var graph = enabled.Keys.ToDictionary(k => k, _ => new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
+            // Only hard required dependencies participate in validity/cycle diagnostics. Optional
+            // dependencies and loadAfter are ordering hints; a contradictory hint must never stop a mod.
+            var hardGraph = enabled.Keys.ToDictionary(
+                key => key,
+                _ => new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+                StringComparer.OrdinalIgnoreCase);
             foreach (var package in enabled.Values)
             {
                 var id = package.Manifest!.Id;
@@ -57,79 +85,210 @@ namespace Robotopia.ModManager.Core
                     if (enabled.TryGetValue(dependency.Id, out var dependencyPackage) &&
                         DependencySatisfied(dependencyPackage.Manifest!.Version, dependency))
                     {
-                        graph[id].Add(dependency.Id);
+                        hardGraph[id].Add(dependency.Id);
                     }
                 }
+            }
 
-                foreach (var dependency in OptionalDependencies(package.Manifest))
+            // Detect every member of every required-dependency cycle before ordering. The old recursive sorter
+            // marked only the repeated id (A in A -> B -> A), allowing B and its dependents to load half-alive.
+            var visitState = hardGraph.Keys.ToDictionary(
+                id => id,
+                _ => 0,
+                StringComparer.OrdinalIgnoreCase);
+            var stack = new List<string>();
+            var stackIndexes = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var id in hardGraph.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
+            {
+                DetectCycles(id, hardGraph, visitState, stack, stackIndexes, errors);
+            }
+
+            // A manifest-blocked hard dependency is just as unavailable as a missing one. Propagate that failure
+            // to required dependents to a fixed point; optional dependencies and loadAfter hints stay non-blocking.
+            bool changed;
+            do
+            {
+                changed = false;
+                foreach (var package in enabled.Values)
                 {
-                    if (enabled.TryGetValue(dependency.Id, out var dependencyPackage) &&
+                    var manifest = package.Manifest!;
+                    foreach (var dependency in GetRequiredDependencies(manifest))
+                    {
+                        if (enabled.TryGetValue(dependency.Id, out var dependencyPackage)
+                            && errors.ContainsKey(dependencyPackage.Manifest!.Id))
+                        {
+                            changed |= AddError(
+                                errors,
+                                manifest.Id,
+                                "Required dependency cannot load: " + dependency.Id + ".");
+                        }
+                    }
+                }
+            }
+            while (changed);
+
+            // Start with the acyclic hard edges between loadable packages, then apply soft edges in a stable
+            // order. Optional dependency hints win over loadAfter hints; within each class, lexical owner/target
+            // order determines which edge survives a contradictory pair. An edge is simply skipped if it would
+            // close a cycle, preserving the documented non-blocking semantics.
+            var graph = enabled.Keys
+                .Where(id => !errors.ContainsKey(id))
+                .ToDictionary(
+                    id => id,
+                    id => new HashSet<string>(
+                        hardGraph[id].Where(dependency => !errors.ContainsKey(dependency)),
+                        StringComparer.OrdinalIgnoreCase),
+                    StringComparer.OrdinalIgnoreCase);
+            var softEdges = new List<(int Priority, string Owner, string Dependency)>();
+            foreach (var package in enabled.Values.OrderBy(
+                package => package.Manifest!.Id,
+                StringComparer.OrdinalIgnoreCase))
+            {
+                var manifest = package.Manifest!;
+                if (!graph.ContainsKey(manifest.Id))
+                {
+                    continue;
+                }
+
+                foreach (var dependency in OptionalDependencies(manifest))
+                {
+                    if (graph.ContainsKey(dependency.Id) &&
+                        enabled.TryGetValue(dependency.Id, out var dependencyPackage) &&
                         DependencySatisfied(dependencyPackage.Manifest!.Version, dependency))
                     {
-                        graph[id].Add(dependency.Id);
+                        softEdges.Add((0, manifest.Id, dependency.Id));
                     }
                 }
 
-                foreach (var after in package.Manifest.LoadAfter ?? new List<string>())
+                foreach (var after in manifest.LoadAfter ?? new List<string>())
                 {
-                    if (enabled.ContainsKey(after))
+                    if (graph.ContainsKey(after))
                     {
-                        graph[id].Add(after);
+                        softEdges.Add((1, manifest.Id, after));
                     }
+                }
+            }
+
+            foreach (var edge in softEdges
+                .OrderBy(edge => edge.Priority)
+                .ThenBy(edge => edge.Owner, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(edge => edge.Dependency, StringComparer.OrdinalIgnoreCase))
+            {
+                if (!graph[edge.Owner].Contains(edge.Dependency) &&
+                    !WouldCreateCycle(graph, edge.Owner, edge.Dependency))
+                {
+                    graph[edge.Owner].Add(edge.Dependency);
                 }
             }
 
             var ordered = new List<ModPackage>();
-            var temporary = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var permanent = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var id in graph.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
             {
-                Visit(id, graph, enabled, temporary, permanent, ordered, errors);
+                VisitLoadable(id, graph, enabled, permanent, ordered);
             }
 
-            foreach (var package in enabled.Values)
-            {
-                if (errors.ContainsKey(package.Manifest!.Id))
-                {
-                    ordered.Remove(package);
-                }
-            }
-
-            return new LoadOrderResult(ordered, errors.ToDictionary(k => k.Key, v => (IReadOnlyList<string>)v.Value));
+            return new LoadOrderResult(ordered, errors.ToDictionary(
+                pair => pair.Key,
+                pair => (IReadOnlyList<string>)pair.Value,
+                StringComparer.OrdinalIgnoreCase));
         }
 
-        private static void Visit(
+        private static void DetectCycles(
             string id,
             Dictionary<string, HashSet<string>> graph,
-            Dictionary<string, ModPackage> packages,
-            HashSet<string> temporary,
-            HashSet<string> permanent,
-            List<ModPackage> ordered,
+            Dictionary<string, int> visitState,
+            List<string> stack,
+            Dictionary<string, int> stackIndexes,
             Dictionary<string, List<string>> errors)
         {
-            if (permanent.Contains(id))
+            if (visitState[id] != 0)
             {
                 return;
             }
 
-            if (!temporary.Add(id))
+            visitState[id] = 1;
+            stackIndexes[id] = stack.Count;
+            stack.Add(id);
+            foreach (var dependency in graph[id].OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
             {
-                AddError(errors, id, "Dependency/loadAfter cycle detected.");
+                if (visitState[dependency] == 0)
+                {
+                    DetectCycles(dependency, graph, visitState, stack, stackIndexes, errors);
+                }
+                else if (visitState[dependency] == 1 && stackIndexes.TryGetValue(dependency, out var cycleStart))
+                {
+                    var cycle = stack.Skip(cycleStart).Concat(new[] { dependency }).ToArray();
+                    var message = "Required dependency cycle detected: " + string.Join(" -> ", cycle) + ".";
+                    for (var index = cycleStart; index < stack.Count; index++)
+                    {
+                        AddError(errors, stack[index], message);
+                    }
+                }
+            }
+
+            stack.RemoveAt(stack.Count - 1);
+            stackIndexes.Remove(id);
+            visitState[id] = 2;
+        }
+
+        private static void VisitLoadable(
+            string id,
+            Dictionary<string, HashSet<string>> graph,
+            Dictionary<string, ModPackage> packages,
+            HashSet<string> permanent,
+            List<ModPackage> ordered)
+        {
+            if (!permanent.Add(id))
+            {
                 return;
             }
 
             foreach (var dependency in graph[id].OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
             {
-                Visit(dependency, graph, packages, temporary, permanent, ordered, errors);
+                VisitLoadable(dependency, graph, packages, permanent, ordered);
             }
 
-            temporary.Remove(id);
-            permanent.Add(id);
             ordered.Add(packages[id]);
         }
 
-        private static void AddError(Dictionary<string, List<string>> errors, string id, string error)
+        private static bool WouldCreateCycle(
+            Dictionary<string, HashSet<string>> graph,
+            string owner,
+            string dependency)
+        {
+            if (string.Equals(owner, dependency, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            var pending = new Stack<string>();
+            var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            pending.Push(dependency);
+            while (pending.Count > 0)
+            {
+                var current = pending.Pop();
+                if (!visited.Add(current))
+                {
+                    continue;
+                }
+
+                if (string.Equals(current, owner, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                foreach (var next in graph[current])
+                {
+                    pending.Push(next);
+                }
+            }
+
+            return false;
+        }
+
+        private static bool AddError(Dictionary<string, List<string>> errors, string id, string error)
         {
             if (!errors.TryGetValue(id, out var list))
             {
@@ -137,7 +296,13 @@ namespace Robotopia.ModManager.Core
                 errors[id] = list;
             }
 
+            if (list.Contains(error, StringComparer.Ordinal))
+            {
+                return false;
+            }
+
             list.Add(error);
+            return true;
         }
 
         /// <summary>All hard dependencies of a manifest: vpmDependencies plus non-optional dependencies.</summary>
@@ -156,7 +321,8 @@ namespace Robotopia.ModManager.Core
         {
             foreach (var dependency in GetRequiredDependencies(manifest))
             {
-                if (failedModIds.Contains(dependency.Id))
+                if (failedModIds.Any(failedId =>
+                        string.Equals(failedId, dependency.Id, StringComparison.OrdinalIgnoreCase)))
                 {
                     return dependency.Id;
                 }
@@ -191,7 +357,10 @@ namespace Robotopia.ModManager.Core
                 return VersionUtil.AllowsRange(actualVersion, dependency.VersionRange);
             }
 
-            return VersionUtil.IsAtLeast(actualVersion, dependency.Version);
+            // `version` is the legacy spelling of `versionRange`, not a minimum-version
+            // shortcut. Keep both fields on the same range grammar so a plain version is
+            // exact and comparator/wildcard aliases behave consistently across runtimes.
+            return VersionUtil.AllowsRange(actualVersion, dependency.Version);
         }
 
         private static string DependencyRangeText(ModDependency dependency)
@@ -201,7 +370,7 @@ namespace Robotopia.ModManager.Core
                 return dependency.VersionRange;
             }
 
-            return string.IsNullOrWhiteSpace(dependency.Version) ? "*" : ">=" + dependency.Version;
+            return string.IsNullOrWhiteSpace(dependency.Version) ? "*" : dependency.Version;
         }
 
         private static bool ConflictMatches(string actualVersion, ModConflict conflict)

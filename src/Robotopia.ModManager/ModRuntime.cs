@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -10,26 +11,39 @@ namespace Robotopia.ModManager
 {
     public sealed class ModRuntime
     {
+        // Diagnostic owner for registrations protected by ModServiceRegistry's framework-only path.
+        private const string FrameworkServiceOwnerId = "$robotopia.modmanager";
+
         private readonly ManagerPaths paths;
         private readonly ManagerFileLogger logger;
         private readonly ModServiceRegistry serviceRegistry;
+        private readonly SceneCoordinator sceneCoordinator;
         private readonly List<LoadedMod> loadedMods = new List<LoadedMod>();
-        private readonly List<string> searchPaths = new List<string>();
+        private readonly List<string> loadedModIds = new List<string>();
+        private readonly ReadOnlyCollection<string> loadedModIdsView;
+        private readonly Dictionary<Assembly, string> assemblyOwners = new Dictionary<Assembly, string>();
         private readonly string pluginAssemblyPath;
         private readonly HashSet<string> updateFailureLogged = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> sceneFailureLogged = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string> failedMods = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private ModAssemblyResolutionCatalog? assemblyCatalog;
+        private string? loadingOwnerId;
 
         public ModRuntime(ManagerPaths paths, ManagerFileLogger logger)
         {
             this.paths = paths;
             this.logger = logger;
             serviceRegistry = new ModServiceRegistry();
+            // Manager-owned framework service: scene-transition arbitration is available to every mod from
+            // the first OnLoad and cannot be shadowed or removed through the public mod registry.
+            sceneCoordinator = new SceneCoordinator(logger.Info);
+            serviceRegistry.RegisterFramework<ISceneCoordinator>(FrameworkServiceOwnerId, sceneCoordinator);
             pluginAssemblyPath = Path.GetDirectoryName(typeof(ModRuntime).Assembly.Location) ?? string.Empty;
+            loadedModIdsView = loadedModIds.AsReadOnly();
             AppDomain.CurrentDomain.AssemblyResolve += ResolveAssembly;
         }
 
-        public IReadOnlyCollection<string> LoadedModIds => loadedMods.Select(m => m.Manifest.Id).ToList();
+        public IReadOnlyCollection<string> LoadedModIds => loadedModIdsView;
 
         /// <summary>Why a mod in the load order did not come up (skip reason or exception), or null.</summary>
         public string? GetLoadFailure(string id)
@@ -39,7 +53,21 @@ namespace Robotopia.ModManager
 
         public void Load(IEnumerable<ModPackage> orderedPackages)
         {
-            foreach (var package in orderedPackages)
+            if (orderedPackages == null)
+            {
+                throw new ArgumentNullException(nameof(orderedPackages));
+            }
+
+            var packages = orderedPackages.ToList();
+            assemblyCatalog = new ModAssemblyResolutionCatalog(packages, pluginAssemblyPath);
+            foreach (var entry in assemblyCatalog.ValidateScopes())
+            {
+                var reason = string.Join("; ", entry.Value);
+                failedMods[entry.Key] = reason;
+                logger.Warn("Skipping " + entry.Key + ": assembly preflight failed: " + reason);
+            }
+
+            foreach (var package in packages)
             {
                 Load(package);
             }
@@ -57,8 +85,10 @@ namespace Robotopia.ModManager
 
         public void DispatchUpdate(float deltaTime)
         {
-            foreach (var loaded in loadedMods.ToArray())
+            var count = loadedMods.Count;
+            for (var index = 0; index < count; index++)
             {
+                var loaded = loadedMods[index];
                 try
                 {
                     loaded.Context.RaiseUpdate(deltaTime);
@@ -76,8 +106,10 @@ namespace Robotopia.ModManager
 
         public void DispatchSceneLoaded(string sceneName)
         {
-            foreach (var loaded in loadedMods.ToArray())
+            var count = loadedMods.Count;
+            for (var index = 0; index < count; index++)
             {
+                var loaded = loadedMods[index];
                 try
                 {
                     loaded.Context.RaiseSceneLoaded(sceneName);
@@ -95,8 +127,9 @@ namespace Robotopia.ModManager
 
         public void UnloadAll()
         {
-            foreach (var loaded in loadedMods.AsEnumerable().Reverse().ToArray())
+            for (var index = loadedMods.Count - 1; index >= 0; index--)
             {
+                var loaded = loadedMods[index];
                 try
                 {
                     loaded.Instance.OnUnload();
@@ -113,6 +146,10 @@ namespace Robotopia.ModManager
             }
 
             loadedMods.Clear();
+            loadedModIds.Clear();
+            assemblyOwners.Clear();
+            assemblyCatalog = null;
+            loadingOwnerId = null;
             updateFailureLogged.Clear();
             sceneFailureLogged.Clear();
             failedMods.Clear();
@@ -132,6 +169,11 @@ namespace Robotopia.ModManager
 
             var manifest = package.Manifest!;
 
+            if (failedMods.ContainsKey(manifest.Id))
+            {
+                return;
+            }
+
             // The resolver already validated dependencies at the manifest level, but a dependency can still
             // fail at load time (e.g. a TypeLoadException from a binary-stale package). Running a dependent
             // without its dependency's services produces a half-alive mod giving users wrong advice — skip
@@ -144,6 +186,8 @@ namespace Robotopia.ModManager
                 return;
             }
 
+            IRobotopiaMod? instance = null;
+            var onLoadStarted = false;
             try
             {
                 var assemblyPath = Path.Combine(package.PackagePath, manifest.EntryAssembly);
@@ -154,8 +198,9 @@ namespace Robotopia.ModManager
                     return;
                 }
 
-                searchPaths.Add(package.PackagePath);
+                loadingOwnerId = manifest.Id;
                 var assembly = Assembly.LoadFrom(assemblyPath);
+                RegisterAssemblyOwner(assembly, manifest.Id);
                 var type = assembly.GetType(manifest.EntryType, throwOnError: false);
                 if (type == null)
                 {
@@ -171,44 +216,145 @@ namespace Robotopia.ModManager
                     return;
                 }
 
-                var instance = (IRobotopiaMod)Activator.CreateInstance(type);
+                instance = (IRobotopiaMod)Activator.CreateInstance(type);
                 var context = new ModContext(manifest, paths, package.PackagePath, logger.ForMod(manifest.Id), serviceRegistry);
+                onLoadStarted = true;
                 instance.OnLoad(context);
-                loadedMods.Add(new LoadedMod(manifest, instance, context));
+                // Log before committing to loadedMods. Even a custom/failing log sink must leave this path in
+                // the partial-load catch, where OnUnload and owner cleanup run, rather than stranding a ghost.
                 logger.Info("Loaded mod " + manifest.Id + " " + manifest.Version + ".");
+                loadedMods.Add(new LoadedMod(manifest, instance, context));
+                loadedModIds.Add(manifest.Id);
             }
             catch (Exception ex)
             {
                 failedMods[manifest.Id] = ex.GetType().Name + ": " + ex.Message;
+                Exception? unloadFailure = null;
+                if (onLoadStarted && instance != null)
+                {
+                    try
+                    {
+                        // Assemblies cannot unload under Mono, so give a partially initialized mod the same
+                        // best-effort chance to detach static/Unity callbacks and destroy objects as a normal unload.
+                        instance.OnUnload();
+                    }
+                    catch (Exception unloadException)
+                    {
+                        unloadFailure = unloadException;
+                    }
+                }
+
+                // OnLoad may have published services or acquired a scene claim before throwing. A failed mod
+                // is not added to loadedMods, so UnloadAll would never otherwise clean those partial effects.
+                CleanupOwnedFrameworkServices(manifest.Id);
+                serviceRegistry.UnregisterOwner(manifest.Id);
+                // Diagnostics are deliberately last: cleanup is mandatory even if every log sink is broken.
                 logger.Error(ex, "Failed to load mod " + manifest.Id + ".");
+                if (unloadFailure != null)
+                {
+                    logger.Error(unloadFailure, "Failed to clean up partially loaded mod " + manifest.Id + ".");
+                }
+            }
+            finally
+            {
+                loadingOwnerId = null;
             }
         }
 
         private Assembly? ResolveAssembly(object sender, ResolveEventArgs args)
         {
-            var requested = new AssemblyName(args.Name);
-            var requestedName = requested.Name + ".dll";
+            AssemblyName requested;
+            try
+            {
+                requested = new AssemblyName(args.Name);
+            }
+            catch
+            {
+                return null;
+            }
+
+            var requesterOwner = ResolveRequesterOwner(args.RequestingAssembly) ?? loadingOwnerId;
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
-                if (string.Equals(assembly.GetName().Name, requested.Name, StringComparison.OrdinalIgnoreCase))
+                AssemblyName definition;
+                try
+                {
+                    definition = assembly.GetName();
+                }
+                catch
+                {
+                    continue;
+                }
+
+                if (!ModAssemblyResolutionCatalog.IdentityMatches(requested, definition))
+                {
+                    continue;
+                }
+
+                if (!assemblyOwners.TryGetValue(assembly, out var candidateOwner))
+                {
+                    candidateOwner = ResolveRequesterOwner(assembly);
+                }
+
+                // Runtime/framework assemblies are globally visible. Private mod assemblies are visible only
+                // to their owner and that owner's explicit dependency consumers.
+                if (candidateOwner == null ||
+                    (requesterOwner != null &&
+                     assemblyCatalog?.IsOwnerVisible(requesterOwner, candidateOwner) == true))
                 {
                     return assembly;
                 }
             }
 
-            var pathsToSearch = string.IsNullOrEmpty(pluginAssemblyPath)
-                ? searchPaths
-                : new[] { pluginAssemblyPath }.Concat(searchPaths);
-            foreach (var path in pathsToSearch.Distinct(StringComparer.OrdinalIgnoreCase))
+            var candidate = assemblyCatalog?.FindCandidate(requesterOwner, requested);
+            if (candidate == null)
             {
-                var candidate = Path.Combine(path, requestedName);
-                if (File.Exists(candidate))
-                {
-                    return Assembly.LoadFrom(candidate);
-                }
+                return null;
             }
 
-            return null;
+            var resolved = Assembly.LoadFrom(candidate);
+            if (assemblyCatalog!.TryGetOwner(candidate, out var resolvedOwner))
+            {
+                RegisterAssemblyOwner(resolved, resolvedOwner);
+            }
+
+            return resolved;
+        }
+
+        private string? ResolveRequesterOwner(Assembly? assembly)
+        {
+            if (assembly == null)
+            {
+                return null;
+            }
+
+            if (assemblyOwners.TryGetValue(assembly, out var owner))
+            {
+                return owner;
+            }
+
+            try
+            {
+                return assemblyCatalog != null && assemblyCatalog.TryGetOwner(assembly.Location, out owner)
+                    ? owner
+                    : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private void RegisterAssemblyOwner(Assembly assembly, string owner)
+        {
+            if (assemblyOwners.TryGetValue(assembly, out var existingOwner) &&
+                !string.Equals(existingOwner, owner, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new FileLoadException("Assembly '" + assembly.FullName + "' is already owned by "
+                    + existingOwner + " and cannot also be loaded for " + owner + ".");
+            }
+
+            assemblyOwners[assembly] = owner;
         }
 
         private void CleanupOwnedFrameworkServices(string ownerModId)
@@ -229,6 +375,15 @@ namespace Robotopia.ModManager
             catch (Exception ex)
             {
                 logger.Error(ex, "Prompt override cleanup failed for " + ownerModId + ".");
+            }
+
+            try
+            {
+                sceneCoordinator.ReleaseOwner(ownerModId);
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "Scene claim cleanup failed for " + ownerModId + ".");
             }
         }
 

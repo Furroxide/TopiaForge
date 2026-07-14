@@ -59,6 +59,38 @@ namespace Robotopia.Mods
         void EndSession(WorldSessionEndReason reason);
     }
 
+    /// <summary>
+    /// Optional additive capability published by world providers that expose their scene-load state. Kept
+    /// separate from <see cref="IWorldGamemodeService"/> so SDK 0.1.3 does not binary-break third-party providers
+    /// compiled against the older service interface.
+    /// </summary>
+    public interface IWorldTransitionState
+    {
+        /// <summary>
+        /// True from scene-load dispatch until the target single-mode scene arrives (or the provider times out).
+        /// Automatic scene triggers should use <see cref="ISceneCoordinator"/> rather than racing this state.
+        /// </summary>
+        bool IsTransitionInFlight { get; }
+    }
+
+    /// <summary>
+    /// Optional additive registry-lifecycle capability for world providers. Kept separate from
+    /// <see cref="IWorldGamemodeService"/> so existing third-party providers remain binary compatible.
+    /// Consumers that register gamemodes or menu entries should resolve this capability and undo those
+    /// registrations from <c>OnUnload</c>.
+    /// </summary>
+    public interface IWorldRegistrationService
+    {
+        /// <summary>
+        /// Removes a gamemode. If it owns the current session, that session ends with
+        /// <see cref="WorldSessionEndReason.ProviderUnloading"/>. Returns false when unknown.
+        /// </summary>
+        bool UnregisterGamemode(string gamemodeId);
+
+        /// <summary>Removes a launch-menu entry. Returns false when unknown.</summary>
+        bool UnregisterMenuEntry(string entryId);
+    }
+
     /// <summary>Why a world session ended (carried by <see cref="IWorldGamemodeService.SessionEnded"/>).</summary>
     public enum WorldSessionEndReason
     {
@@ -72,7 +104,19 @@ namespace Robotopia.Mods
         Superseded,
 
         /// <summary>The world/gamemode provider mod is unloading.</summary>
-        ProviderUnloading
+        ProviderUnloading,
+
+        /// <summary>
+        /// Another mod's coordinated scene transition (see <see cref="ISceneCoordinator"/>) replaced the
+        /// session's scene, so the session was ended instead of running over a scene it does not own.
+        /// </summary>
+        SceneReplaced,
+
+        /// <summary>
+        /// The provider dispatched a scene load, but it faulted, was canceled, or never completed before the
+        /// timeout. The provisional session and its coordinator claim have been torn down.
+        /// </summary>
+        LoadFailed
     }
 
     public sealed class WorldSessionEnd
@@ -152,22 +196,71 @@ namespace Robotopia.Mods
 
     public sealed class WorldLoadRequest
     {
+        // SDK 0.1.0 constructor retained verbatim for binary compatibility with already-compiled mods.
         public WorldLoadRequest(
             string worldId,
             string gamemodeId,
             bool preferSceneReplacement = true,
             bool allowAdditiveFallback = true)
+            : this(
+                worldId,
+                gamemodeId,
+                SceneTransitionPriority.UserInitiated,
+                preferSceneReplacement,
+                allowAdditiveFallback)
         {
+        }
+
+        private WorldLoadRequest(
+            string worldId,
+            string gamemodeId,
+            SceneTransitionPriority priority,
+            bool preferSceneReplacement,
+            bool allowAdditiveFallback)
+        {
+            if (!Enum.IsDefined(typeof(SceneTransitionPriority), priority))
+            {
+                throw new ArgumentOutOfRangeException(nameof(priority));
+            }
+
+            // Preserve the legacy constructor's value semantics as well as its metadata signature.
             WorldId = worldId;
             GamemodeId = gamemodeId;
             PreferSceneReplacement = preferSceneReplacement;
             AllowAdditiveFallback = allowAdditiveFallback;
+            Priority = priority;
+        }
+
+        /// <summary>
+        /// Creates a request with an explicit scene-transition priority. This is a named factory rather than
+        /// a public constructor overload so source that passed a <c>default</c> literal to the SDK 0.1.0
+        /// constructor remains unambiguous.
+        /// </summary>
+        public static WorldLoadRequest WithPriority(
+            string worldId,
+            string gamemodeId,
+            SceneTransitionPriority priority,
+            bool preferSceneReplacement = true,
+            bool allowAdditiveFallback = true)
+        {
+            return new WorldLoadRequest(
+                worldId,
+                gamemodeId,
+                priority,
+                preferSceneReplacement,
+                allowAdditiveFallback);
         }
 
         public string WorldId { get; }
         public string GamemodeId { get; }
         public bool PreferSceneReplacement { get; }
         public bool AllowAdditiveFallback { get; }
+
+        /// <summary>
+        /// Priority used to acquire the scene-transition claim before any load side effect. Direct API/UI
+        /// launches keep the default; startup auto-loaders pass <see cref="SceneTransitionPriority.Automatic"/>.
+        /// </summary>
+        public SceneTransitionPriority Priority { get; }
     }
 
     public sealed class WorldSession

@@ -1,6 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Runtime.Serialization;
+using System.Text;
+using System.Xml;
 using Robotopia.ModManager.Core;
 using Robotopia.Mods;
 
@@ -9,6 +13,7 @@ namespace Robotopia.ModManager
     public sealed class ModContext : IModContext
     {
         private readonly string configFile;
+        private readonly object configSync = new object();
         private readonly IModServiceRegistry serviceRegistry;
         private readonly Dictionary<Type, object> services = new Dictionary<Type, object>();
 
@@ -23,7 +28,7 @@ namespace Robotopia.ModManager
             Logger = logger;
             configFile = Paths.ConfigPath;
             Directory.CreateDirectory(Paths.DataPath);
-            services[typeof(IModServiceRegistry)] = serviceRegistry;
+            services[typeof(IModServiceRegistry)] = new OwnerBoundModServiceRegistry(ModId, serviceRegistry);
             services[typeof(IModFileService)] = new ModFileService(Paths);
         }
 
@@ -38,26 +43,103 @@ namespace Robotopia.ModManager
 
         public T LoadConfig<T>(T defaultValue) where T : class
         {
-            if (!File.Exists(configFile))
+            if (defaultValue == null)
             {
-                SaveConfig(defaultValue);
-                return defaultValue;
+                throw new ArgumentNullException(nameof(defaultValue));
             }
 
-            try
+            lock (configSync)
             {
-                return JsonUtil.LoadFile(configFile, defaultValue);
-            }
-            catch (Exception ex)
-            {
-                Logger.Error(ex, "Failed to read config. Defaults will be used.");
-                return defaultValue;
+                if (!File.Exists(configFile) && !File.Exists(configFile + JsonUtil.BackupSuffix))
+                {
+                    SaveConfigCore(defaultValue);
+                    return defaultValue;
+                }
+
+                try
+                {
+                    return JsonUtil.LoadPersistentFile(configFile, defaultValue);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex, "Failed to read config. Defaults will be used.");
+                    return defaultValue;
+                }
             }
         }
 
         public void SaveConfig<T>(T config) where T : class
         {
-            JsonUtil.SaveFile(configFile, config);
+            if (config == null)
+            {
+                throw new ArgumentNullException(nameof(config));
+            }
+
+            lock (configSync)
+            {
+                SaveConfigCore(config);
+            }
+        }
+
+        private void SaveConfigCore<T>(T config) where T : class
+        {
+            var replacementJson = JsonUtil.SerializeBounded(config);
+            if (!IsObjectJson(replacementJson))
+            {
+                // Preserve the historical API behavior for reference types such as arrays and strings. Forward
+                // object-member retention does not apply to a non-object JSON root.
+                JsonUtil.SaveFile(configFile, config);
+                return;
+            }
+
+            string existingJson;
+            try
+            {
+                existingJson = JsonUtil.LoadPersistentJsonObject(configFile, "{}");
+            }
+            catch (InvalidDataException ex) when (IsInvalidConfigContent(ex))
+            {
+                // Both primary and backup are malformed/oversized (or no valid backup exists). Retaining raw
+                // members is impossible, but a validated typed config can safely recover the mod on this save.
+                Logger.Warn("Existing config is malformed or oversized and cannot be merged; replacing it. " + ex.Message);
+                existingJson = "{}";
+            }
+
+            var merged = JsonObjectMerge.MergeSerializedContract(existingJson, replacementJson, typeof(T));
+            JsonUtil.SaveJsonObject(configFile, merged);
+        }
+
+        private static bool IsObjectJson(string json)
+        {
+            for (var index = 0; index < json.Length; index++)
+            {
+                var character = json[index];
+                if (character != ' ' && character != '\t' && character != '\r' && character != '\n')
+                {
+                    return character == '{';
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IsInvalidConfigContent(Exception exception)
+        {
+            if (exception is AggregateException aggregate)
+            {
+                return aggregate.InnerExceptions.Count > 0
+                    && aggregate.InnerExceptions.All(IsInvalidConfigContent);
+            }
+
+            if (exception is InvalidDataException invalidData)
+            {
+                return invalidData.InnerException == null || IsInvalidConfigContent(invalidData.InnerException);
+            }
+
+            return exception is FormatException
+                || exception is SerializationException
+                || exception is XmlException
+                || exception is DecoderFallbackException;
         }
 
         public T? GetService<T>() where T : class
@@ -113,19 +195,7 @@ namespace Robotopia.ModManager
 
             public static string SafeCombine(string root, string relativePath)
             {
-                if (Path.IsPathRooted(relativePath))
-                {
-                    throw new InvalidOperationException("Path must be relative.");
-                }
-
-                var rootFullPath = Path.GetFullPath(root);
-                var combined = Path.GetFullPath(Path.Combine(rootFullPath, relativePath));
-                if (!combined.StartsWith(rootFullPath, StringComparison.OrdinalIgnoreCase))
-                {
-                    throw new InvalidOperationException("Path escapes the mod directory.");
-                }
-
-                return combined;
+                return PathSafety.CombineRelativeChild(root, relativePath);
             }
         }
     }

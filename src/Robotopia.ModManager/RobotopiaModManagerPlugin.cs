@@ -6,6 +6,7 @@ using System.Linq;
 using BepInEx;
 using Robotopia.ModManager.Core;
 using Robotopia.Mods;
+using Robotopia.Mods.UnityUi;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -27,6 +28,8 @@ namespace Robotopia.ModManager
         private ModRuntime runtime = null!;
         private ManagerOverlay overlay = null!;
         private MenuButtonInjector menuButtonInjector = null!;
+        private ProfileLaunchConfiguration? launchProfile;
+        private ManifestValidationContext validationContext = ManifestValidationContext.Current;
         private IReadOnlyList<ModPackage> packages = Array.Empty<ModPackage>();
         private LoadOrderResult loadOrder = new LoadOrderResult(Array.Empty<ModPackage>(), new Dictionary<string, IReadOnlyList<string>>());
         private bool ready;
@@ -51,7 +54,22 @@ namespace Robotopia.ModManager
             {
                 managerLogger.Info("QuantumWorks starting.");
 
-                state = JsonUtil.LoadFile(paths.StateFile, new ManagerState());
+                if (InstalledGameVersionReader.TryRead(BepInEx.Paths.GameRootPath, out var gameVersion, out var versionError))
+                {
+                    validationContext = new ManifestValidationContext(
+                        gameVersion: gameVersion,
+                        requireKnownGameVersion: true);
+                    managerLogger.Info("Detected Robotopia game version " + gameVersion + ".");
+                }
+                else
+                {
+                    validationContext = new ManifestValidationContext(requireKnownGameVersion: true);
+                    managerLogger.Warn("Robotopia game version could not be established: " + versionError
+                        + " Mods with a game compatibility constraint will not load.");
+                }
+
+                state = JsonUtil.LoadPersistentFile(paths.StateFile, new ManagerState());
+                launchProfile = ConsumeLaunchProfile();
                 try
                 {
                     registry.ApplyPendingUninstalls(paths, state);
@@ -61,14 +79,32 @@ namespace Robotopia.ModManager
                     managerLogger.Error(ex, "Failed to apply pending uninstalls.");
                 }
 
-                InstallInboxAtStartup();
-                registry.PruneSupersededVersions(paths, state,
-                    pruned => managerLogger.Info("Pruned superseded package version: " + pruned + "."));
+                if (launchProfile == null)
+                {
+                    InstallInboxAtStartup();
+                    registry.PruneSupersededVersions(paths, state,
+                        pruned => managerLogger.Info("Pruned superseded package version: " + pruned + "."));
+                }
+                else
+                {
+                    // Inbox installation prunes older package versions. Keep
+                    // this process's profile snapshot immutable and leave the
+                    // inbox untouched for the next normal launch.
+                    managerLogger.Info("Deferring package inbox installation for profile launch.");
+                    managerLogger.Info("Preserving installed package versions for profile launch.");
+                }
                 RefreshPackages(saveState: true);
                 LogExcludedPackages();
                 runtime = new ModRuntime(paths, managerLogger);
                 runtime.Load(loadOrder.OrderedPackages);
-                state.ClearAppliedRestartRequirements();
+                if (launchProfile == null)
+                {
+                    state.ClearAppliedRestartRequirements();
+                }
+                else
+                {
+                    managerLogger.Info("Preserving canonical restart requirements after profile launch.");
+                }
                 SaveState();
 
                 overlay = new ManagerOverlay(this, managerLogger);
@@ -82,6 +118,71 @@ namespace Robotopia.ModManager
                 // Stay inert (ready == false) rather than crashing the game. OnDestroy still unloads any mods
                 // that did load before the failure (it gates on runtime, not ready).
                 managerLogger.Error(ex, "QuantumWorks failed to initialize.");
+            }
+        }
+
+        private ProfileLaunchConfiguration? ConsumeLaunchProfile()
+        {
+            var configuredPath = Environment.GetEnvironmentVariable(ProfileLaunchConfiguration.EnvironmentVariable);
+            if (string.IsNullOrWhiteSpace(configuredPath))
+            {
+                return null;
+            }
+
+            try
+            {
+                var staging = Path.GetFullPath(paths.Staging)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                var fullPath = Path.GetFullPath(configuredPath);
+                var comparison = Environment.OSVersion.Platform == PlatformID.Win32NT
+                    ? StringComparison.OrdinalIgnoreCase
+                    : StringComparison.Ordinal;
+                if (!string.Equals(Path.GetDirectoryName(fullPath), staging, comparison)
+                    || !Path.GetFileName(fullPath).StartsWith("launch-profile-", comparison)
+                    || !fullPath.EndsWith(".json", comparison))
+                {
+                    throw new InvalidDataException("Profile launch file must be an immediate child of manager staging.");
+                }
+
+                try
+                {
+                    if ((File.GetAttributes(fullPath) & FileAttributes.ReparsePoint) != 0)
+                    {
+                        throw new InvalidDataException("Profile launch file cannot be a symbolic link or reparse point.");
+                    }
+
+                    var configuration = JsonUtil.LoadFile(fullPath, new ProfileLaunchConfiguration());
+                    var errors = configuration.Validate();
+                    if (errors.Count != 0)
+                    {
+                        throw new InvalidDataException(string.Join(" ", errors));
+                    }
+
+                    managerLogger.Info("Using one-shot launch profile " + configuration.ProfileId + ".");
+                    return configuration;
+                }
+                finally
+                {
+                    try
+                    {
+                        File.Delete(fullPath);
+                    }
+                    catch (Exception ex)
+                    {
+                        managerLogger.Warn("Profile launch file could not be consumed: " + ex.Message);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                managerLogger.Error(ex, "Profile launch configuration was rejected; entering safe mode.");
+                return new ProfileLaunchConfiguration
+                {
+                    SchemaVersion = ProfileLaunchConfiguration.CurrentSchemaVersion,
+                    ProfileId = "rejected-launch-profile",
+                    SafeMode = true,
+                    InheritManagerModState = false
+                };
             }
         }
 
@@ -104,19 +205,66 @@ namespace Robotopia.ModManager
 
         private void OnDestroy()
         {
-            if (runtime == null)
-            {
-                return;
-            }
-
             SceneManager.sceneLoaded -= OnSceneLoaded;
-            if (overlay != null)
+            try
             {
-                overlay.Dispose();
+                overlay?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                LogCleanupFailure(ex, "Manager overlay teardown failed.");
             }
 
-            runtime.UnloadAll();
-            SaveState();
+            try
+            {
+                menuButtonInjector?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                LogCleanupFailure(ex, "Menu button teardown failed.");
+            }
+
+            if (runtime != null)
+            {
+                try
+                {
+                    runtime.UnloadAll();
+                }
+                catch (Exception ex)
+                {
+                    LogCleanupFailure(ex, "Mod runtime teardown failed.");
+                }
+
+                try
+                {
+                    SaveState();
+                }
+                catch (Exception ex)
+                {
+                    LogCleanupFailure(ex, "Manager state could not be saved during teardown.");
+                }
+            }
+
+            try
+            {
+                QwUi.Shutdown();
+            }
+            catch (Exception ex)
+            {
+                LogCleanupFailure(ex, "QwUi global teardown failed.");
+            }
+        }
+
+        private void LogCleanupFailure(Exception exception, string message)
+        {
+            if (managerLogger != null)
+            {
+                managerLogger.Error(exception, message);
+            }
+            else
+            {
+                Logger.LogError(message + " " + exception);
+            }
         }
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
@@ -137,7 +285,11 @@ namespace Robotopia.ModManager
                 SweepConsumedInboxFiles();
 
                 // Nothing is loaded yet, so the installs apply to this launch (no restart flag).
-                var results = packageInstaller.InstallInbox(paths, state, restartRequired: false);
+                var results = packageInstaller.InstallInbox(
+                    paths,
+                    state,
+                    restartRequired: false,
+                    validationContext);
                 if (results.Count == 0)
                 {
                     return;
@@ -218,7 +370,17 @@ namespace Robotopia.ModManager
 
         public void RefreshPackages(bool saveState)
         {
-            packages = registry.Scan(paths, state);
+            var scanState = state;
+            if (launchProfile != null)
+            {
+                scanState = launchProfile.CreateEffectiveState(state);
+                // Seed state entries for package directories missing from a
+                // recovered/legacy state file, then reapply the exact policy.
+                registry.Scan(paths, scanState, validationContext);
+                launchProfile.ApplyTo(scanState);
+            }
+
+            packages = registry.Scan(paths, scanState, validationContext);
             loadOrder = dependencyResolver.Resolve(packages);
             if (saveState)
             {
@@ -228,7 +390,12 @@ namespace Robotopia.ModManager
 
         public string InstallPackage(string packagePath)
         {
-            var result = packageInstaller.Install(packagePath, paths, state, restartRequired: true);
+            var result = packageInstaller.Install(
+                packagePath,
+                paths,
+                state,
+                restartRequired: true,
+                validationContext);
             if (!result.Ok)
             {
                 var message = string.Join("; ", result.Errors);
@@ -243,7 +410,11 @@ namespace Robotopia.ModManager
 
         public string InstallInboxPackages()
         {
-            var results = packageInstaller.InstallInbox(paths, state, restartRequired: true);
+            var results = packageInstaller.InstallInbox(
+                paths,
+                state,
+                restartRequired: true,
+                validationContext);
             if (results.Count == 0)
             {
                 return "No .robotopiamod files found in package-inbox.";
@@ -310,13 +481,7 @@ namespace Robotopia.ModManager
                 return "Uninstall staged for " + mod.Name + ". Restart required.";
             }
 
-            var modRoot = Path.Combine(paths.Packages, mod.Id);
-            if (Directory.Exists(modRoot))
-            {
-                Directory.Delete(modRoot, true);
-            }
-
-            state.Remove(id);
+            registry.RemoveInstalledPackage(paths, state, id);
             SaveState();
             RefreshPackages(saveState: false);
             return "Uninstalled " + mod.Name + ".";
@@ -341,8 +506,13 @@ namespace Robotopia.ModManager
                 return "No manager log exists yet.";
             }
 
-            var lines = File.ReadAllLines(paths.ManagerLogFile);
-            return string.Join(Environment.NewLine, lines.Skip(Math.Max(0, lines.Length - maxLines)).ToArray());
+            var tail = BoundedTextFile.ReadTail(
+                paths.ManagerLogFile,
+                Math.Max(1, Math.Min(maxLines, 2000)),
+                maxBytes: 4 * 1024 * 1024);
+            return tail.Truncated
+                ? "[manager.log output truncated to bounded tail]" + Environment.NewLine + tail.Text
+                : tail.Text;
         }
 
         public void OpenFolder(string path)
@@ -368,6 +538,75 @@ namespace Robotopia.ModManager
             return runtime?.GetService<IWorldGamemodeService>();
         }
 
+        public WorldLaunchSettings ReadWorldLaunchSettings()
+        {
+            try
+            {
+                return JsonUtil.LoadPersistentFile(
+                    paths.GetConfigPath("robotopia.worlds"),
+                    new WorldLaunchSettings());
+            }
+            catch (Exception ex)
+            {
+                managerLogger.Warn("World launch settings could not be read; using defaults: " + ex.Message);
+                return new WorldLaunchSettings();
+            }
+        }
+
+        public void SaveWorldLaunchSettings(WorldLaunchSettings settings)
+        {
+            if (settings == null)
+            {
+                throw new ArgumentNullException(nameof(settings));
+            }
+
+            var path = paths.GetConfigPath("robotopia.worlds");
+            string existingJson;
+            try
+            {
+                existingJson = JsonUtil.LoadPersistentJsonObject(path, "{}");
+            }
+            catch (Exception ex)
+            {
+                managerLogger.Warn("World config could not be read within the bounded JSON policy; replacing it: "
+                    + ex.Message);
+                existingJson = "{}";
+            }
+
+            string merged;
+            try
+            {
+                merged = settings.MergeIntoJson(existingJson);
+            }
+            catch (Exception ex)
+            {
+                // A malformed provider config was already unreadable. Recover the launch fields rather than
+                // making PLAY unusable; the warning makes the loss of unrecoverable raw content explicit.
+                managerLogger.Warn("World config could not be merged; replacing malformed JSON: " + ex.Message);
+                merged = settings.MergeIntoJson("{}");
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(path) ?? paths.Config);
+            var tempPath = path + ".manager.tmp";
+            File.WriteAllText(tempPath, merged);
+            if (File.Exists(path))
+            {
+                try
+                {
+                    File.Replace(tempPath, path, null);
+                }
+                catch (PlatformNotSupportedException)
+                {
+                    File.Delete(path);
+                    File.Move(tempPath, path);
+                }
+            }
+            else
+            {
+                File.Move(tempPath, path);
+            }
+        }
+
         public (bool Ok, string Message) LaunchGamemode(string entryId)
         {
             var service = GetWorldService();
@@ -385,6 +624,68 @@ namespace Robotopia.ModManager
             catch (Exception ex)
             {
                 managerLogger.Error(ex, "Failed to launch gamemode '" + entryId + "'.");
+                return (false, "Failed to launch: " + ex.Message);
+            }
+        }
+
+        public (bool Ok, string Message) LaunchGamemodeSelection(
+            string entryId,
+            string worldId,
+            string gamemodeId,
+            string loadMode)
+        {
+            var service = GetWorldService();
+            if (service == null)
+            {
+                return (false, "World/gamemode service unavailable. Enable the Robotopia Worlds mod.");
+            }
+
+            try
+            {
+                var world = service.Worlds.FirstOrDefault(item =>
+                    string.Equals(item.Id, worldId, StringComparison.OrdinalIgnoreCase));
+                if (world == null)
+                {
+                    return (false, "Unknown world: " + worldId);
+                }
+
+                var gamemode = service.Gamemodes.FirstOrDefault(item =>
+                    string.Equals(item.Id, gamemodeId, StringComparison.OrdinalIgnoreCase));
+                if (gamemode == null)
+                {
+                    return (false, "Unknown gamemode: " + gamemodeId);
+                }
+
+                var resolvedLoadMode = WorldLaunchSettings.ReconcileLoadMode(
+                    world.SupportsSceneReplacement,
+                    world.SupportsAdditiveArena,
+                    loadMode);
+                var existing = ReadWorldLaunchSettings();
+                var settings = new WorldLaunchSettings
+                {
+                    SelectedWorldId = worldId,
+                    SelectedGamemodeId = gamemodeId,
+                    LoadMode = resolvedLoadMode,
+                    AutoLoadOnStart = existing.AutoLoadOnStart,
+                    AllowAdditiveFallback = existing.AllowAdditiveFallback,
+                    EndSessionOnMenuScene = existing.EndSessionOnMenuScene,
+                    InterceptPauseMenu = existing.InterceptPauseMenu
+                };
+                SaveWorldLaunchSettings(settings);
+
+                var result = service.Load(new WorldLoadRequest(
+                    worldId,
+                    gamemodeId,
+                    settings.PreferSceneReplacement,
+                    settings.AllowAdditiveFallback));
+                managerLogger.Info("Gamemode launch '" + entryId + "' world '" + world.Name + "' [" + world.Id
+                    + "] gamemode '" + gamemode.Name + "' [" + gamemode.Id + "] loadMode '" + settings.LoadMode
+                    + "': " + result.Message);
+                return (result.Ok, result.Message);
+            }
+            catch (Exception ex)
+            {
+                managerLogger.Error(ex, "Failed to launch gamemode '" + entryId + "' for world '" + worldId + "'.");
                 return (false, "Failed to launch: " + ex.Message);
             }
         }

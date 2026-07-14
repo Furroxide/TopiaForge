@@ -5,39 +5,39 @@ namespace Robotopia.ModManager.Core
 {
     public static class VersionUtil
     {
+        private static readonly Regex SemanticVersionRegex = new Regex(
+            "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)" +
+            "(?:-([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?" +
+            "(?:\\+([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$",
+            RegexOptions.Compiled);
+        private static readonly Regex NumericIdentifierRegex = new Regex(
+            "^[0-9]+$",
+            RegexOptions.Compiled);
+        private static readonly Regex RangeCoreComponentRegex = new Regex(
+            "^(0|[1-9][0-9]*)$",
+            RegexOptions.Compiled);
         private static readonly Regex RangePartRegex = new Regex(
-            "(>=|>|<=|<|=)\\s*([0-9]+(?:\\.[0-9]+){0,2}(?:[-+][0-9A-Za-z_.-]+)?)",
+            "(>=|>|<=|<|=)\\s*([^\\s]+)",
             RegexOptions.Compiled);
         private static readonly Regex WildcardRangeRegex = new Regex(
-            "^([0-9]+)(?:\\.([0-9]+|x|\\*))?(?:\\.([0-9]+|x|\\*))?$",
+            "^(0|[1-9][0-9]*)(?:\\.(0|[1-9][0-9]*|x|\\*))?" +
+            "(?:\\.(0|[1-9][0-9]*|x|\\*))?$",
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-        public static bool TryParse(string text, out Version version)
+        /// <summary>
+        /// Strictly validates SemVer 2.0 and returns the three-component compatibility value used by the
+        /// established SDK surface. Prerelease/build data is retained by the internal parser used for ordering.
+        /// </summary>
+        public static bool TryParse(string? text, out Version version)
         {
             version = new Version(0, 0, 0);
-            if (string.IsNullOrWhiteSpace(text))
+            if (!TryParseSemantic(text, out var semantic))
             {
                 return false;
             }
 
-            var normalized = text.Trim();
-            var suffix = normalized.IndexOfAny(new[] { '-', '+' });
-            if (suffix >= 0)
-            {
-                normalized = normalized.Substring(0, suffix);
-            }
-
-            var parts = normalized.Split('.');
-            if (parts.Length == 1)
-            {
-                normalized += ".0.0";
-            }
-            else if (parts.Length == 2)
-            {
-                normalized += ".0";
-            }
-
-            return Version.TryParse(normalized, out version);
+            version = semantic.CoreVersion;
+            return true;
         }
 
         public static bool IsAtLeast(string actual, string required)
@@ -47,35 +47,88 @@ namespace Robotopia.ModManager.Core
                 return true;
             }
 
-            if (!TryParse(actual, out var actualVersion) || !TryParse(required, out var requiredVersion))
-            {
-                return false;
-            }
-
-            return actualVersion >= requiredVersion;
+            return TryParseSemantic(actual, out var actualVersion) &&
+                   TryParseSemantic(required, out var requiredVersion) &&
+                   actualVersion.CompareTo(requiredVersion) >= 0;
         }
 
         public static bool AllowsRange(string actual, string range)
         {
-            if (string.IsNullOrWhiteSpace(range) || range.Trim() == "*")
-            {
-                return true;
-            }
+            return TryParseSemantic(actual, out var actualVersion) &&
+                   TryParseRange(range, out var parsedRange) &&
+                   parsedRange.Allows(actualVersion);
+        }
 
-            if (!TryParse(actual, out var actualVersion))
+        public static bool TryParseRange(string? range)
+        {
+            return TryParseRange(range, out _);
+        }
+
+        internal static bool TryParseSemantic(string? text, out ParsedSemanticVersion version)
+        {
+            version = default;
+            if (string.IsNullOrEmpty(text))
             {
                 return false;
             }
 
-            var text = range.Trim();
-            if (AllowsWildcardRange(actualVersion, text, out var wildcardResult))
+            var match = SemanticVersionRegex.Match(text);
+            if (!match.Success)
             {
-                return wildcardResult;
+                return false;
+            }
+
+            var prerelease = match.Groups[4].Success ? match.Groups[4].Value : string.Empty;
+            if (!HasValidPrereleaseIdentifiers(prerelease))
+            {
+                return false;
+            }
+
+            version = new ParsedSemanticVersion(
+                match.Groups[1].Value,
+                match.Groups[2].Value,
+                match.Groups[3].Value,
+                prerelease,
+                match.Groups[5].Success ? match.Groups[5].Value : string.Empty);
+            return true;
+        }
+
+        private static bool TryParseRange(string? range, out ParsedRange parsedRange)
+        {
+            parsedRange = ParsedRange.Any;
+            var text = range?.Trim() ?? string.Empty;
+            if (text.Length == 0 || text == "*")
+            {
+                return true;
+            }
+
+            var wildcardMatch = WildcardRangeRegex.Match(text);
+            if (wildcardMatch.Success &&
+                ((wildcardMatch.Groups[2].Success && IsWildcard(wildcardMatch.Groups[2].Value)) ||
+                 (wildcardMatch.Groups[3].Success && IsWildcard(wildcardMatch.Groups[3].Value))))
+            {
+                if (!TryGetWildcardBounds(text, out var wildcardMin, out var wildcardMax))
+                {
+                    return false;
+                }
+
+                parsedRange = new ParsedRange(
+                    wildcardMin,
+                    wildcardMax,
+                    includeMin: true,
+                    includeMax: false);
+                return true;
             }
 
             if (!StartsWithRangeOperator(text))
             {
-                return TryParse(text, out var exact) && actualVersion == exact;
+                if (!TryParseRangeVersion(text, out var exact))
+                {
+                    return false;
+                }
+
+                parsedRange = new ParsedRange(exact, exact, includeMin: true, includeMax: true);
+                return true;
             }
 
             var matches = RangePartRegex.Matches(text);
@@ -84,90 +137,204 @@ namespace Robotopia.ModManager.Core
                 return false;
             }
 
+            ParsedSemanticVersion? min = null;
+            ParsedSemanticVersion? max = null;
+            var includeMin = true;
+            var includeMax = false;
+            var cursor = 0;
             foreach (Match match in matches)
             {
-                if (!TryParse(match.Groups[2].Value, out var expected))
+                var separator = text.Substring(cursor, match.Index - cursor);
+                var isFirst = cursor == 0;
+                if (!string.IsNullOrWhiteSpace(separator) || (!isFirst && separator.Length == 0) ||
+                    !TryParseRangeVersion(match.Groups[2].Value, out var candidate))
                 {
                     return false;
                 }
 
-                var comparison = actualVersion.CompareTo(expected);
                 switch (match.Groups[1].Value)
                 {
                     case ">=":
-                        if (comparison < 0)
-                        {
-                            return false;
-                        }
-
+                        ApplyMinimum(ref min, ref includeMin, candidate, inclusive: true);
                         break;
                     case ">":
-                        if (comparison <= 0)
-                        {
-                            return false;
-                        }
-
+                        ApplyMinimum(ref min, ref includeMin, candidate, inclusive: false);
                         break;
                     case "<=":
-                        if (comparison > 0)
-                        {
-                            return false;
-                        }
-
+                        ApplyMaximum(ref max, ref includeMax, candidate, inclusive: true);
                         break;
                     case "<":
-                        if (comparison >= 0)
-                        {
-                            return false;
-                        }
-
+                        ApplyMaximum(ref max, ref includeMax, candidate, inclusive: false);
                         break;
                     case "=":
-                        if (comparison != 0)
-                        {
-                            return false;
-                        }
-
+                        ApplyMinimum(ref min, ref includeMin, candidate, inclusive: true);
+                        ApplyMaximum(ref max, ref includeMax, candidate, inclusive: true);
                         break;
+                }
+
+                cursor = match.Index + match.Length;
+            }
+
+            if (!string.IsNullOrWhiteSpace(text.Substring(cursor)) || !BoundsAreSatisfiable(min, max, includeMin, includeMax))
+            {
+                return false;
+            }
+
+            parsedRange = new ParsedRange(min, max, includeMin, includeMax);
+            return true;
+        }
+
+        private static bool TryParseRangeVersion(string value, out ParsedSemanticVersion version)
+        {
+            version = default;
+            var suffixStart = value.Length;
+            var prereleaseStart = value.IndexOf('-');
+            var buildStart = value.IndexOf('+');
+            if (prereleaseStart >= 0 && prereleaseStart < suffixStart)
+            {
+                suffixStart = prereleaseStart;
+            }
+
+            if (buildStart >= 0 && buildStart < suffixStart)
+            {
+                suffixStart = buildStart;
+            }
+
+            var core = value.Substring(0, suffixStart);
+            var parts = core.Split('.');
+            if (parts.Length == 0 || parts.Length > 3)
+            {
+                return false;
+            }
+
+            foreach (var part in parts)
+            {
+                if (!RangeCoreComponentRegex.IsMatch(part))
+                {
+                    return false;
+                }
+            }
+
+            var normalized = core;
+            if (parts.Length == 1)
+            {
+                normalized += ".0.0";
+            }
+            else if (parts.Length == 2)
+            {
+                normalized += ".0";
+            }
+
+            return TryParseSemantic(normalized + value.Substring(suffixStart), out version);
+        }
+
+        private static bool TryGetWildcardBounds(
+            string text,
+            out ParsedSemanticVersion minimum,
+            out ParsedSemanticVersion maximum)
+        {
+            minimum = default;
+            maximum = default;
+            var match = WildcardRangeRegex.Match(text);
+            if (!match.Success || text.IndexOfAny(new[] { 'x', 'X', '*' }) < 0)
+            {
+                return false;
+            }
+
+            var major = match.Groups[1].Value;
+            var minorText = match.Groups[2].Success ? match.Groups[2].Value : string.Empty;
+            var patchText = match.Groups[3].Success ? match.Groups[3].Value : string.Empty;
+            if (string.IsNullOrEmpty(minorText) || IsWildcard(minorText))
+            {
+                if (!string.IsNullOrEmpty(patchText) && !IsWildcard(patchText))
+                {
+                    return false;
+                }
+
+                minimum = new ParsedSemanticVersion(major, "0", "0");
+                maximum = new ParsedSemanticVersion(IncrementNumericIdentifier(major), "0", "0");
+                return true;
+            }
+
+            if (string.IsNullOrEmpty(patchText) || IsWildcard(patchText))
+            {
+                minimum = new ParsedSemanticVersion(major, minorText, "0");
+                maximum = new ParsedSemanticVersion(major, IncrementNumericIdentifier(minorText), "0");
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool HasValidPrereleaseIdentifiers(string prerelease)
+        {
+            if (prerelease.Length == 0)
+            {
+                return true;
+            }
+
+            foreach (var identifier in prerelease.Split('.'))
+            {
+                if (NumericIdentifierRegex.IsMatch(identifier) &&
+                    identifier.Length > 1 &&
+                    identifier[0] == '0')
+                {
+                    return false;
                 }
             }
 
             return true;
         }
 
-        public static bool TryParseRange(string range)
+        private static bool BoundsAreSatisfiable(
+            ParsedSemanticVersion? min,
+            ParsedSemanticVersion? max,
+            bool includeMin,
+            bool includeMax)
         {
-            if (string.IsNullOrWhiteSpace(range) || range.Trim() == "*")
+            if (min == null || max == null)
             {
                 return true;
             }
 
-            var text = range.Trim();
-            if (WildcardRangeRegex.IsMatch(text) && text.IndexOfAny(new[] { 'x', 'X', '*' }) >= 0)
-            {
-                return true;
-            }
+            var comparison = min.Value.CompareTo(max.Value);
+            return comparison < 0 || (comparison == 0 && includeMin && includeMax);
+        }
 
-            if (!StartsWithRangeOperator(text))
+        private static void ApplyMinimum(
+            ref ParsedSemanticVersion? current,
+            ref bool includeCurrent,
+            ParsedSemanticVersion candidate,
+            bool inclusive)
+        {
+            var comparison = current == null ? 1 : candidate.CompareTo(current.Value);
+            if (comparison > 0)
             {
-                return TryParse(text, out _);
+                current = candidate;
+                includeCurrent = inclusive;
             }
-
-            var matches = RangePartRegex.Matches(text);
-            if (matches.Count == 0)
+            else if (comparison == 0)
             {
-                return false;
+                includeCurrent = includeCurrent && inclusive;
             }
+        }
 
-            foreach (Match match in matches)
+        private static void ApplyMaximum(
+            ref ParsedSemanticVersion? current,
+            ref bool includeCurrent,
+            ParsedSemanticVersion candidate,
+            bool inclusive)
+        {
+            var comparison = current == null ? -1 : candidate.CompareTo(current.Value);
+            if (comparison < 0)
             {
-                if (!TryParse(match.Groups[2].Value, out _))
-                {
-                    return false;
-                }
+                current = candidate;
+                includeCurrent = inclusive;
             }
-
-            return true;
+            else if (comparison == 0)
+            {
+                includeCurrent = includeCurrent && inclusive;
+            }
         }
 
         private static bool StartsWithRangeOperator(string text)
@@ -179,45 +346,201 @@ namespace Robotopia.ModManager.Core
                    text.StartsWith("=", StringComparison.Ordinal);
         }
 
-        private static bool AllowsWildcardRange(Version actualVersion, string text, out bool result)
-        {
-            result = false;
-            var match = WildcardRangeRegex.Match(text);
-            if (!match.Success || text.IndexOfAny(new[] { 'x', 'X', '*' }) < 0)
-            {
-                return false;
-            }
-
-            var major = int.Parse(match.Groups[1].Value);
-            var minorText = match.Groups[2].Success ? match.Groups[2].Value : string.Empty;
-            var patchText = match.Groups[3].Success ? match.Groups[3].Value : string.Empty;
-            Version min;
-            Version max;
-            if (string.IsNullOrEmpty(minorText) || IsWildcard(minorText))
-            {
-                min = new Version(major, 0, 0);
-                max = new Version(major + 1, 0, 0);
-            }
-            else if (string.IsNullOrEmpty(patchText) || IsWildcard(patchText))
-            {
-                var minor = int.Parse(minorText);
-                min = new Version(major, minor, 0);
-                max = new Version(major, minor + 1, 0);
-            }
-            else
-            {
-                var exact = new Version(major, int.Parse(minorText), int.Parse(patchText));
-                result = actualVersion == exact;
-                return true;
-            }
-
-            result = actualVersion >= min && actualVersion < max;
-            return true;
-        }
-
         private static bool IsWildcard(string value)
         {
             return value == "*" || value.Equals("x", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string IncrementNumericIdentifier(string value)
+        {
+            var characters = value.ToCharArray();
+            for (var index = characters.Length - 1; index >= 0; index--)
+            {
+                if (characters[index] != '9')
+                {
+                    characters[index]++;
+                    return new string(characters);
+                }
+
+                characters[index] = '0';
+            }
+
+            return "1" + new string(characters);
+        }
+
+        internal readonly struct ParsedSemanticVersion : IComparable<ParsedSemanticVersion>
+        {
+            public ParsedSemanticVersion(
+                int major,
+                int minor,
+                int patch,
+                string prerelease = "",
+                string buildMetadata = "")
+                : this(
+                    major.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    minor.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    patch.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    prerelease,
+                    buildMetadata)
+            {
+            }
+
+            public ParsedSemanticVersion(
+                string major,
+                string minor,
+                string patch,
+                string prerelease = "",
+                string buildMetadata = "")
+            {
+                Major = major;
+                Minor = minor;
+                Patch = patch;
+                Prerelease = prerelease;
+                BuildMetadata = buildMetadata;
+            }
+
+            public string Major { get; }
+            public string Minor { get; }
+            public string Patch { get; }
+            public string Prerelease { get; }
+            public string BuildMetadata { get; }
+            // System.Version cannot represent SemVer core identifiers larger than Int32. Preserve the original
+            // compatibility surface with a saturated projection while all validation and ordering uses the
+            // unbounded canonical digit strings above.
+            public Version CoreVersion => new Version(
+                ToLegacyComponent(Major),
+                ToLegacyComponent(Minor),
+                ToLegacyComponent(Patch));
+
+            public int CompareTo(ParsedSemanticVersion other)
+            {
+                var comparison = CompareNumericIdentifier(Major, other.Major);
+                if (comparison != 0)
+                {
+                    return comparison;
+                }
+
+                comparison = CompareNumericIdentifier(Minor, other.Minor);
+                if (comparison != 0)
+                {
+                    return comparison;
+                }
+
+                comparison = CompareNumericIdentifier(Patch, other.Patch);
+                if (comparison != 0)
+                {
+                    return comparison;
+                }
+
+                if (Prerelease.Length == 0)
+                {
+                    return other.Prerelease.Length == 0 ? 0 : 1;
+                }
+
+                if (other.Prerelease.Length == 0)
+                {
+                    return -1;
+                }
+
+                var identifiers = Prerelease.Split('.');
+                var otherIdentifiers = other.Prerelease.Split('.');
+                var sharedLength = Math.Min(identifiers.Length, otherIdentifiers.Length);
+                for (var index = 0; index < sharedLength; index++)
+                {
+                    comparison = ComparePrereleaseIdentifier(identifiers[index], otherIdentifiers[index]);
+                    if (comparison != 0)
+                    {
+                        return comparison;
+                    }
+                }
+
+                return identifiers.Length.CompareTo(otherIdentifiers.Length);
+            }
+
+            private static int ComparePrereleaseIdentifier(string left, string right)
+            {
+                var leftIsNumeric = NumericIdentifierRegex.IsMatch(left);
+                var rightIsNumeric = NumericIdentifierRegex.IsMatch(right);
+                if (leftIsNumeric && rightIsNumeric)
+                {
+                    var lengthComparison = left.Length.CompareTo(right.Length);
+                    return lengthComparison != 0 ? lengthComparison : string.CompareOrdinal(left, right);
+                }
+
+                if (leftIsNumeric)
+                {
+                    return -1;
+                }
+
+                if (rightIsNumeric)
+                {
+                    return 1;
+                }
+
+                return string.CompareOrdinal(left, right);
+            }
+
+            private static int CompareNumericIdentifier(string left, string right)
+            {
+                var lengthComparison = left.Length.CompareTo(right.Length);
+                return lengthComparison != 0 ? lengthComparison : string.CompareOrdinal(left, right);
+            }
+
+            private static int ToLegacyComponent(string value)
+            {
+                return int.TryParse(
+                    value,
+                    System.Globalization.NumberStyles.None,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var component)
+                    ? component
+                    : int.MaxValue;
+            }
+        }
+
+        private readonly struct ParsedRange
+        {
+            public static ParsedRange Any { get; } = new ParsedRange(null, null, true, true);
+
+            public ParsedRange(
+                ParsedSemanticVersion? min,
+                ParsedSemanticVersion? max,
+                bool includeMin,
+                bool includeMax)
+            {
+                Min = min;
+                Max = max;
+                IncludeMin = includeMin;
+                IncludeMax = includeMax;
+            }
+
+            private ParsedSemanticVersion? Min { get; }
+            private ParsedSemanticVersion? Max { get; }
+            private bool IncludeMin { get; }
+            private bool IncludeMax { get; }
+
+            public bool Allows(ParsedSemanticVersion version)
+            {
+                if (Min != null)
+                {
+                    var comparison = version.CompareTo(Min.Value);
+                    if (comparison < 0 || (comparison == 0 && !IncludeMin))
+                    {
+                        return false;
+                    }
+                }
+
+                if (Max != null)
+                {
+                    var comparison = version.CompareTo(Max.Value);
+                    if (comparison > 0 || (comparison == 0 && !IncludeMax))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
         }
     }
 }

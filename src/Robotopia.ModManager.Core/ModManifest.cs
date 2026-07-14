@@ -48,11 +48,20 @@ namespace Robotopia.ModManager.Core
         [DataMember(Name = "gameVersion")]
         public string GameVersion { get; set; } = string.Empty;
 
+        [DataMember(Name = "gameVersionRange")]
+        public string GameVersionRange { get; set; } = string.Empty;
+
         [DataMember(Name = "supportedGameVersionRange")]
         public string SupportedGameVersionRange { get; set; } = string.Empty;
 
+        [DataMember(Name = "loaderVersionRange")]
+        public string LoaderVersionRange { get; set; } = string.Empty;
+
         [DataMember(Name = "supportedLoaderVersionRange")]
         public string SupportedLoaderVersionRange { get; set; } = string.Empty;
+
+        [DataMember(Name = "sdkVersionRange")]
+        public string SdkVersionRange { get; set; } = string.Empty;
 
         [DataMember(Name = "supportedSdkVersionRange")]
         public string SupportedSdkVersionRange { get; set; } = string.Empty;
@@ -77,6 +86,9 @@ namespace Robotopia.ModManager.Core
 
         [DataMember(Name = "license")]
         public string License { get; set; } = string.Empty;
+
+        [DataMember(Name = "licenseFiles")]
+        public List<string> LicenseFiles { get; set; } = new List<string>();
 
         [DataMember(Name = "hashes")]
         public Dictionary<string, string> Hashes { get; set; } = new Dictionary<string, string>();
