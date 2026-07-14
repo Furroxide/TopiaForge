@@ -27,11 +27,11 @@ jobs:
       - name: Set up Dart
         uses: dart-lang/setup-dart@v1
         with:
-          sdk: stable
+          sdk: "3.11.1"
 
       - name: Restore CLI packages
         working-directory: apps/robotopia_cli
-        run: dart pub get
+        run: dart pub get --enforce-lockfile
 
       # Structural checks run for every entry file; the expensive download +
       # sha verification runs only for the files this PR changed.

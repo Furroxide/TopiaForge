@@ -1,23 +1,17 @@
-name: Build release packages
+name: Publish release packages
 
 on:
-  push:
-    tags:
-      - "v*"
+  pull_request:
+    types: [closed]
+    branches:
+      - main
   workflow_dispatch:
-    inputs:
-      tag:
-        description: "Release tag to create/update when running manually"
-        required: true
-        type: string
 
 permissions:
-  contents: write
-  pages: write
-  id-token: write
+  contents: read
 
 concurrency:
-  group: release-${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
+  group: release-${{ github.event.pull_request.number || github.ref_name }}
   cancel-in-progress: false
 
 env:
@@ -25,220 +19,159 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
-  macos-cli-x64:
-    name: Build macOS x64 CLI
-    runs-on: macos-15-intel
+  preflight:
+    name: Verify release inputs
+    if: >-
+      (github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main') ||
+      (github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'release/'))
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Dart
-        uses: dart-lang/setup-dart@v1
-        with:
-          sdk: stable
-
-      - name: Build x64 CLI
-        working-directory: apps/robotopia_cli
-        run: |
-          dart pub get
-          dart compile exe bin/robotopia.dart -o "$RUNNER_TEMP/robotopia-macos-x64"
-          chmod +x "$RUNNER_TEMP/robotopia-macos-x64"
-
-      - name: Upload x64 CLI
-        uses: actions/upload-artifact@v4
-        with:
-          name: robotopia-macos-x64
-          path: ${{ runner.temp }}/robotopia-macos-x64
-          if-no-files-found: error
-
-  build:
-    name: Build ${{ matrix.platform }} package
-    needs: macos-cli-x64
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: windows
-            runner: windows-latest
-            asset: QuantumWorks-windows-x64.zip
-          - platform: linux
-            runner: ubuntu-latest
-            asset: QuantumWorks-linux-x64.zip
-          - platform: macos
-            runner: macos-15
-            asset: QuantumWorks-macos-universal.zip
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "8.0.x"
-
-      - name: Set up Dart
-        uses: dart-lang/setup-dart@v1
-        with:
-          sdk: stable
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Install Linux desktop dependencies
-        if: matrix.platform == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev zip unzip
-
-      - name: Restore Robotopia managed refs
+      - name: Probe Robotopia managed refs
         shell: pwsh
         env:
+          ROBOTOPIA_REFS_SOURCE: ${{ vars.ROBOTOPIA_REFS_SOURCE }}
+          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
           ROBOTOPIA_REFS_URL: ${{ secrets.ROBOTOPIA_REFS_URL }}
           ROBOTOPIA_REFS_SHA256: ${{ secrets.ROBOTOPIA_REFS_SHA256 }}
           ROBOTOPIA_REFS_TOKEN: ${{ secrets.ROBOTOPIA_REFS_TOKEN }}
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:ROBOTOPIA_REFS_URL)) {
-            throw "ROBOTOPIA_REFS_URL secret is required."
-          }
-          if ([string]::IsNullOrWhiteSpace($env:ROBOTOPIA_REFS_SHA256)) {
-            throw "ROBOTOPIA_REFS_SHA256 secret is required."
-          }
+        run: ./tools/restore-robotopia-managed-refs.ps1 -Probe
 
-          $archive = Join-Path $env:RUNNER_TEMP "robotopia-managed-refs.zip"
-          $headers = @{}
-          if (![string]::IsNullOrWhiteSpace($env:ROBOTOPIA_REFS_TOKEN)) {
-            $headers["Authorization"] = "Bearer $env:ROBOTOPIA_REFS_TOKEN"
-          }
-          Invoke-WebRequest -Uri $env:ROBOTOPIA_REFS_URL -Headers $headers -OutFile $archive
-
-          $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-          $expected = $env:ROBOTOPIA_REFS_SHA256.Trim().ToLowerInvariant()
-          if ($actual -ne $expected) {
-            throw "Robotopia refs SHA-256 mismatch. Expected $expected but got $actual."
-          }
-
-          $extract = Join-Path $env:RUNNER_TEMP "robotopia-managed-refs"
-          Expand-Archive -LiteralPath $archive -DestinationPath $extract -Force
-          $unity = Get-ChildItem -LiteralPath $extract -Recurse -Filter "UnityEngine.dll" -File |
-            Select-Object -First 1
-          if ($null -eq $unity) {
-            throw "Reference archive did not contain UnityEngine.dll."
-          }
-          $managed = Split-Path $unity.FullName -Parent
-          "RobotopiaManagedDir=$managed" >> $env:GITHUB_ENV
-          Write-Host "RobotopiaManagedDir=$managed"
-
-      # Proves the Dart-native scaffold + pack pipeline works on every OS before it feeds the release payload.
-      # Scaffolds inside the checkout (not RUNNER_TEMP) so the generated ProjectReference to
-      # src/Robotopia.Mods.Abstractions stays a same-drive relative path on Windows runners.
-      - name: Smoke test CLI scaffold and pack
-        shell: bash
-        working-directory: apps/robotopia_cli
-        run: |
-          dart pub get
-          dart run bin/robotopia.dart new mod ci.smoke --name "CI Smoke" --dir ../../.pack-smoke
-          dart run bin/robotopia.dart pack --project ../../.pack-smoke/ci.smoke --output "$RUNNER_TEMP/pack-smoke"
-
-      - name: Prepare macOS universal CLI
-        if: matrix.platform == 'macos'
-        uses: actions/download-artifact@v4
+  release-metadata:
+    name: Resolve release metadata
+    needs: preflight
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.metadata.outputs.version }}
+      tag: ${{ steps.metadata.outputs.tag }}
+      target_sha: ${{ steps.metadata.outputs.target_sha }}
+    steps:
+      - name: Checkout merged release
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v4
         with:
-          name: robotopia-macos-x64
-          path: ${{ runner.temp }}/macos-x64-cli
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
 
-      - name: Combine macOS CLI architectures
-        if: matrix.platform == 'macos'
+      - name: Checkout workflow ref
+        if: github.event_name != 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate release versions
+        id: metadata
         shell: bash
-        working-directory: apps/robotopia_cli
-        run: |
-          dart pub get
-          dart compile exe bin/robotopia.dart -o "$RUNNER_TEMP/robotopia-macos-arm64"
-          chmod +x "$RUNNER_TEMP/robotopia-macos-arm64"
-          chmod +x "$RUNNER_TEMP/macos-x64-cli/robotopia-macos-x64"
-          lipo -create \
-            "$RUNNER_TEMP/macos-x64-cli/robotopia-macos-x64" \
-            "$RUNNER_TEMP/robotopia-macos-arm64" \
-            -output "$RUNNER_TEMP/robotopia-macos-universal"
-          chmod +x "$RUNNER_TEMP/robotopia-macos-universal"
-          lipo -archs "$RUNNER_TEMP/robotopia-macos-universal"
-
-      - name: Build release package
-        shell: pwsh
         env:
-          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
-          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-          MACOS_DEVELOPER_ID_APPLICATION: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION }}
-          MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
-          MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
-          MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
-          $args = @(
-            "-Platform", "${{ matrix.platform }}",
-            "-OutputRoot", (Join-Path $env:GITHUB_WORKSPACE "release-artifacts"),
-            "-Configuration", "Release"
-          )
-          if ("${{ matrix.platform }}" -eq "macos") {
-            $args += @("-PrebuiltCli", (Join-Path $env:RUNNER_TEMP "robotopia-macos-universal"))
+          read_version() {
+            awk -F': *' '$1 == "version" { print $2; exit }' "$1" |
+              tr -d '"' |
+              tr -d "'"
           }
-          & ./tools/package-distribution.ps1 @args
 
-      - name: Smoke test release package
-        shell: pwsh
-        run: |
-          $args = @(
-            "-Platform", "${{ matrix.platform }}",
-            "-ZipPath", (Join-Path (Join-Path $env:GITHUB_WORKSPACE "release-artifacts") "${{ matrix.asset }}")
-          )
-          if ("${{ matrix.platform }}" -eq "macos") {
-            $args += "-RequireMacUniversal"
+          release_version="$(read_version apps/robotopia_cli/pubspec.yaml)"
+          if [[ -z "$release_version" ]]; then
+            echo "::error::Could not read apps/robotopia_cli/pubspec.yaml version."
+            exit 1
+          fi
+          release_base="${release_version%%+*}"
+
+          check_version() {
+            local file="$1"
+            local version
+            version="$(read_version "$file")"
+            local base="${version%%+*}"
+            if [[ "$base" != "$release_base" ]]; then
+              echo "::error::$file version '$version' does not match release version '$release_base'."
+              exit 1
+            fi
           }
-          & ./tools/test-release-package.ps1 @args
 
-      - name: Upload package artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.asset }}
-          path: release-artifacts/${{ matrix.asset }}
-          if-no-files-found: error
+          check_version apps/robotopia_launcher_flutter/pubspec.yaml
+          check_version packages/launcher_domain/pubspec.yaml
+          check_version packages/launcher_data/pubspec.yaml
+          check_version packages/launcher_ui/pubspec.yaml
 
-      # One canonical byte-set for the mod registry: per-platform packs are
-      # byte-different, so only the linux leg's dist/ feeds the release assets
-      # the registry index hashes and links.
-      - name: Upload mod packages artifact
-        if: matrix.platform == 'linux'
-        uses: actions/upload-artifact@v4
-        with:
-          name: mod-packages
-          path: dist/*.robotopiamod
-          if-no-files-found: error
+          if [[ "$EVENT_NAME" == "pull_request" && "$HEAD_REF" != "release/$release_base" ]]; then
+            echo "::error::Merged release PR branch '$HEAD_REF' must be release/$release_base."
+            exit 1
+          fi
+
+          tag="v$release_base"
+          target_sha="$(git rev-parse HEAD)"
+          {
+            echo "version=$release_base"
+            echo "tag=$tag"
+            echo "target_sha=$target_sha"
+          } >> "$GITHUB_OUTPUT"
+          echo "Resolved $tag at $target_sha."
+
+  build-packages:
+    name: Build release packages
+    needs: release-metadata
+    permissions:
+      contents: read
+    uses: ./.github/workflows/release-package-build.yml
+    with:
+      fail_on_missing_refs: true
+      artifact_retention_days: 30
+    secrets:
+      ROBOTOPIA_REFS_URL: ${{ secrets.ROBOTOPIA_REFS_URL }}
+      ROBOTOPIA_REFS_SHA256: ${{ secrets.ROBOTOPIA_REFS_SHA256 }}
+      ROBOTOPIA_REFS_TOKEN: ${{ secrets.ROBOTOPIA_REFS_TOKEN }}
+      MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      MACOS_DEVELOPER_ID_APPLICATION: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION }}
+      MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+      MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
+      MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
 
   publish-release:
     name: Publish GitHub Release assets
-    needs: build
+    needs:
+      - release-metadata
+      - build-packages
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
     outputs:
-      tag: ${{ steps.release-tag.outputs.tag }}
+      tag: ${{ needs.release-metadata.outputs.tag }}
     steps:
-      - name: Checkout
+      - name: Checkout release commit
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.release-metadata.outputs.target_sha }}
 
-      - name: Resolve release tag
-        id: release-tag
+      - name: Create or validate release tag
         shell: bash
+        env:
+          TAG: ${{ needs.release-metadata.outputs.tag }}
+          TARGET_SHA: ${{ needs.release-metadata.outputs.target_sha }}
         run: |
-          tag="${GITHUB_REF_NAME}"
-          if [[ "${GITHUB_REF_TYPE}" != "tag" ]]; then
-            tag="${{ inputs.tag }}"
+          git fetch --tags --force
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            actual_sha="$(git rev-list -n 1 "$TAG")"
+            if [[ "$actual_sha" != "$TARGET_SHA" ]]; then
+              echo "::error::$TAG points at $actual_sha, expected $TARGET_SHA."
+              exit 1
+            fi
+            echo "$TAG already points at $TARGET_SHA."
+            exit 0
           fi
-          if [[ -z "$tag" ]]; then
-            echo "Release tag is required." >&2
-            exit 1
-          fi
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "QuantumWorks ${TAG#v}" "$TARGET_SHA"
+          git push origin "refs/tags/$TAG"
 
       - name: Download release packages
         uses: actions/download-artifact@v4
@@ -256,7 +189,7 @@ jobs:
       - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.release-tag.outputs.tag }}
+          TAG: ${{ needs.release-metadata.outputs.tag }}
         run: |
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" --title "$TAG" --notes "QuantumWorks release $TAG"
@@ -267,8 +200,14 @@ jobs:
 
   deploy-index:
     name: Deploy launcher update + mod registry indexes
-    needs: publish-release
+    needs:
+      - release-metadata
+      - publish-release
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     # A Pages deploy replaces the whole site, so every deploy (here and in
     # deploy-launcher-updates.yml) must build BOTH indexes, and the two
     # workflows serialize on the shared "pages" group.
@@ -279,8 +218,10 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Checkout
+      - name: Checkout release commit
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-metadata.outputs.target_sha }}
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
@@ -288,11 +229,11 @@ jobs:
       - name: Set up Dart
         uses: dart-lang/setup-dart@v1
         with:
-          sdk: stable
+          sdk: "3.11.1"
 
       - name: Restore CLI packages
         working-directory: apps/robotopia_cli
-        run: dart pub get
+        run: dart pub get --enforce-lockfile
 
       - name: Build launcher update index
         working-directory: apps/robotopia_cli

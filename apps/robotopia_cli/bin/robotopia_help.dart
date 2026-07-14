@@ -27,6 +27,7 @@ const _commands = [
   'unity',
   'updates',
   'registry',
+  'release',
 ];
 
 /// Shared remediation message for commands that need a detected game install.
@@ -75,7 +76,9 @@ String? _suggestCommand(String input) {
 /// The `robotopia help` text (split out so robotopia.dart stays under the file-size cap).
 extension _HelpCommand on _RobotopiaCli {
   void _printHelp() {
-    stdout.writeln('QuantumWorks CLI — build, package, and run Robotopia mods.');
+    stdout.writeln(
+      'QuantumWorks CLI — build, package, and run Robotopia mods.',
+    );
     stdout.writeln('');
     stdout.writeln('Getting started:');
     stdout.writeln(
@@ -147,9 +150,7 @@ extension _HelpCommand on _RobotopiaCli {
     stdout.writeln(
       '  robotopia dev-install [--game-dir p]  Install the loader + dev mods into the game.',
     );
-    stdout.writeln(
-      '  robotopia launch                      Launch Robotopia.',
-    );
+    stdout.writeln('  robotopia launch                      Launch Robotopia.');
     stdout.writeln(
       '  robotopia restart                     Restart Robotopia.',
     );
@@ -217,6 +218,12 @@ extension _HelpCommand on _RobotopiaCli {
     stdout.writeln('Maintenance:');
     stdout.writeln(
       '  robotopia updates index --repository owner/name --output path  Build a launcher update index.',
+    );
+    stdout.writeln(
+      '  robotopia release build-package ...   Build a release zip (CI maintainers).',
+    );
+    stdout.writeln(
+      '  robotopia release test-package ...    Smoke-test a release zip (CI maintainers).',
     );
     stdout.writeln('');
     stdout.writeln(

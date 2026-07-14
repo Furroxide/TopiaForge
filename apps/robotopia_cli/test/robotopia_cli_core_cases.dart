@@ -11,6 +11,10 @@ void _coreCliTests(_CliTestHarness Function() currentHarness) {
     expect(result.stdout.toString(), contains('robotopia mod set'));
     expect(result.stdout.toString(), contains('robotopia ugc setup'));
     expect(result.stdout.toString(), contains('robotopia ugc dev'));
+    expect(
+      result.stdout.toString(),
+      contains('robotopia release build-package'),
+    );
     expect(result.stdout.toString(), contains('Getting started:'));
     expect(result.stdout.toString(), contains('Build & run:'));
     expect(result.stdout.toString(), contains('Project & manifest:'));
@@ -62,6 +66,31 @@ void _coreCliTests(_CliTestHarness Function() currentHarness) {
 
     expect(result.exitCode, 1);
     expect(result.stderr.toString().trim(), isNotEmpty);
+  });
+
+  test('release command usage errors stay concise', () async {
+    final result = await currentHarness().runCli(['release']);
+
+    expect(result.exitCode, 2);
+    expect(
+      result.stderr.toString(),
+      contains('Usage: robotopia release build-package|test-package'),
+    );
+  });
+
+  test('release build-package requires a platform', () async {
+    final result = await currentHarness().runCli([
+      'release',
+      'build-package',
+      '--output',
+      currentHarness().temp.path,
+    ]);
+
+    expect(result.exitCode, 2);
+    expect(
+      result.stderr.toString(),
+      contains('--platform windows|linux|macos'),
+    );
   });
 
   test(

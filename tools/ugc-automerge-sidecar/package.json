@@ -8,7 +8,8 @@
     "robotopia-ugc-publish": "index.mjs"
   },
   "scripts": {
-    "start": "node index.mjs"
+    "start": "node index.mjs",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=20"

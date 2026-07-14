@@ -42,7 +42,7 @@ jobs:
       - name: Set up Dart
         uses: dart-lang/setup-dart@v1
         with:
-          sdk: stable
+          sdk: "3.11.1"
 
       - name: Set up .NET
         if: matrix.package == 'apps/robotopia_cli'
@@ -53,22 +53,73 @@ jobs:
       - name: Analyze
         working-directory: ${{ matrix.package }}
         run: |
-          dart pub get
+          if git ls-files --error-unmatch -- pubspec.lock >/dev/null 2>&1; then
+            dart pub get --enforce-lockfile
+          else
+            dart pub get
+          fi
           dart analyze --fatal-infos
 
       - name: Test
         working-directory: ${{ matrix.package }}
         run: dart test
 
+  flutter-tests:
+    name: Analyze and test Flutter packages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.4"
+          cache: true
+
+      - name: Analyze and test shared UI
+        working-directory: packages/launcher_ui
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+
+      - name: Analyze and test launcher
+        working-directory: apps/robotopia_launcher_flutter
+        run: |
+          flutter pub get --enforce-lockfile
+          flutter analyze
+          flutter test
+
+  sidecar-checks:
+    name: Validate UGC Automerge sidecar
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: tools/ugc-automerge-sidecar/package-lock.json
+
+      - name: Restore and check sidecar
+        working-directory: tools/ugc-automerge-sidecar
+        run: |
+          npm ci --no-audit --no-fund
+          node --check index.mjs
+          npm test
+          output="$(node index.mjs --check)"
+          echo "$output"
+          grep -F "deps        : installed" <<< "$output"
+
   # Scaffold + validate + pack every mod template so template rot is caught
   # on the PR that causes it, not at the next release.
   template-matrix:
     name: Template ${{ matrix.template }}
     runs-on: ubuntu-latest
-    env:
-      # The ui template needs the game's managed refs (secret); fork PRs have
-      # no secrets, so that one leg no-ops there and still runs on main.
-      REFS_AVAILABLE: ${{ secrets.ROBOTOPIA_REFS_URL != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -85,52 +136,45 @@ jobs:
       - name: Set up Dart
         uses: dart-lang/setup-dart@v1
         with:
-          sdk: stable
+          sdk: "3.11.1"
 
-      - name: Restore Robotopia managed refs
-        if: matrix.template == 'ui' && env.REFS_AVAILABLE == 'true'
+      - name: Install archive dependencies
+        if: matrix.template == 'ui'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y p7zip-full
+
+      - name: Resolve Robotopia refs cache key
+        if: matrix.template == 'ui'
+        id: refs-cache
         shell: pwsh
         env:
-          ROBOTOPIA_REFS_URL: ${{ secrets.ROBOTOPIA_REFS_URL }}
-          ROBOTOPIA_REFS_SHA256: ${{ secrets.ROBOTOPIA_REFS_SHA256 }}
-          ROBOTOPIA_REFS_TOKEN: ${{ secrets.ROBOTOPIA_REFS_TOKEN }}
-        run: |
-          $archive = Join-Path $env:RUNNER_TEMP "robotopia-managed-refs.zip"
-          $headers = @{}
-          if (![string]::IsNullOrWhiteSpace($env:ROBOTOPIA_REFS_TOKEN)) {
-            $headers["Authorization"] = "Bearer $env:ROBOTOPIA_REFS_TOKEN"
-          }
-          Invoke-WebRequest -Uri $env:ROBOTOPIA_REFS_URL -Headers $headers -OutFile $archive
+          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
+        run: ./tools/restore-robotopia-managed-refs.ps1 -Source public -CacheKeyOnly
 
-          $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-          $expected = $env:ROBOTOPIA_REFS_SHA256.Trim().ToLowerInvariant()
-          if ($actual -ne $expected) {
-            throw "Robotopia refs SHA-256 mismatch. Expected $expected but got $actual."
-          }
+      - name: Cache Robotopia managed refs
+        if: matrix.template == 'ui'
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/robotopia-managed-refs-cache
+          key: ${{ steps.refs-cache.outputs.key }}
 
-          $extract = Join-Path $env:RUNNER_TEMP "robotopia-managed-refs"
-          Expand-Archive -LiteralPath $archive -DestinationPath $extract -Force
-          $unity = Get-ChildItem -LiteralPath $extract -Recurse -Filter "UnityEngine.dll" -File |
-            Select-Object -First 1
-          if ($null -eq $unity) {
-            throw "Reference archive did not contain UnityEngine.dll."
-          }
-          $managed = Split-Path $unity.FullName -Parent
-          "RobotopiaManagedDir=$managed" >> $env:GITHUB_ENV
-
-      - name: Skip ui template without managed refs
-        if: matrix.template == 'ui' && env.REFS_AVAILABLE != 'true'
-        run: echo "Skipping ui template — managed-ref secrets are unavailable (fork PR)."
+      - name: Restore Robotopia managed refs
+        if: matrix.template == 'ui'
+        shell: pwsh
+        env:
+          ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
+          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
+        run: ./tools/restore-robotopia-managed-refs.ps1 -Source public
 
       # Scaffolds inside the checkout (not RUNNER_TEMP) so the generated
       # ProjectReference to src/Robotopia.Mods.Abstractions stays a relative
       # path, matching the release workflow's smoke test.
       - name: Scaffold, validate, pack, and re-validate
-        if: matrix.template != 'ui' || env.REFS_AVAILABLE == 'true'
         shell: bash
         working-directory: apps/robotopia_cli
         run: |
-          dart pub get
+          dart pub get --enforce-lockfile
           dart run bin/robotopia.dart new mod "ci.${{ matrix.template }}" \
             --template "${{ matrix.template }}" \
             --name "CI ${{ matrix.template }}" \

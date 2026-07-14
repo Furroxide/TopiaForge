@@ -1,0 +1,26 @@
+name: Release package dry run
+
+on:
+  push:
+    branches:
+      - "release/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-dry-run-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-packages:
+    name: Build release packages
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      github.ref == 'refs/heads/main' ||
+      startsWith(github.ref, 'refs/heads/release/')
+    uses: ./.github/workflows/release-package-build.yml
+    with:
+      fail_on_missing_refs: false
+      artifact_retention_days: 7

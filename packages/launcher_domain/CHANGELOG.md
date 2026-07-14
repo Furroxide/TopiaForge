@@ -1,3 +1,3 @@
-## 1.0.0
+## 0.1.1
 
-- Initial version.
+- Pre-stable release metadata for QuantumWorks 0.1.1.
