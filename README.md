@@ -9,8 +9,20 @@ You need **no developer tools** -- no Flutter, Dart, .NET, or Node. Download the
 `QuantumWorks-windows-x64.zip`, `QuantumWorks-macos-universal.zip`, or `QuantumWorks-linux-x64.zip`. Windows and
 Linux packages expose the launcher in `launcher/` and a root `robotopia` CLI executable; macOS packages expose
 `QuantumWorks.app` plus a root `robotopia` shim. The launcher detects your Robotopia install, repairs the Windows
-runtime payload, and lets you browse, install, enable/disable, and launch mods. The **Developer** tab is hidden by
+or macOS runtime payload, and lets you browse, install, enable/disable, and launch mods. The **Developer** tab is hidden by
 default -- turn it on under **Settings -> Developer mode** only if you build mods.
+
+For the initial release, launcher upgrades are manual: download the next signed platform package from the official
+GitHub Releases page. Automatic self-update is intentionally excluded until the client can verify owner-signed
+metadata and enforce bounded extraction independently of the update index.
+
+The initial compatibility target is Robotopia build **2227**. The built-in registry initially carries verified
+first-party release artifacts only; community authors can use the documented self-hosted registry format while
+official submission governance is being established.
+
+Native macOS launcher/runtime packages are supported, but the current Unity-authored QwUi brand bundle and
+custom-world bundles target `StandaloneWindows64`. Custom worlds are therefore Windows/Proton-only for now;
+on macOS, QwUi falls through its documented font fallback chain if the brand bundle cannot load.
 
 ## For mod developers
 
@@ -20,7 +32,8 @@ Start with the walkthrough: [docs/YourFirstMod.md](docs/YourFirstMod.md). The re
 (`robotopia setup` to auto-fix what it safely can, or `robotopia doctor` to audit read-only). Only the .NET SDK
 is required to build mods; Node/Unity are optional (UGC live-sync). See [docs/Modding.md](docs/Modding.md) for
 the full reference. Build branded in-game UI (windows, HUDs, modals, toasts) with the QuantumWorks UI kit — see
-[docs/UiKit.md](docs/UiKit.md) and the F8 gallery mod.
+[docs/UiKit.md](docs/UiKit.md) and the F8 gallery mod. The complete first-party catalog and candidate gameplay
+acceptance flows are in [docs/FirstPartyMods.md](docs/FirstPartyMods.md).
 
 ## Standalone launcher
 
@@ -44,6 +57,15 @@ Current launcher state management uses `Bloc<LauncherEvent, LauncherState>` rath
 ## Developer workflow
 
 Robotopia has a Creator Companion style workflow with project manifests, lock files, package sources, restore, generated C# references, a `robotopia` CLI, and a launcher Developer surface.
+
+Contributors building the complete repository on Windows or macOS should run the cross-platform bootstrap first:
+
+```powershell
+pwsh ./tools/bootstrap-dev.ps1 -Verify
+```
+
+See [docs/ContributorSetup.md](docs/ContributorSetup.md) for prerequisites, the pinned Flutter SDK, managed
+reference caching, and platform-specific build notes.
 
 Start here:
 
@@ -81,7 +103,7 @@ Mods are `.robotopiamod` zip files with a required `robotopia.mod.json` manifest
 Scaffold a mod and pack it:
 
 ```sh
-robotopia new mod yourname.firstmod --name "First Mod"
+robotopia new mod yourname.firstmod --name "First Mod" --author "Your Name" --license MIT
 cd yourname.firstmod
 robotopia pack
 ```
@@ -97,6 +119,16 @@ BepInEx\RobotopiaModManager\package-inbox
 ## Trust model
 
 Robotopia uses trusted local packages. Do not install `.robotopiamod` files unless you trust their source; C# mods execute code in the game process.
+
+## Community and project policy
+
+See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [SUPPORT.md](SUPPORT.md),
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), and the
+[compatibility policy](docs/CompatibilityPolicy.md). The release-facing component and contract map is in
+[docs/ArchitectureInventory.md](docs/ArchitectureInventory.md). Maintainers preparing a release should use the
+[release checklist](docs/ReleaseChecklist.md) and close the current
+[launch blocker register](docs/LaunchBlockers.md). Remote-service and sensitive-capability behavior is documented in
+[docs/PrivacyAndCapabilities.md](docs/PrivacyAndCapabilities.md).
 
 ## Verification
 

@@ -14,8 +14,9 @@ All commands in these docs use the `robotopia` executable from the release zip:
 3. Add that folder to your `PATH`.
 4. Verify: `robotopia doctor`.
 
-Working from a source checkout instead? Run `dart pub get` once in `apps/robotopia_cli`, then substitute
-`dart run robotopia <command>` (from that directory) wherever these docs say `robotopia <command>`.
+Working from a source checkout instead? Run `dart pub get --enforce-lockfile` once in
+`apps/robotopia_cli`, then substitute `dart run robotopia <command>` (from that directory) wherever these
+docs say `robotopia <command>`.
 
 ## Getting set up
 
@@ -30,7 +31,7 @@ To **develop** mods, validate your machine first:
 - `robotopia setup` — same audit plus safe auto-fixes (installs the Automerge sidecar dependencies) and clear
   guidance for anything that needs a manual install.
 
-Only the **.NET SDK 8+** is required to build mods. **Node.js 20+** and **Unity** are optional (UGC live-sync
+Only the repository-pinned **.NET SDK 10.0.301** is required to build mods. **Node.js 20+** and **Unity** are optional (UGC live-sync
 authoring only). Build/pack commands fail fast with actionable guidance when the toolchain is missing.
 
 ## Platform support
@@ -75,8 +76,7 @@ Manifest fields:
 - `schemaVersion`: must be `2`
 - `name`: stable unique package id, for example `author.gravitygun`
 - `displayName`, `version`, `description`
-- `author`: `{ "name": ..., "email": ..., "url": ... }` (a bare string is accepted and treated as the name;
-  only `name` is required)
+- `author`: `{ "name": ..., "email": ..., "url": ... }` (`author` must be an object and `name` is required)
 - `entryAssembly`: DLL inside the package
 - `entryType`: fully qualified type implementing `IRobotopiaMod`
 - `vpmDependencies`: mods that must be enabled and loaded first, as `{ "mod.id": "version range" }`
@@ -92,7 +92,7 @@ Manifest fields:
   `{ "id": ..., "name": ..., "description": ... }` (`id` and `name` required)
 - `apiAssemblies`: DLLs (package-relative paths) exported for other mods to compile against; consumers get
   reference assemblies on `robotopia restore`
-- `category`, `tags`, `icon`, `screenshots`, `homepage`, `source`, `license`: launcher metadata (see
+- `category`, `tags`, `icon`, `screenshots`, `homepage`, `source`, `license`, `licenseFiles`: launcher metadata (see
   [Categories](#categories))
 - `hashes`: reserved integrity metadata — `robotopia pack` does not write it; the package-level sha256
   travels in the registry entry / lockfile instead (see [ModPackaging.md](ModPackaging.md))
@@ -117,17 +117,24 @@ All version-range fields (`vpmDependencies` values, dependency/conflict `version
 | wildcard | `1.x`, `1.2.x` | any version in that line |
 | comparators | `>=1.2.0 <2.0.0` | space-separated bounds; `>`, `>=`, `<`, `<=`, `=` |
 
-Pre-release/build suffixes (`1.2.3-beta.1+ci`) parse but are **ignored for ordering** — don't rely on them
-to gate resolution.
+Versions use SemVer 2.0 precedence. A release version sorts after its prereleases, numeric prerelease identifiers sort
+numerically before alphanumeric identifiers, and build metadata (`+ci`) does not affect ordering. Wildcard ranges do
+not select prereleases; a comparator set selects a prerelease only when the set explicitly names a prerelease with the
+same major/minor/patch tuple.
 
 ### Permissions
 
 `permissions` entries are descriptive, user-facing capability labels shown in the launcher. Known values:
 
-`ai`, `asset-bundles`, `filesystem`, `filesystem-watch`, `harmony-patch`, `hud`, `input`, `navigation`,
-`network`, `particles`, `physics`, `physics-settings`, `player-control`, `prompt-overrides`,
+`asset-bundles`, `filesystem`, `filesystem-watch`, `harmony-patch`, `hud`, `input`, `microphone`, `navigation`,
+`network`, `particles`, `physics`, `physics-settings`, `player-control`, `player-token`, `prompt-overrides`,
 `quality-settings`, `render-settings`, `robot-spawning`, `scene-management`, `time`, `ugc-livesync`,
-`world-service`
+`remote-ai`, `speech-to-text`, `world-service`
+
+`ai` remains a deprecated compatibility alias for `remote-ai`. Capabilities are disclosure, not a security sandbox:
+every C# package executes inside the game process with the player's authority. Install/update confirmation shows the
+package source and hash plus the aggregate capabilities of required dependencies. See
+[PrivacyAndCapabilities.md](PrivacyAndCapabilities.md) for the sensitive-data contract and required declarations.
 
 An unknown value is a validation **warning** — and warnings fail the zero-finding publishing bar
 ([PublishingYourMod.md](PublishingYourMod.md)).
@@ -147,7 +154,10 @@ Loaded C# assemblies cannot be unloaded from Unity Mono, so enable, disable, upd
 
 ## Scaffolding and manifest management from the CLI
 
-`robotopia new mod <id>` scaffolds a ready-to-build project from a template (`robotopia list templates`):
+`robotopia new mod <id>` scaffolds a local-only project from a template (`robotopia list templates`). The no-argument
+path uses an explicit placeholder author, `NOASSERTION`, and a no-grant license notice so it cannot accidentally pass
+publication. Supply `--author` and `--license` deliberately for a publishable project; non-MIT/Apache expressions also
+require one or more `--license-file` inputs:
 
 | Template | Modeled on | What you get |
 |---|---|---|
@@ -298,6 +308,48 @@ context.RegisterWorldFromBundle(worlds, new BundleWorldOptions
     Name = "Sky Island",
     BundleRelativePath = "AssetBundles/sky-island.bundle",
 });
+```
+
+## Scene Coordination
+
+Single-mode scene loads are **last-write-wins**: if two mods dispatch loads, the later one silently replaces
+the earlier one's world (the classic symptom is a flash of the first scene, then a black or empty one). The
+manager publishes `ISceneCoordinator` to arbitrate this — it is always available, from the first `OnLoad`.
+
+The rules:
+
+- **Any mod that loads a scene asks first.** Call `RequestTransition` and only load on approval. Dispose the
+  returned claim when the transition resolves (your scene arrived, or your load was abandoned).
+- **Automatic triggers yield.** Anything that is not a direct user action — auto-load on start, timers, file
+  watchers — passes `SceneTransitionPriority.Automatic` and is **refused** while any claim is active. Degrade
+  gracefully: defer, skip, or attach when the scene arrives by other means. Never retry-loop the load.
+- **User actions supersede.** A menu/overlay button passes `SceneTransitionPriority.UserInitiated` and is
+  always approved. The superseded mod finds out through its own scene handling — `Robotopia.Worlds` ends its
+  session with `WorldSessionEndReason.SceneReplaced` (a clean teardown plus a log line naming the new owner)
+  when a foreign claimed scene lands over it.
+- **Check the world state too.** `IWorldGamemodeService.CurrentSession` tells you a world/gamemode session is
+  live; the optional `IWorldTransitionState.IsTransitionInFlight` capability tells you its scene load is still
+  in the air. A session holds a scene claim for its whole lifetime, so honoring the coordinator covers both
+  automatically.
+
+When starting through the framework services, use `WorldLoadRequest.WithPriority(...)` or
+`UgcLiveSyncRequest.WithPriority(...)` for automatic work. Their original public constructors remain
+user-initiated for SDK source and binary compatibility.
+
+```csharp
+var scenes = context.RequireService<ISceneCoordinator>();
+var decision = scenes.RequestTransition(new SceneTransitionRequest(
+    context.ModId, "UgcPlay", SceneTransitionPriority.Automatic, "attach my content"));
+if (decision.Approved)
+{
+    LoadMyScene();                      // however your mod loads it
+    // ... on the next scene arrival:
+    decision.Claim!.Dispose();          // release so automatic transitions unblock
+}
+else
+{
+    context.Logger.Info("Deferred: " + decision.Message);  // attach later, when the scene shows up
+}
 ```
 
 ## Robots & Standard Agents

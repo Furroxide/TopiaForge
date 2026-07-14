@@ -270,4 +270,4 @@ The UGC live-sync feature (`IUgcLiveSyncService`, the `Robotopia.UgcLiveSync` mo
 - **Shipped:** `robotopia doctor` verifies the companion package + watch-folder writability; the Flutter launcher
   Developer view has a "UGC Live Sync" panel (edit settings, deploy the runtime config to the install, open the
   watch folder, start/stop the Automerge publisher); and the Automerge writer ships as the
-  [`tools/ugc-automerge-sidecar`](../tools/ugc-automerge-sidecar) Node sidecar driven by `robotopia ugc`.
+  [`tools/ugc-automerge-sidecar`](../../tools/ugc-automerge-sidecar) Node sidecar driven by `robotopia ugc`.
