@@ -12,9 +12,14 @@ templates/**/[Oo]bj/
 **/.dart_tool/
 **/.flutter-plugins
 **/.flutter-plugins-dependencies
+/.fvm/
 apps/**/[Bb]uild/
 packages/**/[Bb]uild/
 /build/
+
+# JavaScript and repository-local tool state
+**/node_modules/
+/.tools/
 
 # Generated distributables and local package caches
 /dist/
@@ -22,6 +27,7 @@ packages/**/[Bb]uild/
 /.robotopia/packages/
 /.robotopia/cache/
 robotopia.dev.props
+/Directory.Build.local.props
 
 # Local game/runtime installs. The bundled third-party runtime under
 # third_party/BepInEx is source-controlled and protected by .gitattributes.
@@ -30,6 +36,7 @@ robotopia.dev.props
 # IDE and user-local state
 .vs/
 .idea/
+.DS_Store
 *.iml
 *.user
 *.suo
