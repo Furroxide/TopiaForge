@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>Robotopia.ModManager.Tests</AssemblyName>
     <RootNamespace>Robotopia.ModManager.Tests</RootNamespace>
   </PropertyGroup>
@@ -12,27 +12,46 @@
     <!-- Unity-free, GameCode-free game-compat core: lets the offline CI gate (GameCompatTests) diff the checked-in
          binding manifests against the checked-in surface baseline without ever loading the game DLL. -->
     <ProjectReference Include="..\..\src\Robotopia.GameCompat.Surface\Robotopia.GameCompat.Surface.csproj" />
+    <ProjectReference Include="..\..\src\Robotopia.GameCompat.Extractor\Robotopia.GameCompat.Extractor.csproj" />
   </ItemGroup>
 
   <!-- Compile the UGC live-sync mod's Unity-free logic directly into the test assembly so the service state
-       machine can be unit-tested on net8.0 without loading the mod's UnityEngine-referencing assembly. Only the
+       machine can be unit-tested on net10.0 without loading the mod's UnityEngine-referencing assembly. Only the
        Unity-free files are included; UgcGameBridge/overlay/mod entry (which touch UnityEngine) are excluded. -->
   <ItemGroup>
+    <Compile Include="..\..\mods\Shared\SafeEvent.cs" />
+    <Compile Include="..\..\mods\Robotopia.Assets\AssetBundlePathPolicy.cs" />
+    <Compile Include="..\..\mods\Shared\UgcNoOpLaunchRequest.cs" />
     <Compile Include="..\..\mods\Robotopia.UgcLiveSync\UgcLiveSyncBridge.cs" />
+    <Compile Include="..\..\mods\Robotopia.UgcLiveSync\UgcCommandPollGate.cs" />
+    <Compile Include="..\..\mods\Robotopia.UgcLiveSync\UgcLiveSyncCommandFile.cs" />
     <Compile Include="..\..\mods\Robotopia.UgcLiveSync\UgcLiveSyncConfig.cs" />
     <Compile Include="..\..\mods\Robotopia.UgcLiveSync\UgcLiveSyncService.cs" />
+    <Compile Include="..\..\mods\Robotopia.UgcLiveSync\UgcSnapshotPayloadValidator.cs" />
     <Compile Include="..\..\mods\Robotopia.UgcLiveSync\UgcLiveSyncStatusFile.cs" />
   </ItemGroup>
 
   <!-- Same pattern for the OVERRIDE feature: its Unity-free pieces (the RoboAPI wire protocol + JSON, and the
-       deterministic decision resolver) compile into the net8.0 test assembly so they can be unit-tested with no
+       deterministic decision resolver) compile into the net10.0 test assembly so they can be unit-tested with no
        UnityEngine/RoboAPI backend. The UnityEngine/HttpClient-referencing files (controllers, client, service) are
        excluded. -->
   <ItemGroup>
     <Compile Include="..\..\mods\Robotopia.RobotKit\MiniJson.cs" />
     <Compile Include="..\..\mods\Robotopia.RobotKit\RoboApiProtocol.cs" />
+    <Compile Include="..\..\mods\Robotopia.RobotKit\RoboApiClient.cs" />
+    <Compile Include="..\..\mods\Robotopia.Zombies\ZombiesConfig.cs" />
     <Compile Include="..\..\mods\Robotopia.Zombies\OverrideDecision.cs" />
     <Compile Include="..\..\mods\Robotopia.Zombies\ConversationDirector.cs" />
+  </ItemGroup>
+
+  <!-- Unity-free first-party config contracts: defaults, partial deserialization, normalization, and preset
+       safety remain executable without loading Unity/GameCode assemblies. -->
+  <ItemGroup>
+    <Compile Include="..\..\mods\Robotopia.GravityGun\GravityGunConfig.cs" />
+    <Compile Include="..\..\mods\Robotopia.NoFeedbackUrl\NoFeedbackUrlConfig.cs" />
+    <Compile Include="..\..\mods\Robotopia.PerfFixes\PerfFixesConfig.cs" />
+    <Compile Include="..\..\mods\Robotopia.Performance\PerformanceConfig.cs" />
+    <Compile Include="..\..\mods\Robotopia.Performance\PerformancePreset.cs" />
   </ItemGroup>
 
   <!-- The multi-turn conversation primitive is also Unity-free (it only touches the SDK contracts + the pure prompt
@@ -49,6 +68,7 @@
     <Compile Include="..\..\mods\Robotopia.RobotKit\ObjectiveRunner.cs" />
     <Compile Include="..\..\mods\Robotopia.RobotKit\RobotObjectiveService.cs" />
     <Compile Include="..\..\mods\Robotopia.Sandbox\RobotProgramDirector.cs" />
+    <Compile Include="..\..\mods\Robotopia.Sandbox\SandboxConfig.cs" />
   </ItemGroup>
 
   <!-- Chronos time-control: the lease derivation, fixedDeltaTime math and turn-order are Unity-free, so they
@@ -67,14 +87,45 @@
   <!-- Worlds auto-load routing is pure SDK policy; compile just that helper so the launcher-to-runtime selection
        contract can be regression-tested without loading UnityEngine or GameCode. -->
   <ItemGroup>
+    <Compile Include="..\..\mods\Robotopia.Worlds\SceneClaimMatcher.cs" />
+    <Compile Include="..\..\mods\Robotopia.Worlds\SceneTransitionTracker.cs" />
+    <Compile Include="..\..\mods\Robotopia.Worlds\MainThreadDispatchQueue.cs" />
     <Compile Include="..\..\mods\Robotopia.Worlds\WorldAutoLoadRouter.cs" />
+  </ItemGroup>
+
+  <!-- The manager's scene-transition arbiter is deliberately Unity-free claim bookkeeping, so the real
+       implementation is compiled in and unit-tested (SceneCoordinatorTests + the live-sync deferral tests). -->
+  <ItemGroup>
+    <Compile Include="..\..\src\Robotopia.ModManager\SceneCoordinator.cs" />
+    <Compile Include="..\..\src\Robotopia.ModManager\ModServiceRegistry.cs" />
+    <Compile Include="..\..\src\Robotopia.ModManager\OwnerBoundModServiceRegistry.cs" />
+    <Compile Include="..\..\src\Robotopia.ModManager\ModContext.cs" />
+    <Compile Include="..\..\src\Robotopia.ModManager\InstalledGameVersionReader.cs" />
+    <Compile Include="..\..\src\Robotopia.ModManager\ModAssemblyResolutionCatalog.cs" />
   </ItemGroup>
 
   <!-- The QwUi kit's Core/ folder is its Unity-free island (tokens, scheme resolution, contrast math,
        easing, sprite-coverage math, virtual-list math, window clamp/snap, sorting-band allocation).
        Compiling it here both unit-tests the logic and mechanically enforces that nothing in Core/
-       ever grows a UnityEngine dependency (this net8.0 build would fail). -->
+       ever grows a UnityEngine dependency (this net10.0 build would fail). -->
   <ItemGroup>
     <Compile Include="..\..\src\Robotopia.Mods.UnityUi\Core\*.cs" />
+    <Compile Include="..\..\src\Robotopia.Mods.UnityUi\Runtime\QwStateFileCodec.cs" />
+  </ItemGroup>
+
+  <!-- Unity editor tooling keeps filesystem primitives in Unity-free helpers so adversarial reads and
+       rollback behavior remain executable on the ordinary test runner. -->
+  <ItemGroup>
+    <Compile Include="..\..\templates\Robotopia.UnityWorldTemplate\Packages\com.robotopia.world-companion\Editor\WorldCompanionFileIo.cs" />
+    <Compile Include="..\..\templates\Robotopia.UnityWorldTemplate\Packages\com.robotopia.vpm-resolver\Editor\VpmSafeFileReader.cs" />
+    <Compile Include="..\..\templates\unity-companion\Packages\com.robotopia.ugc-companion\Editor\UgcCompanionSeedFileIo.cs" />
+    <Compile Include="..\..\tools\unity-ui-bundle\Assets\Editor\UiSmokeAssemblyFileIo.cs" />
+  </ItemGroup>
+
+  <!-- Embed the reviewed SDK contract so the standard offline test gate cannot silently
+       skip it because of the caller's current working directory. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\baselines\robotopia.mods.abstractions.api.txt"
+                      LogicalName="Robotopia.ModManager.Tests.robotopia.mods.abstractions.api.txt" />
   </ItemGroup>
 </Project>

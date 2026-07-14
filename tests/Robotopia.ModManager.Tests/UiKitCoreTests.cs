@@ -18,6 +18,7 @@ namespace Robotopia.ModManager.Tests
             AccentOverrideBehaviors();
             HighContrastParityWithHudColor();
             HighContrastTransformsScheme();
+            AccessibilityProfilesComposeAndClamp();
             EasingEndpointsAndShape();
             RoundedRectCoverage();
             VirtualListMath();
@@ -124,6 +125,48 @@ namespace Robotopia.ModManager.Tests
             Assert(QwContrast.Ratio(paperContrast.Text, paperContrast.Surface) >
                    QwContrast.Ratio(QwSchemes.ResolvePaper(null, false).Text, QwPalette.Surface) - 0.001f,
                 "high contrast never reduces paper text contrast");
+        }
+
+        private static void AccessibilityProfilesComposeAndClamp()
+        {
+            var neutral = QwAccessibilityProfile.Default.Resolve(
+                globalHighContrast: false,
+                globalUiScale: 1f,
+                globalReducedMotion: false,
+                globalMotionIntensity: 1f);
+            Assert(!neutral.HighContrast && !neutral.ReducedMotion, "neutral profile keeps boolean defaults");
+            AssertNear(neutral.UiScale, 1f, "neutral profile keeps global scale");
+            AssertNear(neutral.MotionIntensity, 1f, "neutral profile keeps global motion");
+
+            var profile = new QwAccessibilityProfile(
+                highContrast: true,
+                uiScale: 1.25f,
+                reducedMotion: false,
+                motionIntensity: 0.5f);
+            var effective = profile.Resolve(
+                globalHighContrast: false,
+                globalUiScale: 1.2f,
+                globalReducedMotion: false,
+                globalMotionIntensity: 1.5f);
+            Assert(effective.HighContrast, "host high contrast strengthens global state");
+            AssertNear(effective.UiScale, 1.5f, "host and global scale compose and clamp");
+            AssertNear(effective.MotionIntensity, 0.75f, "host and global motion multiply");
+
+            effective = profile.Resolve(
+                globalHighContrast: true,
+                globalUiScale: 0.75f,
+                globalReducedMotion: true,
+                globalMotionIntensity: 2f);
+            Assert(effective.HighContrast, "host cannot weaken global high contrast");
+            Assert(effective.ReducedMotion, "host cannot weaken global reduced motion");
+            AssertNear(effective.MotionIntensity, 0f, "reduced motion zeroes effective motion");
+
+            var malformed = new QwAccessibilityProfile(
+                uiScale: float.NaN,
+                motionIntensity: float.PositiveInfinity);
+            AssertNear(malformed.UiScale, 1f, "NaN host scale falls back safely");
+            AssertNear(malformed.MotionIntensity, 1f, "infinite host motion falls back safely");
+            Assert(malformed.Equals(new QwAccessibilityProfile()), "normalized profiles compare by value");
         }
 
         private static void EasingEndpointsAndShape()
@@ -244,6 +287,14 @@ namespace Robotopia.ModManager.Tests
             Assert(!tight.TryAllocate(QwLayerBand.Hud, out var exhausted), "third allocation exhausts");
             Assert(exhausted == 1, "exhausted band reuses its last order");
             Assert(tight.Remaining(QwLayerBand.Hud) == 0, "remaining reports zero");
+            Assert(tight.TryRelease(exhausted), "an allocated order can be released");
+            Assert(tight.Remaining(QwLayerBand.Hud) == 0,
+                "an exhaustion-shared slot is not reusable until every holder releases it");
+            Assert(tight.TryRelease(exhausted), "the original holder can release the shared order");
+            Assert(tight.Remaining(QwLayerBand.Hud) == 1, "fully released slot becomes available");
+            Assert(tight.TryAllocate(QwLayerBand.Hud, out var reused) && reused == exhausted,
+                "released slots are reused before a band reports exhaustion");
+            Assert(!tight.TryRelease(999), "orders outside every band cannot be released");
 
             var threw = false;
             try

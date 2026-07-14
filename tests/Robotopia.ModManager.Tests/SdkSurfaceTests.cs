@@ -31,6 +31,7 @@ namespace Robotopia.ModManager.Tests
             TestDialogueInputContracts();
             TestGameScenesClassifier();
             TestWorldSessionEndContracts();
+            TestSceneCoordinationContracts();
             TestPauseMenuContracts();
             TestCustomWorldContracts();
             TestShopContracts();
@@ -74,8 +75,15 @@ namespace Robotopia.ModManager.Tests
 
             // Pin the reason set: mods switch on these, so a silent rename/reorder is a breaking change.
             Assert((int)WorldSessionEndReason.MenuReached == 0 && (int)WorldSessionEndReason.EndedByGamemode == 1
-                && (int)WorldSessionEndReason.Superseded == 2 && (int)WorldSessionEndReason.ProviderUnloading == 3,
-                "WorldSessionEndReason order must be MenuReached, EndedByGamemode, Superseded, ProviderUnloading");
+                && (int)WorldSessionEndReason.Superseded == 2 && (int)WorldSessionEndReason.ProviderUnloading == 3
+                && (int)WorldSessionEndReason.SceneReplaced == 4 && (int)WorldSessionEndReason.LoadFailed == 5,
+                "WorldSessionEndReason order must append SceneReplaced and LoadFailed after the original reasons");
+
+            var inFlight = typeof(IWorldTransitionState).GetProperty("IsTransitionInFlight");
+            Assert(inFlight != null && inFlight.PropertyType == typeof(bool) && inFlight.CanRead && !inFlight.CanWrite,
+                "IWorldTransitionState exposes read-only bool IsTransitionInFlight");
+            Assert(typeof(IWorldGamemodeService).GetProperty("IsTransitionInFlight") == null,
+                "scene-load state stays on an additive capability interface for provider binary compatibility");
 
             var session = new WorldSession("world", "gamemode", "gameScene", "Scene", DateTime.UtcNow);
             var end = new WorldSessionEnd(session, WorldSessionEndReason.MenuReached);
@@ -93,6 +101,110 @@ namespace Robotopia.ModManager.Tests
             }
 
             Assert(threw, "WorldSessionEnd null-guards the session");
+        }
+
+        // The scene-transition arbitration contract (the fix for mods racing single-mode scene loads).
+        private static void TestSceneCoordinationContracts()
+        {
+            // Pin the priority order: Automatic yields, UserInitiated supersedes.
+            Assert((int)SceneTransitionPriority.Automatic == 0 && (int)SceneTransitionPriority.UserInitiated == 1,
+                "SceneTransitionPriority order must be Automatic, UserInitiated");
+
+            var request = new SceneTransitionRequest("owner.mod", "UgcPlay", SceneTransitionPriority.Automatic, "why");
+            Assert(request.OwnerModId == "owner.mod" && request.SceneName == "UgcPlay"
+                && request.Priority == SceneTransitionPriority.Automatic && request.Reason == "why",
+                "SceneTransitionRequest carries owner, scene, priority and reason");
+
+            var defaultReason = new SceneTransitionRequest("owner.mod", "Scene", SceneTransitionPriority.UserInitiated);
+            Assert(defaultReason.Reason == string.Empty, "SceneTransitionRequest reason defaults to empty");
+
+            var threw = false;
+            try
+            {
+                _ = new SceneTransitionRequest(" ", "Scene", SceneTransitionPriority.Automatic);
+            }
+            catch (ArgumentException)
+            {
+                threw = true;
+            }
+
+            Assert(threw, "SceneTransitionRequest requires an owner mod id");
+
+            var claim = new FakeClaim();
+            var approved = SceneTransitionDecision.Approve(claim, "ok");
+            Assert(approved.Approved && ReferenceEquals(approved.Claim, claim) && approved.Message == "ok",
+                "SceneTransitionDecision.Approve carries the claim");
+            var refused = SceneTransitionDecision.Refuse("busy");
+            Assert(!refused.Approved && refused.Claim == null && refused.Message == "busy",
+                "SceneTransitionDecision.Refuse carries no claim");
+
+            var info = new SceneClaimInfo("owner.mod", "Scene", SceneTransitionPriority.UserInitiated, "why", DateTime.UtcNow);
+            Assert(info.OwnerModId == "owner.mod" && info.SceneName == "Scene"
+                && info.Priority == SceneTransitionPriority.UserInitiated && info.Reason == "why",
+                "SceneClaimInfo carries the claim metadata");
+
+            Assert(typeof(ISceneCoordinator).GetMethod("RequestTransition") != null
+                && typeof(ISceneCoordinator).GetMethod("ReleaseOwner") != null
+                && typeof(ISceneCoordinator).GetProperty("IsSceneBusy") != null
+                && typeof(ISceneCoordinator).GetProperty("ActiveClaims") != null,
+                "ISceneCoordinator exposes RequestTransition, ReleaseOwner, IsSceneBusy and ActiveClaims");
+
+            // UgcLiveSyncRequest defaults to user-initiated so explicit connects keep today's behaviour.
+            Assert(new UgcLiveSyncRequest().Priority == SceneTransitionPriority.UserInitiated,
+                "UgcLiveSyncRequest priority defaults to UserInitiated");
+
+            var worldRequest = new WorldLoadRequest("world", "mode");
+            Assert(worldRequest.Priority == SceneTransitionPriority.UserInitiated,
+                "WorldLoadRequest priority defaults to UserInitiated");
+            var automaticWorldRequest = WorldLoadRequest.WithPriority(
+                "world", "mode", SceneTransitionPriority.Automatic);
+            Assert(automaticWorldRequest.Priority == SceneTransitionPriority.Automatic,
+                "WorldLoadRequest carries explicit Automatic priority");
+            AssertThrows<ArgumentOutOfRangeException>(() => WorldLoadRequest.WithPriority(
+                    "world", "mode", (SceneTransitionPriority)99),
+                "WorldLoadRequest rejects an unknown transition priority");
+            AssertThrows<ArgumentOutOfRangeException>(() => UgcLiveSyncRequest.WithPriority(
+                    (SceneTransitionPriority)99),
+                "UgcLiveSyncRequest rejects an unknown transition priority");
+
+            // These default-literal calls compiled against the original constructors. A public priority
+            // overload would make them ambiguous, so keep priority-aware creation on named factories.
+            var legacyDefaultWorld = new WorldLoadRequest("world", "mode", default);
+#pragma warning disable CS8625 // Deliberately exercise the pre-existing default-literal source call.
+            var legacyDefaultUgc = new UgcLiveSyncRequest(default);
+#pragma warning restore CS8625
+            Assert(!legacyDefaultWorld.PreferSceneReplacement && legacyDefaultUgc.WatchFolder == string.Empty,
+                "SDK 0.1.0 default-literal constructor calls remain source-compatible");
+
+            Assert(typeof(WorldLoadRequest).GetConstructor(new[]
+            {
+                typeof(string), typeof(string), typeof(bool), typeof(bool)
+            }) != null, "WorldLoadRequest retains the SDK 0.1.0 constructor for binary compatibility");
+            Assert(typeof(WorldLoadRequest).GetConstructors().Length == 1,
+                "WorldLoadRequest has no public overload that makes legacy default literals ambiguous");
+            Assert(typeof(WorldLoadRequest).GetMethod("WithPriority", new[]
+            {
+                typeof(string), typeof(string), typeof(SceneTransitionPriority), typeof(bool), typeof(bool)
+            }) != null, "WorldLoadRequest exposes priority-aware creation as a named factory");
+            Assert(typeof(UgcLiveSyncRequest).GetConstructor(new[]
+            {
+                typeof(string), typeof(string), typeof(string), typeof(string), typeof(string),
+                typeof(string), typeof(int)
+            }) != null, "UgcLiveSyncRequest retains the SDK 0.1.0 constructor for binary compatibility");
+            Assert(typeof(UgcLiveSyncRequest).GetConstructors().Length == 1,
+                "UgcLiveSyncRequest has no public overload that makes legacy default literals ambiguous");
+            Assert(typeof(UgcLiveSyncRequest).GetMethod("WithPriority", new[]
+            {
+                typeof(SceneTransitionPriority), typeof(string), typeof(string), typeof(string), typeof(string),
+                typeof(string), typeof(string), typeof(int)
+            }) != null, "UgcLiveSyncRequest exposes priority-aware creation as a named factory");
+        }
+
+        private sealed class FakeClaim : IDisposable
+        {
+            public void Dispose()
+            {
+            }
         }
 
         // The wander/flee/reprogram objective additions (RobotKit 0.8.0): appended enum members (mods switch on
@@ -195,10 +307,17 @@ namespace Robotopia.ModManager.Tests
                 "RegisterAction returns an IDisposable handle");
             Assert(typeof(IWorldPauseMenuService).GetMethod("SetExitInterceptor") != null,
                 "IWorldPauseMenuService exposes SetExitInterceptor");
+            Assert(typeof(WorldPauseAction).GetConstructor(new[]
+            {
+                typeof(string), typeof(string), typeof(Action), typeof(bool), typeof(int)
+            }) != null, "WorldPauseAction retains its original binary-compatible constructor");
 
             var action = new WorldPauseAction("mod.action", "DO THING", () => { });
             Assert(action.Id == "mod.action" && action.Label == "DO THING", "WorldPauseAction keeps id and label");
-            Assert(action.ClosePauseMenu && action.Order == 0, "WorldPauseAction defaults: close menu, order 0");
+            Assert(action.ClosePauseMenu && action.Order == 0 && !action.Destructive,
+                "WorldPauseAction defaults: close menu, order 0, non-destructive");
+            var destructive = new WorldPauseAction("mod.reset", "RESET", () => { }, true, 0, destructive: true);
+            Assert(destructive.Destructive, "WorldPauseAction keeps its destructive-confirmation contract");
 
             var threw = false;
             try
@@ -247,6 +366,13 @@ namespace Robotopia.ModManager.Tests
             Assert(unregister != null && unregister.ReturnType == typeof(bool)
                 && unregister.GetParameters().Length == 1 && unregister.GetParameters()[0].ParameterType == typeof(string),
                 "IWorldGamemodeService exposes bool UnregisterWorld(string)");
+
+            var unregisterGamemode = typeof(IWorldRegistrationService).GetMethod("UnregisterGamemode");
+            var unregisterMenuEntry = typeof(IWorldRegistrationService).GetMethod("UnregisterMenuEntry");
+            Assert(unregisterGamemode != null && unregisterGamemode.ReturnType == typeof(bool),
+                "optional world registration capability exposes bool UnregisterGamemode(string)");
+            Assert(unregisterMenuEntry != null && unregisterMenuEntry.ReturnType == typeof(bool),
+                "optional world registration capability exposes bool UnregisterMenuEntry(string)");
 
             var createRoot = typeof(ICustomWorldContent).GetMethod("CreateContentRoot");
             Assert(createRoot != null && createRoot.ReturnType == typeof(object), "ICustomWorldContent exposes CreateContentRoot(): object?");
@@ -766,7 +892,6 @@ namespace Robotopia.ModManager.Tests
             public IReadOnlyList<GamemodeDefinition> Gamemodes => Array.Empty<GamemodeDefinition>();
             public IReadOnlyList<GamemodeMenuEntry> MenuEntries => Array.Empty<GamemodeMenuEntry>();
             public WorldSession? CurrentSession => null;
-
             public event Action<WorldSession>? SessionChanged;
             public event Action<WorldSessionEnd>? SessionEnded;
 
@@ -1009,6 +1134,21 @@ namespace Robotopia.ModManager.Tests
             public void Error(Exception exception, string message)
             {
             }
+        }
+
+        private static void AssertThrows<TException>(Action action, string message)
+            where TException : Exception
+        {
+            try
+            {
+                action();
+            }
+            catch (TException)
+            {
+                return;
+            }
+
+            throw new InvalidOperationException(message);
         }
 
         private static void Assert(bool condition, string message)

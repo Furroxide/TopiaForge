@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Reflection;
 using System.Text.Json;
 using Robotopia.ModManager.Core;
 
@@ -10,8 +11,14 @@ namespace Robotopia.ModManager.Tests
 {
     internal static class Program
     {
-        private static int Main()
+        private static int Main(string[] args)
         {
+            if (args.Length == 1 && string.Equals(args[0], "--print-sdk-api-baseline", StringComparison.Ordinal))
+            {
+                Console.Write(SdkPublicApiBaselineTests.CreateBaseline());
+                return 0;
+            }
+
             var root = Path.Combine(Path.GetTempPath(), "RobotopiaModManagerTests-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(root);
 
@@ -20,12 +27,28 @@ namespace Robotopia.ModManager.Tests
                 TestInstallSuccess(root);
                 TestUpdatePreservesDisabledState(root);
                 TestAppliedRestartRequirementsClear();
+                RuntimePersistenceSecurityTests.Run(root);
+                BoundedTextFileTests.Run(root);
+                ExtractorFileIoTests.Run(root);
+                ModContextConfigPersistenceTests.Run(root);
+                AssetBundlePathPolicyTests.Run(root);
+                RoboApiClientTests.Run(root);
                 TestMissingManifestRejected(root);
                 TestZipTraversalRejected(root);
+                TestCaseChangedZipTraversalRejected(root);
+                TestArchiveManifestLimitRejected(root);
+                TestDuplicateArchivePathRejected(root);
+                TestUnicodeArchivePathPolicy(root);
+                TestArchivePathCollisionRejected(root);
+                TestArchiveLinkRejected(root);
+                TestArchiveEntryCountRejected(root);
+                TestNonPortableArchivePathsRejected(root);
+                TestReplacementRollbackPreservesInstalledPackage(root);
                 TestSchemaV1Rejected(root);
                 TestInstallPrunesOldVersions(root);
                 TestInboxInstallConsumesFiles(root);
                 TestInboxNewestVersionWins(root);
+                TestInboxPrereleasePrecedence(root);
                 TestInboxFailureLeavesFile(root);
                 TestScanIgnoresSupersededBrokenVersions(root);
                 TestScanStillReportsFullyBrokenPackage(root);
@@ -33,9 +56,25 @@ namespace Robotopia.ModManager.Tests
                 TestRequiredDependenciesHelper();
                 TestDependencyOrder(root);
                 TestFrameworkDependencyOrder(root);
+                TestDependencyFailurePropagation(root);
+                TestSoftDependencyCyclesDoNotBlock(root);
+                TestDependencyVersionAliasSemantics(root);
+                TestManifestDependencyIdsRejected();
+                VersionUtilTests.Run();
+                ManifestCompatibilityTests.Run(root);
+                ManifestPathValidationTests.Run();
+                FirstPartyManifestTests.Run();
+                FirstPartyConfigTests.Run();
+                ModAssemblyResolutionCatalogTests.Run(root);
+                ProfileLaunchConfigurationTests.Run();
                 TestUgcExportSchemaContract();
+                TestPendingRuntimeManifestContracts();
+                WorldLaunchSettingsTests.Run();
+                ZombiesConfigTests.Run();
+                UgcNoOpLaunchRequestTests.Run();
                 UgcLiveSyncTests.Run();
                 SdkSurfaceTests.Run();
+                SdkPublicApiBaselineTests.Run();
                 PromptRegistryTests.Run();
                 OverrideTests.Run();
                 ConversationTests.Run();
@@ -43,11 +82,20 @@ namespace Robotopia.ModManager.Tests
                 ObjectiveRunnerTests.Run();
                 RobotTargetFactsTests.Run();
                 SandboxProgramDirectorTests.Run();
+                SandboxConfigTests.Run();
                 WorldAutoLoadRouterTests.Run();
+                SceneCoordinatorTests.Run();
+                ModServiceRegistryTests.Run();
+                SceneTransitionTrackerTests.Run();
+                MainThreadDispatchQueueTests.Run();
+                SafeEventTests.Run();
                 ChronosTests.Run();
                 ShopTests.Run();
                 GameCompatTests.Run();
+                GameVersionLabelReaderTests.Run();
                 UiKitCoreTests.Run();
+                QwStateFileTests.Run(root);
+                UnityToolingFileIoTests.Run(root);
                 UiKitSourceConventionTests.Run();
                 Console.WriteLine("All QuantumWorks tests passed.");
                 return 0;
@@ -171,7 +219,234 @@ namespace Robotopia.ModManager.Tests
             }
 
             var result = new PackageInstaller().Install(package, paths, new ManagerState(), restartRequired: false);
-            Assert(!result.Ok && result.Errors.Any(e => e.Contains("outside")), "zip traversal should be rejected");
+            Assert(!result.Ok && result.Errors.Any(e => e.Contains("non-portable")), "zip traversal should be rejected");
+        }
+
+        private static void TestCaseChangedZipTraversalRejected(string root)
+        {
+            if (Path.DirectorySeparatorChar == '\\')
+            {
+                return; // Case-insensitive containment is correct on Windows.
+            }
+
+            var testRoot = Path.Combine(root, "case-changed-traversal");
+            var destination = Path.Combine(testRoot, "case-root");
+            var escapedPath = Path.Combine(testRoot, "CASE-ROOT", "escape.txt");
+            var package = Path.Combine(root, "case-changed-traversal.robotopiamod");
+            Directory.CreateDirectory(destination);
+            using (var zip = ZipFile.Open(package, ZipArchiveMode.Create))
+            {
+                WriteEntry(zip, "../CASE-ROOT/escape.txt", "escaped");
+            }
+
+            var extraction = typeof(PackageInstaller).GetMethod(
+                "ExtractToSafeDirectory",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            Assert(extraction != null, "package extraction helper should exist");
+            var rejected = false;
+            try
+            {
+                extraction!.Invoke(null, new object[] { package, destination });
+            }
+            catch (TargetInvocationException ex) when (ex.InnerException is InvalidDataException)
+            {
+                rejected = true;
+            }
+
+            Assert(rejected, "case-changed sibling traversal should be rejected on case-sensitive platforms");
+            Assert(!File.Exists(escapedPath), "case-changed traversal must not write outside the destination");
+        }
+
+        private static void TestArchiveManifestLimitRejected(string root)
+        {
+            var paths = NewPaths(root, "manifest-limit");
+            var package = Path.Combine(root, "manifest-limit.robotopiamod");
+            using (var zip = ZipFile.Open(package, ZipArchiveMode.Create))
+            {
+                WriteEntry(zip, "robotopia.mod.json", new string(' ', (1024 * 1024) + 1));
+            }
+
+            var result = new PackageInstaller().Install(package, paths, new ManagerState(), restartRequired: false);
+            Assert(!result.Ok && result.Errors.Any(error => error.Contains("robotopia.mod.json") && error.Contains("limit")),
+                "an oversized packed manifest should be rejected before loading it into memory");
+        }
+
+        private static void TestDuplicateArchivePathRejected(string root)
+        {
+            var paths = NewPaths(root, "duplicate-archive-path");
+            var package = Path.Combine(root, "duplicate-archive-path.robotopiamod");
+            using (var zip = ZipFile.Open(package, ZipArchiveMode.Create))
+            {
+                var manifest = JsonUtil.Serialize(TestManifest("duplicate.archive"));
+                WriteEntry(zip, "robotopia.mod.json", manifest);
+                WriteEntry(zip, "ROBOTOPIA.MOD.JSON", manifest);
+                WriteEntry(zip, "duplicate.archive.dll", "not a dll");
+            }
+
+            var result = new PackageInstaller().Install(package, paths, new ManagerState(), restartRequired: false);
+            Assert(!result.Ok && result.Errors.Any(error => error.Contains("duplicate path")),
+                "case-variant duplicate archive paths should be rejected consistently across platforms");
+        }
+
+        private static void TestUnicodeArchivePathPolicy(string root)
+        {
+            var collisions = new[]
+            {
+                ("assets/ligature-ff.txt", "assets/ligature-\uFB00.txt"),
+                ("assets/fullwidth-A.txt", "assets/fullwidth-\uFF21.txt"),
+                ("assets/sigma-\u03A3.txt", "assets/sigma-\u03C2.txt"),
+                ("assets/strasse.txt", "assets/stra\u00DFe.txt")
+            };
+            for (var index = 0; index < collisions.Length; index++)
+            {
+                var paths = NewPaths(root, "unicode-collision-" + index);
+                var package = Path.Combine(root, "unicode-collision-" + index + ".robotopiamod");
+                using (var zip = ZipFile.Open(package, ZipArchiveMode.Create))
+                {
+                    WriteEntry(zip, collisions[index].Item1, "first");
+                    WriteEntry(zip, collisions[index].Item2, "second");
+                }
+
+                var result = new PackageInstaller().Install(package, paths, new ManagerState(), restartRequired: false);
+                Assert(!result.Ok && result.Errors.Any(error => error.Contains("portable collision")),
+                    "NFKC/invariant-case archive aliases must collide consistently across platforms");
+            }
+
+            var nonCanonicalPaths = NewPaths(root, "unicode-noncanonical");
+            var nonCanonicalPackage = Path.Combine(root, "unicode-noncanonical.robotopiamod");
+            using (var zip = ZipFile.Open(nonCanonicalPackage, ZipArchiveMode.Create))
+            {
+                WriteEntry(zip, "assets/cafe\u0301.txt", "decomposed");
+            }
+
+            var nonCanonical = new PackageInstaller().Install(
+                nonCanonicalPackage,
+                nonCanonicalPaths,
+                new ManagerState(),
+                restartRequired: false);
+            Assert(!nonCanonical.Ok && nonCanonical.Errors.Any(error => error.Contains("Unicode NFC")),
+                "archive paths must use canonical Unicode NFC so manifest references remain stable");
+        }
+
+        private static void TestArchivePathCollisionRejected(string root)
+        {
+            foreach (var childFirst in new[] { false, true })
+            {
+                var suffix = childFirst ? "child-first" : "file-first";
+                var paths = NewPaths(root, "archive-collision-" + suffix);
+                var package = Path.Combine(root, "archive-collision-" + suffix + ".robotopiamod");
+                using (var zip = ZipFile.Open(package, ZipArchiveMode.Create))
+                {
+                    if (childFirst)
+                    {
+                        WriteEntry(zip, "collision/child.txt", "child");
+                        WriteEntry(zip, "collision", "file");
+                    }
+                    else
+                    {
+                        WriteEntry(zip, "collision", "file");
+                        WriteEntry(zip, "collision/child.txt", "child");
+                    }
+                }
+
+                var result = new PackageInstaller().Install(package, paths, new ManagerState(), restartRequired: false);
+                Assert(!result.Ok && result.Errors.Any(error => error.Contains("file")),
+                    "file/directory archive collisions should be rejected regardless of entry order");
+            }
+        }
+
+        private static void TestArchiveLinkRejected(string root)
+        {
+            var paths = NewPaths(root, "archive-link");
+            var package = Path.Combine(root, "archive-link.robotopiamod");
+            using (var zip = ZipFile.Open(package, ZipArchiveMode.Create))
+            {
+                var link = zip.CreateEntry("linked-file");
+                link.ExternalAttributes = unchecked((int)((0xA000u | 0x1FFu) << 16));
+                using (var writer = new StreamWriter(link.Open()))
+                {
+                    writer.Write("../outside");
+                }
+            }
+
+            var result = new PackageInstaller().Install(package, paths, new ManagerState(), restartRequired: false);
+            Assert(!result.Ok && result.Errors.Any(error => error.Contains("symbolic link")),
+                "symbolic-link archive entries should be rejected before extraction");
+        }
+
+        private static void TestArchiveEntryCountRejected(string root)
+        {
+            var paths = NewPaths(root, "archive-entry-count");
+            var package = Path.Combine(root, "archive-entry-count.robotopiamod");
+            using (var zip = ZipFile.Open(package, ZipArchiveMode.Create))
+            {
+                for (var index = 0; index < 8193; index++)
+                {
+                    zip.CreateEntry("entries/" + index + ".txt");
+                }
+            }
+
+            var result = new PackageInstaller().Install(package, paths, new ManagerState(), restartRequired: false);
+            Assert(!result.Ok && result.Errors.Any(error => error.Contains("too many archive entries")),
+                "archive entry counts should be capped before extraction");
+        }
+
+        private static void TestNonPortableArchivePathsRejected(string root)
+        {
+            var unsafePaths = new[]
+            {
+                "C:drive-relative.dll",
+                "payload.dll:stream",
+                "NUL.txt",
+                "folder/trailing. /value.dll",
+                "folder/./value.dll",
+                "folder//value.dll"
+            };
+            for (var index = 0; index < unsafePaths.Length; index++)
+            {
+                var paths = NewPaths(root, "non-portable-path-" + index);
+                var package = Path.Combine(root, "non-portable-path-" + index + ".robotopiamod");
+                using (var zip = ZipFile.Open(package, ZipArchiveMode.Create))
+                {
+                    WriteEntry(zip, unsafePaths[index], "bad");
+                }
+
+                var result = new PackageInstaller().Install(package, paths, new ManagerState(), restartRequired: false);
+                Assert(!result.Ok && result.Errors.Any(error => error.Contains("non-portable")),
+                    "unsafe portable archive path should be rejected: " + unsafePaths[index]);
+            }
+        }
+
+        private static void TestReplacementRollbackPreservesInstalledPackage(string root)
+        {
+            var testRoot = Path.Combine(root, "replacement-rollback");
+            var stagingRoot = Path.Combine(testRoot, "staging");
+            var target = Path.Combine(testRoot, "packages", "rollback.mod", "1.0.0");
+            var missingStaging = Path.Combine(stagingRoot, "missing-staging");
+            Directory.CreateDirectory(stagingRoot);
+            Directory.CreateDirectory(target);
+            var marker = Path.Combine(target, "previous-package.txt");
+            File.WriteAllText(marker, "previous");
+
+            var commit = typeof(PackageInstaller).GetMethod(
+                "CommitStagedDirectory",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            Assert(commit != null, "package commit helper should exist");
+            var failed = false;
+            try
+            {
+                commit!.Invoke(null, new object[] { missingStaging, target, stagingRoot });
+            }
+            catch (TargetInvocationException ex) when (ex.InnerException is IOException || ex.InnerException is DirectoryNotFoundException)
+            {
+                failed = true;
+            }
+
+            Assert(failed, "a missing staged package should make the replacement commit fail");
+            Assert(File.ReadAllText(marker) == "previous",
+                "a failed replacement commit must restore the previously installed package");
+            Assert(!Directory.GetDirectories(stagingRoot, "rollback-*", SearchOption.TopDirectoryOnly).Any(),
+                "a successful rollback should not leave the previous package stranded in staging");
         }
 
         private static void TestSchemaV1Rejected(string root)
@@ -252,6 +527,32 @@ namespace Robotopia.ModManager.Tests
             Assert(state.Find("gamma.mod")?.Version == "1.1.0", "state should select the highest version");
             Assert(!Directory.Exists(paths.GetPackagePath("gamma.mod", "1.0.0")), "old version should never hit disk");
             Assert(!File.Exists(oldFile) && !File.Exists(newFile), "both inbox files should be consumed");
+        }
+
+        private static void TestInboxPrereleasePrecedence(string root)
+        {
+            var paths = NewPaths(root, "inbox-prerelease");
+            var state = new ManagerState();
+            var lowerFile = Path.Combine(paths.PackageInbox, "delta-alpha-2.robotopiamod");
+            var higherFile = Path.Combine(paths.PackageInbox, "delta-alpha-10.robotopiamod");
+            CreatePackage(lowerFile, "delta.prerelease", "Delta", "1.0.0-alpha.2", "Delta.dll", "Delta.Entry");
+            CreatePackage(higherFile, "delta.prerelease", "Delta", "1.0.0-alpha.10", "Delta.dll", "Delta.Entry");
+
+            var results = new PackageInstaller().InstallInbox(paths, state, restartRequired: false);
+
+            Assert(results.Count == 2, "both prerelease inbox files should be reported");
+            var winner = results.Single(r => !r.Superseded);
+            var loser = results.Single(r => r.Superseded);
+            Assert(winner.Install!.Ok && winner.Install.Manifest!.Version == "1.0.0-alpha.10",
+                "numeric prerelease identifiers should use SemVer precedence when selecting an inbox winner");
+            Assert(loser.Install == null && loser.Consumed,
+                "the lower prerelease should be superseded and consumed without installation");
+            Assert(state.Find("delta.prerelease")?.Version == "1.0.0-alpha.10",
+                "state should retain the SemVer-highest prerelease");
+            Assert(!Directory.Exists(paths.GetPackagePath("delta.prerelease", "1.0.0-alpha.2")),
+                "the lower prerelease should never reach the package store");
+            Assert(!File.Exists(lowerFile) && !File.Exists(higherFile),
+                "both prerelease inbox files should be consumed");
         }
 
         private static void TestInboxFailureLeavesFile(string root)
@@ -360,6 +661,10 @@ namespace Robotopia.ModManager.Tests
             var failed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "FRAMEWORK.MOD" };
             Assert(DependencyResolver.FindFailedRequiredDependency(manifest, failed) == "framework.mod",
                 "a failed required dependency should be found case-insensitively");
+            Assert(DependencyResolver.FindFailedRequiredDependency(
+                    manifest,
+                    new List<string> { "FRAMEWORK.MOD" }) == "framework.mod",
+                "failed-dependency matching must remain case-insensitive for ordinary case-sensitive collections");
             Assert(DependencyResolver.FindFailedRequiredDependency(manifest, new HashSet<string>()) == null,
                 "no failures means no gating");
         }
@@ -442,6 +747,218 @@ namespace Robotopia.ModManager.Tests
             Assert(orderedIds.IndexOf("robotopia.prompts") < orderedIds.IndexOf("consumer.mod"), "prompts provider should load before its consumer");
         }
 
+        private static void TestDependencyFailurePropagation(string root)
+        {
+            var state = new ManagerState();
+
+            var cycleA = TestManifest("cycle.a");
+            var cycleB = TestManifest("cycle.b");
+            var cycleDependent = TestManifest("cycle.consumer");
+            var optionalConsumer = TestManifest("cycle.optional");
+            cycleA.VpmDependencies.Add("cycle.b", ">=1.0.0");
+            cycleB.VpmDependencies.Add("cycle.a", ">=1.0.0");
+            cycleDependent.VpmDependencies.Add("cycle.a", ">=1.0.0");
+            optionalConsumer.Dependencies.Add(new ModDependency { Id = "cycle.a", Optional = true });
+
+            var cycleResult = new DependencyResolver().Resolve(new[]
+            {
+                TestPackage(root, state, cycleDependent),
+                TestPackage(root, state, optionalConsumer),
+                TestPackage(root, state, cycleB),
+                TestPackage(root, state, cycleA),
+            });
+            Assert(cycleResult.Errors.ContainsKey("cycle.a") && cycleResult.Errors.ContainsKey("cycle.b"),
+                "every member of A -> B -> A must be blocked as a cycle");
+            Assert(cycleResult.Errors.ContainsKey("cycle.consumer"),
+                "a required dependent of a cycle member must also be blocked");
+            Assert(!cycleResult.Errors.ContainsKey("cycle.optional")
+                && cycleResult.OrderedPackages.Any(package => package.Manifest!.Id == "cycle.optional"),
+                "an optional dependency on a blocked cycle must remain non-blocking");
+
+            var missing = TestManifest("missing.leaf");
+            var missingDependent = TestManifest("missing.consumer");
+            missing.VpmDependencies.Add("not.installed", ">=1.0.0");
+            missingDependent.VpmDependencies.Add("missing.leaf", ">=1.0.0");
+            var missingResult = new DependencyResolver().Resolve(new[]
+            {
+                TestPackage(root, state, missingDependent),
+                TestPackage(root, state, missing),
+                ModPackage.Invalid(Path.Combine(root, "not-installed-invalid"), "invalid manifest")
+            });
+            Assert(missingResult.Errors.ContainsKey("missing.leaf")
+                && missingResult.Errors.ContainsKey("missing.consumer"),
+                "a missing/invalid dependency failure must propagate through required dependents");
+            Assert(missingResult.OrderedPackages.Count == 0,
+                "no package in a required missing-dependency chain may enter the load order");
+
+            var oldProvider = TestManifest("old.provider");
+            var incompatible = TestManifest("incompatible.consumer");
+            var transitive = TestManifest("incompatible.transitive");
+            incompatible.VpmDependencies.Add("old.provider", ">=2.0.0");
+            transitive.VpmDependencies.Add("incompatible.consumer", ">=1.0.0");
+            var versionResult = new DependencyResolver().Resolve(new[]
+            {
+                TestPackage(root, state, transitive),
+                TestPackage(root, state, incompatible),
+                TestPackage(root, state, oldProvider),
+            });
+            Assert(versionResult.Errors.ContainsKey("incompatible.consumer")
+                && versionResult.Errors.ContainsKey("incompatible.transitive"),
+                "an invalid required version must propagate to transitive dependents");
+            Assert(versionResult.OrderedPackages.Count == 1
+                && versionResult.OrderedPackages[0].Manifest!.Id == "old.provider",
+                "an otherwise valid provider remains loadable when only its consumer requires a newer version");
+
+            var duplicateFirst = TestManifest("duplicate.mod");
+            var duplicateSecond = TestManifest("DUPLICATE.MOD");
+            var duplicateConsumer = TestManifest("duplicate.consumer");
+            duplicateConsumer.VpmDependencies.Add("duplicate.mod", ">=1.0.0");
+            var duplicateResult = new DependencyResolver().Resolve(new[]
+            {
+                new ModPackage(
+                    Path.Combine(root, "z-duplicate"),
+                    duplicateSecond,
+                    state.Upsert(duplicateSecond, true, false),
+                    Array.Empty<string>()),
+                TestPackage(root, state, duplicateConsumer),
+                new ModPackage(
+                    Path.Combine(root, "a-duplicate"),
+                    duplicateFirst,
+                    state.Upsert(duplicateFirst, true, false),
+                    Array.Empty<string>()),
+            });
+            Assert(duplicateResult.Errors.TryGetValue("duplicate.mod", out var duplicateErrors)
+                && duplicateErrors.Any(error => error.Contains("Multiple enabled packages")),
+                "duplicate manifest ids should produce a deterministic resolver error instead of throwing");
+            Assert(duplicateResult.Errors.ContainsKey("duplicate.consumer")
+                && duplicateResult.OrderedPackages.Count == 0,
+                "duplicate providers and their required consumers must be excluded from the load order");
+            Assert(duplicateErrors![0].IndexOf("a-duplicate", StringComparison.OrdinalIgnoreCase)
+                    < duplicateErrors[0].IndexOf("z-duplicate", StringComparison.OrdinalIgnoreCase),
+                "duplicate package diagnostics should sort paths deterministically");
+        }
+
+        private static void TestDependencyVersionAliasSemantics(string root)
+        {
+            LoadOrderResult ResolveAlias(string alias)
+            {
+                var state = new ManagerState();
+                var provider = TestManifest("alias.provider");
+                provider.Version = "1.2.4";
+                var consumer = TestManifest("alias.consumer");
+                consumer.Dependencies.Add(new ModDependency
+                {
+                    Id = provider.Id,
+                    Version = alias
+                });
+                return new DependencyResolver().Resolve(new[]
+                {
+                    TestPackage(root, state, consumer),
+                    TestPackage(root, state, provider)
+                });
+            }
+
+            var exact = ResolveAlias("1.2.3");
+            Assert(exact.Errors.TryGetValue("alias.consumer", out var exactErrors)
+                && exactErrors.Any(error => error.Contains("satisfy 1.2.3")),
+                "a plain dependency version alias should be exact, not a minimum");
+            Assert(!exactErrors!.Any(error => error.Contains(">=1.2.3")),
+                "dependency diagnostics should not rewrite an exact alias as a minimum");
+
+            Assert(!ResolveAlias(">=1.2.0 <2.0.0").Errors.ContainsKey("alias.consumer"),
+                "the dependency version alias should accept comparator ranges");
+            Assert(!ResolveAlias("1.2.x").Errors.ContainsKey("alias.consumer"),
+                "the dependency version alias should accept wildcard ranges");
+
+            foreach (var alias in new[] { ">=1.2.0 <2.0.0", "1.2.x" })
+            {
+                var manifest = TestManifest("alias.validation");
+                manifest.Dependencies.Add(new ModDependency { Id = "alias.provider", Version = alias });
+                Assert(!ManifestValidator.Validate(manifest).Any(error => error.Contains("invalid version")),
+                    "manifest validation should accept dependency version range alias: " + alias);
+            }
+        }
+
+        private static void TestSoftDependencyCyclesDoNotBlock(string root)
+        {
+            LoadOrderResult Resolve(params ModManifest[] manifests)
+            {
+                var state = new ManagerState();
+                return new DependencyResolver().Resolve(
+                    manifests.Select(manifest => TestPackage(root, state, manifest)));
+            }
+
+            var loadAfterA = TestManifest("soft.loadafter.a");
+            var loadAfterB = TestManifest("soft.loadafter.b");
+            loadAfterA.LoadAfter.Add(loadAfterB.Id);
+            loadAfterB.LoadAfter.Add(loadAfterA.Id);
+            var loadAfter = Resolve(loadAfterB, loadAfterA);
+            Assert(loadAfter.Errors.Count == 0 && loadAfter.OrderedPackages.Count == 2,
+                "a mutual loadAfter hint must not block either mod");
+            Assert(loadAfter.OrderedPackages.Select(package => package.Manifest!.Id).SequenceEqual(
+                    new[] { loadAfterB.Id, loadAfterA.Id }),
+                "mutual loadAfter ordering should keep the deterministic first edge");
+
+            var optionalA = TestManifest("soft.optional.a");
+            var optionalB = TestManifest("soft.optional.b");
+            optionalA.OptionalDependencies.Add(new ModDependency { Id = optionalB.Id });
+            optionalB.OptionalDependencies.Add(new ModDependency { Id = optionalA.Id });
+            var optional = Resolve(optionalB, optionalA);
+            Assert(optional.Errors.Count == 0 && optional.OrderedPackages.Count == 2,
+                "a mutual optional-dependency hint must not block either mod");
+            Assert(optional.OrderedPackages.Select(package => package.Manifest!.Id).SequenceEqual(
+                    new[] { optionalB.Id, optionalA.Id }),
+                "mutual optional ordering should be deterministic regardless of input order");
+
+            var hardConsumer = TestManifest("soft.mixed.consumer");
+            var hardProvider = TestManifest("soft.mixed.provider");
+            hardConsumer.VpmDependencies.Add(hardProvider.Id, ">=1.0.0");
+            hardProvider.LoadAfter.Add(hardConsumer.Id);
+            var mixed = Resolve(hardConsumer, hardProvider);
+            Assert(mixed.Errors.Count == 0 && mixed.OrderedPackages.Select(package => package.Manifest!.Id).SequenceEqual(
+                    new[] { hardProvider.Id, hardConsumer.Id }),
+                "a contradictory soft hint must yield to a hard dependency without blocking either mod");
+        }
+
+        private static void TestManifestDependencyIdsRejected()
+        {
+            var manifest = TestManifest("safe.mod");
+            manifest.VpmDependencies.Add("../vpm", ">=1.0.0");
+            manifest.Dependencies.Add(new ModDependency { Id = "../required" });
+            manifest.OptionalDependencies.Add(new ModDependency { Id = @"..\optional" });
+            manifest.Conflicts.Add(new ModConflict { Id = "/conflict" });
+            manifest.LoadAfter.Add("../load-after");
+
+            var errors = ManifestValidator.Validate(manifest);
+            foreach (var unsafeId in new[] { "../vpm", "../required", @"..\optional", "/conflict", "../load-after" })
+            {
+                Assert(errors.Any(error => error.Contains(unsafeId)),
+                    "manifest validation should reject unsafe related id '" + unsafeId + "'");
+            }
+        }
+
+        private static ModManifest TestManifest(string id)
+        {
+            return new ModManifest
+            {
+                SchemaVersion = 2,
+                Id = id,
+                Name = id,
+                Version = "1.0.0",
+                EntryAssembly = id + ".dll",
+                EntryType = id + ".Entry"
+            };
+        }
+
+        private static ModPackage TestPackage(string root, ManagerState state, ModManifest manifest)
+        {
+            return new ModPackage(
+                Path.Combine(root, manifest.Id),
+                manifest,
+                state.Upsert(manifest, enabled: true, restartRequired: false),
+                Array.Empty<string>());
+        }
+
         // Pins the shared UGC export JSON contract (the surface the Unity exporter writes and the game
         // importer deserializes into UgcExportProject). GameCode-free on purpose: the test harness targets
         // net8.0 and never references the game's Mono assemblies, so this validates the golden fixture against
@@ -513,6 +1030,34 @@ namespace Robotopia.ModManager.Tests
             }
 
             throw new InvalidOperationException("Could not locate repo root (RobotopiaModManager.slnx) from " + AppContext.BaseDirectory);
+        }
+
+        private static void TestPendingRuntimeManifestContracts()
+        {
+            var root = FindRepoRoot();
+            using var sandbox = JsonDocument.Parse(File.ReadAllText(Path.Combine(
+                root, "mods", "Robotopia.Sandbox", "robotopia.mod.json")));
+            using var zombies = JsonDocument.Parse(File.ReadAllText(Path.Combine(
+                root, "mods", "Robotopia.Zombies", "robotopia.mod.json")));
+            using var worlds = JsonDocument.Parse(File.ReadAllText(Path.Combine(
+                root, "mods", "Robotopia.Worlds", "robotopia.mod.json")));
+            using var ugc = JsonDocument.Parse(File.ReadAllText(Path.Combine(
+                root, "mods", "Robotopia.UgcLiveSync", "robotopia.mod.json")));
+
+            Assert(sandbox.RootElement.GetProperty("vpmDependencies").GetProperty("robotopia.worlds").GetString()
+                    == ">=0.5.4",
+                "Sandbox must require the first Worlds release that publishes Open Sandbox");
+            Assert(zombies.RootElement.GetProperty("vpmDependencies").GetProperty("robotopia.worlds").GetString()
+                    == ">=0.5.4",
+                "Zombies must require the first Worlds release that publishes its default Open Sandbox world");
+            Assert(worlds.RootElement.GetProperty("supportedSdkVersionRange").GetString() == ">=0.1.3 <0.2.0"
+                && ugc.RootElement.GetProperty("supportedSdkVersionRange").GetString() == ">=0.1.3 <0.2.0",
+                "scene-coordinated framework mods must require SDK 0.1.3");
+            Assert(sandbox.RootElement.GetProperty("version").GetString() == "0.3.1"
+                && zombies.RootElement.GetProperty("version").GetString() == "0.12.1"
+                && worlds.RootElement.GetProperty("version").GetString() == "0.6.0"
+                && ugc.RootElement.GetProperty("version").GetString() == "0.3.0",
+                "pending runtime behavior changes must retain their intended manifest version bumps");
         }
 
         private static ManagerPaths NewPaths(string root, string name)

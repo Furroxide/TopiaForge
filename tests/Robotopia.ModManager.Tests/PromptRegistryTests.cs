@@ -13,6 +13,7 @@ namespace Robotopia.ModManager.Tests
             TestReplaceSameOwnerPrompt();
             TestHandleDispose();
             TestUnregisterOwner();
+            TestDisposeRetiresAllHandles();
             Console.WriteLine("All prompt registry tests passed.");
         }
 
@@ -68,6 +69,29 @@ namespace Robotopia.ModManager.Tests
             Assert(alpha.IsDisposed, "owner cleanup should retire handles for that owner");
             Assert(registry.Overrides.Count == 1 && registry.Overrides[0].ModId == "beta.mod", "owner cleanup should leave other owners alone");
             Assert(registry.GetConflicts().Count == 0, "conflict should clear after one owner is removed");
+        }
+
+        private static void TestDisposeRetiresAllHandles()
+        {
+            var registry = new PromptOverrideRegistry();
+            var first = registry.Register(new PromptOverrideRequest("alpha.mod", "robot.greeting", "alpha"));
+            var second = registry.Register(new PromptOverrideRequest("beta.mod", "robot.farewell", "beta"));
+
+            registry.Dispose();
+
+            Assert(first.IsDisposed && second.IsDisposed, "registry disposal should retire every owner handle");
+            Assert(registry.Overrides.Count == 0, "registry disposal should clear all overrides");
+            var threw = false;
+            try
+            {
+                registry.Register(new PromptOverrideRequest("late.mod", "robot.late", "late"));
+            }
+            catch (ObjectDisposedException)
+            {
+                threw = true;
+            }
+
+            Assert(threw, "registering against an unloaded registry should fail explicitly");
         }
 
         private static void Assert(bool condition, string message)
