@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "directories": ["BepInEx", "BepInEx/core"],
+  "files": {
+    ".doorstop_version": { "size": 5, "mode": "0644", "sha256": "75a2f501000d4fe28f74bc7ee66dae5581959d28b6c44f0c1b0c05cd5ba261e6" },
+    "BepInEx/core/0Harmony.dll": { "size": 204800, "mode": "0644", "sha256": "1a21cc03424fc82c3dd1346905d16494536b9595ae4162228d99fb7c285c1031" },
+    "BepInEx/core/0Harmony.xml": { "size": 267107, "mode": "0644", "sha256": "d1f02fc3ada3a13da307de421225bfe56ebe24064370980979391c4be021672f" },
+    "BepInEx/core/0Harmony20.dll": { "size": 112640, "mode": "0644", "sha256": "c755a5ab2712915a32f9a850d580a8c1b70ff1653bc76600f2767aa8ffccc663" },
+    "BepInEx/core/BepInEx.Harmony.dll": { "size": 6656, "mode": "0644", "sha256": "00c8f2ac48593e4d45ce4eb26ce4e68b18113c5c489b38b8bf0850f65830d601" },
+    "BepInEx/core/BepInEx.Harmony.xml": { "size": 4056, "mode": "0644", "sha256": "a04fedf08f7c81f5d01aba6f2840a7ffce50b79bbd24587d8dbe69ab73971d29" },
+    "BepInEx/core/BepInEx.Preloader.dll": { "size": 43008, "mode": "0644", "sha256": "55d3895351a9d16b63b6f35f1c01b44ac650979e853d0bd3a442b92a082af64f" },
+    "BepInEx/core/BepInEx.Preloader.xml": { "size": 7964, "mode": "0644", "sha256": "33275b2783b7b99495a02c098ee86d6a9a2783e884a5c9369021f20c94cf99e7" },
+    "BepInEx/core/BepInEx.dll": { "size": 128512, "mode": "0644", "sha256": "8255b28902886085c578b9e427d3073c97002db85176d2090cdeda90ef14ce70" },
+    "BepInEx/core/BepInEx.xml": { "size": 89835, "mode": "0644", "sha256": "7ba2266061b9f8a9f146218a312bfdd0d7f2b53a99a7e66c957215c6b66ca0d7" },
+    "BepInEx/core/HarmonyXInterop.dll": { "size": 23552, "mode": "0644", "sha256": "7ce1342d3afa0334b59a3e38c0aed15e162b9abe9d46f95f34be44af47f3b493" },
+    "BepInEx/core/Mono.Cecil.Mdb.dll": { "size": 43008, "mode": "0644", "sha256": "5896d1898f616701fff18f3b2c71e6b844d2390ef9f41e1c5fccce8cb27c698e" },
+    "BepInEx/core/Mono.Cecil.Pdb.dll": { "size": 86528, "mode": "0644", "sha256": "174db44a067f58561510af746f3caeb032037762c57a31c8d9ee32db25174984" },
+    "BepInEx/core/Mono.Cecil.Rocks.dll": { "size": 27648, "mode": "0644", "sha256": "54ac539fb5ddc8b44c0e9acd0fcb7324f89d1a072edf8ebc1b06dd691e3d3927" },
+    "BepInEx/core/Mono.Cecil.dll": { "size": 339456, "mode": "0644", "sha256": "7ae470288fff4a402899c254d0a76cefef55877f5c54f96e83c797cc5bb6e2f6" },
+    "BepInEx/core/MonoMod.RuntimeDetour.dll": { "size": 105984, "mode": "0644", "sha256": "40e49bb314391cd7bddc2644f8553eeba92c194b940836b103df16955c464e0c" },
+    "BepInEx/core/MonoMod.RuntimeDetour.xml": { "size": 9414, "mode": "0644", "sha256": "54887808960d156550b37d602d08847607aa9e908d039f2765fb0b5e79394aa4" },
+    "BepInEx/core/MonoMod.Utils.dll": { "size": 187904, "mode": "0644", "sha256": "9d1495f147ac93c4f81f84538c1a326e8f8a6aefc78d6289d798f3ce1162c5e9" },
+    "BepInEx/core/MonoMod.Utils.xml": { "size": 78973, "mode": "0644", "sha256": "0577b362023a3432d6e8d7934c5eddc3e08fdbb19e191af083e341562c5ede38" },
+    "changelog.txt": { "size": 338, "mode": "0644", "sha256": "b184d858cb0ff6614ca8ce0247fb0d186cabc91ed7e4d4d9d57ea3d744ce98b5" },
+    "doorstop_config.ini": { "size": 1460, "mode": "0644", "sha256": "4d5c6dfa0f771c6a5b1b0c559aca0bd0ece7d08b08fff894708dc3b73ce73cfc" },
+    "winhttp.dll": { "size": 26112, "mode": "0644", "sha256": "8c6cdbc38836dee87e3368f5de1994d7c0ccebf29e4ce7aba3c0981f9375412c" }
+  }
+}
