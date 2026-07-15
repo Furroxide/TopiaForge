@@ -2,6 +2,8 @@
 
 Thank you for helping improve the TopiaForge modding ecosystem. Read `AGENTS.md` before changing code; it is the
 authoritative repository guide for architecture, generated artifacts, UI quality, and required verification.
+The protected branch flow, merge-method rules, release gates, and break-glass process are documented in
+[`docs/RepositoryGovernance.md`](docs/RepositoryGovernance.md).
 
 ## Before starting
 
@@ -48,3 +50,8 @@ Explain the user-visible outcome, compatibility impact, security implications, a
 regression test for meaningful bugs. Do not commit generated build directories, credentials, local game files, or
 managed game assemblies. Keep release, signing, Unity-license, registry-publishing, and Pages credentials out of PR
 workflows and logs.
+
+Open normal and community pull requests against `dev` and use a Conventional Commit title. Owner-authored topics are
+squash merged. External contributors must sign every commit and use a merge commit; unsigned patches are restaged by
+the maintainer in a new owner-authored PR. Dependabot and `sync/main-v*` PRs also use merge commits. Contributors must
+not target `main` or `release/*` directly.

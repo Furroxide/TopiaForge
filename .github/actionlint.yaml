@@ -2,6 +2,9 @@ self-hosted-runner:
   # actionlint 1.7.7 predates this GitHub-hosted Intel runner label.
   labels:
     - macos-15-intel
+    # Dedicated trusted live-game hosts are intentionally not registered yet.
+    - topiaforge-game-build-2227
+    - proton
 
 # Configuration variables in array of strings defined in your repository or
 # organization. `null` means disabling configuration variables check.
