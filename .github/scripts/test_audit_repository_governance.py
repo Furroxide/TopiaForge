@@ -6,6 +6,7 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import subprocess
 import unittest
 from pathlib import Path
 from typing import Any
@@ -130,6 +131,30 @@ class RepositoryGovernanceAuditTests(unittest.TestCase):
             {"full_name": "furroxide/TopiaForge", "default_branch": "main"},
             scrubbed,
         )
+
+    def test_json_enabled_probe_supports_json_and_legacy_404(self) -> None:
+        client = AUDIT.GitHubClient()
+        responses = iter(
+            [
+                subprocess.CompletedProcess([], 0, '{"enabled": false}', ""),
+                subprocess.CompletedProcess([], 1, "", "gh: Not Found (HTTP 404)"),
+                subprocess.CompletedProcess([], 0, '{"enabled": true}', ""),
+            ]
+        )
+        client._request = lambda _path: next(responses)
+
+        self.assertFalse(client.json_enabled_probe("/json-disabled"))
+        self.assertFalse(client.json_enabled_probe("/legacy-disabled"))
+        self.assertTrue(client.json_enabled_probe("/json-enabled"))
+
+    def test_json_enabled_probe_rejects_malformed_success(self) -> None:
+        client = AUDIT.GitHubClient()
+        client._request = lambda _path: subprocess.CompletedProcess(
+            [], 0, '{"paused": false}', ""
+        )
+
+        with self.assertRaises(AUDIT.AuditError):
+            client.json_enabled_probe("/malformed")
 
     def test_always_bypass_and_stale_context_are_reported(self) -> None:
         main = next(

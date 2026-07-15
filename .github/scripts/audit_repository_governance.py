@@ -97,6 +97,18 @@ class GitHubClient:
         detail = result.stderr.strip() or f"exit {result.returncode}"
         raise AuditError(f"GitHub GET {path} failed: {detail}")
 
+    def json_enabled_probe(self, path: str) -> bool:
+        """Read a JSON feature flag while tolerating GitHub's legacy 404 form."""
+
+        payload = self.get_json(path, tolerate_statuses={404})
+        if payload is None:
+            return False
+        if not isinstance(payload, dict) or not isinstance(payload.get("enabled"), bool):
+            raise AuditError(
+                f"GitHub GET {path} did not return a boolean `enabled` field."
+            )
+        return payload["enabled"]
+
 
 def read_json(path: Path) -> dict[str, Any]:
     try:
@@ -170,8 +182,6 @@ def collect_snapshot(repository: str, client: GitHubClient | None = None) -> dic
         environment["branch_policies"] = branch_policies
         environments[name] = environment
 
-    automated_security_fixes = github.get_json(f"{base}/automated-security-fixes")
-
     return {
         "snapshot_schema_version": 1,
         "captured_at": datetime.now(timezone.utc).isoformat(),
@@ -192,8 +202,8 @@ def collect_snapshot(repository: str, client: GitHubClient | None = None) -> dic
         "environments": environments,
         "security": {
             "dependabot_alerts": github.enabled_probe(f"{base}/vulnerability-alerts"),
-            "automated_security_updates": bool(
-                automated_security_fixes.get("enabled")
+            "automated_security_updates": github.json_enabled_probe(
+                f"{base}/automated-security-fixes"
             ),
             "private_vulnerability_reporting": bool(
                 github.get_json(f"{base}/private-vulnerability-reporting").get(
