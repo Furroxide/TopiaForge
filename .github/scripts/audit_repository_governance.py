@@ -133,6 +133,12 @@ def collect_snapshot(repository: str, client: GitHubClient | None = None) -> dic
     base = f"/repos/{repository}"
 
     repository_data = scrub_repository_data(github.get_json(base))
+    collaborators = github.get_json(f"{base}/collaborators?affiliation=all&per_page=100")
+    repository_administrators = sorted(
+        collaborator["login"]
+        for collaborator in collaborators
+        if collaborator.get("permissions", {}).get("admin") is True
+    )
     ruleset_summaries = github.get_json(
         f"{base}/rulesets?includes_parents=false&per_page=100"
     )
@@ -171,6 +177,7 @@ def collect_snapshot(repository: str, client: GitHubClient | None = None) -> dic
         "captured_at": datetime.now(timezone.utc).isoformat(),
         "api_version": API_VERSION,
         "repository": repository_data,
+        "repository_administrators": repository_administrators,
         "rulesets": rulesets,
         "actions": {
             "permissions": action_permissions,
@@ -467,6 +474,12 @@ def evaluate_snapshot(snapshot: dict[str, Any], policy: dict[str, Any]) -> list[
         "repository.full_name",
         repository.get("full_name"),
         policy["repository_full_name"],
+    )
+    add_mismatch(
+        failures,
+        "repository_administrators",
+        sorted(snapshot.get("repository_administrators", [])),
+        sorted(policy.get("repository_administrators", [])),
     )
     compare_mapping(
         failures,

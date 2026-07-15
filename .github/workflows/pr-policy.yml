@@ -78,6 +78,9 @@ jobs:
           if [[ "$HEAD_REF" == sync/* && ! $HEAD_REF =~ ^sync/main-v$semver$ ]]; then
             failures+=("Sync branches must be named sync/main-v<semver>.")
           fi
+          if [[ "$HEAD_REF" == sync/* && "$same_repository" == false ]]; then
+            failures+=("Synchronization branches must belong to the base repository.")
+          fi
 
           if (( ${#failures[@]} > 0 )); then
             printf '::error::%s\n' "${failures[@]}"

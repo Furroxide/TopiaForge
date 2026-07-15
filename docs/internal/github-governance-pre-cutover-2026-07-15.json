@@ -27,7 +27,7 @@
       "requiredChecks": [
         "Analyze and test Dart packages (packages/launcher_domain)",
         "Analyze and test Dart packages (packages/launcher_data)",
-        "Analyze and test Dart packages (apps/robotopia_cli)",
+        "Analyze and test Dart packages (apps/\u0072obotopia_cli)",
         "Template minimal",
         "Template gameplay",
         "Template gamemode",

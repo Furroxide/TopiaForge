@@ -74,6 +74,10 @@ Reference lifecycle is intentionally separate from branch updates:
 - `v*` creation is restricted and only the owner/admin lifecycle bypass may create a release tag.
 - `v*` updates and deletions are prohibited by a separate no-bypass ruleset. A failed version is never moved or reused.
 
+GitHub exposes the lifecycle actor as the repository-administrator role rather than an individual user on a personal
+repository. The governance audit therefore requires `furroxide` to be the only administrator; granting another account
+administrator access is a governance change that must update this contract first.
+
 Applicable GitHub rulesets compose, so classic branch protection must not duplicate these rules. The checked-in
 desired-state manifest is `.github/repository-governance.json`, and the read-only audit command is:
 
