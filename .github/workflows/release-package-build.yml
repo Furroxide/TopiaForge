@@ -1,4 +1,4 @@
-name: Release package build
+name: Unsigned release package dry-run build
 
 on:
   workflow_call:
@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       fail_on_missing_refs:
-        description: "Fail when managed-reference secrets are unavailable."
+        description: "Fail when public managed references are unavailable."
         required: false
         type: boolean
         default: true
@@ -17,39 +17,6 @@ on:
         required: false
         type: number
         default: 14
-      require_macos_signing:
-        description: "Require Developer ID signing and notarization for macOS."
-        required: false
-        type: boolean
-        default: false
-      require_windows_signing:
-        description: "Require Authenticode signing and timestamping for Windows."
-        required: false
-        type: boolean
-        default: false
-    secrets:
-      ROBOTOPIA_REFS_URL:
-        required: false
-      ROBOTOPIA_REFS_SHA256:
-        required: false
-      ROBOTOPIA_REFS_TOKEN:
-        required: false
-      MACOS_CERTIFICATE_P12:
-        required: false
-      MACOS_CERTIFICATE_PASSWORD:
-        required: false
-      MACOS_DEVELOPER_ID_APPLICATION:
-        required: false
-      MACOS_NOTARY_APPLE_ID:
-        required: false
-      MACOS_NOTARY_PASSWORD:
-        required: false
-      MACOS_NOTARY_TEAM_ID:
-        required: false
-      WINDOWS_CERTIFICATE_PFX:
-        required: false
-      WINDOWS_CERTIFICATE_PASSWORD:
-        required: false
 
 permissions:
   contents: read
@@ -85,11 +52,8 @@ jobs:
         shell: pwsh
         env:
           FAIL_ON_MISSING_REFS: ${{ inputs.fail_on_missing_refs }}
-          ROBOTOPIA_REFS_SOURCE: ${{ vars.ROBOTOPIA_REFS_SOURCE }}
+          ROBOTOPIA_REFS_SOURCE: public
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-          ROBOTOPIA_REFS_URL: ${{ secrets.ROBOTOPIA_REFS_URL }}
-          ROBOTOPIA_REFS_SHA256: ${{ secrets.ROBOTOPIA_REFS_SHA256 }}
-          ROBOTOPIA_REFS_TOKEN: ${{ secrets.ROBOTOPIA_REFS_TOKEN }}
         run: |
           $failOnMissing = [System.Convert]::ToBoolean($env:FAIL_ON_MISSING_REFS)
           try {
@@ -101,7 +65,7 @@ jobs:
             if ($failOnMissing) {
               throw
             }
-            Write-Warning "Robotopia managed refs are unavailable; skipping release package dry run. $($_.Exception.Message)"
+            Write-Warning "Public Robotopia refs are unavailable; skipping the release dry run. $($_.Exception.Message)"
           }
 
   canonical-ecosystem:
@@ -304,10 +268,8 @@ jobs:
         id: refs-cache
         shell: pwsh
         env:
-          ROBOTOPIA_REFS_SOURCE: ${{ vars.ROBOTOPIA_REFS_SOURCE }}
+          ROBOTOPIA_REFS_SOURCE: public
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-          ROBOTOPIA_REFS_URL: ${{ secrets.ROBOTOPIA_REFS_URL }}
-          ROBOTOPIA_REFS_SHA256: ${{ secrets.ROBOTOPIA_REFS_SHA256 }}
         run: ./tools/restore-robotopia-managed-refs.ps1 -CacheKeyOnly
 
       - name: Cache Robotopia managed refs
@@ -320,11 +282,8 @@ jobs:
         shell: pwsh
         env:
           ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
-          ROBOTOPIA_REFS_SOURCE: ${{ vars.ROBOTOPIA_REFS_SOURCE }}
+          ROBOTOPIA_REFS_SOURCE: public
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-          ROBOTOPIA_REFS_URL: ${{ secrets.ROBOTOPIA_REFS_URL }}
-          ROBOTOPIA_REFS_SHA256: ${{ secrets.ROBOTOPIA_REFS_SHA256 }}
-          ROBOTOPIA_REFS_TOKEN: ${{ secrets.ROBOTOPIA_REFS_TOKEN }}
         run: ./tools/restore-robotopia-managed-refs.ps1 -RequireLatest
 
       # Proves the Dart-native scaffold + pack pipeline works on every OS before it feeds the release payload.
@@ -396,16 +355,6 @@ jobs:
       - name: Build release package
         shell: bash
         working-directory: apps/topiaforge_cli
-        env:
-          MACOS_CERTIFICATE_P12: ${{ matrix.platform == 'macos' && secrets.MACOS_CERTIFICATE_P12 || '' }}
-          MACOS_CERTIFICATE_PASSWORD: ${{ matrix.platform == 'macos' && secrets.MACOS_CERTIFICATE_PASSWORD || '' }}
-          MACOS_DEVELOPER_ID_APPLICATION: ${{ matrix.platform == 'macos' && secrets.MACOS_DEVELOPER_ID_APPLICATION || '' }}
-          MACOS_NOTARY_APPLE_ID: ${{ matrix.platform == 'macos' && secrets.MACOS_NOTARY_APPLE_ID || '' }}
-          MACOS_NOTARY_PASSWORD: ${{ matrix.platform == 'macos' && secrets.MACOS_NOTARY_PASSWORD || '' }}
-          MACOS_NOTARY_TEAM_ID: ${{ matrix.platform == 'macos' && secrets.MACOS_NOTARY_TEAM_ID || '' }}
-          WINDOWS_CERTIFICATE_PFX: ${{ matrix.platform == 'windows' && secrets.WINDOWS_CERTIFICATE_PFX || '' }}
-          WINDOWS_CERTIFICATE_PASSWORD: ${{ matrix.platform == 'windows' && secrets.WINDOWS_CERTIFICATE_PASSWORD || '' }}
-          WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL }}
         run: |
           set -euo pipefail
           workspace="${GITHUB_WORKSPACE//\\//}"
@@ -421,12 +370,6 @@ jobs:
           )
           if [ "${{ matrix.platform }}" = "macos" ]; then
             args+=(--prebuilt-cli "$temp/topiaforge-macos-cli")
-            if [ "${{ inputs.require_macos_signing }}" = "true" ]; then
-              args+=(--require-macos-signing)
-            fi
-          fi
-          if [ "${{ matrix.platform }}" = "windows" ] && [ "${{ inputs.require_windows_signing }}" = "true" ]; then
-            args+=(--require-windows-signing)
           fi
           dart run bin/topiaforge.dart "${args[@]}"
 
@@ -444,16 +387,8 @@ jobs:
           )
           if [ "${{ matrix.platform }}" = "macos" ]; then
             args+=(--require-mac-universal)
-            if [ "${{ inputs.require_macos_signing }}" = "true" ]; then
-              args+=(--require-macos-trust --expected-mac-team-id "$MACOS_NOTARY_TEAM_ID")
-            fi
-          fi
-          if [ "${{ matrix.platform }}" = "windows" ] && [ "${{ inputs.require_windows_signing }}" = "true" ]; then
-            args+=(--require-windows-signature)
           fi
           dart run bin/topiaforge.dart "${args[@]}"
-        env:
-          MACOS_NOTARY_TEAM_ID: ${{ matrix.platform == 'macos' && secrets.MACOS_NOTARY_TEAM_ID || '' }}
 
       - name: Reject retired names in release package
         shell: bash

@@ -33,6 +33,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
+          lfs: true
           persist-credentials: false
 
       - name: Set up .NET
@@ -103,6 +104,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
+          lfs: true
           persist-credentials: false
 
       - name: Set up Dart
@@ -141,6 +143,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
+          lfs: true
           persist-credentials: false
 
       - name: Set up Flutter
@@ -173,6 +176,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
+          lfs: true
           persist-credentials: false
 
       - name: Set up Node.js
@@ -213,6 +217,14 @@ jobs:
 
       - name: Test generated-payload residue scanning
         run: python3 .github/scripts/test_check_topiaforge_residue.py
+
+      - name: Test repository governance audit
+        run: python3 .github/scripts/test_audit_repository_governance.py
+
+      - name: Test protected release evidence gates
+        run: |
+          bash tools/test-verify-release-tag.sh
+          bash tools/test-verify-release-candidate.sh
 
       - name: Set up Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6

@@ -1,0 +1,241 @@
+name: Robotopia V1 SDK live acceptance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: game-sdk-acceptance-${{ github.sha }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  windows:
+    name: Windows build-2227 acceptance
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Windows, X64, topiaforge-game-build-2227]
+    timeout-minutes: 45
+    environment:
+      name: game-acceptance
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.sha }}
+          lfs: true
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: 10.0.301
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
+        with:
+          sdk: 3.11.1
+
+      - name: Restore locked CLI dependencies
+        working-directory: apps/topiaforge_cli
+        run: dart pub get --enforce-lockfile
+
+      - name: Build exact runtime and acceptance probe
+        shell: pwsh
+        run: dotnet build TopiaForge.slnx -c Release
+
+      - name: Prepare extracted-release two-command journey
+        shell: pwsh
+        env:
+          TOPIAFORGE_DATA_ROOT: ${{ runner.temp }}/topiaforge-live-data
+          NUGET_PACKAGES: ${{ runner.temp }}/topiaforge-live-nuget
+          DOTNET_CLI_HOME: ${{ runner.temp }}/topiaforge-live-dotnet-home
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP "topiaforge-release-journey"
+          Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+          $compiledDirectory = Join-Path $root "compiled"
+          $payload = Join-Path $root "extracted-release"
+          $projects = Join-Path $env:RUNNER_TEMP "topiaforge-release-journey-projects"
+          New-Item -ItemType Directory -Force -Path $compiledDirectory, $projects | Out-Null
+          $compiled = Join-Path $compiledDirectory "topiaforge.exe"
+          Push-Location apps/topiaforge_cli
+          try {
+            dart compile exe bin/topiaforge.dart -o $compiled
+            if ($LASTEXITCODE -ne 0) { throw "Could not compile the candidate CLI." }
+            dart run bin/topiaforge.dart release build-sdk-payload `
+              --output $payload --cli $compiled --configuration Release
+            if ($LASTEXITCODE -ne 0) { throw "Could not build the candidate SDK payload." }
+          }
+          finally { Pop-Location }
+          $cli = Join-Path $payload "topiaforge.exe"
+          $id = "dev.topiaforge.release-journey-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $display = "Release Journey $env:GITHUB_RUN_ID.$env:GITHUB_RUN_ATTEMPT"
+          & $cli new mod $id --template minimal --name $display `
+            --author "TopiaForge Acceptance" --license MIT --dir $projects
+          if ($LASTEXITCODE -ne 0) { throw "Packaged CLI could not scaffold the release journey." }
+          $project = Join-Path $projects $id
+          $marker = "$display loaded. Run '${id}:greet' to try its command."
+          "TOPIAFORGE_DATA_ROOT=$env:TOPIAFORGE_DATA_ROOT" >> $env:GITHUB_ENV
+          "NUGET_PACKAGES=$env:NUGET_PACKAGES" >> $env:GITHUB_ENV
+          "DOTNET_CLI_HOME=$env:DOTNET_CLI_HOME" >> $env:GITHUB_ENV
+          "TOPIAFORGE_JOURNEY_CLI=$cli" >> $env:GITHUB_ENV
+          "TOPIAFORGE_JOURNEY_PAYLOAD=$payload" >> $env:GITHUB_ENV
+          "TOPIAFORGE_JOURNEY_PROJECT=$project" >> $env:GITHUB_ENV
+          "TOPIAFORGE_JOURNEY_ID=$id" >> $env:GITHUB_ENV
+          "TOPIAFORGE_JOURNEY_MARKER=$marker" >> $env:GITHUB_ENV
+
+      - name: Run instrumented acceptance
+        shell: pwsh
+        env:
+          ROBOTOPIA_GAME_DIR: ${{ vars.ROBOTOPIA_GAME_DIR_WINDOWS }}
+        run: |
+          $arguments = @(
+            "acceptance", "run",
+            "--game-dir", $env:ROBOTOPIA_GAME_DIR,
+            "--output", (Join-Path $env:RUNNER_TEMP "topiaforge-game-acceptance"),
+            "--timeout-seconds", 1800,
+            "--dev-cli", $env:TOPIAFORGE_JOURNEY_CLI,
+            "--dev-project", $env:TOPIAFORGE_JOURNEY_PROJECT,
+            "--required-loaded-package", $env:TOPIAFORGE_JOURNEY_ID,
+            "--required-log-marker", $env:TOPIAFORGE_JOURNEY_MARKER
+          )
+          $arguments += "--all"
+          Push-Location apps/topiaforge_cli
+          try {
+            dart run bin/topiaforge.dart @arguments
+            if ($LASTEXITCODE -ne 0) { throw "Robotopia live acceptance failed." }
+          }
+          finally { Pop-Location }
+
+      - name: Upload acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: game-sdk-acceptance-windows
+          path: ${{ runner.temp }}/topiaforge-game-acceptance/**
+          if-no-files-found: warn
+          retention-days: 30
+
+  linux-proton:
+    name: Linux/Proton build-2227 acceptance
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Linux, X64, topiaforge-game-build-2227, proton]
+    timeout-minutes: 45
+    environment:
+      name: game-acceptance
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.sha }}
+          lfs: true
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: 10.0.301
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
+        with:
+          sdk: 3.11.1
+
+      - name: Restore locked CLI dependencies
+        working-directory: apps/topiaforge_cli
+        run: dart pub get --enforce-lockfile
+
+      - name: Build exact runtime and acceptance probe
+        shell: pwsh
+        run: dotnet build TopiaForge.slnx -c Release
+
+      - name: Prepare extracted-release two-command journey
+        shell: pwsh
+        env:
+          TOPIAFORGE_DATA_ROOT: ${{ runner.temp }}/topiaforge-live-data
+          NUGET_PACKAGES: ${{ runner.temp }}/topiaforge-live-nuget
+          DOTNET_CLI_HOME: ${{ runner.temp }}/topiaforge-live-dotnet-home
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP "topiaforge-release-journey"
+          Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+          $compiledDirectory = Join-Path $root "compiled"
+          $payload = Join-Path $root "extracted-release"
+          $projects = Join-Path $env:RUNNER_TEMP "topiaforge-release-journey-projects"
+          New-Item -ItemType Directory -Force -Path $compiledDirectory, $projects | Out-Null
+          $compiled = Join-Path $compiledDirectory "topiaforge"
+          Push-Location apps/topiaforge_cli
+          try {
+            dart compile exe bin/topiaforge.dart -o $compiled
+            if ($LASTEXITCODE -ne 0) { throw "Could not compile the candidate CLI." }
+            dart run bin/topiaforge.dart release build-sdk-payload `
+              --output $payload --cli $compiled --configuration Release
+            if ($LASTEXITCODE -ne 0) { throw "Could not build the candidate SDK payload." }
+          }
+          finally { Pop-Location }
+          $cli = Join-Path $payload "topiaforge"
+          $id = "dev.topiaforge.release-journey-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $display = "Release Journey $env:GITHUB_RUN_ID.$env:GITHUB_RUN_ATTEMPT"
+          & $cli new mod $id --template minimal --name $display `
+            --author "TopiaForge Acceptance" --license MIT --dir $projects
+          if ($LASTEXITCODE -ne 0) { throw "Packaged CLI could not scaffold the release journey." }
+          $project = Join-Path $projects $id
+          $marker = "$display loaded. Run '${id}:greet' to try its command."
+          "TOPIAFORGE_DATA_ROOT=$env:TOPIAFORGE_DATA_ROOT" >> $env:GITHUB_ENV
+          "NUGET_PACKAGES=$env:NUGET_PACKAGES" >> $env:GITHUB_ENV
+          "DOTNET_CLI_HOME=$env:DOTNET_CLI_HOME" >> $env:GITHUB_ENV
+          "TOPIAFORGE_JOURNEY_CLI=$cli" >> $env:GITHUB_ENV
+          "TOPIAFORGE_JOURNEY_PAYLOAD=$payload" >> $env:GITHUB_ENV
+          "TOPIAFORGE_JOURNEY_PROJECT=$project" >> $env:GITHUB_ENV
+          "TOPIAFORGE_JOURNEY_ID=$id" >> $env:GITHUB_ENV
+          "TOPIAFORGE_JOURNEY_MARKER=$marker" >> $env:GITHUB_ENV
+
+      - name: Run instrumented acceptance through Proton install
+        shell: pwsh
+        env:
+          ROBOTOPIA_GAME_DIR: ${{ vars.ROBOTOPIA_GAME_DIR_PROTON }}
+        run: |
+          $arguments = @(
+            "acceptance", "run",
+            "--game-dir", $env:ROBOTOPIA_GAME_DIR,
+            "--output", (Join-Path $env:RUNNER_TEMP "topiaforge-game-acceptance"),
+            "--timeout-seconds", 1800,
+            "--dev-cli", $env:TOPIAFORGE_JOURNEY_CLI,
+            "--dev-project", $env:TOPIAFORGE_JOURNEY_PROJECT,
+            "--required-loaded-package", $env:TOPIAFORGE_JOURNEY_ID,
+            "--required-log-marker", $env:TOPIAFORGE_JOURNEY_MARKER
+          )
+          $arguments += "--all"
+          Push-Location apps/topiaforge_cli
+          try {
+            dart run bin/topiaforge.dart @arguments
+            if ($LASTEXITCODE -ne 0) { throw "Robotopia live acceptance failed." }
+          }
+          finally { Pop-Location }
+
+      - name: Upload acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: game-sdk-acceptance-linux-proton
+          path: ${{ runner.temp }}/topiaforge-game-acceptance/**
+          if-no-files-found: warn
+          retention-days: 30
+
+  game-sdk-acceptance:
+    name: Required / Game SDK acceptance
+    if: always()
+    needs: [windows, linux-proton]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require both protected full-platform acceptance runs
+        env:
+          WINDOWS_RESULT: ${{ needs.windows.result }}
+          LINUX_PROTON_RESULT: ${{ needs.linux-proton.result }}
+        run: |
+          test "$WINDOWS_RESULT" = success
+          test "$LINUX_PROTON_RESULT" = success
