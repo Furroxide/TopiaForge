@@ -152,7 +152,8 @@ jobs:
               if [ ! -d "$release_dir" ]; then
                 release_dir="apps/topiaforge_launcher_flutter/build/windows/runner/Release"
               fi
-              tar -cf "$artifact_dir/launcher-windows.tar" -C "$release_dir" .
+              # GNU tar otherwise treats the drive-letter colon as a remote host.
+              tar --force-local -cf "$artifact_dir/launcher-windows.tar" -C "$release_dir" .
               ;;
             linux)
               release_dir="apps/topiaforge_launcher_flutter/build/linux/x64/release/bundle"
