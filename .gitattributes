@@ -131,5 +131,5 @@ CODEOWNERS     text eol=lf
 # Immutable upstream BepInEx payloads are verified byte-for-byte against tree
 # manifests. Do not let the broad text rules rewrite extensionless scripts or
 # configuration files inside those extracted payloads.
-third_party/BepInEx/win_x64_5.4.23.5/**         -text
-third_party/BepInEx/macos_universal_5.4.23.5/** -text
+third_party/BepInEx/win_x64_5.4.23.5/**         binary !eol
+third_party/BepInEx/macos_universal_5.4.23.5/** binary !eol

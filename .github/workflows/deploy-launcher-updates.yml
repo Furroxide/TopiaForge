@@ -1,13 +1,8 @@
 name: Deploy launcher update + mod registry indexes
 
 on:
-  workflow_call:
-    inputs:
-      source_sha:
-        description: "Exact trusted commit used to build both indexes."
-        required: true
-        type: string
-  workflow_dispatch:
+  release:
+    types: [published]
 
 permissions:
   contents: read
@@ -21,20 +16,39 @@ concurrency:
 jobs:
   build-index:
     name: Build and validate complete Pages payload
-    if: >-
-      github.event_name == 'workflow_call' ||
-      (github.event_name == 'workflow_dispatch' &&
-      github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
       pages: read
     steps:
-      - name: Checkout exact source
+      - name: Require an immutable versioned release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ github.event.release.id }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]
+          test "$GITHUB_REF" = "refs/tags/$RELEASE_TAG"
+          release=$(gh api \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID")
+          jq -e \
+            --argjson id "$RELEASE_ID" \
+            --arg tag "$RELEASE_TAG" \
+            '.id == $id and
+             .tag_name == $tag and
+             .draft == false and
+             .published_at != null and
+             .immutable == true' <<<"$release" >/dev/null
+
+      - name: Checkout exact immutable release tag
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
-          ref: ${{ inputs.source_sha || github.sha }}
+          ref: refs/tags/${{ github.event.release.tag_name }}
           persist-credentials: false
 
       - name: Configure Pages
