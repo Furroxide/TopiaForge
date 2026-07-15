@@ -1,16 +1,13 @@
 name: Prepare signed release draft
 
 on:
-  pull_request:
-    types: [closed]
-    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# Publication is globally serialized. Dynamic ref-based groups allow two
-# candidates to race and mutate the same release/tag namespace.
+# Publication is globally serialized. A release must be dispatched from the
+# already-created protected annotated tag, never from a branch or PR event.
 concurrency:
   group: topiaforge-release-publication
   cancel-in-progress: false
@@ -20,57 +17,66 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
-  resolve-release:
-    name: Validate reviewed release policy
-    if: >-
-      (github.event_name == 'workflow_dispatch' &&
-      github.ref == 'refs/heads/main') ||
-      (github.event.pull_request.merged == true &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      startsWith(github.event.pull_request.head.ref, 'release/'))
+  verify-candidate:
+    name: Verify protected release evidence
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      checks: read
+      contents: read
+      pull-requests: read
     outputs:
       version: ${{ steps.metadata.outputs.version }}
       tag: ${{ steps.metadata.outputs.tag }}
       target_sha: ${{ steps.metadata.outputs.target_sha }}
       notes_file: ${{ steps.metadata.outputs.notes_file }}
+      release_head_sha: ${{ steps.evidence.outputs.release_head_sha }}
+      release_pr_number: ${{ steps.evidence.outputs.release_pr_number }}
     steps:
-      - name: Checkout exact trusted release commit
+      - name: Reject non-tag dispatches
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_TYPE" = tag
+          [[ "$GITHUB_REF" == refs/tags/v* ]]
+
+      - name: Checkout exact protected tag
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
           lfs: true
           persist-credentials: false
-          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          ref: ${{ github.ref }}
 
       - name: Set up Dart
         uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
         with:
           sdk: "3.11.1"
 
+      - name: Set up .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: "10.0.301"
+
       - name: Restore release validator
         working-directory: apps/topiaforge_cli
         run: dart pub get --enforce-lockfile
 
-      - name: Resolve catalog entry
+      - name: Resolve exact catalog entry
         id: metadata
         shell: bash
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           set -euo pipefail
           version=$(jq -er '.versioning.productVersion' release/release-policy.json)
-          entry=$(jq -ec --arg version "$version" '.releases[] | select(.version == $version)' release/catalog.json)
+          entry=$(jq -ec \
+            --arg version "$version" \
+            '[.releases[] | select(.version == $version)] |
+             select(length == 1) | .[0]' release/catalog.json)
           tag=$(jq -er '.tag' <<<"$entry")
           notes_file=$(jq -er '.notesFile' <<<"$entry")
-          test -s "$notes_file"
-          if [[ "$EVENT_NAME" == pull_request && "$HEAD_REF" != "release/$version" ]]; then
-            echo "::error::Merged release branch '$HEAD_REF' must be release/$version."
-            exit 1
-          fi
           target_sha=$(git rev-parse HEAD)
+          test "$tag" = "$GITHUB_REF_NAME"
+          test -s "$notes_file"
           {
             echo "version=$version"
             echo "tag=$tag"
@@ -90,39 +96,37 @@ jobs:
           ./tools/restore-robotopia-managed-refs.ps1
           -Source public -Probe -RequireLatest
 
+      - name: Verify tag, release PR, and exact-SHA gates
+        id: evidence
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          ./tools/verify-release-candidate.sh
+          "$GITHUB_REPOSITORY"
+          "${{ steps.metadata.outputs.tag }}"
+          "${{ steps.metadata.outputs.version }}"
+          "${{ steps.metadata.outputs.target_sha }}"
+
   build-packages:
     name: Build signed release candidates
-    needs: resolve-release
+    needs: verify-candidate
     permissions:
       contents: read
-    uses: ./.github/workflows/release-package-build.yml
+    uses: ./.github/workflows/release-signed-package-build.yml
     with:
-      source_sha: ${{ needs.resolve-release.outputs.target_sha }}
-      fail_on_missing_refs: true
+      source_sha: ${{ needs.verify-candidate.outputs.target_sha }}
       artifact_retention_days: 30
-      require_macos_signing: true
-      require_windows_signing: true
-    secrets:
-      ROBOTOPIA_REFS_URL: ${{ secrets.ROBOTOPIA_REFS_URL }}
-      ROBOTOPIA_REFS_SHA256: ${{ secrets.ROBOTOPIA_REFS_SHA256 }}
-      ROBOTOPIA_REFS_TOKEN: ${{ secrets.ROBOTOPIA_REFS_TOKEN }}
-      MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
-      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-      MACOS_DEVELOPER_ID_APPLICATION: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION }}
-      MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
-      MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
-      MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
-      WINDOWS_CERTIFICATE_PFX: ${{ secrets.WINDOWS_CERTIFICATE_PFX }}
-      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
 
   prepare-draft:
-    name: Reconcile immutable GitHub draft
-    needs: [resolve-release, build-packages]
+    name: Attest and reconcile release draft
+    needs: [verify-candidate, build-packages]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       actions: read
+      attestations: write
       contents: write
+      id-token: write
     environment:
       name: release
     steps:
@@ -131,7 +135,7 @@ jobs:
         with:
           lfs: true
           persist-credentials: false
-          ref: ${{ needs.resolve-release.outputs.target_sha }}
+          ref: ${{ needs.verify-candidate.outputs.target_sha }}
 
       - name: Set up Dart
         uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
@@ -142,7 +146,7 @@ jobs:
         working-directory: apps/topiaforge_cli
         run: dart pub get --enforce-lockfile
 
-      - name: Download platform archives
+      - name: Download signed platform archives
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: release-assets
@@ -160,27 +164,33 @@ jobs:
         run: |
           set -euo pipefail
           dart run topiaforge release build-metadata \
-            --version "${{ needs.resolve-release.outputs.version }}" \
-            --target-sha "${{ needs.resolve-release.outputs.target_sha }}" \
+            --version "${{ needs.verify-candidate.outputs.version }}" \
+            --target-sha "${{ needs.verify-candidate.outputs.target_sha }}" \
             --assets ../../release-assets
           dart run topiaforge release verify-metadata \
-            --version "${{ needs.resolve-release.outputs.version }}" \
-            --target-sha "${{ needs.resolve-release.outputs.target_sha }}" \
+            --version "${{ needs.verify-candidate.outputs.version }}" \
+            --target-sha "${{ needs.verify-candidate.outputs.target_sha }}" \
             --assets ../../release-assets
 
-      - name: Create or resume matching draft without tag or clobber
+      - name: Attest all release assets
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: release-assets/*
+
+      - name: Create or resume matching draft without tag mutation
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >-
           ./tools/publish-release-draft.sh
           "$GITHUB_REPOSITORY"
-          "${{ needs.resolve-release.outputs.tag }}"
-          "${{ needs.resolve-release.outputs.target_sha }}"
-          "TopiaForge ${{ needs.resolve-release.outputs.version }}"
-          "${{ needs.resolve-release.outputs.notes_file }}"
+          "${{ needs.verify-candidate.outputs.tag }}"
+          "${{ needs.verify-candidate.outputs.target_sha }}"
+          "TopiaForge ${{ needs.verify-candidate.outputs.version }}"
+          "${{ needs.verify-candidate.outputs.notes_file }}"
           release-assets
 
       - name: Explain the manual publication boundary
         run: |
-          echo 'A verified draft was prepared. This workflow does not create a tag or publish the release.'
-          echo 'An authorized owner must review/sign off, enable GitHub immutable releases, and publish manually.'
+          echo 'A signed, attested, verified draft was prepared from the protected tag.'
+          echo 'An authorized owner must inspect the draft and publish it manually.'
+          echo 'Immutable releases lock the tag and assets at publication.'

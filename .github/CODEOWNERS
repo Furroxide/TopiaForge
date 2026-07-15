@@ -1,19 +1,33 @@
 # These paths define public trust, release, update, and package contracts.
-# Repository rules should require approval from this protected owner.
+# Ownership is advisory while TopiaForge has one maintainer. Repository rules
+# begin requiring an independent CODEOWNER review only after a second trusted
+# maintainer is available.
+/.github/ @furroxide
+/.gitattributes @furroxide
+/.github/CODEOWNERS @furroxide
 /.github/workflows/ @furroxide
+/.github/dependabot.yml @furroxide
+/.github/repository-governance.json @furroxide
 /.github/robotopia-game-build.json @furroxide
+/.github/scripts/audit_repository_governance.py @furroxide
+/.github/scripts/test_audit_repository_governance.py @furroxide
+/CONTRIBUTING.md @furroxide
+/SECURITY.md @furroxide
+/docs/RepositoryGovernance.md @furroxide
+/docs/internal/github-governance-* @furroxide
 /release/ @furroxide
 /schemas/ @furroxide
 /registry/ @furroxide
 
 # Release/publishing executables and their CLI contract.
-/tools/publish-release-draft.sh @furroxide
-/tools/verify-release-tag.sh @furroxide
+/tools/*release* @furroxide
 /tools/package-distribution.ps1 @furroxide
-/tools/test-release-package.ps1 @furroxide
 /tools/restore-robotopia-managed-refs.ps1 @furroxide
+/tools/test-restore-robotopia-managed-refs.ps1 @furroxide
 /apps/topiaforge_cli/bin/topiaforge_release_commands.dart @furroxide
 /apps/topiaforge_cli/lib/src/release_*.dart @furroxide
 
 # Platform signing and sandbox authority.
 /apps/topiaforge_launcher_flutter/macos/Runner/*.entitlements @furroxide
+/apps/topiaforge_launcher_flutter/macos/Runner/Configs/Release.xcconfig @furroxide
+/apps/topiaforge_launcher_flutter/macos/Runner.xcodeproj/project.pbxproj @furroxide

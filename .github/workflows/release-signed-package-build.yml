@@ -1,4 +1,4 @@
-name: Unsigned release package dry-run build
+name: Signed release package build
 
 on:
   workflow_call:
@@ -7,11 +7,6 @@ on:
         description: "Exact commit to package."
         required: true
         type: string
-      fail_on_missing_refs:
-        description: "Fail when public managed references are unavailable."
-        required: false
-        type: boolean
-        default: true
       artifact_retention_days:
         description: "Number of days to retain package artifacts."
         required: false
@@ -37,6 +32,9 @@ jobs:
     name: Verify release package inputs
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Resolve managed-reference credentials only after protected-environment
+    # approval. The caller never receives or forwards these secrets.
+    environment: release
     outputs:
       refs_available: ${{ steps.refs.outputs.available }}
     steps:
@@ -51,9 +49,12 @@ jobs:
         id: refs
         shell: pwsh
         env:
-          FAIL_ON_MISSING_REFS: ${{ inputs.fail_on_missing_refs }}
-          ROBOTOPIA_REFS_SOURCE: public
+          FAIL_ON_MISSING_REFS: "true"
+          ROBOTOPIA_REFS_SOURCE: ${{ vars.ROBOTOPIA_REFS_SOURCE }}
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
+          ROBOTOPIA_REFS_URL: ${{ secrets.ROBOTOPIA_REFS_URL }}
+          ROBOTOPIA_REFS_SHA256: ${{ secrets.ROBOTOPIA_REFS_SHA256 }}
+          ROBOTOPIA_REFS_TOKEN: ${{ secrets.ROBOTOPIA_REFS_TOKEN }}
         run: |
           $failOnMissing = [System.Convert]::ToBoolean($env:FAIL_ON_MISSING_REFS)
           try {
@@ -65,7 +66,7 @@ jobs:
             if ($failOnMissing) {
               throw
             }
-            Write-Warning "Public Robotopia refs are unavailable; skipping the release dry run. $($_.Exception.Message)"
+            Write-Warning "Protected Robotopia refs are unavailable; signed packaging cannot continue. $($_.Exception.Message)"
           }
 
   canonical-ecosystem:
@@ -213,6 +214,10 @@ jobs:
     if: needs.preflight.outputs.refs_available == 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
+    # All platform legs are trusted release builds. Binding the entire matrix
+    # to one protected environment keeps every signing/reference credential
+    # behind the same approval and ref policy.
+    environment: release
     strategy:
       fail-fast: false
       matrix:
@@ -268,8 +273,10 @@ jobs:
         id: refs-cache
         shell: pwsh
         env:
-          ROBOTOPIA_REFS_SOURCE: public
+          ROBOTOPIA_REFS_SOURCE: ${{ vars.ROBOTOPIA_REFS_SOURCE }}
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
+          ROBOTOPIA_REFS_URL: ${{ secrets.ROBOTOPIA_REFS_URL }}
+          ROBOTOPIA_REFS_SHA256: ${{ secrets.ROBOTOPIA_REFS_SHA256 }}
         run: ./tools/restore-robotopia-managed-refs.ps1 -CacheKeyOnly
 
       - name: Cache Robotopia managed refs
@@ -282,8 +289,11 @@ jobs:
         shell: pwsh
         env:
           ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
-          ROBOTOPIA_REFS_SOURCE: public
+          ROBOTOPIA_REFS_SOURCE: ${{ vars.ROBOTOPIA_REFS_SOURCE }}
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
+          ROBOTOPIA_REFS_URL: ${{ secrets.ROBOTOPIA_REFS_URL }}
+          ROBOTOPIA_REFS_SHA256: ${{ secrets.ROBOTOPIA_REFS_SHA256 }}
+          ROBOTOPIA_REFS_TOKEN: ${{ secrets.ROBOTOPIA_REFS_TOKEN }}
         run: ./tools/restore-robotopia-managed-refs.ps1 -RequireLatest
 
       # Proves the Dart-native scaffold + pack pipeline works on every OS before it feeds the release payload.
@@ -355,6 +365,16 @@ jobs:
       - name: Build release package
         shell: bash
         working-directory: apps/topiaforge_cli
+        env:
+          MACOS_CERTIFICATE_P12: ${{ matrix.platform == 'macos' && secrets.MACOS_CERTIFICATE_P12 || '' }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ matrix.platform == 'macos' && secrets.MACOS_CERTIFICATE_PASSWORD || '' }}
+          MACOS_DEVELOPER_ID_APPLICATION: ${{ matrix.platform == 'macos' && secrets.MACOS_DEVELOPER_ID_APPLICATION || '' }}
+          MACOS_NOTARY_APPLE_ID: ${{ matrix.platform == 'macos' && secrets.MACOS_NOTARY_APPLE_ID || '' }}
+          MACOS_NOTARY_PASSWORD: ${{ matrix.platform == 'macos' && secrets.MACOS_NOTARY_PASSWORD || '' }}
+          MACOS_NOTARY_TEAM_ID: ${{ matrix.platform == 'macos' && secrets.MACOS_NOTARY_TEAM_ID || '' }}
+          WINDOWS_CERTIFICATE_PFX: ${{ matrix.platform == 'windows' && secrets.WINDOWS_CERTIFICATE_PFX || '' }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ matrix.platform == 'windows' && secrets.WINDOWS_CERTIFICATE_PASSWORD || '' }}
+          WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL }}
         run: |
           set -euo pipefail
           workspace="${GITHUB_WORKSPACE//\\//}"
@@ -370,6 +390,10 @@ jobs:
           )
           if [ "${{ matrix.platform }}" = "macos" ]; then
             args+=(--prebuilt-cli "$temp/topiaforge-macos-cli")
+            args+=(--require-macos-signing)
+          fi
+          if [ "${{ matrix.platform }}" = "windows" ]; then
+            args+=(--require-windows-signing)
           fi
           dart run bin/topiaforge.dart "${args[@]}"
 
@@ -387,8 +411,14 @@ jobs:
           )
           if [ "${{ matrix.platform }}" = "macos" ]; then
             args+=(--require-mac-universal)
+            args+=(--require-macos-trust --expected-mac-team-id "$MACOS_NOTARY_TEAM_ID")
+          fi
+          if [ "${{ matrix.platform }}" = "windows" ]; then
+            args+=(--require-windows-signature)
           fi
           dart run bin/topiaforge.dart "${args[@]}"
+        env:
+          MACOS_NOTARY_TEAM_ID: ${{ matrix.platform == 'macos' && secrets.MACOS_NOTARY_TEAM_ID || '' }}
 
       - name: Reject retired names in release package
         shell: bash
@@ -422,7 +452,7 @@ jobs:
     steps:
       - name: Enforce all applicable release jobs
         env:
-          FAIL_ON_MISSING_REFS: ${{ inputs.fail_on_missing_refs }}
+          FAIL_ON_MISSING_REFS: "true"
           REFS_AVAILABLE: ${{ needs.preflight.outputs.refs_available }}
           LAUNCHERS_RESULT: ${{ needs.build-launchers.result }}
           PREFLIGHT_RESULT: ${{ needs.preflight.result }}
