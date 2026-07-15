@@ -44,7 +44,22 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ inputs.source_sha || github.sha }}
+          lfs: true
           persist-credentials: false
+
+      - name: Verify launcher LFS assets are hydrated
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs fsck
+          git lfs ls-files --name-only \
+            | grep '^apps/topiaforge_launcher_flutter/' \
+            | while IFS= read -r asset; do
+                if git lfs pointer --check --file="$asset" >/dev/null 2>&1; then
+                  echo "::error file=$asset::Git LFS asset was not hydrated."
+                  exit 1
+                fi
+              done
 
       - name: Set up Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
@@ -80,8 +95,20 @@ jobs:
           project_dir="apps/topiaforge_launcher_flutter/macos"
           app="apps/topiaforge_launcher_flutter/build/macos/Build/Products/Release/TopiaForge.app"
           test -d "$app"
-          if codesign -d --verbose=4 "$app" >/dev/null 2>&1; then
-            echo '::error::The reusable launcher build must stay unsigned until the protected release job.'
+          # Apple-silicon Mach-O binaries can receive a linker-created ad-hoc
+          # signature even when Xcode identity signing is disabled.
+          signature_details=''
+          if signature_details="$(codesign -d --verbose=4 "$app" 2>&1)"; then
+            if ! grep -Fxq 'Signature=adhoc' <<< "$signature_details" \
+              || ! grep -Fxq 'TeamIdentifier=not set' <<< "$signature_details" \
+              || grep -Eq '^Authority=' <<< "$signature_details"; then
+              printf '%s\n' "$signature_details"
+              echo '::error::The reusable launcher build must not carry an identity or team signature.'
+              exit 1
+            fi
+          elif ! grep -Fq 'code object is not signed at all' <<< "$signature_details"; then
+            printf '%s\n' "$signature_details"
+            echo '::error::Unable to verify the reusable launcher signature state.'
             exit 1
           fi
 
