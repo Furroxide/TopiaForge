@@ -37,18 +37,19 @@ case "$url" in
     printf '[{"number":7,"base":{"ref":"main"},"head":{"ref":"release/1.0.0","sha":"%s","repo":{"full_name":"furroxide/TopiaForge"}},"merged_at":"2026-07-15T00:00:00Z","merge_commit_sha":"%s"}]\n' \
       "$FAKE_RELEASE_HEAD" "$FAKE_TARGET"
     ;;
-  repos/furroxide/TopiaForge/commits/*/check-runs?per_page=100)
+  repos/furroxide/TopiaForge/commits/*/check-runs?filter=all\&per_page=100)
     sha=${url#repos/furroxide/TopiaForge/commits/}
-    sha=${sha%/check-runs?per_page=100}
+    sha=${sha%/check-runs?filter=all&per_page=100}
     if [[ $sha == "$FAKE_RELEASE_HEAD" ]]; then
       name='Required / Release packages'
     else
       name='Required / Unity validation'
     fi
     printf '{"check_runs":['
-    printf '{"name":"%s","head_sha":"%s","status":"completed","conclusion":"success","app":{"id":15368}}' "$name" "$sha"
+    printf '{"id":10,"name":"%s","head_sha":"%s","status":"completed","conclusion":"success","app":{"id":15368}},' "$name" "$sha"
+    printf '{"id":20,"name":"%s","head_sha":"%s","status":"completed","conclusion":"%s","app":{"id":15368}}' "$name" "$sha" "$FAKE_NEWEST_CHECK_CONCLUSION"
     if [[ $sha == "$FAKE_TARGET" ]]; then
-      printf ',{"name":"Required / Game SDK acceptance","head_sha":"%s","status":"completed","conclusion":"success","app":{"id":15368}}' "$sha"
+      printf ',{"id":30,"name":"Required / Game SDK acceptance","head_sha":"%s","status":"completed","conclusion":"success","app":{"id":15368}}' "$sha"
     fi
     printf ']}\n'
     ;;
@@ -66,6 +67,7 @@ export FAKE_TARGET=$target_sha
 export FAKE_RELEASE_HEAD=$release_head_sha
 export FAKE_VERIFIED=true
 export FAKE_REASON=valid
+export FAKE_NEWEST_CHECK_CONCLUSION=success
 
 (
   cd "$temp_root/source"
@@ -80,6 +82,13 @@ if (cd "$temp_root/source" && "$verifier" furroxide/TopiaForge v1.0.0 1.0.0 "$ta
 fi
 export FAKE_VERIFIED=true
 export FAKE_REASON=valid
+
+export FAKE_NEWEST_CHECK_CONCLUSION=failure
+if (cd "$temp_root/source" && "$verifier" furroxide/TopiaForge v1.0.0 1.0.0 "$target_sha" >/dev/null 2>&1); then
+  echo "An older successful check overrode a newer failed rerun." >&2
+  exit 1
+fi
+export FAKE_NEWEST_CHECK_CONCLUSION=success
 
 git -C "$temp_root/source" tag v1.0.1 "$target_sha"
 if (cd "$temp_root/source" && "$verifier" furroxide/TopiaForge v1.0.1 1.0.1 "$target_sha" >/dev/null 2>&1); then

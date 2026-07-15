@@ -100,17 +100,23 @@ require_check() {
   local sha=$1
   local name=$2
   local checks
-  checks=$(gh_api "repos/$repository/commits/$sha/check-runs?per_page=100")
-  jq -e \
+  local latest
+  checks=$(gh_api "repos/$repository/commits/$sha/check-runs?filter=all&per_page=100")
+  latest=$(jq -ec \
     --arg name "$name" \
     --arg sha "$sha" \
-    'any(.check_runs[];
+    '[.check_runs[] | select(
       .name == $name and
       .head_sha == $sha and
-      .status == "completed" and
-      .conclusion == "success" and
-      .app.id == 15368)' <<<"$checks" >/dev/null || {
-    echo "Missing successful GitHub Actions check '$name' on $sha." >&2
+      .app.id == 15368
+    )] | sort_by(.id) | last // empty' <<<"$checks") || {
+    echo "Missing GitHub Actions check '$name' on $sha." >&2
+    exit 1
+  }
+  jq -e \
+    '.status == "completed" and .conclusion == "success"' \
+    <<<"$latest" >/dev/null || {
+    echo "Newest GitHub Actions check '$name' on $sha is not successful." >&2
     exit 1
   }
 }
