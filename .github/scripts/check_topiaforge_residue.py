@@ -35,7 +35,11 @@ BYTE_RULES = (
     ("retired QwUi abbreviation", re.compile(rb"qwui", re.IGNORECASE)),
     (
         "retired Qw-prefixed identifier",
-        re.compile(rb"(?<![A-Za-z0-9_])I?Qw[A-Z][a-z][A-Za-z0-9_]*"),
+        # Require a PascalCase stem of at least three alphabetic characters.
+        # Runtime-table collisions such as QwYw and QwYw6 are not identifiers;
+        # historical short symbols such as QwGap remain covered. QwUi and its
+        # longer forms are covered by the dedicated rule above.
+        re.compile(rb"(?<![A-Za-z0-9_])I?Qw[A-Z][a-z]{2}[A-Za-z0-9_]*"),
     ),
     ("retired package extension", re.compile(rb"\.robotopiamod\b", re.IGNORECASE)),
     ("retired manifest filename", re.compile(rb"\brobotopia\.mod\.json\b", re.IGNORECASE)),
@@ -206,7 +210,18 @@ def archive_suffix(path: str) -> str:
 
 def check_path(display: str, policy_path: str, failures: list[str]) -> None:
     normalized = policy_path.replace("\\", "/")
-    if "robotopia" in normalized.lower() and normalized not in ROBOTOPIA_PATH_ALLOWLIST:
+    allowed_game_path = False
+    for allowed in ROBOTOPIA_PATH_ALLOWLIST:
+        suffix = f"/{allowed}"
+        if normalized == allowed:
+            allowed_game_path = True
+            break
+        if normalized.endswith(suffix):
+            package_prefix = normalized[: -len(suffix)]
+            if "robotopia" not in package_prefix.lower():
+                allowed_game_path = True
+                break
+    if "robotopia" in normalized.lower() and not allowed_game_path:
         failures.append(f"{display}: retired Robotopia ecosystem name in path")
     if FORBIDDEN_PATH.search(normalized):
         failures.append(f"{display}: retired ecosystem name in path")

@@ -72,6 +72,7 @@ Future<void> _validateReleaseProvenance(
           extracted,
           issues,
           verifyHashes: verifyArchiveHashes,
+          verifyModes: !Platform.isWindows,
         );
       }
     }
@@ -113,6 +114,7 @@ Future<void> _validateExtractedTree(
   Directory extracted,
   List<String> issues, {
   required bool verifyHashes,
+  required bool verifyModes,
 }) async {
   final treePath = p.join(
     root,
@@ -160,8 +162,14 @@ Future<void> _validateExtractedTree(
     final metadata = _object(expected, '$treePath $relative');
     final stat = File(entity.path).statSync();
     final mode = (stat.mode & 0x1ff).toRadixString(8).padLeft(4, '0');
-    if (stat.size != metadata['size'] || mode != metadata['mode']) {
-      issues.add('BepInEx extracted entry size/mode drifted: $relative.');
+    if (stat.size != metadata['size']) {
+      issues.add('BepInEx extracted entry size drifted: $relative.');
+    }
+    // Windows filesystems do not expose the source archive's POSIX mode bits.
+    // The byte length and SHA-256 remain mandatory on every platform; exact
+    // mode validation runs on the Linux/macOS release legs.
+    if (verifyModes && mode != metadata['mode']) {
+      issues.add('BepInEx extracted entry mode drifted: $relative.');
     }
     if (verifyHashes &&
         await _sha256File(File(entity.path)) != metadata['sha256']) {
