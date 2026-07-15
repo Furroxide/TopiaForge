@@ -92,6 +92,9 @@ def compliant_snapshot(policy: dict[str, Any]) -> dict[str, Any]:
     }
     return {
         "repository": repository,
+        "repository_administrators": copy.deepcopy(
+            policy["repository_administrators"]
+        ),
         "rulesets": [
             ruleset_fixture(ruleset, policy["github_actions_integration_id"])
             for ruleset in policy["rulesets"]
@@ -171,6 +174,15 @@ class RepositoryGovernanceAuditTests(unittest.TestCase):
         failures = AUDIT.evaluate_snapshot(self.snapshot, self.policy)
 
         self.assertTrue(any("obsolete ruleset is still active" in failure for failure in failures))
+
+    def test_unexpected_repository_administrator_is_reported(self) -> None:
+        self.snapshot["repository_administrators"].append("unexpected-admin")
+
+        failures = AUDIT.evaluate_snapshot(self.snapshot, self.policy)
+
+        self.assertTrue(
+            any("repository_administrators" in failure for failure in failures)
+        )
 
     def test_policy_has_exact_common_contexts_and_no_branch_flow_bypass(self) -> None:
         common = {

@@ -1,6 +1,9 @@
 {
   "schema_version": 1,
   "repository_full_name": "furroxide/TopiaForge",
+  "repository_administrators": [
+    "furroxide"
+  ],
   "github_actions_integration_id": 15368,
   "repository_settings": {
     "default_branch": "main",
@@ -328,6 +331,7 @@
     "Confirm the sole owner has a passkey or hardware key, TOTP recovery, offline recovery codes, and reviewed sessions, PATs, and SSH keys.",
     "Confirm administrator bypass is disabled in each protected environment if the REST response cannot prove it.",
     "Confirm only explicitly trusted collaborators can submit formal approval or changes-requested reviews.",
-    "Confirm DCO/web signoff remains disabled until inbound contribution licensing is resolved."
+    "Confirm DCO/web signoff remains disabled until inbound contribution licensing is resolved.",
+    "Confirm ordinary dev pull requests use squash merge and sync/main-v* pull requests use a merge commit; GitHub cannot condition a merge method on the source branch."
   ]
 }
