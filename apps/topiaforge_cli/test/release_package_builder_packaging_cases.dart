@@ -246,6 +246,7 @@ void _registerReleasePackagingTests() {
       );
     }
     _addDartNotices(archive);
+    _addSdkPayload(archive);
     zip.writeAsBytesSync(_markZipEntriesAsUnix(ZipEncoder().encode(archive)));
 
     await ReleasePackageValidator(
@@ -307,6 +308,7 @@ void _registerReleasePackagingTests() {
       );
     }
     _addDartNotices(archive, prefix: payload);
+    _addSdkPayload(archive, prefix: payload);
     final zip = File(p.join(temp.path, 'macos-nested-arch.zip'))
       ..writeAsBytesSync(_markZipEntriesAsUnix(ZipEncoder().encode(archive)));
     final runner = _RecordingProcessRunner(

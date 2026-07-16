@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "requiredLifecycleCycles": 10,
+  "markerPrefix": "TF-ACCEPT",
+  "cases": [
+    {
+      "id": "lifecycle.initial-scene",
+      "probeMethod": "TryPassInitialScene",
+      "description": "The initial active scene and its first scene-delivery callback are observed on the main thread."
+    },
+    {
+      "id": "lifecycle.frame-fixed-late",
+      "probeMethod": "RegisterEvents",
+      "description": "Frame, fixed, and late callbacks are each delivered without cross-subscriber failure propagation."
+    },
+    {
+      "id": "input.devices-and-focus",
+      "probeMethod": "ObserveInput",
+      "description": "Named keyboard, mouse, and gamepad actions report pressed, held, released, axes, conflicts, rebinding, and UI-focus suppression."
+    },
+    {
+      "id": "player.health-and-control",
+      "probeMethod": "ObservePlayerAndWorld",
+      "description": "Player/camera aim, health damage/heal, and nested control leases operate and restore controls."
+    },
+    {
+      "id": "world.physics-entities-items-interactions",
+      "probeMethod": "ObservePlayerAndWorld",
+      "description": "Ray/shape queries, entity transforms and motion, held-item operations, and native interaction prompts/callbacks operate through safe handles."
+    },
+    {
+      "id": "content.prefab-spawn-destroy",
+      "probeMethod": "RunAsyncChecks",
+      "description": "A package bundle and prefab load asynchronously, spawn through an opaque handle, and are destroyed without leaks."
+    },
+    {
+      "id": "content.audio",
+      "probeMethod": "ObservePlayerAndWorld",
+      "description": "Non-positional and positional framework audio cues play and release through lifetime-owned handles."
+    },
+    {
+      "id": "authoring.config-storage-localization-commands",
+      "probeMethod": "RunAuthoringChecks",
+      "description": "Validated config migration, scoped storage/story flags, localization, commands, and diagnostics survive a save-aware reload."
+    },
+    {
+      "id": "ui.accessibility-and-focus",
+      "probeMethod": "RunUiChecks",
+      "description": "HUD, window, modal, toast, high contrast, UI scale, reduced motion, focus, and teardown use TopiaForgeUi."
+    },
+    {
+      "id": "worlds.session-teardown",
+      "probeMethod": "RegisterProviderChecks",
+      "description": "Scene/world/gamemode registration, loading, pause actions, session lifecycle, and save-aware teardown complete cleanly."
+    },
+    {
+      "id": "robots.objectives-dialogue-voice",
+      "probeMethod": "TryPassRobotAcceptance",
+      "description": "Robot spawn/body/health/movement, targets, objectives, dialogue, brain query, voice input, and custom interaction run without consumer native APIs."
+    },
+    {
+      "id": "integration.provider-scope",
+      "probeMethod": "RunProviderContractChecks",
+      "description": "Declared required providers and the installed optional UGC provider resolve exactly once; an absent optional dependency does not block the consumer; singleton conflicts, multiple-provider ordering, deterministic selection, and early release are enforced.",
+      "behaviors": [
+        "required-provider-singletons",
+        "optional-present-provider",
+        "optional-absent-nonblocking",
+        "singleton-conflict",
+        "multiple-cardinality",
+        "deterministic-selection",
+        "early-release"
+      ]
+    },
+    {
+      "id": "compat.graceful-unavailable",
+      "probeMethod": "RunAsyncChecks",
+      "description": "Unavailable or drifted game bindings return stable results and reasons without crashing the mod or startup."
+    },
+    {
+      "id": "lifecycle.ten-cycles",
+      "probeMethod": "RunLifetimeCyclesAsync",
+      "description": "Automatable core and noninteractive module resource families complete ten in-session acquisition/release/reacquisition cycles with callback-stop and inactive-handle assertions. Hardware-, dialogue-, robot-, pause-, and session-specific handles are exercised by their dedicated live cases; offline lifecycle tests cover load/unload/reload and partial-load failure.",
+      "minimumCycles": 10,
+      "resourceFamilies": [
+        "explicit-lifetime",
+        "event-subscriptions",
+        "scheduler-operations",
+        "input-actions",
+        "player-control-leases",
+        "asset-bundle-prefab-entity",
+        "interactions",
+        "audio-playback",
+        "ui-surfaces-modals",
+        "localization",
+        "commands",
+        "extensions",
+        "chronos-leases",
+        "prompt-overrides",
+        "robot-targets",
+        "ugc-asset-overrides",
+        "world-registrations"
+      ]
+    }
+  ]
+}

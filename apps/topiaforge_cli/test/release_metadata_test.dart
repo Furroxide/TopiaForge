@@ -17,7 +17,7 @@ void main() {
   setUp(() {
     temp = Directory.systemTemp.createTempSync('topiaforge-metadata-test-');
     root = _repositoryRoot();
-    release = TopiaForgeReleaseCatalog.load(root).release('0.1.1');
+    release = TopiaForgeReleaseCatalog.load(root).release('1.0.0');
     _writeCandidateAssets(temp, release);
   });
 

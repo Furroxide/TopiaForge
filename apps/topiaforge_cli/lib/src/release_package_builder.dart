@@ -84,6 +84,7 @@ class ReleasePackageBuilder {
       p.join(repositoryRoot, 'TopiaForge.slnx'),
       '-c',
       configuration,
+      '-p:GenerateDocumentationFile=true',
     ], workingDirectory: repositoryRoot);
 
     if (prebuiltDist.trim().isNotEmpty) {

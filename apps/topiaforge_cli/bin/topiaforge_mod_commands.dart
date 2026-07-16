@@ -1,6 +1,6 @@
 part of 'topiaforge.dart';
 
-/// `topiaforge mod ...` — manifest management after creation. Every schema-v3 field of `topiaforge.mod.json` can
+/// `topiaforge mod ...` — manifest management after creation. Every schema-v4 field of `topiaforge.mod.json` can
 /// be shown and edited from the terminal; edits are validated on write (same rules as `check package`).
 extension _TopiaForgeModCommands on _TopiaForgeCli {
   static const _scalarFields = {
@@ -24,8 +24,9 @@ extension _TopiaForgeModCommands on _TopiaForgeCli {
 
   static const _listFields = {
     'tag': 'tags',
-    'permission': 'permissions',
+    'capability': 'capabilities',
     'load-after': 'loadAfter',
+    'load-before': 'loadBefore',
     'screenshot': 'screenshots',
     'api-assembly': 'apiAssemblies',
   };
@@ -54,7 +55,7 @@ extension _TopiaForgeModCommands on _TopiaForgeCli {
           '  topiaforge mod bump [major|minor|patch] [--project path]',
         );
         stdout.writeln(
-          '  topiaforge mod add|remove tag|permission|load-after|screenshot|api-assembly <value> [--project path]',
+          '  topiaforge mod add|remove tag|capability|load-after|load-before|screenshot|api-assembly <value> [--project path]',
         );
         stdout.writeln(
           '  topiaforge mod add|remove dependency|optional-dependency|conflict <id[@range]> [--project path]',
@@ -62,8 +63,137 @@ extension _TopiaForgeModCommands on _TopiaForgeCli {
         stdout.writeln(
           '  topiaforge mod add|remove gamemode <id:Name[:description]> [--project path]',
         );
+        stdout.writeln(
+          '  topiaforge mod add|remove <chronos|prompts|robotkit|ugc|worlds|interop-unity> [--project path]',
+        );
         return sub == null ? 0 : 2;
     }
+  }
+
+  Future<int> _migrateManifest(List<String> args) async {
+    final positional = args.where((arg) => !arg.startsWith('--')).toList();
+    final projectPath =
+        _option(args, '--project') ??
+        positional.firstOrNull ??
+        Directory.current.path;
+    final file = File(p.join(projectPath, 'topiaforge.mod.json'));
+    if (!file.existsSync()) {
+      throw StateError('topiaforge.mod.json was not found in $projectPath.');
+    }
+
+    final map = readBoundedJsonObjectSync(
+      file,
+      maxBytes: CliFileLimits.manifest,
+    );
+    final schemaVersion = (map['schemaVersion'] as num?)?.toInt();
+    if (schemaVersion == 4) {
+      stdout.writeln('topiaforge.mod.json already uses schema V4.');
+      return 0;
+    }
+    if (schemaVersion != 3) {
+      throw StateError(
+        'Only schema V3 manifests can be migrated; found ${schemaVersion ?? 'no schemaVersion'}.',
+      );
+    }
+
+    final required = <String, Object?>{};
+    final optional = <String, Object?>{};
+
+    void readDependencyMap(Object? value, Map<String, Object?> destination) {
+      if (value is! Map) return;
+      for (final entry in value.entries) {
+        destination[entry.key.toString()] = _migrateV3DependencyRange(
+          entry.value?.toString() ?? '*',
+        );
+      }
+    }
+
+    void readDependencyList(
+      Object? value,
+      Map<String, Object?> defaultDestination,
+    ) {
+      if (value is! List) return;
+      for (final raw in value.whereType<Map>()) {
+        final item = raw.map((key, value) => MapEntry(key.toString(), value));
+        final id = item['id']?.toString() ?? '';
+        if (id.isEmpty) continue;
+        final range =
+            item['versionRange']?.toString() ??
+            item['version']?.toString() ??
+            '*';
+        final destination = item['optional'] == true
+            ? optional
+            : defaultDestination;
+        destination[id] = _migrateV3DependencyRange(range);
+      }
+    }
+
+    readDependencyMap(map['vpmDependencies'], required);
+    if (map['dependencies'] is Map) {
+      readDependencyMap(map['dependencies'], required);
+    } else {
+      readDependencyList(map['dependencies'], required);
+    }
+    if (map['optionalDependencies'] is Map) {
+      readDependencyMap(map['optionalDependencies'], optional);
+    } else {
+      readDependencyList(map['optionalDependencies'], optional);
+    }
+    for (final id in required.keys) {
+      optional.remove(id);
+    }
+
+    final legacyPermissions = _jsonStringList(map['permissions']);
+    map
+      ..remove('vpmDependencies')
+      ..remove('permissions')
+      ..['dependencies'] = required
+      ..['schemaVersion'] = 4
+      ..[r'$schema'] = ModManifest.canonicalSchemaUrl;
+    if (optional.isEmpty) {
+      map.remove('optionalDependencies');
+    } else {
+      map['optionalDependencies'] = optional;
+    }
+
+    final capabilities = <String>{
+      ..._jsonStringList(map['capabilities']),
+      ...legacyPermissions,
+    };
+    if (capabilities.isNotEmpty) {
+      map['capabilities'] = capabilities.toList()..sort();
+    }
+
+    final conflicts = _jsonMapList(map['conflicts']);
+    for (final conflict in conflicts) {
+      if (!conflict.containsKey('versionRange') &&
+          conflict['version'] != null) {
+        conflict['versionRange'] = conflict.remove('version');
+      }
+    }
+    if (conflicts.isNotEmpty) map['conflicts'] = conflicts;
+
+    for (final field in const [
+      'supportedGameVersionRange',
+      'supportedLoaderVersionRange',
+      'supportedSdkVersionRange',
+    ]) {
+      map.putIfAbsent(field, () => '*');
+    }
+
+    final migrated = ModManifest.fromJson(map);
+    final issues = migrated.validate();
+    if (issues.any((issue) => issue.isBlocking)) {
+      stderr.writeln('The V3 manifest could not be migrated automatically:');
+      _printIssues(issues);
+      return 1;
+    }
+    await developerRepository.updateModManifest(projectPath, migrated);
+    stdout.writeln('Migrated topiaforge.mod.json from schema V3 to V4.');
+    stdout.writeln(
+      'Review any compatibility range defaulted to * before publishing.',
+    );
+    return 0;
   }
 
   /// Increments the manifest version through the same validated-write path
@@ -161,8 +291,14 @@ extension _TopiaForgeModCommands on _TopiaForgeCli {
   }
 
   Future<int> _modEditList(List<String> args, {required bool add}) async {
-    final kind = args.firstOrNull;
-    final value = args.length > 1 ? args[1] : null;
+    var kind = args.firstOrNull;
+    var value = args.length > 1 ? args[1] : null;
+    if (kind != null &&
+        _sdkModules.containsKey(kind) &&
+        (value == null || value.startsWith('--'))) {
+      value = kind;
+      kind = 'module';
+    }
     if (kind == null || value == null) {
       throw UsageError(
         'Usage: topiaforge mod ${add ? 'add' : 'remove'} <kind> <value> [--project path]\n'
@@ -186,12 +322,21 @@ extension _TopiaForgeModCommands on _TopiaForgeCli {
     }
 
     switch (kind) {
+      case 'module':
+        final module = _sdkModules[value];
+        if (module == null) {
+          throw UsageError(
+            'Unknown SDK module "$value". Available modules: '
+            '${_sdkModules.keys.join(', ')}',
+          );
+        }
+        return _mutateSdkModule(args, value, module, add: add);
       case 'dependency':
         final (id, range) = _splitSpec(value);
         return _mutateManifest(args, (map) {
           final deps = Map<String, Object?>.of(
-            map['vpmDependencies'] is Map
-                ? (map['vpmDependencies'] as Map).cast<String, Object?>()
+            map['dependencies'] is Map
+                ? (map['dependencies'] as Map).cast<String, Object?>()
                 : const <String, Object?>{},
           );
           if (add) {
@@ -199,22 +344,20 @@ extension _TopiaForgeModCommands on _TopiaForgeCli {
           } else {
             deps.remove(id);
           }
-          map['vpmDependencies'] = deps;
+          map['dependencies'] = deps;
         });
       case 'optional-dependency':
         final (id, range) = _splitSpec(value);
         return _mutateManifest(args, (map) {
-          final items = _jsonMapList(
-            map['optionalDependencies'],
-          ).where((item) => item['id'] != id).toList();
+          final items = Map<String, Object?>.of(
+            map['optionalDependencies'] is Map
+                ? (map['optionalDependencies'] as Map).cast<String, Object?>()
+                : const <String, Object?>{},
+          );
           if (add) {
-            items.add(
-              ModDependency(
-                id: id,
-                versionRange: range,
-                optional: true,
-              ).toJson(),
-            );
+            items[id] = range.toString();
+          } else {
+            items.remove(id);
           }
           if (items.isEmpty) {
             map.remove('optionalDependencies');
@@ -288,6 +431,30 @@ extension _TopiaForgeModCommands on _TopiaForgeCli {
     return (spec.substring(0, at), VersionRange.parse(spec.substring(at + 1)));
   }
 
+  String _migrateV3DependencyRange(String value) {
+    final range = value.trim();
+    try {
+      VersionRange.parse(range);
+      return range.isEmpty ? '*' : range;
+    } on FormatException {
+      // V3's vpmDependencies name encouraged the VPM caret/tilde syntax.
+      // Canonical V4 ranges use the framework's explicit comparator form.
+      if (range.length < 2 || (range[0] != '^' && range[0] != '~')) {
+        return range;
+      }
+      final minimum = SemanticVersion.tryParse(range.substring(1));
+      if (minimum == null) return range;
+      final maximum = range[0] == '~'
+          ? minimum.incrementMinor()
+          : minimum.majorNumber.isPositive
+          ? minimum.incrementMajor()
+          : minimum.minorNumber.isPositive
+          ? minimum.incrementMinor()
+          : minimum.incrementPatch();
+      return '>=$minimum <$maximum';
+    }
+  }
+
   GamemodeDefinition _parseGamemodeSpec(String spec) {
     final parts = spec.split(':');
     if (parts.first.trim().isEmpty) {
@@ -311,4 +478,16 @@ extension _TopiaForgeModCommands on _TopiaForgeCli {
             .map((item) => item.cast<String, Object?>())
             .toList()
       : const [];
+}
+
+final class _SdkModule {
+  const _SdkModule({
+    required this.packageId,
+    this.runtimeDependency = '',
+    this.capability = '',
+  });
+
+  final String packageId;
+  final String runtimeDependency;
+  final String capability;
 }

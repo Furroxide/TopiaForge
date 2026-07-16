@@ -20,12 +20,20 @@ namespace TopiaForge
         private const int Cycles = 16;
         private const int MaxAssemblyBytes = 64 * 1024 * 1024;
         private const string PendingSessionKey = "TopiaForge.UiLifecycleSmoke.Pending";
+        private static Assembly coreAssembly;
+        private static Assembly worldsAssembly;
         private static Assembly uiAssembly;
         private static Snapshot baseline;
         private static int verificationAttempts;
+        private static string evidencePath;
 
         public static void Run()
         {
+            evidencePath = RequiredArgument("-topiaforgeLifecycleEvidence");
+            if (File.Exists(evidencePath))
+            {
+                File.Delete(evidencePath);
+            }
             SessionState.SetBool(PendingSessionKey, true);
             ResumePendingSmoke();
             if (!EditorApplication.isPlaying)
@@ -188,6 +196,7 @@ namespace TopiaForge
 
                 EditorApplication.update -= VerifyDestroyedCanvases;
                 current.AssertEquals(baseline, "post-destroy verification");
+                WriteEvidence();
                 Debug.Log("[UiLifecycleSmoke] PASS: " + Cycles
                     + " create/show/modal/clear/dispose cycles returned every tracked baseline.");
                 EditorApplication.Exit(0);
@@ -203,6 +212,13 @@ namespace TopiaForge
         {
             var repoRoot = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "..", ".."));
             var managedDir = RequiredArgument("-robotopiaManagedDir");
+            var loaderPath = Path.Combine(
+                repoRoot,
+                "src",
+                "TopiaForge.ModManager",
+                "bin",
+                "Release",
+                "netstandard2.1");
             var abstractionsPath = Path.Combine(
                 repoRoot,
                 "src",
@@ -211,6 +227,14 @@ namespace TopiaForge
                 "Release",
                 "netstandard2.1",
                 "TopiaForge.Mods.Abstractions.dll");
+            var worldsPath = Path.Combine(
+                repoRoot,
+                "src",
+                "TopiaForge.Mods.Worlds",
+                "bin",
+                "Release",
+                "netstandard2.1",
+                "TopiaForge.Mods.Worlds.dll");
             var uiPath = Path.Combine(
                 repoRoot,
                 "src",
@@ -220,9 +244,90 @@ namespace TopiaForge
                 "netstandard2.1",
                 "TopiaForge.Mods.UnityUi.dll");
 
+            // Exercise the package validator under Unity's Mono profile, using
+            // exactly the dependency split shipped to players. Robotopia owns
+            // its system facades; TopiaForge supplies only Metadata/Immutable.
+            LoadRequiredAssembly(Path.Combine(managedDir, "System.Buffers.dll"));
+            LoadRequiredAssembly(Path.Combine(managedDir, "System.Runtime.CompilerServices.Unsafe.dll"));
+            LoadRequiredAssembly(Path.Combine(managedDir, "System.Memory.dll"));
+            LoadRequiredAssembly(Path.Combine(loaderPath, "System.Collections.Immutable.dll"));
+            LoadRequiredAssembly(Path.Combine(loaderPath, "System.Reflection.Metadata.dll"));
+            coreAssembly = LoadRequiredAssembly(
+                Path.Combine(loaderPath, "TopiaForge.ModManager.Core.dll"));
+            ExerciseManagedValidator();
+
             LoadRequiredAssembly(Path.Combine(managedDir, "Unity.InputSystem.dll"));
             LoadRequiredAssembly(abstractionsPath);
+            // UnityUi's safe shop widgets reference the Worlds contracts.
+            // Load that dependency before UnityUi so this smoke matches the
+            // game-side loader's dependency order.
+            worldsAssembly = LoadRequiredAssembly(worldsPath);
             uiAssembly = LoadRequiredAssembly(uiPath);
+        }
+
+        private static void ExerciseManagedValidator()
+        {
+            var packageRoot = Path.Combine(
+                Path.GetTempPath(),
+                "topiaforge-unity-validator-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(packageRoot);
+            try
+            {
+                File.WriteAllText(Path.Combine(packageRoot, "Broken.dll"), "not a portable executable");
+                var manifestType = coreAssembly.GetType(
+                    "TopiaForge.ModManager.Core.ModManifest",
+                    throwOnError: true);
+                var manifest = Activator.CreateInstance(manifestType);
+                manifestType.GetProperty("EntryAssembly").SetValue(manifest, "Broken.dll");
+                manifestType.GetProperty("EntryType").SetValue(manifest, "Smoke.BrokenMod");
+                var validator = coreAssembly.GetType(
+                    "TopiaForge.ModManager.Core.ManagedModAssemblyValidator",
+                    throwOnError: true);
+                var validate = validator.GetMethod(
+                    "Validate",
+                    BindingFlags.Public | BindingFlags.Static);
+                var errors = ((IEnumerable)validate.Invoke(
+                        null,
+                        new[] { packageRoot, manifest, (object)false }))
+                    .Cast<object>()
+                    .Select(value => value == null ? string.Empty : value.ToString())
+                    .ToArray();
+                if (!errors.Any(error => error.IndexOf("valid PE image", StringComparison.Ordinal) >= 0))
+                {
+                    throw new InvalidOperationException(
+                        "Managed validator did not execute its PE metadata path under Unity Mono.");
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(packageRoot))
+                {
+                    Directory.Delete(packageRoot, true);
+                }
+            }
+        }
+
+        private static void WriteEvidence()
+        {
+            if (string.IsNullOrWhiteSpace(evidencePath))
+            {
+                evidencePath = RequiredArgument("-topiaforgeLifecycleEvidence");
+            }
+            var directory = Path.GetDirectoryName(evidencePath);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+            var json = "{\n"
+                + "  \"schemaVersion\": 1,\n"
+                + "  \"result\": \"pass\",\n"
+                + "  \"editorVersion\": \"" + Application.unityVersion + "\",\n"
+                + "  \"cycles\": " + Cycles + ",\n"
+                + "  \"validatorSmoke\": true,\n"
+                + "  \"worldsAssemblyVersion\": \"" + worldsAssembly.GetName().Version + "\",\n"
+                + "  \"uiAssemblyVersion\": \"" + uiAssembly.GetName().Version + "\"\n"
+                + "}\n";
+            File.WriteAllText(evidencePath, json);
         }
 
         private static Assembly LoadRequiredAssembly(string path)

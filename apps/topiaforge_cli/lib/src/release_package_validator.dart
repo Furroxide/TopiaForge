@@ -1,11 +1,20 @@
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
+import 'package:launcher_data/launcher_data.dart';
 import 'package:path/path.dart' as p;
 
+import 'bounded_file_reader.dart';
+import 'release_loader_payload.dart';
 import 'release_package_io.dart';
 import 'release_package_models.dart';
 import 'release_package_notices.dart';
 import 'release_package_windows.dart';
+import 'release_sdk_payload.dart';
+
+part 'release_package_validator_helpers.dart';
+part 'release_package_validator_smoke.dart';
 
 class ReleasePackageValidator {
   ReleasePackageValidator({
@@ -69,6 +78,9 @@ class ReleasePackageValidator {
     _assertPayload(payload);
     if (requireRuntimePayload) {
       _assertRuntimePayload(payload);
+      await _assertExecutable(
+        p.join(payload, platform.gameCompatExtractorFileName),
+      );
     }
     if (requireLauncher) {
       _assertFlutterNotices(app);
@@ -98,6 +110,9 @@ class ReleasePackageValidator {
     _assertPayload(root);
     if (requireRuntimePayload) {
       _assertRuntimePayload(root);
+      await _assertExecutable(
+        p.join(root, platform.gameCompatExtractorFileName),
+      );
     }
     await _assertCliRuns(cli);
     if (requireLauncher && platform == ReleasePackagePlatform.linux) {
@@ -118,6 +133,7 @@ class ReleasePackageValidator {
   }
 
   void _assertPayload(String payloadRoot) {
+    const ReleaseSdkPayloadValidator().validate(payloadRoot);
     _assertPath(p.join(payloadRoot, 'tools'), 'Package must include tools/.');
     _assertPath(
       p.join(payloadRoot, 'templates'),
@@ -229,47 +245,32 @@ class ReleasePackageValidator {
       'Release',
       'netstandard2.1',
     );
-    _assertPath(
-      p.join(loaderDir, 'TopiaForge.ModManager.dll'),
-      'Package must include the loader.',
-    );
-    _assertPath(
-      p.join(loaderDir, 'TopiaForge.Mods.UnityUi.dll'),
-      'Package must include the UI kit.',
-    );
+    for (final dependency in releaseLoaderDlls) {
+      _assertPath(
+        p.join(loaderDir, dependency),
+        'Package must include managed loader file $dependency.',
+      );
+    }
+    _assertRuntimeLoaderProvenance(payloadRoot);
 
     if (platform == ReleasePackagePlatform.windows) {
       _assertPath(
         p.join(payloadRoot, 'winhttp.dll'),
         'Windows package must include the game-overlay Doorstop.',
       );
-      _assertPath(
-        p.join(
-          payloadRoot,
-          'BepInEx',
-          'plugins',
-          'TopiaForge.ModManager',
-          'TopiaForge.ModManager.dll',
-        ),
-        'Windows package must include the overlay loader.',
+      final overlay = p.join(
+        payloadRoot,
+        'BepInEx',
+        'plugins',
+        'TopiaForge.ModManager',
       );
-    }
-  }
-
-  Future<void> _assertCliRuns(String cliPath) async {
-    await _assertExecutable(cliPath);
-    if (!runCliSmoke) {
-      return;
-    }
-    final result = await processRunner.runResult(cliPath, [
-      '--help',
-    ], environment: releaseChildEnvironment(null));
-    if (result.exitCode != 0) {
-      throw StateError('CLI help failed with exit ${result.exitCode}.');
-    }
-    final output = '${result.stdout}\n${result.stderr}';
-    if (!output.contains('TopiaForge CLI')) {
-      throw StateError('CLI help output did not contain the expected banner.');
+      for (final dependency in releaseLoaderDlls) {
+        _assertPath(
+          p.join(overlay, dependency),
+          'Windows overlay must include managed loader file $dependency.',
+        );
+      }
+      validateWindowsLoaderOverlay(payloadRoot);
     }
   }
 
@@ -436,40 +437,4 @@ class ReleasePackageValidator {
       appPath,
     ], label: 'Gatekeeper assessment');
   }
-
-  Future<void> _requireSuccess(
-    String executable,
-    List<String> arguments, {
-    required String label,
-  }) async {
-    final result = await processRunner.runResult(executable, arguments);
-    if (result.exitCode != 0) {
-      throw StateError('$label failed with exit ${result.exitCode}.');
-    }
-  }
-
-  void _assertFlutterNotices(String launcherRoot) {
-    final root = Directory(launcherRoot);
-    final found =
-        root.existsSync() &&
-        root
-            .listSync(recursive: true, followLinks: false)
-            .whereType<File>()
-            .any((file) => p.basename(file.path) == 'NOTICES.Z');
-    if (!found) {
-      throw StateError(
-        'Flutter launcher must include its generated NOTICES.Z bundle.',
-      );
-    }
-  }
-
-  void _assertPath(String path, String message) {
-    if (!FileSystemEntity.typeSync(path).exists) {
-      throw StateError('$message Missing path: $path');
-    }
-  }
-}
-
-extension on FileSystemEntityType {
-  bool get exists => this != FileSystemEntityType.notFound;
 }

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:launcher_data/launcher_data.dart';
 import 'package:path/path.dart' as p;
 import 'package:topiaforge/src/release_package_builder.dart';
 import 'package:topiaforge/src/release_package_io.dart';
@@ -177,6 +178,20 @@ final _throwsSetupGuidance = throwsA(
 Directory _writeFixtureRepo(Directory temp) {
   final repo = Directory(p.join(temp.path, 'repo'))..createSync();
   File(p.join(repo.path, 'TopiaForge.slnx')).writeAsStringSync('');
+  File(p.join(repo.path, 'global.json')).writeAsStringSync(
+    jsonEncode({
+      'sdk': {
+        'version': '10.0.301',
+        'rollForward': 'disable',
+        'allowPrerelease': false,
+      },
+    }),
+  );
+  _writeFile(repo, [
+    'apps',
+    'topiaforge_cli',
+    'pubspec.yaml',
+  ], 'name: topiaforge\nversion: 0.1.1\n');
   File(p.join(repo.path, 'README.md')).writeAsStringSync('readme');
   File(
     p.join(repo.path, 'THIRD_PARTY_NOTICES.md'),
@@ -185,9 +200,68 @@ Directory _writeFixtureRepo(Directory temp) {
   _writeFile(repo, ['docs', 'Guide.md'], 'guide');
   _writeFile(repo, ['bindings', 'binding.txt'], 'binding');
   _writeFile(repo, ['baselines', 'baseline.txt'], 'baseline');
-  _writeFile(repo, ['templates', 'mod', 'template.txt'], 'template');
+  _writeFile(
+    repo,
+    ['templates', 'mod', 'minimal', '{{ASSEMBLY_NAME}}.csproj'],
+    '''<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile></PropertyGroup>
+  <ItemGroup><PackageReference Include="TopiaForge.Mods.Abstractions" Version="1.0.0" /></ItemGroup>
+</Project>''',
+  );
   _writeFile(repo, ['dist', 'vpm', 'index.json'], '{}');
   _writeFile(repo, ['dist', 'demo.topiaforgemod'], 'package');
+  for (final package in topiaForgeSdkPackageIds) {
+    final analyzer = package == 'TopiaForge.Mods.Analyzers';
+    final target = analyzer ? 'netstandard2.0' : 'netstandard2.1';
+    _writeFile(
+      repo,
+      ['src', package, '$package.csproj'],
+      '<Project><PropertyGroup><TargetFramework>$target</TargetFramework>'
+      '<Version>1.0.0</Version></PropertyGroup></Project>',
+    );
+    _writeFile(repo, [
+      'src',
+      package,
+      'bin',
+      'Release',
+      target,
+      '$package.dll',
+    ], '$package implementation');
+    if (!analyzer) {
+      _writeFile(repo, [
+        'src',
+        package,
+        'bin',
+        'Release',
+        target,
+        '$package.xml',
+      ], '<doc />');
+      _writeFile(repo, [
+        'src',
+        package,
+        'obj',
+        'Release',
+        target,
+        'ref',
+        '$package.dll',
+      ], '$package reference');
+    }
+  }
+  for (final name in const [
+    'TopiaForge.ModPackageValidator.dll',
+    'TopiaForge.ModPackageValidator.deps.json',
+    'TopiaForge.ModPackageValidator.runtimeconfig.json',
+    'TopiaForge.ModManager.Core.dll',
+  ]) {
+    _writeFile(repo, [
+      'src',
+      'TopiaForge.ModPackageValidator',
+      'bin',
+      'Release',
+      'net10.0',
+      name,
+    ], 'validator fixture');
+  }
   _writeReleaseNoticeFixtures(repo);
   return repo;
 }

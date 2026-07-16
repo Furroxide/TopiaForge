@@ -4,9 +4,11 @@ import 'package:launcher_data/launcher_data.dart';
 import 'package:path/path.dart' as p;
 
 import 'bounded_file_reader.dart';
+import 'release_loader_payload.dart';
 import 'release_package_io.dart';
 import 'release_package_models.dart';
 import 'release_package_notices.dart';
+import 'release_sdk_payload.dart';
 
 class ReleasePackagePayloadWriter {
   const ReleasePackagePayloadWriter({
@@ -32,6 +34,10 @@ class ReleasePackagePayloadWriter {
   final RepositoryDotnetSdkResolver dotnetSdkResolver;
 
   Future<void> copyCommonPayload(String destinationRoot) async {
+    ReleaseSdkPayloadWriter(
+      repositoryRoot: repositoryRoot,
+      configuration: configuration,
+    ).write(destinationRoot);
     _copyDistPayload(destinationRoot);
     fileOps.copyDirectory(
       Directory(p.join(repositoryRoot, 'tools')),
@@ -89,6 +95,16 @@ class ReleasePackagePayloadWriter {
     if (!Directory(bepInEx).existsSync()) {
       throw StateError('BepInEx payload was not found at $bepInEx.');
     }
+    for (final assembly in releaseLoaderAssemblies) {
+      await validateReleaseLoaderAssembly(
+        p.join(pluginOut, assembly.fileName),
+        assembly,
+      );
+    }
+    await _noticeWriter.copyRuntimeLoaderNotices(
+      destinationRoot,
+      nugetPackagesRoot: nugetPackagesRoot,
+    );
 
     final bundleDest = p.join(
       destinationRoot,
@@ -111,7 +127,7 @@ class ReleasePackagePayloadWriter {
       'netstandard2.1',
     );
     Directory(loaderDest).createSync(recursive: true);
-    for (final dll in _loaderDlls) {
+    for (final dll in releaseLoaderDlls) {
       fileOps.copyFileIfExists(p.join(pluginOut, dll), p.join(loaderDest, dll));
     }
 
@@ -432,7 +448,7 @@ class ReleasePackagePayloadWriter {
       'TopiaForge.ModManager',
     );
     Directory(pluginDir).createSync(recursive: true);
-    for (final dll in _loaderDlls) {
+    for (final dll in releaseLoaderDlls) {
       fileOps.copyFileIfExists(p.join(pluginOut, dll), p.join(pluginDir, dll));
     }
   }
@@ -442,13 +458,6 @@ class ReleasePackagePayloadWriter {
     fileOps: fileOps,
   );
 }
-
-const _loaderDlls = [
-  'TopiaForge.ModManager.dll',
-  'TopiaForge.ModManager.Core.dll',
-  'TopiaForge.Mods.Abstractions.dll',
-  'TopiaForge.Mods.UnityUi.dll',
-];
 
 const _gameCompatRuntimeVersion = '10.0.9';
 const _metadataLoadContextVersion = '10.0.9';

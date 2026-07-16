@@ -104,6 +104,17 @@ signed `.nuspec` and ships `THIRD-PARTY-NOTICES.TXT`, but it does not contain a 
 verifies the exact MIT declaration and copies the identical .NET Foundation MIT text from the pinned runtime pack as
 the MetadataLoadContext license, together with the package's exact third-party notices; all are mandatory inputs.
 
+The game-side package validator ships `System.Reflection.Metadata` 10.0.9 and its
+`System.Collections.Immutable` 10.0.9 dependency beside the TopiaForge loader.
+Both signed NuGet packages declare MIT and record dotnet/dotnet commit
+`901ca941248413c79832d2fdbd709da0c4386353`. Release packaging verifies the
+exact netstandard2.0 DLL and notice hashes, then emits their license, notices,
+and machine-readable provenance under `third_party/dotnet/runtime-loader`.
+Robotopia build 2227 supplies the referenced `System.Memory`, `System.Buffers`,
+and `System.Runtime.CompilerServices.Unsafe` assemblies; those player-profile
+identities and hashes are validated but their proprietary game copies are not
+redistributed.
+
 The CLI's publication gate includes a generated identifier allowlist from SPDX License List Data 3.28.0.
 
 - Project: SPDX License List Data

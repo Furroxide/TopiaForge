@@ -5,10 +5,16 @@ File _writeTestPackage(
   Directory temp, {
   required Map<String, Object?> manifest,
   String fileName = 'package.topiaforgemod',
+  String entryAssembly = 'Mod.dll',
+  List<int>? entryAssemblyBytes,
 }) {
   final archive = Archive()
     ..addFile(ArchiveFile.string('topiaforge.mod.json', jsonEncode(manifest)))
-    ..addFile(ArchiveFile.string('Mod.dll', 'dll-bytes'));
+    ..addFile(
+      entryAssemblyBytes == null
+          ? ArchiveFile.string(entryAssembly, 'dll-bytes')
+          : ArchiveFile.bytes(entryAssembly, entryAssemblyBytes),
+    );
   final licenseFiles = manifest['licenseFiles'];
   if (licenseFiles is List) {
     for (final path in licenseFiles.whereType<String>()) {
