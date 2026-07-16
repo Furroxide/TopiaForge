@@ -27,14 +27,14 @@ RoboPatch was used only as behavior prior art for clean-room compatibility plann
 Prism Launcher was used only as product maturity and UX inspiration. No Prism Launcher code was copied or ported.
 
 TopiaForge launcher UI bundles first-party Robotopia web brand assets from `https://robotopia.gg/` and local
-TopiaForge brand derivatives for offline launcher theming.
+TopiaForge artwork for offline launcher theming.
 
 - Web-derived raster files: `topiaforge-city-header.webp`, `baby-stitch.webp`, `robot.webp`, and `sheriff.webp`
-- Local brand derivatives: `topiaforge-logo.svg`, `topiaforge-mark.svg`, and the Windows/macOS launcher
-  app-icon variants under `apps/topiaforge_launcher_flutter`
 - Source: `https://robotopia.gg/`
-- Local changes: filenames were normalized; the TopiaForge logo, mark, and platform icon variants were
-  adapted for launcher packaging.
+- Local changes: filenames were normalized for launcher packaging.
+
+The TopiaForge pixel-art wordmark, icon, and generated platform icon variants are first-party project assets,
+not Robotopia-derived third-party artwork.
 
 TopiaForge launcher UI bundles the Quicksand font copied from the Robotopia web bundle into `packages/launcher_ui/fonts`.
 
