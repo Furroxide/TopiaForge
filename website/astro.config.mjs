@@ -29,6 +29,12 @@ export default defineConfig({
     starlight({
       title: 'TopiaForge',
       description: 'Build mods for Robotopia with the safe TopiaForge V1 SDK.',
+      favicon: '/favicon.png',
+      logo: {
+        src: './src/assets/topiaforge-wordmark.png',
+        alt: 'TopiaForge',
+        replacesTitle: true,
+      },
       customCss: ['./src/styles/custom.css'],
       social: [
         {
