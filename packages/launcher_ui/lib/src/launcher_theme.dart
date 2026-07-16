@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 class TopiaForgeBrandAssets {
   static const package = 'launcher_ui';
 
-  static const logo = 'assets/brand/topiaforge-logo.svg';
+  static const logo = 'assets/brand/topiaforge-wordmark.png';
+  static const icon = 'assets/brand/topiaforge-icon.png';
   static const cityHeader = 'assets/brand/topiaforge-city-header.webp';
   static const babyStitch = 'assets/brand/baby-stitch.webp';
   static const robot = 'assets/brand/robot.webp';

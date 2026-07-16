@@ -192,7 +192,7 @@ class _TopBar extends StatelessWidget {
           return Row(
             children: [
               if (!iconOnlyActions) ...[
-                TopiaForgeLogo(height: compact ? 30 : 40),
+                const TopiaForgeLogo(),
                 SizedBox(width: compact ? 8 : 22),
               ],
               Expanded(

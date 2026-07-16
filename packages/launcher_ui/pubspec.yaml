@@ -11,7 +11,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_svg: ^2.0.10
 
 dev_dependencies:
   flutter_test:
@@ -28,8 +27,8 @@ flutter:
     - assets/brand/baby-stitch.webp
     - assets/brand/robot.webp
     - assets/brand/topiaforge-city-header.webp
-    - assets/brand/topiaforge-logo.svg
-    - assets/brand/topiaforge-mark.svg
+    - assets/brand/topiaforge-icon.png
+    - assets/brand/topiaforge-wordmark.png
     - assets/brand/sheriff.webp
 
   # For details regarding assets in packages, see
