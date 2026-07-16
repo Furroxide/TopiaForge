@@ -53,7 +53,7 @@ namespace TopiaForge.ModManager
 
             try
             {
-                lifetime.Track(action);
+                action.AttachLifetimeLease(lifetime.Track(action));
                 return OperationResult<IInputAction>.Success(action);
             }
             catch (ObjectDisposedException)
@@ -230,6 +230,8 @@ namespace TopiaForge.ModManager
             private bool held;
             private bool pressed;
             private bool released;
+            private IDisposable? lifetimeLease;
+            private int disposed;
 
             public UnityInputAction(
                 UnityInputRegistry owner,
@@ -251,6 +253,11 @@ namespace TopiaForge.ModManager
             public bool IsHeld => held;
             public bool WasPressed => pressed;
             public bool WasReleased => released;
+
+            public void AttachLifetimeLease(IDisposable lease)
+            {
+                lifetimeLease = lease ?? throw new ArgumentNullException(nameof(lease));
+            }
 
             public void Sample(bool uiFocused)
             {
@@ -299,21 +306,33 @@ namespace TopiaForge.ModManager
             public void Dispose()
             {
                 UnityMainThreadGuard.AssertCurrent();
+                if (Interlocked.Exchange(ref disposed, 1) != 0)
+                {
+                    return;
+                }
+
                 var registry = Interlocked.Exchange(ref owner, null);
                 registry?.Remove(key, this);
                 value = 0f;
                 held = false;
                 pressed = false;
                 released = false;
+                Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
             }
 
             public void DisposeFromRegistry()
             {
+                if (Interlocked.Exchange(ref disposed, 1) != 0)
+                {
+                    return;
+                }
+
                 Interlocked.Exchange(ref owner, null);
                 value = 0f;
                 held = false;
                 pressed = false;
                 released = false;
+                Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
             }
 
             private static float ReadBindings(IReadOnlyList<InputBinding> bindings)

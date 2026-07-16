@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using TopiaForge.Mods;
 
 namespace TopiaForge.Zombies
@@ -9,21 +10,28 @@ namespace TopiaForge.Zombies
         /// <summary>Gets the stable Zombies gamemode id.</summary>
         public const string GamemodeId = "io.github.furroxide.topiaforge.zombies.survival";
 
-        private const string MenuEntryId = "io.github.furroxide.topiaforge.zombies.menu";
+        internal const string MenuEntryId = "io.github.furroxide.topiaforge.zombies.menu";
 
         private static readonly ConfigDefinition<ZombiesConfig> ConfigContract =
             new ConfigDefinition<ZombiesConfig>(
-                1,
+                2,
                 () => new ZombiesConfig(),
                 value =>
                 {
                     value.Normalize();
                     return OperationResult<bool>.Success(true);
+                },
+                (storedSchemaVersion, value) =>
+                {
+                    value.MigrateFrom(storedSchemaVersion);
+                    return OperationResult<ZombiesConfig>.Success(value);
                 });
 
         private ZombiesConfig config = new ZombiesConfig();
         private IWorldGamemodeService? worlds;
         private IRobotAgentService? robots;
+        private IWorldRegistration? gamemodeRegistration;
+        private IWorldRegistration? menuRegistration;
         private ZombiesController? controller;
         private IDisposable? controllerLifetime;
         private IDisposable? pauseActionLifetime;
@@ -32,6 +40,7 @@ namespace TopiaForge.Zombies
         protected override void OnLoad()
         {
             LoadConfig();
+            ApplyAccessibility();
             RegisterCommands();
 
             if (!Context.Extensions.TryGet<IWorldGamemodeService>(out var worldsService)
@@ -50,16 +59,31 @@ namespace TopiaForge.Zombies
             }
             robots = robotService;
 
-            EnsureRegistered(worldsService.RegisterGamemode(new GamemodeDefinition(
-                GamemodeId,
-                "Zombies",
-                "Survive escalating waves of infected robots with the SDK zapper.")), "gamemode");
-            EnsureRegistered(worldsService.RegisterMenuEntry(new GamemodeMenuEntry(
-                MenuEntryId,
-                "Zombies",
-                "Safe-SDK robot wave survival.",
-                GamemodeId,
-                config.TargetWorldId)), "menu entry");
+            if (!TryRetainRegistration(
+                    worldsService.RegisterGamemode(new GamemodeDefinition(
+                        GamemodeId,
+                        "Zombies",
+                        "Survive escalating waves of infected robots with the SDK zapper.")),
+                    "gamemode",
+                    out gamemodeRegistration))
+            {
+                return;
+            }
+
+            if (!TryRetainRegistration(
+                    worldsService.RegisterMenuEntry(new GamemodeMenuEntry(
+                        MenuEntryId,
+                        "Zombies",
+                        "Safe-SDK robot wave survival.",
+                        GamemodeId,
+                        config.TargetWorldId)),
+                    "menu entry",
+                    out menuRegistration))
+            {
+                gamemodeRegistration?.Dispose();
+                gamemodeRegistration = null;
+                return;
+            }
 
             worldsService.SessionChanged += OnSessionChanged;
             worldsService.SessionEnded += OnSessionEnded;
@@ -81,6 +105,10 @@ namespace TopiaForge.Zombies
         protected override void OnUnload()
         {
             StopController();
+            menuRegistration?.Dispose();
+            menuRegistration = null;
+            gamemodeRegistration?.Dispose();
+            gamemodeRegistration = null;
         }
 
         private void LoadConfig()
@@ -121,6 +149,24 @@ namespace TopiaForge.Zombies
                     : OperationResult<string>.Success(controller.DescribeStatus()));
         }
 
+        private void ApplyAccessibility()
+        {
+            var current = Context.Ui.Accessibility;
+            var result = Context.Ui.ApplyAccessibility(new UiAccessibilityPreferences(
+                config.HudHighContrast,
+                config.HudScale,
+                current.ReducedMotion || config.HudMotionIntensity <= 0f,
+                config.HudMotionIntensity));
+            if (!result.Succeeded)
+            {
+                Context.Diagnostics.Report(new DiagnosticEntry(
+                    "ZOMBIES_ACCESSIBILITY_UNAVAILABLE",
+                    "Zombies could not apply its configured UI accessibility profile.",
+                    DiagnosticSeverity.Warning,
+                    result.ErrorMessage));
+            }
+        }
+
         private void RegisterCommand(
             CommandDefinition definition,
             Func<CommandInvocation, OperationResult<string>> handler)
@@ -132,20 +178,23 @@ namespace TopiaForge.Zombies
             }
         }
 
-        private void EnsureRegistered(
+        private bool TryRetainRegistration(
             OperationResult<IWorldRegistration> result,
-            string description)
+            string description,
+            out IWorldRegistration? registration)
         {
-            if (result.Succeeded)
+            if (result.TryGetValue(out registration) && registration != null)
             {
-                return;
+                return true;
             }
 
+            registration = null;
             Context.Diagnostics.Report(new DiagnosticEntry(
                 "ZOMBIES_REGISTRATION_FAILED",
                 "The Zombies " + description + " could not be registered.",
                 DiagnosticSeverity.Error,
                 result.ErrorMessage));
+            return false;
         }
 
         private void OnSessionChanged(WorldSession session)
@@ -162,12 +211,38 @@ namespace TopiaForge.Zombies
             }
 
             StopController();
-            controller = new ZombiesController(
-                Context,
-                config,
-                robots,
-                () => worlds?.EndSession(WorldSessionEndReason.EndedByGamemode));
-            controllerLifetime = Context.Lifetime.Track(controller);
+            try
+            {
+                controller = new ZombiesController(
+                    Context,
+                    config,
+                    robots,
+                    session,
+                    cancellationToken => ReturnToMenuAsync(session, cancellationToken));
+                controllerLifetime = Context.Lifetime.Track(controller);
+            }
+            catch (Exception exception)
+            {
+                var failedController = controller;
+                controller = null;
+                try
+                {
+                    failedController?.Dispose();
+                }
+                catch (Exception cleanupException)
+                {
+                    Context.Logger.Warn("Zombies failed-session cleanup encountered an error: "
+                        + cleanupException.Message);
+                }
+
+                Context.Diagnostics.Report(new DiagnosticEntry(
+                    "ZOMBIES_SESSION_START_FAILED",
+                    "Zombies could not start a visible, controllable session.",
+                    DiagnosticSeverity.Error,
+                    exception.Message));
+                worlds?.EndSession(WorldSessionEndReason.LoadFailed);
+                return;
+            }
 
             if (Context.Extensions.TryGet<IWorldPauseMenuService>(out var pauseMenu)
                 && pauseMenu != null)
@@ -193,6 +268,21 @@ namespace TopiaForge.Zombies
         private void OnSessionEnded(WorldSessionEnd ended)
         {
             StopController();
+        }
+
+        private async Task<OperationResult<SceneSnapshot>> ReturnToMenuAsync(
+            WorldSession originatingSession,
+            System.Threading.CancellationToken cancellationToken)
+        {
+            var result = await Context.Scenes.LoadAsync(
+                new SceneLoadRequest(GameScenes.MainMenuSceneName, SceneLoadMode.Single),
+                cancellationToken);
+            if (result.Succeeded && ReferenceEquals(worlds?.CurrentSession, originatingSession))
+            {
+                worlds?.EndSession(WorldSessionEndReason.EndedByGamemode);
+            }
+
+            return result;
         }
 
         private void StopController()

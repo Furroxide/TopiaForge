@@ -80,7 +80,8 @@ namespace TopiaForge.Mods
         /// <inheritdoc/>
         public event Action<int>? BalanceChanged;
 
-        /// <summary>Credits <paramref name="amount"/>; negative amounts are ignored.</summary>
+        /// <summary>Credits <paramref name="amount"/>; negative amounts are ignored and overflow saturates at
+        /// <see cref="int.MaxValue"/>.</summary>
         public void Earn(int amount)
         {
             if (amount <= 0)
@@ -88,7 +89,15 @@ namespace TopiaForge.Mods
                 return;
             }
 
-            balance += amount;
+            var nextBalance = balance > int.MaxValue - amount
+                ? int.MaxValue
+                : balance + amount;
+            if (nextBalance == balance)
+            {
+                return;
+            }
+
+            balance = nextBalance;
             BalanceChanged?.Invoke(balance);
         }
 

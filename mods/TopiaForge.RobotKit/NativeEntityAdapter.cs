@@ -1,4 +1,5 @@
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 using UnityEngine;
 
 namespace TopiaForge.RobotKit
@@ -38,5 +39,24 @@ namespace TopiaForge.RobotKit
         }
 
         public GameObject NativeGameObject => gameObject;
+    }
+
+    // Attached to a spawned robot's root before activation. The host entity registry discovers this marker while
+    // walking upward from any hit collider/body and emits the agent's stable SDK id instead of a child object id.
+    internal sealed class RobotAgentEntityIdentityAnchor : MonoBehaviour, IRuntimeEntityIdentityAnchor
+    {
+        private string runtimeEntityId = string.Empty;
+
+        public string RuntimeEntityId => runtimeEntityId;
+
+        public void Initialize(string entityId)
+        {
+            if (string.IsNullOrWhiteSpace(entityId))
+            {
+                throw new System.ArgumentException("A runtime entity id is required.", nameof(entityId));
+            }
+
+            runtimeEntityId = entityId;
+        }
     }
 }

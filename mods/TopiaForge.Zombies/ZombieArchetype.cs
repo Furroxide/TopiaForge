@@ -14,16 +14,6 @@ namespace TopiaForge.Zombies
         Runt
     }
 
-    // What just happened to a zombie, for the crosshair / hit-marker / floating-number feedback. Combined kinds
-    // (HeadshotKill) let the HUD pick a single strongest reaction per event.
-    internal enum ZombieHitKind
-    {
-        Normal,
-        Headshot,
-        Kill,
-        HeadshotKill
-    }
-
     // One fully-resolved archetype: all numbers are absolute (already folded through the config multipliers in the
     // roster) so the rest of the mod never multiplies again. Pure data, no Unity types — the single source of truth
     // for how a kind looks and plays, and trivially unit-testable.
@@ -32,7 +22,6 @@ namespace TopiaForge.Zombies
         public ZombieArchetype(
             ZombieKind kind,
             string displayName,
-            string tallyLetter,
             RobotColor tint,
             float scale,
             RobotGait gait,
@@ -51,7 +40,6 @@ namespace TopiaForge.Zombies
         {
             Kind = kind;
             DisplayName = displayName;
-            TallyLetter = tallyLetter;
             Tint = tint;
             Scale = scale;
             Gait = gait;
@@ -71,7 +59,6 @@ namespace TopiaForge.Zombies
 
         public ZombieKind Kind { get; }
         public string DisplayName { get; }
-        public string TallyLetter { get; }
         public RobotColor Tint { get; }
         public float Scale { get; }
         public RobotGait Gait { get; }
@@ -110,7 +97,7 @@ namespace TopiaForge.Zombies
             var defaultStop = config.ZombieAttackRange * 0.8f;
 
             grunt = new ZombieArchetype(
-                ZombieKind.Grunt, "Grunt", "G",
+                ZombieKind.Grunt, "Grunt",
                 new RobotColor(0.45f, 0.95f, 0.30f, 1f), 1.0f, RobotGait.Run, ":rage:",
                 health: config.ZombieHealth,
                 moveSpeed: config.ZombieMoveSpeed,
@@ -124,7 +111,7 @@ namespace TopiaForge.Zombies
                 baseResistance: config.OverrideResistGrunt);
 
             sprinter = new ZombieArchetype(
-                ZombieKind.Sprinter, "Sprinter", "S",
+                ZombieKind.Sprinter, "Sprinter",
                 new RobotColor(1.0f, 0.85f, 0.15f, 1f), config.SprinterScale, RobotGait.Sprint, ":zap:",
                 health: config.ZombieHealth * config.SprinterHealthMult,
                 moveSpeed: config.SprinterSpeed,
@@ -138,7 +125,7 @@ namespace TopiaForge.Zombies
                 baseResistance: config.OverrideResistSprinter);
 
             brute = new ZombieArchetype(
-                ZombieKind.Brute, "Brute", "B",
+                ZombieKind.Brute, "Brute",
                 new RobotColor(0.55f, 0.25f, 0.65f, 1f), config.BruteScale, RobotGait.Walk, ":skull:",
                 health: config.ZombieHealth * config.BruteHealthMult,
                 moveSpeed: config.BruteSpeed,
@@ -152,7 +139,7 @@ namespace TopiaForge.Zombies
                 baseResistance: config.OverrideResistBrute);
 
             runt = new ZombieArchetype(
-                ZombieKind.Runt, "Runt", "R",
+                ZombieKind.Runt, "Runt",
                 new RobotColor(0.70f, 1.0f, 0.55f, 1f), config.RuntScale, RobotGait.Sprint, ":bug:",
                 health: config.ZombieHealth * config.RuntHealthMult,
                 moveSpeed: config.RuntSpeed,

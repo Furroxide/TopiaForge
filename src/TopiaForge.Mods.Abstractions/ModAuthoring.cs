@@ -120,6 +120,44 @@ namespace TopiaForge.Mods
         IDisposable SubscribeSceneLoaded(Action<string> handler);
     }
 
+    /// <summary>
+    /// Optional detailed scene-load event source implemented by hosts that can report load mode and active-scene
+    /// state. Use <see cref="ModEventExtensions.SubscribeSceneLoaded(IModEvents, Action{SceneLoadEvent})"/> rather
+    /// than casting to this interface so mods remain compatible with older hosts.
+    /// </summary>
+    public interface ISceneLoadEventSource
+    {
+        /// <summary>Subscribes to successful scene load/activation notifications with transition metadata.</summary>
+        /// <param name="handler">A callback receiving the scene-load notification.</param>
+        /// <returns>A lifetime-tracked subscription that may be disposed early.</returns>
+        IDisposable SubscribeSceneLoaded(Action<SceneLoadEvent> handler);
+    }
+
+    /// <summary>Compatibility-preserving additions to runtime mod events.</summary>
+    public static class ModEventExtensions
+    {
+        /// <summary>
+        /// Subscribes to detailed scene transition notifications. Older event hosts fall back to an authoritative single
+        /// load, matching the only scene-load semantics their string-only contract could represent.
+        /// </summary>
+        /// <param name="events">The owner-scoped mod event source.</param>
+        /// <param name="handler">A callback receiving the scene-load notification.</param>
+        /// <returns>A lifetime-tracked subscription that may be disposed early.</returns>
+        public static IDisposable SubscribeSceneLoaded(this IModEvents events, Action<SceneLoadEvent> handler)
+        {
+            if (events == null) throw new ArgumentNullException(nameof(events));
+            if (handler == null) throw new ArgumentNullException(nameof(handler));
+
+            if (events is ISceneLoadEventSource detailed)
+            {
+                return detailed.SubscribeSceneLoaded(handler);
+            }
+
+            return events.SubscribeSceneLoaded(sceneName =>
+                handler(new SceneLoadEvent(sceneName, SceneLoadMode.Single, true)));
+        }
+    }
+
     /// <summary>Defines defaults, schema version, validation, and migration for one typed config document.</summary>
     /// <typeparam name="T">The serializable configuration type.</typeparam>
     public sealed class ConfigDefinition<T> where T : class
