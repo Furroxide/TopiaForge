@@ -1,6 +1,6 @@
 name: launcher_ui
 description: Shared Flutter widgets and theme for the TopiaForge launcher.
-version: 0.1.1
+version: 1.0.0
 publish_to: none
 homepage:
 

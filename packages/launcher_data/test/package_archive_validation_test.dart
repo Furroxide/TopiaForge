@@ -25,6 +25,7 @@ void main() {
     repository = LocalLauncherRepository(
       dataRoot: p.join(root.path, 'data'),
       repositoryRoot: root.path,
+      packageMetadataValidator: (_) async => const [],
     );
     install = await repository.selectGameDirectory(game.path);
   });
@@ -202,13 +203,16 @@ Archive _validArchive() => Archive()
     ArchiveFile.string(
       'topiaforge.mod.json',
       jsonEncode({
-        'schemaVersion': 3,
+        'schemaVersion': 4,
         'name': 'validation.mod',
         'displayName': 'Validation Mod',
         'version': '1.0.0',
         'author': {'name': 'TopiaForge'},
         'entryAssembly': 'Validation.dll',
         'entryType': 'Validation.Entry',
+        'supportedGameVersionRange': '*',
+        'supportedLoaderVersionRange': '*',
+        'supportedSdkVersionRange': '*',
       }),
     ),
   )
@@ -219,13 +223,16 @@ Archive _archiveWithAuthor(Object author) => Archive()
     ArchiveFile.string(
       'topiaforge.mod.json',
       jsonEncode({
-        'schemaVersion': 3,
+        'schemaVersion': 4,
         'name': 'validation.mod',
         'displayName': 'Validation Mod',
         'version': '1.0.0',
         'author': author,
         'entryAssembly': 'Validation.dll',
         'entryType': 'Validation.Entry',
+        'supportedGameVersionRange': '*',
+        'supportedLoaderVersionRange': '*',
+        'supportedSdkVersionRange': '*',
       }),
     ),
   )

@@ -33,5 +33,24 @@ void _validateManifestWorldGamemodes(
         ),
       );
     }
+    if (gamemode.name.runes.length > 128) {
+      issues.add(
+        LauncherIssue(
+          severity: IssueSeverity.error,
+          subjectId: gamemode.id,
+          message: 'worldGamemodes name may contain at most 128 characters.',
+        ),
+      );
+    }
+    if (gamemode.description.runes.length > 1024) {
+      issues.add(
+        LauncherIssue(
+          severity: IssueSeverity.error,
+          subjectId: gamemode.id,
+          message:
+              'worldGamemodes description may contain at most 1024 characters.',
+        ),
+      );
+    }
   }
 }

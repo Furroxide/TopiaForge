@@ -88,7 +88,7 @@ extension _ProcessHelpers on LocalLauncherRepository {
     } on Object catch (error) {
       await _deleteProfileLaunchConfiguration(launchFile);
       try {
-        await _appendLauncherLog(
+        await _appendLauncherLogBestEffort(
           'Game process start failed (${error.runtimeType}).',
         );
       } on Object {
@@ -101,7 +101,7 @@ extension _ProcessHelpers on LocalLauncherRepository {
     }
 
     try {
-      await _appendLauncherLog('$message$logSuffix pid=$processId');
+      await _appendLauncherLogBestEffort('$message$logSuffix pid=$processId');
     } on Object {
       // The detached process owns the one-shot file now; logging must not turn
       // a successful start into a failure or delete its launch configuration.
@@ -125,11 +125,11 @@ extension _ProcessHelpers on LocalLauncherRepository {
     ], timeout: const Duration(seconds: 15));
 
     if (result.exitCode == 0) {
-      await _appendLauncherLog('Stopped TopiaForge before restart.');
+      await _appendLauncherLogBestEffort('Stopped TopiaForge before restart.');
       return true;
     }
     if (result.exitCode == 2) {
-      await _appendLauncherLog('No running Robotopia process found.');
+      await _appendLauncherLogBestEffort('No running Robotopia process found.');
       return false;
     }
 
@@ -154,7 +154,7 @@ extension _ProcessHelpers on LocalLauncherRepository {
 
     final pids = await matchingPids();
     if (pids.isEmpty) {
-      await _appendLauncherLog('No running Robotopia process found.');
+      await _appendLauncherLogBestEffort('No running Robotopia process found.');
       return false;
     }
 
@@ -172,7 +172,9 @@ extension _ProcessHelpers on LocalLauncherRepository {
     while (DateTime.now().isBefore(deadline)) {
       await Future<void>.delayed(const Duration(milliseconds: 200));
       if ((await matchingPids()).isEmpty) {
-        await _appendLauncherLog('Stopped TopiaForge before restart.');
+        await _appendLauncherLogBestEffort(
+          'Stopped TopiaForge before restart.',
+        );
         return true;
       }
     }

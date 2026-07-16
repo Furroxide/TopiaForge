@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:launcher_data/launcher_data.dart';
+import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
@@ -34,13 +35,16 @@ void main() {
   });
 
   Map<String, Object?> manifestJson() => {
-    'schemaVersion': 3,
+    'schemaVersion': 4,
     'name': 'sample.mod',
     'displayName': 'Sample Mod',
     'version': '1.2.3',
     'author': {'name': 'Tester'},
     'entryAssembly': 'Sample.dll',
     'entryType': 'Sample.Entry',
+    'supportedGameVersionRange': '*',
+    'supportedLoaderVersionRange': '*',
+    'supportedSdkVersionRange': '*',
   };
 
   void writeManifest([Map<String, Object?>? overrides]) {
@@ -75,6 +79,27 @@ void main() {
     expect(names, contains('assets/texture.png'));
     expect(names.where((name) => name.startsWith('bin/')), isEmpty);
     expect(names.where((name) => name.startsWith('obj/')), isEmpty);
+  });
+
+  test('broad compatibility range records the exact SDK game build', () async {
+    writeManifest({'supportedGameVersionRange': '>=0.0.2200 <0.0.2300'});
+    File(p.join(projectDir.path, 'Sample.dll')).writeAsStringSync('payload');
+
+    final packagePath = await repository.packModDirectory(projectDir.path);
+    final archive = readPackage(packagePath);
+    final manifestFile = archive.files.singleWhere(
+      (file) => file.name == 'topiaforge.mod.json',
+    );
+    final manifest =
+        jsonDecode(utf8.decode(manifestFile.content as List<int>))
+            as Map<String, Object?>;
+    final builtWith = manifest['builtWith'] as Map<String, Object?>;
+
+    expect(builtWith['gameVersion'], TopiaForgeRuntimeVersions.gameVersion);
+    expect(
+      builtWith['gameVersion'],
+      isNot(manifest['supportedGameVersionRange']),
+    );
   });
 
   test('ships the repo-root game bindings file when present', () async {
@@ -289,6 +314,48 @@ printf 'dll' > ${_shellQuote(output.path)}
       '-c',
       'Release',
     ]);
+  });
+
+  test('compiled packages exclude every loader-owned SDK assembly', () async {
+    if (Platform.isWindows) return;
+    writeManifest();
+    File(p.join(projectDir.path, 'Sample.csproj')).writeAsStringSync('''
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>netstandard2.1</TargetFramework></PropertyGroup>
+</Project>
+''');
+    final output = Directory(
+      p.join(projectDir.path, 'bin', 'Release', 'netstandard2.1'),
+    );
+    final fakeDotnet = File(p.join(root.path, 'validated-dotnet'))
+      ..writeAsStringSync('''#!/bin/sh
+set -eu
+mkdir -p ${_shellQuote(output.path)}
+printf mod > ${_shellQuote(p.join(output.path, 'Sample.dll'))}
+printf private > ${_shellQuote(p.join(output.path, 'Private.Dependency.dll'))}
+for name in Abstractions Analyzers Chronos Interop.Unity Prompts RobotKit Testing Ugc UnityUi Worlds; do
+  printf sdk > ${_shellQuote(output.path)}/TopiaForge.Mods.\$name.dll
+  printf pdb > ${_shellQuote(output.path)}/TopiaForge.Mods.\$name.pdb
+done
+''');
+    final chmod = await Process.run('chmod', ['700', fakeDotnet.path]);
+    expect(chmod.exitCode, 0);
+    repository = LocalDeveloperRepository(
+      dataRoot: p.join(root.path, 'data'),
+      repositoryRoot: repoRoot.path,
+      dotnetSdkResolver: (_) async => DotnetSdkSelection(
+        executable: fakeDotnet.path,
+        version: '10.0.301',
+        requiredVersion: '10.0.301',
+      ),
+    );
+
+    final packagePath = await repository.packModDirectory(projectDir.path);
+    final names = readPackage(
+      packagePath,
+    ).files.map((file) => file.name).toSet();
+    expect(names, containsAll(['Sample.dll', 'Private.Dependency.dll']));
+    expect(names.where((name) => name.startsWith('TopiaForge.Mods.')), isEmpty);
   });
 }
 

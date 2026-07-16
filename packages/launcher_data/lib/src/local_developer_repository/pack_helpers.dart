@@ -6,6 +6,18 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
   static const _contentDirs = ['ref', 'assets', 'AssetBundles', 'Resources'];
   static const _buildOutputContentDirs = ['third_party'];
   static const _excludedTreeDirs = ['bin', 'obj', 'dist', '.topiaforge'];
+  static const _loaderOwnedSdkAssemblyNames = {
+    'topiaforge.mods.abstractions',
+    'topiaforge.mods.analyzers',
+    'topiaforge.mods.chronos',
+    'topiaforge.mods.interop.unity',
+    'topiaforge.mods.prompts',
+    'topiaforge.mods.robotkit',
+    'topiaforge.mods.testing',
+    'topiaforge.mods.ugc',
+    'topiaforge.mods.unityui',
+    'topiaforge.mods.worlds',
+  };
   static const _rootNoticeNames = {
     'license',
     'license.txt',
@@ -66,7 +78,7 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
     final added = <String>{};
     final exactAdded = <String>{};
     var expandedBytes = 0;
-    void addFile(String archivePath, File source) {
+    void addBytes(String archivePath, List<int> bytes) {
       final name = _portableDeveloperArchivePath(
         p.posix.joinAll(p.split(archivePath)),
         label: 'TopiaForge package',
@@ -81,11 +93,6 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
       if (added.length > _maxDeveloperArchiveEntries) {
         throw StateError('TopiaForge package exceeds the 8192-entry limit.');
       }
-      final bytes = _readDeveloperFileBoundedSync(
-        source,
-        maxBytes: _maxDeveloperArchiveEntryBytes,
-        label: name,
-      );
       final length = bytes.length;
       if (length > _maxDeveloperArchiveEntryBytes) {
         throw StateError('$name exceeds the 1 GB expanded-file limit.');
@@ -97,6 +104,20 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
       }
       expandedBytes += length;
       archive.addFile(ArchiveFile.bytes(name, bytes));
+    }
+
+    void addFile(String archivePath, File source) {
+      final name = _portableDeveloperArchivePath(
+        p.posix.joinAll(p.split(archivePath)),
+        label: 'TopiaForge package',
+      );
+      if (p.posix.basename(name) == '.gitkeep') return;
+      final bytes = _readDeveloperFileBoundedSync(
+        source,
+        maxBytes: _maxDeveloperArchiveEntryBytes,
+        label: name,
+      );
+      addBytes(name, bytes);
     }
 
     final csprojCandidates =
@@ -119,6 +140,12 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
     } else {
       _stageProjectTree(root, addFile);
     }
+
+    final packedManifest = _manifestWithBuildMetadata(root, manifest);
+    addBytes(
+      'topiaforge.mod.json',
+      utf8.encode('${_prettyJson(packedManifest.toJson())}\n'),
+    );
 
     // Ship the mod's game-binding manifest (from the centralized repo-root
     // bindings/ dir) inside its package, so a game-compatibility check can
@@ -148,8 +175,15 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
     return packagePath;
   }
 
-  List<int> _encodeReproducibleZip(Archive archive) =>
-      ZipEncoder().encode(archive, modified: _reproducibleZipTimestamp);
+  List<int> _encodeReproducibleZip(Archive archive) {
+    final ordered = Archive();
+    final files = archive.files.toList()
+      ..sort((left, right) => left.name.compareTo(right.name));
+    for (final file in files) {
+      ordered.addFile(file);
+    }
+    return ZipEncoder().encode(ordered, modified: _reproducibleZipTimestamp);
+  }
 
   Future<void> _buildAndStage(
     Directory root,
@@ -159,13 +193,16 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
     void Function(String archivePath, File source) addFile,
     bool Function(String archivePath) hasArchivePath,
   ) async {
-    final dotnet = await _dotnetSdkResolver(_repositoryRoot);
+    final buildRoot = File(p.join(root.path, 'global.json')).existsSync()
+        ? root
+        : _repositoryRoot;
+    final dotnet = await _dotnetSdkResolver(buildRoot);
     final build = await runBoundedProcess(
       dotnet.executable,
       ['build', csproj.path, '-c', configuration],
-      // Anchor SDK resolution at the repository global.json even when the mod
-      // project itself lives outside the repository tree.
-      workingDirectory: _repositoryRoot.path,
+      // The scaffold pins its own SDK, so builds remain reproducible after the
+      // release archive or source checkout is moved or removed.
+      workingDirectory: buildRoot.path,
       timeout: const Duration(minutes: 10),
       maxStdoutBytes: 16 * 1024 * 1024,
       maxStderrBytes: 16 * 1024 * 1024,
@@ -192,10 +229,6 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
       );
     }
 
-    addFile(
-      'topiaforge.mod.json',
-      File(p.join(root.path, 'topiaforge.mod.json')),
-    );
     final rootNotices =
         root
             .listSync(followLinks: false)
@@ -215,8 +248,9 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
     for (final file in buildFiles) {
       final name = p.basename(file.path);
       final extension = p.extension(name).toLowerCase();
+      final assemblyName = p.basenameWithoutExtension(name).toLowerCase();
       if ((extension == '.dll' || extension == '.pdb') &&
-          !name.startsWith('TopiaForge.Mods.Abstractions.')) {
+          !_loaderOwnedSdkAssemblyNames.contains(assemblyName)) {
         addFile(name, file);
       }
     }
@@ -255,8 +289,8 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
         p.posix.joinAll(p.split(entry)),
         label: 'TopiaForge API assembly',
       );
-      // Framework/service mods often expose their entry assembly as their API
-      // assembly. It is already staged by the build-output DLL pass above.
+      // Project-referenced contract assemblies are normally copied beside the
+      // entry assembly and staged by the build-output DLL pass above.
       if (hasArchivePath(archivePath)) {
         continue;
       }
@@ -284,11 +318,33 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
     for (final file in projectFiles) {
       final relative = p.relative(file.path, from: root.path);
       final segments = p.split(relative);
-      if (segments.any(_excludedTreeDirs.contains)) {
+      if (segments.any(_excludedTreeDirs.contains) ||
+          p.posix.joinAll(segments) == 'topiaforge.mod.json') {
         continue;
       }
       addFile(relative, file);
     }
+  }
+
+  ModManifest _manifestWithBuildMetadata(
+    Directory root,
+    Map<String, Object?> source,
+  ) {
+    final lock = _readSdkLock(root.path);
+    final toolVersion = lock?.toolVersion.isNotEmpty == true
+        ? lock!.toolVersion
+        : _repositoryToolVersion();
+    final gameVersion =
+        lock?.gameVersion ?? TopiaForgeRuntimeVersions.gameVersion;
+    return ModManifest.fromJson({
+      ...source,
+      'builtWith': {
+        'sdkVersion': lock?.sdkVersion ?? TopiaForgeRuntimeVersions.sdkVersion,
+        'loaderVersion': TopiaForgeRuntimeVersions.loaderVersion,
+        'gameVersion': gameVersion,
+        if (toolVersion.isNotEmpty) 'toolVersion': toolVersion,
+      },
+    });
   }
 
   String _sanitizePackageToken(String value) =>

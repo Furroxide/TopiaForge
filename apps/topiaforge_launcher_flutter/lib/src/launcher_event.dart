@@ -107,6 +107,10 @@ class SelectedModEnabledChanged extends LauncherEvent {
   final bool enabled;
 }
 
+class SelectedModRepairRequested extends LauncherEvent {
+  const SelectedModRepairRequested();
+}
+
 class AllModsDisabled extends LauncherEvent {
   const AllModsDisabled();
 }

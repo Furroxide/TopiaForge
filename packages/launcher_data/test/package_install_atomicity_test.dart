@@ -19,6 +19,7 @@ void main() {
       final repository = LocalLauncherRepository(
         dataRoot: p.join(root.path, 'data'),
         repositoryRoot: root.path,
+        packageMetadataValidator: (_) async => const [],
       );
       final install = await repository.selectGameDirectory(game.path);
       final oldFirst = _package(root, 'first.dep', '1.0.0');
@@ -98,6 +99,7 @@ void main() {
     final repository = LocalLauncherRepository(
       dataRoot: dataRoot,
       repositoryRoot: root.path,
+      packageMetadataValidator: (_) async => const [],
     );
     final install = await repository.selectGameDirectory(game.path);
     await repository.installPackage(
@@ -141,6 +143,7 @@ void main() {
     final failingRepository = LocalLauncherRepository(
       dataRoot: dataRoot,
       repositoryRoot: root.path,
+      packageMetadataValidator: (_) async => const [],
       packageInstallCommitHook: (count) {
         if (count == 1) {
           throw StateError('injected commit failure');
@@ -187,6 +190,7 @@ void main() {
     final repository = LocalLauncherRepository(
       dataRoot: p.join(root.path, 'data'),
       repositoryRoot: root.path,
+      packageMetadataValidator: (_) async => const [],
     );
     final install = await repository.selectGameDirectory(game.path);
     final invalidDependency = _package(
@@ -245,6 +249,7 @@ void main() {
     final repository = LocalLauncherRepository(
       dataRoot: p.join(root.path, 'data'),
       repositoryRoot: root.path,
+      packageMetadataValidator: (_) async => const [],
     );
     final install = await repository.selectGameDirectory(game.path);
     final dependencyV1 = _package(root, 'versioned.dep', '1.0.0');
@@ -309,6 +314,7 @@ void main() {
     final repository = LocalLauncherRepository(
       dataRoot: p.join(root.path, 'data'),
       repositoryRoot: root.path,
+      packageMetadataValidator: (_) async => const [],
     );
     final install = await repository.selectGameDirectory(game.path);
     final source = Directory(p.join(root.path, 'packages'))..createSync();
@@ -350,6 +356,7 @@ void main() {
     final repository = LocalLauncherRepository(
       dataRoot: p.join(root.path, 'data'),
       repositoryRoot: root.path,
+      packageMetadataValidator: (_) async => const [],
     );
     final install = await repository.selectGameDirectory(game.path);
     final outside = Directory(p.join(root.path, 'outside'))..createSync();
@@ -413,14 +420,17 @@ Map<String, Object?> _manifest(
   String version, {
   Map<String, String> dependencies = const {},
 }) => {
-  'schemaVersion': 3,
+  'schemaVersion': 4,
   'name': id,
   'displayName': id,
   'version': version,
   'author': {'name': 'TopiaForge'},
   'entryAssembly': '${_assembly(id)}.dll',
   'entryType': '$id.Entry',
-  if (dependencies.isNotEmpty) 'vpmDependencies': dependencies,
+  'supportedGameVersionRange': '*',
+  'supportedLoaderVersionRange': '*',
+  'supportedSdkVersionRange': '*',
+  if (dependencies.isNotEmpty) 'dependencies': dependencies,
 };
 
 String _assembly(String id) => id

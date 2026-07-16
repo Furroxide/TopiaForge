@@ -29,6 +29,10 @@ extension LauncherEventDispatch on LauncherBloc {
       PreviewedPackageInstalled() => _onPreviewedPackageInstalled(event, emit),
       InboxPackagesInstalled() => _onInboxPackagesInstalled(event, emit),
       SelectedModEnabledChanged() => _onSelectedModEnabledChanged(event, emit),
+      SelectedModRepairRequested() => _onSelectedModRepairRequested(
+        event,
+        emit,
+      ),
       AllModsDisabled() => _onAllModsDisabled(event, emit),
       SelectedModUninstalled() => _onSelectedModUninstalled(event, emit),
       GameLaunchRequested() => _onGameLaunchRequested(event, emit),

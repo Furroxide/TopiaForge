@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ffi' as ffi;
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -7,9 +8,11 @@ import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
+import 'package:unorm_dart/unorm_dart.dart' as unicode;
 
 import 'bounded_process.dart';
 import 'data_root.dart';
+import 'dotnet_sdk.dart';
 import 'process_identity.dart';
 import 'package_contract.dart';
 import 'public_url.dart';
@@ -18,15 +21,25 @@ import 'ugc_sidecar_runtime.dart';
 import 'safe_zip_archive.dart';
 
 part 'local_launcher_repository/game_layout.dart';
+part 'local_launcher_repository/game_architecture.dart';
 part 'local_launcher_repository/diagnostics_helpers.dart';
 part 'local_launcher_repository/game_runtime_helpers.dart';
 part 'local_launcher_repository/manager_state_helpers.dart';
+part 'local_launcher_repository/installed_package_validation.dart';
+part 'local_launcher_repository/noncritical_logging.dart';
+part 'local_launcher_repository/package_install_receipt.dart';
+part 'local_launcher_repository/package_inbox.dart';
+part 'local_launcher_repository/package_inbox_consumption.dart';
+part 'local_launcher_repository/package_inbox_selection.dart';
 part 'local_launcher_repository/package_installation_helpers.dart';
+part 'local_launcher_repository/package_repair.dart';
+part 'local_launcher_repository/package_metadata_validation.dart';
 part 'local_launcher_repository/package_helpers.dart';
 part 'local_launcher_repository/path_helpers.dart';
 part 'local_launcher_repository/profile_launch_helpers.dart';
 part 'local_launcher_repository/process_helpers.dart';
 part 'local_launcher_repository/registry_source_helpers.dart';
+part 'local_launcher_repository/registry_source_models.dart';
 part 'local_launcher_repository/repository_hooks.dart';
 part 'local_launcher_repository/runtime_transaction.dart';
 part 'local_launcher_repository/runtime_repair_helpers.dart';
@@ -41,6 +54,7 @@ class LocalLauncherRepository implements LauncherRepository {
     String? workingDirectory,
     String? knownGamePath,
     DependencyPlanner dependencyPlanner = const DependencyPlanner(),
+    PackageMetadataValidator? packageMetadataValidator,
     PackageInstallCommitHook? packageInstallCommitHook,
     RuntimeRepairCommitHook? runtimeRepairCommitHook,
     UgcInspectionReadHook? ugcInspectionReadHook,
@@ -51,15 +65,17 @@ class LocalLauncherRepository implements LauncherRepository {
        ),
        _knownGamePath = knownGamePath,
        _dependencyPlanner = dependencyPlanner,
+       _packageMetadataValidator = packageMetadataValidator,
        _packageInstallCommitHook = packageInstallCommitHook,
        _runtimeRepairCommitHook = runtimeRepairCommitHook,
        _ugcInspectionReadHook = ugcInspectionReadHook,
        _gameProcessStarter = gameProcessStarter ?? _startDetachedGameProcess;
-
   final Directory _dataRoot;
   final Directory _repositoryRoot;
   final String? _knownGamePath;
   final DependencyPlanner _dependencyPlanner;
+  final PackageMetadataValidator? _packageMetadataValidator;
+  final Map<String, Future<List<String>>> _installedMetadataCache = {};
   final PackageInstallCommitHook? _packageInstallCommitHook;
   final RuntimeRepairCommitHook? _runtimeRepairCommitHook;
   final UgcInspectionReadHook? _ugcInspectionReadHook;
@@ -74,13 +90,8 @@ class LocalLauncherRepository implements LauncherRepository {
   int _ugcPublisherSessionId = 0;
   bool _ugcPublisherStopping = false;
   bool _disposed = false;
-
-  static const _bepInExVersion = '5.4.23.5';
-  static const _loaderVersion = TopiaForgeRuntimeVersions.loaderVersion;
-  static const _sdkVersion = TopiaForgeRuntimeVersions.sdkVersion;
   @override
   String get dataRoot => _dataRoot.path;
-
   File get _settingsFile => File(p.join(_dataRoot.path, 'settings.json'));
   File get _profilesFile => File(p.join(_dataRoot.path, 'profiles.json'));
   File get _sourcesFile => File(p.join(_dataRoot.path, 'package_sources.json'));
@@ -165,7 +176,9 @@ class LocalLauncherRepository implements LauncherRepository {
       throw StateError(install.issues.map((issue) => issue.message).join(' '));
     }
     await _updateSettings((settings) => settings['gamePath'] = install.path);
-    await _appendLauncherLog('Selected game directory ${install.path}.');
+    await _appendLauncherLogBestEffort(
+      'Selected game directory ${install.path}.',
+    );
     return install;
   }
 
@@ -208,48 +221,28 @@ class LocalLauncherRepository implements LauncherRepository {
     String packagePath,
     GameInstall install, {
     String expectedSha256 = '',
-  }) => _installPackage(packagePath, install, expectedSha256: expectedSha256);
+    String sourceId = '',
+  }) => _installPackage(
+    packagePath,
+    install,
+    expectedSha256: expectedSha256,
+    sourceId: sourceId,
+  );
 
   @override
-  Future<List<PackageSource>> savePackageSources(
-    List<PackageSource> sources,
-  ) async {
-    final normalized = sources.isEmpty ? _defaultPackageSources() : sources;
-    _validatePackageSources(normalized);
-    await _writeJsonFileAtomic(
-      _sourcesFile,
-      {
-        'formatVersion': _packageSourceFormatVersion,
-        'sources': normalized.map((source) => source.toJson()).toList(),
-      },
-      maxBytes: _maxPackageSourcesBytes,
-      label: 'Package sources',
-    );
-    await _appendLauncherLog('Saved ${normalized.length} package sources.');
-    return normalized;
-  }
+  Future<List<PackageSource>> savePackageSources(List<PackageSource> sources) =>
+      _savePackageSources(sources);
 
   @override
-  Future<List<InstalledMod>> installInboxPackages(GameInstall install) async {
-    final inbox = _packageInbox(install);
-    if (!inbox.existsSync()) {
-      return _loadInstalledMods(install);
-    }
+  Future<PackageInboxInstallOutcome> installInboxPackages(
+    GameInstall install,
+  ) => _installInboxPackages(install);
 
-    for (final file in inbox.listSync().whereType<File>().where(
-      (file) => file.path.toLowerCase().endsWith('.topiaforgemod'),
-    )) {
-      try {
-        await installPackage(file.path, install);
-      } on Object catch (error) {
-        await _appendLauncherLog(
-          'Inbox install failed for ${file.path}: $error',
-        );
-      }
-    }
-
-    return _loadInstalledMods(install);
-  }
+  @override
+  Future<List<InstalledMod>> repairInstalledMod(
+    GameInstall install,
+    InstalledMod mod,
+  ) => _repairInstalledMod(install, mod);
 
   @override
   Future<List<InstalledMod>> setModEnabled(
@@ -267,7 +260,9 @@ class LocalLauncherRepository implements LauncherRepository {
       }
     }
     await _saveManagerState(install, state);
-    await _appendLauncherLog('${enabled ? 'Enabled' : 'Disabled'} $modId.');
+    await _appendLauncherLogBestEffort(
+      '${enabled ? 'Enabled' : 'Disabled'} $modId.',
+    );
     return _loadInstalledMods(install);
   }
 
@@ -280,7 +275,7 @@ class LocalLauncherRepository implements LauncherRepository {
       item['updatedAtUtc'] = DateTime.now().toUtc().toIso8601String();
     }
     await _saveManagerState(install, state);
-    await _appendLauncherLog('Disabled all mods.');
+    await _appendLauncherLogBestEffort('Disabled all mods.');
     return _loadInstalledMods(install);
   }
 
@@ -302,7 +297,7 @@ class LocalLauncherRepository implements LauncherRepository {
     );
     state['mods'] = mods;
     await _saveManagerState(install, state);
-    await _appendLauncherLog('Uninstalled $modId.');
+    await _appendLauncherLogBestEffort('Uninstalled $modId.');
     return _loadInstalledMods(install);
   }
 
@@ -484,9 +479,7 @@ class LocalLauncherRepository implements LauncherRepository {
 
   @override
   Future<void> dispose() async {
-    if (_disposed) {
-      return;
-    }
+    if (_disposed) return;
     _disposed = true;
     try {
       await _stopUgcPublisher(waitForExit: true);

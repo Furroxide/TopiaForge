@@ -29,6 +29,44 @@ class ModAuthor {
   };
 }
 
+class ModBuildMetadata {
+  const ModBuildMetadata({
+    this.sdkVersion = '',
+    this.loaderVersion = '',
+    this.gameVersion = '',
+    this.toolVersion = '',
+  });
+
+  final String sdkVersion;
+  final String loaderVersion;
+  final String gameVersion;
+  final String toolVersion;
+
+  factory ModBuildMetadata.fromJson(Object? value) {
+    if (value == null) return const ModBuildMetadata();
+    final json = _objectMap(value);
+    return ModBuildMetadata(
+      sdkVersion: (json['sdkVersion'] as String?) ?? '',
+      loaderVersion: (json['loaderVersion'] as String?) ?? '',
+      gameVersion: (json['gameVersion'] as String?) ?? '',
+      toolVersion: (json['toolVersion'] as String?) ?? '',
+    );
+  }
+
+  bool get isEmpty =>
+      sdkVersion.isEmpty &&
+      loaderVersion.isEmpty &&
+      gameVersion.isEmpty &&
+      toolVersion.isEmpty;
+
+  Map<String, Object?> toJson() => {
+    if (sdkVersion.isNotEmpty) 'sdkVersion': sdkVersion,
+    if (loaderVersion.isNotEmpty) 'loaderVersion': loaderVersion,
+    if (gameVersion.isNotEmpty) 'gameVersion': gameVersion,
+    if (toolVersion.isNotEmpty) 'toolVersion': toolVersion,
+  };
+}
+
 class ModConflict {
   const ModConflict({
     required this.id,

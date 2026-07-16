@@ -6,6 +6,9 @@ DependencyResolutionResult _resolveInstalled(
   required bool requireKnownGameVersion,
   required String loaderVersion,
   required String sdkVersion,
+  required String? platform,
+  required String? architecture,
+  required List<String> contentTargets,
 }) {
   final issues = <LauncherIssue>[];
   final candidatesById = <String, List<InstalledMod>>{};
@@ -43,6 +46,9 @@ DependencyResolutionResult _resolveInstalled(
       requireKnownGameVersion: requireKnownGameVersion,
       loaderVersion: loaderVersion,
       sdkVersion: sdkVersion,
+      platform: platform,
+      architecture: architecture,
+      contentTargets: contentTargets,
     );
     if (compatibilityIssues.isNotEmpty) {
       issues.addAll(compatibilityIssues);
@@ -139,6 +145,13 @@ DependencyResolutionResult _resolveInstalled(
       }
     }
 
+    for (final before in manifest.loadBefore) {
+      final beforeMod = enabled[before.toLowerCase()];
+      if (beforeMod != null) {
+        softEdges.add((priority: 1, from: beforeMod.id, to: mod.id));
+      }
+    }
+
     for (final conflict in manifest.conflicts) {
       final conflictingMod = enabled[conflict.id.toLowerCase()];
       if (conflictingMod != null &&
@@ -160,7 +173,7 @@ DependencyResolutionResult _resolveInstalled(
   }
 
   // Only hard dependency cycles are blocking. Optional dependencies and
-  // loadAfter are best-effort ordering hints; folding them into cycle
+  // loadAfter/loadBefore are best-effort ordering hints; folding them into cycle
   // detection would turn a mutual hint into a load failure.
   final hardOrdered = <InstalledMod>[];
   final permanent = <String>{};

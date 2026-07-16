@@ -72,7 +72,9 @@ extension _DiagnosticsHelpers on LocalLauncherRepository {
       throw StateError('Diagnostic bundle exceeds the 16 MB output limit.');
     }
     await _writeFileBytesAtomic(bundle, bytes);
-    await _appendLauncherLog('Created diagnostic bundle ${bundle.path}.');
+    await _appendLauncherLogBestEffort(
+      'Created diagnostic bundle ${bundle.path}.',
+    );
     return DiagnosticBundle(
       path: bundle.path,
       createdAtUtc: now,

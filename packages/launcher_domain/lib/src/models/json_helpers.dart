@@ -1,14 +1,7 @@
 part of '../models.dart';
 
-bool _isUnsafeRelativePath(String value) {
-  final portable = value.replaceAll('\\', '/');
-  return portable.isEmpty ||
-      portable.startsWith('/') ||
-      portable.split('/').any(_isUnsafePortablePathSegment);
-}
-
 String? _portableManifestPathCollisionKey(String value) {
-  if (value.length > 1024 ||
+  if (value.runes.length > 1024 ||
       value.contains('\\') ||
       value.startsWith('/') ||
       value.trim().isEmpty) {
@@ -20,7 +13,7 @@ String? _portableManifestPathCollisionKey(String value) {
     }
     final folded = <String>[];
     for (final segment in value.split('/')) {
-      if (segment.length > 255 || _isUnsafePortablePathSegment(segment)) {
+      if (segment.runes.length > 255 || _isUnsafePortablePathSegment(segment)) {
         return null;
       }
       final key = unicode
