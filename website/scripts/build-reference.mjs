@@ -15,14 +15,15 @@ rmSync(resolve(websiteRoot, 'dist', 'api', 'csharp'), {
   force: true,
 });
 
-const result = spawnSync('dotnet', ['tool', 'run', 'docfx', 'docfx.json'], {
+const dotnet = process.env.TOPIAFORGE_DOTNET_BIN || 'dotnet';
+const result = spawnSync(dotnet, ['tool', 'run', 'docfx', 'docfx.json'], {
   cwd: websiteRoot,
   encoding: 'utf8',
   stdio: 'inherit',
 });
 
 if (result.error) {
-  console.error(`Unable to start DocFX: ${result.error.message}`);
+  console.error(`Unable to start DocFX with ${dotnet}: ${result.error.message}`);
   process.exit(1);
 }
 process.exit(result.status ?? 1);

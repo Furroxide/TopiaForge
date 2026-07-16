@@ -25,7 +25,7 @@ class LauncherUpdateSettings {
   });
 
   static const defaultArchiveUrl =
-      'https://furroxide.github.io/TopiaForge/manual-releases.json';
+      'https://docs.topiaforge.dev/manual-releases.json';
 
   final bool enabled;
   final bool checkAutomatically;
