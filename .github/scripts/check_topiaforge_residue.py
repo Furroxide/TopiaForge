@@ -19,8 +19,6 @@ SELF_PATH = ".github/scripts/check_topiaforge_residue.py"
 # These paths describe the game build/reference input, not the modding ecosystem.
 ROBOTOPIA_EXACT_PATH_ALLOWLIST = {
     ".github/robotopia-game-build.json",
-    "tools/restore-robotopia-managed-refs.ps1",
-    "tools/test-restore-robotopia-managed-refs.ps1",
 }
 
 TOPIAFORGE_PACKAGE_TOOL_PATH = re.compile(
@@ -105,13 +103,13 @@ TEXT_ONLY_BYTE_RULES = (
     ("retired Qw abbreviation", re.compile(rb"(?<![A-Za-z0-9_])Qw(?![A-Za-z0-9_])")),
 )
 
-# Every lowercase use is deliberately narrow. The title-cased word Robotopia is
-# the game name; these additional forms are game files, game compatibility
-# identifiers, managed-reference plumbing, verified in-game asset ids, or tags.
+# Every lowercase use is deliberately narrow. Natural-language references to
+# Robotopia are valid product documentation; these additional lowercase forms
+# are game files, compatibility identifiers, managed-reference plumbing,
+# verified in-game asset ids, or tags.
 LOWERCASE_ROBOTOPIA_ALLOWLIST = (
     re.compile(r"robotopia\.gg", re.IGNORECASE),
     re.compile(r"@robotopia(?:-parts)?/", re.IGNORECASE),
-    re.compile(r"(?:test-)?restore-robotopia-managed-refs", re.IGNORECASE),
     re.compile(r"robotopia-(?:bundled-refs|game-build|managed-refs|public-refs)", re.IGNORECASE),
     re.compile(r"-robotopiaManagedDir\b"),
 )
@@ -178,6 +176,11 @@ def parse_args() -> argparse.Namespace:
             "Relative paths are resolved from the repository root"
         ),
     )
+    parser.add_argument(
+        "--include-only",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
     return parser.parse_args()
 
 
@@ -229,26 +232,15 @@ def check_path(display: str, policy_path: str, failures: list[str]) -> None:
         failures.append(f"{display}: retired ecosystem name in path")
 
 
-def extract_binary_strings(data: bytes, display: str) -> bytes:
-    try:
-        result = subprocess.run(
-            ["strings", "-a"],
-            check=True,
-            input=data,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-    except FileNotFoundError as error:
-        raise AuditToolError(
-            "The rename residue audit requires the `strings` executable "
-            f"to inspect binary payloads (while scanning {display})."
-        ) from error
-    except subprocess.CalledProcessError as error:
-        detail = error.stderr.decode("utf-8", errors="replace").strip()
-        raise AuditToolError(
-            f"strings failed while scanning {display}: {detail or f'exit {error.returncode}'}"
-        ) from error
-    return result.stdout
+def extract_binary_strings(data: bytes) -> bytes:
+    """Return portable ASCII runs without invoking a platform-specific tool.
+
+    Every binary residue rule is ASCII and at least four characters long. A
+    local extractor is deterministic across GNU/binutils and Xcode, avoids an
+    external process per binary, and cannot deadlock while both sides fill
+    stdin/stdout pipes on large managed assemblies.
+    """
+    return b"\n".join(re.findall(rb"[\x20-\x7e]{4,}", data))
 
 
 def scan_content(
@@ -262,7 +254,7 @@ def scan_content(
     binary = not force_text and (
         archive_suffix(policy_path) in BINARY_SUFFIXES or b"\0" in data
     )
-    scan_data = extract_binary_strings(data, display) if binary else data
+    scan_data = extract_binary_strings(data) if binary else data
     location_suffix = ":strings" if binary else ""
 
     rules = BYTE_RULES if binary else BYTE_RULES + TEXT_ONLY_BYTE_RULES
@@ -446,12 +438,13 @@ def main() -> int:
     failures: list[str] = []
     scanned_files: set[Path] = set()
 
-    for relative in repository_files():
-        if relative == SELF_PATH:
-            continue
-        path = ROOT / relative
-        scan_file(path, relative, relative, failures)
-        scanned_files.add(path.resolve(strict=False))
+    if not args.include_only:
+        for relative in repository_files():
+            if relative == SELF_PATH:
+                continue
+            path = ROOT / relative
+            scan_file(path, relative, relative, failures)
+            scanned_files.add(path.resolve(strict=False))
 
     try:
         for raw_include in args.include:

@@ -93,8 +93,9 @@ jobs:
       - name: Require the pinned game build to still be latest
         shell: pwsh
         run: >-
-          ./tools/restore-robotopia-managed-refs.ps1
-          -Source public -Probe -RequireLatest
+          dotnet run
+          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
+          -c Release -- --source public --probe --require-latest
 
       - name: Verify tag, release PR, and exact-SHA gates
         id: evidence
