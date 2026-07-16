@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 using UnityEngine;
 
 namespace TopiaForge.RobotKit
@@ -9,7 +12,7 @@ namespace TopiaForge.RobotKit
     // Implementation of the public IRobotAgentService. Owns a DontDestroyOnLoad root with an always-inactive
     // incubator (so a clone's native Awake/OnEnable fire only after the brain has been configured), the live
     // agent handles, and the per-frame tick that drives each agent's native walk.
-    internal sealed class RobotAgentService : IRobotAgentService, IDisposable
+    internal sealed class RobotAgentService : IRobotAgentService, IOwnerBoundExtensionFactory, IDisposable
     {
         private readonly IModLogger logger;
         private readonly RobotPrefabResolver prefabResolver;
@@ -65,9 +68,10 @@ namespace TopiaForge.RobotKit
             }
         }
 
-        public bool IsRobotPrefab(object gameObject)
+        public bool TryGetRobot(IEntity entity, out IRobotAgent? agent)
         {
-            return gameObject is GameObject go && GameReflection.HasRobotBody(go);
+            agent = FindAgentByEntity(entity);
+            return agent != null;
         }
 
         public IReadOnlyList<IRobotAgent> ActiveAgents
@@ -88,16 +92,16 @@ namespace TopiaForge.RobotKit
         // Maps a spawned robot's GameObject (as object) back to its agent handle, by CLR reference — identity
         // holds regardless of Unity fake-null, and consumers hand out agent.GameObject itself (target snapshots).
         // Used by the objective service to resolve a Reprogram courier's recipient. Null for foreign objects.
-        internal IRobotAgent? FindAgentByGameObject(object gameObject)
+        internal IRobotAgent? FindAgentByEntity(IEntity entity)
         {
-            if (gameObject == null)
+            if (entity == null)
             {
                 return null;
             }
 
             for (var index = 0; index < agents.Count; index++)
             {
-                if (ReferenceEquals(agents[index].GameObject, gameObject))
+                if (ReferenceEquals(agents[index], entity))
                 {
                     return agents[index];
                 }
@@ -106,23 +110,34 @@ namespace TopiaForge.RobotKit
             return null;
         }
 
-        public IRobotAgent? Spawn(RobotAgentSpawnRequest request)
+        public OperationResult<IRobotAgent> Spawn(RobotAgentSpawnRequest request)
         {
-            if (disposed || request == null)
+            if (request == null)
             {
-                return null;
+                throw new ArgumentNullException(nameof(request));
+            }
+
+            if (disposed)
+            {
+                return OperationResult<IRobotAgent>.Failure(
+                    ModErrorCode.InvalidState,
+                    "RobotKit has been disposed.");
             }
 
             var prefab = ResolvePrefabForType(request.RobotTypeId);
             if (prefab == null)
             {
-                return null;
+                return OperationResult<IRobotAgent>.Failure(
+                    ModErrorCode.Unavailable,
+                    "No spawnable robot prefab is available in this scene.");
             }
 
             EnsureRoots();
             if (incubator == null || root == null)
             {
-                return null;
+                return OperationResult<IRobotAgent>.Failure(
+                    ModErrorCode.Unavailable,
+                    "RobotKit could not create its scene-owned spawn root.");
             }
 
             var position = new Vector3(request.Position.X, request.Position.Y, request.Position.Z);
@@ -167,7 +182,7 @@ namespace TopiaForge.RobotKit
             activeDirty = true;
 
             LogSpawnModeOnce();
-            return agent;
+            return OperationResult<IRobotAgent>.Success(agent);
         }
 
         public bool TryGetPlayerPosition(out Vec3 position)
@@ -184,16 +199,19 @@ namespace TopiaForge.RobotKit
             return false;
         }
 
-        public bool TryGetPlayerObject(out object gameObject)
+        public bool TryGetPlayerEntity(out IEntity? entity)
         {
             var player = ResolvePlayer();
             if (player != null)
             {
-                gameObject = PlayerBridge.GetPlayerObject(player);
-                return true;
+                if (PlayerBridge.GetPlayerObject(player) is GameObject gameObject)
+                {
+                    entity = new NativeEntityAdapter("robotkit:player", gameObject);
+                    return true;
+                }
             }
 
-            gameObject = null!;
+            entity = null;
             return false;
         }
 
@@ -218,12 +236,26 @@ namespace TopiaForge.RobotKit
             }
         }
 
-        public IReachableSpawn BeginFindReachableSpawn(ReachableSpawnRequest request)
+        public Task<OperationResult<ReachableSpawnResult>> FindReachableSpawnAsync(
+            ReachableSpawnRequest request,
+            CancellationToken cancellationToken = default)
         {
+            if (request == null)
+            {
+                throw new ArgumentNullException(nameof(request));
+            }
+
+            if (disposed)
+            {
+                return Task.FromResult(OperationResult<ReachableSpawnResult>.Failure(
+                    ModErrorCode.InvalidState,
+                    "RobotKit has been disposed."));
+            }
+
             // The search self-completes in its constructor when the service is gone or there is no navigation, so a
             // caller can always poll the returned handle without special-casing those paths.
             var search = new ReachableSpawnSearch(
-                request ?? new ReachableSpawnRequest(Vec3.Zero),
+                request,
                 ResolvePathFindSettings(),
                 random,
                 logger);
@@ -232,7 +264,21 @@ namespace TopiaForge.RobotKit
                 searches.Add(search);
             }
 
-            return search;
+            search.AttachCancellation(cancellationToken);
+            return search.Completion;
+        }
+
+        object IOwnerBoundExtensionFactory.CreateOwnerFacade(
+            Type contractType,
+            string ownerModId,
+            IModLifetime lifetime)
+        {
+            if (contractType != typeof(IRobotAgentService))
+            {
+                throw new ArgumentException("Unsupported RobotKit agent extension contract.", nameof(contractType));
+            }
+
+            return new OwnerFacade(this, lifetime);
         }
 
         // The designer-tuned PathFindSettings read off the spawnable robot prefab's LocomotionController (cached for
@@ -350,6 +396,146 @@ namespace TopiaForge.RobotKit
             }
 
             searches.Clear();
+        }
+
+        private sealed class OwnerFacade : IRobotAgentService
+        {
+            private readonly RobotAgentService service;
+            private readonly IModLifetime lifetime;
+            private readonly List<IRobotAgent> ownedAgents = new List<IRobotAgent>();
+
+            public OwnerFacade(RobotAgentService service, IModLifetime lifetime)
+            {
+                this.service = service;
+                this.lifetime = lifetime;
+            }
+
+            public bool IsAvailable => !lifetime.IsStopping && service.IsAvailable;
+            public bool IsNavigationAvailable => !lifetime.IsStopping && service.IsNavigationAvailable;
+            public IReadOnlyList<RobotTypeDescriptor> RobotTypes => service.RobotTypes;
+
+            public IReadOnlyList<IRobotAgent> ActiveAgents
+            {
+                get
+                {
+                    ownedAgents.RemoveAll(agent => !agent.IsAlive);
+                    return ownedAgents.ToArray();
+                }
+            }
+
+            public bool TryGetRobot(IEntity entity, out IRobotAgent? agent)
+            {
+                foreach (var owned in ownedAgents)
+                {
+                    if (ReferenceEquals(owned, entity)
+                        || owned is OwnerRobotAgent wrapper && wrapper.Wraps(entity))
+                    {
+                        agent = owned;
+                        return true;
+                    }
+                }
+
+                agent = null;
+                return false;
+            }
+
+            public OperationResult<IRobotAgent> Spawn(RobotAgentSpawnRequest request)
+            {
+                if (lifetime.IsStopping)
+                {
+                    return OperationResult<IRobotAgent>.Failure(
+                        ModErrorCode.Cancelled,
+                        "The mod is stopping and cannot spawn robots.");
+                }
+
+                var result = service.Spawn(request);
+                if (!result.TryGetValue(out var agent))
+                {
+                    return result;
+                }
+
+                try
+                {
+                    var wrapper = new OwnerRobotAgent(agent, lifetime.Track(agent));
+                    ownedAgents.Add(wrapper);
+                    return OperationResult<IRobotAgent>.Success(wrapper);
+                }
+                catch (ObjectDisposedException)
+                {
+                    return OperationResult<IRobotAgent>.Failure(
+                        ModErrorCode.Cancelled,
+                        "The mod stopped before its spawned robot could be retained.");
+                }
+            }
+
+            public async Task<OperationResult<ReachableSpawnResult>> FindReachableSpawnAsync(
+                ReachableSpawnRequest request,
+                CancellationToken cancellationToken = default)
+            {
+                using (var linked = CancellationTokenSource.CreateLinkedTokenSource(
+                    cancellationToken,
+                    lifetime.StoppingToken))
+                {
+                    return await service.FindReachableSpawnAsync(request, linked.Token);
+                }
+            }
+
+            private sealed class OwnerRobotAgent : IRobotAgent
+            {
+                private readonly IRobotAgent agent;
+                private IDisposable? lifetimeLease;
+
+                public OwnerRobotAgent(IRobotAgent agent, IDisposable lifetimeLease)
+                {
+                    this.agent = agent;
+                    this.lifetimeLease = lifetimeLease;
+                }
+
+                public string Id => agent.Id;
+                public string Name => agent.Name;
+                public bool IsAlive => lifetimeLease != null && agent.IsAlive;
+                public Vec3 Position => agent.Position;
+                public Vec3 HeadPosition => agent.HeadPosition;
+                public RobotBrainMode BrainMode => agent.BrainMode;
+                public bool IsMoving => agent.IsMoving;
+                public bool HasReachedTarget => agent.HasReachedTarget;
+                public float MoveSpeed => agent.MoveSpeed;
+                public float TurnSpeed => agent.TurnSpeed;
+                public float StopDistance => agent.StopDistance;
+                public RobotGait Gait => agent.Gait;
+
+                public bool Wraps(IEntity entity) => ReferenceEquals(agent, entity);
+                public OperationResult<bool> SetBrainMode(RobotBrainMode mode) => agent.SetBrainMode(mode);
+                public OperationResult<bool> ConfigureMovement(RobotMovementSettings settings) =>
+                    agent.ConfigureMovement(settings);
+                public OperationResult<bool> MoveTo(Vec3 position) => agent.MoveTo(position);
+                public OperationResult<bool> Chase(IEntity target) =>
+                    agent.Chase(target is OwnerRobotAgent wrapper ? wrapper.agent : target);
+                public OperationResult<bool> Stop() => agent.Stop();
+                public OperationResult<bool> SetTint(RobotColor color) => agent.SetTint(color);
+                public OperationResult<bool> SetEmote(string emojiShortcode) => agent.SetEmote(emojiShortcode);
+                public OperationResult<bool> SetName(string name) => agent.SetName(name);
+                public OperationResult<bool> SetScale(float scale) => agent.SetScale(scale);
+                public OperationResult<bool> SetInteraction(RobotInteractionOptions options) =>
+                    agent.SetInteraction(options);
+                public OperationResult<bool> ApplyDamage(float amount, RobotDamageType type, string source) =>
+                    agent.ApplyDamage(amount, type, source);
+                public OperationResult<bool> Kill(RobotDamageType type, string source) => agent.Kill(type, source);
+                public OperationResult<bool> Ragdoll() => agent.Ragdoll();
+                public OperationResult<bool> Knockback(Vec3 impulse) => agent.Knockback(impulse);
+
+                public OperationResult<bool> Despawn()
+                {
+                    var result = agent.Despawn();
+                    Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
+                    return result;
+                }
+
+                public void Dispose()
+                {
+                    Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
+                }
+            }
         }
 
         private void ClearAgents()

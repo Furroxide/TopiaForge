@@ -119,6 +119,7 @@ namespace TopiaForge.Mods.UnityUi
                 : new Vector2(extent * fraction, 0f);
         }
 
+        /// <summary>Applies the resolved theme to this UI element.</summary>
         public virtual void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
             track.color = theme.SurfaceSunken;
@@ -240,6 +241,7 @@ namespace TopiaForge.Mods.UnityUi
             label.text = lastLabel;
         }
 
+        /// <summary>Applies the resolved theme to this UI element.</summary>
         public override void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
             base.ApplyTheme(theme);

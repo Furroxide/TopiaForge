@@ -11,8 +11,9 @@ namespace TopiaForge.ModManager.Tests
         {
             TestSiblingPrefixTraversalRejected(root);
             TestTamperedSerializedIdsCannotDeleteOutsidePackages(root);
-            TestTamperedSelectedVersionCannotPrunePackages(root);
+            TestTamperedSelectedVersionCannotDeletePackages(root);
             TestAtomicStateRecoveryAndBounds(root);
+            TestManagerStateMigration(root);
         }
 
         private static void TestSiblingPrefixTraversalRejected(string root)
@@ -53,7 +54,7 @@ namespace TopiaForge.ModManager.Tests
                 Path.Combine(packageDirectory, "topiaforge.mod.json"),
                 JsonUtil.Serialize(new ModManifest
                 {
-                    SchemaVersion = 3,
+                    SchemaVersion = 4,
                     Id = unsafeId,
                     Name = "Tampered",
                     Version = "1.0.0",
@@ -96,7 +97,7 @@ namespace TopiaForge.ModManager.Tests
             Assert(state.Find(unsafeId) == null, "pending uninstall should discard the unsafe state record");
         }
 
-        private static void TestTamperedSelectedVersionCannotPrunePackages(string root)
+        private static void TestTamperedSelectedVersionCannotDeletePackages(string root)
         {
             var paths = NewPaths(root, "tampered-prune-version");
             var package = paths.GetPackagePath("safe.mod", "1.0.0");
@@ -112,10 +113,10 @@ namespace TopiaForge.ModManager.Tests
             });
             state = RoundTripState(paths.StateFile, state);
 
-            new ModRegistry().PruneSupersededVersions(paths, state);
+            new ModRegistry().Scan(paths, state);
 
-            Assert(Directory.Exists(package), "an unsafe selected version must not cause valid versions to be pruned");
-            Assert(File.Exists(outside), "pruning must not touch a path selected by tampered state");
+            Assert(Directory.Exists(package), "an unsafe selected version must not cause valid versions to be deleted");
+            Assert(File.Exists(outside), "selection must not touch a path named by tampered state");
         }
 
         private static void TestAtomicStateRecoveryAndBounds(string root)
@@ -170,6 +171,41 @@ namespace TopiaForge.ModManager.Tests
             Throws<InvalidDataException>(
                 () => JsonUtil.LoadFile(oversizedPath, new ManagerState()),
                 "persisted JSON reads should be bounded before deserialization");
+        }
+
+        private static void TestManagerStateMigration(string root)
+        {
+            var path = Path.Combine(root, "state-migration", "legacy-state.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(
+                path,
+                "{\"mods\":[" +
+                "{\"id\":\"zeta.mod\",\"name\":\"Zeta\",\"version\":\"1.0.0\"}," +
+                "{\"id\":\"alpha.mod\",\"name\":\"Old\",\"version\":\"1.0.0\"}," +
+                "{\"id\":\"ALPHA.MOD\",\"name\":\"Latest\",\"version\":\"2.0.0\"," +
+                "\"installedAtUtc\":null,\"updatedAtUtc\":null}," +
+                "{\"id\":\"../unsafe\",\"name\":\"Unsafe\",\"version\":\"1.0.0\"}]}");
+
+            var migrated = JsonUtil.LoadFile(path, new ManagerState());
+            Assert(migrated.SchemaVersion == 0,
+                "legacy state without schemaVersion should deserialize as the migration sentinel");
+            migrated.Normalize();
+
+            Assert(migrated.SchemaVersion == ManagerState.CurrentSchemaVersion,
+                "legacy state should migrate to the current schema");
+            Assert(migrated.Mods.Count == 2 &&
+                   migrated.Mods.Select(mod => mod.Id).SequenceEqual(
+                       new[] { "ALPHA.MOD", "zeta.mod" }, StringComparer.OrdinalIgnoreCase),
+                "migration should drop unsafe records, de-duplicate ids, and normalize order");
+            var alpha = migrated.Find("alpha.mod");
+            Assert(alpha?.Name == "Latest" && alpha.Version == "2.0.0" &&
+                   alpha.InstalledAtUtc != null && alpha.UpdatedAtUtc != null,
+                "the last duplicate should win and nullable legacy fields should be normalized");
+
+            var future = new ManagerState { SchemaVersion = ManagerState.CurrentSchemaVersion + 1 };
+            Throws<System.Runtime.Serialization.SerializationException>(
+                future.Normalize,
+                "unknown future manager-state schemas must fail closed");
         }
 
         private static ManagerPaths NewPaths(string root, string name)

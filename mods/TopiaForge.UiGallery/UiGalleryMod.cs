@@ -1,3 +1,4 @@
+using System;
 using TopiaForge.Mods;
 using TopiaForge.Mods.UnityUi;
 
@@ -8,27 +9,55 @@ namespace TopiaForge.UiGallery
     /// widget renders in both schemes with live accessibility toggles, making this the
     /// manual-QA surface and the copy-paste reference for mod authors.
     /// </summary>
-    public sealed class UiGalleryMod : ITopiaForgeMod
+    public sealed class UiGalleryMod : TopiaForgeMod
     {
         private UiHost? ui;
         private GalleryWindow? gallery;
+        private IInputAction? toggleAction;
+        private IDisposable? galleryLifetime;
 
-        public void OnLoad(IModContext context)
+        /// <inheritdoc />
+        protected override void OnLoad()
         {
-            ui = TopiaForgeUi.For(context);
-            ui.Hotkey(TopiaForgeKey.F8, () =>
+            ui = TopiaForgeUi.For(Context);
+            Context.Lifetime.Track(ui);
+            var registration = Context.Input.RegisterAction(new InputActionDefinition(
+                "toggle-gallery",
+                "Toggle TopiaForge UI Gallery",
+                new[] { InputBinding.Key("F8") }));
+            if (!registration.TryGetValue(out toggleAction))
             {
-                gallery ??= new GalleryWindow(ui);
+                Context.Logger.Error(
+                    "UI Gallery input registration failed (" + registration.ErrorCode + "): " +
+                    registration.ErrorMessage);
+                return;
+            }
+
+            Context.Events.SubscribeUpdate(deltaTime =>
+            {
+                if (toggleAction?.WasPressed != true || ui == null)
+                {
+                    return;
+                }
+
+                if (gallery == null)
+                {
+                    gallery = new GalleryWindow(ui);
+                    galleryLifetime = Context.Lifetime.Track(gallery);
+                }
+
                 gallery.Toggle();
             });
-            context.Logger.Info("UI Gallery loaded - press F8 to open.");
+            Context.Logger.Info("UI Gallery loaded - press F8 to open.");
         }
 
-        public void OnUnload()
+        /// <inheritdoc />
+        protected override void OnUnload()
         {
-            gallery?.Dispose();
+            // SDK input/events, the gallery, and the direct kit host are released in reverse order by Lifetime.
+            galleryLifetime = null;
             gallery = null;
-            ui?.Dispose();
+            toggleAction = null;
             ui = null;
         }
     }

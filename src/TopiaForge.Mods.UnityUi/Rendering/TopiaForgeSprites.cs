@@ -43,12 +43,14 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
+        /// <summary>Creates and adds a fill child element.</summary>
         public static Sprite Fill(TopiaForgeRadius radius)
         {
             EnsureAtlas();
             return Cache["fill-" + (int)radius];
         }
 
+        /// <summary>Creates and adds a ring child element.</summary>
         public static Sprite Ring(TopiaForgeRadius radius, float thickness)
         {
             EnsureAtlas();
@@ -56,12 +58,14 @@ namespace TopiaForge.Mods.UnityUi
             return Cache[key + (int)radius];
         }
 
+        /// <summary>Creates and adds a circle child element.</summary>
         public static Sprite Circle()
         {
             EnsureAtlas();
             return Cache["circle"];
         }
 
+        /// <summary>Creates a sprite for a semantic TopiaForge icon.</summary>
         public static Sprite Icon(TopiaForgeIcon icon)
         {
             EnsureAtlas();

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 namespace TopiaForge.ModManager.Core
@@ -80,6 +81,68 @@ namespace TopiaForge.ModManager.Core
         public static void ValidateObject(string json)
         {
             Parse(json ?? string.Empty);
+        }
+
+        /// <summary>Returns the decoded top-level property names of one strict JSON object.</summary>
+        internal static IReadOnlyList<string> ReadPropertyNames(string json)
+        {
+            return Parse(json ?? string.Empty).Select(property => property.Name).ToList();
+        }
+
+        /// <summary>Returns decoded names and strict raw values for one JSON object.</summary>
+        internal static IReadOnlyList<RawJsonProperty> ReadProperties(string json)
+        {
+            return Parse(json ?? string.Empty)
+                .Select(property => new RawJsonProperty(property.Name, property.RawValue))
+                .ToList();
+        }
+
+        /// <summary>Returns strict raw elements for one JSON array.</summary>
+        internal static IReadOnlyList<string> ReadArrayValues(string json)
+        {
+            var values = new List<string>();
+            var index = 0;
+            SkipWhitespace(json, ref index);
+            Require(json, ref index, '[');
+            SkipWhitespace(json, ref index);
+            if (TryConsume(json, ref index, ']'))
+            {
+                SkipWhitespace(json, ref index);
+                RequireEnd(json, index);
+                return values;
+            }
+
+            while (true)
+            {
+                SkipWhitespace(json, ref index);
+                var valueStart = index;
+                ScanValue(json, ref index);
+                var valueEnd = index;
+                while (valueEnd > valueStart && IsJsonWhitespace(json[valueEnd - 1]))
+                {
+                    valueEnd--;
+                }
+
+                if (valueEnd == valueStart)
+                {
+                    throw new FormatException("JSON array contains an empty value.");
+                }
+
+                var rawValue = json.Substring(valueStart, valueEnd - valueStart);
+                StrictJsonValueValidator.Validate(rawValue);
+                values.Add(rawValue);
+                SkipWhitespace(json, ref index);
+                if (TryConsume(json, ref index, ']'))
+                {
+                    break;
+                }
+
+                Require(json, ref index, ',');
+            }
+
+            SkipWhitespace(json, ref index);
+            RequireEnd(json, index);
+            return values;
         }
 
         private static string MergeContractObjects(
@@ -306,7 +369,7 @@ namespace TopiaForge.ModManager.Core
                 throw new FormatException("Unterminated JSON object or array value.");
             }
 
-            while (index < json.Length && json[index] != ',' && json[index] != '}')
+            while (index < json.Length && json[index] != ',' && json[index] != '}' && json[index] != ']')
             {
                 index++;
             }
@@ -404,6 +467,18 @@ namespace TopiaForge.ModManager.Core
 
             public string Name { get; }
             public string RawName { get; }
+            public string RawValue { get; }
+        }
+
+        internal sealed class RawJsonProperty
+        {
+            public RawJsonProperty(string name, string rawValue)
+            {
+                Name = name;
+                RawValue = rawValue;
+            }
+
+            public string Name { get; }
             public string RawValue { get; }
         }
 

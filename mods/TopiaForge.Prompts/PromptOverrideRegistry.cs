@@ -1,15 +1,23 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.Prompts
 {
-    internal sealed class PromptOverrideRegistry : IPromptOverrideRegistry, IDisposable
+    internal sealed class PromptOverrideRegistry : IPromptOverrideRegistry, IOwnerBoundExtensionFactory, IDisposable
     {
+        private readonly string sourceId;
         private readonly object gate = new object();
         private readonly List<Entry> entries = new List<Entry>();
         private bool disposed;
+
+        public PromptOverrideRegistry(string sourceId = "test.provider")
+        {
+            this.sourceId = sourceId ?? string.Empty;
+        }
 
         public IReadOnlyList<PromptOverride> Overrides
         {
@@ -21,36 +29,40 @@ namespace TopiaForge.Prompts
                         .Select(e => e.Override)
                         .OrderBy(o => o.PromptId, StringComparer.OrdinalIgnoreCase)
                         .ThenByDescending(o => o.Priority)
-                        .ThenBy(o => o.ModId, StringComparer.OrdinalIgnoreCase)
+                        .ThenBy(o => o.SourceId, StringComparer.OrdinalIgnoreCase)
                         .ToList();
                 }
             }
         }
 
-        public IPromptOverrideHandle Register(PromptOverrideRequest request)
+        public OperationResult<IPromptOverrideHandle> Register(PromptOverrideRequest request)
+        {
+            return Register(sourceId, request);
+        }
+
+        private OperationResult<IPromptOverrideHandle> Register(string ownerId, PromptOverrideRequest request)
         {
             if (request == null)
             {
                 throw new ArgumentNullException(nameof(request));
             }
 
-            if (string.IsNullOrWhiteSpace(request.OwnerModId))
-            {
-                throw new ArgumentException("Owner mod id is required.", nameof(request));
-            }
-
             if (string.IsNullOrWhiteSpace(request.PromptId))
             {
-                throw new ArgumentException("Prompt id is required.", nameof(request));
+                return OperationResult<IPromptOverrideHandle>.Failure(
+                    ModErrorCode.InvalidArgument,
+                    "Prompt id is required.");
             }
 
             if (string.IsNullOrWhiteSpace(request.ReplacementText))
             {
-                throw new ArgumentException("Replacement text is required.", nameof(request));
+                return OperationResult<IPromptOverrideHandle>.Failure(
+                    ModErrorCode.InvalidArgument,
+                    "Replacement text is required.");
             }
 
             var promptOverride = new PromptOverride(
-                request.OwnerModId,
+                ownerId,
                 request.PromptId,
                 request.ReplacementText,
                 request.Priority,
@@ -63,16 +75,31 @@ namespace TopiaForge.Prompts
             {
                 if (disposed)
                 {
-                    throw new ObjectDisposedException(nameof(PromptOverrideRegistry));
+                    return OperationResult<IPromptOverrideHandle>.Failure(
+                        ModErrorCode.InvalidState,
+                        "Prompt override registry is disposed.");
                 }
 
                 RemoveMatchingLocked(e =>
-                    string.Equals(e.Override.ModId, promptOverride.ModId, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(e.Override.SourceId, promptOverride.SourceId, StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(e.Override.PromptId, promptOverride.PromptId, StringComparison.OrdinalIgnoreCase));
                 entries.Add(entry);
             }
 
-            return handle;
+            return OperationResult<IPromptOverrideHandle>.Success(handle);
+        }
+
+        object IOwnerBoundExtensionFactory.CreateOwnerFacade(
+            Type contractType,
+            string ownerModId,
+            IModLifetime lifetime)
+        {
+            if (contractType != typeof(IPromptOverrideRegistry))
+            {
+                throw new ArgumentException("Unsupported prompt extension contract.", nameof(contractType));
+            }
+
+            return new OwnerFacade(this, ownerModId, lifetime);
         }
 
         public bool TryGetEffectiveOverride(string promptId, out PromptOverride? promptOverride)
@@ -91,7 +118,7 @@ namespace TopiaForge.Prompts
                 return entries
                     .Select(e => e.Override)
                     .GroupBy(o => o.PromptId, StringComparer.OrdinalIgnoreCase)
-                    .Where(g => g.Select(o => o.ModId).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1)
+                    .Where(g => g.Select(o => o.SourceId).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1)
                     .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
                     .Select(g =>
                     {
@@ -99,19 +126,6 @@ namespace TopiaForge.Prompts
                         return new PromptConflict(g.Key, overrides, overrides.FirstOrDefault());
                     })
                     .ToList();
-            }
-        }
-
-        public void UnregisterOwner(string ownerModId)
-        {
-            if (string.IsNullOrWhiteSpace(ownerModId))
-            {
-                return;
-            }
-
-            lock (gate)
-            {
-                RemoveMatchingLocked(e => string.Equals(e.Override.ModId, ownerModId, StringComparison.OrdinalIgnoreCase));
             }
         }
 
@@ -154,7 +168,7 @@ namespace TopiaForge.Prompts
         {
             return promptOverrides
                 .OrderByDescending(o => o.Priority)
-                .ThenBy(o => o.ModId, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(o => o.SourceId, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(o => o.ReplacementText, StringComparer.Ordinal);
         }
 
@@ -210,6 +224,75 @@ namespace TopiaForge.Prompts
             public void MarkDisposed()
             {
                 IsDisposed = true;
+            }
+        }
+
+        private sealed class OwnerFacade : IPromptOverrideRegistry
+        {
+            private readonly PromptOverrideRegistry registry;
+            private readonly string ownerModId;
+            private readonly IModLifetime lifetime;
+
+            public OwnerFacade(PromptOverrideRegistry registry, string ownerModId, IModLifetime lifetime)
+            {
+                this.registry = registry;
+                this.ownerModId = ownerModId;
+                this.lifetime = lifetime;
+            }
+
+            public IReadOnlyList<PromptOverride> Overrides => registry.Overrides;
+
+            public OperationResult<IPromptOverrideHandle> Register(PromptOverrideRequest request)
+            {
+                if (lifetime.IsStopping)
+                {
+                    return OperationResult<IPromptOverrideHandle>.Failure(
+                        ModErrorCode.Cancelled,
+                        "The mod is stopping and cannot register prompt overrides.");
+                }
+
+                var result = registry.Register(ownerModId, request);
+                if (!result.TryGetValue(out var handle))
+                {
+                    return result;
+                }
+
+                try
+                {
+                    var ownedHandle = new OwnerHandle(handle, lifetime.Track(handle));
+                    return OperationResult<IPromptOverrideHandle>.Success(ownedHandle);
+                }
+                catch (ObjectDisposedException)
+                {
+                    return OperationResult<IPromptOverrideHandle>.Failure(
+                        ModErrorCode.Cancelled,
+                        "The mod stopped before its prompt override could be registered.");
+                }
+            }
+
+            public bool TryGetEffectiveOverride(string promptId, out PromptOverride? promptOverride) =>
+                registry.TryGetEffectiveOverride(promptId, out promptOverride);
+
+            public IReadOnlyList<PromptConflict> GetConflicts() => registry.GetConflicts();
+
+            private sealed class OwnerHandle : IPromptOverrideHandle
+            {
+                private readonly IPromptOverrideHandle handle;
+                private IDisposable? lifetimeLease;
+
+                public OwnerHandle(IPromptOverrideHandle handle, IDisposable lifetimeLease)
+                {
+                    this.handle = handle;
+                    this.lifetimeLease = lifetimeLease;
+                }
+
+                public PromptOverride Override => handle.Override;
+                public bool IsDisposed => lifetimeLease == null || handle.IsDisposed;
+
+                public void Dispose()
+                {
+                    Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
+                }
             }
         }
     }

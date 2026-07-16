@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 using TopiaForge.Mods.UnityUi;
 using UnityEngine;
 using UnityEngine.UI;
@@ -17,7 +18,8 @@ namespace TopiaForge.Worlds
     /// <see cref="GameLevelBridge"/> style: a missing symbol or unrecognized UI logs once and degrades to
     /// doing nothing — the provider's scene-load session teardown remains the correctness backstop.
     /// </summary>
-    internal sealed partial class PauseMenuBridge : IWorldPauseMenuService, IDisposable
+    internal sealed partial class PauseMenuBridge : IWorldPauseMenuService,
+        IOwnerBoundExtensionFactory, IDisposable
     {
         private const float PollIntervalSeconds = 0.5f;
         private const BindingFlags AnyStatic = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
@@ -50,7 +52,7 @@ namespace TopiaForge.Worlds
 
         public bool IsAvailable { get; private set; }
 
-        public IDisposable RegisterAction(WorldPauseAction action)
+        public OperationResult<IDisposable> RegisterAction(WorldPauseAction action)
         {
             if (action == null)
             {
@@ -60,7 +62,9 @@ namespace TopiaForge.Worlds
             if (disposed)
             {
                 logger.Warn("Worlds ignored a pause action registered after the pause service was disposed.");
-                return NoopDisposable.Instance;
+                return OperationResult<IDisposable>.Failure(
+                    ModErrorCode.InvalidState,
+                    "Pause service is disposed.");
             }
 
             var previous = actions.FirstOrDefault(item =>
@@ -71,17 +75,39 @@ namespace TopiaForge.Worlds
             actions.Add(registration);
             RefreshActionOverlay();
 
-            return registration;
+            return OperationResult<IDisposable>.Success(registration);
         }
 
-        public void SetExitInterceptor(Func<WorldPauseExitContext, WorldPauseExitDecision>? interceptor)
+        public OperationResult<IDisposable> InterceptExit(
+            Func<WorldPauseExitContext, WorldPauseExitDecision> interceptor)
         {
+            if (interceptor == null)
+            {
+                throw new ArgumentNullException(nameof(interceptor));
+            }
+
             if (disposed)
             {
-                return;
+                return OperationResult<IDisposable>.Failure(
+                    ModErrorCode.InvalidState,
+                    "Pause service is disposed.");
             }
 
             exitInterceptor = interceptor;
+            return OperationResult<IDisposable>.Success(new ExitInterceptorLease(this, interceptor));
+        }
+
+        object IOwnerBoundExtensionFactory.CreateOwnerFacade(
+            Type contractType,
+            string ownerModId,
+            IModLifetime lifetime)
+        {
+            if (contractType != typeof(IWorldPauseMenuService))
+            {
+                throw new ArgumentException("Unsupported Worlds pause extension contract.", nameof(contractType));
+            }
+
+            return new OwnerFacade(this, ownerModId, lifetime);
         }
 
         /// <summary>Main-thread pump (throttled). Watches for the pause UI opening during a session.</summary>
@@ -284,6 +310,14 @@ namespace TopiaForge.Worlds
             }
         }
 
+        private void RemoveExitInterceptor(Func<WorldPauseExitContext, WorldPauseExitDecision> interceptor)
+        {
+            if (ReferenceEquals(exitInterceptor, interceptor))
+            {
+                exitInterceptor = null;
+            }
+        }
+
         private void ClosePauseMenu()
         {
             try
@@ -313,38 +347,5 @@ namespace TopiaForge.Worlds
             public Button.ButtonClickedEvent Original { get; }
         }
 
-        private sealed class ActionRegistration : IDisposable
-        {
-            private readonly PauseMenuBridge owner;
-            private bool disposed;
-
-            public ActionRegistration(PauseMenuBridge owner, WorldPauseAction action)
-            {
-                this.owner = owner;
-                Action = action;
-            }
-
-            public WorldPauseAction Action { get; }
-
-            public void Dispose()
-            {
-                if (disposed)
-                {
-                    return;
-                }
-
-                disposed = true;
-                owner.RemoveAction(this);
-            }
-        }
-
-        private sealed class NoopDisposable : IDisposable
-        {
-            public static readonly NoopDisposable Instance = new NoopDisposable();
-
-            public void Dispose()
-            {
-            }
-        }
     }
 }

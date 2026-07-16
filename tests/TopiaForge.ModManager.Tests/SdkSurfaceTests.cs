@@ -5,20 +5,13 @@ using TopiaForge.Mods;
 
 namespace TopiaForge.ModManager.Tests
 {
-    // Exercises the Unity-free additions to TopiaForge.Mods.Abstractions: the Vec3 struct and the IModContext
-    // service-resolution extension methods. No GameCode/UnityEngine involved.
+    // Exercises the Unity-free V1 contracts and specialist module data types. No GameCode/UnityEngine involved.
     internal static class SdkSurfaceTests
     {
         public static void Run()
         {
             TestVec3RoundTrip();
             TestVec3Equality();
-            TestRequireServiceReturnsRegistered();
-            TestRequireServiceThrowsWhenMissing();
-            TestTryGetService();
-            TestAssetContracts();
-            TestPromptContracts();
-            TestAssetAndPromptContextExtensions();
             TestRobotColor();
             TestRobotAgentSpawnRequestDefaults();
             TestRobotTypeAndBrainSwitchContracts();
@@ -31,12 +24,38 @@ namespace TopiaForge.ModManager.Tests
             TestDialogueInputContracts();
             TestGameScenesClassifier();
             TestWorldSessionEndContracts();
-            TestSceneCoordinationContracts();
-            TestPauseMenuContracts();
-            TestCustomWorldContracts();
+            TestUnifiedExpectedFailureContracts();
             TestShopContracts();
             TestRobotObjectiveProgramContracts();
             Console.WriteLine("All SDK surface tests passed.");
+        }
+
+        private static void TestUnifiedExpectedFailureContracts()
+        {
+            var bespokeOperationResults = typeof(TopiaForgeMod).Assembly.GetExportedTypes()
+                .Where(type => type != typeof(OperationResult<>))
+                .Where(type => type.GetProperty("Succeeded") != null && type.GetProperty("ErrorCode") != null)
+                .Select(type => type.FullName)
+                .ToArray();
+            Assert(bespokeOperationResults.Length == 0,
+                "expected failures must not introduce result wrappers alongside OperationResult<T>: " +
+                string.Join(", ", bespokeOperationResults));
+
+            var configType = typeof(ConfigDefinition<object>);
+            Assert(configType.GetProperty("Validate")?.PropertyType ==
+                   typeof(Func<object, OperationResult<bool>>) &&
+                   configType.GetProperty("Migrate")?.PropertyType ==
+                   typeof(Func<int, object, OperationResult<object>>),
+                "config validation and migration use the common stable result contract");
+
+            var register = typeof(ICommandService).GetMethod("Register");
+            Assert(register != null && register.GetParameters()[1].ParameterType ==
+                   typeof(Func<CommandInvocation, OperationResult<string>>),
+                "command handlers use OperationResult<string> for display text and stable failures");
+
+            Assert(typeof(IRuntimeInfo).GetProperty("GameVersion") == null &&
+                   typeof(IRuntimeInfo).GetMethod("TryGetGameVersion") != null,
+                "optional runtime version discovery follows the cheap Try-query convention");
         }
 
         // The shared scene classifier every mod uses to agree on what counts as "the menu" vs gameplay.
@@ -103,82 +122,6 @@ namespace TopiaForge.ModManager.Tests
             Assert(threw, "WorldSessionEnd null-guards the session");
         }
 
-        // The scene-transition arbitration contract (the fix for mods racing single-mode scene loads).
-        private static void TestSceneCoordinationContracts()
-        {
-            // Pin the priority order: Automatic yields, UserInitiated supersedes.
-            Assert((int)SceneTransitionPriority.Automatic == 0 && (int)SceneTransitionPriority.UserInitiated == 1,
-                "SceneTransitionPriority order must be Automatic, UserInitiated");
-
-            var request = new SceneTransitionRequest("owner.mod", "UgcPlay", SceneTransitionPriority.Automatic, "why");
-            Assert(request.OwnerModId == "owner.mod" && request.SceneName == "UgcPlay"
-                && request.Priority == SceneTransitionPriority.Automatic && request.Reason == "why",
-                "SceneTransitionRequest carries owner, scene, priority and reason");
-
-            var defaultReason = new SceneTransitionRequest("owner.mod", "Scene", SceneTransitionPriority.UserInitiated);
-            Assert(defaultReason.Reason == string.Empty, "SceneTransitionRequest reason defaults to empty");
-
-            var threw = false;
-            try
-            {
-                _ = new SceneTransitionRequest(" ", "Scene", SceneTransitionPriority.Automatic);
-            }
-            catch (ArgumentException)
-            {
-                threw = true;
-            }
-
-            Assert(threw, "SceneTransitionRequest requires an owner mod id");
-
-            var claim = new FakeClaim();
-            var approved = SceneTransitionDecision.Approve(claim, "ok");
-            Assert(approved.Approved && ReferenceEquals(approved.Claim, claim) && approved.Message == "ok",
-                "SceneTransitionDecision.Approve carries the claim");
-            var refused = SceneTransitionDecision.Refuse("busy");
-            Assert(!refused.Approved && refused.Claim == null && refused.Message == "busy",
-                "SceneTransitionDecision.Refuse carries no claim");
-
-            var info = new SceneClaimInfo("owner.mod", "Scene", SceneTransitionPriority.UserInitiated, "why", DateTime.UtcNow);
-            Assert(info.OwnerModId == "owner.mod" && info.SceneName == "Scene"
-                && info.Priority == SceneTransitionPriority.UserInitiated && info.Reason == "why",
-                "SceneClaimInfo carries the claim metadata");
-
-            Assert(typeof(ISceneCoordinator).GetMethod("RequestTransition") != null
-                && typeof(ISceneCoordinator).GetMethod("ReleaseOwner") != null
-                && typeof(ISceneCoordinator).GetProperty("IsSceneBusy") != null
-                && typeof(ISceneCoordinator).GetProperty("ActiveClaims") != null,
-                "ISceneCoordinator exposes RequestTransition, ReleaseOwner, IsSceneBusy and ActiveClaims");
-
-            // Direct requests default to user-initiated; automatic callers opt into the lower priority.
-            Assert(new UgcLiveSyncRequest().Priority == SceneTransitionPriority.UserInitiated,
-                "UgcLiveSyncRequest priority defaults to UserInitiated");
-
-            var worldRequest = new WorldLoadRequest("world", "mode");
-            Assert(worldRequest.Priority == SceneTransitionPriority.UserInitiated,
-                "WorldLoadRequest priority defaults to UserInitiated");
-            var automaticWorldRequest = new WorldLoadRequest(
-                "world", "mode", SceneTransitionPriority.Automatic);
-            Assert(automaticWorldRequest.Priority == SceneTransitionPriority.Automatic,
-                "WorldLoadRequest carries explicit Automatic priority");
-            AssertThrows<ArgumentOutOfRangeException>(() => new WorldLoadRequest(
-                    "world", "mode", (SceneTransitionPriority)99),
-                "WorldLoadRequest rejects an unknown transition priority");
-            AssertThrows<ArgumentOutOfRangeException>(() => new UgcLiveSyncRequest(
-                    (SceneTransitionPriority)99),
-                "UgcLiveSyncRequest rejects an unknown transition priority");
-
-            Assert(typeof(WorldLoadRequest).GetConstructors().Length == 1,
-                "WorldLoadRequest exposes one canonical constructor");
-            Assert(typeof(UgcLiveSyncRequest).GetConstructors().Length == 1,
-                "UgcLiveSyncRequest exposes one canonical constructor");
-        }
-
-        private sealed class FakeClaim : IDisposable
-        {
-            public void Dispose()
-            {
-            }
-        }
 
         // The wander/flee/reprogram objective additions (RobotKit 0.8.0): appended enum members (mods switch on
         // these, so a silent reorder is a breaking change), the new factories and their defaults, the courier
@@ -203,8 +146,9 @@ namespace TopiaForge.ModManager.Tests
                 && wanderHere.TargetPoint == null && wanderHere.Payload == null,
                 "Wander() roams the set-time position and carries no payload");
             Assert(Math.Abs(wanderHere.WanderRadius - 8f) < 1e-6f, "WanderRadius defaults to 8 m");
-            wanderHere.WanderRadius = 3f;
-            Assert(Math.Abs(wanderHere.WanderRadius - 3f) < 1e-6f, "WanderRadius is a settable knob");
+            var tunedWander = RobotObjective.Wander(new RobotObjectiveOptions(wanderRadius: 3f));
+            Assert(Math.Abs(tunedWander.WanderRadius - 3f) < 1e-6f,
+                "immutable objective options configure the wander radius");
             Assert(RobotObjective.Wander("PAD").TargetName == "PAD", "Wander(name) anchors to the named target");
             Assert(RobotObjective.Wander(new Vec3(1f, 2f, 3f)).TargetPoint != null, "Wander(point) anchors to the point");
 
@@ -270,161 +214,7 @@ namespace TopiaForge.ModManager.Tests
             Assert(threwDelivery, "RobotProgramDelivery null-guards its parts");
         }
 
-        // The pause-menu customization contract (session-scoped vanilla pause menu integration).
-        private static void TestPauseMenuContracts()
-        {
-            Assert(typeof(IWorldPauseMenuService).GetProperty("IsAvailable") != null,
-                "IWorldPauseMenuService exposes IsAvailable");
-            var register = typeof(IWorldPauseMenuService).GetMethod("RegisterAction");
-            Assert(register != null && register.ReturnType == typeof(IDisposable),
-                "RegisterAction returns an IDisposable handle");
-            Assert(typeof(IWorldPauseMenuService).GetMethod("SetExitInterceptor") != null,
-                "IWorldPauseMenuService exposes SetExitInterceptor");
-            Assert(typeof(WorldPauseAction).GetConstructors().Length == 1,
-                "WorldPauseAction exposes one canonical constructor");
-
-            var action = new WorldPauseAction("mod.action", "DO THING", () => { });
-            Assert(action.Id == "mod.action" && action.Label == "DO THING", "WorldPauseAction keeps id and label");
-            Assert(action.ClosePauseMenu && action.Order == 0 && !action.Destructive,
-                "WorldPauseAction defaults: close menu, order 0, non-destructive");
-            var destructive = new WorldPauseAction("mod.reset", "RESET", () => { }, true, 0, destructive: true);
-            Assert(destructive.Destructive, "WorldPauseAction keeps its destructive-confirmation contract");
-
-            var threw = false;
-            try
-            {
-                _ = new WorldPauseAction("id", "label", null!);
-            }
-            catch (ArgumentNullException)
-            {
-                threw = true;
-            }
-
-            Assert(threw, "WorldPauseAction null-guards the callback");
-
-            foreach (var invalid in new[] { "", " " })
-            {
-                try
-                {
-                    _ = new WorldPauseAction(invalid, "label", () => { });
-                    Assert(false, "WorldPauseAction must reject a blank id");
-                }
-                catch (ArgumentException)
-                {
-                }
-            }
-
-            var session = new WorldSession("world", "gamemode", "gameScene", "Scene", DateTime.UtcNow);
-            Assert(ReferenceEquals(new WorldPauseExitContext(session).Session, session),
-                "WorldPauseExitContext carries the session");
-
-            Assert((int)WorldPauseExitDecision.EndSessionAndExit == 0 && (int)WorldPauseExitDecision.ExitWithoutEnding == 1
-                && (int)WorldPauseExitDecision.Block == 2,
-                "WorldPauseExitDecision order must be EndSessionAndExit, ExitWithoutEnding, Block");
-        }
-
-        // The custom-world contract: mod-shipped content (e.g. a bundle prefab) registered as a playable world.
-        private static void TestCustomWorldContracts()
-        {
-            Assert(WellKnownIds.SandboxGamemodeId == "io.github.furroxide.topiaforge.worlds.sandbox"
-                && WellKnownIds.OpenSandboxWorldId == "io.github.furroxide.topiaforge.worlds.open_sandbox",
-                "WellKnownIds must pin the published sandbox gamemode/world ids");
-
-            var registerContent = typeof(IWorldGamemodeService).GetMethod(
-                "RegisterWorld", new[] { typeof(WorldDefinition), typeof(ICustomWorldContent) });
-            Assert(registerContent != null, "IWorldGamemodeService exposes RegisterWorld(WorldDefinition, ICustomWorldContent)");
-            var unregister = typeof(IWorldGamemodeService).GetMethod("UnregisterWorld");
-            Assert(unregister != null && unregister.ReturnType == typeof(bool)
-                && unregister.GetParameters().Length == 1 && unregister.GetParameters()[0].ParameterType == typeof(string),
-                "IWorldGamemodeService exposes bool UnregisterWorld(string)");
-
-            var unregisterGamemode = typeof(IWorldRegistrationService).GetMethod("UnregisterGamemode");
-            var unregisterMenuEntry = typeof(IWorldRegistrationService).GetMethod("UnregisterMenuEntry");
-            Assert(unregisterGamemode != null && unregisterGamemode.ReturnType == typeof(bool),
-                "optional world registration capability exposes bool UnregisterGamemode(string)");
-            Assert(unregisterMenuEntry != null && unregisterMenuEntry.ReturnType == typeof(bool),
-                "optional world registration capability exposes bool UnregisterMenuEntry(string)");
-
-            var createRoot = typeof(ICustomWorldContent).GetMethod("CreateContentRoot");
-            Assert(createRoot != null && createRoot.ReturnType == typeof(object), "ICustomWorldContent exposes CreateContentRoot(): object?");
-            Assert(typeof(ICustomWorldContent).GetProperty("Options")?.PropertyType == typeof(CustomWorldOptions),
-                "ICustomWorldContent exposes CustomWorldOptions Options");
-
-            var options = CustomWorldOptions.Default;
-            Assert(options.SpawnPointName == "SpawnPoint" && options.ApplyDefaultEnvironment
-                && options.EnableKillPlane && options.KillPlaneDepth == 100f,
-                "CustomWorldOptions defaults: SpawnPoint marker, default env, kill plane at 100m");
-            Assert(!ReferenceEquals(CustomWorldOptions.Default, CustomWorldOptions.Default),
-                "CustomWorldOptions.Default returns fresh instances");
-
-            var bundleOptions = new BundleWorldOptions();
-            Assert(bundleOptions.PrefabAssetName == "" && bundleOptions.RegisterSandboxMenuEntry
-                && bundleOptions.MenuEntryId == "", "BundleWorldOptions defaults: single-prefab bundle, sandbox menu entry");
-
-            // RegisterWorldFromBundle wires definition + content + sandbox menu entry through the service.
-            var context = new FakeContext();
-            var worlds = new FakeWorldService();
-            var definition = context.RegisterWorldFromBundle(worlds, new BundleWorldOptions
-            {
-                Id = "test.worlds.island",
-                Name = "Island",
-                Description = "A test world.",
-                BundleRelativePath = "AssetBundles/island.bundle",
-            });
-            Assert(definition.Id == "test.worlds.island" && ReferenceEquals(worlds.LastWorld, definition),
-                "RegisterWorldFromBundle registers the definition");
-            Assert(worlds.LastContent is BundleWorldContent, "RegisterWorldFromBundle attaches BundleWorldContent");
-            Assert(worlds.LastMenuEntry != null && worlds.LastMenuEntry.Id == "test.worlds.island.menu"
-                && worlds.LastMenuEntry.GamemodeId == WellKnownIds.SandboxGamemodeId
-                && worlds.LastMenuEntry.WorldId == "test.worlds.island",
-                "RegisterWorldFromBundle registers a sandbox-paired menu entry by default");
-
-            worlds.LastMenuEntry = null;
-            context.RegisterWorldFromBundle(worlds, new BundleWorldOptions
-            {
-                Id = "test.worlds.quiet",
-                Name = "Quiet",
-                BundleRelativePath = "AssetBundles/q.bundle",
-                RegisterSandboxMenuEntry = false,
-            });
-            Assert(worlds.LastMenuEntry == null, "RegisterSandboxMenuEntry=false suppresses the menu entry");
-
-            foreach (var invalid in new[]
-            {
-                new BundleWorldOptions { Name = "n", BundleRelativePath = "b" },
-                new BundleWorldOptions { Id = "i", BundleRelativePath = "b" },
-                new BundleWorldOptions { Id = "i", Name = "n" },
-            })
-            {
-                try
-                {
-                    context.RegisterWorldFromBundle(worlds, invalid);
-                    Assert(false, "RegisterWorldFromBundle must reject blank Id/Name/BundleRelativePath");
-                }
-                catch (ArgumentException)
-                {
-                }
-            }
-
-            // BundleWorldContent failure paths degrade to null (never throw): the fake asset service exposes
-            // one asset named "prefab" (no .prefab suffix), so the single-prefab resolution finds nothing.
-            var assetService = new FakeAssetBundleService();
-            context.Services[typeof(IAssetBundleService)] = assetService;
-            var noPrefab = new BundleWorldContent(context, "AssetBundles/x.bundle");
-            Assert(noPrefab.CreateContentRoot() == null, "a bundle with no *.prefab resolves to null content");
-
-            // With a pinned asset name the load succeeds, but this test process has no UnityEngine —
-            // the GameObject type resolution must degrade to a logged null, not a throw.
-            var pinned = new BundleWorldContent(context, "AssetBundles/x.bundle", "assets/world.prefab");
-            Assert(pinned.CreateContentRoot() == null, "content creation degrades to null outside a Unity runtime");
-
-            context.Services.Remove(typeof(IAssetBundleService));
-            var noService = new BundleWorldContent(context, "AssetBundles/x.bundle");
-            Assert(noService.CreateContentRoot() == null, "a missing io.github.furroxide.topiaforge.assets service degrades to null content");
-        }
-
-        // The multi-turn conversation primitive (IRobotConversationService): request defaults + the pollable handle
-        // surface, so the Unity-free contract cannot regress silently.
+        // The multi-turn conversation primitive: immutable requests and awaited lifetime-owned turns.
         private static void TestConversationContracts()
         {
             var request = new RobotConversationRequest("frame", new[] { "CONVERT", "REFUSE" });
@@ -439,33 +229,46 @@ namespace TopiaForge.ModManager.Tests
             Assert(nullRequest.SystemFrame == string.Empty && nullRequest.DecisionOptions.Count == 0, "request null-guards frame/options");
 
             Assert(request.LiveFacts == null, "LiveFacts defaults to null (static facts only)");
-            request.LiveFacts = () => new Dictionary<string, string> { ["k"] = "v" };
-            Assert(request.LiveFacts()!["k"] == "v", "LiveFacts is a settable per-turn provider");
+            var liveRequest = new RobotConversationRequest(
+                "frame",
+                new[] { "CONVERT" },
+                liveFacts: () => new Dictionary<string, string> { ["k"] = "v" });
+            var liveFacts = liveRequest.LiveFacts?.Invoke();
+            Assert(liveFacts != null && liveFacts["k"] == "v",
+                "LiveFacts is supplied immutably at construction");
 
             var begin = typeof(IRobotConversationService).GetMethod("BeginConversation");
-            Assert(begin != null && begin.ReturnType == typeof(IRobotConversation), "BeginConversation returns IRobotConversation");
+            Assert(begin != null && begin.ReturnType == typeof(OperationResult<IRobotConversation>),
+                "BeginConversation returns a stable result containing a lifetime-owned conversation");
             Assert(typeof(IRobotConversationService).GetProperty("IsAvailable") != null, "service exposes IsAvailable");
-            foreach (var member in new[] { "IsThinking", "TurnReady", "Ended", "TurnCount", "LastReply", "LastDecision" })
+            foreach (var member in new[] { "IsEnded", "TurnCount", "MaxTurns" })
             {
                 Assert(typeof(IRobotConversation).GetProperty(member) != null, "IRobotConversation should expose " + member);
             }
 
-            Assert(typeof(IRobotConversation).GetMethod("Submit") != null, "IRobotConversation should expose Submit");
-            Assert(typeof(IRobotConversation).GetMethod("End") != null, "IRobotConversation should expose End");
+            var submit = typeof(IRobotConversation).GetMethod("SubmitAsync");
+            Assert(submit != null && submit.ReturnType ==
+                typeof(System.Threading.Tasks.Task<OperationResult<RobotConversationTurnResult>>),
+                "IRobotConversation exposes awaited result-based turns");
+            Assert(typeof(IDisposable).IsAssignableFrom(typeof(IRobotConversation)),
+                "conversation handles are explicitly disposable for early release");
         }
 
         // The player dialogue input (text + voice) contract surface.
         private static void TestDialogueInputContracts()
         {
             var begin = typeof(IPlayerDialogueInputService).GetMethod("BeginVoiceCapture");
-            Assert(begin != null && begin.ReturnType == typeof(IVoiceCapture), "BeginVoiceCapture returns IVoiceCapture");
+            Assert(begin != null && begin.ReturnType == typeof(OperationResult<IVoiceCapture>),
+                "BeginVoiceCapture returns a stable result");
             Assert(typeof(IPlayerDialogueInputService).GetProperty("IsVoiceAvailable") != null, "service exposes IsVoiceAvailable");
-            foreach (var member in new[] { "IsRecording", "IsComplete", "Found", "Text" })
-            {
-                Assert(typeof(IVoiceCapture).GetProperty(member) != null, "IVoiceCapture should expose " + member);
-            }
-
-            Assert(typeof(IVoiceCapture).GetMethod("Stop") != null && typeof(IVoiceCapture).GetMethod("Cancel") != null, "IVoiceCapture should expose Stop/Cancel");
+            Assert(typeof(IVoiceCapture).GetProperty("IsRecording")?.PropertyType == typeof(bool),
+                "IVoiceCapture exposes recording state");
+            var stop = typeof(IVoiceCapture).GetMethod("StopAsync");
+            Assert(stop != null && stop.ReturnType ==
+                typeof(System.Threading.Tasks.Task<OperationResult<VoiceTranscriptResult>>),
+                "voice capture exposes awaited transcription");
+            Assert(typeof(IDisposable).IsAssignableFrom(typeof(IVoiceCapture)),
+                "voice captures are explicitly disposable for cancellation");
 
             // TextInputBuffer is a concrete shared helper — exercise its core behaviour.
             var buffer = new TextInputBuffer(4);
@@ -478,8 +281,7 @@ namespace TopiaForge.ModManager.Tests
             Assert(buffer.ConsumeSubmit() && !buffer.ConsumeSubmit(), "TextInputBuffer submit is one-shot");
         }
 
-        // The structured brain-query primitive (IRobotBrainQueryService): guard the enum order, the request/result
-        // defaults, and the pollable-handle surface so the Unity-free contract cannot regress silently.
+        // The structured brain-query primitive: guard immutable requests and Task/result completion.
         private static void TestBrainQueryContracts()
         {
             Assert((int)RobotDecision.Comply == 0 && (int)RobotDecision.Freeze == 1 && (int)RobotDecision.Flee == 2
@@ -499,22 +301,19 @@ namespace TopiaForge.ModManager.Tests
             var nullRequest = new BrainQueryRequest(null!, null!);
             Assert(nullRequest.Prompt == string.Empty && nullRequest.Outputs.Count == 0, "BrainQueryRequest should null-guard prompt/outputs");
 
-            var unavailable = BrainQueryResult.Unavailable;
-            Assert(!unavailable.Available && !unavailable.Succeeded, "Unavailable result should be not-available, not-succeeded");
-            Assert(unavailable.Values.Count == 0 && !unavailable.TryGet("x", out _), "Unavailable result should have empty values");
+            var unavailable = OperationResult<BrainQueryResult>.Failure(ModErrorCode.Unavailable, "offline");
+            Assert(!unavailable.Succeeded && unavailable.ErrorCode == ModErrorCode.Unavailable,
+                "expected brain failures use stable result codes");
 
-            var ok = new BrainQueryResult(true, true, new Dictionary<string, string> { ["action"] = "comply" }, null);
+            var ok = new BrainQueryResult(new Dictionary<string, string> { ["action"] = "comply" });
             Assert(ok.TryGet("action", out var action) && action == "comply", "BrainQueryResult.TryGet should return a present value");
             Assert(!ok.TryGet("missing", out _), "BrainQueryResult.TryGet should be false for a missing key");
 
-            // Pollable-handle surface (Unity-free reflection, loads no UnityEngine).
-            var serviceBegin = typeof(IRobotBrainQueryService).GetMethod("BeginQuery");
-            Assert(serviceBegin != null && serviceBegin.ReturnType == typeof(IRobotBrainQuery), "IRobotBrainQueryService.BeginQuery should return IRobotBrainQuery");
+            var query = typeof(IRobotBrainQueryService).GetMethod("QueryAsync");
+            Assert(query != null && query.ReturnType ==
+                typeof(System.Threading.Tasks.Task<OperationResult<BrainQueryResult>>),
+                "IRobotBrainQueryService.QueryAsync returns an awaited stable result");
             Assert(typeof(IRobotBrainQueryService).GetProperty("IsAvailable") != null, "IRobotBrainQueryService should expose IsAvailable");
-            var complete = typeof(IRobotBrainQuery).GetProperty("IsComplete");
-            Assert(complete != null && complete.PropertyType == typeof(bool), "IRobotBrainQuery should expose a bool IsComplete");
-            var result = typeof(IRobotBrainQuery).GetProperty("Result");
-            Assert(result != null && result.PropertyType == typeof(BrainQueryResult), "IRobotBrainQuery.Result should be a BrainQueryResult");
         }
 
         // The shop contract (catalog item + wallet + purchase arbiter) consumed by the TopiaForgeUi shop pane.
@@ -605,13 +404,16 @@ namespace TopiaForge.ModManager.Tests
             Assert(interaction.NativeTalkDistance == 0f, "native talk distance should default to prefab distance");
             Assert(interaction.CustomInteraction == null, "custom interaction should default to null");
 
-            var facing = new RobotAgentSpawnRequest(Vec3.Zero, new Vec3(0f, 0f, 1f)) { BrainMode = RobotBrainMode.Autonomous };
+            var facing = new RobotAgentSpawnRequest(
+                Vec3.Zero,
+                new Vec3(0f, 0f, 1f),
+                brainMode: RobotBrainMode.Autonomous,
+                robotTypeId: "worker-robot");
             Assert(facing.Facing.HasValue && facing.Facing.Value.Equals(new Vec3(0f, 0f, 1f)), "facing should round-trip when provided");
             Assert(facing.BrainMode == RobotBrainMode.Autonomous, "brain mode should be settable to Autonomous");
 
             Assert(request.RobotTypeId == null, "robot type should default to null (default type)");
-            request.RobotTypeId = "worker-robot";
-            Assert(request.RobotTypeId == "worker-robot", "robot type id should round-trip");
+            Assert(facing.RobotTypeId == "worker-robot", "robot type id should round-trip immutably");
         }
 
         // The robot type catalog and runtime brain-switch surface: a spawn UI's contract with RobotKit.
@@ -626,8 +428,6 @@ namespace TopiaForge.ModManager.Tests
             var types = typeof(IRobotAgentService).GetProperty("RobotTypes");
             Assert(types != null && typeof(IReadOnlyList<RobotTypeDescriptor>).IsAssignableFrom(types.PropertyType),
                 "IRobotAgentService exposes the RobotTypes list");
-            Assert(typeof(IRobotAgentService).GetMethod("IsRobotPrefab") != null,
-                "IRobotAgentService exposes IsRobotPrefab");
 
             var agent = new FakeRobotAgent();
             Assert(agent.BrainMode == RobotBrainMode.Dormant, "the fake starts dormant");
@@ -662,12 +462,12 @@ namespace TopiaForge.ModManager.Tests
                 "DisableNativeTalk should disable native talk without installing a callback");
 
             var invoked = false;
-            var custom = new RobotCustomInteraction("Hack robot", _ => invoked = true)
-            {
-                Distance = 9f,
-                ScreenRectExpansion = 0.2f,
-                CanInteract = ctx => ctx.Distance < 9f
-            };
+            var custom = new RobotCustomInteraction(
+                "Hack robot",
+                _ => invoked = true,
+                distance: 9f,
+                screenRectExpansion: 0.2f,
+                canInteract: ctx => ctx.Distance < 9f);
             var customOptions = RobotInteractionOptions.Custom(custom);
             Assert(customOptions.NativeTalkMode == RobotNativeTalkMode.Disabled && ReferenceEquals(customOptions.CustomInteraction, custom),
                 "Custom should disable native talk and keep the custom interaction");
@@ -676,11 +476,10 @@ namespace TopiaForge.ModManager.Tests
 
             var context = new RobotInteractionContext(
                 new FakeRobotAgent(),
-                new object(),
                 new Vec3(1f, 2f, 3f),
                 new Vec3(1f, 2f, 7f),
                 4f);
-            Assert(context.Agent != null && context.Hand != null, "interaction context should keep agent and hand");
+            Assert(context.Agent != null, "interaction context should keep the selected agent");
             Assert(context.AgentPosition.Equals(new Vec3(1f, 2f, 3f)) && context.HandPosition.Equals(new Vec3(1f, 2f, 7f)),
                 "interaction context should keep positions");
             Assert(context.Distance == 4f && custom.CanInteract!(context), "interaction context should keep distance");
@@ -705,13 +504,12 @@ namespace TopiaForge.ModManager.Tests
             Assert(request.GroundProbeDepth == 12f, "GroundProbeDepth should default to 12");
             Assert(request.HeightOffset == 0.25f, "HeightOffset should default to 0.25");
 
-            var anchored = new ReachableSpawnRequest(Vec3.Zero)
-            {
-                ReachableFrom = new Vec3(1f, 0f, 2f),
-                MinRadius = 5f,
-                MaxRadius = 30f,
-                MaxCandidates = 24
-            };
+            var anchored = new ReachableSpawnRequest(
+                Vec3.Zero,
+                reachableFrom: new Vec3(1f, 0f, 2f),
+                minRadius: 5f,
+                maxRadius: 30f,
+                maxCandidates: 24);
             Assert(anchored.ReachableFrom.HasValue && anchored.ReachableFrom.Value.Equals(new Vec3(1f, 0f, 2f)), "ReachableFrom should round-trip");
             Assert(anchored.MinRadius == 5f && anchored.MaxRadius == 30f && anchored.MaxCandidates == 24, "request radii/attempts should be settable");
         }
@@ -740,111 +538,6 @@ namespace TopiaForge.ModManager.Tests
             Assert((int)RobotGait.Walk == 0 && (int)RobotGait.Run == 1 && (int)RobotGait.Sprint == 2, "gait order should be Walk, Run, Sprint");
         }
 
-        private static void TestRequireServiceReturnsRegistered()
-        {
-            var svc = new FakeService();
-            var context = new FakeContext();
-            context.Services[typeof(IFakeService)] = svc;
-            Assert(ReferenceEquals(context.RequireService<IFakeService>(), svc), "RequireService should return the registered service");
-        }
-
-        private static void TestRequireServiceThrowsWhenMissing()
-        {
-            var context = new FakeContext();
-            var threw = false;
-            try
-            {
-                context.RequireService<IFakeService>();
-            }
-            catch (InvalidOperationException ex)
-            {
-                threw = ex.Message.Contains("IFakeService");
-            }
-
-            Assert(threw, "RequireService should throw an InvalidOperationException naming the missing service type");
-        }
-
-        private static void TestTryGetService()
-        {
-            var svc = new FakeService();
-            var context = new FakeContext();
-
-            Assert(!context.TryGetService<IFakeService>(out _), "TryGetService should be false when unregistered");
-
-            context.Services[typeof(IFakeService)] = svc;
-            Assert(context.TryGetService<IFakeService>(out var resolved) && ReferenceEquals(resolved, svc),
-                "TryGetService should return true and the service when registered");
-        }
-
-        private static void TestAssetContracts()
-        {
-            var options = AssetBundleLoadOptions.Default;
-            Assert(options.Cache && !options.Reload, "asset bundle options should cache by default without reload");
-
-            var request = new AssetBundleLoadRequest("owner.mod", "pkg", "AssetBundles/main", options);
-            Assert(request.OwnerModId == "owner.mod" && request.PackagePath == "pkg" && request.RelativePath == "AssetBundles/main",
-                "asset bundle request should keep owner/package/relative path");
-
-            var handle = new FakeAssetBundleHandle();
-            var loadSuccess = AssetBundleLoadResult.Success(handle);
-            Assert(loadSuccess.Ok && ReferenceEquals(loadSuccess.Bundle, handle) && loadSuccess.Error == string.Empty,
-                "asset bundle load success should expose the handle");
-            var loadFail = AssetBundleLoadResult.Fail("missing");
-            Assert(!loadFail.Ok && loadFail.Bundle == null && loadFail.Error == "missing", "asset bundle load failure should expose the error");
-
-            var asset = new object();
-            var assetSuccess = AssetLoadResult.Success(asset);
-            Assert(assetSuccess.Ok && ReferenceEquals(assetSuccess.Asset, asset), "asset load success should expose the asset");
-            var typedAssetSuccess = AssetLoadResult<object>.Success(asset);
-            Assert(typedAssetSuccess.Ok && ReferenceEquals(typedAssetSuccess.Asset, asset), "typed asset load success should expose the asset");
-
-            var spawnSuccess = SpawnAssetResult.Success(asset);
-            Assert(spawnSuccess.Ok && ReferenceEquals(spawnSuccess.Instance, asset), "spawn success should expose the instance");
-            var typedSpawnSuccess = SpawnAssetResult<object>.Success(asset);
-            Assert(typedSpawnSuccess.Ok && ReferenceEquals(typedSpawnSuccess.Instance, asset), "typed spawn success should expose the instance");
-        }
-
-        private static void TestPromptContracts()
-        {
-            var request = new PromptOverrideRequest("owner.mod", "robot.greeting", "replacement", 7, "why");
-            Assert(request.OwnerModId == "owner.mod" && request.PromptId == "robot.greeting", "prompt request should keep owner and prompt id");
-            Assert(request.ReplacementText == "replacement" && request.Priority == 7 && request.Description == "why",
-                "prompt request should keep replacement metadata");
-
-            var promptOverride = new PromptOverride("owner.mod", "robot.greeting", "replacement", 7, "why");
-            var conflict = new PromptConflict("robot.greeting", new[] { promptOverride }, promptOverride);
-            Assert(conflict.PromptId == "robot.greeting" && ReferenceEquals(conflict.EffectiveOverride, promptOverride),
-                "prompt conflict should expose prompt id and effective override");
-            Assert(conflict.Overrides.Count == 1 && ReferenceEquals(conflict.Overrides[0], promptOverride),
-                "prompt conflict should keep overrides");
-        }
-
-        private static void TestAssetAndPromptContextExtensions()
-        {
-            var context = new FakeContext();
-            var assetService = new FakeAssetBundleService();
-            var promptRegistry = new FakePromptOverrideRegistry();
-            context.Services[typeof(IAssetBundleService)] = assetService;
-            context.Services[typeof(IPromptOverrideRegistry)] = promptRegistry;
-
-            var load = context.LoadAssetBundle("AssetBundles/main");
-            Assert(load.Ok && assetService.LastRequest != null, "context.LoadAssetBundle should call the asset service");
-            Assert(assetService.LastRequest!.OwnerModId == context.ModId && assetService.LastRequest.PackagePath == context.Paths.PackagePath,
-                "context.LoadAssetBundle should inject owner and package path");
-
-            var asset = context.LoadAsset<object>(assetService.Handle, "prefab");
-            Assert(asset.Ok && assetService.LastAssetName == "prefab", "context.LoadAsset should call the typed asset helper");
-
-            var prefab = new object();
-            var spawn = context.SpawnAsset(prefab);
-            Assert(spawn.Ok && ReferenceEquals(assetService.LastPrefab, prefab), "context.SpawnAsset should call the typed spawn helper");
-
-            var prompt = context.RegisterPromptOverride("robot.greeting", "hello", 3, "test");
-            Assert(promptRegistry.LastRequest != null && promptRegistry.LastRequest.OwnerModId == context.ModId,
-                "context.RegisterPromptOverride should inject the owner mod id");
-            Assert(prompt.Override.Priority == 3 && prompt.Override.Description == "test", "prompt helper should keep priority and description");
-        }
-
         private interface IFakeService
         {
         }
@@ -853,178 +546,10 @@ namespace TopiaForge.ModManager.Tests
         {
         }
 
-        private sealed class FakeWorldService : IWorldGamemodeService
-        {
-            public WorldDefinition? LastWorld { get; private set; }
-            public ICustomWorldContent? LastContent { get; private set; }
-            public GamemodeMenuEntry? LastMenuEntry { get; set; }
-
-            public IReadOnlyList<WorldDefinition> Worlds => Array.Empty<WorldDefinition>();
-            public IReadOnlyList<GamemodeDefinition> Gamemodes => Array.Empty<GamemodeDefinition>();
-            public IReadOnlyList<GamemodeMenuEntry> MenuEntries => Array.Empty<GamemodeMenuEntry>();
-            public WorldSession? CurrentSession => null;
-            public event Action<WorldSession>? SessionChanged;
-            public event Action<WorldSessionEnd>? SessionEnded;
-
-            public void RegisterWorld(WorldDefinition world)
-            {
-                LastWorld = world;
-            }
-
-            public void RegisterWorld(WorldDefinition world, ICustomWorldContent content)
-            {
-                LastWorld = world;
-                LastContent = content;
-            }
-
-            public bool UnregisterWorld(string worldId)
-            {
-                return false;
-            }
-
-            public void RegisterGamemode(GamemodeDefinition gamemode)
-            {
-            }
-
-            public void RegisterMenuEntry(GamemodeMenuEntry entry)
-            {
-                LastMenuEntry = entry;
-            }
-
-            public WorldLoadResult Load(WorldLoadRequest request)
-            {
-                return WorldLoadResult.Fail("not implemented");
-            }
-
-            public WorldLoadResult LaunchMenuEntry(string entryId)
-            {
-                return WorldLoadResult.Fail("not implemented");
-            }
-
-            public void EndSession(WorldSessionEndReason reason)
-            {
-            }
-
-            // Keep the compiler from warning the events are unused without changing the public surface.
-            public void RaiseForCoverage(WorldSession session)
-            {
-                SessionChanged?.Invoke(session);
-                SessionEnded?.Invoke(new WorldSessionEnd(session, WorldSessionEndReason.MenuReached));
-            }
-        }
-
-        private sealed class FakeAssetBundleService : IAssetBundleService
-        {
-            public FakeAssetBundleHandle Handle { get; } = new FakeAssetBundleHandle();
-            public AssetBundleLoadRequest? LastRequest { get; private set; }
-            public string LastAssetName { get; private set; } = string.Empty;
-            public object? LastPrefab { get; private set; }
-
-            public AssetBundleLoadResult LoadBundle(AssetBundleLoadRequest request)
-            {
-                LastRequest = request;
-                return AssetBundleLoadResult.Success(Handle);
-            }
-
-            public AssetLoadResult LoadAsset(IAssetBundleHandle bundle, string assetName, Type assetType)
-            {
-                LastAssetName = assetName;
-                return AssetLoadResult.Success(new object());
-            }
-
-            public AssetLoadResult<T> LoadAsset<T>(IAssetBundleHandle bundle, string assetName) where T : class
-            {
-                LastAssetName = assetName;
-                return AssetLoadResult<T>.Success(new object() as T ?? throw new InvalidOperationException("Unexpected test type."));
-            }
-
-            public SpawnAssetResult SpawnAsset(object prefab)
-            {
-                LastPrefab = prefab;
-                return SpawnAssetResult.Success(prefab);
-            }
-
-            public SpawnAssetResult<T> SpawnAsset<T>(T prefab) where T : class
-            {
-                LastPrefab = prefab;
-                return SpawnAssetResult<T>.Success(prefab);
-            }
-
-            public IReadOnlyList<string> GetAllAssetNames(IAssetBundleHandle bundle)
-            {
-                return new[] { "prefab" };
-            }
-
-            public void UnloadOwner(string ownerModId, bool unloadAllLoadedObjects = false)
-            {
-            }
-        }
-
-        private sealed class FakeAssetBundleHandle : IAssetBundleHandle
-        {
-            public string FullPath => "pkg/AssetBundles/main";
-            public object Bundle { get; } = new object();
-            public IReadOnlyList<string> OwnerModIds => new[] { "test.mod" };
-            public bool IsLoaded => true;
-        }
-
-        private sealed class FakePromptOverrideRegistry : IPromptOverrideRegistry
-        {
-            private readonly List<PromptOverride> overrides = new List<PromptOverride>();
-
-            public PromptOverrideRequest? LastRequest { get; private set; }
-            public IReadOnlyList<PromptOverride> Overrides => overrides;
-
-            public IPromptOverrideHandle Register(PromptOverrideRequest request)
-            {
-                LastRequest = request;
-                var promptOverride = new PromptOverride(
-                    request.OwnerModId,
-                    request.PromptId,
-                    request.ReplacementText,
-                    request.Priority,
-                    request.Description);
-                overrides.Add(promptOverride);
-                return new FakePromptOverrideHandle(promptOverride);
-            }
-
-            public bool TryGetEffectiveOverride(string promptId, out PromptOverride? promptOverride)
-            {
-                promptOverride = overrides.FirstOrDefault(o => o.PromptId == promptId);
-                return promptOverride != null;
-            }
-
-            public IReadOnlyList<PromptConflict> GetConflicts()
-            {
-                return Array.Empty<PromptConflict>();
-            }
-
-            public void UnregisterOwner(string ownerModId)
-            {
-                overrides.RemoveAll(o => o.ModId == ownerModId);
-            }
-        }
-
-        private sealed class FakePromptOverrideHandle : IPromptOverrideHandle
-        {
-            public FakePromptOverrideHandle(PromptOverride promptOverride)
-            {
-                Override = promptOverride;
-            }
-
-            public PromptOverride Override { get; }
-            public bool IsDisposed { get; private set; }
-
-            public void Dispose()
-            {
-                IsDisposed = true;
-            }
-        }
-
         private sealed class FakeRobotAgent : IRobotAgent
         {
             public string Id => "fake";
-            public object GameObject { get; } = new object();
+            public string Name => "Fake";
             public bool IsAlive => true;
             public Vec3 Position => Vec3.Zero;
             public Vec3 HeadPosition => Vec3.Zero;
@@ -1035,77 +560,31 @@ namespace TopiaForge.ModManager.Tests
             public float TurnSpeed { get; set; }
             public float StopDistance { get; set; }
             public RobotGait Gait { get; set; }
-            public void MoveTo(Vec3 position) { }
-            public void Chase(object targetGameObject) { }
-            public void Stop() { }
-            public void SetBrainMode(RobotBrainMode mode) => BrainMode = mode;
-            public void SetTint(RobotColor color) { }
-            public void SetEmote(string emojiShortcode) { }
-            public void SetName(string name) { }
-            public void SetScale(float scale) { }
-            public void SetInteraction(RobotInteractionOptions options) { }
-            public bool ApplyDamage(float amount, RobotDamageType type, string source) => false;
-            public void Kill(RobotDamageType type, string source) { }
-            public void Ragdoll() { }
-            public void Knockback(Vec3 impulse) { }
-            public void Despawn() { }
+            public OperationResult<bool> MoveTo(Vec3 position) => OperationResult<bool>.Success(true);
+            public OperationResult<bool> Chase(IEntity target) => OperationResult<bool>.Success(true);
+            public OperationResult<bool> Stop() => OperationResult<bool>.Success(true);
+            public OperationResult<bool> SetBrainMode(RobotBrainMode mode)
+            {
+                BrainMode = mode;
+                return OperationResult<bool>.Success(true);
+            }
+            public OperationResult<bool> ConfigureMovement(RobotMovementSettings settings) =>
+                OperationResult<bool>.Success(true);
+            public OperationResult<bool> SetTint(RobotColor color) => OperationResult<bool>.Success(true);
+            public OperationResult<bool> SetEmote(string emojiShortcode) => OperationResult<bool>.Success(true);
+            public OperationResult<bool> SetName(string name) => OperationResult<bool>.Success(true);
+            public OperationResult<bool> SetScale(float scale) => OperationResult<bool>.Success(true);
+            public OperationResult<bool> SetInteraction(RobotInteractionOptions options) =>
+                OperationResult<bool>.Success(true);
+            public OperationResult<bool> ApplyDamage(float amount, RobotDamageType type, string source) =>
+                OperationResult<bool>.Success(false);
+            public OperationResult<bool> Kill(RobotDamageType type, string source) => OperationResult<bool>.Success(true);
+            public OperationResult<bool> Ragdoll() => OperationResult<bool>.Success(true);
+            public OperationResult<bool> Knockback(Vec3 impulse) => OperationResult<bool>.Success(true);
+            public OperationResult<bool> Despawn() => OperationResult<bool>.Success(true);
+            public void Dispose() { }
         }
 
-        // Minimal IModContext for testing the service-resolution extensions; only GetService is exercised.
-        private sealed class FakeContext : IModContext
-        {
-            public Dictionary<Type, object> Services { get; } = new Dictionary<Type, object>();
-
-            public string ModId => "test.mod";
-            public string ModName => "Test";
-            public Version Version => new Version(1, 0, 0);
-            public ModPaths Paths => new ModPaths("pkg", "cfg", "data");
-            public IModLogger Logger => new NullLogger();
-
-            public event Action<float>? Update;
-            public event Action<string>? SceneLoaded;
-
-            public T LoadConfig<T>(T defaultValue) where T : class => defaultValue;
-
-            public void SaveConfig<T>(T config) where T : class
-            {
-            }
-
-            public T? GetService<T>() where T : class
-            {
-                return Services.TryGetValue(typeof(T), out var service) ? (T)service : null;
-            }
-
-            // Keep the compiler from warning the events are unused without changing the public surface.
-            public void RaiseForCoverage()
-            {
-                Update?.Invoke(0f);
-                SceneLoaded?.Invoke(string.Empty);
-            }
-        }
-
-        private sealed class NullLogger : IModLogger
-        {
-            public void Debug(string message)
-            {
-            }
-
-            public void Info(string message)
-            {
-            }
-
-            public void Warn(string message)
-            {
-            }
-
-            public void Error(string message)
-            {
-            }
-
-            public void Error(Exception exception, string message)
-            {
-            }
-        }
 
         private static void AssertThrows<TException>(Action action, string message)
             where TException : Exception

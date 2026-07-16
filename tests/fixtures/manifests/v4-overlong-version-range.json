@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 4,
+  "name": "fixtures.range",
+  "displayName": "V4 Adversarial Fixture",
+  "version": "1.0.0",
+  "author": {
+    "name": "TopiaForge Tests"
+  },
+  "entryAssembly": "Fixture.dll",
+  "entryType": "Fixtures.V4Mod",
+  "supportedGameVersionRange": "*",
+  "supportedLoaderVersionRange": "*",
+  "supportedSdkVersionRange": ">=1.0.0                                                                                                                                                                                                                                                          "
+}

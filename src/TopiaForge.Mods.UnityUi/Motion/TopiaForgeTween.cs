@@ -38,25 +38,30 @@ namespace TopiaForge.Mods.UnityUi
         private static int highWater;
         private static bool overflowLogged;
 
+        /// <summary>Gets or sets active count.</summary>
         public static int ActiveCount { get; private set; }
 
+        /// <summary>Animates this element to the requested opacity.</summary>
         public static void FadeTo(TopiaForgeWidget target, float from, float to, float duration, TopiaForgeEase ease = TopiaForgeEase.OutQuad, Action? onDone = null)
         {
             target.EnsureCanvasGroup().alpha = from;
             Start(target, Channel.Alpha, from, to, duration, ease, onDone);
         }
 
+        /// <summary>Animates this element to the requested scale.</summary>
         public static void ScaleTo(TopiaForgeWidget target, float from, float to, float duration, TopiaForgeEase ease = TopiaForgeEase.OutCubic, Action? onDone = null)
         {
             target.Rect.localScale = new Vector3(from, from, 1f);
             Start(target, Channel.ScaleUniform, from, to, duration, ease, onDone);
         }
 
+        /// <summary>Animates this element along the horizontal axis.</summary>
         public static void MoveX(TopiaForgeWidget target, float from, float to, float duration, TopiaForgeEase ease = TopiaForgeEase.OutCubic, Action? onDone = null)
         {
             Start(target, Channel.OffsetX, from, to, duration, ease, onDone);
         }
 
+        /// <summary>Animates this element along the vertical axis.</summary>
         public static void MoveY(TopiaForgeWidget target, float from, float to, float duration, TopiaForgeEase ease = TopiaForgeEase.OutCubic, Action? onDone = null)
         {
             Start(target, Channel.OffsetY, from, to, duration, ease, onDone);

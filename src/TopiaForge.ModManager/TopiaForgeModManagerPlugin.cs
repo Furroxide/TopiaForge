@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using BepInEx;
 using TopiaForge.ModManager.Core;
 using TopiaForge.Mods;
@@ -32,6 +33,12 @@ namespace TopiaForge.ModManager
         private ManifestValidationContext validationContext = ManifestValidationContext.Current;
         private IReadOnlyList<ModPackage> packages = Array.Empty<ModPackage>();
         private LoadOrderResult loadOrder = new LoadOrderResult(Array.Empty<ModPackage>(), new Dictionary<string, IReadOnlyList<string>>());
+        private readonly Stopwatch startupStopwatch = new Stopwatch();
+        private readonly List<LastRunStage> startupStages = new List<LastRunStage>();
+        private StartupJournal? startupJournal;
+        private StartupRecoveryDecision startupRecovery = StartupRecoveryDecision.None;
+        private string startupStartedAtUtc = string.Empty;
+        private bool startupCompleted;
         private bool ready;
 
         public ManagerPaths Paths => paths;
@@ -45,6 +52,8 @@ namespace TopiaForge.ModManager
 
         private void Awake()
         {
+            startupStartedAtUtc = DateTime.UtcNow.ToString("O");
+            startupStopwatch.Restart();
             DontDestroyOnLoad(gameObject);
             paths = new ManagerPaths(BepInEx.Paths.BepInExRootPath);
             paths.EnsureCreated();
@@ -52,24 +61,30 @@ namespace TopiaForge.ModManager
 
             try
             {
+                var stageStart = startupStopwatch.ElapsedMilliseconds;
                 managerLogger.Info("TopiaForge starting.");
+                TryBeginStartupJournal();
 
                 if (InstalledGameVersionReader.TryRead(BepInEx.Paths.GameRootPath, out var gameVersion, out var versionError))
                 {
-                    validationContext = new ManifestValidationContext(
+                    validationContext = ManifestValidationContext.ForCurrentRuntime(
                         gameVersion: gameVersion,
                         requireKnownGameVersion: true);
                     managerLogger.Info("Detected Robotopia game version " + gameVersion + ".");
                 }
                 else
                 {
-                    validationContext = new ManifestValidationContext(requireKnownGameVersion: true);
+                    validationContext = ManifestValidationContext.ForCurrentRuntime(requireKnownGameVersion: true);
                     managerLogger.Warn("Robotopia game version could not be established: " + versionError
                         + " Mods with a game compatibility constraint will not load.");
                 }
+                RecordStartupStage("environment", stageStart);
 
+                stageStart = startupStopwatch.ElapsedMilliseconds;
                 state = JsonUtil.LoadPersistentFile(paths.StateFile, new ManagerState());
+                state.Normalize();
                 launchProfile = ConsumeLaunchProfile();
+                ApplyStartupRecovery();
                 try
                 {
                     registry.ApplyPendingUninstalls(paths, state);
@@ -82,21 +97,29 @@ namespace TopiaForge.ModManager
                 if (launchProfile == null)
                 {
                     InstallInboxAtStartup();
-                    registry.PruneSupersededVersions(paths, state,
-                        pruned => managerLogger.Info("Pruned superseded package version: " + pruned + "."));
                 }
                 else
                 {
-                    // Inbox installation prunes older package versions. Keep
-                    // this process's profile snapshot immutable and leave the
-                    // inbox untouched for the next normal launch.
+                    // Keep this process's exact profile snapshot immutable and leave newly delivered
+                    // packages in the inbox for the next normal launch.
                     managerLogger.Info("Deferring package inbox installation for profile launch.");
                     managerLogger.Info("Preserving installed package versions for profile launch.");
                 }
+                RecordStartupStage("state-and-packages", stageStart);
+
+                stageStart = startupStopwatch.ElapsedMilliseconds;
                 RefreshPackages(saveState: true);
                 LogExcludedPackages();
-                runtime = new ModRuntime(paths, managerLogger);
+                RecordStartupStage("validation-and-ordering", stageStart);
+
+                stageStart = startupStopwatch.ElapsedMilliseconds;
+                runtime = new ModRuntime(
+                    paths,
+                    managerLogger,
+                    validationContext,
+                    startupJournal == null ? null : new StartupJournalLoadObserver(startupJournal, managerLogger));
                 runtime.Load(loadOrder.OrderedPackages);
+                RecordStartupStage("mod-loading", stageStart);
                 if (launchProfile == null)
                 {
                     state.ClearAppliedRestartRequirements();
@@ -107,10 +130,16 @@ namespace TopiaForge.ModManager
                 }
                 SaveState();
 
+                stageStart = startupStopwatch.ElapsedMilliseconds;
                 overlay = new ManagerOverlay(this, managerLogger);
                 menuButtonInjector = new MenuButtonInjector(overlay, managerLogger);
                 SceneManager.sceneLoaded += OnSceneLoaded;
+                DeliverInitialScene();
                 ready = true;
+                RecordStartupStage("manager-ui", stageStart);
+                startupCompleted = true;
+                TryMarkStartupComplete();
+                WriteLastRunReport(null);
                 managerLogger.Info("TopiaForge ready. Press F10 to open the overlay.");
             }
             catch (Exception ex)
@@ -118,6 +147,57 @@ namespace TopiaForge.ModManager
                 // Stay inert (ready == false) rather than crashing the game. OnDestroy still unloads any mods
                 // that did load before the failure (it gates on runtime, not ready).
                 managerLogger.Error(ex, "TopiaForge failed to initialize.");
+                WriteLastRunReport(ex);
+            }
+        }
+
+        private void TryBeginStartupJournal()
+        {
+            try
+            {
+                startupJournal = StartupJournal.Begin(paths.StartupJournalFile, out startupRecovery);
+            }
+            catch (Exception ex)
+            {
+                startupJournal = null;
+                startupRecovery = StartupRecoveryDecision.None;
+                managerLogger.Warn("Startup recovery journal is unavailable: " + ex.Message);
+            }
+        }
+
+        private void ApplyStartupRecovery()
+        {
+            if (!string.IsNullOrEmpty(startupRecovery.QuarantineModId))
+            {
+                managerLogger.Warn(
+                    "Automatically quarantined " + startupRecovery.QuarantineModId + ": " + startupRecovery.Reason);
+            }
+
+            if (startupRecovery.SafeMode)
+            {
+                managerLogger.Warn("Automatic startup recovery enabled safe mode: " + startupRecovery.Reason);
+            }
+
+            // Recovery is evaluated after consuming the launcher's one-shot profile. It must therefore be
+            // layered over that profile: ambiguous crashes force temporary safe mode, while precise blame
+            // removes only the quarantined owner from an exact profile. The policy clones caller input so all
+            // unrelated profile selections remain intact.
+            launchProfile = StartupRecoveryPolicy.Apply(
+                launchProfile,
+                state,
+                startupRecovery,
+                DateTime.UtcNow);
+        }
+
+        private void TryMarkStartupComplete()
+        {
+            try
+            {
+                startupJournal?.MarkStartupComplete();
+            }
+            catch (Exception ex)
+            {
+                managerLogger.Warn("Startup journal could not record completion: " + ex.Message);
             }
         }
 
@@ -253,6 +333,27 @@ namespace TopiaForge.ModManager
             {
                 LogCleanupFailure(ex, "TopiaForgeUi global teardown failed.");
             }
+
+            if (startupCompleted)
+            {
+                try
+                {
+                    startupJournal?.MarkCleanExit();
+                }
+                catch (Exception ex)
+                {
+                    LogCleanupFailure(ex, "Startup journal could not record a clean exit.");
+                }
+            }
+
+            try
+            {
+                managerLogger?.Dispose();
+            }
+            catch
+            {
+                // All independent log sinks are already tearing down.
+            }
         }
 
         private void LogCleanupFailure(Exception exception, string message)
@@ -269,8 +370,24 @@ namespace TopiaForge.ModManager
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            runtime.DispatchSceneLoaded(scene.name);
-            menuButtonInjector.ResetForScene(scene.name);
+            if (runtime.DispatchSceneLoaded(scene.handle, scene.name, scene.IsValid()))
+            {
+                menuButtonInjector.ResetForScene(scene.name);
+            }
+        }
+
+        private void DeliverInitialScene()
+        {
+            var scene = SceneManager.GetActiveScene();
+            if (runtime.DispatchInitialScene(scene.handle, scene.name, scene.IsValid()))
+            {
+                menuButtonInjector.ResetForScene(scene.name);
+                managerLogger.Debug("Delivered initial active scene '" + scene.name + "' to loaded mods.");
+            }
+            else if (!scene.IsValid() || string.IsNullOrWhiteSpace(scene.name))
+            {
+                managerLogger.Debug("Initial active scene is not valid yet; waiting for Unity's scene-loaded callback.");
+            }
         }
 
         /// <summary>
@@ -456,6 +573,11 @@ namespace TopiaForge.ModManager
             }
 
             mod.Enabled = !mod.Enabled;
+            if (mod.Enabled)
+            {
+                mod.QuarantineReason = string.Empty;
+                mod.QuarantinedAtUtc = string.Empty;
+            }
             mod.RestartRequired = true;
             mod.UpdatedAtUtc = DateTime.UtcNow.ToString("O");
             SaveState();
@@ -607,7 +729,7 @@ namespace TopiaForge.ModManager
             }
         }
 
-        public (bool Ok, string Message) LaunchGamemode(string entryId)
+        public async Task<(bool Ok, string Message)> LaunchGamemode(string entryId)
         {
             var service = GetWorldService();
             if (service == null)
@@ -617,9 +739,12 @@ namespace TopiaForge.ModManager
 
             try
             {
-                var result = service.LaunchMenuEntry(entryId);
-                managerLogger.Info("Gamemode launch '" + entryId + "': " + result.Message);
-                return (result.Ok, result.Message);
+                var result = await service.LaunchMenuEntryAsync(entryId);
+                var message = result.Succeeded
+                    ? "Launched gamemode entry '" + entryId + "'."
+                    : result.ErrorMessage;
+                managerLogger.Info("Gamemode launch '" + entryId + "': " + message);
+                return (result.Succeeded, message);
             }
             catch (Exception ex)
             {
@@ -628,7 +753,7 @@ namespace TopiaForge.ModManager
             }
         }
 
-        public (bool Ok, string Message) LaunchGamemodeSelection(
+        public async Task<(bool Ok, string Message)> LaunchGamemodeSelection(
             string entryId,
             string worldId,
             string gamemodeId,
@@ -673,20 +798,194 @@ namespace TopiaForge.ModManager
                 };
                 SaveWorldLaunchSettings(settings);
 
-                var result = service.Load(new WorldLoadRequest(
+                var result = await service.LoadAsync(new WorldLoadRequest(
                     worldId,
                     gamemodeId,
                     preferSceneReplacement: settings.PreferSceneReplacement,
                     allowAdditiveFallback: settings.AllowAdditiveFallback));
+                var message = result.Succeeded
+                    ? "Launched '" + gamemode.Name + "' in '" + world.Name + "'."
+                    : result.ErrorMessage;
                 managerLogger.Info("Gamemode launch '" + entryId + "' world '" + world.Name + "' [" + world.Id
                     + "] gamemode '" + gamemode.Name + "' [" + gamemode.Id + "] loadMode '" + settings.LoadMode
-                    + "': " + result.Message);
-                return (result.Ok, result.Message);
+                    + "': " + message);
+                return (result.Succeeded, message);
             }
             catch (Exception ex)
             {
                 managerLogger.Error(ex, "Failed to launch gamemode '" + entryId + "' for world '" + worldId + "'.");
                 return (false, "Failed to launch: " + ex.Message);
+            }
+        }
+
+        private void WriteLastRunReport(Exception? rootError)
+        {
+            try
+            {
+                if (startupStopwatch.IsRunning)
+                {
+                    startupStopwatch.Stop();
+                }
+
+                var report = new LastRunReport
+                {
+                    SessionId = startupJournal?.SessionId ?? string.Empty,
+                    StartedAtUtc = startupStartedAtUtc,
+                    CompletedAtUtc = DateTime.UtcNow.ToString("O"),
+                    StartupDurationMs = startupStopwatch.ElapsedMilliseconds,
+                    GameVersion = validationContext.GameVersion ?? string.Empty,
+                    LoaderVersion = validationContext.LoaderVersion,
+                    SdkVersion = validationContext.SdkVersion,
+                    Recovery = startupRecovery.Reason,
+                    RootError = rootError?.ToString() ?? string.Empty,
+                    RootExceptionChain = DescribeExceptionChain(rootError),
+                    Stages = startupStages.ToList()
+                };
+
+                var order = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                for (var index = 0; index < loadOrder.OrderedPackages.Count; index++)
+                {
+                    var id = loadOrder.OrderedPackages[index].Manifest?.Id;
+                    if (!string.IsNullOrEmpty(id))
+                    {
+                        order[id] = index;
+                    }
+                }
+
+                foreach (var package in packages)
+                {
+                    var id = package.Manifest?.Id ??
+                        (Path.GetFileName(Path.GetDirectoryName(package.PackagePath)) ?? Path.GetFileName(package.PackagePath));
+                    var failure = runtime?.GetLoadFailure(id);
+                    var compatibility = package.Manifest == null
+                        ? null
+                        : ManifestRuntimeCompatibility.Evaluate(package.Manifest, validationContext);
+                    var item = new LastRunPackage
+                    {
+                        Id = id,
+                        Version = package.Manifest?.Version ?? string.Empty,
+                        Enabled = package.IsEnabled,
+                        Valid = package.IsValid,
+                        Compatibility = compatibility?.Status ?? ManifestRuntimeCompatibility.RejectedStatus,
+                        CompatibilityReasons = compatibility?.Errors.ToList()
+                            ?? new List<string> { "Package manifest was unavailable for compatibility evaluation." },
+                        Selection = package.SelectionReason,
+                        Status = !package.IsValid
+                            ? "invalid"
+                            : !package.IsEnabled
+                                ? "disabled"
+                                : runtime != null && runtime.IsLoaded(id)
+                                    ? "loaded"
+                                    : failure != null
+                                        ? "load-failed"
+                                        : "excluded",
+                        LoadOrder = order.TryGetValue(id, out var position) ? position : (int?)null,
+                        Errors = package.Errors.ToList()
+                    };
+
+                    if (loadOrder.Errors.TryGetValue(id, out var resolutionErrors))
+                    {
+                        item.Errors.AddRange(resolutionErrors);
+                    }
+
+                    if (!string.IsNullOrEmpty(failure))
+                    {
+                        item.Errors.Add(failure);
+                    }
+
+                    if (package.Manifest != null)
+                    {
+                        try
+                        {
+                            var receipt = JsonUtil.LoadFile(
+                                Path.Combine(package.PackagePath, PackageInstallReceipt.FileName),
+                                new PackageInstallReceipt());
+                            item.SourceSha256 = receipt.SourceSha256 ?? string.Empty;
+                            item.CriticalFiles = (receipt.Files ?? new List<PackageFileReceipt>())
+                                .Where(file => file != null && file.Critical)
+                                .OrderBy(file => file.Path, StringComparer.Ordinal)
+                                .Select(file => new LastRunFileDigest
+                                {
+                                    Path = file.Path,
+                                    Sha256 = file.Sha256
+                                })
+                                .ToList();
+                        }
+                        catch (Exception ex)
+                        {
+                            item.Errors.Add("Install receipt could not be summarized: " + ex.Message);
+                        }
+                    }
+
+                    report.Packages.Add(item);
+                }
+
+                report.Packages = report.Packages
+                    .OrderBy(item => item.LoadOrder ?? int.MaxValue)
+                    .ThenBy(item => item.Id, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                JsonUtil.SaveFile(paths.LastRunFile, report);
+            }
+            catch (Exception ex)
+            {
+                managerLogger?.Warn("last-run.json could not be written: " + ex.Message);
+            }
+        }
+
+        private void RecordStartupStage(string name, long startedMs)
+        {
+            startupStages.Add(new LastRunStage
+            {
+                Name = name,
+                StartedMs = startedMs,
+                DurationMs = Math.Max(0, startupStopwatch.ElapsedMilliseconds - startedMs)
+            });
+        }
+
+        private static List<string> DescribeExceptionChain(Exception? exception)
+        {
+            var result = new List<string>();
+            var current = exception;
+            while (current != null && result.Count < 32)
+            {
+                result.Add(current.GetType().FullName + ": " + current.Message);
+                current = current.InnerException;
+            }
+
+            return result;
+        }
+
+        private sealed class StartupJournalLoadObserver : IModLoadObserver
+        {
+            private readonly StartupJournal journal;
+            private readonly ManagerFileLogger logger;
+
+            public StartupJournalLoadObserver(StartupJournal journal, ManagerFileLogger logger)
+            {
+                this.journal = journal;
+                this.logger = logger;
+            }
+
+            public void OnLoading(string modId)
+            {
+                TryWrite(() => journal.MarkLoading(modId));
+            }
+
+            public void OnLoadCompleted(string modId, bool succeeded)
+            {
+                TryWrite(() => journal.MarkLoaded(modId));
+            }
+
+            private void TryWrite(Action write)
+            {
+                try
+                {
+                    write();
+                }
+                catch (Exception ex)
+                {
+                    logger.Warn("Startup journal update failed: " + ex.Message);
+                }
             }
         }
     }

@@ -23,6 +23,7 @@ namespace TopiaForge.UgcLiveSync
         private TopiaForgeLabel? feedLabel;
         private TopiaForgeInputField? watchInput;
         private TopiaForgeInputField? editorInput;
+        private IUgcSyncLease? activeLease;
 
         private string editorUrl = string.Empty;
         private string watchFolder = string.Empty;
@@ -84,6 +85,8 @@ namespace TopiaForge.UgcLiveSync
                 service.SessionStopped -= OnSessionStopped;
             }
 
+            activeLease?.Dispose();
+            activeLease = null;
             ui?.Dispose();
             ui = null;
             window = null;
@@ -183,15 +186,25 @@ namespace TopiaForge.UgcLiveSync
 
         private void StopSession()
         {
-            service?.Stop();
+            activeLease?.Dispose();
+            activeLease = null;
             lastMessage = "Stopped.";
         }
 
-        private void Run(Func<UgcLiveSyncResult> action)
+        private void Run(Func<OperationResult<IUgcSyncLease>> action)
         {
             try
             {
-                lastMessage = action().Message;
+                var result = action();
+                if (!result.TryGetValue(out var lease))
+                {
+                    lastMessage = "Error: " + result.ErrorMessage;
+                    return;
+                }
+
+                activeLease?.Dispose();
+                activeLease = lease;
+                lastMessage = "Session requested: " + lease.Session.Transport + " -> " + lease.Session.Target;
             }
             catch (Exception ex)
             {

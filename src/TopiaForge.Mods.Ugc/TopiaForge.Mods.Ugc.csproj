@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>TopiaForge.Mods.Ugc</AssemblyName>
+    <RootNamespace>TopiaForge.Mods</RootNamespace>
+    <Version>1.0.0</Version>
+    <PackageVersion>1.0.0</PackageVersion>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <InformationalVersion>1.0.0</InformationalVersion>
+    <Description>Unity-free TopiaForge user-generated-content import and live-sync contracts.</Description>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <WarningsAsErrors>$(WarningsAsErrors);CS1591;CS1574</WarningsAsErrors>
+    <ProduceReferenceAssembly>true</ProduceReferenceAssembly>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
+    <ProjectReference Include="..\TopiaForge.Mods.Worlds\TopiaForge.Mods.Worlds.csproj" />
+    <Compile Include="..\TopiaForge.Mods.Abstractions\UgcLiveSync.cs" Link="UgcLiveSync.cs" />
+  </ItemGroup>
+  <Import Project="..\TopiaForge.Mods.ReferenceOnlyPack.targets" />
+</Project>

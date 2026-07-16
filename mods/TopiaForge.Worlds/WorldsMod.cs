@@ -5,13 +5,14 @@ using UnityEngine.SceneManagement;
 
 namespace TopiaForge.Worlds
 {
-    public sealed class WorldsMod : ITopiaForgeMod
+    public sealed class WorldsMod : TopiaForgeMod
     {
         // We hold the auto-load until the game has actually reached the menu so the gamemode's scene load is
         // a clean transition from the menu, not a race against the boot sequence.
         private const float AutoLoadMaxWaitSeconds = 12f;
 
-        private IModContext? context;
+        private static readonly ConfigDefinition<WorldsConfig> ConfigContract =
+            new ConfigDefinition<WorldsConfig>(1, () => new WorldsConfig());
         private WorldsConfig? config;
         private WorldsService? service;
         private PauseMenuBridge? pauseBridge;
@@ -19,20 +20,14 @@ namespace TopiaForge.Worlds
         private bool pendingAutoLoad;
         private float autoLoadWait;
 
-        public void OnLoad(IModContext context)
+        protected override void OnLoad()
         {
-            this.context = context;
-            config = context.LoadConfig(new WorldsConfig());
-            context.SaveConfig(config);
+            var loaded = Context.Config.Load(ConfigContract);
+            config = loaded.TryGetValue(out var value) ? value : new WorldsConfig();
+            Context.Config.Save(ConfigContract, config);
 
-            service = new WorldsService(context.Logger, context.Paths.DataPath);
+            service = new WorldsService(Context.Logger, Context.Files);
             service.EndSessionOnMenuScene = config.EndSessionOnMenuScene;
-            var sceneCoordinator = context.GetService<ISceneCoordinator>();
-            if (sceneCoordinator != null)
-            {
-                service.AttachSceneCoordinator(sceneCoordinator, context.ModId);
-            }
-
             service.DiscoverBuiltIns();
             // Pin the entry to the Open Sandbox world: world routing is keyed on the world id (a blank id
             // would resolve to the first checkpoint level, i.e. the campaign tutorial), and an explicit world
@@ -46,35 +41,23 @@ namespace TopiaForge.Worlds
                 WorldsService.OpenSandboxWorldId));
             service.WriteCatalog();
 
-            ui = TopiaForgeUi.For(context);
-            pauseBridge = new PauseMenuBridge(service, context.Logger, ui, config.InterceptPauseMenu);
+            ui = TopiaForgeUi.For(Context);
+            pauseBridge = new PauseMenuBridge(service, Context.Logger, ui, config.InterceptPauseMenu);
 
-            var registry = context.GetService<IModServiceRegistry>();
-            registry?.Register<IWorldGamemodeService>(context.ModId, service);
-            registry?.Register<IWorldPauseMenuService>(context.ModId, pauseBridge);
+            Context.Lifetime.Track(service);
+            Context.Lifetime.Track(ui);
+            Context.Lifetime.Track(pauseBridge);
+            RegisterExtension<IWorldGamemodeService>(service);
+            RegisterExtension<IWorldPauseMenuService>(pauseBridge);
 
             pendingAutoLoad = config.AutoLoadOnStart;
             autoLoadWait = AutoLoadMaxWaitSeconds;
-            context.Update += OnUpdate;
-            context.Logger.Info("TopiaForge Worlds loaded with " + service.Worlds.Count + " worlds and " + service.Gamemodes.Count + " gamemodes.");
+            Context.Events.SubscribeUpdate(OnUpdate);
+            Context.Logger.Info("TopiaForge Worlds loaded with " + service.Worlds.Count + " worlds and " + service.Gamemodes.Count + " gamemodes.");
         }
 
-        public void OnUnload()
+        protected override void OnUnload()
         {
-            if (context != null)
-            {
-                context.Update -= OnUpdate;
-                context.GetService<IModServiceRegistry>()?.UnregisterOwner(context.ModId);
-            }
-
-            pauseBridge?.Dispose();
-            pauseBridge = null;
-            ui?.Dispose();
-            ui = null;
-            service?.Dispose();
-            service = null;
-            config = null;
-            context = null;
             pendingAutoLoad = false;
         }
 
@@ -83,7 +66,7 @@ namespace TopiaForge.Worlds
             service?.UpdateTransition();
             pauseBridge?.Update(deltaTime);
 
-            if (!pendingAutoLoad || service == null || config == null || context == null)
+            if (!pendingAutoLoad || service == null || config == null)
             {
                 return;
             }
@@ -105,22 +88,25 @@ namespace TopiaForge.Worlds
             // scene, which would race the boot sequence the wait exists to avoid.
             if (!atMenu && GameScenes.IsNonGameplayScene(activeScene))
             {
-                context.Logger.Warn("Auto-launch skipped: menu scene was never reached (active scene '" + activeScene + "').");
+                Context.Logger.Warn("Auto-launch skipped: menu scene was never reached (active scene '" + activeScene + "').");
                 return;
             }
 
-            var result = AutoLoad(service, config, context.Logger);
+            var result = AutoLoad(service, config, Context.Logger);
             if (result.Ok)
             {
-                context.Logger.Info("Auto-launch: " + result.Message);
+                Context.Logger.Info("Auto-launch: " + result.Message);
             }
             else
             {
-                context.Logger.Warn("Auto-launch failed: " + result.Message);
+                Context.Logger.Warn("Auto-launch failed: " + result.Message);
             }
         }
 
-        private static WorldLoadResult AutoLoad(WorldsService service, WorldsConfig config, IModLogger logger)
+        private static WorldsService.WorldLoadResult AutoLoad(
+            WorldsService service,
+            WorldsConfig config,
+            IModLogger logger)
         {
             // Honour any explicitly selected, registered world directly, including Open Sandbox. WorldsService.Load
             // routes Open Sandbox through the clean UgcPlay scene; falling back through a blank gamemode menu entry
@@ -148,6 +134,15 @@ namespace TopiaForge.Worlds
             }
 
             return service.Load(route.Request!);
+        }
+
+        private void RegisterExtension<T>(T provider) where T : class
+        {
+            var registration = Context.Extensions.Register(provider);
+            if (!registration.Succeeded)
+            {
+                throw new InvalidOperationException(registration.ErrorMessage);
+            }
         }
     }
 }

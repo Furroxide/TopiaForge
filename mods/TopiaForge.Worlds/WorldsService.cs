@@ -4,6 +4,8 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 using UnityEngine;
@@ -12,19 +14,26 @@ using UnityEngine.SceneManagement;
 
 namespace TopiaForge.Worlds
 {
-    public sealed class WorldsService : IWorldGamemodeService, IWorldTransitionState, IWorldRegistrationService
+    public sealed class WorldsService : IWorldGamemodeService, IWorldTransitionState,
+        IOwnerBoundExtensionFactory, IDisposable
     {
         // Aliases of the SDK's WellKnownIds so consumers that cannot reference this assembly and this
         // service always agree on the ids (SdkSurfaceTests pins the WellKnownIds values).
-        public const string OpenSandboxWorldId = WellKnownIds.OpenSandboxWorldId;
-        public const string SandboxGamemodeId = WellKnownIds.SandboxGamemodeId;
+        public const string OpenSandboxWorldId = WellKnownWorldIds.OpenSandboxWorld;
+        public const string SandboxGamemodeId = WellKnownWorldIds.SandboxGamemode;
 
         private readonly IModLogger logger;
-        private readonly string dataPath;
+        private readonly IModFiles files;
         private readonly GameLevelBridge levelBridge;
         private readonly List<WorldDefinition> worlds = new List<WorldDefinition>();
         private readonly List<GamemodeDefinition> gamemodes = new List<GamemodeDefinition>();
         private readonly List<GamemodeMenuEntry> menuEntries = new List<GamemodeMenuEntry>();
+        private readonly Dictionary<string, Registration> worldRegistrations =
+            new Dictionary<string, Registration>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Registration> gamemodeRegistrations =
+            new Dictionary<string, Registration>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Registration> menuEntryRegistrations =
+            new Dictionary<string, Registration>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, object> worldCheckpoints = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
         private readonly ReadOnlyCollection<WorldDefinition> worldsView;
         private readonly ReadOnlyCollection<GamemodeDefinition> gamemodesView;
@@ -34,12 +43,6 @@ namespace TopiaForge.Worlds
         private GameObject? arenaRoot;
         private VolumeProfile? arenaProfile;
         private float lastLaunchTime = -10f;
-        // Scene-transition arbitration (manager-owned ISceneCoordinator). A claim is held for the whole
-        // session lifetime so automatic scene loads from other mods (auto-connects, watchers) are refused
-        // while a world is live or still loading; released in EndSession.
-        private ISceneCoordinator? sceneCoordinator;
-        private string sceneOwnerId = "io.github.furroxide.topiaforge.worlds";
-        private IDisposable? sessionClaim;
         // Provisional scene-load lifecycle. Async loader faults can arrive off-thread; the tracker carries
         // them to UpdateTransition on the Unity thread and generation-isolates late faults from older loads.
         private const float TransitionTimeoutSeconds = 30f;
@@ -53,11 +56,12 @@ namespace TopiaForge.Worlds
         // One-shot payload armed by LoadCustomWorld and consumed on the same sandbox-scene load: the custom
         // world's pre-created content, waiting for the play scene (and its player spawn) to exist.
         private PendingCustomWorld? pendingCustomWorld;
+        private IWorldContent? activeWorldContent;
 
-        public WorldsService(IModLogger logger, string dataPath)
+        public WorldsService(IModLogger logger, IModFiles files)
         {
             this.logger = logger;
-            this.dataPath = dataPath;
+            this.files = files;
             levelBridge = new GameLevelBridge(logger);
             worldsView = new ReadOnlyCollection<WorldDefinition>(worlds);
             gamemodesView = new ReadOnlyCollection<GamemodeDefinition>(gamemodes);
@@ -84,21 +88,6 @@ namespace TopiaForge.Worlds
         // Config gate for the automatic end-on-menu behaviour (WorldsConfig.EndSessionOnMenuScene). Explicit
         // EndSession calls are never gated.
         public bool EndSessionOnMenuScene { get; set; } = true;
-
-        /// <summary>
-        /// Wires the manager's scene-transition arbiter in. Sessions then hold a claim for their lifetime
-        /// (refusing automatic scene loads from other mods) and a foreign user-initiated transition that
-        /// lands over a session ends it with <see cref="WorldSessionEndReason.SceneReplaced"/>.
-        /// </summary>
-        public void AttachSceneCoordinator(ISceneCoordinator coordinator, string ownerModId)
-        {
-            ThrowIfDisposed();
-            sceneCoordinator = coordinator;
-            if (!string.IsNullOrWhiteSpace(ownerModId))
-            {
-                sceneOwnerId = ownerModId;
-            }
-        }
 
         public void DiscoverBuiltIns()
         {
@@ -167,7 +156,9 @@ namespace TopiaForge.Worlds
             }
         }
 
-        public void RegisterWorld(WorldDefinition world)
+        public OperationResult<IWorldRegistration> RegisterWorld(
+            WorldDefinition world,
+            ICustomWorldContent? content = null)
         {
             ThrowIfDisposed();
             if (world == null)
@@ -175,27 +166,24 @@ namespace TopiaForge.Worlds
                 throw new ArgumentNullException(nameof(world));
             }
 
-            worlds.RemoveAll(item => string.Equals(item.Id, world.Id, StringComparison.OrdinalIgnoreCase));
+            if (worldRegistrations.ContainsKey(world.Id))
+            {
+                return OperationResult<IWorldRegistration>.Failure(
+                    ModErrorCode.Conflict,
+                    "World '" + world.Id + "' is already registered.");
+            }
+
             worlds.Add(world);
             // A plain re-registration means "this id is a normal world again" — drop any stale content link.
             customWorldContent.Remove(world.Id);
-        }
-
-        public void RegisterWorld(WorldDefinition world, ICustomWorldContent content)
-        {
-            ThrowIfDisposed();
-            if (world == null)
+            if (content != null)
             {
-                throw new ArgumentNullException(nameof(world));
+                customWorldContent[world.Id] = content;
             }
 
-            if (content == null)
-            {
-                throw new ArgumentNullException(nameof(content));
-            }
-
-            RegisterWorld(world);
-            customWorldContent[world.Id] = content;
+            var registration = new Registration(this, world.Id, WorldRegistrationKind.World);
+            worldRegistrations.Add(world.Id, registration);
+            return OperationResult<IWorldRegistration>.Success(registration);
         }
 
         public bool UnregisterWorld(string worldId)
@@ -205,19 +193,11 @@ namespace TopiaForge.Worlds
                 return false;
             }
 
-            var removed = worlds.RemoveAll(item => string.Equals(item.Id, worldId, StringComparison.OrdinalIgnoreCase)) > 0;
-            customWorldContent.Remove(worldId);
-            worldCheckpoints.Remove(worldId);
-            if (removed && CurrentSession != null
-                && string.Equals(CurrentSession.WorldId, worldId, StringComparison.OrdinalIgnoreCase))
-            {
-                EndSession(WorldSessionEndReason.ProviderUnloading);
-            }
-
-            return removed;
+            return worldRegistrations.TryGetValue(worldId, out var registration)
+                && ReleaseRegistration(registration);
         }
 
-        public void RegisterGamemode(GamemodeDefinition gamemode)
+        public OperationResult<IWorldRegistration> RegisterGamemode(GamemodeDefinition gamemode)
         {
             ThrowIfDisposed();
             if (gamemode == null)
@@ -225,11 +205,20 @@ namespace TopiaForge.Worlds
                 throw new ArgumentNullException(nameof(gamemode));
             }
 
-            gamemodes.RemoveAll(item => string.Equals(item.Id, gamemode.Id, StringComparison.OrdinalIgnoreCase));
+            if (gamemodeRegistrations.ContainsKey(gamemode.Id))
+            {
+                return OperationResult<IWorldRegistration>.Failure(
+                    ModErrorCode.Conflict,
+                    "Gamemode '" + gamemode.Id + "' is already registered.");
+            }
+
             gamemodes.Add(gamemode);
+            var registration = new Registration(this, gamemode.Id, WorldRegistrationKind.Gamemode);
+            gamemodeRegistrations.Add(gamemode.Id, registration);
+            return OperationResult<IWorldRegistration>.Success(registration);
         }
 
-        public void RegisterMenuEntry(GamemodeMenuEntry entry)
+        public OperationResult<IWorldRegistration> RegisterMenuEntry(GamemodeMenuEntry entry)
         {
             ThrowIfDisposed();
             if (entry == null)
@@ -237,8 +226,17 @@ namespace TopiaForge.Worlds
                 throw new ArgumentNullException(nameof(entry));
             }
 
-            menuEntries.RemoveAll(item => string.Equals(item.Id, entry.Id, StringComparison.OrdinalIgnoreCase));
+            if (menuEntryRegistrations.ContainsKey(entry.Id))
+            {
+                return OperationResult<IWorldRegistration>.Failure(
+                    ModErrorCode.Conflict,
+                    "World menu entry '" + entry.Id + "' is already registered.");
+            }
+
             menuEntries.Add(entry);
+            var registration = new Registration(this, entry.Id, WorldRegistrationKind.MenuEntry);
+            menuEntryRegistrations.Add(entry.Id, registration);
+            return OperationResult<IWorldRegistration>.Success(registration);
         }
 
         public bool UnregisterGamemode(string gamemodeId)
@@ -248,48 +246,70 @@ namespace TopiaForge.Worlds
                 return false;
             }
 
-            var removed = gamemodes.RemoveAll(item =>
-                string.Equals(item.Id, gamemodeId, StringComparison.OrdinalIgnoreCase)) > 0;
-            if (removed && CurrentSession != null
-                && string.Equals(CurrentSession.GamemodeId, gamemodeId, StringComparison.OrdinalIgnoreCase))
-            {
-                EndSession(WorldSessionEndReason.ProviderUnloading);
-            }
-
-            return removed;
+            return gamemodeRegistrations.TryGetValue(gamemodeId, out var registration)
+                && ReleaseRegistration(registration);
         }
 
         public bool UnregisterMenuEntry(string entryId)
         {
             return !disposed && !string.IsNullOrWhiteSpace(entryId)
-                && menuEntries.RemoveAll(item => string.Equals(item.Id, entryId, StringComparison.OrdinalIgnoreCase)) > 0;
+                && menuEntryRegistrations.TryGetValue(entryId, out var registration)
+                && ReleaseRegistration(registration);
         }
 
-        public WorldLoadResult LaunchMenuEntry(string entryId)
+        public Task<OperationResult<WorldSession>> LoadAsync(
+            WorldLoadRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return Task.FromResult(OperationResult<WorldSession>.Failure(
+                    ModErrorCode.Cancelled,
+                    "World load was cancelled."));
+            }
+
+            return Task.FromResult(ToOperation(Load(request)));
+        }
+
+        public Task<OperationResult<WorldSession>> LaunchMenuEntryAsync(
+            string entryId,
+            CancellationToken cancellationToken = default)
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return Task.FromResult(OperationResult<WorldSession>.Failure(
+                    ModErrorCode.Cancelled,
+                    "World launch was cancelled."));
+            }
+
+            return Task.FromResult(ToOperation(LaunchMenuEntry(entryId)));
+        }
+
+        internal WorldLoadResult LaunchMenuEntry(string entryId)
         {
             return LaunchMenuEntry(
                 entryId,
                 preferSceneReplacement: true,
                 allowAdditiveFallback: true,
-                SceneTransitionPriority.UserInitiated);
+                WorldLoadPriority.UserInitiated);
         }
 
         // Overload that threads the caller's configured load mode through to Load, so the launcher's "Load mode"
         // selection is honoured on the menu-entry path instead of being structurally dropped.
-        public WorldLoadResult LaunchMenuEntry(string entryId, bool preferSceneReplacement, bool allowAdditiveFallback)
+        internal WorldLoadResult LaunchMenuEntry(string entryId, bool preferSceneReplacement, bool allowAdditiveFallback)
         {
             return LaunchMenuEntry(
                 entryId,
                 preferSceneReplacement,
                 allowAdditiveFallback,
-                SceneTransitionPriority.UserInitiated);
+                WorldLoadPriority.UserInitiated);
         }
 
         internal WorldLoadResult LaunchMenuEntry(
             string entryId,
             bool preferSceneReplacement,
             bool allowAdditiveFallback,
-            SceneTransitionPriority priority)
+            WorldLoadPriority priority)
         {
             if (disposed)
             {
@@ -316,7 +336,7 @@ namespace TopiaForge.Worlds
                 allowAdditiveFallback));
         }
 
-        public WorldLoadResult Load(WorldLoadRequest request)
+        internal WorldLoadResult Load(WorldLoadRequest request)
         {
             if (disposed)
             {
@@ -391,21 +411,6 @@ namespace TopiaForge.Worlds
                     : SceneManager.GetActiveScene().name;
 
             IDisposable? launchClaim = null;
-            if (sceneCoordinator != null)
-            {
-                var decision = sceneCoordinator.RequestTransition(new SceneTransitionRequest(
-                    sceneOwnerId,
-                    targetScene,
-                    request.Priority,
-                    "world session: " + gamemode.Id + " in " + world.Id));
-                if (!decision.Approved)
-                {
-                    logger.Info("World launch refused before scene dispatch: " + decision.Message);
-                    return WorldLoadResult.Fail("World launch deferred: " + decision.Message);
-                }
-
-                launchClaim = decision.Claim;
-            }
 
             lastLaunchTime = Time.realtimeSinceStartup;
             try
@@ -459,7 +464,7 @@ namespace TopiaForge.Worlds
 
                 if (result.Ok)
                 {
-                    // StartSession transferred ownership to sessionClaim.
+                    // StartSession accepted the launch.
                     launchClaim = null;
                 }
 
@@ -510,44 +515,17 @@ namespace TopiaForge.Worlds
         public void WriteCatalog()
         {
             ThrowIfDisposed();
-            Directory.CreateDirectory(dataPath);
-            var path = Path.Combine(dataPath, "catalog.json");
-            var bytes = new UTF8Encoding(false, true).GetBytes(CatalogJson());
+            var json = CatalogJson();
+            var bytes = new UTF8Encoding(false, true).GetBytes(json);
             if (bytes.Length > MaxCatalogBytes)
             {
                 throw new InvalidDataException("World catalog exceeds " + MaxCatalogBytes + " bytes.");
             }
 
-            var temp = path + ".tmp-" + Guid.NewGuid().ToString("N");
-            try
+            var result = files.WriteDataTextAsync("catalog.json", json).GetAwaiter().GetResult();
+            if (!result.Succeeded)
             {
-                using (var stream = new FileStream(
-                    temp,
-                    FileMode.CreateNew,
-                    FileAccess.Write,
-                    FileShare.None,
-                    81920,
-                    FileOptions.WriteThrough))
-                {
-                    stream.Write(bytes, 0, bytes.Length);
-                    stream.Flush(flushToDisk: true);
-                }
-
-                if (File.Exists(path))
-                {
-                    File.Replace(temp, path, null);
-                }
-                else
-                {
-                    File.Move(temp, path);
-                }
-            }
-            finally
-            {
-                if (File.Exists(temp))
-                {
-                    File.Delete(temp);
-                }
+                throw new IOException("Could not write world catalog: " + result.ErrorMessage);
             }
         }
 
@@ -557,17 +535,9 @@ namespace TopiaForge.Worlds
             // down (or switching to a different world) must not leave a pending build that fires on a later load.
             sandboxArenaPending = false;
 
-            // Same for a pending custom world; a pre-created scene instance the launch never placed would
-            // otherwise leak as a hidden DontDestroyOnLoad object.
-            if (pendingCustomWorld != null)
-            {
-                if (pendingCustomWorld.IsInstance && pendingCustomWorld.ContentRootOrPrefab != null)
-                {
-                    UnityEngine.Object.Destroy(pendingCustomWorld.ContentRootOrPrefab);
-                }
-
-                pendingCustomWorld = null;
-            }
+            pendingCustomWorld = null;
+            activeWorldContent?.Dispose();
+            activeWorldContent = null;
 
             if (arenaRoot != null)
             {
@@ -585,11 +555,13 @@ namespace TopiaForge.Worlds
         /// subscribers observing the service see no active session), tears down the sandbox arena, then fires
         /// <see cref="SessionEnded"/> exactly once.
         /// </summary>
-        public void EndSession(WorldSessionEndReason reason)
+        public OperationResult<bool> EndSession(WorldSessionEndReason reason)
         {
             if (disposed)
             {
-                return;
+                return OperationResult<bool>.Failure(
+                    ModErrorCode.InvalidState,
+                    "World service is disposed.");
             }
 
             // The scene API exposes no cancellation handle. If teardown arrives before sceneLoaded, quarantine
@@ -599,13 +571,11 @@ namespace TopiaForge.Worlds
             var session = CurrentSession;
             if (session == null)
             {
-                return;
+                return OperationResult<bool>.Success(false);
             }
 
             CurrentSession = null;
             sessionSceneName = string.Empty;
-            sessionClaim?.Dispose();
-            sessionClaim = null;
             UnloadArena();
             SafeEvent.Invoke(
                 SessionEnded,
@@ -613,6 +583,7 @@ namespace TopiaForge.Worlds
                 ex => logger.Error(ex, "A SessionEnded subscriber failed."));
 
             logger.Info("World session ended (" + reason + "): " + session.GamemodeId + " in " + session.WorldId + ".");
+            return OperationResult<bool>.Success(true);
         }
 
         // Releases the scene-loaded subscription. Called when the mod unloads (C# assemblies never unload under
@@ -629,9 +600,10 @@ namespace TopiaForge.Worlds
             levelBridge.Dispose();
             SceneManager.sceneLoaded -= OnSceneLoaded;
             UnloadArena();
-            sessionClaim?.Dispose();
-            sessionClaim = null;
             transitionTracker.Abandon();
+            DeactivateRegistrations(worldRegistrations);
+            DeactivateRegistrations(gamemodeRegistrations);
+            DeactivateRegistrations(menuEntryRegistrations);
             worlds.Clear();
             gamemodes.Clear();
             menuEntries.Clear();
@@ -718,9 +690,8 @@ namespace TopiaForge.Worlds
             sandboxArenaPending = true;
         }
 
-        // Launches a mod-provided custom world: create the content eagerly (so a broken bundle fails the load
-        // synchronously, before any scene is touched), load the clean sandbox play scene (real player spawn),
-        // then place the content at the player spawn once that scene is up.
+        // Launches a mod-provided custom world. The SDK content factory is invoked only after the clean play
+        // scene arrives, so all assets/entities are created in their intended scene and remain opaque here.
         private WorldLoadResult LoadCustomWorld(
             WorldDefinition world,
             GamemodeDefinition gamemode,
@@ -729,32 +700,6 @@ namespace TopiaForge.Worlds
         {
             UnloadArena();
 
-            GameObject contentRoot;
-            try
-            {
-                if (!(content.CreateContentRoot() is GameObject created))
-                {
-                    return WorldLoadResult.Fail(
-                        "Custom world content for '" + world.Name + "' could not be created (see the log for details).");
-                }
-
-                contentRoot = created;
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ex, "Custom world content for '" + world.Name + "' threw during creation.");
-                return WorldLoadResult.Fail("Custom world content for '" + world.Name + "' failed: " + ex.Message);
-            }
-
-            // A live scene instance (procedural world) must survive the single-mode scene switch and stay
-            // hidden until placement; a prefab asset is just held and instantiated at placement time.
-            var isInstance = contentRoot.scene.IsValid();
-            if (isInstance)
-            {
-                UnityEngine.Object.DontDestroyOnLoad(contentRoot);
-                contentRoot.SetActive(false);
-            }
-
             var transition = transitionTracker.Begin(
                 Time.realtimeSinceStartup,
                 GameLevelBridge.SandboxSceneName);
@@ -762,17 +707,10 @@ namespace TopiaForge.Worlds
                     message => transitionTracker.ReportFailure(transition, message)))
             {
                 transitionTracker.Cancel(transition);
-                // Unlike the generic arena, a custom world overlaid on whatever scene is active (usually the
-                // menu) is useless — fail the launch instead.
-                if (isInstance)
-                {
-                    UnityEngine.Object.Destroy(contentRoot);
-                }
-
                 return WorldLoadResult.Fail("The game's sandbox play scene could not be loaded for '" + world.Name + "'.");
             }
 
-            pendingCustomWorld = new PendingCustomWorld(world, content, contentRoot, isInstance);
+            pendingCustomWorld = new PendingCustomWorld(world, content);
             sandboxArenaPending = false;
             return StartSession(
                 world,
@@ -803,24 +741,8 @@ namespace TopiaForge.Worlds
                 return;
             }
 
-            // A gameplay scene that is not the session's own: if another mod claimed it through the scene
-            // coordinator, this is a deliberate takeover — end the session cleanly instead of running the
-            // gamemode over a scene it does not own (HUD, spawners and time drivers over a foreign world).
-            // Without a claim it is treated as the game's native level progression (e.g. walking through a
-            // level-exit trigger) and the session follows the player, as gamemodes already expect.
             if (CurrentSession != null)
             {
-                var foreign = FindForeignClaim(scene.name);
-                if (foreign != null)
-                {
-                    logger.Warn("Worlds session scene replaced: '" + foreign.OwnerModId + "' loaded '" + scene.name
-                        + "' over the session's scene '" + sessionSceneName + "'"
-                        + (string.IsNullOrEmpty(foreign.Reason) ? "" : " (" + foreign.Reason + ")")
-                        + "; ending the session.");
-                    EndSession(WorldSessionEndReason.SceneReplaced);
-                    return;
-                }
-
                 if (!string.Equals(scene.name, sessionSceneName, StringComparison.OrdinalIgnoreCase))
                 {
                     logger.Debug("Worlds session scene changed to '" + scene.name + "' without a coordinator claim"
@@ -830,16 +752,6 @@ namespace TopiaForge.Worlds
             }
 
             OnSandboxSceneLoaded(scene, mode);
-        }
-
-        private SceneClaimInfo? FindForeignClaim(string sceneName)
-        {
-            if (sceneCoordinator == null)
-            {
-                return null;
-            }
-
-            return SceneClaimMatcher.FindForeign(sceneCoordinator.ActiveClaims, sceneName, sceneOwnerId);
         }
 
         private void OnSandboxSceneLoaded(Scene scene, LoadSceneMode mode)
@@ -880,9 +792,8 @@ namespace TopiaForge.Worlds
             logger.Info("Worlds open sandbox arena ready in scene '" + scene.name + "'.");
         }
 
-        // Materializes a pending custom world in the freshly loaded sandbox play scene: instantiate/adopt the
-        // content, align its spawn point to the native player spawn, apply the default environment (unless
-        // the content brings its own global Volume), and attach the player guards.
+        // Materializes SDK-owned content in the freshly loaded sandbox play scene. The content owns its own
+        // transform and teardown; this provider supplies environment and player safety only.
         private void PlaceCustomWorld(PendingCustomWorld pending, Scene scene)
         {
             var spawnPosition = levelBridge.GetSandboxSpawnPosition();
@@ -891,39 +802,17 @@ namespace TopiaForge.Worlds
                 arenaRoot = new GameObject("TopiaForge Worlds - Custom World: " + pending.World.Id);
                 UnityEngine.Object.DontDestroyOnLoad(arenaRoot);
 
-                GameObject root;
-                if (pending.IsInstance)
-                {
-                    root = pending.ContentRootOrPrefab;
-                    root.SetActive(true);
-                }
-                else
-                {
-                    root = UnityEngine.Object.Instantiate(pending.ContentRootOrPrefab);
-                }
-
-                root.transform.SetParent(arenaRoot.transform, worldPositionStays: true);
-
-                // Move the world to the player: offset the root so its spawn marker coincides with where the
-                // scene's native bootstrap spawns the player — no player teleport, no extra game reflection.
                 var options = pending.Content.Options;
-                var spawnPoint = FindDescendant(root.transform, options.SpawnPointName);
-                if (spawnPoint != null)
+                var result = pending.Content.CreateAsync().GetAwaiter().GetResult();
+                if (!result.TryGetValue(out var created))
                 {
-                    root.transform.position += spawnPosition - spawnPoint.position;
-                }
-                else
-                {
-                    logger.Warn("Custom world '" + pending.World.Name + "' has no '" + options.SpawnPointName
-                        + "' marker; using the content root as the spawn point.");
-                    root.transform.position = spawnPosition;
+                    throw new InvalidOperationException(result.ErrorCode + ": " + result.ErrorMessage);
                 }
 
-                var effectiveSpawn = spawnPoint != null ? spawnPoint.position : root.transform.position;
+                activeWorldContent = created;
+                var effectiveSpawn = spawnPosition;
 
-                // Respect a world that ships its own sky/exposure: any active global Volume suppresses ours.
-                var hasOwnEnvironment = HasGlobalVolume(root);
-                if (options.ApplyDefaultEnvironment && !hasOwnEnvironment)
+                if (options.ApplyDefaultEnvironment)
                 {
                     arenaProfile = HdrpEnvironment.Apply(arenaRoot, logger);
                 }
@@ -1017,14 +906,9 @@ namespace TopiaForge.Worlds
         {
             // The debounce timestamp is already stamped at the top of Load (covering both success and failure);
             // re-stamping here would be a redundant second source of truth for the same value.
-            var session = new WorldSession(world.Id, gamemode.Id, mode, sceneName, DateTime.UtcNow);
+            var session = new WorldSession(world.Id, gamemode.Id, mode, sceneName, DateTimeOffset.UtcNow);
             CurrentSession = session;
             sessionSceneName = sceneName;
-
-            // The claim was acquired before any scene side effect in Load. Transfer it to the session for its
-            // full lifetime so other mods' automatic scene loads are refused until EndSession.
-            sessionClaim?.Dispose();
-            sessionClaim = launchClaim;
 
             // A consumer must not turn an already-dispatched world load into a reported failure (which
             // would also cause the caller to dispose the now session-owned scene claim), nor starve later
@@ -1160,23 +1044,404 @@ namespace TopiaForge.Worlds
             }
         }
 
+        private static OperationResult<WorldSession> ToOperation(WorldLoadResult result)
+        {
+            return result.Ok && result.Session != null
+                ? OperationResult<WorldSession>.Success(result.Session)
+                : OperationResult<WorldSession>.Failure(ModErrorCode.External, result.Message);
+        }
+
+        object IOwnerBoundExtensionFactory.CreateOwnerFacade(
+            Type contractType,
+            string ownerModId,
+            IModLifetime lifetime)
+        {
+            if (contractType != typeof(IWorldGamemodeService))
+            {
+                throw new ArgumentException("Unsupported Worlds extension contract.", nameof(contractType));
+            }
+
+            return new OwnerFacade(this, lifetime);
+        }
+
+        private bool ReleaseRegistration(Registration registration)
+        {
+            if (disposed || !RegistrationMap(registration.Kind).TryGetValue(registration.Id, out var current)
+                || !ReferenceEquals(current, registration))
+            {
+                registration.Deactivate();
+                return false;
+            }
+
+            RegistrationMap(registration.Kind).Remove(registration.Id);
+            registration.Deactivate();
+            switch (registration.Kind)
+            {
+                case WorldRegistrationKind.World:
+                    worlds.RemoveAll(item => string.Equals(item.Id, registration.Id, StringComparison.OrdinalIgnoreCase));
+                    customWorldContent.Remove(registration.Id);
+                    worldCheckpoints.Remove(registration.Id);
+                    if (CurrentSession != null
+                        && string.Equals(CurrentSession.WorldId, registration.Id, StringComparison.OrdinalIgnoreCase))
+                    {
+                        EndSession(WorldSessionEndReason.ProviderUnloading);
+                    }
+
+                    break;
+                case WorldRegistrationKind.Gamemode:
+                    gamemodes.RemoveAll(item => string.Equals(item.Id, registration.Id, StringComparison.OrdinalIgnoreCase));
+                    if (CurrentSession != null
+                        && string.Equals(CurrentSession.GamemodeId, registration.Id, StringComparison.OrdinalIgnoreCase))
+                    {
+                        EndSession(WorldSessionEndReason.ProviderUnloading);
+                    }
+
+                    break;
+                case WorldRegistrationKind.MenuEntry:
+                    menuEntries.RemoveAll(item => string.Equals(item.Id, registration.Id, StringComparison.OrdinalIgnoreCase));
+                    break;
+            }
+
+            return true;
+        }
+
+        private Dictionary<string, Registration> RegistrationMap(WorldRegistrationKind kind)
+        {
+            switch (kind)
+            {
+                case WorldRegistrationKind.World:
+                    return worldRegistrations;
+                case WorldRegistrationKind.Gamemode:
+                    return gamemodeRegistrations;
+                case WorldRegistrationKind.MenuEntry:
+                    return menuEntryRegistrations;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(kind));
+            }
+        }
+
+        private static void DeactivateRegistrations(Dictionary<string, Registration> registrations)
+        {
+            foreach (var registration in registrations.Values)
+            {
+                registration.Deactivate();
+            }
+
+            registrations.Clear();
+        }
+
+        private sealed class Registration : IWorldRegistration
+        {
+            private WorldsService? owner;
+
+            public Registration(WorldsService owner, string id, WorldRegistrationKind kind)
+            {
+                this.owner = owner;
+                Id = id;
+                Kind = kind;
+            }
+
+            public string Id { get; }
+            public WorldRegistrationKind Kind { get; }
+            public bool IsActive => owner != null;
+
+            public void Dispose()
+            {
+                var current = Interlocked.Exchange(ref owner, null);
+                current?.ReleaseRegistration(this);
+            }
+
+            public void Deactivate()
+            {
+                Interlocked.Exchange(ref owner, null);
+            }
+        }
+
+        private sealed class OwnerFacade : IWorldGamemodeService
+        {
+            private readonly WorldsService service;
+            private readonly IModLifetime lifetime;
+            private readonly object subscriptionSync = new object();
+            private readonly List<SessionChangedSubscription> changedSubscriptions =
+                new List<SessionChangedSubscription>();
+            private readonly List<SessionEndedSubscription> endedSubscriptions =
+                new List<SessionEndedSubscription>();
+
+            public OwnerFacade(WorldsService service, IModLifetime lifetime)
+            {
+                this.service = service;
+                this.lifetime = lifetime;
+            }
+
+            public IReadOnlyList<WorldDefinition> Worlds => service.Worlds;
+            public IReadOnlyList<GamemodeDefinition> Gamemodes => service.Gamemodes;
+            public IReadOnlyList<GamemodeMenuEntry> MenuEntries => service.MenuEntries;
+            public WorldSession? CurrentSession => service.CurrentSession;
+
+            public event Action<WorldSession>? SessionChanged
+            {
+                add
+                {
+                    if (value == null || lifetime.IsStopping)
+                    {
+                        return;
+                    }
+
+                    var subscription = new SessionChangedSubscription(service, value);
+                    lock (subscriptionSync)
+                    {
+                        changedSubscriptions.Add(subscription);
+                    }
+
+                    service.SessionChanged += subscription.Wrapper;
+                    lifetime.Track(subscription);
+                }
+                remove
+                {
+                    if (value != null)
+                    {
+                        RemoveChanged(value);
+                    }
+                }
+            }
+
+            public event Action<WorldSessionEnd>? SessionEnded
+            {
+                add
+                {
+                    if (value == null || lifetime.IsStopping)
+                    {
+                        return;
+                    }
+
+                    var subscription = new SessionEndedSubscription(service, value);
+                    lock (subscriptionSync)
+                    {
+                        endedSubscriptions.Add(subscription);
+                    }
+
+                    service.SessionEnded += subscription.Wrapper;
+                    lifetime.Track(subscription);
+                }
+                remove
+                {
+                    if (value != null)
+                    {
+                        RemoveEnded(value);
+                    }
+                }
+            }
+
+            public OperationResult<IWorldRegistration> RegisterWorld(
+                WorldDefinition world,
+                ICustomWorldContent? content = null) =>
+                Track(service.RegisterWorld(world, content));
+
+            public OperationResult<IWorldRegistration> RegisterGamemode(GamemodeDefinition gamemode) =>
+                Track(service.RegisterGamemode(gamemode));
+
+            public OperationResult<IWorldRegistration> RegisterMenuEntry(GamemodeMenuEntry entry) =>
+                Track(service.RegisterMenuEntry(entry));
+
+            public Task<OperationResult<WorldSession>> LoadAsync(
+                WorldLoadRequest request,
+                CancellationToken cancellationToken = default) =>
+                RunWithLifetimeCancellation(token => service.LoadAsync(request, token), cancellationToken);
+
+            public Task<OperationResult<WorldSession>> LaunchMenuEntryAsync(
+                string entryId,
+                CancellationToken cancellationToken = default) =>
+                RunWithLifetimeCancellation(token => service.LaunchMenuEntryAsync(entryId, token), cancellationToken);
+
+            public OperationResult<bool> EndSession(WorldSessionEndReason reason) => service.EndSession(reason);
+
+            private OperationResult<IWorldRegistration> Track(OperationResult<IWorldRegistration> result)
+            {
+                if (lifetime.IsStopping)
+                {
+                    if (result.TryGetValue(out var stoppingRegistration))
+                    {
+                        stoppingRegistration.Dispose();
+                    }
+
+                    return OperationResult<IWorldRegistration>.Failure(
+                        ModErrorCode.Cancelled,
+                        "The mod is stopping and cannot register world content.");
+                }
+
+                if (!result.TryGetValue(out var registration))
+                {
+                    return result;
+                }
+
+                try
+                {
+                    var ownedRegistration = new OwnerRegistration(
+                        registration,
+                        lifetime.Track(registration));
+                    return OperationResult<IWorldRegistration>.Success(ownedRegistration);
+                }
+                catch (ObjectDisposedException)
+                {
+                    return OperationResult<IWorldRegistration>.Failure(
+                        ModErrorCode.Cancelled,
+                        "The mod stopped before its world registration could be retained.");
+                }
+            }
+
+            private async Task<OperationResult<WorldSession>> RunWithLifetimeCancellation(
+                Func<CancellationToken, Task<OperationResult<WorldSession>>> operation,
+                CancellationToken cancellationToken)
+            {
+                using (var linked = CancellationTokenSource.CreateLinkedTokenSource(
+                    cancellationToken,
+                    lifetime.StoppingToken))
+                {
+                    return await operation(linked.Token);
+                }
+            }
+
+            private void RemoveChanged(Action<WorldSession> handler)
+            {
+                SessionChangedSubscription? subscription = null;
+                lock (subscriptionSync)
+                {
+                    for (var index = changedSubscriptions.Count - 1; index >= 0; index--)
+                    {
+                        if (changedSubscriptions[index].Matches(handler))
+                        {
+                            subscription = changedSubscriptions[index];
+                            changedSubscriptions.RemoveAt(index);
+                            break;
+                        }
+                    }
+                }
+
+                subscription?.Dispose();
+            }
+
+            private void RemoveEnded(Action<WorldSessionEnd> handler)
+            {
+                SessionEndedSubscription? subscription = null;
+                lock (subscriptionSync)
+                {
+                    for (var index = endedSubscriptions.Count - 1; index >= 0; index--)
+                    {
+                        if (endedSubscriptions[index].Matches(handler))
+                        {
+                            subscription = endedSubscriptions[index];
+                            endedSubscriptions.RemoveAt(index);
+                            break;
+                        }
+                    }
+                }
+
+                subscription?.Dispose();
+            }
+
+            private sealed class SessionChangedSubscription : IDisposable
+            {
+                private WorldsService? service;
+                private readonly Action<WorldSession> handler;
+
+                public SessionChangedSubscription(WorldsService service, Action<WorldSession> handler)
+                {
+                    this.service = service;
+                    this.handler = handler;
+                    Wrapper = session => this.handler(session);
+                }
+
+                public Action<WorldSession> Wrapper { get; }
+                public bool Matches(Action<WorldSession> candidate) => handler == candidate;
+
+                public void Dispose()
+                {
+                    var current = Interlocked.Exchange(ref service, null);
+                    if (current != null)
+                    {
+                        current.SessionChanged -= Wrapper;
+                    }
+                }
+            }
+
+            private sealed class OwnerRegistration : IWorldRegistration
+            {
+                private readonly IWorldRegistration registration;
+                private IDisposable? lifetimeLease;
+
+                public OwnerRegistration(IWorldRegistration registration, IDisposable lifetimeLease)
+                {
+                    this.registration = registration;
+                    this.lifetimeLease = lifetimeLease;
+                }
+
+                public string Id => registration.Id;
+                public WorldRegistrationKind Kind => registration.Kind;
+                public bool IsActive => lifetimeLease != null && registration.IsActive;
+
+                public void Dispose()
+                {
+                    Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
+                }
+            }
+
+            private sealed class SessionEndedSubscription : IDisposable
+            {
+                private WorldsService? service;
+                private readonly Action<WorldSessionEnd> handler;
+
+                public SessionEndedSubscription(WorldsService service, Action<WorldSessionEnd> handler)
+                {
+                    this.service = service;
+                    this.handler = handler;
+                    Wrapper = session => this.handler(session);
+                }
+
+                public Action<WorldSessionEnd> Wrapper { get; }
+                public bool Matches(Action<WorldSessionEnd> candidate) => handler == candidate;
+
+                public void Dispose()
+                {
+                    var current = Interlocked.Exchange(ref service, null);
+                    if (current != null)
+                    {
+                        current.SessionEnded -= Wrapper;
+                    }
+                }
+            }
+        }
+
         private sealed class PendingCustomWorld
         {
-            public PendingCustomWorld(WorldDefinition world, ICustomWorldContent content, GameObject contentRootOrPrefab, bool isInstance)
+            public PendingCustomWorld(WorldDefinition world, ICustomWorldContent content)
             {
                 World = world;
                 Content = content;
-                ContentRootOrPrefab = contentRootOrPrefab;
-                IsInstance = isInstance;
             }
 
             public WorldDefinition World { get; }
             public ICustomWorldContent Content { get; }
 
-            /// <summary>A live scene instance when <see cref="IsInstance"/>, otherwise a prefab asset.</summary>
-            public GameObject ContentRootOrPrefab { get; }
+        }
 
-            public bool IsInstance { get; }
+        internal sealed class WorldLoadResult
+        {
+            private WorldLoadResult(bool ok, WorldSession? session, string message)
+            {
+                Ok = ok;
+                Session = session;
+                Message = message;
+            }
+
+            public bool Ok { get; }
+            public WorldSession? Session { get; }
+            public string Message { get; }
+
+            public static WorldLoadResult Success(WorldSession session, string message) =>
+                new WorldLoadResult(true, session, message);
+
+            public static WorldLoadResult Fail(string message) =>
+                new WorldLoadResult(false, null, message);
         }
     }
 }

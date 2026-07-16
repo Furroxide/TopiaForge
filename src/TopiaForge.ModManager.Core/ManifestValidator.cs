@@ -9,6 +9,25 @@ namespace TopiaForge.ModManager.Core
     public static class ManifestValidator
     {
         private static readonly Regex IdRegex = new Regex("^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$", RegexOptions.Compiled);
+        private static readonly Regex ContentTargetRegex = new Regex("^[a-z0-9][a-z0-9_.-]{0,63}$", RegexOptions.Compiled);
+        private static readonly Regex Sha256Regex = new Regex("^[A-Fa-f0-9]{64}$", RegexOptions.Compiled);
+        private static readonly HashSet<string> KnownCapabilities = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "asset-bundles", "filesystem", "filesystem-watch", "harmony-patch", "hud", "input",
+            "navigation", "network", "microphone", "particles", "physics", "physics-settings",
+            "player-control", "player-token", "prompt-overrides", "quality-settings", "remote-ai",
+            "render-settings", "robot-spawning", "scene-management", "speech-to-text", "time",
+            "ugc-livesync", "unsafe-native", "world-service"
+        };
+        private static readonly HashSet<string> KnownPlatforms = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "windows", "macos", "linux"
+        };
+        private static readonly HashSet<string> KnownArchitectures = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "x64", "arm64"
+        };
+        private const int MaxDependencies = 128;
         private static readonly string[] RetiredEcosystemIdPrefixes =
         {
             StringFromCodeUnits(114, 111, 98, 111, 116, 111, 112, 105, 97, 46),
@@ -40,25 +59,32 @@ namespace TopiaForge.ModManager.Core
                 errors.Add(field + " is not supported by the TopiaForge manifest contract.");
             }
 
-            if (manifest.SchemaVersion != 3)
+            if (manifest.SchemaVersion != 4)
             {
-                errors.Add("schemaVersion must be 3.");
+                errors.Add("schemaVersion must be 4.");
             }
+
+            ValidateStringLength(manifest.SchemaUrl, "$schema", 0, 512, required: false, errors);
 
             if (!IsValidId(manifest.Id))
             {
                 errors.Add("name must be 2-64 characters and contain only letters, numbers, underscore, dot, or dash.");
             }
 
-            if (string.IsNullOrWhiteSpace(manifest.Name))
-            {
-                errors.Add("displayName is required.");
-            }
+            ValidateStringLength(manifest.Name, "displayName", 1, 128, required: true, errors);
 
             if (manifest.Author == null || string.IsNullOrWhiteSpace(manifest.Author.Name))
             {
                 errors.Add("author.name is required.");
             }
+            else
+            {
+                ValidateStringLength(manifest.Author.Name, "author.name", 1, 128, required: true, errors);
+                ValidateStringLength(manifest.Author.Email, "author.email", 0, 254, required: false, errors);
+                ValidateStringLength(manifest.Author.Url, "author.url", 0, 2048, required: false, errors);
+            }
+
+            ValidateStringLength(manifest.Description, "description", 0, 4096, required: false, errors);
 
             if (!VersionUtil.TryParse(manifest.Version, out _))
             {
@@ -74,28 +100,14 @@ namespace TopiaForge.ModManager.Core
                 seen: assemblyPaths,
                 errors);
 
-            if (string.IsNullOrWhiteSpace(manifest.EntryType))
-            {
-                errors.Add("entryType is required for C# mods.");
-            }
+            ValidateStringLength(manifest.EntryType, "entryType", 1, 512, required: true, errors);
 
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var dependency in VpmDependencies(manifest))
-            {
-                ValidateDependency(dependency, "vpmDependencies", seen, errors);
-            }
-
-            foreach (var dependency in manifest.Dependencies ?? new List<ModDependency>())
-            {
-                ValidateDependency(dependency, "dependencies", seen, errors);
-            }
-
-            foreach (var dependency in manifest.OptionalDependencies ?? new List<ModDependency>())
-            {
-                ValidateDependency(dependency, "optionalDependencies", seen, errors);
-            }
+            ValidateDependencies(manifest.Dependencies, "dependencies", seen, errors);
+            ValidateDependencies(manifest.OptionalDependencies, "optionalDependencies", seen, errors);
 
             seen.Clear();
+            ValidateCount(manifest.Conflicts, "conflicts", MaxDependencies, errors);
             foreach (var conflict in manifest.Conflicts ?? new List<ModConflict>())
             {
                 if (conflict.HasUnsupportedVersion)
@@ -118,15 +130,13 @@ namespace TopiaForge.ModManager.Core
                 {
                     errors.Add("conflict '" + conflict.Id + "' has an invalid versionRange.");
                 }
+
+                ValidateStringLength(conflict.VersionRange, "conflicts.versionRange", 1, 256, required: false, errors);
+                ValidateStringLength(conflict.Reason, "conflicts.reason", 0, 512, required: false, errors);
             }
 
-            foreach (var loadAfterId in manifest.LoadAfter ?? new List<string>())
-            {
-                if (!IsValidId(loadAfterId))
-                {
-                    errors.Add("loadAfter id '" + loadAfterId + "' must use the safe mod id format.");
-                }
-            }
+            ValidateRelatedIds(manifest.Id, manifest.LoadAfter, "loadAfter", errors);
+            ValidateRelatedIds(manifest.Id, manifest.LoadBefore, "loadBefore", errors);
 
             ValidateGameCompatibility(manifest.SupportedGameVersionRange, context, errors);
 
@@ -144,8 +154,29 @@ namespace TopiaForge.ModManager.Core
                 context.SdkVersion,
                 errors);
 
-            ValidateLicenseFiles(manifest.LicenseFiles, errors);
+            ValidateStringLength(manifest.Category, "category", 0, 64, required: false, errors);
+            ValidateStringLength(manifest.Homepage, "homepage", 0, 2048, required: false, errors);
+            ValidateStringLength(manifest.Source, "source", 0, 2048, required: false, errors);
+            ValidateStringLength(
+                manifest.License,
+                "license",
+                1,
+                256,
+                required: manifest.LicenseWasPresent,
+                errors);
+            ValidateOptionalPortablePath(manifest.Icon, "icon", manifest.IconWasPresent, errors);
+            ValidateLicenseFiles(manifest.LicenseFiles, manifest.LicenseFilesWasPresent, errors);
             ValidateApiAssemblies(manifest.ApiAssemblies, assemblyPaths, errors);
+            ValidateEnumList(manifest.Capabilities, "capabilities", KnownCapabilities, 64, errors);
+            ValidateEnumList(manifest.Platforms, "platforms", KnownPlatforms, 3, errors);
+            ValidateEnumList(manifest.Architectures, "architectures", KnownArchitectures, 2, errors);
+            ValidateContentTargets(manifest.ContentTargets, errors);
+            errors.AddRange(ManifestRuntimeCompatibility.Evaluate(manifest, context).Errors);
+            ValidateStringList(manifest.Tags, "tags", 64, 1, 64, validatePaths: false, errors);
+            ValidateStringList(manifest.Screenshots, "screenshots", 32, 1, 1024, validatePaths: true, errors);
+            ValidateHashes(manifest.Hashes, errors);
+            ValidateWorldGamemodes(manifest.WorldGamemodes, errors);
+            ValidateBuiltWith(manifest.BuiltWith, errors);
 
             return errors;
         }
@@ -155,8 +186,10 @@ namespace TopiaForge.ModManager.Core
             ManifestValidationContext context,
             List<string> errors)
         {
+            ValidateStringLength(range, "supportedGameVersionRange", 1, 256, required: true, errors);
             if (string.IsNullOrWhiteSpace(range))
             {
+                errors.Add("supportedGameVersionRange is required for publishable manifests.");
                 return;
             }
 
@@ -193,8 +226,10 @@ namespace TopiaForge.ModManager.Core
             string actualVersion,
             List<string> errors)
         {
+            ValidateStringLength(range, fieldName, 1, 256, required: true, errors);
             if (string.IsNullOrWhiteSpace(range))
             {
+                errors.Add(fieldName + " is required for publishable manifests.");
                 return;
             }
 
@@ -208,13 +243,37 @@ namespace TopiaForge.ModManager.Core
             }
         }
 
-        private static void ValidateLicenseFiles(IEnumerable<string>? paths, List<string> errors)
+        private static void ValidateLicenseFiles(
+            IEnumerable<string>? paths,
+            bool wasPresent,
+            List<string> errors)
         {
+            var entries = (paths ?? Array.Empty<string>()).ToList();
+            if (wasPresent && entries.Count == 0)
+            {
+                errors.Add("licenseFiles must contain at least one path when present.");
+            }
+
+            ValidateCount(entries, "licenseFiles", 32, errors);
             var seen = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var path in paths ?? Array.Empty<string>())
+            foreach (var path in entries)
             {
                 ValidatePortablePath(path, "licenseFiles", required: true, requireDll: false, seen, errors);
             }
+        }
+
+        private static void ValidateOptionalPortablePath(
+            string? path,
+            string fieldName,
+            bool wasPresent,
+            List<string> errors)
+        {
+            if (!wasPresent && string.IsNullOrEmpty(path))
+            {
+                return;
+            }
+
+            ValidatePortablePath(path, fieldName, required: true, requireDll: false, seen: null, errors);
         }
 
         private static void ValidateApiAssemblies(
@@ -222,7 +281,9 @@ namespace TopiaForge.ModManager.Core
             HashSet<string> seen,
             List<string> errors)
         {
-            foreach (var path in paths ?? Array.Empty<string>())
+            var entries = (paths ?? Array.Empty<string>()).ToList();
+            ValidateCount(entries, "apiAssemblies", 64, errors);
+            foreach (var path in entries)
             {
                 ValidatePortablePath(path, "apiAssemblies", required: true, requireDll: true, seen, errors);
             }
@@ -263,43 +324,280 @@ namespace TopiaForge.ModManager.Core
             }
         }
 
-        private static IEnumerable<ModDependency> VpmDependencies(ModManifest manifest)
-        {
-            foreach (var entry in manifest.VpmDependencies ?? new Dictionary<string, string>())
-            {
-                yield return new ModDependency
-                {
-                    Id = entry.Key,
-                    VersionRange = entry.Value
-                };
-            }
-        }
-
-        private static void ValidateDependency(
-            ModDependency dependency,
+        private static void ValidateDependencies(
+            IDictionary<string, string>? dependencies,
             string fieldName,
             HashSet<string> seen,
             List<string> errors)
         {
-            if (dependency.HasUnsupportedVersion)
+            ValidateCount(dependencies, fieldName, MaxDependencies, errors);
+            foreach (var entry in dependencies ?? new Dictionary<string, string>())
             {
-                errors.Add("dependency '" + dependency.Id + "' must use versionRange, not version.");
+                ValidateDependency(entry.Key, entry.Value, fieldName, seen, errors);
             }
+        }
 
-            if (!IsValidId(dependency.Id))
+        private static void ValidateDependency(
+            string id,
+            string versionRange,
+            string fieldName,
+            HashSet<string> seen,
+            List<string> errors)
+        {
+            if (!IsValidId(id))
             {
-                errors.Add(fieldName + " id '" + dependency.Id + "' must use the safe mod id format.");
+                errors.Add(fieldName + " id '" + id + "' must use the safe mod id format.");
                 return;
             }
 
-            if (!seen.Add(dependency.Id))
+            if (!seen.Add(id))
             {
-                errors.Add(fieldName + " contains duplicate id '" + dependency.Id + "'.");
+                errors.Add(fieldName + " contains duplicate id '" + id + "'.");
             }
 
-            if (!string.IsNullOrWhiteSpace(dependency.VersionRange) && !VersionUtil.TryParseRange(dependency.VersionRange))
+            if (string.IsNullOrWhiteSpace(versionRange) || !VersionUtil.TryParseRange(versionRange))
             {
-                errors.Add("dependency '" + dependency.Id + "' has an invalid versionRange.");
+                errors.Add("dependency '" + id + "' has an invalid version range.");
+            }
+
+            ValidateStringLength(versionRange, fieldName + "." + id, 1, 256, required: true, errors);
+        }
+
+        private static void ValidateRelatedIds(
+            string ownerId,
+            IEnumerable<string>? ids,
+            string fieldName,
+            List<string> errors)
+        {
+            var values = (ids ?? Array.Empty<string>()).ToList();
+            ValidateCount(values, fieldName, MaxDependencies, errors);
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var id in values)
+            {
+                if (!IsValidId(id))
+                {
+                    errors.Add(fieldName + " id '" + id + "' must use the safe mod id format.");
+                }
+                else if (!seen.Add(id))
+                {
+                    errors.Add(fieldName + " contains duplicate id '" + id + "'.");
+                }
+                else if (string.Equals(ownerId, id, StringComparison.OrdinalIgnoreCase))
+                {
+                    errors.Add(fieldName + " cannot reference the owning mod.");
+                }
+            }
+        }
+
+        private static void ValidateEnumList(
+            IEnumerable<string>? values,
+            string fieldName,
+            ISet<string> known,
+            int maximum,
+            List<string> errors)
+        {
+            var entries = (values ?? Array.Empty<string>()).ToList();
+            ValidateCount(entries, fieldName, maximum, errors);
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var value in entries)
+            {
+                if (!seen.Add(value))
+                {
+                    errors.Add(fieldName + " contains duplicate value '" + value + "'.");
+                }
+                else if (!known.Contains(value))
+                {
+                    errors.Add(fieldName + " contains unknown value '" + value + "'.");
+                }
+            }
+        }
+
+        private static void ValidateContentTargets(IEnumerable<string>? values, List<string> errors)
+        {
+            var entries = (values ?? Array.Empty<string>()).ToList();
+            ValidateCount(entries, "contentTargets", 64, errors);
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var value in entries)
+            {
+                if (!ContentTargetRegex.IsMatch(value))
+                {
+                    errors.Add("contentTargets value '" + value + "' must use lowercase letters, numbers, dot, dash, or underscore.");
+                }
+                else if (!seen.Add(value))
+                {
+                    errors.Add("contentTargets contains duplicate value '" + value + "'.");
+                }
+            }
+        }
+
+        private static void ValidateWorldGamemodes(IEnumerable<ModGamemode>? values, List<string> errors)
+        {
+            var entries = (values ?? Array.Empty<ModGamemode>()).ToList();
+            ValidateCount(entries, "worldGamemodes", 64, errors);
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var gamemode in entries)
+            {
+                if (!IsValidId(gamemode.Id))
+                {
+                    errors.Add("worldGamemodes id '" + gamemode.Id + "' must use the safe mod id format.");
+                }
+                else if (!seen.Add(gamemode.Id))
+                {
+                    errors.Add("worldGamemodes contains duplicate id '" + gamemode.Id + "'.");
+                }
+
+                ValidateStringLength(
+                    gamemode.Name,
+                    "worldGamemodes name for '" + gamemode.Id + "'",
+                    1,
+                    128,
+                    required: true,
+                    errors);
+                ValidateStringLength(
+                    gamemode.Description,
+                    "worldGamemodes description for '" + gamemode.Id + "'",
+                    0,
+                    1024,
+                    required: false,
+                    errors);
+            }
+        }
+
+        private static void ValidateStringList(
+            IEnumerable<string>? values,
+            string fieldName,
+            int maximumCount,
+            int minimumLength,
+            int maximumLength,
+            bool validatePaths,
+            List<string> errors)
+        {
+            var entries = (values ?? Array.Empty<string>()).ToList();
+            ValidateCount(entries, fieldName, maximumCount, errors);
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var value in entries)
+            {
+                if (validatePaths)
+                {
+                    ValidatePortablePath(value, fieldName, required: true, requireDll: false, seen, errors);
+                    continue;
+                }
+
+                ValidateStringLength(value, fieldName, minimumLength, maximumLength, required: true, errors);
+                if (!seen.Add(value))
+                {
+                    errors.Add(fieldName + " contains duplicate value '" + value + "'.");
+                }
+            }
+        }
+
+        private static void ValidateHashes(IDictionary<string, string>? hashes, List<string> errors)
+        {
+            ValidateCount(hashes, "hashes", 8192, errors);
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var entry in hashes ?? new Dictionary<string, string>())
+            {
+                ValidatePortablePath(
+                    entry.Key,
+                    "hashes",
+                    required: true,
+                    requireDll: false,
+                    seen,
+                    errors);
+                if (entry.Value == null || !Sha256Regex.IsMatch(entry.Value))
+                {
+                    errors.Add("hashes value for '" + entry.Key + "' must be a 64-character SHA-256 digest.");
+                }
+            }
+        }
+
+        private static void ValidateStringLength(
+            string? value,
+            string fieldName,
+            int minimum,
+            int maximum,
+            bool required,
+            List<string> errors)
+        {
+            if (string.IsNullOrEmpty(value) || (required && string.IsNullOrWhiteSpace(value)))
+            {
+                if (required)
+                {
+                    errors.Add(fieldName + " is required.");
+                }
+
+                return;
+            }
+
+            var length = UnicodeScalarLength(value!);
+            if (length < minimum || length > maximum)
+            {
+                errors.Add(
+                    fieldName + " must contain between " + minimum + " and " + maximum + " Unicode characters.");
+            }
+        }
+
+        private static int UnicodeScalarLength(string value)
+        {
+            var length = 0;
+            for (var index = 0; index < value.Length; index++)
+            {
+                if (char.IsHighSurrogate(value[index]) &&
+                    index + 1 < value.Length &&
+                    char.IsLowSurrogate(value[index + 1]))
+                {
+                    index++;
+                }
+
+                length++;
+            }
+
+            return length;
+        }
+
+        private static void ValidateBuiltWith(ModBuildMetadata? metadata, List<string> errors)
+        {
+            if (metadata == null)
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(metadata.SdkVersion) &&
+                string.IsNullOrWhiteSpace(metadata.LoaderVersion) &&
+                string.IsNullOrWhiteSpace(metadata.GameVersion) &&
+                string.IsNullOrWhiteSpace(metadata.ToolVersion))
+            {
+                errors.Add("builtWith must contain at least one version.");
+                return;
+            }
+
+            ValidateExactVersion(metadata.SdkVersion, "builtWith.sdkVersion", errors);
+            ValidateExactVersion(metadata.LoaderVersion, "builtWith.loaderVersion", errors);
+            ValidateExactVersion(metadata.GameVersion, "builtWith.gameVersion", errors);
+            ValidateExactVersion(metadata.ToolVersion, "builtWith.toolVersion", errors);
+        }
+
+        private static void ValidateExactVersion(string value, string fieldName, List<string> errors)
+        {
+            if (!string.IsNullOrWhiteSpace(value) && !VersionUtil.TryParse(value, out _))
+            {
+                errors.Add(fieldName + " must be an exact semantic version.");
+            }
+        }
+
+        private static void ValidateCount<T>(ICollection<T>? values, string fieldName, int maximum, List<string> errors)
+        {
+            if (values != null && values.Count > maximum)
+            {
+                errors.Add(fieldName + " cannot contain more than " + maximum + " entries.");
+            }
+        }
+
+        private static void ValidateCount<TKey, TValue>(IDictionary<TKey, TValue>? values, string fieldName, int maximum, List<string> errors)
+        {
+            if (values != null && values.Count > maximum)
+            {
+                errors.Add(fieldName + " cannot contain more than " + maximum + " entries.");
             }
         }
 

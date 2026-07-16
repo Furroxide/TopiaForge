@@ -167,6 +167,14 @@ namespace TopiaForge.ModManager.Core
                         softEdges.Add((1, manifest.Id, after));
                     }
                 }
+
+                foreach (var before in manifest.LoadBefore ?? new List<string>())
+                {
+                    if (graph.ContainsKey(before))
+                    {
+                        softEdges.Add((1, before, manifest.Id));
+                    }
+                }
             }
 
             foreach (var edge in softEdges
@@ -305,11 +313,10 @@ namespace TopiaForge.ModManager.Core
             return true;
         }
 
-        /// <summary>All hard dependencies of a manifest: vpmDependencies plus non-optional dependencies.</summary>
+        /// <summary>All hard dependencies declared by a manifest.</summary>
         public static IEnumerable<ModDependency> GetRequiredDependencies(ModManifest manifest)
         {
-            return VpmDependencies(manifest)
-                .Concat((manifest.Dependencies ?? new List<ModDependency>()).Where(dependency => !dependency.Optional));
+            return Dependencies(manifest.Dependencies);
         }
 
         /// <summary>
@@ -333,14 +340,12 @@ namespace TopiaForge.ModManager.Core
 
         private static IEnumerable<ModDependency> OptionalDependencies(ModManifest manifest)
         {
-            return (manifest.Dependencies ?? new List<ModDependency>())
-                .Where(dependency => dependency.Optional)
-                .Concat(manifest.OptionalDependencies ?? new List<ModDependency>());
+            return Dependencies(manifest.OptionalDependencies);
         }
 
-        private static IEnumerable<ModDependency> VpmDependencies(ModManifest manifest)
+        private static IEnumerable<ModDependency> Dependencies(IDictionary<string, string>? dependencies)
         {
-            foreach (var entry in manifest.VpmDependencies ?? new Dictionary<string, string>())
+            foreach (var entry in dependencies ?? new Dictionary<string, string>())
             {
                 yield return new ModDependency
                 {

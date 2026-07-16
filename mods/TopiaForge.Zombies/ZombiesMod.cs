@@ -1,84 +1,151 @@
 using System;
-using System.Reflection;
 using TopiaForge.Mods;
 
 namespace TopiaForge.Zombies
 {
-    public sealed class ZombiesMod : ITopiaForgeMod
+    /// <summary>Robot wave-survival gamemode authored entirely against V1 SDK contracts.</summary>
+    public sealed class ZombiesMod : TopiaForgeMod
     {
+        /// <summary>Gets the stable Zombies gamemode id.</summary>
         public const string GamemodeId = "io.github.furroxide.topiaforge.zombies.survival";
+
         private const string MenuEntryId = "io.github.furroxide.topiaforge.zombies.menu";
 
-        private IModContext? context;
-        private ZombiesConfig? config;
+        private static readonly ConfigDefinition<ZombiesConfig> ConfigContract =
+            new ConfigDefinition<ZombiesConfig>(
+                1,
+                () => new ZombiesConfig(),
+                value =>
+                {
+                    value.Normalize();
+                    return OperationResult<bool>.Success(true);
+                });
+
+        private ZombiesConfig config = new ZombiesConfig();
         private IWorldGamemodeService? worlds;
+        private IRobotAgentService? robots;
         private ZombiesController? controller;
-        private IDisposable? restartPauseAction;
+        private IDisposable? controllerLifetime;
+        private IDisposable? pauseActionLifetime;
 
-        public void OnLoad(IModContext context)
+        /// <inheritdoc />
+        protected override void OnLoad()
         {
-            this.context = context;
-            config = context.LoadConfig(new ZombiesConfig());
-            config.Normalize();
-            context.SaveConfig(config);
+            LoadConfig();
+            RegisterCommands();
 
-            worlds = context.GetService<IWorldGamemodeService>();
-            if (worlds == null)
+            if (!Context.Extensions.TryGet<IWorldGamemodeService>(out var worldsService)
+                || worldsService == null)
             {
-                context.Logger.Warn("TopiaForge Worlds service is not available; Zombies cannot register its gamemode.");
+                Context.Logger.Warn("The Worlds module is unavailable; Zombies cannot register its gamemode.");
+                return;
+            }
+            worlds = worldsService;
+
+            if (!Context.Extensions.TryGet<IRobotAgentService>(out var robotService)
+                || robotService == null)
+            {
+                Context.Logger.Warn("RobotKit is unavailable; Zombies cannot create infected robot entities.");
+                return;
+            }
+            robots = robotService;
+
+            EnsureRegistered(worldsService.RegisterGamemode(new GamemodeDefinition(
+                GamemodeId,
+                "Zombies",
+                "Survive escalating waves of infected robots with the SDK zapper.")), "gamemode");
+            EnsureRegistered(worldsService.RegisterMenuEntry(new GamemodeMenuEntry(
+                MenuEntryId,
+                "Zombies",
+                "Safe-SDK robot wave survival.",
+                GamemodeId,
+                config.TargetWorldId)), "menu entry");
+
+            worldsService.SessionChanged += OnSessionChanged;
+            worldsService.SessionEnded += OnSessionEnded;
+            Context.Lifetime.Defer(() =>
+            {
+                worldsService.SessionChanged -= OnSessionChanged;
+                worldsService.SessionEnded -= OnSessionEnded;
+            });
+
+            if (worldsService.CurrentSession != null)
+            {
+                OnSessionChanged(worldsService.CurrentSession);
+            }
+
+            Context.Logger.Info("Zombies V1 registered with safe Worlds, RobotKit, Chronos, input, physics, and UI APIs.");
+        }
+
+        /// <inheritdoc />
+        protected override void OnUnload()
+        {
+            StopController();
+        }
+
+        private void LoadConfig()
+        {
+            var loaded = Context.Config.Load(ConfigContract);
+            if (!loaded.TryGetValue(out var value))
+            {
+                Context.Logger.Warn("Zombies config could not be loaded: " + loaded.ErrorMessage);
+                config = new ZombiesConfig();
+                config.Normalize();
+                Context.Config.Save(ConfigContract, config);
                 return;
             }
 
-            worlds.RegisterGamemode(new GamemodeDefinition(
-                GamemodeId,
-                "Zombies",
-                "Survive escalating waves of infected robots with a built-in zapper."));
-            worlds.RegisterMenuEntry(new GamemodeMenuEntry(
-                MenuEntryId,
-                "Zombies",
-                "Survive escalating waves of infected robots with a built-in zapper.",
-                GamemodeId,
-                config.TargetWorldId));
-            TryWriteCatalog(worlds, context.Logger);
-
-            worlds.SessionChanged += OnSessionChanged;
-            worlds.SessionEnded += OnSessionEnded;
-            if (worlds.CurrentSession != null)
+            config = value;
+            config.Normalize();
+            var saved = Context.Config.Save(ConfigContract, config);
+            if (!saved.Succeeded)
             {
-                OnSessionChanged(worlds.CurrentSession);
+                Context.Logger.Warn("Zombies config normalization could not be saved: " + saved.ErrorMessage);
             }
-
-            context.Update += OnUpdate;
-            context.Logger.Info("Zombies gamemode registered.");
         }
 
-        public void OnUnload()
+        private void RegisterCommands()
         {
-            if (context != null)
-            {
-                context.Update -= OnUpdate;
-            }
-
-            if (worlds != null)
-            {
-                worlds.SessionChanged -= OnSessionChanged;
-                worlds.SessionEnded -= OnSessionEnded;
-                if (worlds is IWorldRegistrationService registrations)
-                {
-                    registrations.UnregisterMenuEntry(MenuEntryId);
-                    registrations.UnregisterGamemode(GamemodeId);
-                }
-            }
-
-            StopController();
-            worlds = null;
-            config = null;
-            context = null;
+            RegisterCommand(
+                new CommandDefinition("zombies-restart", "Restart the current Zombies run."),
+                invocation => controller?.Restart()
+                    ?? OperationResult<string>.Failure(ModErrorCode.InvalidState, "Start the Zombies gamemode first."));
+            RegisterCommand(
+                new CommandDefinition("zombies-stand-down", "Temporarily halt the infected robot horde."),
+                invocation => controller?.BroadcastStandDown()
+                    ?? OperationResult<string>.Failure(ModErrorCode.InvalidState, "Start the Zombies gamemode first."));
+            RegisterCommand(
+                new CommandDefinition("zombies-status", "Describe the current Zombies run."),
+                invocation => controller == null
+                    ? OperationResult<string>.Failure(ModErrorCode.InvalidState, "Start the Zombies gamemode first.")
+                    : OperationResult<string>.Success(controller.DescribeStatus()));
         }
 
-        private void OnUpdate(float deltaTime)
+        private void RegisterCommand(
+            CommandDefinition definition,
+            Func<CommandInvocation, OperationResult<string>> handler)
         {
-            controller?.Update(deltaTime);
+            var result = Context.Commands.Register(definition, handler);
+            if (!result.Succeeded)
+            {
+                Context.Logger.Warn("Could not register /" + definition.Name + ": " + result.ErrorMessage);
+            }
+        }
+
+        private void EnsureRegistered(
+            OperationResult<IWorldRegistration> result,
+            string description)
+        {
+            if (result.Succeeded)
+            {
+                return;
+            }
+
+            Context.Diagnostics.Report(new DiagnosticEntry(
+                "ZOMBIES_REGISTRATION_FAILED",
+                "The Zombies " + description + " could not be registered.",
+                DiagnosticSeverity.Error,
+                result.ErrorMessage));
         }
 
         private void OnSessionChanged(WorldSession session)
@@ -89,63 +156,52 @@ namespace TopiaForge.Zombies
                 return;
             }
 
-            if (context == null || config == null)
+            if (robots == null)
             {
                 return;
             }
 
             StopController();
-            controller = new ZombiesController(context, config);
-            // Route the controller's self-terminating exit (game-over "RETURN TO MENU") through the Worlds
-            // session so the provider also clears CurrentSession/arena; its SessionEnded event then reaches
-            // OnSessionEnded below, which stops the controller. The direct StopController after it is the
-            // fallback for a session the provider no longer tracks (EndSession no-ops). Re-entrancy is safe:
-            // EndSession clears the session before firing, and StopController/Dispose are guarded.
-            controller.SessionEnded = () =>
-            {
-                worlds?.EndSession(WorldSessionEndReason.EndedByGamemode);
-                StopController();
-            };
-            controller.Start(session);
+            controller = new ZombiesController(
+                Context,
+                config,
+                robots,
+                () => worlds?.EndSession(WorldSessionEndReason.EndedByGamemode));
+            controllerLifetime = Context.Lifetime.Track(controller);
 
-            // Surface a confirmed run restart in the TopiaForgeUi pause companion while our session runs. The vanilla exit
-            // button needs no interceptor: the default (end the session, then exit) is exactly what we want.
-            var pauseMenu = context.GetService<IWorldPauseMenuService>();
-            restartPauseAction = pauseMenu?.RegisterAction(new WorldPauseAction(
-                "io.github.furroxide.topiaforge.zombies.restart",
-                "RESTART RUN",
-                () => controller?.Restart(),
-                closePauseMenu: true,
-                order: 0,
-                destructive: true));
+            if (Context.Extensions.TryGet<IWorldPauseMenuService>(out var pauseMenu)
+                && pauseMenu != null)
+            {
+                var result = pauseMenu.RegisterAction(new WorldPauseAction(
+                    "zombies-restart",
+                    "RESTART RUN",
+                    () => controller?.Restart(),
+                    closePauseMenu: true,
+                    order: 0,
+                    destructive: true));
+                if (result.TryGetValue(out var registration))
+                {
+                    pauseActionLifetime = registration;
+                }
+                else
+                {
+                    Context.Logger.Debug("Zombies pause action unavailable: " + result.ErrorMessage);
+                }
+            }
         }
 
-        private void OnSessionEnded(WorldSessionEnd end)
+        private void OnSessionEnded(WorldSessionEnd ended)
         {
             StopController();
         }
 
         private void StopController()
         {
-            restartPauseAction?.Dispose();
-            restartPauseAction = null;
-            controller?.Dispose();
+            pauseActionLifetime?.Dispose();
+            pauseActionLifetime = null;
+            controllerLifetime?.Dispose();
+            controllerLifetime = null;
             controller = null;
-        }
-
-        private static void TryWriteCatalog(IWorldGamemodeService worlds, IModLogger logger)
-        {
-            try
-            {
-                var method = worlds.GetType().GetMethod(
-                    "WriteCatalog",
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-                method?.Invoke(worlds, Array.Empty<object>());
-            }
-            catch (Exception ex)
-            {
-                logger.Debug("Zombies could not refresh the Worlds catalog: " + ex.Message);
-            }
         }
     }
 }

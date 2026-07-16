@@ -168,7 +168,7 @@ namespace TopiaForge.ModManager
                 detailPane.Label("Load failure: " + loadFailure, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Danger);
             }
 
-            detailPane.Label("Permissions: " + string.Join(", ", manifest.Permissions.ToArray()), TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Muted);
+            detailPane.Label("Capabilities: " + string.Join(", ", manifest.Capabilities.ToArray()), TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Muted);
 
             var actions = detailPane.Row(TopiaForgeGap.Sm);
             actions.FixedHeight(TopiaForgeTokens.ControlHeight);

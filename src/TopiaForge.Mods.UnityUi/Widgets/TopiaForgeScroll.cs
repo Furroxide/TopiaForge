@@ -88,17 +88,20 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Add children here.</summary>
         public TopiaForgeContainer Content { get; }
 
+        /// <summary>Scrolls to the beginning of the content.</summary>
         public void ScrollToTop()
         {
             scrollRect.verticalNormalizedPosition = 1f;
         }
 
+        /// <summary>Scrolls to the end of the content.</summary>
         public void ScrollToEnd()
         {
             Canvas.ForceUpdateCanvases();
             scrollRect.verticalNormalizedPosition = 0f;
         }
 
+        /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
             scrollbarTrack.color = theme.SurfaceSunken;

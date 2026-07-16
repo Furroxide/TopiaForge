@@ -6,13 +6,35 @@
     <RootNamespace>TopiaForge.ModManager.Tests</RootNamespace>
   </PropertyGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(TestingKitOnly)' != 'true'">
+    <Compile Remove="TestingKitFocusedProgram.cs" />
     <ProjectReference Include="..\..\src\TopiaForge.ModManager.Core\TopiaForge.ModManager.Core.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Interop.Unity\TopiaForge.Mods.Interop.Unity.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Chronos\TopiaForge.Mods.Chronos.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Prompts\TopiaForge.Mods.Prompts.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.RobotKit\TopiaForge.Mods.RobotKit.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Ugc\TopiaForge.Mods.Ugc.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Worlds\TopiaForge.Mods.Worlds.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Testing\TopiaForge.Mods.Testing.csproj" />
     <!-- Unity-free, GameCode-free game-compat core: lets the offline CI gate (GameCompatTests) diff the checked-in
          binding manifests against the checked-in surface baseline without ever loading the game DLL. -->
     <ProjectReference Include="..\..\src\TopiaForge.GameCompat.Surface\TopiaForge.GameCompat.Surface.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.GameCompat.Extractor\TopiaForge.GameCompat.Extractor.csproj" />
+    <ProjectReference Include="..\TopiaForge.ValidTestMod\TopiaForge.ValidTestMod.csproj" />
+    <ProjectReference Include="..\TopiaForge.ValidTestMod.Api\TopiaForge.ValidTestMod.Api.csproj" />
+    <!-- ModContext's opt-in interop implementation mentions Unity types. Copy only the two reference
+         assemblies needed to load that internal type while exercising the manager context off-game. -->
+    <Reference Include="UnityEngine" HintPath="$(RobotopiaManagedDir)\UnityEngine.dll" Private="true" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.CoreModule.dll" Private="true" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="TopiaForge.RobotopiaManagedDir" Value="$(RobotopiaManagedDir)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TestingKitOnly)' == 'true'">
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Testing\TopiaForge.Mods.Testing.csproj" />
   </ItemGroup>
 
   <!-- Compile the UGC live-sync mod's Unity-free logic directly into the test assembly so the service state
@@ -20,7 +42,6 @@
        Unity-free files are included; UgcGameBridge/overlay/mod entry (which touch UnityEngine) are excluded. -->
   <ItemGroup>
     <Compile Include="..\..\mods\Shared\SafeEvent.cs" />
-    <Compile Include="..\..\mods\TopiaForge.Assets\AssetBundlePathPolicy.cs" />
     <Compile Include="..\..\mods\Shared\UgcNoOpLaunchRequest.cs" />
     <Compile Include="..\..\mods\TopiaForge.UgcLiveSync\UgcLiveSyncBridge.cs" />
     <Compile Include="..\..\mods\TopiaForge.UgcLiveSync\UgcCommandPollGate.cs" />
@@ -48,6 +69,7 @@
        safety remain executable without loading Unity/GameCode assemblies. -->
   <ItemGroup>
     <Compile Include="..\..\mods\TopiaForge.GravityGun\GravityGunConfig.cs" />
+    <Compile Include="..\..\mods\TopiaForge.GravityGun\GravityGunController.cs" />
     <Compile Include="..\..\mods\TopiaForge.NoFeedbackUrl\NoFeedbackUrlConfig.cs" />
     <Compile Include="..\..\mods\TopiaForge.PerfFixes\PerfFixesConfig.cs" />
     <Compile Include="..\..\mods\TopiaForge.Performance\PerformanceConfig.cs" />
@@ -87,7 +109,6 @@
   <!-- Worlds auto-load routing is pure SDK policy; compile just that helper so the launcher-to-runtime selection
        contract can be regression-tested without loading UnityEngine or GameCode. -->
   <ItemGroup>
-    <Compile Include="..\..\mods\TopiaForge.Worlds\SceneClaimMatcher.cs" />
     <Compile Include="..\..\mods\TopiaForge.Worlds\SceneTransitionTracker.cs" />
     <Compile Include="..\..\mods\TopiaForge.Worlds\MainThreadDispatchQueue.cs" />
     <Compile Include="..\..\mods\TopiaForge.Worlds\WorldAutoLoadRouter.cs" />
@@ -99,7 +120,14 @@
     <Compile Include="..\..\src\TopiaForge.ModManager\SceneCoordinator.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\ModServiceRegistry.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\OwnerBoundModServiceRegistry.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\OwnerModLifetime.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\RuntimeInfo.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\RuntimeCapabilityProbe.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\GameplayContextServices.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\UnityMainThreadGuard.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\UnityTimingServices.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\ModContext.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\OwnerCoreServices.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\InstalledGameVersionReader.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\ModAssemblyResolutionCatalog.cs" />
   </ItemGroup>
@@ -127,5 +155,24 @@
   <ItemGroup>
     <EmbeddedResource Include="..\..\baselines\topiaforge.mods.abstractions.api.txt"
                       LogicalName="TopiaForge.ModManager.Tests.topiaforge.mods.abstractions.api.txt" />
+    <EmbeddedResource Include="..\..\baselines\topiaforge.mods.robotkit.api.txt"
+                      LogicalName="TopiaForge.ModManager.Tests.topiaforge.mods.robotkit.api.txt" />
+    <EmbeddedResource Include="..\..\baselines\topiaforge.mods.worlds.api.txt"
+                      LogicalName="TopiaForge.ModManager.Tests.topiaforge.mods.worlds.api.txt" />
+    <EmbeddedResource Include="..\..\baselines\topiaforge.mods.chronos.api.txt"
+                      LogicalName="TopiaForge.ModManager.Tests.topiaforge.mods.chronos.api.txt" />
+    <EmbeddedResource Include="..\..\baselines\topiaforge.mods.prompts.api.txt"
+                      LogicalName="TopiaForge.ModManager.Tests.topiaforge.mods.prompts.api.txt" />
+    <EmbeddedResource Include="..\..\baselines\topiaforge.mods.ugc.api.txt"
+                      LogicalName="TopiaForge.ModManager.Tests.topiaforge.mods.ugc.api.txt" />
+    <EmbeddedResource Include="..\..\baselines\topiaforge.mods.testing.api.txt"
+                      LogicalName="TopiaForge.ModManager.Tests.topiaforge.mods.testing.api.txt" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TestingKitOnly)' == 'true'">
+    <Compile Remove="@(Compile)" />
+    <EmbeddedResource Remove="@(EmbeddedResource)" />
+    <Compile Include="TestingKitTests.cs" />
+    <Compile Include="TestingKitFocusedProgram.cs" />
   </ItemGroup>
 </Project>

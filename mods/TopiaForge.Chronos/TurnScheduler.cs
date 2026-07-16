@@ -16,16 +16,22 @@ namespace TopiaForge.Chronos
         private ITimeLease? freezeLease;     // held while NOT acting (world frozen); released during an action
         private readonly TurnOrder order;
         private readonly TurnSchedulerOptions options;
+        private readonly string ownerModId;
 
-        private object? currentActor;
+        private TurnActorId? currentActor;
         private TurnState state = TurnState.Idle;
         private float actionTimer;
         private bool ended;
 
-        public TurnScheduler(TimeControlService? service, ITimeLease? freezeLease, TurnSchedulerOptions options)
+        public TurnScheduler(
+            TimeControlService? service,
+            ITimeLease? freezeLease,
+            string ownerModId,
+            TurnSchedulerOptions options)
         {
             this.service = service;
             this.freezeLease = freezeLease;
+            this.ownerModId = ownerModId;
             this.options = options ?? new TurnSchedulerOptions();
             order = new TurnOrder(this.options.EnergyPerTurn);
             if (service == null)
@@ -35,28 +41,35 @@ namespace TopiaForge.Chronos
         }
 
         public TurnState State => state;
-        public object? CurrentActor => currentActor;
+        public TurnActorId? CurrentActor => currentActor;
         public int ActorCount => order.Count;
 
-        public void Register(object actorToken, float speed)
+        public OperationResult<bool> Register(TurnActorId actor, float speed)
         {
             if (ended)
             {
-                return;
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "Turn scheduler has ended.");
             }
 
-            order.Register(actorToken, speed);
+            if (speed <= 0f || float.IsNaN(speed) || float.IsInfinity(speed))
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "Actor speed must be finite and positive.");
+            }
+
+            return order.Register(actor, speed)
+                ? OperationResult<bool>.Success(true)
+                : OperationResult<bool>.Failure(ModErrorCode.Conflict, "Actor is already registered.");
         }
 
-        public void Unregister(object actorToken)
+        public OperationResult<bool> Unregister(TurnActorId actor)
         {
             if (ended)
             {
-                return;
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "Turn scheduler has ended.");
             }
 
-            order.Unregister(actorToken);
-            if (ReferenceEquals(actorToken, currentActor))
+            var removed = order.Unregister(actor);
+            if (currentActor == actor)
             {
                 // The acting/awaiting actor left — cancel its turn and re-freeze if we'd lifted.
                 if (state == TurnState.Acting)
@@ -67,13 +80,17 @@ namespace TopiaForge.Chronos
                 currentActor = null;
                 state = TurnState.Idle;
             }
+
+            return OperationResult<bool>.Success(removed);
         }
 
-        public void BeginAction()
+        public OperationResult<bool> BeginAction()
         {
-            if (ended || state != TurnState.AwaitingAction || currentActor == null)
+            if (ended || state != TurnState.AwaitingAction || !currentActor.HasValue)
             {
-                return;
+                return OperationResult<bool>.Failure(
+                    ModErrorCode.InvalidState,
+                    "No actor is awaiting an action.");
             }
 
             state = TurnState.Acting;
@@ -81,23 +98,27 @@ namespace TopiaForge.Chronos
             // Lift the freeze so the active actor's native locomotion runs this turn.
             freezeLease?.Release();
             freezeLease = null;
+            return OperationResult<bool>.Success(true);
         }
 
-        public void EndAction()
+        public OperationResult<bool> EndAction()
         {
             if (ended || state != TurnState.Acting)
             {
-                return;
+                return OperationResult<bool>.Failure(
+                    ModErrorCode.InvalidState,
+                    "No actor action is currently running.");
             }
 
-            if (currentActor != null)
+            if (currentActor.HasValue)
             {
-                order.SpendTurn(currentActor);
+                order.SpendTurn(currentActor.Value);
             }
 
             ReFreeze();
             currentActor = null;
             state = TurnState.Idle;
+            return OperationResult<bool>.Success(true);
         }
 
         public void Tick(float controlDeltaTime)
@@ -164,7 +185,7 @@ namespace TopiaForge.Chronos
         {
             if (freezeLease == null && service != null)
             {
-                freezeLease = service.Freeze("turn-based:between-turns");
+                freezeLease = service.Freeze(ownerModId, "turn-based:between-turns");
             }
         }
     }

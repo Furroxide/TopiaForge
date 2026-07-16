@@ -71,11 +71,13 @@ namespace TopiaForge.Mods.UnityUi
             Pump();
         }
 
+        /// <summary>Shows a success toast.</summary>
         public static void Success(string text)
         {
             Show(text, TopiaForgeTone.Success);
         }
 
+        /// <summary>Writes an error message.</summary>
         public static void Error(string text)
         {
             Show(text, TopiaForgeTone.Danger, 5f);

@@ -5,21 +5,22 @@ using TopiaForge.Mods;
 
 namespace TopiaForge.NoFeedbackUrl
 {
-    public sealed class NoFeedbackUrlMod : ITopiaForgeMod
+    public sealed class NoFeedbackUrlMod : TopiaForgeMod
     {
         private const string HarmonyId = "io.github.furroxide.topiaforge.no-feedback-url.harmony";
+        private static readonly ConfigDefinition<NoFeedbackUrlConfig> Config =
+            new ConfigDefinition<NoFeedbackUrlConfig>(1, () => new NoFeedbackUrlConfig());
 
         private static bool allowFeedbackPageLaunchThisSession;
         private static IModLogger? logger;
 
-        private IModContext? context;
         private Harmony? harmony;
 
-        public void OnLoad(IModContext context)
+        /// <inheritdoc/>
+        protected override void OnLoad()
         {
-            this.context = context;
-            logger = context.Logger;
-            allowFeedbackPageLaunchThisSession = ConfigureLaunchPolicy(context);
+            logger = Context.Logger;
+            allowFeedbackPageLaunchThisSession = ConfigureLaunchPolicy(Context);
 
             harmony = new Harmony(HarmonyId);
 
@@ -28,7 +29,7 @@ namespace TopiaForge.NoFeedbackUrl
                 BindingFlags.Public | BindingFlags.Static);
             if (target == null)
             {
-                context.Logger.Warn("Could not find OpenFeedBackURL.OpenFeedbackTask; feedback URL suppression is inactive.");
+                Context.Logger.Warn("Could not find OpenFeedBackURL.OpenFeedbackTask; feedback URL suppression is inactive.");
                 return;
             }
 
@@ -37,29 +38,29 @@ namespace TopiaForge.NoFeedbackUrl
                 BindingFlags.NonPublic | BindingFlags.Static);
             if (prefix == null)
             {
-                context.Logger.Warn("Could not find feedback URL suppression prefix; feedback URL suppression is inactive.");
+                Context.Logger.Warn("Could not find feedback URL suppression prefix; feedback URL suppression is inactive.");
                 return;
             }
 
             harmony.Patch(target, prefix: new HarmonyMethod(prefix));
-            context.Logger.Info("No Feedback URL loaded.");
+            Context.Logger.Info("No Feedback URL loaded.");
         }
 
-        public void OnUnload()
+        /// <inheritdoc/>
+        protected override void OnUnload()
         {
             try
             {
                 harmony?.UnpatchSelf();
-                context?.Logger.Info("No Feedback URL unloaded.");
+                Context.Logger.Info("No Feedback URL unloaded.");
             }
             catch (Exception ex)
             {
-                context?.Logger.Error(ex, "Failed to unpatch No Feedback URL.");
+                Context.Logger.Error(ex, "Failed to unpatch No Feedback URL.");
             }
             finally
             {
                 harmony = null;
-                context = null;
                 logger = null;
                 allowFeedbackPageLaunchThisSession = false;
             }
@@ -79,7 +80,14 @@ namespace TopiaForge.NoFeedbackUrl
 
         private static bool ConfigureLaunchPolicy(IModContext context)
         {
-            var config = context.LoadConfig(new NoFeedbackUrlConfig());
+            var configResult = context.Config.Load(Config);
+            if (!configResult.TryGetValue(out var config))
+            {
+                context.Logger.Error(
+                    $"NoFeedbackUrl configuration could not be loaded ({configResult.ErrorCode}): {configResult.ErrorMessage}");
+                return false;
+            }
+
             if (config.HasSeenFirstLaunch)
             {
                 context.Logger.Info("First game launch has already occurred. Shutdown feedback page launches will be suppressed.");
@@ -87,7 +95,12 @@ namespace TopiaForge.NoFeedbackUrl
             }
 
             config.HasSeenFirstLaunch = true;
-            context.SaveConfig(config);
+            var saveResult = context.Config.Save(Config, config);
+            if (!saveResult.Succeeded)
+            {
+                context.Logger.Warn(
+                    $"Could not persist first-launch state ({saveResult.ErrorCode}): {saveResult.ErrorMessage}");
+            }
             context.Logger.Info("First game launch detected. Shutdown feedback page launch will be allowed once this session.");
             return true;
         }

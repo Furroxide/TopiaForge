@@ -5,8 +5,10 @@ namespace TopiaForge.Mods.UnityUi
     /// <summary>A surface Escape can dismiss (windows, modals).</summary>
     public interface ITopiaForgeDismissable
     {
+        /// <summary>Gets band.</summary>
         TopiaForgeLayerBand Band { get; }
 
+        /// <summary>Dismisses the active UI element.</summary>
         void Dismiss();
     }
 
@@ -20,8 +22,10 @@ namespace TopiaForge.Mods.UnityUi
     {
         private static readonly List<ITopiaForgeDismissable> Entries = new List<ITopiaForgeDismissable>();
 
+        /// <summary>Gets count.</summary>
         public static int Count => Entries.Count;
 
+        /// <summary>Pushes a dismissible layer and returns its ownership token.</summary>
         public static void Push(ITopiaForgeDismissable entry)
         {
             if (!Entries.Contains(entry))
@@ -31,6 +35,7 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
+        /// <summary>Removes the specified state entry.</summary>
         public static void Remove(ITopiaForgeDismissable entry)
         {
             Entries.Remove(entry);

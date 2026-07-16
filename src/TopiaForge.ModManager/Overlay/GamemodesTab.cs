@@ -102,10 +102,10 @@ namespace TopiaForge.ModManager
                 text.Flex(1f, 0f);
                 text.Label(entry.Title.ToUpperInvariant(), TopiaForgeTextStyle.Heading);
                 text.Label(entry.Description, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Muted);
-                var play = row.Button("PLAY", () =>
+                var play = row.Button("PLAY", async () =>
                 {
                     var selectedWorldId = worlds[selectedWorldIndex].Id;
-                    var (ok, message) = context.Plugin.LaunchGamemodeSelection(
+                    var (ok, message) = await context.Plugin.LaunchGamemodeSelection(
                         entryId,
                         selectedWorldId,
                         gamemodeId,

@@ -9,7 +9,7 @@ namespace TopiaForge.RobotKit
     // stuck, and drives the walk animation. This class is a thin driver around that native walk plus the visual
     // and combat overrides a mod typically needs; everything else (collision, grounding, slopes, separation) is
     // owned by the native LocomotionController.
-    internal sealed class RobotAgent : IRobotAgent
+    internal sealed class RobotAgent : IRobotAgent, INativeEntityAdapter
     {
         private enum Intent
         {
@@ -92,7 +92,8 @@ namespace TopiaForge.RobotKit
         }
 
         public string Id => id;
-        public object GameObject => go;
+        public string Name => go != null ? go.name : string.Empty;
+        public GameObject NativeGameObject => go;
         public bool IsAlive => !despawned && go != null && !GameReflection.HasKilledComponent(go);
         public Vec3 Position => go != null ? ToVec3(transform.position) : Vec3.Zero;
         public Vec3 HeadPosition => ResolveHeadPosition();
@@ -100,11 +101,16 @@ namespace TopiaForge.RobotKit
 
         // Runtime brain switch. To Dormant: suppress the native brain so mod intents take over (the reprogram
         // path). To Autonomous: clear mod intents and best-effort wake the native brain back up.
-        public void SetBrainMode(RobotBrainMode mode)
+        public OperationResult<bool> SetBrainMode(RobotBrainMode mode)
         {
-            if (mode == brainMode || !IsAlive)
+            if (!IsAlive)
             {
-                return;
+                return Unavailable("The robot is no longer alive.");
+            }
+
+            if (mode == brainMode)
+            {
+                return OperationResult<bool>.Success(false);
             }
 
             if (mode == RobotBrainMode.Autonomous)
@@ -114,48 +120,43 @@ namespace TopiaForge.RobotKit
 
             brainMode = mode;
             GameReflection.ApplyBrainMode(go, mode, nativeBrainSnapshot, logger);
+            return OperationResult<bool>.Success(true);
         }
         public bool IsMoving => isMoving;
         public bool HasReachedTarget => hasReachedTarget;
 
-        public float MoveSpeed
+        public float MoveSpeed => moveSpeed;
+        public float TurnSpeed => turnSpeed;
+        public float StopDistance => stopDistance;
+        public RobotGait Gait => gait;
+
+        public OperationResult<bool> ConfigureMovement(RobotMovementSettings settings)
         {
-            get => moveSpeed;
-            set
+            if (settings == null)
             {
-                moveSpeed = Mathf.Max(0f, value);
-                ApplySpeeds();
+                throw new System.ArgumentNullException(nameof(settings));
             }
-        }
 
-        public float TurnSpeed
-        {
-            get => turnSpeed;
-            set
+            if (!IsAlive)
             {
-                turnSpeed = Mathf.Max(0f, value);
-                ApplySpeeds();
+                return Unavailable("The robot is no longer alive.");
             }
+
+            moveSpeed = Mathf.Max(0f, settings.MoveSpeed);
+            turnSpeed = Mathf.Max(0f, settings.TurnSpeed);
+            stopDistance = Mathf.Max(0f, settings.StopDistance);
+            gait = settings.Gait;
+            ApplySpeeds();
+            return OperationResult<bool>.Success(true);
         }
 
-        public float StopDistance
+        public OperationResult<bool> MoveTo(Vec3 position)
         {
-            get => stopDistance;
-            set => stopDistance = Mathf.Max(0f, value);
-        }
-
-        public RobotGait Gait
-        {
-            get => gait;
-            set
+            if (!IsAlive)
             {
-                gait = value;
-                ApplySpeeds();
+                return Unavailable("The robot is no longer alive.");
             }
-        }
 
-        public void MoveTo(Vec3 position)
-        {
             var target = new Vector3(position.X, position.Y, position.Z);
             if (intent != Intent.MoveTo || (moveToPosition - target).sqrMagnitude > 0.04f)
             {
@@ -166,14 +167,17 @@ namespace TopiaForge.RobotKit
             moveToPosition = target;
             chaseTarget = null;
             hasReachedTarget = false;
+            return OperationResult<bool>.Success(true);
         }
 
-        public void Chase(object targetGameObject)
+        public OperationResult<bool> Chase(IEntity targetEntity)
         {
-            var target = targetGameObject as GameObject;
+            var target = (targetEntity as INativeEntityAdapter)?.NativeGameObject;
             if (target == null)
             {
-                return;
+                return OperationResult<bool>.Failure(
+                    ModErrorCode.InvalidArgument,
+                    "The target is not a live native-backed entity.");
             }
 
             if (intent != Intent.Chase || !ReferenceEquals(chaseTarget, target))
@@ -184,21 +188,29 @@ namespace TopiaForge.RobotKit
 
             intent = Intent.Chase;
             chaseTarget = target;
+            return OperationResult<bool>.Success(true);
         }
 
-        public void Stop()
+        public OperationResult<bool> Stop()
         {
+            if (!IsAlive)
+            {
+                return Unavailable("The robot is no longer alive.");
+            }
+
+            var changed = intent != Intent.None || isMoving;
             intent = Intent.None;
             chaseTarget = null;
             hasReachedTarget = false;
             CancelWalk();
+            return OperationResult<bool>.Success(changed);
         }
 
-        public void SetTint(RobotColor color)
+        public OperationResult<bool> SetTint(RobotColor color)
         {
             if (go == null)
             {
-                return;
+                return Unavailable("The robot is no longer alive.");
             }
 
             renderers ??= go.GetComponentsInChildren<Renderer>(true);
@@ -218,48 +230,81 @@ namespace TopiaForge.RobotKit
                 tintBlock.SetColor("_EmissiveColor", c * 0.35f);
                 renderer.SetPropertyBlock(tintBlock);
             }
+
+            return OperationResult<bool>.Success(true);
         }
 
-        public void SetEmote(string emojiShortcode)
+        public OperationResult<bool> SetEmote(string emojiShortcode)
         {
-            if (go != null)
+            if (go == null)
             {
-                GameReflection.StartEmote(go, emojiShortcode, logger);
+                return Unavailable("The robot is no longer alive.");
             }
+
+            GameReflection.StartEmote(go, emojiShortcode, logger);
+            return OperationResult<bool>.Success(true);
         }
 
-        public void SetName(string name)
+        public OperationResult<bool> SetName(string name)
         {
-            if (go != null && !string.IsNullOrEmpty(name))
+            if (go == null)
             {
-                go.name = name;
+                return Unavailable("The robot is no longer alive.");
             }
-        }
 
-        public void SetScale(float scale)
-        {
-            if (go != null && scale > 0f)
+            if (string.IsNullOrWhiteSpace(name))
             {
-                transform.localScale = Vector3.one * scale;
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "A robot name is required.");
             }
+
+            go.name = name;
+            return OperationResult<bool>.Success(true);
         }
 
-        public void SetInteraction(RobotInteractionOptions options)
+        public OperationResult<bool> SetScale(float scale)
         {
-            interaction = (options ?? RobotInteractionOptions.NativeTalk()).Clone();
-            ApplyInteraction();
+            if (go == null)
+            {
+                return Unavailable("The robot is no longer alive.");
+            }
+            if (scale <= 0f || float.IsNaN(scale) || float.IsInfinity(scale))
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "Robot scale must be positive and finite.");
+            }
+
+            transform.localScale = Vector3.one * scale;
+            return OperationResult<bool>.Success(true);
         }
 
-        public bool ApplyDamage(float amount, RobotDamageType type, string source)
-        {
-            return IsAlive && GameReflection.ApplyDamage(go, amount, type, source, logger);
-        }
-
-        public void Kill(RobotDamageType type, string source)
+        public OperationResult<bool> SetInteraction(RobotInteractionOptions options)
         {
             if (!IsAlive)
             {
-                return;
+                return Unavailable("The robot is no longer alive.");
+            }
+
+            interaction = (options ?? throw new System.ArgumentNullException(nameof(options))).Clone();
+            ApplyInteraction();
+            return OperationResult<bool>.Success(true);
+        }
+
+        public OperationResult<bool> ApplyDamage(float amount, RobotDamageType type, string source)
+        {
+            if (!IsAlive)
+            {
+                return Unavailable("The robot is no longer alive.");
+            }
+
+            return GameReflection.ApplyDamage(go, amount, type, source, logger)
+                ? OperationResult<bool>.Success(true)
+                : OperationResult<bool>.Failure(ModErrorCode.Unavailable, "Robot health is unavailable.");
+        }
+
+        public OperationResult<bool> Kill(RobotDamageType type, string source)
+        {
+            if (!IsAlive)
+            {
+                return OperationResult<bool>.Success(false);
             }
 
             // Drive the native death pipeline (ragdoll + corpse cleanup) by dealing lethal damage to native
@@ -270,29 +315,37 @@ namespace TopiaForge.RobotKit
             {
                 Despawn();
             }
+
+            return OperationResult<bool>.Success(true);
         }
 
-        public void Ragdoll()
+        public OperationResult<bool> Ragdoll()
         {
-            if (IsAlive)
+            if (!IsAlive)
             {
-                LocomotionBridge.ForceRagdoll(go);
+                return Unavailable("The robot is no longer alive.");
             }
+
+            LocomotionBridge.ForceRagdoll(go);
+            return OperationResult<bool>.Success(true);
         }
 
-        public void Knockback(Vec3 impulse)
+        public OperationResult<bool> Knockback(Vec3 impulse)
         {
-            if (IsAlive)
+            if (!IsAlive)
             {
-                LocomotionBridge.ReceiveForce(go, new Vector3(impulse.X, impulse.Y, impulse.Z));
+                return Unavailable("The robot is no longer alive.");
             }
+
+            LocomotionBridge.ReceiveForce(go, new Vector3(impulse.X, impulse.Y, impulse.Z));
+            return OperationResult<bool>.Success(true);
         }
 
-        public void Despawn()
+        public OperationResult<bool> Despawn()
         {
             if (despawned)
             {
-                return;
+                return OperationResult<bool>.Success(false);
             }
 
             despawned = true;
@@ -303,7 +356,17 @@ namespace TopiaForge.RobotKit
             {
                 UnityEngine.Object.Destroy(go);
             }
+
+            return OperationResult<bool>.Success(true);
         }
+
+        public void Dispose()
+        {
+            Despawn();
+        }
+
+        private static OperationResult<bool> Unavailable(string message) =>
+            OperationResult<bool>.Failure(ModErrorCode.InvalidState, message);
 
         // Apply spawn-request speed overrides once the robot is live (the LocomotionController exists by then).
         public void OnActivated()
@@ -677,7 +740,7 @@ namespace TopiaForge.RobotKit
 
             renderers ??= go.GetComponentsInChildren<Renderer>(true);
             var hasBounds = false;
-            var bounds = default(Bounds);
+            var bounds = default(UnityEngine.Bounds);
             foreach (var renderer in renderers)
             {
                 if (renderer == null)

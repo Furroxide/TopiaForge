@@ -2,13 +2,20 @@ using System;
 
 namespace TopiaForge.Mods.UnityUi
 {
+    /// <summary>Defines the supported ease values.</summary>
     public enum TopiaForgeEase
     {
+        /// <summary>Selects the linear option.</summary>
         Linear,
+        /// <summary>Selects the in quad option.</summary>
         InQuad,
+        /// <summary>Selects the out quad option.</summary>
         OutQuad,
+        /// <summary>Selects the in out quad option.</summary>
         InOutQuad,
+        /// <summary>Selects the out cubic option.</summary>
         OutCubic,
+        /// <summary>Selects the out back option.</summary>
         OutBack,
     }
 
@@ -17,6 +24,7 @@ namespace TopiaForge.Mods.UnityUi
     {
         private const float BackOvershoot = 1.70158f;
 
+        /// <summary>Evaluates the selected easing curve at a normalized time.</summary>
         public static float Evaluate(TopiaForgeEase ease, float t)
         {
             t = t < 0f ? 0f : t > 1f ? 1f : t;

@@ -278,6 +278,7 @@ namespace TopiaForge.Mods.UnityUi
             ApplyTheme(Theme);
         }
 
+        /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
             if (!enabledState)

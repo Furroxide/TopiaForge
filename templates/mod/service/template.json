@@ -1,11 +1,11 @@
 {
   "id": "service",
   "label": "Framework service mod",
-  "description": "Framework mod that publishes a typed service other mods consume via GetService (modeled on the Assets mod).",
+  "description": "Framework mod that publishes a typed, dependency-scoped extension service with provider and consumer examples.",
   "manifestDefaults": {
     "category": "Framework",
     "description": "Framework SDK service for TopiaForge mods.",
     "tags": ["framework", "sdk"],
-    "apiAssemblies": ["{{ASSEMBLY_NAME}}.dll"]
+    "apiAssemblies": ["{{ASSEMBLY_NAME}}.Api.dll"]
   }
 }

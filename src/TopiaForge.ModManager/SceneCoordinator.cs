@@ -1,18 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
-using TopiaForge.Mods;
 
 namespace TopiaForge.ModManager
 {
-    /// <summary>
-    /// The manager-owned <see cref="ISceneCoordinator"/>: pure claim bookkeeping, no Unity types (the file is
-    /// also compiled into the net8.0 test assembly). Automatic-priority requests are refused while any claim
-    /// is active; user-initiated requests are always approved and simply stack — the superseded claim holder
-    /// learns about the takeover through its own scene handling (e.g. TopiaForge.Worlds ends its session with
-    /// <see cref="WorldSessionEndReason.SceneReplaced"/> when the foreign scene arrives).
-    /// </summary>
-    public sealed class SceneCoordinator : ISceneCoordinator
+    /// <summary>Internal owner-aware arbitration retained as a loader safety net behind owner-bound scene facades.</summary>
+    internal sealed class SceneCoordinator
     {
         private readonly object gate = new object();
         private readonly List<Claim> claims = new List<Claim>();
@@ -75,11 +68,13 @@ namespace TopiaForge.ModManager
                 else
                 {
                     var claim = new Claim(this, new SceneClaimInfo(
-                        request.OwnerModId, request.SceneName, request.Priority, request.Reason, DateTime.UtcNow));
+                        request.OwnerModId,
+                        request.SceneName,
+                        request.Priority,
+                        request.Reason,
+                        DateTime.UtcNow));
                     if (claims.Count > 0)
                     {
-                        // A user-initiated takeover: allowed, but say so — this is the trace that explains a
-                        // SceneReplaced session end.
                         logMessage = "Scene transition approved for '" + request.OwnerModId + "' -> '"
                             + request.SceneName + "' superseding " + claims.Count
                             + " active claim(s) (first: '" + claims[0].Info.OwnerModId + "').";
@@ -107,8 +102,10 @@ namespace TopiaForge.ModManager
 
             lock (gate)
             {
-                claims.RemoveAll(claim =>
-                    string.Equals(claim.Info.OwnerModId, ownerModId, StringComparison.OrdinalIgnoreCase));
+                claims.RemoveAll(claim => string.Equals(
+                    claim.Info.OwnerModId,
+                    ownerModId,
+                    StringComparison.OrdinalIgnoreCase));
             }
         }
 
@@ -128,7 +125,7 @@ namespace TopiaForge.ModManager
             }
             catch
             {
-                // Arbitration is correctness state; diagnostics are best-effort and never alter a decision.
+                // Correctness state must not depend on diagnostics.
             }
         }
 
@@ -146,9 +143,81 @@ namespace TopiaForge.ModManager
 
             public void Dispose()
             {
-                var coordinator = Interlocked.Exchange(ref owner, null);
-                coordinator?.Release(this);
+                Interlocked.Exchange(ref owner, null)?.Release(this);
             }
+        }
+    }
+
+    internal enum SceneTransitionPriority
+    {
+        Automatic = 0,
+        UserInitiated = 1
+    }
+
+    internal sealed class SceneTransitionRequest
+    {
+        public SceneTransitionRequest(
+            string ownerModId,
+            string sceneName,
+            SceneTransitionPriority priority,
+            string reason = "")
+        {
+            OwnerModId = ownerModId;
+            SceneName = sceneName;
+            Priority = priority;
+            Reason = reason;
+        }
+
+        public string OwnerModId { get; }
+        public string SceneName { get; }
+        public SceneTransitionPriority Priority { get; }
+        public string Reason { get; }
+    }
+
+    internal sealed class SceneClaimInfo
+    {
+        public SceneClaimInfo(
+            string ownerModId,
+            string sceneName,
+            SceneTransitionPriority priority,
+            string reason,
+            DateTime acquiredAtUtc)
+        {
+            OwnerModId = ownerModId;
+            SceneName = sceneName;
+            Priority = priority;
+            Reason = reason;
+            AcquiredAtUtc = acquiredAtUtc;
+        }
+
+        public string OwnerModId { get; }
+        public string SceneName { get; }
+        public SceneTransitionPriority Priority { get; }
+        public string Reason { get; }
+        public DateTime AcquiredAtUtc { get; }
+    }
+
+    internal sealed class SceneTransitionDecision
+    {
+        private SceneTransitionDecision(bool approved, IDisposable? claim, string message)
+        {
+            Approved = approved;
+            Claim = claim;
+            Message = message;
+        }
+
+        public bool Approved { get; }
+        public IDisposable? Claim { get; }
+        public string Message { get; }
+
+        public static SceneTransitionDecision Approve(IDisposable claim, string message)
+        {
+            return new SceneTransitionDecision(true, claim, message);
+        }
+
+        public static SceneTransitionDecision Refuse(string message)
+        {
+            return new SceneTransitionDecision(false, null, message);
         }
     }
 }

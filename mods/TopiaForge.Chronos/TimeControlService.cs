@@ -1,5 +1,6 @@
 using System;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 using UnityEngine;
 
 namespace TopiaForge.Chronos
@@ -11,7 +12,7 @@ namespace TopiaForge.Chronos
     // can never leak. Coexists with a native pause (FreezeGame): if it sees an external timeScale==0 it didn't set, it
     // yields rather than fights. Drives Unity time; the derivation/ordering live in Unity-free files (TimeMath/
     // LeaseLedger/TurnOrder) so they unit-test.
-    internal sealed class TimeControlService : ITimeControlService, IDisposable
+    internal sealed class TimeControlService : ITimeControlService, IOwnerBoundExtensionFactory, IDisposable
     {
         private const float FixedFloor = 0.1f; // co-scale floor for fixedDeltaTime (keeps the physics step affordable)
 
@@ -53,14 +54,21 @@ namespace TopiaForge.Chronos
 
         // --- leases ---------------------------------------------------------------------------------------------
 
-        public ITimeLease Freeze(string usage, bool suspendPlayer = false)
+        public OperationResult<ITimeLease> Freeze(string usage, bool suspendPlayer = false)
+        {
+            return disposed
+                ? OperationResult<ITimeLease>.Failure(ModErrorCode.Unavailable, "Chronos is unavailable.")
+                : OperationResult<ITimeLease>.Success(Freeze(ownerModId, usage, suspendPlayer));
+        }
+
+        internal ITimeLease Freeze(string consumerId, string usage, bool suspendPlayer = false)
         {
             if (disposed)
             {
                 return DeadLease.Instance;
             }
 
-            var id = ledger.Add(LeaseKind.Freeze, ownerModId, usage ?? "freeze");
+            var id = ledger.Add(LeaseKind.Freeze, consumerId, usage ?? "freeze");
             if (suspendPlayer)
             {
                 if (suspendRefCount++ == 0)
@@ -73,30 +81,66 @@ namespace TopiaForge.Chronos
             return new TimeLease(this, id, suspendPlayer);
         }
 
-        public ITimeLease Slow(string usage, float scale)
+        public OperationResult<ITimeLease> Slow(string usage, float scale)
+        {
+            if (disposed)
+            {
+                return OperationResult<ITimeLease>.Failure(ModErrorCode.Unavailable, "Chronos is unavailable.");
+            }
+
+            if (float.IsNaN(scale) || float.IsInfinity(scale) || scale < 0f || scale > 1f)
+            {
+                return OperationResult<ITimeLease>.Failure(
+                    ModErrorCode.InvalidArgument,
+                    "A slow scale must be finite and between zero and one.");
+            }
+
+            return OperationResult<ITimeLease>.Success(Slow(ownerModId, usage, scale));
+        }
+
+        internal ITimeLease Slow(string consumerId, string usage, float scale)
         {
             if (disposed)
             {
                 return DeadLease.Instance;
             }
 
-            var id = ledger.Add(LeaseKind.Slow, ownerModId, usage ?? "slow", TimeMath.Clamp01(scale));
+            var id = ledger.Add(LeaseKind.Slow, consumerId, usage ?? "slow", TimeMath.Clamp01(scale));
             ApplyDiscrete();
             return new TimeLease(this, id, false);
         }
 
-        public ITimeLease ExemptPlayer(string usage)
+        public OperationResult<ITimeLease> ExemptPlayer(string usage)
+        {
+            return disposed
+                ? OperationResult<ITimeLease>.Failure(ModErrorCode.Unavailable, "Chronos is unavailable.")
+                : OperationResult<ITimeLease>.Success(ExemptPlayer(ownerModId, usage));
+        }
+
+        internal ITimeLease ExemptPlayer(string consumerId, string usage)
         {
             if (disposed)
             {
                 return DeadLease.Instance;
             }
 
-            var id = ledger.Add(LeaseKind.ExemptPlayer, ownerModId, usage ?? "exempt-player");
+            var id = ledger.Add(LeaseKind.ExemptPlayer, consumerId, usage ?? "exempt-player");
             return new TimeLease(this, id, false);
         }
 
-        public ITimeLease SetDriver(string usage, ITimeDriver newDriver)
+        public OperationResult<ITimeLease> SetDriver(string usage, ITimeDriver newDriver)
+        {
+            if (newDriver == null)
+            {
+                throw new ArgumentNullException(nameof(newDriver));
+            }
+
+            return disposed
+                ? OperationResult<ITimeLease>.Failure(ModErrorCode.Unavailable, "Chronos is unavailable.")
+                : OperationResult<ITimeLease>.Success(SetDriver(ownerModId, usage, newDriver));
+        }
+
+        internal ITimeLease SetDriver(string consumerId, string usage, ITimeDriver newDriver)
         {
             if (disposed || newDriver == null)
             {
@@ -110,33 +154,82 @@ namespace TopiaForge.Chronos
             }
 
             driver = newDriver;
-            driverLeaseId = ledger.Add(LeaseKind.Driver, ownerModId, usage ?? "driver");
+            driverLeaseId = ledger.Add(LeaseKind.Driver, consumerId, usage ?? "driver");
             ApplyDiscrete();
             return new TimeLease(this, driverLeaseId, false);
         }
 
-        public void Step(float seconds)
-        {
-            StepInternal(Mathf.Clamp(seconds, 0f, 0.5f), 0);
-        }
-
-        public void StepFixed(int ticks)
-        {
-            StepInternal(0f, Mathf.Clamp(ticks, 0, 20));
-        }
-
-        public ITurnScheduler BeginTurnBased(string usage, TurnSchedulerOptions options)
+        public OperationResult<bool> Step(float seconds)
         {
             if (disposed)
             {
-                return new TurnScheduler(null, null, new TurnSchedulerOptions());
+                return OperationResult<bool>.Failure(ModErrorCode.Unavailable, "Chronos is unavailable.");
+            }
+
+            if (seconds <= 0f || float.IsNaN(seconds) || float.IsInfinity(seconds))
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "Step duration must be finite and positive.");
+            }
+
+            var applied = IsFrozen;
+            StepInternal(Mathf.Clamp(seconds, 0f, 0.5f), 0);
+            return OperationResult<bool>.Success(applied);
+        }
+
+        public OperationResult<bool> StepFixed(int ticks)
+        {
+            if (disposed)
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.Unavailable, "Chronos is unavailable.");
+            }
+
+            if (ticks <= 0)
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "Fixed-step count must be positive.");
+            }
+
+            var applied = IsFrozen;
+            StepInternal(0f, Mathf.Clamp(ticks, 0, 20));
+            return OperationResult<bool>.Success(applied);
+        }
+
+        public OperationResult<ITurnScheduler> BeginTurnBased(string usage, TurnSchedulerOptions options)
+        {
+            if (options == null)
+            {
+                throw new ArgumentNullException(nameof(options));
+            }
+
+            return disposed
+                ? OperationResult<ITurnScheduler>.Failure(ModErrorCode.Unavailable, "Chronos is unavailable.")
+                : OperationResult<ITurnScheduler>.Success(BeginTurnBased(ownerModId, usage, options));
+        }
+
+        internal ITurnScheduler BeginTurnBased(string consumerId, string usage, TurnSchedulerOptions options)
+        {
+            if (disposed)
+            {
+                return new TurnScheduler(null, null, consumerId, new TurnSchedulerOptions());
             }
 
             turnScheduler?.Dispose();
-            var freeze = Freeze(usage ?? "turn-based"); // hard-freeze the world; the scheduler lifts time per actor
-            turnScheduler = new TurnScheduler(this, freeze, options ?? new TurnSchedulerOptions());
+            var freeze = Freeze(consumerId, usage ?? "turn-based"); // hard-freeze the world; the scheduler lifts time per actor
+            turnScheduler = new TurnScheduler(this, freeze, consumerId, options ?? new TurnSchedulerOptions());
             Mode = TimeMode.TurnBased;
             return turnScheduler;
+        }
+
+        object IOwnerBoundExtensionFactory.CreateOwnerFacade(
+            Type contractType,
+            string consumerId,
+            IModLifetime lifetime)
+        {
+            if (contractType != typeof(ITimeControlService))
+            {
+                throw new ArgumentException("Unsupported Chronos extension contract.", nameof(contractType));
+            }
+
+            return new OwnerFacade(this, consumerId, lifetime);
         }
 
         public void ForceReset()
@@ -402,6 +495,165 @@ namespace TopiaForge.Chronos
             catch
             {
                 baseFixedCaptured = false;
+            }
+        }
+
+        private sealed class OwnerFacade : ITimeControlService
+        {
+            private readonly TimeControlService service;
+            private readonly string consumerId;
+            private readonly IModLifetime lifetime;
+
+            public OwnerFacade(TimeControlService service, string consumerId, IModLifetime lifetime)
+            {
+                this.service = service;
+                this.consumerId = consumerId;
+                this.lifetime = lifetime;
+            }
+
+            public bool IsAvailable => service.IsAvailable && !lifetime.IsStopping;
+            public float WorldScale => service.WorldScale;
+            public float WorldDeltaTime => service.WorldDeltaTime;
+            public float WorldTime => service.WorldTime;
+            public float ControlDeltaTime => service.ControlDeltaTime;
+            public float ControlTime => service.ControlTime;
+            public bool IsFrozen => service.IsFrozen;
+            public TimeMode Mode => service.Mode;
+
+            public OperationResult<ITimeLease> Freeze(string usage, bool suspendPlayer = false) =>
+                Track(service.Freeze(consumerId, usage, suspendPlayer));
+
+            public OperationResult<ITimeLease> Slow(string usage, float scale)
+            {
+                if (float.IsNaN(scale) || float.IsInfinity(scale) || scale < 0f || scale > 1f)
+                {
+                    return OperationResult<ITimeLease>.Failure(
+                        ModErrorCode.InvalidArgument,
+                        "A slow scale must be finite and between zero and one.");
+                }
+
+                return Track(service.Slow(consumerId, usage, scale));
+            }
+
+            public OperationResult<ITimeLease> ExemptPlayer(string usage) =>
+                Track(service.ExemptPlayer(consumerId, usage));
+
+            public OperationResult<ITimeLease> SetDriver(string usage, ITimeDriver driver)
+            {
+                if (driver == null)
+                {
+                    throw new ArgumentNullException(nameof(driver));
+                }
+
+                return Track(service.SetDriver(consumerId, usage, driver));
+            }
+
+            public OperationResult<bool> Step(float seconds)
+            {
+                if (lifetime.IsStopping)
+                {
+                    return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The mod lifetime is stopping.");
+                }
+
+                return service.Step(seconds);
+            }
+
+            public OperationResult<bool> StepFixed(int ticks)
+            {
+                if (lifetime.IsStopping)
+                {
+                    return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The mod lifetime is stopping.");
+                }
+
+                return service.StepFixed(ticks);
+            }
+
+            public OperationResult<ITurnScheduler> BeginTurnBased(string usage, TurnSchedulerOptions options)
+            {
+                if (lifetime.IsStopping)
+                {
+                    return OperationResult<ITurnScheduler>.Failure(ModErrorCode.InvalidState, "The mod lifetime is stopping.");
+                }
+
+                var scheduler = service.BeginTurnBased(consumerId, usage, options);
+                try
+                {
+                    return OperationResult<ITurnScheduler>.Success(
+                        new OwnerTurnScheduler(scheduler, lifetime.Track(scheduler)));
+                }
+                catch (ObjectDisposedException)
+                {
+                    scheduler.Dispose();
+                    return OperationResult<ITurnScheduler>.Failure(ModErrorCode.InvalidState, "The mod lifetime is stopping.");
+                }
+            }
+
+            private OperationResult<ITimeLease> Track(ITimeLease lease)
+            {
+                if (lifetime.IsStopping)
+                {
+                    lease.Dispose();
+                    return OperationResult<ITimeLease>.Failure(ModErrorCode.InvalidState, "The mod lifetime is stopping.");
+                }
+
+                try
+                {
+                    return OperationResult<ITimeLease>.Success(
+                        new OwnerTimeLease(lease, lifetime.Track(lease)));
+                }
+                catch (ObjectDisposedException)
+                {
+                    lease.Dispose();
+                    return OperationResult<ITimeLease>.Failure(ModErrorCode.InvalidState, "The mod lifetime is stopping.");
+                }
+            }
+
+            private sealed class OwnerTimeLease : ITimeLease
+            {
+                private readonly ITimeLease lease;
+                private IDisposable? lifetimeLease;
+
+                public OwnerTimeLease(ITimeLease lease, IDisposable lifetimeLease)
+                {
+                    this.lease = lease;
+                    this.lifetimeLease = lifetimeLease;
+                }
+
+                public bool IsActive => lifetimeLease != null && lease.IsActive;
+
+                public void Release()
+                {
+                    System.Threading.Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
+                }
+
+                public void Dispose() => Release();
+            }
+
+            private sealed class OwnerTurnScheduler : ITurnScheduler
+            {
+                private readonly ITurnScheduler scheduler;
+                private IDisposable? lifetimeLease;
+
+                public OwnerTurnScheduler(ITurnScheduler scheduler, IDisposable lifetimeLease)
+                {
+                    this.scheduler = scheduler;
+                    this.lifetimeLease = lifetimeLease;
+                }
+
+                public TurnState State => scheduler.State;
+                public TurnActorId? CurrentActor => scheduler.CurrentActor;
+                public int ActorCount => scheduler.ActorCount;
+                public OperationResult<bool> Register(TurnActorId actor, float speed) =>
+                    scheduler.Register(actor, speed);
+                public OperationResult<bool> Unregister(TurnActorId actor) => scheduler.Unregister(actor);
+                public OperationResult<bool> BeginAction() => scheduler.BeginAction();
+                public OperationResult<bool> EndAction() => scheduler.EndAction();
+                public void Tick(float controlDeltaTime) => scheduler.Tick(controlDeltaTime);
+
+                public void Dispose()
+                {
+                    System.Threading.Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
+                }
             }
         }
     }

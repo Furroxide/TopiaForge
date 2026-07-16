@@ -111,6 +111,7 @@ namespace TopiaForge.Mods.UnityUi
             Repaint();
         }
 
+        /// <summary>Gets value.</summary>
         public bool Value => value;
 
         /// <summary>Dirty-checked programmatic update (does NOT fire onChanged).</summary>
@@ -126,11 +127,13 @@ namespace TopiaForge.Mods.UnityUi
             Repaint();
         }
 
+        /// <summary>Sets whether the toggle accepts input.</summary>
         public void SetEnabled(bool enabled)
         {
             toggle.interactable = enabled;
         }
 
+        /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
             Repaint();

@@ -37,8 +37,10 @@ namespace TopiaForge.Mods.UnityUi
             TopiaForgeTheme.Changed += OnThemeChanged;
         }
 
+        /// <summary>Gets owner id.</summary>
         public string OwnerId { get; }
 
+        /// <summary>Gets state store.</summary>
         public ITopiaForgeStateStore StateStore { get; }
 
         /// <summary>Resolved theme for a scheme, cached per global and host theme version.</summary>
@@ -198,6 +200,7 @@ namespace TopiaForge.Mods.UnityUi
             DestroySubtree(root);
         }
 
+        /// <summary>Releases the resources owned by this instance.</summary>
         public void Dispose()
         {
             if (disposed)

@@ -11,7 +11,9 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Display name of the currency ("CREDITS", "SCRAP", …).</summary>
         public string CurrencyLabel { get; set; } = "CREDITS";
 
+        /// <summary>Gets or sets cell width.</summary>
         public float CellWidth { get; set; } = 118f;
+        /// <summary>Gets or sets cell height.</summary>
         public float CellHeight { get; set; } = 148f;
 
         /// <summary>Show a search field that filters the catalog by name/id.</summary>
@@ -45,6 +47,7 @@ namespace TopiaForge.Mods.UnityUi
         private string filter = string.Empty;
         private bool walletHooked;
 
+        /// <summary>Creates a shop pane.</summary>
         public TopiaForgeShopPane(TopiaForgeContainer parent, IReadOnlyList<ShopItem> catalog, IShopWallet wallet, TopiaForgeShopPaneOptions? options = null)
         {
             if (parent == null)
@@ -88,6 +91,7 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Optional host gate consulted before funds (e.g. "integrity already full").</summary>
         public Func<ShopItem, bool>? CanPurchase { get; set; }
 
+        /// <summary>Gets the purchase count.</summary>
         public int GetPurchaseCount(string itemId)
         {
             return purchaseCounts.TryGetValue(itemId, out var count) ? count : 0;

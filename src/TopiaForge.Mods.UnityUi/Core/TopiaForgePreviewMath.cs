@@ -9,6 +9,7 @@ namespace TopiaForge.Mods.UnityUi
     /// </summary>
     public readonly struct TopiaForgePreviewFraming
     {
+        /// <summary>Creates a preview framing.</summary>
         public TopiaForgePreviewFraming(float offsetX, float offsetY, float offsetZ, float distance, float orthoHalfSize, float nearPlane, float farPlane)
         {
             OffsetX = offsetX;
@@ -20,12 +21,19 @@ namespace TopiaForge.Mods.UnityUi
             FarPlane = farPlane;
         }
 
+        /// <summary>Gets offset x.</summary>
         public float OffsetX { get; }
+        /// <summary>Gets offset y.</summary>
         public float OffsetY { get; }
+        /// <summary>Gets offset z.</summary>
         public float OffsetZ { get; }
+        /// <summary>Gets distance.</summary>
         public float Distance { get; }
+        /// <summary>Gets ortho half size.</summary>
         public float OrthoHalfSize { get; }
+        /// <summary>Gets near plane.</summary>
         public float NearPlane { get; }
+        /// <summary>Gets far plane.</summary>
         public float FarPlane { get; }
     }
 
@@ -38,7 +46,9 @@ namespace TopiaForge.Mods.UnityUi
     {
         /// <summary>The classic product-shot angle used for prop thumbnails.</summary>
         public const float DefaultYawDegrees = 45f;
+        /// <summary>The default pitch degrees design-token value.</summary>
         public const float DefaultPitchDegrees = 30f;
+        /// <summary>The default margin design-token value.</summary>
         public const float DefaultMargin = 1.15f;
 
         /// <summary>Floor for the ortho size so degenerate bounds still yield a valid camera.</summary>

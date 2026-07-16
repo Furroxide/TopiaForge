@@ -140,20 +140,21 @@ namespace TopiaForge.Sandbox
             var programOptions = new List<string> { NoTarget };
             programOptions.AddRange(ReprogramPrograms);
 
-            return new RobotConversationRequest(frame, DecisionOptions)
-            {
-                GroundTruthFacts = facts,
-                LiveFacts = describeTargets == null
+            return new RobotConversationRequest(
+                frame,
+                DecisionOptions,
+                groundTruthFacts: facts,
+                liveFacts: describeTargets == null
                     ? null
                     : () => new Dictionary<string, string>
                     {
                         ["known-targets"] = KnownTargetsFact(null, describeTargets()),
                     },
-                MaxTurns = maxTurns,
-                Temperature = temperature,
-                Usage = "sandbox-program",
-                ReplyGuidance = "Your short, in-character spoken line back to the operator (max ~16 words).",
-                DecisionGuidance =
+                maxTurns: maxTurns,
+                temperature: temperature,
+                usage: "sandbox-program",
+                replyGuidance: "Your short, in-character spoken line back to the operator (max ~16 words).",
+                decisionGuidance:
                     "CHAT = you are still talking, need clarification, or were not given a task yet. Pick any " +
                     "other decision ONLY when the operator has given you that task and you accept it — choosing " +
                     "one ends the conversation and you go do it immediately. IDLE = stand down and wait; GO_TO = " +
@@ -163,14 +164,14 @@ namespace TopiaForge.Sandbox
                     "comes close; REPROGRAM = walk over to the target robot and give IT a new task — put that " +
                     "task in program and that task's target in program_target; AUTONOMOUS = the operator told " +
                     "you to be free / think for yourself — you leave operator control and act on your own.",
-                MaxReplyChars = 160,
+                maxReplyChars: 160,
                 // At most three extra outputs: the RoboAPI /agent/check3 backend caps a request at FIVE output
                 // fields total, and ConversationPrompt always adds the built-in `reply` + `decision`. A fourth
                 // extra (e.g. a per-turn emote field) tips it to six and the backend rejects the whole turn with
                 // "Too many outputs: max 5" — which surfaces to the player as "brain unreachable". The robot's
                 // facial expression is instead derived deterministically from its chosen decision (see
                 // EmoteForDecision), costing no output field.
-                ExtraOutputs = new[]
+                extraOutputs: new[]
                 {
                     new BrainOutputField(
                         TargetField,
@@ -191,8 +192,7 @@ namespace TopiaForge.Sandbox
                         "to follow you\" means it follows YOU). NONE otherwise.",
                         BrainFieldType.String,
                         programTargetOptions),
-                },
-            };
+                });
         }
 
         // The robot's facial expression for a turn, derived from the decision it just made — a free stand-in for

@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace TopiaForge.ModManager.Core
 {
@@ -15,6 +17,11 @@ namespace TopiaForge.ModManager.Core
         private const long MaxArchiveEntryBytes = 1024L * 1024 * 1024;
         private const long MaxExtractedBytes = 2L * 1024 * 1024 * 1024;
         private const long MaxManifestBytes = 1024L * 1024;
+        private const int MaxInboxEntries = 1024;
+        private const int MaxInboxCandidates = 256;
+
+        internal Action<string>? BeforeInboxInstallForTesting { get; set; }
+
         public PackageInstallResult Install(string packagePath, ManagerPaths paths, ManagerState state, bool restartRequired)
         {
             return Install(
@@ -32,92 +39,171 @@ namespace TopiaForge.ModManager.Core
             bool restartRequired,
             ManifestValidationContext validationContext)
         {
+            return InstallWithSource(
+                packagePath,
+                paths,
+                state,
+                restartRequired,
+                validationContext,
+                PackageInstallReceipt.LocalSource,
+                expectedSourceSha256: null);
+        }
+
+        private PackageInstallResult InstallWithSource(
+            string packagePath,
+            ManagerPaths paths,
+            ManagerState state,
+            bool restartRequired,
+            ManifestValidationContext validationContext,
+            string sourceProvenance,
+            string? expectedSourceSha256)
+        {
             if (validationContext == null)
             {
                 throw new ArgumentNullException(nameof(validationContext));
             }
 
-            if (string.IsNullOrWhiteSpace(packagePath) || !File.Exists(packagePath))
+            using (var preflight = PreflightPackage(packagePath, paths, validationContext))
             {
-                return PackageInstallResult.Fail("Package file does not exist: " + packagePath);
+                if (!preflight.Ok)
+                {
+                    return PackageInstallResult.Fail(preflight.Errors);
+                }
+
+                if (expectedSourceSha256 != null &&
+                    !string.Equals(preflight.SourceSha256, expectedSourceSha256, StringComparison.Ordinal))
+                {
+                    return PackageInstallResult.Fail(
+                        "Package bytes changed after inbox preflight; the candidate was retained for inspection.");
+                }
+
+                var manifest = preflight.Manifest!;
+                var stagingPath = preflight.StagingPath!;
+                try
+                {
+                    state.Normalize();
+                    var receipt = PackageInstallReceipt.Create(
+                        packagePath,
+                        stagingPath,
+                        manifest,
+                        sourceProvenance);
+                    if (!string.Equals(receipt.SourceSha256, preflight.SourceSha256, StringComparison.Ordinal))
+                    {
+                        return PackageInstallResult.Fail(
+                            "Package bytes changed while the validated package was being installed.");
+                    }
+
+                    JsonUtil.SaveFile(Path.Combine(stagingPath, PackageInstallReceipt.FileName), receipt);
+
+                    var targetPath = paths.GetPackagePath(manifest.Id, manifest.Version);
+                    var rollbackPath = CommitStagedDirectory(stagingPath, targetPath, paths.Staging);
+                    try
+                    {
+                        var existing = state.Find(manifest.Id);
+                        state.Upsert(manifest, enabled: existing?.Enabled ?? true, restartRequired: restartRequired);
+                    }
+                    catch (Exception stateError)
+                    {
+                        try
+                        {
+                            RestoreCommittedDirectory(targetPath, rollbackPath);
+                        }
+                        catch (Exception rollbackError)
+                        {
+                            throw new IOException(
+                                "Package files were installed but state update and rollback both failed. " +
+                                "The previous package remains at: " + rollbackPath,
+                                new AggregateException(stateError, rollbackError));
+                        }
+
+                        throw;
+                    }
+
+                    TryDelete(rollbackPath);
+
+                    return PackageInstallResult.Success(manifest, targetPath);
+                }
+                catch (Exception ex)
+                {
+                    return PackageInstallResult.Fail(ex.Message);
+                }
+            }
+        }
+
+        private static PackagePreflightResult PreflightPackage(
+            string packagePath,
+            ManagerPaths paths,
+            ManifestValidationContext validationContext)
+        {
+            if (string.IsNullOrWhiteSpace(packagePath) || !IsRegularFile(packagePath))
+            {
+                return PackagePreflightResult.Fail(
+                    null,
+                    null,
+                    "Package file does not exist or is not a regular file: " + packagePath);
             }
 
             if (!string.Equals(Path.GetExtension(packagePath), PackageExtension, StringComparison.OrdinalIgnoreCase))
             {
-                return PackageInstallResult.Fail("Package file must use the " + PackageExtension + " extension.");
+                return PackagePreflightResult.Fail(
+                    null,
+                    null,
+                    "Package file must use the " + PackageExtension + " extension.");
             }
 
-            paths.EnsureCreated();
-            var stagingPath = Path.Combine(paths.Staging, "install-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(stagingPath);
-
+            string? stagingPath = null;
+            ModManifest? manifest = null;
             try
             {
+                paths.EnsureCreated();
+                stagingPath = Path.Combine(paths.Staging, "install-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(stagingPath);
                 EnsurePackageSize(new FileInfo(packagePath).Length);
-                ExtractToSafeDirectory(packagePath, stagingPath);
+                var sourceSha256 = ExtractToSafeDirectory(packagePath, stagingPath);
                 var manifestPath = Path.Combine(stagingPath, "topiaforge.mod.json");
                 if (!File.Exists(manifestPath))
                 {
-                    return PackageInstallResult.Fail("Package is missing topiaforge.mod.json.");
+                    return PackagePreflightResult.Fail(
+                        stagingPath,
+                        null,
+                        "Package is missing topiaforge.mod.json.");
                 }
 
-                var manifest = JsonUtil.LoadFile(manifestPath, new ModManifest());
+                manifest = ModManifestJson.LoadFile(manifestPath);
                 var errors = ManifestValidator.Validate(manifest, validationContext);
                 if (errors.Count > 0)
                 {
-                    return PackageInstallResult.Fail(errors);
+                    return PackagePreflightResult.Fail(stagingPath, manifest, errors);
                 }
 
                 var entryAssemblyPath = Path.Combine(stagingPath, manifest.EntryAssembly);
                 if (!File.Exists(entryAssemblyPath))
                 {
-                    return PackageInstallResult.Fail("entryAssembly was not found in package: " + manifest.EntryAssembly);
+                    return PackagePreflightResult.Fail(
+                        stagingPath,
+                        manifest,
+                        "entryAssembly was not found in package: " + manifest.EntryAssembly);
                 }
 
-                var targetPath = paths.GetPackagePath(manifest.Id, manifest.Version);
-                var rollbackPath = CommitStagedDirectory(stagingPath, targetPath, paths.Staging);
-                try
+                var assemblyErrors = ManagedModAssemblyValidator.Validate(stagingPath, manifest);
+                if (assemblyErrors.Count > 0)
                 {
-                    var existing = state.Find(manifest.Id);
-                    state.Upsert(manifest, enabled: existing?.Enabled ?? true, restartRequired: restartRequired);
-                }
-                catch (Exception stateError)
-                {
-                    try
-                    {
-                        RestoreCommittedDirectory(targetPath, rollbackPath);
-                    }
-                    catch (Exception rollbackError)
-                    {
-                        throw new IOException(
-                            "Package files were installed but state update and rollback both failed. " +
-                            "The previous package remains at: " + rollbackPath,
-                            new AggregateException(stateError, rollbackError));
-                    }
-
-                    throw;
+                    return PackagePreflightResult.Fail(stagingPath, manifest, assemblyErrors);
                 }
 
-                TryDelete(rollbackPath);
-                PruneOtherVersions(paths, manifest.Id, manifest.Version);
-
-                return PackageInstallResult.Success(manifest, targetPath);
+                return PackagePreflightResult.Success(stagingPath, manifest, sourceSha256);
             }
             catch (Exception ex)
             {
-                return PackageInstallResult.Fail(ex.Message);
-            }
-            finally
-            {
-                TryDelete(stagingPath);
+                return PackagePreflightResult.Fail(stagingPath, manifest, ex.Message);
             }
         }
 
         /// <summary>
-        /// Installs every .topiaforgemod file waiting in the package-inbox. When the inbox holds several
-        /// versions of the same mod, only the highest version is installed and the rest are marked
-        /// superseded. Successfully processed files are consumed (deleted, or renamed to *.installed when
-        /// the delete is blocked); failed installs leave their file in place so the user can inspect it.
+        /// Installs every .topiaforgemod file waiting in the package-inbox. Every candidate is fully
+        /// preflighted without loading its code. When several versions share a mod id, the highest valid,
+        /// compatible version is installed; invalid candidates are reported and left for inspection, while
+        /// lower valid candidates are consumed as superseded after the selected package installs.
         /// </summary>
         public IReadOnlyList<InboxInstallResult> InstallInbox(ManagerPaths paths, ManagerState state, bool restartRequired)
         {
@@ -145,76 +231,182 @@ namespace TopiaForge.ModManager.Core
                 return results;
             }
 
-            var files = Directory.GetFiles(paths.PackageInbox, "*.topiaforgemod", SearchOption.TopDirectoryOnly)
-                .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
+            FileAttributes inboxAttributes;
+            try
+            {
+                inboxAttributes = File.GetAttributes(paths.PackageInbox);
+            }
+            catch (Exception ex)
+            {
+                return new[]
+                {
+                    new InboxInstallResult(
+                        paths.PackageInbox,
+                        PackageInstallResult.Fail("Package inbox could not be inspected safely: " + ex.Message),
+                        superseded: false)
+                };
+            }
+
+            if ((inboxAttributes & (FileAttributes.ReparsePoint | FileAttributes.Device)) != 0)
+            {
+                return new[]
+                {
+                    new InboxInstallResult(
+                        paths.PackageInbox,
+                        PackageInstallResult.Fail("Package inbox must be a regular local directory."),
+                        superseded: false)
+                };
+            }
+
+            List<string> entries;
+            try
+            {
+                entries = Directory.EnumerateFileSystemEntries(paths.PackageInbox, "*", SearchOption.TopDirectoryOnly)
+                    .Take(MaxInboxEntries + 1)
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                return new[]
+                {
+                    new InboxInstallResult(
+                        paths.PackageInbox,
+                        PackageInstallResult.Fail("Package inbox could not be enumerated safely: " + ex.Message),
+                        superseded: false)
+                };
+            }
+
+            if (entries.Count > MaxInboxEntries)
+            {
+                return new[]
+                {
+                    new InboxInstallResult(
+                        paths.PackageInbox,
+                        PackageInstallResult.Fail(
+                            "Package inbox exceeds the " + MaxInboxEntries + " entry limit; no files were processed."),
+                        superseded: false)
+                };
+            }
+
+            var files = entries
+                .Where(path => string.Equals(Path.GetExtension(path), PackageExtension, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(NormalizeSelectionPath, StringComparer.Ordinal)
+                .ThenBy(path => path, StringComparer.Ordinal)
                 .ToList();
             if (files.Count == 0)
             {
                 return results;
             }
 
-            // Pick one winner per mod id up front (highest parseable version); everything else for that id
-            // is superseded. Files whose manifest cannot be pre-read stay winners of their own group so the
-            // normal install path can produce the real, actionable error.
-            var winners = new Dictionary<
-                string,
-                (string File, VersionUtil.ParsedSemanticVersion Version, bool HasValidVersion)>(
-                StringComparer.OrdinalIgnoreCase);
-            var groups = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-            var fileToId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (files.Count > MaxInboxCandidates)
+            {
+                return new[]
+                {
+                    new InboxInstallResult(
+                        paths.PackageInbox,
+                        PackageInstallResult.Fail(
+                            "Package inbox exceeds the " + MaxInboxCandidates + " package limit; no files were processed."),
+                        superseded: false)
+                };
+            }
+
+            var candidates = new List<InboxCandidate>(files.Count);
             foreach (var file in files)
             {
-                var manifest = TryReadPackedManifest(file);
-                var id = manifest != null && !string.IsNullOrWhiteSpace(manifest.Id) ? manifest.Id : file;
-                fileToId[file] = id;
-                if (!groups.TryGetValue(id, out var group))
+                if (!IsRegularFile(file))
                 {
-                    group = new List<string>();
-                    groups[id] = group;
+                    candidates.Add(new InboxCandidate(
+                        filePath: file,
+                        manifest: null,
+                        preflightOk: false,
+                        preflightErrors: new[] { "Package inbox candidate is a link, directory, or special file." },
+                        sourceSha256: string.Empty));
+                    continue;
                 }
 
-                group.Add(file);
-                var hasValidVersion = VersionUtil.TryParseSemantic(manifest?.Version, out var version);
-                if (!winners.TryGetValue(id, out var best) ||
-                    (hasValidVersion &&
-                     (!best.HasValidVersion || version.CompareTo(best.Version) > 0)))
+                using (var preflight = PreflightPackage(file, paths, validationContext))
                 {
-                    winners[id] = (file, version, hasValidVersion);
+                    candidates.Add(new InboxCandidate(
+                        file,
+                        preflight.Manifest,
+                        preflight.Ok,
+                        preflight.Errors,
+                        preflight.SourceSha256));
                 }
             }
 
-            foreach (var file in files)
+            foreach (var group in candidates
+                         .GroupBy(candidate => candidate.GroupKey, StringComparer.Ordinal)
+                         .OrderBy(candidateGroup => candidateGroup.Key, StringComparer.Ordinal))
             {
-                var groupId = fileToId[file];
-                if (!string.Equals(winners[groupId].File, file, StringComparison.OrdinalIgnoreCase))
+                var ordered = group
+                    .OrderBy(candidate => candidate.NormalizedPath, StringComparer.Ordinal)
+                    .ThenBy(candidate => candidate.FilePath, StringComparer.Ordinal)
+                    .ToList();
+                var selectable = ordered
+                    .Where(candidate => candidate.IsValid)
+                    .OrderByDescending(candidate => candidate.Version)
+                    .ThenBy(candidate => candidate.NormalizedPath, StringComparer.Ordinal)
+                    .ThenBy(candidate => candidate.FilePath, StringComparer.Ordinal)
+                    .ToList();
+
+                if (selectable.Count == 0)
                 {
-                    continue; // superseded — handled after its winner installs
+                    foreach (var rejected in ordered)
+                    {
+                        results.Add(new InboxInstallResult(
+                            rejected.FilePath,
+                            PackageInstallResult.Fail(rejected.Errors),
+                            superseded: false));
+                    }
+
+                    continue;
                 }
 
-                var install = Install(file, paths, state, restartRequired, validationContext);
-                var result = new InboxInstallResult(file, install, superseded: false);
+                var winner = selectable[0];
+                BeforeInboxInstallForTesting?.Invoke(winner.FilePath);
+                var install = InstallWithSource(
+                    winner.FilePath,
+                    paths,
+                    state,
+                    restartRequired,
+                    validationContext,
+                    PackageInstallReceipt.InboxSource,
+                    winner.SourceSha256);
+                var result = new InboxInstallResult(winner.FilePath, install, superseded: false);
                 if (install.Ok)
                 {
-                    Consume(result);
+                    Consume(result, winner.SourceSha256);
                 }
 
                 results.Add(result);
 
-                foreach (var loser in groups[groupId])
+                foreach (var candidate in ordered)
                 {
-                    if (string.Equals(loser, file, StringComparison.OrdinalIgnoreCase))
+                    if (ReferenceEquals(candidate, winner))
                     {
                         continue;
                     }
 
-                    // Only consume superseded files once the winner actually installed; otherwise leave
-                    // the whole group on disk for inspection.
-                    var supersededResult = new InboxInstallResult(loser, null, superseded: true);
-                    if (install.Ok)
+                    if (!candidate.IsValid)
                     {
-                        Consume(supersededResult);
+                        results.Add(new InboxInstallResult(
+                            candidate.FilePath,
+                            PackageInstallResult.Fail(candidate.Errors),
+                            superseded: false));
+                        continue;
                     }
 
+                    // Only consume valid superseded files once the selected package actually installed;
+                    // otherwise leave the whole selectable set on disk for a retry.
+                    var supersededResult = new InboxInstallResult(
+                        candidate.FilePath,
+                        null,
+                        superseded: true);
+                    if (install.Ok)
+                    {
+                        Consume(supersededResult, candidate.SourceSha256);
+                    }
                     results.Add(supersededResult);
                 }
             }
@@ -222,45 +414,34 @@ namespace TopiaForge.ModManager.Core
             return results;
         }
 
-        // Reads just the manifest out of a packed .topiaforgemod zip; null when the file or manifest is
-        // unreadable (the caller then routes the file through the normal install path for a real error).
-        private static ModManifest? TryReadPackedManifest(string packagePath)
+        private static string NormalizeSelectionPath(string path)
         {
-            try
-            {
-                EnsurePackageSize(new FileInfo(packagePath).Length);
-                using (var file = File.OpenRead(packagePath))
-                {
-                    EnsurePackageSize(file.Length);
-                    PreflightArchiveDirectory(file);
-                    using (var archive = new ZipArchive(file, ZipArchiveMode.Read))
-                    {
-                        var entries = ValidateArchiveEntries(archive);
-                        var entry = entries.SingleOrDefault(candidate =>
-                            !candidate.IsDirectory &&
-                            string.Equals(candidate.PortablePath, "topiaforge.mod.json", StringComparison.Ordinal));
-                        if (entry == null)
-                        {
-                            return null;
-                        }
-
-                        using (var buffer = ReadEntryToMemory(entry.Entry, MaxManifestBytes))
-                        {
-                            return JsonUtil.Deserialize<ModManifest>(buffer);
-                        }
-                    }
-                }
-            }
-            catch
-            {
-                return null;
-            }
+            return Path.GetFullPath(path)
+                .Replace(Path.DirectorySeparatorChar, '/')
+                .Replace(Path.AltDirectorySeparatorChar, '/')
+                .Normalize(NormalizationForm.FormC)
+                .ToLowerInvariant();
         }
 
-        private static void Consume(InboxInstallResult result)
+        private static void Consume(InboxInstallResult result, string expectedSourceSha256)
         {
             try
             {
+                if (!IsRegularFile(result.FilePath))
+                {
+                    result.ConsumeError =
+                        "Package inbox candidate disappeared or is no longer a regular file; it was not consumed.";
+                    return;
+                }
+
+                var actualSourceSha256 = ComputeSha256(result.FilePath);
+                if (!string.Equals(actualSourceSha256, expectedSourceSha256, StringComparison.Ordinal))
+                {
+                    result.ConsumeError =
+                        "Package inbox candidate bytes changed after preflight; the replacement was retained.";
+                    return;
+                }
+
                 File.Delete(result.FilePath);
                 result.Consumed = true;
             }
@@ -273,7 +454,9 @@ namespace TopiaForge.ModManager.Core
                     var renamed = result.FilePath + ".installed";
                     if (File.Exists(renamed))
                     {
-                        File.Delete(renamed);
+                        result.ConsumeError =
+                            "The package was installed, but the retained .installed path already exists.";
+                        return;
                     }
 
                     File.Move(result.FilePath, renamed);
@@ -286,40 +469,24 @@ namespace TopiaForge.ModManager.Core
             }
         }
 
-        // Superseded sibling versions would otherwise accumulate forever and, once their manifest schema
-        // ages out, produce a startup warning per launch. Deletes are best-effort: a mid-session upgrade
-        // has the old version's DLL loaded/locked, and the startup prune sweeps it next boot.
-        private static void PruneOtherVersions(ManagerPaths paths, string id, string keepVersion)
+        private static string ExtractToSafeDirectory(string zipPath, string destination)
         {
-            var idRoot = paths.GetPackageIdPath(id);
-            if (!Directory.Exists(idRoot))
-            {
-                return;
-            }
-
-            foreach (var versionDirectory in Directory.GetDirectories(idRoot))
-            {
-                if (string.Equals(Path.GetFileName(versionDirectory), keepVersion, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                try
-                {
-                    Directory.Delete(versionDirectory, true);
-                }
-                catch
-                {
-                    // Locked by a loaded assembly; the startup prune retries when nothing is loaded.
-                }
-            }
-        }
-
-        private static void ExtractToSafeDirectory(string zipPath, string destination)
-        {
-            using (var file = File.OpenRead(zipPath))
+            using (var file = new FileStream(
+                       zipPath,
+                       FileMode.Open,
+                       FileAccess.Read,
+                       FileShare.Read,
+                       bufferSize: 81920,
+                       FileOptions.SequentialScan))
             {
                 EnsurePackageSize(file.Length);
+                string sourceSha256;
+                using (var sha256 = SHA256.Create())
+                {
+                    sourceSha256 = ToLowerHex(sha256.ComputeHash(file));
+                }
+
+                file.Position = 0;
                 PreflightArchiveDirectory(file);
                 using (var archive = new ZipArchive(file, ZipArchiveMode.Read))
                 {
@@ -356,7 +523,42 @@ namespace TopiaForge.ModManager.Core
                             entryLimit);
                     }
                 }
+
+                return sourceSha256;
             }
+        }
+
+        private static bool IsRegularFile(string path)
+        {
+            try
+            {
+                var attributes = File.GetAttributes(path);
+                return (attributes & (FileAttributes.Directory | FileAttributes.ReparsePoint | FileAttributes.Device)) == 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static string ComputeSha256(string path)
+        {
+            using (var input = new FileStream(
+                       path,
+                       FileMode.Open,
+                       FileAccess.Read,
+                       FileShare.Read,
+                       bufferSize: 81920,
+                       FileOptions.SequentialScan))
+            using (var sha256 = SHA256.Create())
+            {
+                return ToLowerHex(sha256.ComputeHash(input));
+            }
+        }
+
+        private static string ToLowerHex(byte[] bytes)
+        {
+            return BitConverter.ToString(bytes).Replace("-", string.Empty).ToLowerInvariant();
         }
 
         private static void PreflightArchiveDirectory(FileStream file)
@@ -836,6 +1038,118 @@ namespace TopiaForge.ModManager.Core
             }
         }
 
+        private sealed class PackagePreflightResult : IDisposable
+        {
+            private PackagePreflightResult(
+                string? stagingPath,
+                ModManifest? manifest,
+                IReadOnlyList<string> errors,
+                string sourceSha256)
+            {
+                StagingPath = stagingPath;
+                Manifest = manifest;
+                Errors = errors;
+                SourceSha256 = sourceSha256;
+            }
+
+            public string? StagingPath { get; }
+
+            public ModManifest? Manifest { get; }
+
+            public IReadOnlyList<string> Errors { get; }
+
+            public string SourceSha256 { get; }
+
+            public bool Ok => StagingPath != null && Manifest != null && Errors.Count == 0;
+
+            public static PackagePreflightResult Success(
+                string stagingPath,
+                ModManifest manifest,
+                string sourceSha256)
+            {
+                return new PackagePreflightResult(
+                    stagingPath,
+                    manifest,
+                    Array.Empty<string>(),
+                    sourceSha256);
+            }
+
+            public static PackagePreflightResult Fail(
+                string? stagingPath,
+                ModManifest? manifest,
+                string error)
+            {
+                return new PackagePreflightResult(stagingPath, manifest, new[] { error }, string.Empty);
+            }
+
+            public static PackagePreflightResult Fail(
+                string? stagingPath,
+                ModManifest? manifest,
+                IReadOnlyList<string> errors)
+            {
+                return new PackagePreflightResult(stagingPath, manifest, errors.ToArray(), string.Empty);
+            }
+
+            public void Dispose()
+            {
+                if (StagingPath != null)
+                {
+                    TryDelete(StagingPath);
+                }
+            }
+        }
+
+        private sealed class InboxCandidate
+        {
+            public InboxCandidate(
+                string filePath,
+                ModManifest? manifest,
+                bool preflightOk,
+                IReadOnlyList<string> preflightErrors,
+                string sourceSha256)
+            {
+                FilePath = filePath;
+                NormalizedPath = NormalizeSelectionPath(filePath);
+                var hasVersion = VersionUtil.TryParseSemantic(manifest?.Version, out var version);
+                Version = version;
+                IsValid = preflightOk && hasVersion;
+                SourceSha256 = IsValid ? sourceSha256 : string.Empty;
+                if (IsValid)
+                {
+                    Errors = Array.Empty<string>();
+                }
+                else if (preflightErrors.Count > 0)
+                {
+                    Errors = preflightErrors.ToArray();
+                }
+                else
+                {
+                    Errors = new[]
+                    {
+                        "Package candidate failed preflight because its version could not be ordered as SemVer."
+                    };
+                }
+
+                GroupKey = manifest != null && !string.IsNullOrWhiteSpace(manifest.Id)
+                    ? "id:" + manifest.Id.Trim().Normalize(NormalizationForm.FormC).ToLowerInvariant()
+                    : "path:" + NormalizedPath;
+            }
+
+            public string FilePath { get; }
+
+            public string NormalizedPath { get; }
+
+            public string GroupKey { get; }
+
+            public VersionUtil.ParsedSemanticVersion Version { get; }
+
+            public bool IsValid { get; }
+
+            public string SourceSha256 { get; }
+
+            public IReadOnlyList<string> Errors { get; }
+        }
+
         private sealed class ValidatedArchiveEntry
         {
             public ValidatedArchiveEntry(ZipArchiveEntry entry, string portablePath, bool isDirectory)
@@ -880,7 +1194,10 @@ namespace TopiaForge.ModManager.Core
 
         public string FilePath { get; }
 
-        /// <summary>Null when the file was skipped as superseded by a newer version in the same inbox.</summary>
+        /// <summary>
+        /// The install or rejected-preflight outcome. Null only when a valid candidate was skipped as
+        /// superseded by the selected version in the same inbox.
+        /// </summary>
         public PackageInstallResult? Install { get; }
 
         public bool Superseded { get; }

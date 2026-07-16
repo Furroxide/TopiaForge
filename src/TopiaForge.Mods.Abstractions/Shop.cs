@@ -9,6 +9,7 @@ namespace TopiaForge.Mods
     /// </summary>
     public sealed class ShopItem
     {
+        /// <summary>Creates an immutable shop catalog entry.</summary>
         public ShopItem(string id, string name, string description, int price, string category = "", int maxPurchases = 0)
         {
             if (string.IsNullOrWhiteSpace(id))
@@ -29,9 +30,16 @@ namespace TopiaForge.Mods
             MaxPurchases = Math.Max(0, maxPurchases);
         }
 
+        /// <summary>Gets the stable item identifier.</summary>
         public string Id { get; }
+
+        /// <summary>Gets the user-facing item name.</summary>
         public string Name { get; }
+
+        /// <summary>Gets the user-facing item description.</summary>
         public string Description { get; }
+
+        /// <summary>Gets the non-negative purchase price.</summary>
         public int Price { get; }
 
         /// <summary>Short display chip (e.g. "WEAPON"); empty for none.</summary>
@@ -44,6 +52,7 @@ namespace TopiaForge.Mods
     /// <summary>A spendable balance a shop UI can observe and debit.</summary>
     public interface IShopWallet
     {
+        /// <summary>Gets the current spendable balance.</summary>
         int Balance { get; }
 
         /// <summary>Debits <paramref name="amount"/> and returns true, or returns false without
@@ -59,13 +68,16 @@ namespace TopiaForge.Mods
     {
         private int balance;
 
+        /// <summary>Creates a wallet with an optional initial balance.</summary>
         public ShopWallet(int balance = 0)
         {
             this.balance = Math.Max(0, balance);
         }
 
+        /// <inheritdoc/>
         public int Balance => balance;
 
+        /// <inheritdoc/>
         public event Action<int>? BalanceChanged;
 
         /// <summary>Credits <paramref name="amount"/>; negative amounts are ignored.</summary>
@@ -80,6 +92,7 @@ namespace TopiaForge.Mods
             BalanceChanged?.Invoke(balance);
         }
 
+        /// <inheritdoc/>
         public bool TrySpend(int amount)
         {
             if (amount < 0 || amount > balance)
@@ -100,9 +113,13 @@ namespace TopiaForge.Mods
         }
     }
 
+    /// <summary>Describes the outcome of a shop purchase attempt.</summary>
     public enum ShopPurchaseResult
     {
+        /// <summary>The wallet was debited and the item was purchased.</summary>
         Purchased,
+
+        /// <summary>The wallet did not contain enough currency.</summary>
         InsufficientFunds,
 
         /// <summary>The item's <see cref="ShopItem.MaxPurchases"/> cap has been reached.</summary>
@@ -118,6 +135,7 @@ namespace TopiaForge.Mods
     /// </summary>
     public static class ShopTransactions
     {
+        /// <summary>Applies purchase limits, the optional host gate, and the wallet debit in a stable order.</summary>
         public static ShopPurchaseResult TryPurchase(ShopItem item, IShopWallet wallet, int timesPurchased, Func<ShopItem, bool>? canPurchase = null)
         {
             if (item == null)

@@ -1,15 +1,20 @@
 using System;
 using System.IO;
+using System.Text;
 using BepInEx.Logging;
 using TopiaForge.Mods;
 
 namespace TopiaForge.ModManager
 {
-    public sealed class ManagerFileLogger
+    public sealed class ManagerFileLogger : IDisposable, IModRuntimeLogger
     {
+        private const long MaxLogBytes = 8L * 1024 * 1024;
+        private const int RetainedLogFiles = 3;
         private readonly object sync = new object();
         private readonly string logFile;
         private readonly ManualLogSource bepinExLogger;
+        private StreamWriter? writer;
+        private bool disposed;
 
         public ManagerFileLogger(string logFile, ManualLogSource bepinExLogger)
         {
@@ -22,6 +27,9 @@ namespace TopiaForge.ModManager
                 {
                     Directory.CreateDirectory(directory);
                 }
+
+                RotateIfNeeded(force: false);
+                OpenWriter();
             }
             catch (Exception ex)
             {
@@ -73,7 +81,18 @@ namespace TopiaForge.ModManager
             {
                 lock (sync)
                 {
-                    File.AppendAllText(logFile, DateTime.Now.ToString("O") + " [" + level + "] [" + source + "] " + message + Environment.NewLine);
+                    if (!disposed)
+                    {
+                        EnsureWriter();
+                        writer?.WriteLine(DateTime.Now.ToString("O") + " [" + level + "] [" + source + "] " + message);
+                        if (writer != null && writer.BaseStream.Position >= MaxLogBytes)
+                        {
+                            writer.Dispose();
+                            writer = null;
+                            RotateIfNeeded(force: true);
+                            OpenWriter();
+                        }
+                    }
                 }
             }
             catch (Exception ex)
@@ -85,6 +104,63 @@ namespace TopiaForge.ModManager
             // BepInEx remains the observable fallback when the manager file cannot be written. Mod-scoped
             // messages include their owner so diagnostics do not lose attribution.
             EmitToBepInEx(level, consoleMessage);
+        }
+
+        public void Dispose()
+        {
+            lock (sync)
+            {
+                if (disposed)
+                {
+                    return;
+                }
+
+                disposed = true;
+                writer?.Dispose();
+                writer = null;
+            }
+        }
+
+        private void EnsureWriter()
+        {
+            if (writer == null)
+            {
+                OpenWriter();
+            }
+        }
+
+        private void OpenWriter()
+        {
+            var stream = new FileStream(logFile, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+            writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false))
+            {
+                AutoFlush = true
+            };
+        }
+
+        private void RotateIfNeeded(bool force)
+        {
+            if (!File.Exists(logFile) || (!force && new FileInfo(logFile).Length < MaxLogBytes))
+            {
+                return;
+            }
+
+            var oldest = logFile + "." + RetainedLogFiles;
+            if (File.Exists(oldest))
+            {
+                File.Delete(oldest);
+            }
+
+            for (var index = RetainedLogFiles - 1; index >= 1; index--)
+            {
+                var source = logFile + "." + index;
+                if (File.Exists(source))
+                {
+                    File.Move(source, logFile + "." + (index + 1));
+                }
+            }
+
+            File.Move(logFile, logFile + ".1");
         }
 
         private void EmitToBepInEx(string level, string message)

@@ -14,45 +14,115 @@ namespace TopiaForge.ModManager.Tests
 {
     /// <summary>
     /// Produces and verifies a deterministic metadata-level baseline for the public mod SDK.
-    /// Exact comparison makes every public change reviewable; the assembly version remains stable
-    /// at 0.1.0.0 while the 0.1 line accepts additive changes only.
+    /// Exact comparison makes every public change reviewable while the pre-release V1 contract is reshaped.
     /// </summary>
     internal static class SdkPublicApiBaselineTests
     {
-        private const string BaselineResourceName =
-            "TopiaForge.ModManager.Tests.topiaforge.mods.abstractions.api.txt";
+        private sealed class BaselineSpec
+        {
+            public BaselineSpec(string slug, string displayName, Func<Assembly> getAssembly)
+            {
+                Slug = slug;
+                DisplayName = displayName;
+                GetAssembly = getAssembly;
+            }
+
+            public string Slug { get; }
+            public string DisplayName { get; }
+            public Func<Assembly> GetAssembly { get; }
+            public string ResourceName => "TopiaForge.ModManager.Tests." + Slug + ".api.txt";
+        }
+
+        private static readonly IReadOnlyList<BaselineSpec> Baselines = new[]
+        {
+            new BaselineSpec(
+                "topiaforge.mods.abstractions",
+                "TopiaForge.Mods.Abstractions",
+                () => typeof(TopiaForgeMod).Assembly),
+            new BaselineSpec(
+                "topiaforge.mods.robotkit",
+                "TopiaForge.Mods.RobotKit",
+                () => typeof(IRobotAgentService).Assembly),
+            new BaselineSpec(
+                "topiaforge.mods.worlds",
+                "TopiaForge.Mods.Worlds",
+                () => typeof(IWorldGamemodeService).Assembly),
+            new BaselineSpec(
+                "topiaforge.mods.chronos",
+                "TopiaForge.Mods.Chronos",
+                () => typeof(ITimeControlService).Assembly),
+            new BaselineSpec(
+                "topiaforge.mods.prompts",
+                "TopiaForge.Mods.Prompts",
+                () => typeof(IPromptOverrideRegistry).Assembly),
+            new BaselineSpec(
+                "topiaforge.mods.ugc",
+                "TopiaForge.Mods.Ugc",
+                () => typeof(IUgcLiveSyncService).Assembly),
+            new BaselineSpec(
+                "topiaforge.mods.testing",
+                "TopiaForge.Mods.Testing",
+                () => typeof(TopiaForge.Mods.Testing.FakeModContext).Assembly)
+        };
 
         public static void Run()
         {
-            var actual = CreateBaseline();
             var assembly = typeof(SdkPublicApiBaselineTests).Assembly;
-            using var stream = assembly.GetManifestResourceStream(BaselineResourceName);
-            if (stream == null)
+            foreach (var baseline in Baselines)
             {
-                throw new InvalidOperationException(
-                    "The embedded SDK API baseline is missing. Restore " +
-                    "baselines/topiaforge.mods.abstractions.api.txt.");
+                var actual = CreateBaseline(baseline);
+                using var stream = assembly.GetManifestResourceStream(baseline.ResourceName);
+                if (stream == null)
+                {
+                    throw new InvalidOperationException(
+                        "The embedded SDK API baseline is missing. Restore baselines/" +
+                        baseline.Slug + ".api.txt.");
+                }
+
+                using var reader = new StreamReader(stream, Encoding.UTF8, true);
+                var expected = Normalize(reader.ReadToEnd());
+                if (!string.Equals(expected, actual, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        BuildDifference(baseline, expected, actual));
+                }
             }
 
-            using var reader = new StreamReader(stream, Encoding.UTF8, true);
-            var expected = Normalize(reader.ReadToEnd());
-            if (!string.Equals(expected, actual, StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(BuildDifference(expected, actual));
-            }
-
-            Console.WriteLine("SDK public API baseline passed.");
+            Console.WriteLine("SDK public API baselines passed (" + Baselines.Count + " assemblies).");
         }
 
         public static string CreateBaseline()
         {
-            var sdkAssembly = typeof(ITopiaForgeMod).Assembly;
+            return CreateBaseline(Baselines[0]);
+        }
+
+        public static string CreateBaseline(string slug)
+        {
+            var baseline = Baselines.FirstOrDefault(
+                candidate => string.Equals(candidate.Slug, slug, StringComparison.OrdinalIgnoreCase));
+            if (baseline == null)
+            {
+                throw new ArgumentException(
+                    "Unknown SDK API baseline '" + slug + "'. Available baselines: " +
+                    string.Join(", ", Baselines.Select(candidate => candidate.Slug)) + ".",
+                    nameof(slug));
+            }
+
+            return CreateBaseline(baseline);
+        }
+
+        public static IReadOnlyList<string> Slugs => Baselines.Select(baseline => baseline.Slug).ToArray();
+
+        private static string CreateBaseline(BaselineSpec baseline)
+        {
+            var sdkAssembly = baseline.GetAssembly();
             var lines = new List<string>
             {
-                "# TopiaForge.Mods.Abstractions public API baseline",
+                "# " + baseline.DisplayName + " public API baseline",
                 "# Format version: 2",
-                "# Regenerate with: dotnet run --project tests/TopiaForge.ModManager.Tests -c Release -- --print-sdk-api-baseline",
-                "# Review every change. The stable 0.1 line permits additive API changes only.",
+                "# Regenerate with: dotnet run --project tests/TopiaForge.ModManager.Tests -c Release -- " +
+                "--print-sdk-api-baseline " + baseline.Slug,
+                "# Review every change. Breaking changes require explicit V1 compatibility approval.",
                 string.Empty,
                 "assembly " + sdkAssembly.GetName().FullName,
                 "target-framework " + (sdkAssembly.GetCustomAttribute<TargetFrameworkAttribute>()?.FrameworkName ?? "unknown"),
@@ -454,16 +524,15 @@ namespace TopiaForge.ModManager.Tests
                 .TrimEnd('\n') + "\n";
         }
 
-        private static string BuildDifference(string expected, string actual)
+        private static string BuildDifference(BaselineSpec baseline, string expected, string actual)
         {
             var expectedLines = expected.Split('\n');
             var actualLines = actual.Split('\n');
             var removed = expectedLines.Except(actualLines, StringComparer.Ordinal).Take(25).ToArray();
             var added = actualLines.Except(expectedLines, StringComparer.Ordinal).Take(25).ToArray();
             var builder = new StringBuilder(
-                "TopiaForge.Mods.Abstractions public API differs from its reviewed baseline. " +
-                "Breaking changes are forbidden in the stable 0.1 assembly line; additive changes require review " +
-                "and an intentional baseline refresh.\n");
+                baseline.DisplayName + " public API differs from its reviewed baseline. " +
+                "Every V1 API change requires review and an intentional baseline refresh.\n");
             foreach (var line in removed)
             {
                 builder.Append("- ").AppendLine(line);
@@ -499,7 +568,8 @@ namespace TopiaForge.ModManager.Tests
             }
 
             builder.Append("To inspect the complete candidate surface, run: dotnet run --project ")
-                .Append("tests/TopiaForge.ModManager.Tests -c Release -- --print-sdk-api-baseline");
+                .Append("tests/TopiaForge.ModManager.Tests -c Release -- --print-sdk-api-baseline ")
+                .Append(baseline.Slug);
             return builder.ToString();
         }
     }

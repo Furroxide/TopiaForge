@@ -13,10 +13,95 @@ namespace TopiaForge.ModManager.Tests
     {
         private static int Main(string[] args)
         {
-            if (args.Length == 1 && string.Equals(args[0], "--print-sdk-api-baseline", StringComparison.Ordinal))
+            UnityMainThreadGuard.CaptureCurrentThread();
+            if (args.Length >= 1 && args.Length <= 2 &&
+                string.Equals(args[0], "--print-sdk-api-baseline", StringComparison.Ordinal))
             {
-                Console.Write(SdkPublicApiBaselineTests.CreateBaseline());
+                if (args.Length == 2)
+                {
+                    Console.Write(SdkPublicApiBaselineTests.CreateBaseline(args[1]));
+                }
+                else
+                {
+                    Console.Write(SdkPublicApiBaselineTests.CreateBaseline());
+                }
+
                 return 0;
+            }
+
+            if (args.Length == 1 &&
+                string.Equals(args[0], "--sdk-api-baselines", StringComparison.Ordinal))
+            {
+                SdkPublicApiBaselineTests.Run();
+                return 0;
+            }
+
+            if (args.Length == 1 && string.Equals(args[0], "--sdk-lifecycle", StringComparison.Ordinal))
+            {
+                var lifecycleRoot = Path.Combine(
+                    Path.GetTempPath(),
+                    "TopiaForgeSdkLifecycleTests-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(lifecycleRoot);
+                try
+                {
+                    SdkLifecycleTests.Run(lifecycleRoot);
+                    return 0;
+                }
+                finally
+                {
+                    TryDelete(lifecycleRoot);
+                }
+            }
+
+            if (args.Length == 1 && string.Equals(args[0], "--gameplay-facades", StringComparison.Ordinal))
+            {
+                GameplayFacadeTests.Run();
+                return 0;
+            }
+
+            if (args.Length == 1 && string.Equals(args[0], "--testing-kit", StringComparison.Ordinal))
+            {
+                TestingKitTests.Run();
+                return 0;
+            }
+
+            if (args.Length == 1 && string.Equals(args[0], "--module-contracts", StringComparison.Ordinal))
+            {
+                SdkSurfaceTests.Run();
+                ModuleContractSurfaceTests.Run();
+                TestingKitTests.Run();
+                PromptRegistryTests.Run();
+                OverrideTests.Run();
+                ConversationTests.Run();
+                ObjectiveRunnerTests.Run();
+                SandboxProgramDirectorTests.Run();
+                ModServiceRegistryTests.Run();
+                ChronosTests.Run();
+                return 0;
+            }
+
+            if (args.Length == 1 && string.Equals(args[0], "--first-party-manifests", StringComparison.Ordinal))
+            {
+                FirstPartyManifestTests.Run();
+                return 0;
+            }
+
+            if (args.Length == 1 &&
+                string.Equals(args[0], "--installed-version-coexistence", StringComparison.Ordinal))
+            {
+                var coexistenceRoot = Path.Combine(
+                    Path.GetTempPath(),
+                    "TopiaForgeInstalledVersionTests-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(coexistenceRoot);
+                try
+                {
+                    InstalledVersionCoexistenceTests.Run(coexistenceRoot);
+                    return 0;
+                }
+                finally
+                {
+                    TryDelete(coexistenceRoot);
+                }
             }
 
             var root = Path.Combine(Path.GetTempPath(), "TopiaForgeModManagerTests-" + Guid.NewGuid().ToString("N"));
@@ -29,10 +114,15 @@ namespace TopiaForge.ModManager.Tests
                 TestUpdatePreservesDisabledState(root);
                 TestAppliedRestartRequirementsClear();
                 RuntimePersistenceSecurityTests.Run(root);
+                StartupJournalTests.Run(root);
+                StartupRecoveryPolicyTests.Run();
+                PackageInstallReceiptTests.Run(root);
+                ManagedModAssemblyValidatorTests.Run(root);
+                RuntimePayloadDependencyTests.Run();
+                ServiceScaffoldRuntimeTests.Run(root);
                 BoundedTextFileTests.Run(root);
                 ExtractorFileIoTests.Run(root);
                 ModContextConfigPersistenceTests.Run(root);
-                AssetBundlePathPolicyTests.Run(root);
                 RoboApiClientTests.Run(root);
                 TestMissingManifestRejected(root);
                 TestZipTraversalRejected(root);
@@ -47,14 +137,24 @@ namespace TopiaForge.ModManager.Tests
                 TestReplacementRollbackPreservesInstalledPackage(root);
                 TestSchemaV1Rejected(root);
                 TestRetiredManifestAliasesRejected(root);
-                TestInstallPrunesOldVersions(root);
+                TestStrictManifestExtensions();
+                TestInstallPreservesOtherVersions(root);
                 TestInboxInstallConsumesFiles(root);
                 TestInboxNewestVersionWins(root);
                 TestInboxPrereleasePrecedence(root);
+                TestInboxFallsBackFromIncompatibleHigherVersion(root);
+                TestInboxFallsBackFromCorruptHigherVersion(root);
+                TestInboxEqualVersionUsesNormalizedPath(root);
+                TestInboxChangedAfterPreflightIsRetained(root);
+                TestInboxChangedSupersededCandidateIsRetained(root);
+                TestInboxEnumerationLimitsFailClosed(root);
+                TestInboxRejectsNonRegularCandidate(root);
                 TestInboxFailureLeavesFile(root);
                 TestScanIgnoresSupersededBrokenVersions(root);
                 TestScanStillReportsFullyBrokenPackage(root);
-                TestPruneSupersededVersionsRespectsStatePin(root);
+                TestScanSelectsDependencyCompatibleProviderVersion(root);
+                TestScanBacktracksConsumerVersionForCompleteAssignment(root);
+                InstalledVersionCoexistenceTests.Run(root);
                 TestRequiredDependenciesHelper();
                 TestDependencyOrder(root);
                 TestFrameworkDependencyOrder(root);
@@ -77,6 +177,12 @@ namespace TopiaForge.ModManager.Tests
                 UgcNoOpLaunchRequestTests.Run();
                 UgcLiveSyncTests.Run();
                 SdkSurfaceTests.Run();
+                RuntimeInfoTests.Run();
+                ModuleContractSurfaceTests.Run();
+                V1LaunchCoverageTests.Run();
+                GameplayFacadeTests.Run();
+                SdkLifecycleTests.Run(root);
+                TestingKitTests.Run();
                 SdkPublicApiBaselineTests.Run();
                 PromptRegistryTests.Run();
                 OverrideTests.Run();
@@ -91,6 +197,7 @@ namespace TopiaForge.ModManager.Tests
                 ModServiceRegistryTests.Run();
                 SceneTransitionTrackerTests.Run();
                 MainThreadDispatchQueueTests.Run();
+                MainThreadGuardTests.Run();
                 SafeEventTests.Run();
                 ChronosTests.Run();
                 ShopTests.Run();
@@ -181,7 +288,7 @@ namespace TopiaForge.ModManager.Tests
             var state = new ManagerState();
             var appliedManifest = new ModManifest
             {
-                SchemaVersion = 3,
+                SchemaVersion = 4,
                 Id = "applied.mod",
                 Name = "Applied",
                 Version = "1.0.0",
@@ -190,7 +297,7 @@ namespace TopiaForge.ModManager.Tests
             };
             var pendingManifest = new ModManifest
             {
-                SchemaVersion = 3,
+                SchemaVersion = 4,
                 Id = "pending.mod",
                 Name = "Pending",
                 Version = "1.0.0",
@@ -234,7 +341,7 @@ namespace TopiaForge.ModManager.Tests
                 zip.CreateEntry("../escape.txt");
                 WriteEntry(zip, "topiaforge.mod.json", JsonUtil.Serialize(new ModManifest
                 {
-                    SchemaVersion = 3,
+                    SchemaVersion = 4,
                     Id = "bad.mod",
                     Name = "Bad",
                     Version = "1.0.0",
@@ -495,10 +602,10 @@ namespace TopiaForge.ModManager.Tests
             }
 
             var result = new PackageInstaller().Install(package, paths, new ManagerState(), restartRequired: false);
-            Assert(!result.Ok && result.Errors.Any(e => e.Contains("schemaVersion must be 3")), "schema v1 should be rejected");
+            Assert(!result.Ok && result.Errors.Any(e => e.Contains("schemaVersion must be 4")), "schema v1 should be rejected");
         }
 
-        private static void TestInstallPrunesOldVersions(string root)
+        private static void TestInstallPreservesOtherVersions(string root)
         {
             var paths = NewPaths(root, "prune-install");
             var state = new ManagerState();
@@ -511,7 +618,8 @@ namespace TopiaForge.ModManager.Tests
             Assert(installer.Install(firstPackage, paths, state, restartRequired: false).Ok, "1.0.0 should install");
             Assert(installer.Install(secondPackage, paths, state, restartRequired: false).Ok, "1.1.0 should install");
 
-            Assert(!Directory.Exists(paths.GetPackagePath("prune.mod", "1.0.0")), "superseded 1.0.0 should be pruned");
+            Assert(Directory.Exists(paths.GetPackagePath("prune.mod", "1.0.0")),
+                "installing a new version should preserve the previous version for profile selection");
             Assert(Directory.Exists(paths.GetPackagePath("prune.mod", "1.1.0")), "installed 1.1.0 should remain");
         }
 
@@ -519,11 +627,12 @@ namespace TopiaForge.ModManager.Tests
         {
             var paths = NewPaths(root, "retired-manifest-aliases");
             var package = Path.Combine(root, "retired-manifest-aliases.topiaforgemod");
-            const string manifest = "{\"schemaVersion\":3,\"name\":\"alias.mod\"," +
+            const string manifest = "{\"schemaVersion\":4,\"name\":\"alias.mod\"," +
                 "\"displayName\":\"Alias\",\"version\":\"1.0.0\"," +
                 "\"author\":{\"name\":\"TopiaForge\"},\"entryAssembly\":\"Alias.dll\"," +
                 "\"entryType\":\"Alias.Entry\",\"gameVersion\":\"2227\"," +
-                "\"dependencies\":[{\"id\":\"other.mod\",\"version\":\">=1.0.0\"}]}";
+                "\"supportedGameVersionRange\":\"*\",\"supportedLoaderVersionRange\":\"*\"," +
+                "\"supportedSdkVersionRange\":\"*\",\"vpmDependencies\":{},\"permissions\":[]}";
             using (var zip = ZipFile.Open(package, ZipArchiveMode.Create))
             {
                 WriteEntry(zip, "topiaforge.mod.json", manifest);
@@ -538,7 +647,8 @@ namespace TopiaForge.ModManager.Tests
             Assert(
                 !result.Ok &&
                 result.Errors.Any(error => error.Contains("gameVersion is not supported")) &&
-                result.Errors.Any(error => error.Contains("must use versionRange")),
+                result.Errors.Any(error => error.Contains("vpmDependencies is not supported")) &&
+                result.Errors.Any(error => error.Contains("permissions is not supported")),
                 "retired manifest aliases must be rejected explicitly");
         }
 
@@ -559,6 +669,52 @@ namespace TopiaForge.ModManager.Tests
             Assert(!File.Exists(alphaFile) && !File.Exists(betaFile), "consumed inbox files should be gone");
             Assert(state.Find("alpha.mod")?.RestartRequired == false, "startup-style install should not flag restart");
             Assert(state.Find("beta.mod")?.Version == "1.0.0", "state should track the installed version");
+            var receipt = JsonUtil.LoadFile(
+                Path.Combine(paths.GetPackagePath("alpha.mod", "1.0.0"), PackageInstallReceipt.FileName),
+                new PackageInstallReceipt());
+            Assert(receipt.Source == PackageInstallReceipt.InboxSource,
+                "runtime inbox installs should retain inbox provenance without persisting the inbox path");
+        }
+
+        private static void TestStrictManifestExtensions()
+        {
+            var fixtures = Path.Combine(FindRepoRoot(), "tests", "fixtures", "manifests");
+            var corpus = File.ReadAllLines(Path.Combine(fixtures, "corpus.txt"));
+            foreach (var rawCase in corpus)
+            {
+                var testCase = rawCase.Trim();
+                if (testCase.Length == 0 || testCase.StartsWith("#", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var separator = testCase.IndexOf(' ');
+                Assert(separator > 0, "manifest corpus entries must contain an expectation and fixture name");
+                var expectedValid = string.Equals(
+                    testCase.Substring(0, separator),
+                    "valid",
+                    StringComparison.Ordinal);
+                var fixtureName = testCase.Substring(separator + 1).Trim();
+                var actualValid = false;
+                try
+                {
+                    var manifest = ModManifestJson.Deserialize(
+                        File.ReadAllText(Path.Combine(fixtures, fixtureName)));
+                    actualValid = ManifestValidator.Validate(manifest).Count == 0;
+                }
+                catch (InvalidDataException)
+                {
+                    actualValid = false;
+                }
+                catch (FormatException)
+                {
+                    actualValid = false;
+                }
+
+                Assert(
+                    actualValid == expectedValid,
+                    "C# manifest validator disagreed with corpus expectation for " + fixtureName);
+            }
         }
 
         private static void TestInboxNewestVersionWins(string root)
@@ -606,6 +762,219 @@ namespace TopiaForge.ModManager.Tests
                 "the lower prerelease should never reach the package store");
             Assert(!File.Exists(lowerFile) && !File.Exists(higherFile),
                 "both prerelease inbox files should be consumed");
+        }
+
+        private static void TestInboxFallsBackFromIncompatibleHigherVersion(string root)
+        {
+            var paths = NewPaths(root, "inbox-incompatible-fallback");
+            var state = new ManagerState();
+            var lowerFile = Path.Combine(paths.PackageInbox, "compatible-1.0.0.topiaforgemod");
+            var higherFile = Path.Combine(paths.PackageInbox, "incompatible-2.0.0.topiaforgemod");
+            CreatePackageCandidate(
+                lowerFile,
+                "fallback.compatibility",
+                "Compatibility fallback",
+                "1.0.0",
+                supportedGameVersionRange: "0.0.2227",
+                corruptEntryAssembly: false);
+            CreatePackageCandidate(
+                higherFile,
+                "fallback.compatibility",
+                "Compatibility fallback",
+                "2.0.0",
+                supportedGameVersionRange: ">=0.0.3000",
+                corruptEntryAssembly: false);
+            var validationContext = new ManifestValidationContext(
+                gameVersion: "0.0.2227",
+                requireKnownGameVersion: true);
+
+            var results = new PackageInstaller().InstallInbox(
+                paths,
+                state,
+                restartRequired: false,
+                validationContext);
+
+            Assert(results.Count == 2, "both compatible and incompatible candidates should be reported");
+            var installed = results.Single(result => result.Install?.Ok == true);
+            var rejected = results.Single(result => string.Equals(
+                result.FilePath,
+                higherFile,
+                StringComparison.Ordinal));
+            var rejection = rejected.Install;
+            Assert(installed.Install!.Manifest!.Version == "1.0.0" && installed.Consumed,
+                "the highest compatible candidate should install even when a newer candidate is incompatible");
+            Assert(!rejected.Superseded && rejection != null && !rejection.Ok,
+                "the incompatible higher candidate should retain its rejected-preflight outcome");
+            Assert(rejection!.Errors.Any(error => error.Contains(
+                    "supportedGameVersionRange",
+                    StringComparison.Ordinal)),
+                "the incompatible candidate should report its actionable game-range error");
+            Assert(!rejected.Consumed && File.Exists(higherFile),
+                "the rejected incompatible candidate should remain in the inbox for inspection");
+            Assert(state.Find("fallback.compatibility")?.Version == "1.0.0",
+                "state should select the compatible lower version");
+        }
+
+        private static void TestInboxFallsBackFromCorruptHigherVersion(string root)
+        {
+            var paths = NewPaths(root, "inbox-corrupt-fallback");
+            var state = new ManagerState();
+            var lowerFile = Path.Combine(paths.PackageInbox, "valid-1.0.0.topiaforgemod");
+            var higherFile = Path.Combine(paths.PackageInbox, "corrupt-2.0.0.topiaforgemod");
+            CreatePackageCandidate(
+                lowerFile,
+                "fallback.integrity",
+                "Integrity fallback",
+                "1.0.0",
+                supportedGameVersionRange: "*",
+                corruptEntryAssembly: false);
+            CreatePackageCandidate(
+                higherFile,
+                "fallback.integrity",
+                "Integrity fallback",
+                "2.0.0",
+                supportedGameVersionRange: "*",
+                corruptEntryAssembly: true);
+
+            var results = new PackageInstaller().InstallInbox(paths, state, restartRequired: false);
+
+            Assert(results.Count == 2, "both valid and corrupt candidates should be reported");
+            var installed = results.Single(result => result.Install?.Ok == true);
+            var rejected = results.Single(result => string.Equals(
+                result.FilePath,
+                higherFile,
+                StringComparison.Ordinal));
+            var rejection = rejected.Install;
+            Assert(installed.Install!.Manifest!.Version == "1.0.0" && installed.Consumed,
+                "the valid lower candidate should install when the newer assembly fails metadata preflight");
+            Assert(!rejected.Superseded && rejection != null && !rejection.Ok,
+                "the corrupt higher candidate should be reported as rejected rather than superseded");
+            Assert(rejection!.Errors.Any(error =>
+                    error.Contains("PE", StringComparison.OrdinalIgnoreCase) ||
+                    error.Contains("managed", StringComparison.OrdinalIgnoreCase)),
+                "the corrupt candidate should retain its actionable managed-assembly validation error");
+            Assert(!rejected.Consumed && File.Exists(higherFile),
+                "the rejected corrupt package should remain in the inbox for inspection");
+            Assert(state.Find("fallback.integrity")?.Version == "1.0.0",
+                "state should select the valid lower package");
+        }
+
+        private static void TestInboxEqualVersionUsesNormalizedPath(string root)
+        {
+            var paths = NewPaths(root, "inbox-path-tiebreak");
+            var state = new ManagerState();
+            var selectedFile = Path.Combine(paths.PackageInbox, "a-equal.topiaforgemod");
+            var supersededFile = Path.Combine(paths.PackageInbox, "Z-equal.topiaforgemod");
+            CreatePackage(selectedFile, "fallback.tie", "Tie", "1.0.0", "Tie.dll", "Tie.Entry");
+            CreatePackage(supersededFile, "fallback.tie", "Tie", "1.0.0", "Tie.dll", "Tie.Entry");
+
+            var results = new PackageInstaller().InstallInbox(paths, state, restartRequired: false);
+
+            var selected = results.Single(result => result.Install?.Ok == true);
+            var superseded = results.Single(result => result.Superseded);
+            Assert(string.Equals(selected.FilePath, selectedFile, StringComparison.Ordinal),
+                "equal SemVer candidates should use normalized path order as the deterministic tiebreaker");
+            Assert(string.Equals(superseded.FilePath, supersededFile, StringComparison.Ordinal)
+                && superseded.Consumed,
+                "the path-later equal-version candidate should be consumed as superseded");
+        }
+
+        private static void TestInboxChangedAfterPreflightIsRetained(string root)
+        {
+            var paths = NewPaths(root, "inbox-preflight-race");
+            var package = Path.Combine(paths.PackageInbox, "race.topiaforgemod");
+            CreatePackage(package, "race.mod", "Race", "1.0.0", "Race.dll", "Race.Entry");
+            var installer = new PackageInstaller
+            {
+                BeforeInboxInstallForTesting = selected =>
+                {
+                    File.Delete(selected);
+                    CreatePackage(selected, "race.mod", "Race replacement", "2.0.0", "Race.dll", "Race.Entry");
+                }
+            };
+
+            var results = installer.InstallInbox(paths, new ManagerState(), restartRequired: false);
+
+            Assert(results.Count == 1 && results[0].Install != null && !results[0].Install!.Ok,
+                "bytes replaced after inbox preflight must fail the install");
+            Assert(results[0].Install!.Errors.Any(error => error.Contains("changed", StringComparison.OrdinalIgnoreCase)),
+                "a changed inbox candidate should produce an actionable integrity error");
+            Assert(!results[0].Consumed && File.Exists(package),
+                "a replacement at the selected inbox path must be retained rather than deleted");
+            Assert(!Directory.Exists(paths.GetPackagePath("race.mod", "1.0.0")) &&
+                   !Directory.Exists(paths.GetPackagePath("race.mod", "2.0.0")),
+                "neither preflighted nor replacement bytes may reach the package store");
+        }
+
+        private static void TestInboxChangedSupersededCandidateIsRetained(string root)
+        {
+            var paths = NewPaths(root, "inbox-superseded-race");
+            var lower = Path.Combine(paths.PackageInbox, "race-1.topiaforgemod");
+            var higher = Path.Combine(paths.PackageInbox, "race-2.topiaforgemod");
+            CreatePackage(lower, "race.superseded", "Race", "1.0.0", "Race.dll", "Race.Entry");
+            CreatePackage(higher, "race.superseded", "Race", "2.0.0", "Race.dll", "Race.Entry");
+            var installer = new PackageInstaller
+            {
+                BeforeInboxInstallForTesting = _ => File.AppendAllText(lower, "replacement")
+            };
+
+            var results = installer.InstallInbox(paths, new ManagerState(), restartRequired: false);
+            var winner = results.Single(result => !result.Superseded);
+            var superseded = results.Single(result => result.Superseded);
+
+            Assert(winner.Install?.Ok == true && winner.Consumed,
+                "the unchanged selected candidate should still install and be consumed");
+            Assert(!superseded.Consumed && File.Exists(lower) &&
+                   superseded.ConsumeError?.Contains("changed", StringComparison.OrdinalIgnoreCase) == true,
+                "changed bytes at a superseded path must be retained rather than deleting a replacement");
+        }
+
+        private static void TestInboxEnumerationLimitsFailClosed(string root)
+        {
+            var entryPaths = NewPaths(root, "inbox-entry-limit");
+            for (var index = 0; index <= 1024; index++)
+            {
+                File.WriteAllText(Path.Combine(entryPaths.PackageInbox, "entry-" + index + ".txt"), string.Empty);
+            }
+
+            var entryResults = new PackageInstaller().InstallInbox(
+                entryPaths,
+                new ManagerState(),
+                restartRequired: false);
+            Assert(entryResults.Count == 1 && entryResults[0].Install?.Ok == false &&
+                   entryResults[0].Install!.Errors.Any(error => error.Contains("1024 entry limit")),
+                "an oversized inbox must fail closed before candidate processing");
+
+            var packagePaths = NewPaths(root, "inbox-package-limit");
+            for (var index = 0; index <= 256; index++)
+            {
+                File.WriteAllText(
+                    Path.Combine(packagePaths.PackageInbox, "candidate-" + index + ".topiaforgemod"),
+                    string.Empty);
+            }
+
+            var packageResults = new PackageInstaller().InstallInbox(
+                packagePaths,
+                new ManagerState(),
+                restartRequired: false);
+            Assert(packageResults.Count == 1 && packageResults[0].Install?.Ok == false &&
+                   packageResults[0].Install!.Errors.Any(error => error.Contains("256 package limit")),
+                "too many package candidates must fail closed before archive preflight");
+        }
+
+        private static void TestInboxRejectsNonRegularCandidate(string root)
+        {
+            var paths = NewPaths(root, "inbox-non-regular");
+            var directoryCandidate = Path.Combine(paths.PackageInbox, "directory.topiaforgemod");
+            Directory.CreateDirectory(directoryCandidate);
+
+            var results = new PackageInstaller().InstallInbox(paths, new ManagerState(), restartRequired: false);
+
+            Assert(results.Count == 1 && results[0].Install?.Ok == false,
+                "a package-named directory should be reported as an invalid inbox candidate");
+            Assert(results[0].Install!.Errors.Any(error => error.Contains("special file", StringComparison.Ordinal)) &&
+                   !results[0].Consumed && Directory.Exists(directoryCandidate),
+                "non-regular candidates must remain untouched for inspection");
         }
 
         private static void TestInboxFailureLeavesFile(string root)
@@ -659,56 +1028,124 @@ namespace TopiaForge.ModManager.Tests
             Assert(!epsilon[0].IsValid && epsilon[0].Errors.Count > 0, "the broken package should carry its error");
         }
 
-        private static void TestPruneSupersededVersionsRespectsStatePin(string root)
+        private static void TestScanSelectsDependencyCompatibleProviderVersion(string root)
         {
-            var paths = NewPaths(root, "prune-startup");
+            var paths = NewPaths(root, "scan-compatible-provider");
             var state = new ManagerState();
-            var pinnedManifest = new ModManifest
+            var installer = new PackageInstaller();
+            var providerOne = Path.Combine(root, "selection-provider-1.topiaforgemod");
+            var providerTwo = Path.Combine(root, "selection-provider-2.topiaforgemod");
+            var consumer = Path.Combine(root, "selection-consumer.topiaforgemod");
+            CreatePackageCandidate(
+                providerOne,
+                "selection.provider",
+                "Selection provider",
+                "1.0.0",
+                "*",
+                corruptEntryAssembly: false);
+            CreatePackageCandidate(
+                providerTwo,
+                "selection.provider",
+                "Selection provider",
+                "2.0.0",
+                "*",
+                corruptEntryAssembly: false);
+            CreatePackageCandidate(
+                consumer,
+                "selection.consumer",
+                "Selection consumer",
+                "1.0.0",
+                "*",
+                corruptEntryAssembly: false,
+                dependencies: new Dictionary<string, string>
+                {
+                    ["selection.provider"] = ">=1.0.0 <2.0.0"
+                });
+            Assert(installer.Install(providerOne, paths, state, false).Ok, "provider 1 should install");
+            Assert(installer.Install(providerTwo, paths, state, false).Ok, "provider 2 should install");
+            Assert(installer.Install(consumer, paths, state, false).Ok, "consumer should install");
+
+            var packages = new ModRegistry().Scan(paths, state);
+            var selectedProvider = packages.Single(package => package.Manifest?.Id == "selection.provider");
+            var resolution = new DependencyResolver().Resolve(packages);
+
+            Assert(selectedProvider.Manifest!.Version == "1.0.0",
+                "an unpinned provider should downgrade to the highest version compatible with its consumer");
+            Assert(selectedProvider.SelectionReason.Contains("highest compatible version '1.0.0'", StringComparison.Ordinal),
+                "dependency-compatible recovery should be recorded in diagnostics");
+            Assert(resolution.Errors.Count == 0 && resolution.OrderedPackages.Count == 2,
+                "a satisfiable retained provider version must keep the complete dependency graph loadable");
+        }
+
+        private static void TestScanBacktracksConsumerVersionForCompleteAssignment(string root)
+        {
+            var paths = NewPaths(root, "scan-compatible-assignment");
+            var state = new ManagerState();
+            var installer = new PackageInstaller();
+            var providerOne = Path.Combine(root, "assignment-provider-1.topiaforgemod");
+            var providerTwo = Path.Combine(root, "assignment-provider-2.topiaforgemod");
+            var consumerOne = Path.Combine(root, "assignment-consumer-1.topiaforgemod");
+            var consumerTwo = Path.Combine(root, "assignment-consumer-2.topiaforgemod");
+            var guard = Path.Combine(root, "assignment-guard.topiaforgemod");
+            CreatePackageCandidate(providerOne, "assignment.provider", "Provider", "1.0.0", "*", false);
+            CreatePackageCandidate(providerTwo, "assignment.provider", "Provider", "2.0.0", "*", false);
+            CreatePackageCandidate(
+                consumerOne,
+                "assignment.consumer",
+                "Consumer",
+                "1.0.0",
+                "*",
+                false,
+                new Dictionary<string, string> { ["assignment.provider"] = "<2.0.0" });
+            CreatePackageCandidate(
+                consumerTwo,
+                "assignment.consumer",
+                "Consumer",
+                "2.0.0",
+                "*",
+                false,
+                new Dictionary<string, string> { ["assignment.provider"] = ">=2.0.0" });
+            CreatePackageCandidate(
+                guard,
+                "assignment.guard",
+                "Guard",
+                "1.0.0",
+                "*",
+                false,
+                new Dictionary<string, string> { ["assignment.provider"] = "<2.0.0" });
+            foreach (var archive in new[] { providerOne, providerTwo, consumerOne, consumerTwo, guard })
             {
-                SchemaVersion = 3,
-                Id = "zeta.mod",
-                Name = "Zeta",
-                Version = "1.0.0",
-                EntryAssembly = "Zeta.dll",
-                EntryType = "Zeta.Entry"
-            };
-            state.Upsert(pinnedManifest, enabled: true, restartRequired: false);
-            Directory.CreateDirectory(paths.GetPackagePath("zeta.mod", "1.0.0"));
-            Directory.CreateDirectory(paths.GetPackagePath("zeta.mod", "1.1.0"));
-            // No state entry for this id: nothing may be deleted.
-            Directory.CreateDirectory(paths.GetPackagePath("orphan.mod", "0.1.0"));
-            Directory.CreateDirectory(paths.GetPackagePath("orphan.mod", "0.2.0"));
+                Assert(installer.Install(archive, paths, state, false).Ok, "assignment fixture should install");
+            }
 
-            var pruned = new List<string>();
-            new ModRegistry().PruneSupersededVersions(paths, state, pruned.Add);
+            var packages = new ModRegistry().Scan(paths, state);
+            var selectedConsumer = packages.Single(package => package.Manifest?.Id == "assignment.consumer");
+            var selectedProvider = packages.Single(package => package.Manifest?.Id == "assignment.provider");
+            var resolution = new DependencyResolver().Resolve(packages);
 
-            Assert(Directory.Exists(paths.GetPackagePath("zeta.mod", "1.0.0")), "state-pinned version should be kept");
-            Assert(!Directory.Exists(paths.GetPackagePath("zeta.mod", "1.1.0")), "non-pinned version should be pruned even when higher");
-            Assert(pruned.Count == 1 && pruned[0].Contains("1.1.0"), "prune should report the removed version");
-            Assert(Directory.Exists(paths.GetPackagePath("orphan.mod", "0.1.0"))
-                && Directory.Exists(paths.GetPackagePath("orphan.mod", "0.2.0")), "ids without state must not be touched");
+            Assert(selectedConsumer.Manifest!.Version == "1.0.0" && selectedProvider.Manifest!.Version == "1.0.0",
+                "selection should backtrack a consumer as well as its provider to find the highest complete assignment");
+            Assert(resolution.Errors.Count == 0 && resolution.OrderedPackages.Count == 3,
+                "the selected assignment should load every compatible retained package");
         }
 
         private static void TestRequiredDependenciesHelper()
         {
             var manifest = new ModManifest
             {
-                SchemaVersion = 3,
+                SchemaVersion = 4,
                 Id = "eta.mod",
                 Name = "Eta",
                 Version = "1.0.0",
                 EntryAssembly = "Eta.dll",
                 EntryType = "Eta.Entry"
             };
-            manifest.VpmDependencies.Add("framework.mod", ">=1.0.0");
-            manifest.Dependencies = new List<ModDependency>
-            {
-                new ModDependency { Id = "hard.mod" },
-                new ModDependency { Id = "soft.mod", Optional = true }
-            };
+            manifest.Dependencies.Add("framework.mod", ">=1.0.0");
+            manifest.Dependencies.Add("hard.mod", "*");
+            manifest.OptionalDependencies.Add("soft.mod", "*");
 
             var required = DependencyResolver.GetRequiredDependencies(manifest).Select(d => d.Id).ToList();
-            Assert(required.Contains("framework.mod") && required.Contains("hard.mod"), "vpm + hard dependencies are required");
+            Assert(required.Contains("framework.mod") && required.Contains("hard.mod"), "hard dependencies are required");
             Assert(!required.Contains("soft.mod"), "optional dependencies are not required");
 
             var failed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "FRAMEWORK.MOD" };
@@ -727,7 +1164,7 @@ namespace TopiaForge.ModManager.Tests
             var state = new ManagerState();
             var depManifest = new ModManifest
             {
-                SchemaVersion = 3,
+                SchemaVersion = 4,
                 Id = "dependency.mod",
                 Name = "Dependency",
                 Version = "1.0.0",
@@ -736,14 +1173,14 @@ namespace TopiaForge.ModManager.Tests
             };
             var mainManifest = new ModManifest
             {
-                SchemaVersion = 3,
+                SchemaVersion = 4,
                 Id = "main.mod",
                 Name = "Main",
                 Version = "1.0.0",
                 EntryAssembly = "Main.dll",
                 EntryType = "Main.Entry"
             };
-            mainManifest.VpmDependencies.Add("dependency.mod", ">=1.0.0");
+            mainManifest.Dependencies.Add("dependency.mod", ">=1.0.0");
 
             var dependency = new ModPackage(Path.Combine(root, "dep"), depManifest, state.Upsert(depManifest, true, false), Array.Empty<string>());
             var main = new ModPackage(Path.Combine(root, "main"), mainManifest, state.Upsert(mainManifest, true, false), Array.Empty<string>());
@@ -757,46 +1194,46 @@ namespace TopiaForge.ModManager.Tests
         private static void TestFrameworkDependencyOrder(string root)
         {
             var state = new ManagerState();
-            var assetsManifest = new ModManifest
+            var worldsManifest = new ModManifest
             {
-                SchemaVersion = 3,
-                Id = "io.github.furroxide.topiaforge.assets",
-                Name = "TopiaForge Assets",
-                Version = "0.1.0",
-                EntryAssembly = "TopiaForge.Assets.dll",
-                EntryType = "TopiaForge.Assets.AssetsMod"
+                SchemaVersion = 4,
+                Id = "io.github.furroxide.topiaforge.worlds",
+                Name = "TopiaForge Worlds",
+                Version = "1.0.0",
+                EntryAssembly = "TopiaForge.Worlds.dll",
+                EntryType = "TopiaForge.Worlds.WorldsMod"
             };
             var promptsManifest = new ModManifest
             {
-                SchemaVersion = 3,
+                SchemaVersion = 4,
                 Id = "io.github.furroxide.topiaforge.prompts",
                 Name = "TopiaForge Prompts",
-                Version = "0.1.0",
+                Version = "1.0.0",
                 EntryAssembly = "TopiaForge.Prompts.dll",
                 EntryType = "TopiaForge.Prompts.PromptsMod"
             };
             var consumerManifest = new ModManifest
             {
-                SchemaVersion = 3,
+                SchemaVersion = 4,
                 Id = "consumer.mod",
                 Name = "Consumer",
                 Version = "1.0.0",
                 EntryAssembly = "Consumer.dll",
                 EntryType = "Consumer.Entry"
             };
-            consumerManifest.VpmDependencies.Add("io.github.furroxide.topiaforge.assets", ">=0.1.0");
-            consumerManifest.VpmDependencies.Add("io.github.furroxide.topiaforge.prompts", ">=0.1.0");
-            consumerManifest.LoadAfter.Add("io.github.furroxide.topiaforge.assets");
+            consumerManifest.Dependencies.Add("io.github.furroxide.topiaforge.worlds", ">=1.0.0 <2.0.0");
+            consumerManifest.Dependencies.Add("io.github.furroxide.topiaforge.prompts", ">=1.0.0 <2.0.0");
+            consumerManifest.LoadAfter.Add("io.github.furroxide.topiaforge.worlds");
             consumerManifest.LoadAfter.Add("io.github.furroxide.topiaforge.prompts");
 
-            var assets = new ModPackage(Path.Combine(root, "assets"), assetsManifest, state.Upsert(assetsManifest, true, false), Array.Empty<string>());
+            var worlds = new ModPackage(Path.Combine(root, "worlds"), worldsManifest, state.Upsert(worldsManifest, true, false), Array.Empty<string>());
             var prompts = new ModPackage(Path.Combine(root, "prompts"), promptsManifest, state.Upsert(promptsManifest, true, false), Array.Empty<string>());
             var consumer = new ModPackage(Path.Combine(root, "consumer"), consumerManifest, state.Upsert(consumerManifest, true, false), Array.Empty<string>());
-            var result = new DependencyResolver().Resolve(new[] { consumer, prompts, assets });
+            var result = new DependencyResolver().Resolve(new[] { consumer, prompts, worlds });
             var orderedIds = result.OrderedPackages.Select(p => p.Manifest!.Id).ToList();
 
             Assert(orderedIds.Count == 3, "framework providers and consumer should all be loadable");
-            Assert(orderedIds.IndexOf("io.github.furroxide.topiaforge.assets") < orderedIds.IndexOf("consumer.mod"), "assets provider should load before its consumer");
+            Assert(orderedIds.IndexOf("io.github.furroxide.topiaforge.worlds") < orderedIds.IndexOf("consumer.mod"), "worlds provider should load before its consumer");
             Assert(orderedIds.IndexOf("io.github.furroxide.topiaforge.prompts") < orderedIds.IndexOf("consumer.mod"), "prompts provider should load before its consumer");
         }
 
@@ -808,10 +1245,10 @@ namespace TopiaForge.ModManager.Tests
             var cycleB = TestManifest("cycle.b");
             var cycleDependent = TestManifest("cycle.consumer");
             var optionalConsumer = TestManifest("cycle.optional");
-            cycleA.VpmDependencies.Add("cycle.b", ">=1.0.0");
-            cycleB.VpmDependencies.Add("cycle.a", ">=1.0.0");
-            cycleDependent.VpmDependencies.Add("cycle.a", ">=1.0.0");
-            optionalConsumer.Dependencies.Add(new ModDependency { Id = "cycle.a", Optional = true });
+            cycleA.Dependencies.Add("cycle.b", ">=1.0.0");
+            cycleB.Dependencies.Add("cycle.a", ">=1.0.0");
+            cycleDependent.Dependencies.Add("cycle.a", ">=1.0.0");
+            optionalConsumer.OptionalDependencies.Add("cycle.a", "*");
 
             var cycleResult = new DependencyResolver().Resolve(new[]
             {
@@ -830,8 +1267,8 @@ namespace TopiaForge.ModManager.Tests
 
             var missing = TestManifest("missing.leaf");
             var missingDependent = TestManifest("missing.consumer");
-            missing.VpmDependencies.Add("not.installed", ">=1.0.0");
-            missingDependent.VpmDependencies.Add("missing.leaf", ">=1.0.0");
+            missing.Dependencies.Add("not.installed", ">=1.0.0");
+            missingDependent.Dependencies.Add("missing.leaf", ">=1.0.0");
             var missingResult = new DependencyResolver().Resolve(new[]
             {
                 TestPackage(root, state, missingDependent),
@@ -847,8 +1284,8 @@ namespace TopiaForge.ModManager.Tests
             var oldProvider = TestManifest("old.provider");
             var incompatible = TestManifest("incompatible.consumer");
             var transitive = TestManifest("incompatible.transitive");
-            incompatible.VpmDependencies.Add("old.provider", ">=2.0.0");
-            transitive.VpmDependencies.Add("incompatible.consumer", ">=1.0.0");
+            incompatible.Dependencies.Add("old.provider", ">=2.0.0");
+            transitive.Dependencies.Add("incompatible.consumer", ">=1.0.0");
             var versionResult = new DependencyResolver().Resolve(new[]
             {
                 TestPackage(root, state, transitive),
@@ -865,7 +1302,7 @@ namespace TopiaForge.ModManager.Tests
             var duplicateFirst = TestManifest("duplicate.mod");
             var duplicateSecond = TestManifest("DUPLICATE.MOD");
             var duplicateConsumer = TestManifest("duplicate.consumer");
-            duplicateConsumer.VpmDependencies.Add("duplicate.mod", ">=1.0.0");
+            duplicateConsumer.Dependencies.Add("duplicate.mod", ">=1.0.0");
             var duplicateResult = new DependencyResolver().Resolve(new[]
             {
                 new ModPackage(
@@ -899,11 +1336,7 @@ namespace TopiaForge.ModManager.Tests
                 var provider = TestManifest("range.provider");
                 provider.Version = "1.2.4";
                 var consumer = TestManifest("range.consumer");
-                consumer.Dependencies.Add(new ModDependency
-                {
-                    Id = provider.Id,
-                    VersionRange = range
-                });
+                consumer.Dependencies.Add(provider.Id, range);
                 return new DependencyResolver().Resolve(new[]
                 {
                     TestPackage(root, state, consumer),
@@ -926,7 +1359,7 @@ namespace TopiaForge.ModManager.Tests
             foreach (var range in new[] { ">=1.2.0 <2.0.0", "1.2.x" })
             {
                 var manifest = TestManifest("range.validation");
-                manifest.Dependencies.Add(new ModDependency { Id = "range.provider", VersionRange = range });
+                manifest.Dependencies.Add("range.provider", range);
                 Assert(!ManifestValidator.Validate(manifest).Any(error => error.Contains("invalid version")),
                     "manifest validation should accept dependency versionRange: " + range);
             }
@@ -952,10 +1385,18 @@ namespace TopiaForge.ModManager.Tests
                     new[] { loadAfterB.Id, loadAfterA.Id }),
                 "mutual loadAfter ordering should keep the deterministic first edge");
 
+            var loadBeforeA = TestManifest("soft.loadbefore.a");
+            var loadBeforeB = TestManifest("soft.loadbefore.b");
+            loadBeforeA.LoadBefore.Add(loadBeforeB.Id);
+            var loadBefore = Resolve(loadBeforeB, loadBeforeA);
+            Assert(loadBefore.Errors.Count == 0 && loadBefore.OrderedPackages.Select(package => package.Manifest!.Id)
+                    .SequenceEqual(new[] { loadBeforeA.Id, loadBeforeB.Id }),
+                "loadBefore should order its owner before the named mod without becoming a hard dependency");
+
             var optionalA = TestManifest("soft.optional.a");
             var optionalB = TestManifest("soft.optional.b");
-            optionalA.OptionalDependencies.Add(new ModDependency { Id = optionalB.Id });
-            optionalB.OptionalDependencies.Add(new ModDependency { Id = optionalA.Id });
+            optionalA.OptionalDependencies.Add(optionalB.Id, "*");
+            optionalB.OptionalDependencies.Add(optionalA.Id, "*");
             var optional = Resolve(optionalB, optionalA);
             Assert(optional.Errors.Count == 0 && optional.OrderedPackages.Count == 2,
                 "a mutual optional-dependency hint must not block either mod");
@@ -963,9 +1404,24 @@ namespace TopiaForge.ModManager.Tests
                     new[] { optionalB.Id, optionalA.Id }),
                 "mutual optional ordering should be deterministic regardless of input order");
 
+            var absentOptionalConsumer = TestManifest("soft.optional.absent-consumer");
+            absentOptionalConsumer.OptionalDependencies.Add("soft.optional.absent-provider", ">=2.0.0 <3.0.0");
+            var absentOptional = Resolve(absentOptionalConsumer);
+            Assert(absentOptional.Errors.Count == 0 && absentOptional.OrderedPackages.Count == 1,
+                "an absent optional provider must remain non-blocking for its consumer");
+
+            var incompatibleOptionalConsumer = TestManifest("soft.optional.incompatible-consumer");
+            var incompatibleOptionalProvider = TestManifest("soft.optional.incompatible-provider");
+            incompatibleOptionalConsumer.OptionalDependencies.Add(
+                incompatibleOptionalProvider.Id,
+                ">=2.0.0 <3.0.0");
+            var incompatibleOptional = Resolve(incompatibleOptionalProvider, incompatibleOptionalConsumer);
+            Assert(incompatibleOptional.Errors.Count == 0 && incompatibleOptional.OrderedPackages.Count == 2,
+                "an incompatible optional provider must not block either provider or consumer");
+
             var hardConsumer = TestManifest("soft.mixed.consumer");
             var hardProvider = TestManifest("soft.mixed.provider");
-            hardConsumer.VpmDependencies.Add(hardProvider.Id, ">=1.0.0");
+            hardConsumer.Dependencies.Add(hardProvider.Id, ">=1.0.0");
             hardProvider.LoadAfter.Add(hardConsumer.Id);
             var mixed = Resolve(hardConsumer, hardProvider);
             Assert(mixed.Errors.Count == 0 && mixed.OrderedPackages.Select(package => package.Manifest!.Id).SequenceEqual(
@@ -976,9 +1432,9 @@ namespace TopiaForge.ModManager.Tests
         private static void TestManifestDependencyIdsRejected()
         {
             var manifest = TestManifest("safe.mod");
-            manifest.VpmDependencies.Add("../vpm", ">=1.0.0");
-            manifest.Dependencies.Add(new ModDependency { Id = "../required" });
-            manifest.OptionalDependencies.Add(new ModDependency { Id = @"..\optional" });
+            manifest.Dependencies.Add("../vpm", ">=1.0.0");
+            manifest.Dependencies.Add("../required", "*");
+            manifest.OptionalDependencies.Add(@"..\optional", "*");
             manifest.Conflicts.Add(new ModConflict { Id = "/conflict" });
             manifest.LoadAfter.Add("../load-after");
 
@@ -1010,7 +1466,7 @@ namespace TopiaForge.ModManager.Tests
 
                 var related = TestManifest("io.github.furroxide.topiaforge.validation");
                 related.Author.Name = "Tests";
-                related.Dependencies.Add(new ModDependency { Id = retiredId });
+                related.Dependencies.Add(retiredId, "*");
                 related.Conflicts.Add(new ModConflict { Id = retiredId });
                 var relatedErrors = ManifestValidator.Validate(related);
                 Assert(relatedErrors.Count(error => error.Contains(retiredId)) == 2,
@@ -1019,10 +1475,7 @@ namespace TopiaForge.ModManager.Tests
 
             var canonical = TestManifest("io.github.furroxide.topiaforge.validation");
             canonical.Author.Name = "Tests";
-            canonical.Dependencies.Add(new ModDependency
-            {
-                Id = "io.github.furroxide.topiaforge.validation.required"
-            });
+            canonical.Dependencies.Add("io.github.furroxide.topiaforge.validation.required", "*");
             canonical.Conflicts.Add(new ModConflict
             {
                 Id = "io.github.furroxide.topiaforge.validation.conflict"
@@ -1046,7 +1499,7 @@ namespace TopiaForge.ModManager.Tests
         {
             return new ModManifest
             {
-                SchemaVersion = 3,
+                SchemaVersion = 4,
                 Id = id,
                 Name = id,
                 Version = "1.0.0",
@@ -1149,20 +1602,20 @@ namespace TopiaForge.ModManager.Tests
             using var ugc = JsonDocument.Parse(File.ReadAllText(Path.Combine(
                 root, "mods", "TopiaForge.UgcLiveSync", "topiaforge.mod.json")));
 
-            Assert(sandbox.RootElement.GetProperty("vpmDependencies").GetProperty("io.github.furroxide.topiaforge.worlds").GetString()
-                    == ">=0.5.4",
-                "Sandbox must require the first Worlds release that publishes Open Sandbox");
-            Assert(zombies.RootElement.GetProperty("vpmDependencies").GetProperty("io.github.furroxide.topiaforge.worlds").GetString()
-                    == ">=0.5.4",
-                "Zombies must require the first Worlds release that publishes its default Open Sandbox world");
-            Assert(worlds.RootElement.GetProperty("supportedSdkVersionRange").GetString() == ">=0.1.3 <0.2.0"
-                && ugc.RootElement.GetProperty("supportedSdkVersionRange").GetString() == ">=0.1.3 <0.2.0",
-                "scene-coordinated framework mods must require SDK 0.1.3");
-            Assert(sandbox.RootElement.GetProperty("version").GetString() == "0.3.1"
-                && zombies.RootElement.GetProperty("version").GetString() == "0.12.1"
-                && worlds.RootElement.GetProperty("version").GetString() == "0.6.0"
-                && ugc.RootElement.GetProperty("version").GetString() == "0.3.0",
-                "pending runtime behavior changes must retain their intended manifest version bumps");
+            Assert(sandbox.RootElement.GetProperty("dependencies").GetProperty("io.github.furroxide.topiaforge.worlds").GetString()
+                    == ">=1.0.0 <2.0.0",
+                "Sandbox must require the V1 Worlds contract");
+            Assert(zombies.RootElement.GetProperty("dependencies").GetProperty("io.github.furroxide.topiaforge.worlds").GetString()
+                    == ">=1.0.0 <2.0.0",
+                "Zombies must require the V1 Worlds contract");
+            Assert(worlds.RootElement.GetProperty("supportedSdkVersionRange").GetString() == ">=1.0.0 <2.0.0"
+                && ugc.RootElement.GetProperty("supportedSdkVersionRange").GetString() == ">=1.0.0 <2.0.0",
+                "scene-coordinated framework mods must require the V1 SDK line");
+            Assert(sandbox.RootElement.GetProperty("version").GetString() == "1.0.0"
+                && zombies.RootElement.GetProperty("version").GetString() == "1.0.0"
+                && worlds.RootElement.GetProperty("version").GetString() == "1.0.0"
+                && ugc.RootElement.GetProperty("version").GetString() == "1.0.0",
+                "first-party runtime packages must move atomically to V1");
         }
 
         private static ManagerPaths NewPaths(string root, string name)
@@ -1174,19 +1627,57 @@ namespace TopiaForge.ModManager.Tests
 
         private static void CreatePackage(string path, string id, string name, string version, string assembly, string type)
         {
+            CreatePackageCandidate(
+                path,
+                id,
+                name,
+                version,
+                supportedGameVersionRange: "*",
+                corruptEntryAssembly: false);
+        }
+
+        private static void CreatePackageCandidate(
+            string path,
+            string id,
+            string name,
+            string version,
+            string supportedGameVersionRange,
+            bool corruptEntryAssembly,
+            IReadOnlyDictionary<string, string>? dependencies = null)
+        {
+            const string fixtureAssembly = "TopiaForge.ValidTestMod.dll";
+            const string fixtureType = "TopiaForge.ValidTestMod.ValidMod";
             using (var zip = ZipFile.Open(path, ZipArchiveMode.Create))
             {
                 WriteEntry(zip, "topiaforge.mod.json", JsonUtil.Serialize(new ModManifest
                 {
-                    SchemaVersion = 3,
+                    SchemaVersion = 4,
                     Id = id,
                     Name = name,
                     Author = new ModAuthor { Name = "TopiaForge" },
                     Version = version,
-                    EntryAssembly = assembly,
-                    EntryType = type
+                    EntryAssembly = fixtureAssembly,
+                    EntryType = fixtureType,
+                    SupportedGameVersionRange = supportedGameVersionRange,
+                    SupportedLoaderVersionRange = ">=1.0.0 <2.0.0",
+                    SupportedSdkVersionRange = ">=1.0.0 <2.0.0",
+                    Dependencies = dependencies == null
+                        ? new Dictionary<string, string>()
+                        : new Dictionary<string, string>(dependencies, StringComparer.Ordinal)
                 }));
-                WriteEntry(zip, assembly, "not a real dll");
+                if (corruptEntryAssembly)
+                {
+                    WriteEntry(zip, fixtureAssembly, "not a managed PE image");
+                }
+                else
+                {
+                    var entry = zip.CreateEntry(fixtureAssembly);
+                    using (var output = entry.Open())
+                    using (var input = File.OpenRead(Path.Combine(AppContext.BaseDirectory, fixtureAssembly)))
+                    {
+                        input.CopyTo(output);
+                    }
+                }
             }
         }
 

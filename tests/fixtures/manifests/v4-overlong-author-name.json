@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 4,
+  "name": "fixtures.author-name",
+  "displayName": "V4 Adversarial Fixture",
+  "version": "1.0.0",
+  "author": {
+    "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "entryAssembly": "Fixture.dll",
+  "entryType": "Fixtures.V4Mod",
+  "supportedGameVersionRange": "*",
+  "supportedLoaderVersionRange": "*",
+  "supportedSdkVersionRange": "*"
+}

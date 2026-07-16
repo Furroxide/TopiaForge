@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 using TopiaForge.Mods;
 using UnityEngine;
 
@@ -15,7 +16,7 @@ namespace TopiaForge.RobotKit
     //      first whose Path.complete is true — exactly the gate the native WalkSession uses.
     // When the scene has no pathfinder it degrades to a best-effort grounded point (no reachability guarantee), so
     // robot-less/camera-only scenes behave as before.
-    internal sealed class ReachableSpawnSearch : IReachableSpawn
+    internal sealed class ReachableSpawnSearch
     {
         // How close to the reachability anchor (the player) a path must get to count as "reached". Generous enough
         // that the player's own footprint/curb does not produce a false negative, tight enough to mean "right here".
@@ -39,6 +40,11 @@ namespace TopiaForge.RobotKit
         private bool complete;
         private bool found;
         private Vec3 position;
+        private readonly TaskCompletionSource<OperationResult<ReachableSpawnResult>> completion =
+            new TaskCompletionSource<OperationResult<ReachableSpawnResult>>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+        private CancellationTokenRegistration cancellationRegistration;
+        private volatile bool cancellationRequested;
 
         public ReachableSpawnSearch(
             ReachableSpawnRequest request,
@@ -87,14 +93,27 @@ namespace TopiaForge.RobotKit
         }
 
         public bool IsComplete => complete;
-        public bool Found => found;
-        public Vec3 Position => position;
+        public Task<OperationResult<ReachableSpawnResult>> Completion => completion.Task;
+
+        public void AttachCancellation(CancellationToken cancellationToken)
+        {
+            if (!complete && cancellationToken.CanBeCanceled)
+            {
+                cancellationRegistration = cancellationToken.Register(() => cancellationRequested = true);
+            }
+        }
 
         // Advance the search one frame's worth of work. Drives at most one in-flight native pathfind at a time.
         public void Step()
         {
             if (complete)
             {
+                return;
+            }
+
+            if (cancellationRequested)
+            {
+                Cancel();
                 return;
             }
 
@@ -172,7 +191,13 @@ namespace TopiaForge.RobotKit
             ReleasePending();
             if (!complete)
             {
-                Finish(false, Vector3.zero);
+                complete = true;
+                found = false;
+                position = Vec3.Zero;
+                cancellationRegistration.Dispose();
+                completion.TrySetResult(OperationResult<ReachableSpawnResult>.Failure(
+                    ModErrorCode.Cancelled,
+                    "Reachable spawn search was cancelled."));
             }
         }
 
@@ -244,6 +269,12 @@ namespace TopiaForge.RobotKit
             complete = true;
             found = didFind;
             position = didFind ? new Vec3(point.x, point.y, point.z) : Vec3.Zero;
+            cancellationRegistration.Dispose();
+            completion.TrySetResult(didFind
+                ? OperationResult<ReachableSpawnResult>.Success(new ReachableSpawnResult(position))
+                : OperationResult<ReachableSpawnResult>.Failure(
+                    ModErrorCode.NotFound,
+                    "No reachable robot spawn point was found."));
         }
     }
 }
