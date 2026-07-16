@@ -1,9 +1,9 @@
 # Initial release blocker register
 
-Last audited: 2026-07-14. Product candidate: `0.1.1`. Recommendation: **NO-SHIP**.
+Last audited: 2026-07-15. Product candidate: `1.0.0`. Recommendation: **NO-SHIP**.
 
 The repository-wide remediation found no remaining known local critical- or high-severity engineering defect. The
-release is nevertheless blocked by decisions, credentials, protected-host configuration, and native/in-game
+release is nevertheless blocked by decisions, credentials, protected-host configuration, and native Robotopia-runtime
 acceptance that cannot be supplied by source changes. The strict publication gates intentionally continue to reject
 the candidate until those items are closed.
 
@@ -22,34 +22,36 @@ Priority meanings:
 ## Verification matrix
 
 `PASS` means the locally applicable gate passed on this working tree. `FAIL` is an expected hard-stop that correctly
-rejected a non-distributable candidate. `BLOCKED` requires authority, credentials, hardware, hosted configuration, or
-manual evidence unavailable to this audit. No required check is silently skipped.
+rejected a non-distributable candidate. `NEEDS RERUN` means the implementation gate is present, but its retained
+artifact evidence predates the V1 reset and must be regenerated from the frozen candidate. `BLOCKED` requires
+authority, credentials, hardware, hosted configuration, or manual evidence unavailable to this audit. No required
+check is silently skipped.
 
 | Gate family | Result | Retained evidence |
 | --- | --- | --- |
 | Whole-repository component and contract inventory | PASS | All source, app, package, mod, template, tool, schema, test, documentation, and workflow surfaces are mapped in `ArchitectureInventory.md`. |
-| C# Release solution | PASS | 20 projects; zero build warnings or errors on SDK `10.0.301` / runtime `10.0.9`. |
-| C# regression harness | PASS | Complete `TopiaForge.ModManager.Tests` harness passed. |
+| C# Release solution | PASS | 33 projects; zero build warnings or errors on SDK `10.0.301` / runtime `10.0.9`. |
+| C# regression harness | PASS | Complete `TopiaForge.ModManager.Tests`, synthetic runtime-assembly, analyzer, startup-recovery, receipt, installed-version coexistence, service-scaffold, and V1 live-probe contract suites passed. |
 | C# boundaries and public SDK surface | PASS | Unity-free Core, Unity/BepInEx runtime isolation, strict audit, generated API baseline, and bounded production-read scans passed. |
-| Dart formatting and analyzers | PASS | 254 Dart files checked; domain, data, UI, app, and CLI analyzers report no issues. |
-| Dart domain/data tests | PASS | 147 domain and 187 data tests passed. |
-| Flutter UI/app tests | PASS | 2 shared-UI and 46 launcher tests passed, including BLoC lifecycle, scaling, contrast, focus, install confirmation, safe mode, recovery, and Xcode payload/logging configuration. |
-| CLI tests | PASS | 126 tests passed, including packaging, registry, Unity probing, UGC, release metadata, final-archive validation, ad-hoc/Developer ID signing separation, and fail-closed signing behavior. |
+| Dart formatting and analyzers | PASS | 308 non-generated Dart files checked; domain, data, UI, app, and CLI analyzers report no issues and every file is at most 500 lines. |
+| Dart domain/data tests | PASS | 171 domain and 260 data tests passed, including the shared 35-case manifest corpus, full runtime-constraint propagation, maximum-cardinality deterministic package-inbox planning, complete 12-assembly runtime repair, and receipt provenance/repair behavior. |
+| Flutter UI/app tests | PASS | 2 shared-UI and 54 launcher tests passed, including BLoC lifecycle, package-inbox outcomes, scaling, contrast, focus, install/repair confirmation, safe mode, recovery, and Xcode payload/logging configuration. |
+| CLI tests | PASS | All 151 CLI tests passed, including packaging, registry, Unity probing, UGC, release metadata, bounded packaged GameCompat, canonical-versus-executed Windows loader-overlay integrity, final-archive validation, and the relocated seven-template restore/build/test/pack/install/rebuild lifecycle. |
 | C#/Dart contract parity | PASS | SemVer 2.0, build mapping, canonical fields, unknown fields, dependencies, pins, conflicts, load order, and state fixtures agree. |
-| Sidecar install/runtime/security | PASS | Lockfile `npm ci`, syntax checks, 16 tests, production dependency tree, and audit passed with zero vulnerabilities. |
+| Sidecar install/runtime/security | PASS | Lockfile `npm ci`, syntax checks, 23 tests, production dependency tree, and audit passed with zero vulnerabilities. |
 | Archive, UGC, diagnostic, repair, and process hardening | PASS | Adversarial traversal/link/collision/size/race/rollback/redaction/timeout regressions passed. |
-| First-party mods | PASS | All 13 mods validated and packed twice byte-identically; archives were inspected directly. UiGallery is excluded from the normal player payload. |
-| C# author templates | PASS | All seven template families scaffolded, validated, packed twice, and inspected; defaults remain deliberately non-publishable. |
-| VPM and canonical ecosystem payload | PASS | Three VPM packages and the 12-mod player payload built twice byte-identically with no missing, extra, linked, or mismatched entries. |
+| First-party mods | NEEDS RERUN | The V1 reset now has 12 source mods and an 11-mod player payload after moving assets into manager-owned core services. Repack and inspect the frozen candidate twice; UiGallery remains excluded from the normal payload. |
+| C# author templates | PASS | All seven template families scaffolded from a release-like payload, restored, relocated, built, tested, packed, validated, installed with full receipt checks, and rebuilt after extraction removal; each real platform-archive job repeats that lifecycle. Defaults remain deliberately non-publishable. |
+| VPM and canonical ecosystem payload | NEEDS RERUN | Rebuild the three VPM packages and canonical 11-mod player payload twice from the frozen V1 candidate. |
 | Exact-Unity TopiaForgeUi build | PASS | Unity `6000.0.23f1`; two builds matched SHA-256 `3cc6624f2a3a5fabc83c4fde49b32f859869e1d1e202afdaf91a888089f9fedb`. |
 | Exact-Unity representative world build | PASS | Two builds matched SHA-256 `f6e6a9802eb043eb5b81d3d519eead7cbb47f348d4c1d110747ec73378464bc9`. |
-| Exact-Unity lifecycle smoke | PASS | Sixteen repeated create/dispose and scene-transition cycles returned allocator, tween, cursor, hotkey, modal, theme, and callback state to baseline. |
-| Game compatibility | PASS | Build `2227`; 217 bindings, 195 statically verifiable, 22 explicitly dynamic/in-game-only, zero indeterminate findings. |
+| Exact-Unity lifecycle smoke | NEEDS RERUN | A local Unity `6000.0.23f1` V1 run executed the managed validator and all 16 lifecycle cycles successfully with zero retained-resource delta. The protected workflow now invokes and uploads the same evidence, but it must still be regenerated from the frozen candidate. |
+| Robotopia compatibility | PASS | Build `2227`; 188 bindings, 167 statically verifiable, 21 explicitly dynamic/Robotopia-only, zero indeterminate findings; safe GravityGun, Sandbox, and Zombies have no native binding declarations. |
 | Public build freshness | PASS | Both audited platform records still identify build `2227`; CI/release now fail if the public latest manifest changes. |
 | BepInEx/UnityDoorstop provenance | PASS | Pinned BepInEx `5.4.23.5` archives and extracted trees, UnityDoorstop commit/source, hashes, modes, and notices validate. |
-| Local macOS package structure | PASS | Universal launcher/frameworks and GameCompat, separate runnable arm64/x64 Dart AOT CLIs, canonical nested payload bytes, modes, links, notices, and deterministic archive bytes validated. |
-| Local macOS launch and Xcode development | PASS | Fresh Xcode Debug/Release code shares Team ID `34Y7669588`; the shared scheme resolves checkout payloads. A regenerated 12-mod/BepInEx technical archive passed structural, embedded-CLI, and direct five-second launch smoke after ad-hoc signing correctly omitted hardened runtime. |
-| Local macOS runtime repair | PASS | The installed build-2227 copy transactionally repaired BepInEx `5.4.23.5` and loader `0.2.0`, restored executable modes, left no transaction residue or managed links, and staged all 13 first-party packages. Package-inbox ingestion remains part of authorized in-game acceptance. |
+| Local macOS package structure | NEEDS RERUN | The retained universal-package record predates the V1 CLI, SDK, runtime, and canonical 11-mod payload. Rebuild and validate the frozen V1 archive on macOS. |
+| Local macOS launch and Xcode development | NEEDS RERUN | Xcode scheme wiring is implemented, but the retained technical-archive/direct-launch evidence is for the pre-V1 payload. Repeat structural, embedded-CLI, and direct-launch smoke against the frozen candidate. |
+| Local macOS runtime repair | NEEDS RERUN | The recorded repair targeted the retired pre-V1 loader and package set. Repeat with loader `1.0.0` and the canonical 11-mod player payload; package-inbox ingestion remains part of authorized Robotopia acceptance. |
 | Release-policy/BOM/SBOM/checksum machinery | PASS | Policy validation in technical dry-run mode and metadata build/verify regression suites passed. |
 | Repository and CI hygiene | PASS | actionlint, PSScriptAnalyzer, PowerShell/bash syntax, shellcheck, JSON, YAML, schemas, Markdown links, LFS, action pins, conflict markers, LF policy, and Dart line cap passed. |
 | Credential exposure containment | BLOCKED | An Xcode scheme pre-action printed inherited credential-shaped variables during this local audit. Repository shell phases now suppress environment listings, release children scrub secret-shaped names, and contributor guidance requires a sanitized Xcode launch; affected credentials still require owner rotation and local-log disposal. See `P0-CRED-01`. |
@@ -58,7 +60,7 @@ manual evidence unavailable to this audit. No required check is silently skipped
 | Windows x64 signed package and clean-host run | BLOCKED | Requires a Windows runner, Authenticode identity, RFC 3161 timestamp service, and clean-machine QA; see `P0-WIN-01`. |
 | Linux x64 package and Proton run | BLOCKED | Flutter desktop builds are host-specific; requires Linux/Proton runners and gameplay QA; see `P0-LINUX-01`. |
 | Signed macOS arm64 and Intel clean-host runs | BLOCKED | Requires Apple credentials and quarantined clean hosts; see `P0-MAC-01`. |
-| Authorized build-2227 in-game acceptance | BLOCKED | Dynamic bindings, all mods, reloads, recovery, and profiler evidence require an authorized game environment; see `P0-GAME-01`. |
+| Authorized Robotopia build-2227 acceptance | BLOCKED | Dynamic bindings, all mods, reloads, recovery, and profiler evidence require an authorized Robotopia environment; see `P0-GAME-01`. |
 | Native UX/accessibility acceptance | BLOCKED | Screen Recording permission prevented screenshot comparison; screen-reader and native-platform manual QA remain; see `P1-UX-01`. |
 | Project license, IP, and OSS legal approval | BLOCKED | Project-owner/legal decisions cannot be inferred; see `P0-LIC-01`, `P0-IP-01`, and `P0-OSS-01`. |
 | Privacy/backend authorization and package trust policy | BLOCKED | Remote features default off, but owner approval is still required; see `P0-PRIV-01` and `P0-TRUST-01`. |
@@ -66,12 +68,12 @@ manual evidence unavailable to this audit. No required check is silently skipped
 | Frozen candidate hosted matrix and reviewed release record | BLOCKED | This audit intentionally leaves uncommitted changes and creates no tag/release; see `P0-CAND-01`. |
 | Independent player/author clean-machine acceptance | BLOCKED | Requires external participants and supported native hosts; see `P1-E2E-01`. |
 
-Matrix totals: **25 PASS, 2 FAIL, 11 BLOCKED, 0 SKIP**.
+Matrix totals: **19 PASS, 2 FAIL, 6 NEEDS RERUN, 11 BLOCKED, 0 SKIP**.
 
 The four informational exceptions are explained, not waived: `dotnet format` reports expected workspace-loader
-diagnostics for the intentional Unity compile/reference split while formatting 0 of 420 files; Flutter reports newer
-packages outside current compatible constraints; Node lists optional non-host native packages; and 22 GameCompat
-bindings are inherently dynamic and therefore belong to the in-game acceptance gate.
+diagnostics for the intentional Unity compile/reference split while finding no formatting changes; Flutter reports newer
+packages outside current compatible constraints; Node lists optional non-host native packages; and 21 GameCompat
+bindings are inherently dynamic and therefore belong to the Robotopia acceptance gate.
 
 ## P0 blockers
 
@@ -88,12 +90,12 @@ bindings are inherently dynamic and therefore belong to the in-game acceptance g
   artifacts must carry which text; run the strict policy, package, registry, BOM, SBOM, and archive-notice gates with
   zero findings.
 
-- [ ] **P0-IP-01 — Approve the rights basis and public naming for game integration and assets.**
+- [ ] **P0-IP-01 — Approve the rights basis and public naming for Robotopia integration and assets.**
 
-  Owner: project/game owner and IP/trademark counsel.
+  Owner: project owner, Robotopia owner, and IP/trademark counsel.
 
   Exit criteria: retain written authority or an approved clean-room/non-affiliation basis for the Robotopia and
-  TopiaForge names, game injection, compatibility extraction/baselines, registry claims, web-derived art, adapted
+  TopiaForge names, Robotopia injection, compatibility extraction/baselines, registry claims, web-derived art, adapted
   icons, fonts, and custom-world content. Remove or replace any item that lacks a distributable rights basis and
   record provenance, transformation, hash, license, and approver for retained assets.
 
@@ -110,7 +112,7 @@ bindings are inherently dynamic and therefore belong to the in-game acceptance g
 
 - [ ] **P0-PRIV-01 — Approve remote AI, player-token, microphone, and speech-to-text behavior.**
 
-  Owner: backend/game owner, privacy/legal, security, and product.
+  Owner: backend owner, Robotopia owner, privacy/legal, security, and product.
 
   Current state: canonical descriptive capabilities are present; `remote-ai` is the sole remote-inference label; Zombies live-brain
   and voice defaults are off; no token, remote-AI, microphone, or STT activity occurs without explicit configuration.
@@ -155,16 +157,16 @@ bindings are inherently dynamic and therefore belong to the in-game acceptance g
   Owner: Linux/Proton release QA.
 
   Exit criteria: build on Linux from the frozen SHA; inspect final ZIP executable modes, links, checksums, notices,
-  and bundled payloads; run native launcher/CLI flows; exercise the documented Windows-game-under-Proton discovery,
-  path translation, process launch, runtime repair, custom-world, recovery, and uninstall paths.
+  and bundled payloads; run native launcher/CLI flows; exercise discovery, path translation, process launch,
+  runtime repair, custom-world, recovery, and uninstall paths for Robotopia's Windows build under Proton.
 
 - [ ] **P0-GAME-01 — Complete authorized build-2227 runtime and first-party-mod acceptance.**
 
-  Owner: runtime/mod QA with authorized game access.
+  Owner: runtime/mod QA with authorized Robotopia access.
 
   Exit criteria: on build `2227`, test startup/shutdown, repeated scenes, safe mode, reloads, enable/disable,
   dependency order, package inbox, collision isolation, partial failures, restart-required state, save compatibility,
-  all 13 mod flows, TopiaForgeUi-only UI, dirty updates, and resource teardown. Verify all 22 dynamic GameCompat bindings and
+  all 12 mod flows, TopiaForgeUi-only UI, dirty updates, and resource teardown. Verify all 21 dynamic GameCompat bindings and
   record profiler evidence of no steady-state allocation regressions or task/callback leaks.
 
 - [ ] **P0-HOST-01 — Configure and prove the protected hosted release path.**
@@ -175,7 +177,7 @@ bindings are inherently dynamic and therefore belong to the in-game acceptance g
   `Required / Registry validation`, and trusted-candidate `Required / Unity validation`); protect release and Unity
   environments with reviewers; inventory and scope Apple, Windows, Unity, managed-reference, Pages, and attestation
   credentials; prove fork PRs are secretless; enable reviewed Pages and immutable-release policy; protect creation of
-  the annotated `v0.1.1` tag while forbidding mutation/deletion; retain an administrator-reviewed dry run.
+  the annotated `v1.0.0` tag while forbidding mutation/deletion; retain an administrator-reviewed dry run.
 
 - [ ] **P0-CRED-01 — Rotate credentials exposed through the local Xcode build log.**
 
@@ -198,7 +200,7 @@ bindings are inherently dynamic and therefore belong to the in-game acceptance g
   Owner: release manager.
 
   Exit criteria: review and commit the remediation; approve release notes; create the pre-protected annotated
-  `v0.1.1` tag on that exact SHA through the authorized process; run every hosted/native/Unity gate without unexplained
+  `v1.0.0` tag on that exact SHA through the authorized process; run every hosted/native/Unity gate without unexplained
   warnings or skips; generate and independently verify the candidate BOM, SPDX SBOM, `SHA256SUMS`, nested digests,
   sizes, signatures, provenance, and manual-release index. The workflow may prepare only a matching draft and must
   never create/mutate the tag, replace assets, or publish automatically.
@@ -219,7 +221,7 @@ bindings are inherently dynamic and therefore belong to the in-game acceptance g
 
   Owner: release/community QA.
 
-  Exit criteria: a player discovers the game, installs/repairs BepInEx, installs the canonical package set, previews
+  Exit criteria: a player discovers Robotopia, installs/repairs BepInEx, installs the canonical package set, previews
   capabilities/dependencies, launches normally and in safe mode, diagnoses a failure, updates manually, and recovers.
   Separately, a new author uses only published docs to install prerequisites, scaffold with explicit author/license,
   build/test/package/validate, publish to a self-hosted registry, install through the launcher, diagnose, and update.
@@ -240,8 +242,8 @@ bindings are inherently dynamic and therefore belong to the in-game acceptance g
 - [x] **P2-REGISTRY-01 — Official community submissions remain closed.** Official indexes contain first-party entries
   only. Opening submissions requires namespace ownership, moderation, malware review, transfer/dispute, yank,
   revocation, appeal, and installed-user response governance plus tests.
-- [x] **P2-WORLDS-01 — Custom worlds are Windows/Proton-only for v1.** Do not advertise native macOS game support.
-- [x] **P2-COMPAT-01 — Build `2227` is the sole supported game build.** Numeric build `N` maps to SemVer `0.0.N`.
+- [x] **P2-WORLDS-01 — Custom worlds are Windows/Proton-only for v1.** Do not advertise native macOS Robotopia support.
+- [x] **P2-COMPAT-01 — Build `2227` is the sole supported Robotopia build.** Numeric build `N` maps to SemVer `0.0.N`.
   Any change in the public latest manifest stops release for a new compatibility audit; unknown constrained versions
   block mods but never block an empty safe-mode launch.
 

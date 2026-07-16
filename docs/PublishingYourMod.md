@@ -1,13 +1,17 @@
-# Publishing Your Mod
+---
+title: Publish a mod
+description: Validate, pack, host, and publish an immutable self-hosted package source.
+---
 
-End-to-end: from a working mod to a registry that players can add to the launcher. Community submissions to the
+# Publish a mod
+
+End-to-end: from a working Robotopia mod to a registry that players can add to the TopiaForge launcher. Community submissions to the
 TopiaForge official registry are **closed for the initial release** while namespace ownership, moderation, malware
 response, revocation, appeals, and installed-user response are defined. A merge to `registry/**` does not publish a
 community package. Do not describe a package as officially reviewed or endorsed.
 
 Self-hosting uses the same format-version-2 contracts, HTTPS/integrity rules, and zero-finding publication bar planned
 for the official service. You host both the package and static index; players add the index URL as a package source.
-See [RegistryFormat.md](RegistryFormat.md) for the complete wire format.
 
 ## 1. Validate to zero findings
 
@@ -15,8 +19,8 @@ See [RegistryFormat.md](RegistryFormat.md) for the complete wire format.
 topiaforge check package .
 ```
 
-Fix every line it prints — warnings included. Typical last-mile fixes: a valid SPDX expression and declared license
-file, only known [permission values](Modding.md#permissions), explicit author identity, and a real SemVer `version`.
+Fix every line it prints — warnings included. Typical last-mile fixes are a valid SPDX expression and declared license
+file, only known [capability values](ManifestV4.md#capabilities), explicit author identity, and a real SemVer `version`.
 If your mod has dependencies, add
 `--resolve` to dry-run resolution against your configured sources.
 

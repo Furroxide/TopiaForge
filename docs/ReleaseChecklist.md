@@ -6,13 +6,13 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
 
 ## 1. Scope, policy, and ownership
 
-- [x] Product version is `0.1.1`; components/mods version independently; initial release has no rollback target.
-- [x] Game support is build `2227` only (`0.0.2227`); public-latest drift is release-fatal.
+- [x] Product version is `1.0.0`; components/mods version independently; initial release has no rollback target.
+- [x] Robotopia support is build `2227` only (`0.0.2227`); public-latest drift is release-fatal.
 - [x] Unity is exactly `6000.0.23f1`; no fallback editor is accepted.
 - [x] Launcher upgrades are manual; custom worlds are Windows/Proton-only; official community submissions are closed.
 - [x] Remote AI, player-token, microphone, and STT features default off and declare descriptive capabilities.
 - [ ] Owner/legal approves the project and inbound license; replace `OWNER_DECISION_REQUIRED` and `NOASSERTION`.
-- [ ] Owner/legal approves game/brand/art/font/compatibility/injection rights and all third-party dispositions.
+- [ ] Owner/legal approves Robotopia/brand/art/font/compatibility/injection rights and all third-party dispositions.
 - [ ] Privacy/backend/security owners approve remote data flows, retention, consent, cost, abuse, and incident policy.
 - [ ] Security/product owners approve first-party package trust, origin, revocation, and installed-user recovery.
 - [ ] Public security, support, release-note, and incident owners are named and monitored.
@@ -20,9 +20,9 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
 ## 2. Candidate and toolchains
 
 - [ ] Review and commit the remediation without discarding unrelated user work; freeze one candidate SHA.
-- [ ] Create a protected, annotated `v0.1.1` tag on that SHA through the approved administrator process.
+- [ ] Create a protected, annotated `v1.0.0` tag on that SHA through the approved administrator process.
 - [ ] Confirm `global.json` resolves exactly .NET SDK `10.0.301` with roll-forward disabled and runtime `10.0.9`.
-- [ ] Confirm Dart `3.11.1`, Flutter `3.41.4`, Node 20+, and Unity `6000.0.23f1` on every applicable runner.
+- [ ] Confirm Dart `3.11.1`, Flutter `3.41.4`, Node `24.16.0`, and Unity `6000.0.23f1` on every applicable runner.
 - [ ] Probe the public latest-build manifest and verify both pinned build-2227 archive paths and SHA-256 values.
 - [ ] Confirm all LFS objects, immutable BepInEx inputs, UnityDoorstop source, and managed references are present.
 
@@ -50,7 +50,7 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
 - [ ] Diagnostics enforce 4 MiB/log and 16 MiB total caps, streaming tails, link rejection, secret redaction,
       truncation metadata, hashes, and atomic ZIP replacement.
 - [ ] Sidecar setup uses the checked-in lockfile, `npm ci --ignore-scripts --no-fund --no-audit`, trusted regular
-      paths, no shell, bounded/coalesced output, timeouts, and restrictive session permissions.
+      paths, no shell, bounded/coalesced output, timeouts, and restrictive session access rules.
 - [ ] Download/registry/update paths require bounded reads, timeouts, HTTPS, no URL credentials/query/fragment,
       digest validation, partial-download recovery, atomic writes, and rollback.
 - [ ] Install/update confirmation shows source, SHA-256, aggregate dependency capabilities, and arbitrary-code risk.
@@ -59,7 +59,7 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
 
 ## 5. Sidecar and repository hygiene
 
-- [ ] Sidecar `npm ci`, every-module syntax check, 16 tests, production dependency tree, and `npm audit` pass.
+- [ ] Sidecar `npm ci`, every-module syntax check, 23 tests, production dependency tree, and `npm audit` pass.
 - [ ] actionlint passes every workflow; all external actions are pinned to full commit SHA values.
 - [ ] PSScriptAnalyzer `1.25.0`, PowerShell parser, bash syntax, and shellcheck pass for repository-owned scripts.
 - [ ] JSON, YAML, JSON Schema, Markdown-link, Git LFS, binary-attribute, conflict-marker, and LF audits pass.
@@ -67,13 +67,18 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
 
 ## 6. Mods, templates, registry, and ecosystem payload
 
-- [ ] All 13 first-party source manifests and packages validate; every mod is packed twice byte-identically and the
+- [ ] All 12 first-party source manifests and packages validate; every mod is packed twice byte-identically and the
       resulting archive is inspected for manifest, assembly, license paths, links, names, and collisions.
+- [ ] The packaged metadata validator rejects bad PE/type/constructor/SDK/TFM fixtures without loading mod code, and
+      every first-party archive is independently scanned for loader-owned SDK DLL/PDB files.
+- [ ] The canonical 12-assembly loader payload contains the exact pinned Metadata/Immutable bytes and notices; the
+      build-2227 Unity/Mono profile supplies the verified Memory/Buffers/Unsafe dependency closure, and every DLL in
+      the Windows Robotopia-executed BepInEx overlay hashes identically to its canonical payload copy.
 - [ ] All seven C# templates scaffold, validate, build/package twice, and retain safe non-publishable defaults.
 - [ ] Explicit `--author`/`--license` scaffolding is tested; MIT/Apache text is generated only after selection and
       other expressions require safe repeatable `--license-file` inputs.
 - [ ] Three VPM packages/listings build twice and pass direct manifest, license, notice, target, and hash inspection.
-- [ ] One canonical deterministic `ecosystem-dist` contains exactly 12 player mods plus three VPM packages; UiGallery
+- [ ] One canonical deterministic `ecosystem-dist` contains exactly 11 player mods plus three VPM packages; UiGallery
       remains validated but absent from normal payloads; every platform consumes identical nested bytes.
 - [ ] Strict registry schema/semantic/dependency/license/package/all-version validation passes.
 - [ ] Merge-base/index comparison proves append-only history: no deletion, rename, reorder, mutation, downgrade, or
@@ -89,8 +94,12 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
       to baseline.
 - [ ] UiGallery covers loading, empty, information, warning, error, success, disabled, focus, long/scroll content,
       destructive modal, toast, scale, contrast, and reduced-motion states.
-- [ ] Authorized in-game/profiler QA validates all 13 mods, 22 dynamic bindings, lifecycle isolation, save behavior,
+- [ ] Authorized Robotopia/profiler QA validates all 12 mods, 21 dynamic bindings, lifecycle isolation, save behavior,
       TopiaForgeUi usage, accessibility propagation, and zero steady-state allocation regressions.
+- [ ] The full `game-sdk-acceptance.yml` matrix passes from the frozen SHA on both Windows and Linux/Proton with
+      all canonical markers, main-thread assertions, ten resource cycles, exact package hashes, and uploaded evidence.
+- [ ] An independent clean-machine author with only Robotopia, the release archive, and its pinned .NET SDK creates
+      and launches a working safe code mod in at most five commands, without a source checkout or Unity installation.
 
 ## 8. Platform release archives
 
@@ -105,8 +114,8 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
       ad-hoc signature omits hardened runtime because ad-hoc code has no common Team ID; publication mode rejects it.
 - [ ] Every macOS Mach-O is Developer ID/expected-Team signed; the app is notarized, stapled, quarantined, and passes
       deep/strict codesign, `stapler validate`, and Gatekeeper after final extraction on arm64 and Intel.
-- [ ] Linux executable modes, native launcher/CLI, and Windows-game-under-Proton discovery/path/process/repair/custom-
-      world assumptions pass on a clean host.
+- [ ] Linux executable modes, native launcher/CLI, and discovery/path/process/repair/custom-world assumptions for
+      Robotopia's Windows build under Proton pass on a clean host.
 - [ ] Clean-machine install, repair, profiles, dependency preview, normal/safe-mode launch, failure recovery,
       diagnostics, manual update, and uninstall pass for each supported platform.
 - [ ] Native visual/accessibility QA covers all screens and state families at 800x600, 100–200% text scale, high
@@ -127,7 +136,7 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
 - [ ] Publication validates everything before creating/resuming an exact matching draft; same-name/different-digest
       assets fail; exact reruns are no-ops; no clobber/tag creation/tag mutation/automatic publication exists.
 - [ ] GitHub reports every uploaded size/digest/state complete; an authorized owner reviews notes, BOM/SBOM, checksums,
-      signatures, notarization, native/in-game QA, and all blocker dispositions before manually publishing.
+      signatures, notarization, native and Robotopia-runtime QA, and all blocker dispositions before manually publishing.
 
 ## 10. Final decision
 

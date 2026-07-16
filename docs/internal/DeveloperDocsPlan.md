@@ -35,7 +35,7 @@ Status: Proposed · Date: 2026-06-29 · Owner: docs/platform · Repo: repository
 
 | Priority | Audience | Core need |
 |---|---|---|
-| **1 (primary)** | External C# mod developers | Reference SDK → implement `ITopiaForgeMod` → manifest → `topiaforge pack` → install → services (assets, prompts, Worlds) → publish. Needs the restart-required/Mono-no-unload model explained. |
+| **1 (primary)** | External C# mod developers | Reference SDK → derive from `TopiaForgeMod` → manifest → `topiaforge dev` → services/modules → publish. Needs the restart-required/Mono-no-unload model explained. |
 | 2 | End users (launcher) | Install/detect game, install/enable/disable mods, dependency/conflict plans, diagnostics. Mostly *user* docs; overlaps dev docs only at the package-format boundary. |
 | 3 | Internal contributors | Architecture map, `AGENTS.md` rules (Bloc, 500-line Dart cap, clean-room, Core free of Unity), verification matrix, where the manifest schema *actually* lives (Dart `launcher_domain`). |
 
@@ -172,7 +172,7 @@ Section type in brackets (loose Diátaxis check). **Legend:** 🟢 exists today 
 
 ### Phase 0 — Stop the bleed (in-repo Markdown) · setup ~0.5 day · authoring ~0.5–1 day
 - Expand `docs\Modding.md` into a real end-to-end Quickstart (template → build → `topiaforge pack` → install → F10).
-- Add `docs\Manifest.md` documenting the **actual** canonical field set — cross-check against `manifest_models.dart`: include `worldGamemodes`, `vpmDependencies`, optional dependency objects, and TopiaForge extensions, plus `schemaVersion == 3` and the VPM `name` id rule (`^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$`, i.e. 2–64 chars).
+- `docs/ManifestV4.md` now documents the canonical schema-V4 field set: ID-to-range `dependencies` and `optionalDependencies`, `loadBefore`/`loadAfter`, compatibility and host constraints, capabilities, bounded `x-*` metadata, build provenance, and the safe mod-id rule.
 - Add `CONTRIBUTING.md` with the one-line content-routing rule + PR checklist.
 - **Done when:** a new modder can ship a `.topiaforgemod` using only in-repo Markdown.
 
@@ -205,7 +205,7 @@ The generated C# API tier is **worthless until comments exist** — this is the 
 **C# (the public modder surface — do this):**
 - In `src\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj` add `<GenerateDocumentationFile>true</GenerateDocumentationFile>`. For coverage, prefer a **CI doc-coverage report** (warn on `CS1591`) over a hard `<WarningsAsErrors>CS1591</WarningsAsErrors>` build gate: for a solo dev the hard gate breaks the build on every new undocumented public member, which is friction without much payoff at this stage. Flip to the hard gate later if the SDK formalizes. (`Directory.Build.props` sets `TreatWarningsAsErrors=false`, so either approach is a per-project opt-in; other projects keep `<NoWarn>1591</NoWarn>`.)
 - Write `/// <summary>` (and `<param>`/`<returns>` where constructors/methods take arguments) for the public surface across **two files, ~17–18 public types**:
-  - `ITopiaForgeMod.cs` (currently **zero** `///`): `ITopiaForgeMod`, `IModContext`, `IModServiceRegistry`, `IModLogger`, `ModPaths`, `ModServiceRegistration`, `IModFileService`, `IAssetBundleService`, `IPromptOverrideRegistry`, plus `PromptOverride`/`PromptConflict`.
+  - V1 authoring contracts: `TopiaForgeMod`, `IModContext`, lifetime-owned services, `OperationResult<T>`, and the optional module contracts. All public members are covered by XML documentation.
   - `Worlds.cs` (only ~3 summaries today): `IWorldGamemodeService`, `GamemodeMenuEntry`, `WorldDefinition`, `GamemodeDefinition`, `WorldLoadRequest`, `WorldSession`, `WorldLoadResult`.
 - **Realistic effort:** ~half a day for terse one-line summaries across the SDK; budget **~1 full day** to do the Worlds API (the most complex surface, multi-arg constructors) properly with `<param>`/`<returns>`.
 
@@ -250,8 +250,8 @@ The generated C# API tier is **worthless until comments exist** — this is the 
 ## 9. Immediate Next Steps (start within a day)
 
 1. **Decide the two forks** (§8): commit to versioning now (→ Docusaurus) or defer (→ Starlight, recommended); and whether to minimize toolchains (DocFX-whole-site / Writerside) or keep best-of-breed (recommended).
-2. **C# prerequisite kickoff:** add `<GenerateDocumentationFile>` to `TopiaForge.Mods.Abstractions.csproj` and a CI doc-coverage (CS1591) **report**; start writing `///` summaries in `ITopiaForgeMod.cs`, then `Worlds.cs`.
-3. **Phase 0 Markdown:** expand `docs\Modding.md` into a full Quickstart; add `docs\Manifest.md` covering the true field superset incl. VPM-shaped `name`/`displayName`, `schemaVersion == 3`, and the package id regex (verify against `manifest_models.dart`); add `CONTRIBUTING.md` with the content-routing rule.
+2. **C# prerequisite kickoff (completed for V1):** every safe contract project generates XML documentation and treats CS1591 as an error; DocFX publishes the approved public API baselines.
+3. **Phase 0 Markdown (completed):** `docs/Modding.md` is the quickstart, `docs/ManifestV4.md` covers the strict V4 contract and package-id regex, and `CONTRIBUTING.md` defines content routing.
 4. **CI seed:** add a GitHub Actions job with `markdownlint-cli2` + `lychee` link-check **and a manifest-key parse test** (§7) on PRs.
 5. **Scaffold the portal** (chosen generator) under `website/` and wire a deploy-to-Pages workflow with a placeholder home page to lock in hosting/URL early.
 

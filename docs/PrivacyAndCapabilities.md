@@ -1,4 +1,9 @@
-# Privacy and Capability Disclosure
+---
+title: Privacy and capability disclosure
+description: Understand full-process trust and sensitive behavior declarations.
+---
+
+# Privacy and capability disclosure
 
 Status: engineering disclosure for the initial-release candidate. This document does **not** replace an approved
 privacy notice, backend authorization, or platform microphone-consent text. Those approvals remain release blockers.
@@ -18,14 +23,14 @@ player; they do not sandbox, mediate, or grant that behavior. Install only packa
 
 `remote-ai` is the only canonical remote-inference label. These labels
 are deliberately descriptive: a package that has one label is not technically prevented from exercising another
-capability, because mods run with the game process's authority.
+capability, because mods run with the Robotopia process's authority.
 
 The launcher must show the package source, package SHA-256, arbitrary-code warning, and the aggregate capabilities of
 the selected package and required dependencies before install or update. A capability is not consent by itself.
 
 ## First-party remote services
 
-RobotKit contains optional integrations with the game's RoboAPI backend. The built-in origin is
+RobotKit contains optional integrations with Robotopia's RoboAPI backend. The built-in origin is
 `https://api.tomatocake.dev/v1`; a development override is accepted only when it is an absolute HTTPS origin without
 credentials, query, or fragment. Redirects are disabled.
 

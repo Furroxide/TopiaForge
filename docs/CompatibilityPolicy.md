@@ -1,74 +1,80 @@
-# Compatibility and Versioning Policy
+---
+title: Compatibility policy
+description: V1 source, binary, manifest, runtime, and package compatibility guarantees for Robotopia mods.
+---
 
-## Version lines
+# Compatibility policy
 
-TopiaForge runtime, SDK, launcher packages, CLI, schemas, and first-party mods use Semantic Versioning 2.0. Before
-`1.0.0`, a minor release may contain an intentional breaking API or contract change; patch releases must remain
-backward-compatible within the same minor line. Build metadata does not affect precedence.
+TopiaForge runtime, SDK, CLI, launcher, schemas, and first-party packages use Semantic Versioning 2.
+The safe V1 contract begins at `1.0.0`.
 
-The runtime and launcher must reject malformed versions and unsupported schema versions explicitly. They must not guess
-an invalid version, silently select an arbitrary package, or reinterpret `x` inside prerelease/build metadata as a
-wildcard. Dependency planning compares full SemVer precedence, including prerelease identifiers.
+## Safe SDK packages
 
-## Manifests and serialized data
+Core, UI facade, testing, and specialist module contract assemblies keep `AssemblyVersion`
+`1.0.0.0` throughout the V1 line. NuGet package and file versions carry the release SemVer.
+Compatibility baselines include public types, members, nullability, default values, and XML
+documentation coverage.
 
-`topiaforge.mod.json` schema version 3 is the current package contract. Readers ignore unknown fields so a newer producer
-can add optional data; authoring tools preserve unknown manifest fields when they read and rewrite a manifest. A reader
-must fail closed when a required field is missing, a known field has the wrong type, or the declared schema version is
-unsupported.
+Within V1:
 
-Persistent launcher/manager state is backward-readable within a release line. Writes are bounded and atomic, keep a
-last-known-good backup where recovery is supported, and never use a package-supplied backup as an alternate manifest.
-Changing the meaning of an existing field requires a schema/version migration and regression fixtures.
+- patch releases fix behavior without breaking public source or binary compatibility;
+- minor releases add APIs and optional behavior without invalidating existing safe mods;
+- obsolete APIs remain callable until the next major unless retaining one creates a critical risk;
+- provider implementations may adapt to a Robotopia update behind unchanged safe contracts; and
+- an unavailable adapter reports a reason instead of exposing a native fallback.
 
-## SDK and mod lifecycle
+The explicitly unstable interop package is outside these guarantees.
 
-Mods declare `supportedSdkVersionRange` and must use only public abstractions. Public SDK additions are additive within a
-minor line. A planned removal must be documented and deprecated for at least one minor release unless retaining it
-would preserve a critical security flaw. Lifecycle callbacks may be repeated across failures or scene changes; mods
-must unregister handlers/services, release Unity objects, and tolerate partial startup.
+## Manifest and serialized state
 
-First-party mods follow the same package, permission, dependency, error-isolation, and lifecycle rules as community
-mods. They must not rely on privileged internal access.
+Schema V4 is the only V1 package manifest. Unknown fields fail validation except bounded namespaced
+`x-*` metadata. Changing an existing field's meaning requires a new schema and migration command;
+the runtime does not guess or normalize unsupported legacy input.
 
-## Dependencies and load order
+Manager, profile, receipt, journal, and last-run state are versioned, bounded, and written atomically.
+Readers either migrate a known older state or fail with a recovery path. Package-supplied backup
+files never replace authoritative manager state.
 
-Required dependencies participate in version solving and block installation/load when unsatisfied. Optional
-dependencies affect ordering or integrations only when present. Conflicts block a plan. `loadBefore`/`loadAfter` are
-ordering constraints, not implicit dependencies; cycles and ambiguous selections are errors. Exact lock entries record
-the selected version and integrity hash, while an explicit resolve operation may update them from declared ranges.
+## Dependencies and resolution
 
-## Game and platform compatibility
+Required dependency ranges participate in version solving and block load when unsatisfied. Optional
+dependencies integrate only when present and valid. Conflicts block a plan. Load-order hints do not
+create dependencies.
 
-The initial release supports Robotopia build **2227** only. A numeric Robotopia build `N` is represented in manifest
-ranges as SemVer `0.0.N`, so the canonical version for this release is `0.0.2227`. First-party packages declare that
-exact game version and the compatible loader line. If the launcher or loader cannot determine the installed build, a
-package with a constrained game range is blocked; temporary safe mode remains available because it loads no mods.
+Resolution is deterministic across filesystem enumeration order: ids are normalized, versions use
+full SemVer precedence, paths break any remaining tie, and the authoritative selection/load order is
+recorded. Exact pins fail closed rather than silently selecting another version.
 
-The checked-in game archive pin, compatibility baseline, live installed-game result, package manifests, and release
-BOM must all name the same build. A newer public game build stops candidate publication for a compatibility audit; CI
-never follows it automatically. Live verification against a legally installed Robotopia build is a release gate and
-must never be silently waived.
+Extension providers are visible only through declared dependencies and exported API assemblies.
+Singleton contracts reject duplicate providers; multi-provider contracts have deterministic order.
 
-Windows x64, macOS universal, and Linux x64/Proton release artifacts are distinct. Platform support is claimed only
-after the native runner builds and validates the artifact. Unity-authored worlds and UI assets must record Unity
-`6000.0.23f1`, target platform, hashes, and fallback behavior; a bundle built for one Unity target is not presumed
-portable to another. Initial custom-world bundles target `StandaloneWindows64` and are supported only on Windows or
-through the documented Proton/Wine path, not by the native macOS player.
+## Lifecycle compatibility
 
-## Registry, updates, and trust
+All SDK callbacks and engine-facing calls run on Robotopia's Unity main thread. The runtime owns a mod
+lifetime before invoking load and releases resources in reverse order after unload or partial-load
+failure. Cleanup is idempotent. A provider must isolate subscriber exceptions so one mod cannot
+prevent another subscriber from receiving an event.
 
-Registry and release catalogs are untrusted data. Published mod-package assets are immutable for a version, use HTTPS,
-declare SHA-256 integrity, and are validated before atomic installation. Redirects, size limits, timeouts, archive
-paths, links, case-fold collisions, and rollback are enforced by the mod-package client. The initial launcher consumes
-no self-update instructions: the published catalog is marked `manualOnly`, and launcher upgrades remain manual until
-owner-signed metadata verification and bounded extraction are available.
+## Robotopia and platform compatibility
 
-The official registry initially contains only release-engineering-generated first-party entries. Community submission
-and automatic deployment are closed until namespace ownership, moderation, malware response, revocation, appeal, and
-installed-user response policies are approved. Authors can still publish through a self-hosted format-version-2
-registry or a local package source.
+Robotopia uses numeric build identifiers. TopiaForge maps build 2227 to SemVer `0.0.2227` for range
+evaluation while retaining the human-readable build label. A mod may claim only ranges exercised by
+its acceptance tests. When the installed Robotopia build is unknown, a constrained mod fails closed.
 
-A registry listing is not a security endorsement. C# mods execute in the game process with the user's authority. The
-publisher is responsible for license/provenance, changelog, support, and vulnerability response; users must choose
-which publishers they trust.
+Platform and architecture claims are made per release artifact and require their native CI jobs.
+Custom-world live acceptance is Windows/Proton-only for V1. Bundle content must declare an
+appropriate content target; a build for one target is not assumed portable to another.
+Under Proton/Wine, TopiaForge treats Robotopia as the Windows player target. Empty constraint lists are portable;
+otherwise the loader normalizes the host platform/architecture and requires at least one declared
+content target to match `code` or the active Unity player target. Valid installed versions coexist;
+exact profile pins fail closed without deleting alternatives, while ordinary selection chooses the
+highest compatible SemVer and records the decision in `last-run.json`.
+
+## Packages, updates, and trust
+
+Published package bytes are immutable for a version, fetched over HTTPS, pinned by SHA-256, validated
+without execution, and installed atomically with an integrity receipt. Modified installed bytes are
+repaired or blocked, never executed.
+
+Capabilities are disclosures, not grants. Mods execute with the Robotopia process's authority. Registry
+listing is not a security endorsement; users still choose which authors and sources to trust.
