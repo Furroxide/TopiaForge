@@ -56,6 +56,12 @@ Cover at least these lifecycle paths for every acquired resource:
 4. Early handle disposal followed by lifetime cleanup.
 5. One event subscriber throwing while another still receives the event.
 
+For runtime-level event tests, also cover the deterministic failure circuit: a successful callback resets
+the consecutive-failure streak, three consecutive failures disable only that subscription, and disposing and
+re-subscribing rearms it. Assert that diagnostics name the callback and phase without emitting one log entry
+per failed frame, including when failures alternate with successes; sustained healthy delivery is required to
+rearm failure diagnostics.
+
 `ModLeakAssertions` reports active actions, subscriptions, registrations, handles, surfaces,
 scheduled work, and extension providers together. A leak failure therefore points to the resource
 family that remained live instead of merely timing out.

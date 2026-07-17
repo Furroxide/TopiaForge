@@ -13,6 +13,7 @@ namespace TopiaForge.ModManager.Tests
         {
             TestSemanticVersion();
             TestOperationResult();
+            TestSceneLifecycleEvent();
             TestLifetimeCleanup();
             TestBaseClassAndContext(Path.Combine(root, "sdk-lifecycle"));
             Console.WriteLine("SdkLifecycleTests passed.");
@@ -53,6 +54,28 @@ namespace TopiaForge.ModManager.Tests
             AssertThrows<ArgumentOutOfRangeException>(
                 () => OperationResult<string>.Failure(ModErrorCode.None, "bad"),
                 "failure without an error code should be rejected");
+        }
+
+        private static void TestSceneLifecycleEvent()
+        {
+            AssertThrows<ArgumentException>(
+                () => new SceneLifecycleEvent(
+                    1,
+                    "Gameplay",
+                    SceneLifecyclePhase.Activated,
+                    SceneLoadMode.Single,
+                    isActive: false),
+                "an Activated lifecycle transition must reject inactive state");
+
+            var initialBackground = new SceneLifecycleEvent(
+                2,
+                "Lighting",
+                SceneLifecyclePhase.Loaded,
+                SceneLoadMode.Additive,
+                isActive: false,
+                isInitial: true);
+            Assert(initialBackground.IsInitial && !initialBackground.IsActive,
+                "initial replay metadata should support already-loaded background scenes");
         }
 
         private static void TestLifetimeCleanup()

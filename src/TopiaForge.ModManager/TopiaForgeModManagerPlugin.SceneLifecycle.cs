@@ -23,8 +23,8 @@ namespace TopiaForge.ModManager
             var isActive = SceneManager.GetActiveScene().handle == scene.handle;
             if (sdkMode == SceneLoadMode.Single)
             {
-                loadedSceneModes.Clear();
                 suppressNextActivation.Clear();
+                lifecycleActivationPublishedAtLoad.Clear();
             }
 
             loadedSceneModes[scene.handle] = sdkMode;
@@ -35,6 +35,10 @@ namespace TopiaForge.ModManager
                 // already carries authoritative metadata (Single is authoritative even if activation state has not
                 // caught up), so suppress only that immediately pending activation.
                 suppressNextActivation.Add(scene.handle);
+                if (isActive)
+                {
+                    lifecycleActivationPublishedAtLoad.Add(scene.handle);
+                }
             }
 
             if (runtime.DispatchSceneLoaded(scene.handle, scene.name, scene.IsValid(), sdkMode, isActive))
@@ -45,8 +49,16 @@ namespace TopiaForge.ModManager
 
         private void OnSceneUnloaded(Scene scene)
         {
+            var knownScene = loadedSceneModes.TryGetValue(scene.handle, out var loadedMode);
+            var mode = knownScene
+                ? loadedMode
+                : SceneLoadMode.Single;
+            // Unity may invalidate a Scene before invoking sceneUnloaded. A handle recorded at load/initial replay
+            // is authoritative provenance; unknown callbacks still require Unity validity and a usable name.
+            runtime.DispatchSceneUnloaded(scene.handle, scene.name, knownScene || scene.IsValid(), mode);
             loadedSceneModes.Remove(scene.handle);
             suppressNextActivation.Remove(scene.handle);
+            lifecycleActivationPublishedAtLoad.Remove(scene.handle);
         }
 
         private void OnActiveSceneChanged(Scene previous, Scene current)
@@ -54,6 +66,19 @@ namespace TopiaForge.ModManager
             lastActiveSceneHandle = current.IsValid() ? current.handle : 0;
             if (current.IsValid() && suppressNextActivation.Remove(current.handle))
             {
+                if (!lifecycleActivationPublishedAtLoad.Remove(current.handle)
+                    && loadedSceneModes.TryGetValue(current.handle, out var suppressedMode))
+                {
+                    // The detailed SceneLoadEvent stream already treats a Single load as authoritative even when
+                    // Unity activates it one callback later. Publish only the exact activation to the new lifecycle
+                    // stream so existing detailed subscribers do not gain a duplicate callback.
+                    runtime.DispatchSceneLifecycleActivated(
+                        current.handle,
+                        current.name,
+                        isValid: true,
+                        mode: suppressedMode);
+                }
+
                 return;
             }
 
@@ -75,6 +100,8 @@ namespace TopiaForge.ModManager
             var scene = SceneManager.GetActiveScene();
             loadedSceneModes.Clear();
             suppressNextActivation.Clear();
+            lifecycleActivationPublishedAtLoad.Clear();
+            var initialScenes = new List<ModRuntime.InitialSceneReplay>();
             for (var index = 0; index < SceneManager.sceneCount; index++)
             {
                 var loaded = SceneManager.GetSceneAt(index);
@@ -86,14 +113,32 @@ namespace TopiaForge.ModManager
                 loadedSceneModes[loaded.handle] = loaded.handle == scene.handle
                     ? SceneLoadMode.Single
                     : SceneLoadMode.Additive;
+                if (loaded.handle != scene.handle)
+                {
+                    initialScenes.Add(new ModRuntime.InitialSceneReplay(
+                        loaded.handle,
+                        loaded.name,
+                        isValid: true,
+                        mode: SceneLoadMode.Additive,
+                        isActive: false));
+                }
             }
 
             if (scene.IsValid())
             {
                 lastActiveSceneHandle = scene.handle;
+                loadedSceneModes[scene.handle] = SceneLoadMode.Single;
+                // Background additive scenes are replayed first, then the active scene retains the established
+                // legacy/detailed startup callback and gains its normalized Loaded -> Activated lifecycle pair.
+                initialScenes.Add(new ModRuntime.InitialSceneReplay(
+                    scene.handle,
+                    scene.name,
+                    isValid: true,
+                    mode: SceneLoadMode.Single,
+                    isActive: true));
             }
 
-            if (runtime.DispatchInitialScene(scene.handle, scene.name, scene.IsValid()))
+            if (runtime.DispatchInitialScenes(initialScenes))
             {
                 menuButtonInjector.ResetForScene(scene.name);
                 managerLogger.Debug("Delivered initial active scene '" + scene.name + "' to loaded mods.");

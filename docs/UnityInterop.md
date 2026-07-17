@@ -42,3 +42,25 @@ that boundary, but safe consumers must not inherit its compatibility risk.
 
 The TopiaForge team keeps Performance, PerfFixes, and NoFeedbackUrl as narrowly allowlisted advanced
 packages. They are examples of the exception, not the recommended authoring path.
+
+## Owner-scoped Harmony patches
+
+Do not create a long-lived `Harmony` owner and remember to unpatch it manually. Acquire an owner-scoped
+lease from the interop context instead:
+
+```csharp
+using System.Reflection;
+using TopiaForge.Mods.Interop.Unity;
+
+var patches = Context.CreateHarmonyLease("camera-fixes");
+patches.Patch(targetMethod, prefix: prefixMethod);
+```
+
+The runtime derives a process-unique Harmony id from the manifest owner and purpose, tracks the lease in
+`Context.Lifetime`, and removes every patch carrying that id after normal unload and partial-load failure.
+Disposal is idempotent and may be requested early. Creating a lease, applying a patch, and the first disposal
+must run on Robotopia's game thread; queue worker-originated work with `Context.Scheduler.NextFrame`. After
+teardown completes, repeated disposal is a thread-safe no-op. Patch application and teardown are serialized so
+a patch cannot land after the teardown sweep. The runtime keeps the Harmony owner id private; all patches must
+go through the lease to retain that guarantee. Consumers do not need a compile-time 0Harmony reference—the
+game runtime supplies Harmony.

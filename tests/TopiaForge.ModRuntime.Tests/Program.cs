@@ -21,8 +21,12 @@ namespace TopiaForge.ModRuntime.Tests
             try
             {
                 TestNormalLifecycleAndSubscriberIsolation(root);
+                TestModEventDispatch(root);
                 TestInitialSceneReplayAndDeduplication(root);
+                TestInitialBackgroundSceneReplay(root);
                 TestDetailedSceneLoadDelivery(root);
+                TestCompleteSceneLifecycleDelivery(root);
+                TestOwnerHarmonyLeaseCleanup();
                 TestNativeInitialSceneRaceIsDeduplicated(root);
                 TestInvalidInitialSceneWaitsForNativeDelivery(root);
                 TestPartialLoadFailureCleanup(root);
@@ -188,6 +192,8 @@ namespace TopiaForge.ModRuntime.Tests
             public void DispatchUpdate(float deltaTime) => runtime!.DispatchUpdate(deltaTime);
             public bool DispatchInitialScene(int sceneHandle, string sceneName, bool isValid) =>
                 runtime!.DispatchInitialScene(sceneHandle, sceneName, isValid);
+            public bool DispatchInitialScenes(params RuntimeUnderTest.InitialSceneReplay[] scenes) =>
+                runtime!.DispatchInitialScenes(scenes);
             public bool DispatchSceneLoaded(int sceneHandle, string sceneName, bool isValid) =>
                 runtime!.DispatchSceneLoaded(sceneHandle, sceneName, isValid);
             public bool DispatchSceneLoaded(
@@ -203,6 +209,18 @@ namespace TopiaForge.ModRuntime.Tests
                 bool isValid,
                 SceneLoadMode mode) =>
                 runtime!.DispatchSceneActivated(sceneHandle, sceneName, isValid, mode);
+            public bool DispatchSceneLifecycleActivated(
+                int sceneHandle,
+                string sceneName,
+                bool isValid,
+                SceneLoadMode mode) =>
+                runtime!.DispatchSceneLifecycleActivated(sceneHandle, sceneName, isValid, mode);
+            public bool DispatchSceneUnloaded(
+                int sceneHandle,
+                string sceneName,
+                bool isValid,
+                SceneLoadMode mode) =>
+                runtime!.DispatchSceneUnloaded(sceneHandle, sceneName, isValid, mode);
             public void UnloadAll() => runtime!.UnloadAll();
 
             public void Dispose()

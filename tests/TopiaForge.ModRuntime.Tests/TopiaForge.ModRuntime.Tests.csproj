@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <Reference Include="BepInEx" HintPath="$(BepInExCoreDir)\BepInEx.dll" Private="true" />
+    <Reference Include="0Harmony" HintPath="$(BepInExCoreDir)\0Harmony.dll" Private="true" />
     <Reference Include="UnityEngine" HintPath="$(RobotopiaManagedDir)\UnityEngine.dll" Private="true" />
     <Reference Include="UnityEngine.CoreModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.CoreModule.dll" Private="true" />
     <Reference Include="UnityEngine.AssetBundleModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.AssetBundleModule.dll" Private="true" />

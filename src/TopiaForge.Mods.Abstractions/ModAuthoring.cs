@@ -133,6 +133,19 @@ namespace TopiaForge.Mods
         IDisposable SubscribeSceneLoaded(Action<SceneLoadEvent> handler);
     }
 
+    /// <summary>
+    /// Optional complete scene lifecycle source implemented by hosts that can distinguish scene instances and report
+    /// normalized load, activation, and unload phases. Subscribe through
+    /// <see cref="ModEventExtensions.SubscribeSceneLifecycle"/> to retain a load-only fallback on simpler hosts.
+    /// </summary>
+    public interface ISceneLifecycleEventSource
+    {
+        /// <summary>Subscribes to normalized scene-instance lifecycle notifications.</summary>
+        /// <param name="handler">A callback receiving the lifecycle transition.</param>
+        /// <returns>A lifetime-tracked subscription that may be disposed early.</returns>
+        IDisposable SubscribeSceneLifecycle(Action<SceneLifecycleEvent> handler);
+    }
+
     /// <summary>Compatibility-preserving additions to runtime mod events.</summary>
     public static class ModEventExtensions
     {
@@ -155,6 +168,34 @@ namespace TopiaForge.Mods
 
             return events.SubscribeSceneLoaded(sceneName =>
                 handler(new SceneLoadEvent(sceneName, SceneLoadMode.Single, true)));
+        }
+
+        /// <summary>
+        /// Subscribes to normalized scene lifecycle notifications. Hosts implementing
+        /// <see cref="ISceneLifecycleEventSource"/> report loaded, activated, and unloaded phases with a process-local
+        /// instance id. Simpler hosts preserve compatibility by reporting load-only events with instance id zero.
+        /// </summary>
+        /// <param name="events">The owner-scoped mod event source.</param>
+        /// <param name="handler">A callback receiving the lifecycle transition.</param>
+        /// <returns>A lifetime-tracked subscription that may be disposed early.</returns>
+        public static IDisposable SubscribeSceneLifecycle(
+            this IModEvents events,
+            Action<SceneLifecycleEvent> handler)
+        {
+            if (events == null) throw new ArgumentNullException(nameof(events));
+            if (handler == null) throw new ArgumentNullException(nameof(handler));
+
+            if (events is ISceneLifecycleEventSource lifecycle)
+            {
+                return lifecycle.SubscribeSceneLifecycle(handler);
+            }
+
+            return events.SubscribeSceneLoaded(sceneName => handler(new SceneLifecycleEvent(
+                0,
+                sceneName,
+                SceneLifecyclePhase.Loaded,
+                SceneLoadMode.Single,
+                isActive: true)));
         }
     }
 
