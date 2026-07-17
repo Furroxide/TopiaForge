@@ -68,8 +68,9 @@ their "leave" sentinel (`-1`, `0`, or `false`) are not touched.
 ## How it stays reversible
 Each applier captures the original value of everything it touches before changing it, and restores it on
 unload. The injected Volume's `GameObject` and `VolumeProfile`/component `ScriptableObject`s are destroyed
-explicitly (Unity does not GC them). Harmony patches are removed with `UnpatchSelf()`. Robotopia interaction
-goes through clean-room reflection (`AccessTools` / `Type.GetType("…, GameCode")`), so a future Robotopia
+explicitly (Unity does not GC them). Harmony patches are owned by a lifetime-tracked interop lease and removed
+as a group during unload or partial-load cleanup. Robotopia interaction goes through clean-room reflection
+(`AccessTools` / `Type.GetType("…, GameCode")`), so a future Robotopia
 update that renames a member downgrades a single lever to an inert, logged no-op instead of breaking the
 mod.
 

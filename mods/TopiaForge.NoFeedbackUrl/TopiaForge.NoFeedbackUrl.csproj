@@ -15,7 +15,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="0Harmony" HintPath="$(BepInExCoreDir)\0Harmony.dll" Private="false" />
     <Reference Include="GameCode" HintPath="$(RobotopiaManagedDir)\GameCode.dll" Private="false" />
   </ItemGroup>
 </Project>
