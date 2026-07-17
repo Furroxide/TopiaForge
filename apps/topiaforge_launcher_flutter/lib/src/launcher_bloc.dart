@@ -421,6 +421,7 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
           : statusSeverity,
       gameInstall: snapshot.gameInstall,
       clearGameInstall: snapshot.gameInstall == null,
+      gameInstallCandidates: snapshot.gameInstallCandidates,
       profiles: snapshot.profiles,
       selectedProfileId: snapshot.selectedProfileId,
       installedMods: snapshot.installedMods,

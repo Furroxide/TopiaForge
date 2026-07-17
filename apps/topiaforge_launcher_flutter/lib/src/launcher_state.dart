@@ -20,6 +20,7 @@ class LauncherState {
     required this.resolution,
     required this.launcherUpdates,
     this.gameInstall,
+    this.gameInstallCandidates = const [],
     this.selectedModId,
     this.modSearch = '',
     this.errorMessage,
@@ -71,6 +72,7 @@ class LauncherState {
   final String statusMessage;
   final IssueSeverity statusSeverity;
   final GameInstall? gameInstall;
+  final List<GameInstallCandidate> gameInstallCandidates;
   final List<LauncherProfile> profiles;
   final String selectedProfileId;
   final List<InstalledMod> installedMods;
@@ -199,6 +201,7 @@ class LauncherState {
     IssueSeverity? statusSeverity,
     GameInstall? gameInstall,
     bool clearGameInstall = false,
+    List<GameInstallCandidate>? gameInstallCandidates,
     List<LauncherProfile>? profiles,
     String? selectedProfileId,
     List<InstalledMod>? installedMods,
@@ -248,6 +251,8 @@ class LauncherState {
           statusSeverity ??
           (statusMessage != null ? IssueSeverity.info : this.statusSeverity),
       gameInstall: clearGameInstall ? null : gameInstall ?? this.gameInstall,
+      gameInstallCandidates:
+          gameInstallCandidates ?? this.gameInstallCandidates,
       profiles: profiles ?? this.profiles,
       selectedProfileId: selectedProfileId ?? this.selectedProfileId,
       installedMods: installedMods ?? this.installedMods,

@@ -5,20 +5,65 @@ extension LauncherGameInstallActions on LauncherBloc {
     KnownInstallDetected event,
     Emitter<LauncherState> emit,
   ) async {
-    await _guard(emit, 'Detected Robotopia install.', () async {
-      final install = await _repository.detectKnownInstall();
-      if (install == null) {
+    await _guard(emit, 'Searched for Robotopia installs.', () async {
+      final candidates = await _discoverGameInstallCandidates();
+      if (candidates.isEmpty) {
         emit(
           state.copyWith(
-            isBusy: false,
-            statusMessage: 'Known TopiaForge launcher path was not found.',
+            clearGameInstall: true,
+            gameInstallCandidates: const [],
+          ),
+        );
+        final refreshed = _snapshotState(
+          await _repository.loadSnapshot(),
+          'No validated Robotopia install was found. Choose the folder manually.',
+        );
+        emit(
+          refreshed.copyWith(
+            clearGameInstall: true,
+            gameInstallCandidates: const [],
           ),
         );
         return;
       }
-      await _repository.selectGameDirectory(install.path);
-      emit(_snapshotState(await _repository.loadSnapshot(), 'Ready.'));
+      final currentPath = state.gameInstall?.path;
+      final preferred = candidates.firstWhere(
+        (candidate) => candidate.install.path == currentPath,
+        orElse: () => candidates.first,
+      );
+      await _repository.selectGameDirectory(preferred.install.path);
+      final count = candidates.length;
+      emit(
+        _snapshotState(
+          await _repository.loadSnapshot(),
+          count == 1
+              ? 'Detected one Robotopia install.'
+              : 'Detected $count Robotopia installs. Select one in Setup or Settings.',
+        ),
+      );
     });
+  }
+
+  Future<List<GameInstallCandidate>> _discoverGameInstallCandidates() async {
+    final repository = _repository;
+    if (repository is GameInstallDiscoveryRepository) {
+      return repository.discoverGameInstalls();
+    }
+    final install = await repository.detectKnownInstall();
+    return install == null
+        ? const []
+        : [
+            GameInstallCandidate(
+              install: install,
+              sources: const [
+                GameInstallDiscoverySource(
+                  id: 'known-install',
+                  label: 'Known install',
+                  precedence: 0,
+                ),
+              ],
+            ),
+          ];
   }
 
   Future<void> _onGameDirectorySelected(

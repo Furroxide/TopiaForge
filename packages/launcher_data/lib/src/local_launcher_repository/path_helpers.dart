@@ -34,7 +34,7 @@ extension _PathHelpers on LocalLauncherRepository {
     ).createSync(recursive: true);
   }
 
-  String _redact(String text, String gamePath) {
+  String _redact(String text, Iterable<String> gamePaths) {
     var result = text;
     final userHome =
         Platform.environment['USERPROFILE'] ?? Platform.environment['HOME'];
@@ -44,11 +44,13 @@ extension _PathHelpers on LocalLauncherRepository {
         r'%USERHOME%',
       );
     }
-    if (gamePath.trim().isNotEmpty) {
-      result = result.replaceAll(
-        RegExp(RegExp.escape(gamePath), caseSensitive: false),
-        r'%ROBOTOPIA_GAME%',
-      );
+    for (final gamePath in gamePaths) {
+      if (gamePath.trim().isNotEmpty) {
+        result = result.replaceAll(
+          RegExp(RegExp.escape(gamePath), caseSensitive: false),
+          r'%ROBOTOPIA_GAME%',
+        );
+      }
     }
     result = result.replaceAllMapped(
       RegExp(
@@ -139,41 +141,6 @@ void _requireRuntimeDirectory(
     }
     current = current.parent;
   }
-}
-
-String? _defaultKnownGamePath() {
-  final override = Platform.environment['ROBOTOPIA_GAME_DIR'];
-  if (override != null && override.trim().isNotEmpty) {
-    return override;
-  }
-
-  if (Platform.isWindows) {
-    final localAppData = Platform.environment['LOCALAPPDATA'];
-    if (localAppData == null || localAppData.isEmpty) {
-      return null;
-    }
-    return p.join(localAppData, 'Tomato Cake', 'launcher', 'Robotopia');
-  }
-
-  if (Platform.isMacOS) {
-    final home = Platform.environment['HOME'];
-    if (home == null || home.isEmpty) {
-      return null;
-    }
-    // The Tomato Cake launcher installs Robotopia.app here; the install root
-    // is the directory containing the bundle.
-    return p.join(
-      home,
-      'Library',
-      'Application Support',
-      'Tomato Cake',
-      'launcher',
-    );
-  }
-
-  // Linux runs the Windows build under Proton/Wine — there is no reliable
-  // prefix heuristic, so the user selects the game folder manually.
-  return null;
 }
 
 String _findRepositoryRoot(String? workingDirectory) {

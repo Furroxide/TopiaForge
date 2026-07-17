@@ -371,6 +371,7 @@ class LauncherSnapshot {
     required this.worldCatalog,
     required this.recentLog,
     this.gameInstall,
+    this.gameInstallCandidates = const [],
     this.launcherUpdates = const LauncherUpdateSettings(),
     this.developerMode = false,
     this.sourceStatuses = const [],
@@ -378,6 +379,7 @@ class LauncherSnapshot {
   });
 
   final GameInstall? gameInstall;
+  final List<GameInstallCandidate> gameInstallCandidates;
   final List<LauncherProfile> profiles;
   final String selectedProfileId;
   final List<InstalledMod> installedMods;

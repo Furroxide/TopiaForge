@@ -10,6 +10,7 @@ abstract interface class LauncherRepository {
 
   Future<LauncherSnapshot> loadSnapshot();
 
+  /// Compatibility shim returning the highest-precedence discovered install.
   Future<GameInstall?> detectKnownInstall();
 
   Future<GameInstall> selectGameDirectory(String path);
@@ -140,6 +141,15 @@ abstract interface class LauncherRepository {
   /// Inspects the deterministic newest exported project snapshot and returns
   /// its scenes, source provenance, and structured validation issues.
   Future<UgcSceneInspectionResult> inspectWatchFolderScenes(String watchFolder);
+}
+
+/// Optional launcher-repository capability for enumerating multiple installs.
+///
+/// Consumers must continue to support a plain [LauncherRepository] by falling
+/// back to [LauncherRepository.detectKnownInstall].
+abstract interface class GameInstallDiscoveryRepository
+    implements LauncherRepository {
+  Future<List<GameInstallCandidate>> discoverGameInstalls();
 }
 
 abstract interface class DeveloperRepository {
