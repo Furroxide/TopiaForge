@@ -117,13 +117,13 @@ jobs:
           sdk: "3.11.1"
 
       - name: Set up .NET
-        if: matrix.package == 'apps/topiaforge_cli'
+        if: matrix.package != 'packages/launcher_domain'
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: "10.0.301"
 
-      - name: Prepare CLI build and managed-reference fixtures
-        if: matrix.package == 'apps/topiaforge_cli'
+      - name: Prepare managed-reference fixtures
+        if: matrix.package != 'packages/launcher_domain'
         env:
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
         run: |
@@ -132,6 +132,10 @@ jobs:
           dotnet run \
             --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj \
             -c Release -- --source public --write-local-props
+
+      - name: Build CLI test fixtures
+        if: matrix.package == 'apps/topiaforge_cli'
+        run: |
           dotnet build TopiaForge.slnx -c Release --nologo
 
       - name: Analyze
@@ -397,6 +401,8 @@ jobs:
         working-directory: apps/topiaforge_cli
         run: |
           dart pub get --enforce-lockfile
+          dotnet build ../../src/TopiaForge.ModPackageValidator/TopiaForge.ModPackageValidator.csproj \
+            -c Release --nologo
           dart run bin/topiaforge.dart new mod "ci.${{ matrix.template }}" \
             --template "${{ matrix.template }}" \
             --name "CI ${{ matrix.template }}" \
