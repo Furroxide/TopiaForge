@@ -78,16 +78,38 @@ namespace TopiaForge.Mods.Testing
         internal OperationResult<T> TrackResult<T>(T resource, string cancelledMessage)
             where T : class, IDisposable
         {
+            return TrackResult(resource, null, cancelledMessage);
+        }
+
+        internal OperationResult<T> TrackResult<T>(
+            T resource,
+            Action<IDisposable>? attachLifetimeLease,
+            string cancelledMessage)
+            where T : class, IDisposable
+        {
+            IDisposable? lifetimeLease = null;
             try
             {
-                Track(resource);
+                lifetimeLease = Track(resource);
+                if (attachLifetimeLease != null)
+                {
+                    attachLifetimeLease(lifetimeLease);
+                    lifetimeLease = null;
+                }
+
                 return OperationResult<T>.Success(resource);
             }
             catch (ObjectDisposedException)
             {
+                lifetimeLease?.Dispose();
                 return OperationResult<T>.Failure(
                     ModErrorCode.Cancelled,
                     cancelledMessage ?? string.Empty);
+            }
+            catch
+            {
+                lifetimeLease?.Dispose();
+                throw;
             }
         }
 

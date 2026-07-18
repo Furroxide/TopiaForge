@@ -1,13 +1,9 @@
 using System;
-using TopiaForge.Mods;
 
 namespace TopiaForge.Zombies
 {
-    // The "robot psychology" that decides how an infected robot answers an OVERRIDE command. Pure, Unity-free, and
-    // deterministic given a robot's seeded mind — it is the always-on authority that resolves at frame 0 with zero
-    // network, so the cast feels instant and works offline. A live LLM answer (when available) only ENRICHES it via
-    // ApplyBrainModulation, which can upgrade a failed cast toward the player's intent but never harden an outcome the
-    // player has already been shown. Kept engine-independent so it unit-tests on net8.0.
+    // The deterministic "robot psychology" that decides how an infected robot answers an OVERRIDE command. It is
+    // engine-independent and remains the offline authority whenever the opt-in JACK IN conversation path is closed.
 
     // The player's command. Each maps to a target outcome with its own persuasiveness/difficulty.
     internal enum OverrideCommand
@@ -18,7 +14,7 @@ namespace TopiaForge.Zombies
         StandDown  // safe pacify: easiest, never enrages
     }
 
-    // The resolved effect, ordered by how compliant it is (the rank is used by the soften-only brain modulation).
+    // The resolved effect, ordered from least to most compliant.
     internal enum HijackOutcome
     {
         Resist = 0,
@@ -153,68 +149,6 @@ namespace TopiaForge.Zombies
             return new OverrideResolution(HijackOutcome.Resist, EnragesOnFail(command));
         }
 
-        // Soften-only LLM modulation: a live brain answer may rescue a failed/partial cast up to the command's
-        // intended outcome (clearing any enrage), but can never downgrade an outcome the player was already shown. A
-        // brain that confirms or refuses leaves the deterministic result untouched (only its bark is surfaced).
-        public static OverrideResolution ApplyBrainModulation(OverrideCommand command, OverrideResolution deterministic, RobotDecision brainAction)
-        {
-            var target = TargetOutcome(command);
-            if (brainAction == RobotDecision.Comply && (int)deterministic.Outcome < (int)target)
-            {
-                return new OverrideResolution(target, false);
-            }
-
-            return deterministic;
-        }
-
-        // Map a brain `action` field value to the shared decision vocabulary. Unknown/empty → Unknown (treated as a
-        // no-op by the modulation rule).
-        public static RobotDecision ParseBrainAction(string? action)
-        {
-            if (string.IsNullOrEmpty(action))
-            {
-                return RobotDecision.Unknown;
-            }
-
-            switch (action!.Trim().ToLowerInvariant())
-            {
-                case "comply":
-                case "obey":
-                case "join":
-                    return RobotDecision.Comply;
-                case "freeze":
-                case "halt":
-                case "stop":
-                    return RobotDecision.Freeze;
-                case "flee":
-                case "scatter":
-                case "run":
-                    return RobotDecision.Flee;
-                case "resist":
-                case "refuse":
-                case "attack":
-                    return RobotDecision.Resist;
-                default:
-                    return RobotDecision.Unknown;
-            }
-        }
-
-        // The natural-language phrase the player "says" — used both as the HUD label and woven into the brain prompt.
-        public static string Phrase(OverrideCommand command)
-        {
-            switch (command)
-            {
-                case OverrideCommand.JoinMe:
-                    return "Join me — fight with me.";
-                case OverrideCommand.Freeze:
-                    return "Freeze. Power down.";
-                case OverrideCommand.GetOut:
-                    return "Get out of here. Run.";
-                default:
-                    return "Stand down. Stay calm.";
-            }
-        }
-
         public static HijackOutcome TargetOutcome(OverrideCommand command)
         {
             switch (command)
@@ -262,67 +196,5 @@ namespace TopiaForge.Zombies
         private static bool EnragesOnFail(OverrideCommand command) => command == OverrideCommand.JoinMe;
 
         private const float HesitationBand = 0.18f;
-    }
-
-    // Builds the structured brain query for one override cast: the robot's own LLM brain decides how it reacts and
-    // barks a line. The action is constrained to the comply/freeze/flee/resist enum so the answer is machine-readable;
-    // the bark is short free text. Pure (returns the Unity-free SDK request), so it unit-tests without a backend.
-    internal static class OverridePrompt
-    {
-        private static readonly string[] ActionChoices = { "comply", "freeze", "flee", "resist" };
-
-        public static BrainQueryRequest Build(string chassis, in RobotMind mind, OverrideCommand command, int wave, float temperature)
-        {
-            var prompt =
-                "You are an infected combat robot in a robot-zombie outbreak. Chassis type: " + chassis +
-                ". You are " + CorruptionWord(mind.Corruption) + " by the infection (wave " + wave +
-                "). A lone human survivor points a weapon at you and says: \"" + OverrideDecision.Phrase(command) +
-                "\". Decide how YOU, this specific robot, react this instant. 'comply' means you obey the human and turn on the other infected; otherwise freeze, flee, or resist. Then give a SHORT in-character line (max ~10 words).";
-
-            var outputs = new BrainOutputField[]
-            {
-                new BrainOutputField("action", "How you react to the human's command.", BrainFieldType.String, ActionChoices),
-                new BrainOutputField("bark", "A short in-character line you say out loud (<= 10 words).", BrainFieldType.String),
-            };
-
-            return new BrainQueryRequest(
-                prompt,
-                outputs,
-                usage: "zombies-override",
-                successDescription: "Return a valid action and a short spoken bark.",
-                temperature: temperature);
-        }
-
-        // A crowd-level broadcast query: the whole swarm answers with one voice (a single line). Used purely as
-        // flavour over the swarm — the per-robot outcomes are resolved deterministically.
-        public static BrainQueryRequest BuildBroadcast(OverrideCommand command, int wave, int crowdSize, float temperature)
-        {
-            var prompt =
-                "You are the collective voice of a swarm of " + crowdSize + " infected combat robots (wave " + wave +
-                ") in a robot-zombie outbreak. A lone human survivor broadcasts to all of you: \"" +
-                OverrideDecision.Phrase(command) + "\". Answer as the swarm with ONE short, menacing or glitchy line (max ~10 words).";
-
-            var outputs = new BrainOutputField[]
-            {
-                new BrainOutputField("bark", "The swarm's single short spoken line (<= 10 words).", BrainFieldType.String),
-            };
-
-            return new BrainQueryRequest(
-                prompt,
-                outputs,
-                usage: "zombies-broadcast",
-                successDescription: "Return one short spoken line for the swarm.",
-                temperature: temperature);
-        }
-
-        private static string CorruptionWord(float corruption)
-        {
-            if (corruption < 0.33f)
-            {
-                return "only lightly corrupted";
-            }
-
-            return corruption < 0.66f ? "badly corrupted" : "almost fully consumed";
-        }
     }
 }

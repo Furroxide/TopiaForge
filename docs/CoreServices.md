@@ -73,6 +73,39 @@ or an SDK async continuation. If background work needs to re-enter Robotopia, qu
 `Context.Scheduler.NextFrame` and handle its result. Calling an engine adapter directly from a worker
 thread fails before touching Unity with `TFSDK100` and points to that remediation.
 
+## Scene transition semantics
+
+The original scene callback remains available when only the loaded scene name matters. It fires
+once for each completed load:
+
+```csharp
+Context.Events.SubscribeSceneLoaded((string sceneName) =>
+    Context.Logger.Info("Loaded " + sceneName));
+```
+
+Use the typed overload when a mod must distinguish replacement loads, additive content, and later
+activation of an additively loaded gameplay scene:
+
+```csharp
+Context.Events.SubscribeSceneLoaded((SceneLoadEvent scene) =>
+{
+    if (!scene.IsAuthoritativeReplacement)
+    {
+        return;
+    }
+
+    Context.Logger.Info("Active world: " + scene.SceneName);
+});
+```
+
+`Mode` reports `Single` or `Additive`, `IsActive` reports whether that scene is currently active,
+and `IsAuthoritativeReplacement` accepts every single replacement; for additive transitions it
+accepts an activated gameplay scene while filtering loader/menu overlays. Detailed subscribers can
+therefore observe an additive scene once when it loads and again if it later becomes active. The extension
+falls back to `Single` plus active metadata on older hosts, and both overloads return
+lifetime-owned subscriptions. SDK scene-load continuations resume on Robotopia's main thread; do
+not opt out with `ConfigureAwait(false)` before making another engine-facing call.
+
 ## Lifetime ownership
 
 Every SDK subscription, registration, asset handle, spawned entity, UI surface, playback, lease,

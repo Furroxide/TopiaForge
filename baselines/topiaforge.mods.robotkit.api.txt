@@ -103,6 +103,9 @@ type public interface TopiaForge.Mods.IRobotObjectiveService
   property System.Collections.Generic.IReadOnlyList<System.String> TargetNames { get [abstract,virtual,newslot]; }
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.RobotTargetInfo> Targets { get [abstract,virtual,newslot]; }
 
+type public interface TopiaForge.Mods.IRobotPlayerEntitySource
+  method [abstract,virtual,newslot] System.Boolean TryGetPlayerEntity(out TopiaForge.Mods.IEntity? entity)
+
 type public interface TopiaForge.Mods.IRobotTargetRegistration : System.IDisposable
   property System.Boolean IsActive { get [abstract,virtual,newslot]; }
   property System.String Name { get [abstract,virtual,newslot]; }
@@ -126,6 +129,9 @@ type public sealed class TopiaForge.Mods.ReachableSpawnRequest : System.Object
 type public sealed class TopiaForge.Mods.ReachableSpawnResult : System.Object
   constructor .ctor(TopiaForge.Mods.Vec3 position)
   property TopiaForge.Mods.Vec3 Position { get; }
+
+type public static class TopiaForge.Mods.RobotAgentServiceExtensions : System.Object
+  method extension [static] System.Boolean TryGetPlayerEntity(TopiaForge.Mods.IRobotAgentService service, out TopiaForge.Mods.IEntity? entity)
 
 type public sealed class TopiaForge.Mods.RobotAgentSpawnRequest : System.Object
   constructor .ctor(TopiaForge.Mods.Vec3 position, System.Nullable<TopiaForge.Mods.Vec3> facing = null, TopiaForge.Mods.RobotBrainMode brainMode = 0 (Dormant), TopiaForge.Mods.RobotGait gait = 1 (Run), System.Single moveSpeed = 0, System.Single turnSpeed = 0, System.Single stopDistance = 0, System.Nullable<TopiaForge.Mods.RobotColor> tint = null, System.String? name = null, System.Single scale = 1, TopiaForge.Mods.RobotInteractionOptions? interaction = null, System.String? robotTypeId = null)

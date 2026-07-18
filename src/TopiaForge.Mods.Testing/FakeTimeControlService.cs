@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace TopiaForge.Mods.Testing
 {
     /// <summary>Deterministic Chronos fake with observable leases and a manually advanced control clock.</summary>
-    public sealed class FakeTimeControlService : ITimeControlService
+    public sealed partial class FakeTimeControlService : ITimeControlService
     {
         private readonly FakeModLifetime lifetime;
         private readonly List<Lease> leases = new List<Lease>();
@@ -49,6 +49,20 @@ namespace TopiaForge.Mods.Testing
 
         /// <summary>Gets the total requested fixed-update slices.</summary>
         public int RequestedFixedSteps { get; private set; }
+
+        /// <summary>Invalidates every active effect, mirroring an authoritative Chronos reset.</summary>
+        public void ForceReset()
+        {
+            turnScheduler?.Dispose();
+            turnScheduler = null;
+            for (var index = leases.Count - 1; index >= 0; index--)
+            {
+                leases[index].Dispose();
+            }
+
+            driver = null;
+            Recompute();
+        }
 
         /// <inheritdoc />
         public OperationResult<ITimeLease> Freeze(string usage, bool suspendPlayer = false) =>
@@ -167,6 +181,7 @@ namespace TopiaForge.Mods.Testing
             Mode = TimeMode.TurnBased;
             return lifetime.TrackResult<ITurnScheduler>(
                 scheduler,
+                scheduler.AttachLifetimeLease,
                 "The fake mod stopped before turn-based time could begin.");
         }
 
@@ -223,6 +238,7 @@ namespace TopiaForge.Mods.Testing
 
             var tracked = lifetime.TrackResult<ITimeLease>(
                 lease,
+                lease.AttachLifetimeLease,
                 "The fake mod stopped before the time lease could be acquired.");
             Recompute();
             return tracked;
@@ -285,178 +301,5 @@ namespace TopiaForge.Mods.Testing
 
         private static OperationResult<bool> UnavailableBool() =>
             OperationResult<bool>.Failure(ModErrorCode.Unavailable, "Fake Chronos is unavailable.");
-
-        private enum LeaseKind
-        {
-            Freeze,
-            Slow,
-            Exemption,
-            Driver
-        }
-
-        private sealed class Lease : ITimeLease
-        {
-            private Action<Lease>? release;
-
-            public Lease(LeaseKind kind, float scale, Action<Lease> release, ITimeDriver? driver)
-            {
-                Kind = kind;
-                Scale = scale;
-                Driver = driver;
-                this.release = release;
-            }
-
-            public LeaseKind Kind { get; }
-            public float Scale { get; }
-            public ITimeDriver? Driver { get; }
-            public bool IsActive => release != null;
-
-            public void Release()
-            {
-                var callback = release;
-                release = null;
-                callback?.Invoke(this);
-            }
-
-            public void Dispose() => Release();
-        }
-
-        private sealed class FakeTurnScheduler : ITurnScheduler
-        {
-            private readonly TurnSchedulerOptions options;
-            private readonly Dictionary<TurnActorId, float> actors = new Dictionary<TurnActorId, float>();
-            private readonly Func<ITimeLease?> acquireFreeze;
-            private readonly Action<FakeTurnScheduler> onDisposed;
-            private ITimeLease? freeze;
-            private bool disposed;
-            private float elapsed;
-
-            public FakeTurnScheduler(
-                TurnSchedulerOptions options,
-                ITimeLease freeze,
-                Func<ITimeLease?> acquireFreeze,
-                Action<FakeTurnScheduler> onDisposed)
-            {
-                this.options = options;
-                this.freeze = freeze;
-                this.acquireFreeze = acquireFreeze;
-                this.onDisposed = onDisposed;
-            }
-
-            public TurnState State { get; private set; }
-            public TurnActorId? CurrentActor { get; private set; }
-            public int ActorCount => actors.Count;
-
-            public OperationResult<bool> Register(TurnActorId actor, float speed)
-            {
-                if (disposed)
-                {
-                    return InvalidState();
-                }
-
-                if (speed <= 0f || float.IsNaN(speed) || float.IsInfinity(speed))
-                {
-                    return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "Actor speed must be finite and positive.");
-                }
-
-                if (actors.ContainsKey(actor))
-                {
-                    return OperationResult<bool>.Failure(ModErrorCode.Conflict, "Actor is already registered.");
-                }
-
-                actors.Add(actor, speed);
-                return OperationResult<bool>.Success(true);
-            }
-
-            public OperationResult<bool> Unregister(TurnActorId actor)
-            {
-                if (disposed)
-                {
-                    return InvalidState();
-                }
-
-                var removed = actors.Remove(actor);
-                if (CurrentActor == actor)
-                {
-                    CurrentActor = null;
-                    State = TurnState.Idle;
-                }
-
-                return OperationResult<bool>.Success(removed);
-            }
-
-            public OperationResult<bool> BeginAction()
-            {
-                if (disposed || State != TurnState.AwaitingAction)
-                {
-                    return InvalidState();
-                }
-
-                State = TurnState.Acting;
-                elapsed = 0f;
-                freeze?.Dispose();
-                freeze = null;
-                return OperationResult<bool>.Success(true);
-            }
-
-            public OperationResult<bool> EndAction()
-            {
-                if (disposed || State != TurnState.Acting)
-                {
-                    return InvalidState();
-                }
-
-                CurrentActor = null;
-                State = TurnState.Idle;
-                freeze = acquireFreeze();
-                return OperationResult<bool>.Success(true);
-            }
-
-            public void Tick(float controlDeltaTime)
-            {
-                if (disposed || actors.Count == 0)
-                {
-                    return;
-                }
-
-                if (State == TurnState.Idle)
-                {
-                    foreach (var actor in actors.Keys)
-                    {
-                        CurrentActor = actor;
-                        break;
-                    }
-
-                    State = TurnState.AwaitingAction;
-                }
-                else if (State == TurnState.Acting)
-                {
-                    elapsed += Math.Max(0f, controlDeltaTime);
-                    if (elapsed >= options.MaxActionSeconds)
-                    {
-                        EndAction();
-                    }
-                }
-            }
-
-            public void Dispose()
-            {
-                if (disposed)
-                {
-                    return;
-                }
-
-                disposed = true;
-                freeze?.Dispose();
-                freeze = null;
-                actors.Clear();
-                CurrentActor = null;
-                State = TurnState.Idle;
-                onDisposed(this);
-            }
-
-            private static OperationResult<bool> InvalidState() =>
-                OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The fake turn scheduler is not in the required state.");
-        }
     }
 }

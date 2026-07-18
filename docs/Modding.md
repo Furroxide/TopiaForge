@@ -131,6 +131,7 @@ staged when required and take effect after a Robotopia restart.
 - [Test a mod](TestingMods.md)
 - [Development loop](CliDevLoop.md)
 - [Diagnostics](Diagnostics.md)
+- [Zombies worked example](Zombies.md)
 - [V1 capability coverage](CapabilityMatrix.md)
 - [Live Robotopia acceptance](LiveGameAcceptance.md)
 - [Publish a mod](PublishingYourMod.md)

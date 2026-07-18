@@ -73,9 +73,9 @@ namespace TopiaForge.ModManager.Tests
             AssertLacksCapabilities(
                 manifests["io.github.furroxide.topiaforge.sandbox"],
                 "network", "remote-ai", "player-token", "microphone", "speech-to-text");
-            AssertLacksCapabilities(
+            AssertCapabilities(
                 manifests["io.github.furroxide.topiaforge.zombies"],
-                "remote-ai", "player-token", "microphone", "speech-to-text");
+                "navigation", "scene-management", "network", "remote-ai", "player-token", "microphone", "speech-to-text");
             AssertAdvancedInterop(manifests, manifestPaths);
             Console.WriteLine("FirstPartyManifestTests passed.");
         }

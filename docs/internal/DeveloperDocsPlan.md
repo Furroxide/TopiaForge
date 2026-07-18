@@ -154,7 +154,7 @@ Section type in brackets (loose Diátaxis check). **Legend:** 🟢 exists today 
 | Prompt Override Guide (`IPromptOverrideRegistry`, priority, `PromptConflict`) | How-to | hand | ⚪ |
 | Worlds & Gamemodes Guide (`IWorldGamemodeService`, `WorldDefinition`…) | How-to | hand | ⚪ |
 | Logging & Debugging (`IModLogger`, BepInEx console/log locations) | How-to | hand | ⚪ |
-| Worked Examples (GravityGun, Zombies→Worlds, Worlds, NoFeedbackUrl) | Tutorial/Expl | hand → existing mods | ⚪ |
+| Worked Examples (GravityGun, Zombies→Worlds, Worlds, NoFeedbackUrl) | Tutorial/Expl | hand → existing mods | 🟡 (Zombies complete) |
 | **C# API Reference** | Reference | 🤖 **DocFX** | ⚪ (gated on §7) |
 | Security & Trust Model (in-process code exec, permissions descriptive-only) | Explanation | hand | 🟡 (README) |
 | Versioning & Compatibility (`supportedGameVersionRange`/loader range) | Explanation | hand | ⚪ |

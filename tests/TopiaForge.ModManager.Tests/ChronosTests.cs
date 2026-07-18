@@ -1,21 +1,30 @@
 using System;
 using TopiaForge.Chronos;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Testing;
 
 namespace TopiaForge.ModManager.Tests
 {
     // Unit tests for the Unity-free core of the Chronos time-control framework: the leak-proof lease derivation
-    // (LeaseLedger), the fixedDeltaTime co-scale math (TimeMath), the Superhot ramp (SuperhotTimeDriver), and the
-    // turn initiative/energy order (TurnOrder). No UnityEngine and no timeScale writes — these compile into the
-    // net8.0 test assembly via the csproj Compile includes, like the OVERRIDE/conversation tests.
+    // (LeaseLedger), native-write suppression/logical state (TimeScaleOwnership/TimeScalePlan), fixedDeltaTime
+    // co-scale math (TimeMath), the Superhot ramp (SuperhotTimeDriver), and turn initiative/energy order (TurnOrder).
+    // No UnityEngine and no timeScale writes — these compile into the test assembly via explicit Compile includes.
     internal static class ChronosTests
     {
         public static void Run()
         {
             TestLeaseDerivation();
             TestLeaseOwnerScopedRelease();
+            TestResetInvalidatesLeaseAndStaleReleaseIsHarmless();
+            TestReplacedDriverLeaseCannotClearNewDriver();
+            TestPlayerSuspensionComposesWithOtherControlLeases();
+            TestPlayerSuspensionRetriesAfterTransientFailure();
             TestDriverBaseTimesSlow();
             TestFixedDeltaNoDrift();
+            TestNativePauseOwnershipPolicy();
+            TestNativePauseOverlayRelease();
+            TestDeferredNativePauseRestore();
+            TestLogicalStateDuringNativePause();
             TestSuperhotRamp();
             TestTurnOrderInitiative();
             TestTurnOrderTieBreakAndUnregister();
@@ -66,6 +75,82 @@ namespace TopiaForge.ModManager.Tests
             Assert(ledger.ActiveDriverId != 0, "the active driver is tracked");
         }
 
+        private static void TestResetInvalidatesLeaseAndStaleReleaseIsHarmless()
+        {
+            var host = new TestLeaseHost();
+            var staleId = host.AddFreeze(suspendPlayer: true);
+            var stale = new TimeLease(host, staleId, suspend: true);
+            Assert(stale.IsActive, "new lease reflects its live ledger entry");
+
+            host.ForceReset();
+            Assert(!stale.IsActive, "ForceReset invalidates an outstanding handle immediately");
+
+            var currentId = host.AddFreeze(suspendPlayer: true);
+            var current = new TimeLease(host, currentId, suspend: true);
+            stale.Release();
+            Assert(current.IsActive, "releasing the stale handle does not remove the newer freeze");
+            Assert(host.SuspendRefCount == 1, "stale release does not decrement the newer suspension count");
+            Assert(host.PlayerSuspendReleaseCount == 0, "stale release does not lift the newer player suspension");
+
+            current.Release();
+            Assert(!current.IsActive && host.SuspendRefCount == 0, "current release removes its own freeze");
+            Assert(host.PlayerSuspendReleaseCount == 1, "the final live suspend release lifts player control once");
+        }
+
+        private static void TestReplacedDriverLeaseCannotClearNewDriver()
+        {
+            var host = new TestLeaseHost();
+            var firstId = host.ReplaceDriver();
+            var first = new TimeLease(host, firstId, suspend: false);
+            var secondId = host.ReplaceDriver();
+            var second = new TimeLease(host, secondId, suspend: false);
+
+            Assert(!first.IsActive && second.IsActive, "replacing a driver invalidates only the prior handle");
+            first.Release();
+            Assert(host.DriverLeaseId == secondId, "releasing the replaced handle cannot clear the new driver");
+            Assert(second.IsActive, "the replacement driver remains active after stale release");
+
+            second.Release();
+            Assert(host.DriverLeaseId == 0 && !second.IsActive, "the live driver clears on its own release");
+        }
+
+        private static void TestPlayerSuspensionComposesWithOtherControlLeases()
+        {
+            using var context = new FakeModContext();
+            var externalResult = context.Player.AcquireControl("another mod's modal");
+            Assert(externalResult.TryGetValue(out _), "external control lease acquired");
+            var external = externalResult.Value
+                ?? throw new InvalidOperationException("The successful control result had no lease.");
+            using var coordinator = new PlayerSuspendCoordinator(context.Player, context.Logger);
+
+            coordinator.Suspend("conversation");
+            coordinator.Suspend("duplicate request");
+            Assert(context.Player.ActiveControlLeaseCount == 2, "Chronos acquires one shared control lease");
+
+            coordinator.Release();
+            Assert(context.Player.ActiveControlLeaseCount == 1, "Chronos release preserves the other mod's lease");
+            Assert(external.IsActive, "the other mod retains player control ownership");
+
+            external.Dispose();
+            Assert(context.Player.ActiveControlLeaseCount == 0, "controls restore after the final owner releases");
+        }
+
+        private static void TestPlayerSuspensionRetriesAfterTransientFailure()
+        {
+            using var context = new FakeModContext();
+            context.Player.AcquireControlErrorCode = ModErrorCode.Unavailable;
+            using var coordinator = new PlayerSuspendCoordinator(context.Player, context.Logger);
+
+            coordinator.Suspend("player not ready");
+            Assert(!coordinator.IsSuspended && context.Player.ActiveControlLeaseCount == 0,
+                "a transient player-control failure leaves the coordinator eligible to retry");
+
+            context.Player.AcquireControlErrorCode = ModErrorCode.None;
+            coordinator.Tick(0.5f);
+            Assert(coordinator.IsSuspended && context.Player.ActiveControlLeaseCount == 1,
+                "the active hard freeze reacquires player control when the player becomes ready");
+        }
+
         private static void TestFixedDeltaNoDrift()
         {
             const float baseFixed = 0.02f;
@@ -82,6 +167,162 @@ namespace TopiaForge.ModManager.Tests
             }
 
             Assert(Math.Abs(TimeMath.FixedDelta(baseFixed, 1f, 0.1f) - baseFixed) < 1e-7f, "repeated cycles can't drift the baseline");
+        }
+
+        private static void TestNativePauseOwnershipPolicy()
+        {
+            Assert(TimeScaleOwnership.IsNativePaused(
+                    explicitNativePause: false,
+                    hasWritten: false,
+                    ownedScale: 1f,
+                    observedScale: 0f),
+                "a native pause that predates the first Chronos lease remains externally owned");
+            Assert(TimeScaleOwnership.IsNativePaused(
+                    explicitNativePause: false,
+                    hasWritten: true,
+                    ownedScale: 0.25f,
+                    observedScale: 0f),
+                "a native pause that overrides a Chronos slow remains externally owned");
+            Assert(!TimeScaleOwnership.IsNativePaused(
+                    explicitNativePause: false,
+                    hasWritten: true,
+                    ownedScale: 0f,
+                    observedScale: 0f),
+                "Chronos recognizes a zero scale that it wrote itself");
+            Assert(TimeScaleOwnership.IsNativePaused(
+                    explicitNativePause: true,
+                    hasWritten: true,
+                    ownedScale: 0f,
+                    observedScale: 0f),
+                "the explicit pause signal disambiguates a native overlay on a Chronos-owned freeze");
+            Assert(!TimeScaleOwnership.CanStep(isFrozen: true, nativePaused: true),
+                "bounded stepping cannot lift a native pause layered over a Chronos freeze");
+            Assert(TimeScaleOwnership.CanStep(isFrozen: true, nativePaused: false),
+                "bounded stepping remains available for a Chronos-only freeze");
+            Assert(TimeScaleOwnership.RestoreFixedOnAbandon(hasWritten: true, baseFixedCaptured: true)
+                && !TimeScaleOwnership.RestoreFixedOnAbandon(hasWritten: false, baseFixedCaptured: true),
+                "disposing behind native pause restores Chronos' fixed-step ownership without lifting timeScale");
+        }
+
+        private static void TestNativePauseOverlayRelease()
+        {
+            var externalSlowPause = TimeScaleOwnership.PlanRestore(
+                explicitNativePause: false,
+                hasWritten: true,
+                ownedScale: 0.25f,
+                observedScale: 0f);
+            Assert(!externalSlowPause.WriteBaseline && externalSlowPause.RetainOwnership,
+                "disposing the final slow lease cannot restore scale one behind a native pause");
+
+            var ownedFreeze = TimeScaleOwnership.PlanRestore(
+                explicitNativePause: false,
+                hasWritten: true,
+                ownedScale: 0f,
+                observedScale: 0f);
+            Assert(ownedFreeze.WriteBaseline && !ownedFreeze.RetainOwnership,
+                "disposing a Chronos-owned freeze restores the baseline");
+
+            var nativeOverlay = TimeScaleOwnership.PlanRestore(
+                explicitNativePause: true,
+                hasWritten: true,
+                ownedScale: 0f,
+                observedScale: 0f);
+            Assert(!nativeOverlay.WriteBaseline && nativeOverlay.RetainOwnership,
+                "releasing or force-resetting a Chronos freeze behind the native pause overlay cannot lift it");
+
+            var overlayClosed = TimeScaleOwnership.PlanRestore(
+                explicitNativePause: false,
+                hasWritten: nativeOverlay.RetainOwnership,
+                ownedScale: 0f,
+                observedScale: 0f);
+            Assert(overlayClosed.WriteBaseline && !overlayClosed.RetainOwnership,
+                "after the overlay closes, retained Chronos ownership safely restores its zero baseline");
+        }
+
+        private static void TestDeferredNativePauseRestore()
+        {
+            Assert(TimeScaleOwnership.PlanDeferredRestore(
+                    hasExactPauseRoot: true,
+                    exactNativePauseActive: true,
+                    ownedScale: 0.5f,
+                    observedScale: 0f) == DeferredScaleRestoreAction.Wait,
+                "Chronos unload never lifts an explicitly active native pause");
+            Assert(TimeScaleOwnership.PlanDeferredRestore(
+                    hasExactPauseRoot: false,
+                    exactNativePauseActive: false,
+                    ownedScale: 0.5f,
+                    observedScale: 0f) == DeferredScaleRestoreAction.Wait,
+                "the scale-only fallback waits for an external zero pause to release");
+            Assert(TimeScaleOwnership.PlanDeferredRestore(
+                    hasExactPauseRoot: false,
+                    exactNativePauseActive: false,
+                    ownedScale: 0.5f,
+                    observedScale: 0.5f) == DeferredScaleRestoreAction.RestoreBaseline,
+                "after native pause restores Chronos' slow scale, the unload handoff restores baseline time");
+            Assert(TimeScaleOwnership.PlanDeferredRestore(
+                    hasExactPauseRoot: true,
+                    exactNativePauseActive: false,
+                    ownedScale: 0f,
+                    observedScale: 0f) == DeferredScaleRestoreAction.RestoreBaseline,
+                "after an explicit pause closes over a Chronos freeze, the stranded freeze is restorable");
+            Assert(TimeScaleOwnership.PlanDeferredRestore(
+                    hasExactPauseRoot: false,
+                    exactNativePauseActive: false,
+                    ownedScale: 0f,
+                    observedScale: 0f) == DeferredScaleRestoreAction.Abandon,
+                "a zero scale without an exact captured overlay is never lifted by inference");
+            Assert(TimeScaleOwnership.PlanDeferredRestore(
+                    hasExactPauseRoot: false,
+                    exactNativePauseActive: false,
+                    ownedScale: 0.5f,
+                    observedScale: 0.25f) == DeferredScaleRestoreAction.Abandon,
+                "a different non-zero scale is treated as a newer external owner and is never overwritten");
+        }
+
+        private static void TestLogicalStateDuringNativePause()
+        {
+            var ledger = new LeaseLedger();
+            ledger.Add(LeaseKind.Slow, "mod.a", "cinematic", 0.5f);
+            ledger.Add(LeaseKind.ExemptPlayer, "mod.a", "player");
+
+            var slow = TimeScalePlan.Derive(
+                ledger,
+                driverScale: 1f,
+                turnBased: false,
+                nativePaused: true);
+            Assert(Math.Abs(slow.WorldScale - 0.5f) < 1e-6f && slow.Mode == TimeMode.Slowed,
+                "a lease acquired behind native pause still updates logical scale and mode");
+            Assert(slow.ExemptPlayer,
+                "logical player exemption remains derived while native pause owns the clock");
+            Assert(!slow.WriteNativeScale,
+                "native pause suppresses the engine write without suppressing logical derivation");
+
+            ledger.Add(LeaseKind.Freeze, "mod.b", "overlay");
+            var freeze = TimeScalePlan.Derive(
+                ledger,
+                driverScale: 1f,
+                turnBased: false,
+                nativePaused: true);
+            Assert(freeze.WorldScale == 0f && freeze.Mode == TimeMode.Paused && freeze.ExemptPlayer,
+                "freeze and exemption changes remain visible behind native pause");
+            Assert(!freeze.WriteNativeScale,
+                "Step and ordinary application cannot lift an explicit native pause");
+
+            var turn = TimeScalePlan.Derive(
+                ledger,
+                driverScale: 1f,
+                turnBased: true,
+                nativePaused: true);
+            Assert(turn.Mode == TimeMode.TurnBased,
+                "turn-based mode remains authoritative logical state behind native pause");
+
+            var resumed = TimeScalePlan.Derive(
+                ledger,
+                driverScale: 1f,
+                turnBased: false,
+                nativePaused: false);
+            Assert(resumed.WriteNativeScale && resumed.WorldScale == 0f,
+                "the accumulated logical lease state becomes writable when native pause releases");
         }
 
         private static void TestSuperhotRamp()
@@ -151,6 +392,63 @@ namespace TopiaForge.ModManager.Tests
             if (!condition)
             {
                 throw new InvalidOperationException(message);
+            }
+        }
+
+        private sealed class TestLeaseHost : ITimeLeaseHost
+        {
+            private readonly LeaseLedger ledger = new LeaseLedger();
+            private int driverLeaseId;
+            private int suspendRefCount;
+
+            public int DriverLeaseId => driverLeaseId;
+            public int SuspendRefCount => suspendRefCount;
+            public int PlayerSuspendReleaseCount { get; private set; }
+
+            public int AddFreeze(bool suspendPlayer)
+            {
+                var id = ledger.Add(LeaseKind.Freeze, "test", "freeze");
+                if (suspendPlayer)
+                {
+                    suspendRefCount++;
+                }
+
+                return id;
+            }
+
+            public int ReplaceDriver()
+            {
+                if (driverLeaseId != 0)
+                {
+                    ledger.Remove(driverLeaseId);
+                }
+
+                driverLeaseId = ledger.Add(LeaseKind.Driver, "test", "driver");
+                return driverLeaseId;
+            }
+
+            public void ForceReset()
+            {
+                ledger.Clear();
+                driverLeaseId = 0;
+                suspendRefCount = 0;
+                PlayerSuspendReleaseCount = 0;
+            }
+
+            public bool ContainsLease(int id) => ledger.Contains(id);
+
+            public void ReleaseLease(int id, bool wasSuspend)
+            {
+                var effects = LeaseLifecycle.Release(
+                    ledger,
+                    id,
+                    wasSuspend,
+                    ref driverLeaseId,
+                    ref suspendRefCount);
+                if (effects.ReleasePlayerSuspend)
+                {
+                    PlayerSuspendReleaseCount++;
+                }
             }
         }
     }

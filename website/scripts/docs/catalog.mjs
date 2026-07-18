@@ -8,6 +8,7 @@ export const pages = [
   page('docs/UiKit.md', 'guides/ui.md'),
   page('docs/Modules.md', 'guides/modules.md'),
   page('docs/RobotKit.md', 'guides/robotkit.md'),
+  page('docs/Zombies.md', 'guides/zombies.md'),
   page('docs/CustomWorlds.md', 'guides/custom-worlds.md'),
   page('docs/TestingMods.md', 'guides/testing.md'),
   page('docs/CliDevLoop.md', 'guides/cli-dev.md'),

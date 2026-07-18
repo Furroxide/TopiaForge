@@ -26,6 +26,7 @@ integration.
 | Contract | Purpose |
 | --- | --- |
 | `IRobotAgentService` | Discover robot types, find reachable positions, spawn robots, and map entity handles back to agents. |
+| `IRobotPlayerEntitySource` | Optional live-player entity identity for native chase/target tracking, exposed compatibly through `TryGetPlayerEntity`. |
 | `IRobotAgent` | Opaque entity identity, body/health state, movement intent, gait, target, damage, and interaction options. |
 | `IRobotObjectiveService` | Register named targets and run lifetime-owned go-to, follow, patrol, wander, flee, and reprogram objectives. |
 | `IRobotConversationService` | Run bounded multi-turn dialogue with closed-set decisions. |
@@ -35,6 +36,27 @@ integration.
 Every operation either uses a cheap `Try...` query, returns `OperationResult<T>`, or returns
 `Task<OperationResult<T>>` with lifetime cancellation. Check provider availability and
 `Context.Runtime.UnavailableCapabilities` before exposing a feature in Robotopia's UI.
+
+## Track the live player
+
+RobotKit providers can expose the current player as a safe `IEntity`. Use the compatibility extension
+on `IRobotAgentService`; it returns `false` with older providers and while no live player exists:
+
+```csharp
+var robots = Context.RequireExtension<IRobotAgentService>();
+var spawned = robots.Spawn(new RobotAgentSpawnRequest(spawnPosition));
+if (spawned.TryGetValue(out var robot)
+    && robots.TryGetPlayerEntity(out var player)
+    && player != null)
+{
+    robot.Chase(player);
+}
+```
+
+The entity remains backed by Robotopia's moving player, so `Chase` does not need a per-frame
+position rewrite. A scene transition or native player recreation can invalidate the old handle;
+check `IsAlive`, call `TryGetPlayerEntity` again, and rebind the target when that happens. Keep a
+position-based behavior as the graceful fallback when the optional capability is absent.
 
 ## Deterministic Robotopia gameplay first
 
