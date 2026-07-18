@@ -361,13 +361,11 @@ jobs:
           sdk: "3.11.1"
 
       - name: Install archive dependencies
-        if: matrix.template == 'ui'
         run: |
           sudo apt-get update
           sudo apt-get install -y p7zip-full
 
       - name: Resolve Robotopia refs cache key
-        if: matrix.template == 'ui'
         id: refs-cache
         env:
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
@@ -377,14 +375,12 @@ jobs:
           -c Release -- --source public --cache-key-only
 
       - name: Cache Robotopia managed refs
-        if: matrix.template == 'ui'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/robotopia-managed-refs-cache
           key: ${{ steps.refs-cache.outputs.key }}
 
       - name: Restore Robotopia managed refs
-        if: matrix.template == 'ui'
         env:
           ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
