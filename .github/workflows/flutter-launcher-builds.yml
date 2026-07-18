@@ -41,10 +41,25 @@ jobs:
             runner: macos-15
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ inputs.source_sha || github.sha }}
+          lfs: true
           persist-credentials: false
+
+      - name: Verify launcher LFS assets are hydrated
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs fsck
+          git lfs ls-files --name-only \
+            --include='apps/topiaforge_launcher_flutter/**' \
+            | while IFS= read -r asset; do
+                if git lfs pointer --check --file="$asset" >/dev/null 2>&1; then
+                  echo "::error file=$asset::Git LFS asset was not hydrated."
+                  exit 1
+                fi
+              done
 
       - name: Set up Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
@@ -59,31 +74,67 @@ jobs:
           sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
 
       - name: Build launcher
+        shell: bash
         working-directory: apps/topiaforge_launcher_flutter
         env:
+          # Flutter forwards FLUTTER_XCODE_* variables as Xcode build settings.
+          # The protected release job signs this reusable build output later.
+          FLUTTER_XCODE_CODE_SIGNING_ALLOWED: ${{ matrix.platform == 'macos' && 'NO' || '' }}
+          FLUTTER_XCODE_CODE_SIGNING_REQUIRED: ${{ matrix.platform == 'macos' && 'NO' || '' }}
           LAUNCHER_PLATFORM: ${{ matrix.platform }}
         run: |
+          set -euo pipefail
           flutter pub get --enforce-lockfile
           flutter build "$LAUNCHER_PLATFORM" --release
 
-      - name: Verify macOS launcher entitlements
+      - name: Verify unsigned macOS launcher policy
         if: matrix.platform == 'macos'
         shell: bash
         run: |
           set -euo pipefail
+          project_dir="apps/topiaforge_launcher_flutter/macos"
           app="apps/topiaforge_launcher_flutter/build/macos/Build/Products/Release/TopiaForge.app"
-          entitlements="$(codesign -d --entitlements - "$app" 2>&1)"
+          test -d "$app"
+          # Apple-silicon Mach-O binaries can receive a linker-created ad-hoc
+          # signature even when Xcode identity signing is disabled.
+          signature_details=''
+          if signature_details="$(codesign -d --verbose=4 "$app" 2>&1)"; then
+            if ! grep -Fxq 'Signature=adhoc' <<< "$signature_details" \
+              || ! grep -Fxq 'TeamIdentifier=not set' <<< "$signature_details" \
+              || grep -Eq '^Authority=' <<< "$signature_details"; then
+              printf '%s\n' "$signature_details"
+              echo '::error::The reusable launcher build must not carry an identity or team signature.'
+              exit 1
+            fi
+          elif ! grep -Fq 'code object is not signed at all' <<< "$signature_details"; then
+            printf '%s\n' "$signature_details"
+            echo '::error::Unable to verify the reusable launcher signature state.'
+            exit 1
+          fi
+
+          settings="$(xcodebuild \
+            -project "$project_dir/Runner.xcodeproj" \
+            -target Runner \
+            -configuration Release \
+            -showBuildSettings)"
+          if ! grep -Eq '^[[:space:]]*ENABLE_HARDENED_RUNTIME = YES$' <<< "$settings"; then
+            echo '::error::The release launcher must enable the hardened runtime before signing.'
+            exit 1
+          fi
+          entitlements_path="$(awk -F ' = ' \
+            '/^[[:space:]]*CODE_SIGN_ENTITLEMENTS = / { print $2; exit }' \
+            <<< "$settings")"
+          if [ "$entitlements_path" != 'Runner/Release.entitlements' ]; then
+            echo "::error::Unexpected release entitlements path: $entitlements_path"
+            exit 1
+          fi
+          entitlements="$(plutil -p "$project_dir/$entitlements_path")"
           if grep -Fq 'com.apple.security.app-sandbox' <<< "$entitlements"; then
             echo '::error::The launcher cannot perform install/repair or launch work while App Sandbox is enabled.'
             exit 1
           fi
           if grep -Fq 'com.apple.security.get-task-allow' <<< "$entitlements"; then
             echo '::error::The release launcher must not carry the debug get-task-allow entitlement.'
-            exit 1
-          fi
-          signature="$(codesign -d --verbose=4 "$app" 2>&1)"
-          if ! grep -Eq 'flags=.*runtime' <<< "$signature"; then
-            echo '::error::The release launcher must enable the hardened runtime.'
             exit 1
           fi
 
@@ -101,7 +152,8 @@ jobs:
               if [ ! -d "$release_dir" ]; then
                 release_dir="apps/topiaforge_launcher_flutter/build/windows/runner/Release"
               fi
-              tar -cf "$artifact_dir/launcher-windows.tar" -C "$release_dir" .
+              # GNU tar otherwise treats the drive-letter colon as a remote host.
+              tar --force-local -cf "$artifact_dir/launcher-windows.tar" -C "$release_dir" .
               ;;
             linux)
               release_dir="apps/topiaforge_launcher_flutter/build/linux/x64/release/bundle"
