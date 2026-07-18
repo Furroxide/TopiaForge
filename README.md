@@ -8,7 +8,7 @@ standalone desktop launcher, and a developer CLI for the Unity Mono build of Rob
 You need **no developer tools** -- no Flutter, Dart, .NET, or Node. Download the release zip for your OS:
 `TopiaForge-windows-x64.zip`, `TopiaForge-macos-universal.zip`, or `TopiaForge-linux-x64.zip`. Windows and
 Linux packages expose the launcher in `launcher/` and a root `topiaforge` CLI executable; macOS packages expose
-`TopiaForge.app` plus a root `topiaforge` shim. The launcher detects your Robotopia install, repairs the Windows
+`TopiaForge.app` plus a root `topiaforge` shim. The launcher detects your Robotopia installation, repairs the Windows
 or macOS runtime payload, and lets you browse, install, enable/disable, and launch mods. The **Developer** tab is hidden by
 default -- turn it on under **Settings -> Developer mode** only if you build mods.
 
@@ -31,7 +31,7 @@ Start with the walkthrough: [docs/YourFirstMod.md](docs/YourFirstMod.md). The re
 [docs/Modding.md → Install the CLI](docs/Modding.md#install-the-cli)). Validate your machine first
 (`topiaforge setup` to auto-fix what it safely can, or `topiaforge doctor` to audit read-only). Only the .NET SDK
 is required to build mods; Node/Unity are optional (UGC live-sync). See [docs/Modding.md](docs/Modding.md) for
-the full reference. Build branded in-game UI (windows, HUDs, modals, toasts) with the TopiaForge UI kit — see
+the full reference. Build branded in-game UI for Robotopia (windows, HUDs, modals, toasts) with the TopiaForge UI kit — see
 [docs/UiKit.md](docs/UiKit.md) and the F8 gallery mod. The complete first-party catalog and candidate gameplay
 acceptance flows are in [docs/FirstPartyMods.md](docs/FirstPartyMods.md).
 
@@ -50,7 +50,7 @@ cd apps\topiaforge_launcher_flutter
 flutter run -d windows   # or -d macos / -d linux
 ```
 
-The launcher uses Flutter with Bloc state management. It detects the known Robotopia install, validates the game payload (`Robotopia.exe` on Windows/Proton, `Robotopia.app` on macOS), repairs bundled BepInEx and the C# loader, manages profiles, previews dependency/conflict plans before package installs, launches Robotopia, and creates diagnostic bundles.
+The launcher uses Flutter with Bloc state management. It detects the known Robotopia installation, validates the Robotopia payload (`Robotopia.exe` on Windows/Proton, `Robotopia.app` on macOS), repairs bundled BepInEx and the C# loader, manages profiles, previews dependency/conflict plans before package installs, launches Robotopia, and creates diagnostic bundles.
 
 Current launcher state management uses `Bloc<LauncherEvent, LauncherState>` rather than Cubit. Non-generated Dart source files are kept at 500 lines or fewer and split by responsibility.
 
@@ -78,26 +78,26 @@ The workflow is inspired by VCC/VPM concepts and remains Robotopia-native: `.top
 ## Local install
 
 ```sh
-topiaforge dev-install                     # add --game-dir <path> to override detection
+topiaforge dev-install                     # add --game-dir <path> to override Robotopia detection
 ```
 
 (From a source checkout: `cd apps/topiaforge_cli && dart run topiaforge dev-install`.)
 
-This installs BepInEx 5.4.23.5 and the manager plugin into the detected game install:
+This installs BepInEx 5.4.23.5 and the manager plugin into the detected Robotopia installation:
 
-| Platform | Default game location |
+| Platform | Default Robotopia location |
 | --- | --- |
 | Windows | `%LOCALAPPDATA%\Tomato Cake\launcher\Robotopia` |
 | macOS | `~/Library/Application Support/Tomato Cake/launcher/Robotopia.app` (BepInEx installs beside the app) |
-| Linux | No auto-detect — the game is the Windows build under Proton/Wine; pass `--game-dir` pointing at the game folder inside your prefix |
+| Linux | No auto-detect — Robotopia uses the Windows build under Proton/Wine; pass `--game-dir` pointing at the Robotopia folder inside your prefix |
 
-On Linux, launch the game with `WINEDLLOVERRIDES="winhttp=n,b"` so the mod loader injects. The `ROBOTOPIA_GAME_DIR` environment variable overrides game detection on every platform.
+On Linux, launch Robotopia with `WINEDLLOVERRIDES="winhttp=n,b"` so the mod loader injects. The `ROBOTOPIA_GAME_DIR` environment variable overrides Robotopia detection on every platform.
 
 Launch Robotopia, then open the manager from the main-menu **TopiaForge** button or press `F10`.
 
 ## Package format
 
-Mods are `.topiaforgemod` zip files with a required `topiaforge.mod.json` manifest and a C# assembly that implements `TopiaForge.Mods.ITopiaForgeMod`.
+Mods are `.topiaforgemod` zip files with a required `topiaforge.mod.json` manifest and a C# entry class that derives from `TopiaForge.Mods.TopiaForgeMod`.
 
 Scaffold a mod and pack it:
 
@@ -109,7 +109,7 @@ topiaforge pack
 
 `topiaforge pack --all` packs every first-party mod under `mods/`, and `topiaforge unity pack-packages` regenerates the VPM listing in `dist/vpm/`.
 
-Packages can be installed from the in-game package tab by full path, or by placing them into:
+Packages can be installed from the Robotopia manager's package tab by full path, or by placing them into:
 
 ```text
 BepInEx\TopiaForge\package-inbox
@@ -117,7 +117,7 @@ BepInEx\TopiaForge\package-inbox
 
 ## Trust model
 
-TopiaForge uses trusted local packages. Do not install `.topiaforgemod` files unless you trust their source; C# mods execute code in the game process.
+TopiaForge uses trusted local packages. Do not install `.topiaforgemod` files unless you trust their source; C# mods execute code in the Robotopia process.
 
 ## Community and project policy
 

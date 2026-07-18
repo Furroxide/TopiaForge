@@ -1,125 +1,89 @@
-# Your First Mod
+---
+title: Your first mod
+description: Create, test, install, and run a safe mod for Robotopia in four commands.
+---
 
-A start-to-finish walkthrough: from nothing to a mod running inside Robotopia. Takes about ten minutes.
+# Your first mod
 
-## Prerequisites
+This walkthrough takes you from an empty directory to a mod running inside Robotopia. It starts with
+a TopiaForge release and the pinned .NET SDK, and does not require a source checkout, Unity editor,
+or direct knowledge of Robotopia's implementation APIs.
 
-- **Robotopia installed** (the launcher detects the standard install location).
-- **The `topiaforge` CLI** — extract the release zip and add its root folder to `PATH`
-  (see [Modding.md → Install the CLI](Modding.md#install-the-cli)).
-- **.NET SDK 10.0.301** — the repository-pinned tool required to build mods. Node.js and Unity are optional and only used for
-  UGC live-sync authoring; you don't need them today.
-
-## 1. Check your machine
+## 1. Check the toolchain
 
 ```sh
-topiaforge doctor
+topiaforge doctor --strict
 ```
+
+The command reports the selected TopiaForge release, exact .NET SDK, Robotopia installation, and
+loader state. Follow its remediation if a required row is not ready.
+
+## 2. Create a project
+
+```sh
+topiaforge new mod example.first-mod --name "First Mod" --author "You" --license MIT --version 1.0.0
+cd example.first-mod
+```
+
+The generated project contains:
 
 ```text
-Build mods (.NET, required to develop):
-  [OK ] .NET SDK — v10.0.301
-UGC live-sync (optional):
-  [ X ] Unity Editor — Unity not detected (optional).
-         Install Unity via Unity Hub only if you author UGC content or custom worlds. (https://unity.com/download)
-  [OK ] Node.js — v23.8.0
-Other:
-  [OK ] Git — C:\Program Files\Git\cmd\git.exe
+example.first-mod/
+├── global.json
+├── packages.lock.json
+├── topiaforge.sdk.lock.json
+├── topiaforge.mod.json
+├── topiaforge.project.json
+├── ExampleFirstMod.csproj
+├── ExampleFirstModConfig.cs
+├── ExampleFirstModMod.cs
+└── tests/ExampleFirstMod.Tests/
 ```
 
-`[ X ]` on optional rows is fine — only the **.NET SDK** row must be `[OK ]`. If something is missing,
-`topiaforge setup` applies the safe fixes automatically and tells you exactly what to install by hand.
+`global.json` pins the SDK. The lock files make restores repeatable. The generated build props are
+local output and can be recreated anywhere by `topiaforge restore`.
 
-## 2. Create the mod
+## 3. Read the entry point
+
+The minimal template loads validated configuration, registers a namespaced command, and logs a
+friendly message. The following code is inserted from the compiled template rather than copied into
+this guide:
+
+<!-- topiaforge-snippet path="templates/mod/minimal/{{TYPE_NAME}}Mod.cs" -->
+
+Notice what is absent: owner ids, filesystem paths, global cleanup calls, Robotopia or Unity object types, and
+manual event teardown. `Context` is attached before `OnLoad()`, and the command registration belongs
+to the mod lifetime automatically.
+
+## 4. Run the development loop
 
 ```sh
-topiaforge new mod yourname.firstmod --name "First Mod" --author "You" --license MIT
+topiaforge dev
 ```
 
-```text
-Created C:\...\yourname.firstmod
-Next: edit topiaforge.mod.json (or use `topiaforge mod set|add|remove`), then validate with `topiaforge check package ...`.
-```
+That one command restores exact SDK packages, builds, runs the NUnit project, packs, validates,
+installs, launches Robotopia, and tails attributed logs. It stops before install if any earlier
+stage fails.
 
-You get a complete, buildable project — no renaming or find-and-replace needed:
+The launch-blocking hosted Robotopia gate repeats this journey with a clean candidate developer payload
+built from the frozen SHA: its CLI runs `new mod`, then `dev --launch`, and CI requires that unique
+mod's attributed load marker in the same fresh `last-run.json`. The project lives outside that
+payload and requires no Unity installation. The separate final clean-machine release gate repeats
+the journey with the actual extracted platform archive and no source checkout.
 
-```text
-yourname.firstmod/
-├── .gitignore                 # ignores bin/, obj/, build artifacts
-├── README.md
-├── topiaforge.mod.json         # the manifest ($schema included, so your editor autocompletes it)
-├── topiaforge.project.json     # dependency management (topiaforge add package / restore)
-├── YournameFirstmod.csproj
-└── YournameFirstmodMod.cs     # the entry point: logs load, scene, and update events
-```
+In Robotopia, open the TopiaForge manager with F10. Select **First Mod** to see its log. Run the
+`example.first-mod:greet` command from the manager command console to exercise the scaffolded
+behavior.
 
-Pick a different starting point with `--template gameplay|gamemode|service|ui|asset|world`
-(`topiaforge list templates` describes each).
+## 5. Make a change
 
-## 3. Validate and pack
-
-From inside `yourname.firstmod/`:
-
-```sh
-topiaforge check package .
-```
-
-```text
-First Mod 0.1.0 (yourname.firstmod)
-```
-
-No issues listed means the manifest and layout are valid. Now build it into an installable package —
-`pack` compiles the C# project and zips it into a `.topiaforgemod`:
-
-```sh
-topiaforge pack
-```
-
-```text
-C:\...\yourname.firstmod-0.1.0.topiaforgemod
-```
-
-## 4. Install and run
-
-```sh
-topiaforge install        # packs the current folder and installs it into the detected game
-topiaforge launch
-```
-
-If the game isn't auto-detected, set the `ROBOTOPIA_GAME_DIR` environment variable to your game folder and
-retry (`topiaforge doctor` shows what was detected). [Troubleshooting.md](Troubleshooting.md) covers the
-per-platform paths, shell pitfalls, and `--game-dir`.
-
-## 5. See it in game
-
-In the main menu, click the **TopiaForge** button or press **F10** to open the mod manager. Your mod is
-listed and enabled; its log line ("Loaded") shows in the mod's log view.
-
-## 6. Iterate
-
-1. Edit `YournameFirstmodMod.cs` — say, change the log message.
-2. `topiaforge install` again (rebuilds and reinstalls).
-3. `topiaforge restart` — restarts the game with the new build.
-
-Manage the manifest without hand-editing JSON — every change is validated before it's written:
-
-```sh
-topiaforge mod set version 0.2.0
-topiaforge mod add tag physics
-topiaforge mod add dependency io.github.furroxide.topiaforge.worlds@">=0.3.0"
-```
-
-## 7. Publish it
-
-Worth sharing? Publish a self-hosted registry or package source: validate to zero findings, pack, host the immutable
-file, generate an index, and test its public URL. Official community submissions are closed for the initial release.
-The full walkthrough is
-[PublishingYourMod.md](PublishingYourMod.md).
+Edit the default greeting in `ExampleFirstModConfig.cs`, add a test assertion, and run
+`topiaforge dev` again. A running Robotopia instance must restart before it can load changed assembly bytes.
 
 ## Where next
 
-- [Modding.md](Modding.md) — the full SDK reference: manifest fields, services, permissions, packaging.
-- [UiKit.md](UiKit.md) — branded in-game UI (windows, HUDs, modals, toasts); press **F8** in game for the live gallery.
-- [CustomWorlds.md](CustomWorlds.md) — ship a Unity world as a mod.
-- [RobotKit.md](RobotKit.md) — spawn and control robots and standard agents.
-- [UgcLiveSync.md](UgcLiveSync.md) — hot-reload level content into the running game.
+- Use [Core services](CoreServices.md) to add input, player, physics, entities, assets, audio, or UI.
+- Add robots, worlds, time control, prompt overrides, or UGC through [Specialist modules](Modules.md).
+- Read [Test a mod](TestingMods.md) before adding behavior with several resource handles.
+- Use [Manifest V4](ManifestV4.md) for dependencies, constraints, capabilities, and exported contracts.
+- See [Diagnostics](Diagnostics.md) when a stable `TF` code appears.

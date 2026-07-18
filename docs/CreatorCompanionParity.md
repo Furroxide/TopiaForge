@@ -43,7 +43,8 @@ generates `topiaforge.dev.props` so C# code can compile against exported APIs.
 
 ## Exported C# APIs
 
-Runtime-only dependencies belong in `vpmDependencies` or `optionalDependencies`.
+Runtime-only code-mod dependencies belong in the schema-V4 `dependencies` or
+`optionalDependencies` maps. Editor package dependencies remain isolated in editor project state.
 If a package intentionally exposes C# APIs for other mods to compile against,
 list those DLLs in `apiAssemblies`:
 
@@ -60,7 +61,7 @@ load ordering separate from compile-time API contracts.
 
 The launcher and CLI read the existing flat `mods` registry and the
 `packages -> versions` repository shape used by VPM-style indexes. TopiaForge
-uses VPM-style `name`, `displayName`, `author`, and `vpmDependencies` fields in
+uses editor-package identity, display, author, and dependency fields in
 `topiaforge.mod.json` while keeping `.topiaforgemod` as the runtime package file.
 
 ## Unity Companion

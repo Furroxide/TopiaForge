@@ -41,21 +41,19 @@ namespace TopiaForge.ModManager.Tests
             var root = Program.FindRepoRoot();
             var matrixPath = Path.Combine(root, "docs", "capability-matrix.json");
             var acceptancePath = Path.Combine(root, "tests", "live-game-acceptance.json");
-            // The reviewed coverage matrix and live-game evidence contract are
-            // delivered by the following developer-workflow batch. Once those
-            // files exist this test exercises the complete V1 launch contract.
-            if (!File.Exists(matrixPath) || !File.Exists(acceptancePath))
-            {
-                return;
-            }
             var acceptanceModDirectory = Path.Combine(root, "tests", "TopiaForge.SdkAcceptanceMod");
             var acceptanceManifestPath = Path.Combine(acceptanceModDirectory, "topiaforge.mod.json");
             var harnessPath = Path.Combine(
                 root, "apps", "topiaforge_cli", "lib", "src", "live_acceptance_runner.dart");
             var acceptanceCommandPath = Path.Combine(
                 root, "apps", "topiaforge_cli", "bin", "topiaforge_acceptance_commands.dart");
-            var workflowPath = Path.Combine(root, ".github", "workflows", "game-sdk-acceptance.yml");
             var solution = File.ReadAllText(Path.Combine(root, "TopiaForge.slnx"));
+            var docsPublisher = File.ReadAllText(
+                Path.Combine(root, "website", "scripts", "prepare-docs.mjs"));
+            var docsCatalog = File.ReadAllText(
+                Path.Combine(root, "website", "scripts", "docs", "catalog.mjs"));
+            Assert(docsPublisher.Contains("./docs/catalog.mjs", StringComparison.Ordinal),
+                "the documentation publisher must consume the reviewed page catalog");
             using var matrix = JsonDocument.Parse(File.ReadAllText(matrixPath));
             using var acceptance = JsonDocument.Parse(File.ReadAllText(acceptancePath));
 
@@ -84,27 +82,12 @@ namespace TopiaForge.ModManager.Tests
                 acceptanceSource,
                 requiredCycles);
 
-            // The developer CLI and CI gate are intentionally layered onto
-            // this SDK contract by their following focused batches.
-            if (File.Exists(harnessPath) && File.Exists(acceptanceCommandPath))
-            {
-                var harness = File.ReadAllText(harnessPath);
-                var acceptanceCommand = File.ReadAllText(acceptanceCommandPath);
-                Assert(harness.Contains("options.requiredCases.isEmpty", StringComparison.Ordinal)
-                       && harness.Contains("spec.caseIds", StringComparison.Ordinal)
-                       && acceptanceCommand.Contains("'--all'", StringComparison.Ordinal),
-                    "live acceptance must require the full canonical matrix by default");
-            }
-            if (File.Exists(workflowPath))
-            {
-                var workflow = File.ReadAllText(workflowPath);
-                Assert(workflow.Contains("default: full", StringComparison.Ordinal)
-                       && workflow.Contains("runs-on: [self-hosted, Windows", StringComparison.Ordinal)
-                       && workflow.Contains("runs-on: [self-hosted, Linux", StringComparison.Ordinal)
-                       && workflow.Contains("dart run bin/topiaforge.dart @arguments", StringComparison.Ordinal),
-                    "live acceptance workflow must default to the full Windows and Linux/Proton gate");
-            }
-
+            var harness = File.ReadAllText(harnessPath);
+            var acceptanceCommand = File.ReadAllText(acceptanceCommandPath);
+            Assert(harness.Contains("options.requiredCases.isEmpty", StringComparison.Ordinal)
+                   && harness.Contains("spec.caseIds", StringComparison.Ordinal)
+                   && acceptanceCommand.Contains("'--all'", StringComparison.Ordinal),
+                "live acceptance must require the full canonical matrix by default");
             var rows = matrix.RootElement.GetProperty("rows").EnumerateArray().ToArray();
             Assert(rows.Length == 7, "the V1 matrix must contain exactly seven modder-goal rows");
             var rowIds = new HashSet<string>(StringComparer.Ordinal);
@@ -124,6 +107,8 @@ namespace TopiaForge.ModManager.Tests
                     id + " guide must be Markdown");
                 Assert(File.Exists(Path.Combine(root, guide.Replace('/', Path.DirectorySeparatorChar))),
                     id + " guide does not exist: " + guide);
+                Assert(docsCatalog.Contains("page('" + guide + "'", StringComparison.Ordinal),
+                    id + " guide is not published by the Starlight source pipeline: " + guide);
 
                 var cases = RequiredArray(row, "acceptanceCases");
                 foreach (var value in cases)
