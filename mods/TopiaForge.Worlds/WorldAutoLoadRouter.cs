@@ -18,7 +18,7 @@ namespace TopiaForge.Worlds
             string menuEntryId,
             bool preferSceneReplacement,
             bool allowAdditiveFallback,
-            SceneTransitionPriority priority,
+            WorldLoadPriority priority,
             string warning)
         {
             Kind = kind;
@@ -35,7 +35,7 @@ namespace TopiaForge.Worlds
         public string MenuEntryId { get; }
         public bool PreferSceneReplacement { get; }
         public bool AllowAdditiveFallback { get; }
-        public SceneTransitionPriority Priority { get; }
+        public WorldLoadPriority Priority { get; }
         public string Warning { get; }
 
         public static WorldAutoLoadRoute LoadSelection(WorldLoadRequest request, string warning = "")
@@ -54,7 +54,7 @@ namespace TopiaForge.Worlds
             string menuEntryId,
             bool preferSceneReplacement,
             bool allowAdditiveFallback,
-            SceneTransitionPriority priority,
+            WorldLoadPriority priority,
             string warning = "")
         {
             return new WorldAutoLoadRoute(
@@ -87,7 +87,7 @@ namespace TopiaForge.Worlds
                 return WorldAutoLoadRoute.LoadSelection(new WorldLoadRequest(
                     worldId,
                     gamemodeId,
-                    SceneTransitionPriority.Automatic,
+                    WorldLoadPriority.Automatic,
                     preferSceneReplacement,
                     allowAdditiveFallback));
             }
@@ -107,7 +107,7 @@ namespace TopiaForge.Worlds
                         entry.Id,
                         preferSceneReplacement,
                         allowAdditiveFallback,
-                        SceneTransitionPriority.Automatic,
+                        WorldLoadPriority.Automatic,
                         warning);
                 }
             }
@@ -115,7 +115,7 @@ namespace TopiaForge.Worlds
             return WorldAutoLoadRoute.LoadSelection(new WorldLoadRequest(
                 worldId,
                 gamemodeId,
-                SceneTransitionPriority.Automatic,
+                WorldLoadPriority.Automatic,
                 preferSceneReplacement,
                 allowAdditiveFallback), warning);
         }

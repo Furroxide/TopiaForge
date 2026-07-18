@@ -1,4 +1,7 @@
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace TopiaForge.Mods
 {
@@ -10,19 +13,18 @@ namespace TopiaForge.Mods
     /// </summary>
     /// <remarks>
     /// Published by the <c>TopiaForge.RobotKit</c> framework mod and resolved with
-    /// <c>context.GetService&lt;IRobotBrainQueryService&gt;()</c>, exactly like <see cref="IRobotAgentService"/>.
+    /// <c>context.RequireExtension&lt;IRobotBrainQueryService&gt;()</c>, exactly like
+    /// <see cref="IRobotAgentService"/>.
     /// <para>
     /// The call is <b>asynchronous and must never block a frame</b>: a brain round-trip is a network request to a
-    /// metered backend (typically a few hundred milliseconds, occasionally up to a second), so this follows the same
-    /// pollable-handle idiom as <see cref="IRobotAgentService.BeginFindReachableSpawn"/> — start a query, then poll
-    /// the returned <see cref="IRobotBrainQuery"/> each frame and read its result once
-    /// <see cref="IRobotBrainQuery.IsComplete"/> is <c>true</c>. The completion is marshalled back onto the main
-    /// thread by the service tick, so callers stay single-threaded.
+    /// metered backend (typically a few hundred milliseconds, occasionally up to a second). Await
+    /// <see cref="IRobotBrainQueryService.QueryAsync"/> with the current mod lifetime token; it never blocks a game
+    /// frame.
     /// </para>
     /// <para>
     /// Everything degrades gracefully. When the backend is unreachable, the per-user token is missing/expired, or the
-    /// game build does not expose what the service needs, <see cref="IsAvailable"/> is <c>false</c> and a started
-    /// query completes with <see cref="BrainQueryResult.Available"/> <c>false</c> rather than throwing. A brain query
+    /// game build does not expose what the service needs, <see cref="IsAvailable"/> is <c>false</c> and a query
+    /// returns a stable failed <see cref="OperationResult{T}"/> rather than throwing. A brain query
     /// is a pure <i>enrichment</i> layer — gameplay should resolve its own deterministic outcome first and let the
     /// brain answer (or not) a beat later.
     /// </para>
@@ -35,42 +37,16 @@ namespace TopiaForge.Mods
     {
         /// <summary>
         /// <c>true</c> when a brain query can currently be served — the backend token was resolved and the service is
-        /// live. <c>false</c> means <see cref="BeginQuery"/> still returns a usable handle, but it will complete
-        /// immediately as unavailable (so callers never special-case the offline path). Cheap to poll.
+        /// live. Cheap to poll.
         /// </summary>
         bool IsAvailable { get; }
 
         /// <summary>
-        /// Begins an asynchronous structured brain query. Returns a pollable handle immediately; the network call runs
-        /// off the main thread and its result is marshalled back on the service tick. Poll
-        /// <see cref="IRobotBrainQuery.IsComplete"/>, then read <see cref="IRobotBrainQuery.Result"/>. Abandon a handle
-        /// simply by dropping it; the service tears down in-flight queries on dispose. Never throws.
+        /// Runs a structured brain query asynchronously with stable failure codes and cancellation.
         /// </summary>
-        IRobotBrainQuery BeginQuery(BrainQueryRequest request);
-    }
-
-    /// <summary>
-    /// A pollable handle for an in-flight <see cref="IRobotBrainQueryService.BeginQuery"/>. Poll
-    /// <see cref="IsComplete"/> each frame; once it is <c>true</c>, read <see cref="Result"/>. Never throws and is safe
-    /// to keep polling after completion.
-    /// </summary>
-    public interface IRobotBrainQuery
-    {
-        /// <summary>
-        /// <c>true</c> once the query has finished — whether the brain answered, declined, or the call failed/timed
-        /// out. Until then the request is still in flight.
-        /// </summary>
-        bool IsComplete { get; }
-
-        /// <summary>
-        /// <c>true</c> when the brain produced a usable answer (<see cref="Result"/>'s
-        /// <see cref="BrainQueryResult.Succeeded"/>). Convenience mirror of the result; valid only once
-        /// <see cref="IsComplete"/> is <c>true</c>.
-        /// </summary>
-        bool Found { get; }
-
-        /// <summary>The query outcome. Valid only once <see cref="IsComplete"/> is <c>true</c>; never <c>null</c>.</summary>
-        BrainQueryResult Result { get; }
+        Task<OperationResult<BrainQueryResult>> QueryAsync(
+            BrainQueryRequest request,
+            CancellationToken cancellationToken = default);
     }
 
     /// <summary>
@@ -84,10 +60,26 @@ namespace TopiaForge.Mods
         /// <summary>Creates a query with a prompt and the output fields the brain must return.</summary>
         /// <param name="prompt">The full natural-language question/context for the brain.</param>
         /// <param name="outputs">The typed fields the brain must produce (at least one).</param>
-        public BrainQueryRequest(string prompt, IReadOnlyList<BrainOutputField> outputs)
+        /// <param name="usage">A stable diagnostic label for this query.</param>
+        /// <param name="successDescription">Optional guidance describing a successful answer.</param>
+        /// <param name="temperature">Sampling temperature; zero is the most deterministic.</param>
+        /// <param name="useReasoning">Whether the provider should request an additional reasoning value.</param>
+        public BrainQueryRequest(
+            string prompt,
+            IReadOnlyList<BrainOutputField> outputs,
+            string usage = "robot-brain-query",
+            string? successDescription = null,
+            float temperature = 0.7f,
+            bool useReasoning = false)
         {
             Prompt = prompt ?? string.Empty;
-            Outputs = outputs ?? System.Array.Empty<BrainOutputField>();
+            Outputs = outputs == null
+                ? System.Array.Empty<BrainOutputField>()
+                : new ReadOnlyCollection<BrainOutputField>(new List<BrainOutputField>(outputs));
+            Usage = usage ?? string.Empty;
+            SuccessDescription = successDescription;
+            Temperature = temperature;
+            UseReasoning = useReasoning;
         }
 
         /// <summary>The full natural-language prompt the brain reasons over.</summary>
@@ -100,19 +92,19 @@ namespace TopiaForge.Mods
         /// Short label describing what this query is for (telemetry/debugging on the backend). Optional; defaults to a
         /// generic label when empty.
         /// </summary>
-        public string Usage { get; set; } = "robot-brain-query";
+        public string Usage { get; }
 
         /// <summary>Optional description of what a successful answer looks like, to steer the brain. May be empty.</summary>
-        public string? SuccessDescription { get; set; }
+        public string? SuccessDescription { get; }
 
         /// <summary>Sampling temperature (0 = most deterministic). Clamped by the service to the backend's valid range.</summary>
-        public float Temperature { get; set; } = 0.7f;
+        public float Temperature { get; }
 
         /// <summary>
         /// When <c>true</c>, asks the brain to also produce its reasoning (a <c>reasoning</c> field in the result
         /// values). Costs more tokens; leave <c>false</c> for snappy gameplay decisions.
         /// </summary>
-        public bool UseReasoning { get; set; }
+        public bool UseReasoning { get; }
     }
 
     /// <summary>One typed field the brain must return, optionally constrained to a fixed set of strings (an enum).</summary>
@@ -132,7 +124,9 @@ namespace TopiaForge.Mods
             Name = name ?? string.Empty;
             Description = description ?? string.Empty;
             Type = type;
-            AllowedStrings = allowedStrings;
+            AllowedStrings = allowedStrings == null
+                ? null
+                : new ReadOnlyCollection<string>(new List<string>(allowedStrings));
         }
 
         /// <summary>The field key (e.g. <c>"action"</c>).</summary>
@@ -153,44 +147,23 @@ namespace TopiaForge.Mods
 
     /// <summary>
     /// The result of a brain query. The brain's answer is a flat map from each requested <see cref="BrainOutputField.Name"/>
-    /// to its value rendered as a string (consumers parse/enum-map as needed). Always non-null even when the call could
-    /// not run — check <see cref="Available"/>/<see cref="Succeeded"/> first.
+    /// to its value rendered as a string (consumers parse/enum-map as needed).
     /// </summary>
     public sealed class BrainQueryResult
     {
-        private static readonly IReadOnlyDictionary<string, string> EmptyValues =
-            new Dictionary<string, string>();
-
-        /// <summary>An unavailable result (the service/backend could not be reached). Shared immutable instance.</summary>
-        public static readonly BrainQueryResult Unavailable = new BrainQueryResult(false, false, EmptyValues, null);
-
         /// <summary>Creates a brain query result.</summary>
-        public BrainQueryResult(
-            bool available,
-            bool succeeded,
-            IReadOnlyDictionary<string, string> values,
-            string? error)
+        public BrainQueryResult(IReadOnlyDictionary<string, string> values)
         {
-            Available = available;
-            Succeeded = succeeded;
-            Values = values ?? EmptyValues;
-            Error = error;
+            Values = new ReadOnlyDictionary<string, string>(
+                values == null
+                    ? new Dictionary<string, string>()
+                    : new Dictionary<string, string>(values, System.StringComparer.Ordinal));
         }
 
-        /// <summary><c>true</c> when the backend was reachable and the query actually ran (independent of content).</summary>
-        public bool Available { get; }
-
-        /// <summary><c>true</c> when the brain returned a well-formed answer for the requested fields.</summary>
-        public bool Succeeded { get; }
-
         /// <summary>
-        /// The brain's answer: each requested field name mapped to its value as a string. Empty when
-        /// <see cref="Succeeded"/> is <c>false</c>. Use <see cref="TryGet"/> for convenient lookup.
+        /// The brain's answer: each requested field name mapped to its value as a string.
         /// </summary>
         public IReadOnlyDictionary<string, string> Values { get; }
-
-        /// <summary>A short diagnostic message when the query did not succeed; <c>null</c> on success.</summary>
-        public string? Error { get; }
 
         /// <summary>Gets a returned field value by name. Returns <c>false</c> when absent.</summary>
         public bool TryGet(string name, out string value)

@@ -15,7 +15,7 @@ namespace TopiaForge.UgcLiveSync
     /// snapshots, lifecycle) can be unit-tested on plain .NET. The owning mod pumps <see cref="Pump"/> from the
     /// per-frame Update event (Unity main thread) and forwards scene loads to <see cref="NotifySceneLoaded"/>.
     /// </summary>
-    internal sealed class UgcLiveSyncService : IUgcLiveSyncService, IDisposable
+    internal sealed class UgcLiveSyncService : IUgcLiveSyncService, IOwnerBoundExtensionFactory, IDisposable
     {
         private const float SceneDispatchTimeoutSeconds = 30f;
         private const long DefaultMaxSnapshotBytes = 16L * 1024 * 1024;
@@ -55,7 +55,10 @@ namespace TopiaForge.UgcLiveSync
         private readonly bool enableFileWatcher;
         private readonly List<UgcAssetOverride> overrides = new List<UgcAssetOverride>();
         private readonly ReadOnlyCollection<UgcAssetOverride> overridesView;
+        private readonly Dictionary<string, AssetOverrideLease> overrideLeases =
+            new Dictionary<string, AssetOverrideLease>(StringComparer.Ordinal);
         private readonly object gate = new object();
+        private bool disposed;
 
         private FileSystemWatcher? watcher;
         private string watchFolder = string.Empty;
@@ -70,22 +73,11 @@ namespace TopiaForge.UgcLiveSync
         private UgcSyncTransport pendingTransport;
         private bool awaitingScene;
         private UgcSyncSession? pendingSession;
-        private bool deferredSceneLoad;
         private bool sceneLoadDispatched;
         private float sceneDispatchRemaining;
-        private string pendingSceneFailure = string.Empty;
-        private SceneTransitionPriority pendingPriority = SceneTransitionPriority.UserInitiated;
-        private string pendingAutomergeDocumentUrl = string.Empty;
-        private string pendingAutomergeSyncServerUrl = string.Empty;
         // Native callbacks can already be queued when Stop/failure detaches the bridge. Generation-tag every
         // Automerge arm so a late callback from an abandoned or superseded request cannot resurrect a session.
         private int automergeCallbackGeneration;
-
-        // In-flight claim on the play-scene load (see ISceneCoordinator); released on the next scene arrival.
-        private IDisposable? sceneClaim;
-        // SceneLoaded is dispatched to mods in load order. Keep a resolved claim visible until the next Pump
-        // so a world-session owner handling the same event can still identify this foreign takeover.
-        private bool sceneClaimReleasePending;
 
         public UgcLiveSyncService(IUgcLiveSyncBridge bridge, IModLogger logger)
             : this(bridge, logger, enableFileWatcher: true)
@@ -111,40 +103,40 @@ namespace TopiaForge.UgcLiveSync
         // public CurrentSession contract remains null until the scene is actually ready and SessionStarted fires.
         internal UgcSyncSession? PendingSession => pendingSession;
 
-        /// <summary>
-        /// Optional scene-transition arbiter (the manager's <see cref="ISceneCoordinator"/>). When set, a
-        /// session that must load the UGC play scene first asks for the transition at the request's priority;
-        /// a refused automatic request defers the load and attaches when the play scene arrives on its own
-        /// (e.g. the player launches the sandbox) instead of stomping a live world/gamemode session.
-        /// </summary>
-        public ISceneCoordinator? SceneCoordinator { get; set; }
-
-        /// <summary>Owner id used for coordinator claims; the owning mod sets this to its mod id.</summary>
-        public string SceneOwnerId { get; set; } = "io.github.furroxide.topiaforge.ugc.livesync";
-
         public event Action<UgcSyncSession>? SessionStarted;
         public event Action<UgcSnapshotInfo>? SnapshotImported;
         public event Action<UgcSnapshotInfo>? PatchApplied;
         public event Action<UgcSyncError>? SyncError;
         public event Action<UgcSyncSession>? SessionStopped;
 
-        public UgcLiveSyncResult StartLocalSession(UgcLiveSyncRequest request)
+        public OperationResult<IUgcSyncLease> StartLocalSession(UgcLiveSyncRequest request)
         {
             if (request == null)
             {
                 throw new ArgumentNullException(nameof(request));
             }
 
+            if (disposed)
+            {
+                return OperationResult<IUgcSyncLease>.Failure(
+                    ModErrorCode.InvalidState,
+                    "UGC live sync has already been disposed.");
+            }
+
             if (!bridge.IsAvailable)
             {
                 Status = UgcLiveSyncStatus.Unavailable;
-                return UgcLiveSyncResult.Fail("UGC live sync is unavailable in this build (game symbols not found).");
+                return OperationResult<IUgcSyncLease>.Failure(
+                    ModErrorCode.Unavailable,
+                    "UGC live sync is unavailable in this build (game symbols not found).");
             }
 
             var folder = string.IsNullOrWhiteSpace(request.WatchFolder) ? bridge.GetDefaultWatchFolder() : request.WatchFolder;
             if (string.IsNullOrWhiteSpace(folder))
             {
-                return UgcLiveSyncResult.Fail("No watch folder configured and no default import folder is available.");
+                return OperationResult<IUgcSyncLease>.Failure(
+                    ModErrorCode.InvalidArgument,
+                    "No watch folder configured and no default import folder is available.");
             }
 
             try
@@ -153,7 +145,9 @@ namespace TopiaForge.UgcLiveSync
             }
             catch (Exception ex)
             {
-                return UgcLiveSyncResult.Fail("Could not create watch folder '" + folder + "': " + ex.Message);
+                return OperationResult<IUgcSyncLease>.Failure(
+                    ModErrorCode.Io,
+                    "Could not create watch folder '" + folder + "': " + ex.Message);
             }
 
             // Do not tear down a healthy session until the replacement request passes its cheap validation.
@@ -162,7 +156,6 @@ namespace TopiaForge.UgcLiveSync
             sceneId = request.SceneId ?? string.Empty;
             debounceSeconds = Math.Max(0f, request.DebounceMilliseconds / 1000f);
             pendingTransport = UgcSyncTransport.LocalFolder;
-            pendingPriority = request.Priority;
             var requestedSession = new UgcSyncSession(
                 UgcSyncTransport.LocalFolder, watchFolder, sceneId, DateTime.UtcNow);
             pendingSession = requestedSession;
@@ -171,64 +164,53 @@ namespace TopiaForge.UgcLiveSync
             {
                 if (!BeginLocalWatch())
                 {
-                    return UgcLiveSyncResult.Fail("Could not watch '" + watchFolder + "' (see log).");
+                    return OperationResult<IUgcSyncLease>.Failure(
+                        ModErrorCode.Io,
+                        "Could not watch '" + watchFolder + "' (see log).");
                 }
 
-                return UgcLiveSyncResult.Success(
-                    CurrentSession!, "Watching '" + watchFolder + "' for UGC snapshots.");
+                return OperationResult<IUgcSyncLease>.Success(
+                    new SyncLease(this, CurrentSession!));
             }
 
-            // No UGC play scene yet: load it (content import suppressed) and attach once it is ready. The
-            // load is arbitrated — an automatic trigger yields to whoever holds the scene (e.g. a live world
-            // session) and attaches later, when the play scene arrives on its own.
+            // No UGC play scene yet: load it (content import suppressed) and attach once it is ready.
             awaitingScene = true;
             Status = UgcLiveSyncStatus.WaitingForScene;
-
-            var coordinator = SceneCoordinator;
-            if (coordinator != null)
-            {
-                var decision = coordinator.RequestTransition(new SceneTransitionRequest(
-                    SceneOwnerId, bridge.PlaySceneName, request.Priority, "attach UGC live sync"));
-                if (!decision.Approved)
-                {
-                    deferredSceneLoad = true;
-                    logger.Info("UGC live sync: play-scene load deferred (" + decision.Message
-                        + "); will attach when the UGC play scene loads.");
-                    return UgcLiveSyncResult.Success(
-                        requestedSession,
-                        "Deferred: " + decision.Message + " Watching '" + watchFolder
-                        + "' will begin when the UGC play scene loads.");
-                }
-
-                sceneClaim?.Dispose();
-                sceneClaim = decision.Claim;
-            }
 
             if (!bridge.EnsurePlaySceneLoaded())
             {
                 FailPendingStart("load", "Could not load the UGC play scene.");
-                return UgcLiveSyncResult.Fail("Could not load the UGC play scene (see log).");
+                return OperationResult<IUgcSyncLease>.Failure(
+                    ModErrorCode.External,
+                    "Could not load the UGC play scene (see log).");
             }
 
             BeginSceneDispatchTimeout();
 
             logger.Info("UGC live sync: waiting for the UGC play scene before watching '" + watchFolder + "'.");
-            return UgcLiveSyncResult.Success(
-                requestedSession,
-                "Loading UGC play scene, then watching '" + watchFolder + "'.");
+            return OperationResult<IUgcSyncLease>.Success(new SyncLease(this, requestedSession));
         }
 
-        public UgcLiveSyncResult StartAutomergeSession(UgcLiveSyncRequest request)
+        public OperationResult<IUgcSyncLease> StartAutomergeSession(UgcLiveSyncRequest request)
         {
             if (request == null)
             {
                 throw new ArgumentNullException(nameof(request));
             }
 
+            if (disposed)
+            {
+                return OperationResult<IUgcSyncLease>.Failure(
+                    ModErrorCode.InvalidState,
+                    "UGC live sync has already been disposed.");
+            }
+
             if (!bridge.IsAvailable)
             {
                 Status = UgcLiveSyncStatus.Unavailable;
-                return UgcLiveSyncResult.Fail("UGC live sync is unavailable in this build (game symbols not found).");
+                return OperationResult<IUgcSyncLease>.Failure(
+                    ModErrorCode.Unavailable,
+                    "UGC live sync is unavailable in this build (game symbols not found).");
             }
 
             var documentUrl = request.DocumentUrl ?? string.Empty;
@@ -244,12 +226,16 @@ namespace TopiaForge.UgcLiveSync
 
             if (string.IsNullOrWhiteSpace(documentUrl))
             {
-                return UgcLiveSyncResult.Fail("No Automerge document url or editor url provided.");
+                return OperationResult<IUgcSyncLease>.Failure(
+                    ModErrorCode.InvalidArgument,
+                    "No Automerge document url or editor url provided.");
             }
 
             if (documentUrl.Length > 4096 || resolvedScene.Length > 512)
             {
-                return UgcLiveSyncResult.Fail("Automerge document or scene identifiers exceed the runtime limit.");
+                return OperationResult<IUgcSyncLease>.Failure(
+                    ModErrorCode.InvalidArgument,
+                    "Automerge document or scene identifiers exceed the runtime limit.");
             }
 
             var syncServer = string.IsNullOrWhiteSpace(request.SyncServerUrl)
@@ -257,41 +243,20 @@ namespace TopiaForge.UgcLiveSync
                 : request.SyncServerUrl.Trim();
             if (!TryValidateSecureSyncServerUrl(syncServer, out var syncServerError))
             {
-                return UgcLiveSyncResult.Fail(syncServerError);
+                return OperationResult<IUgcSyncLease>.Failure(ModErrorCode.InvalidArgument, syncServerError);
             }
 
             // Validation succeeded; only now replace any active/pending session.
             Stop();
             sceneId = resolvedScene;
-            pendingAutomergeDocumentUrl = documentUrl;
-            pendingAutomergeSyncServerUrl = syncServer;
             pendingTransport = UgcSyncTransport.Automerge;
-            pendingPriority = request.Priority;
             var requestedSession = new UgcSyncSession(
                 UgcSyncTransport.Automerge, documentUrl, resolvedScene, DateTime.UtcNow);
             pendingSession = requestedSession;
             awaitingScene = true;
             Status = UgcLiveSyncStatus.WaitingForScene;
 
-            var loadPlayScene = true;
-            var coordinator = SceneCoordinator;
-            if (coordinator != null)
-            {
-                var decision = coordinator.RequestTransition(new SceneTransitionRequest(
-                    SceneOwnerId, bridge.PlaySceneName, request.Priority, "attach UGC live sync (Automerge)"));
-                if (!decision.Approved)
-                {
-                    loadPlayScene = false;
-                    deferredSceneLoad = true;
-                    logger.Info("UGC live sync: Automerge play-scene load deferred (" + decision.Message
-                        + "); the native request is armed for the next UGC play-scene load.");
-                }
-                else
-                {
-                    sceneClaim?.Dispose();
-                    sceneClaim = decision.Claim;
-                }
-            }
+            const bool loadPlayScene = true;
 
             if (!bridge.StartAutomerge(
                     documentUrl,
@@ -303,32 +268,22 @@ namespace TopiaForge.UgcLiveSync
                 FailPendingStart("connect", loadPlayScene
                     ? "Could not start the Automerge live session or load the UGC play scene."
                     : "Could not arm the deferred Automerge live session.");
-                return UgcLiveSyncResult.Fail("Could not start the Automerge live session (see log).");
-            }
-
-            if (!loadPlayScene)
-            {
-                return UgcLiveSyncResult.Success(
-                    requestedSession,
-                    "Deferred until the UGC play scene is available; Automerge document '" + documentUrl
-                    + "' is armed for connection.");
+                return OperationResult<IUgcSyncLease>.Failure(
+                    ModErrorCode.External,
+                    "Could not start the Automerge live session (see log).");
             }
 
             BeginSceneDispatchTimeout();
 
             logger.Info("UGC live sync: loading the UGC play scene for Automerge document '" + documentUrl + "'.");
-            return UgcLiveSyncResult.Success(
-                requestedSession, "Loading the UGC play scene, then connecting to the Automerge document.");
+            return OperationResult<IUgcSyncLease>.Success(new SyncLease(this, requestedSession));
         }
 
-        public void Stop()
+        internal void Stop()
         {
             DisposeWatcher();
             awaitingScene = false;
             InvalidateAutomergeCallbacks();
-            sceneClaim?.Dispose();
-            sceneClaim = null;
-            sceneClaimReleasePending = false;
 
             if (bridge.IsAvailable)
             {
@@ -340,13 +295,8 @@ namespace TopiaForge.UgcLiveSync
             var pending = pendingSession;
             CurrentSession = null;
             pendingSession = null;
-            deferredSceneLoad = false;
             sceneLoadDispatched = false;
             sceneDispatchRemaining = 0f;
-            pendingSceneFailure = string.Empty;
-            pendingPriority = SceneTransitionPriority.UserInitiated;
-            pendingAutomergeDocumentUrl = string.Empty;
-            pendingAutomergeSyncServerUrl = string.Empty;
             lock (gate)
             {
                 dirty = false;
@@ -370,48 +320,103 @@ namespace TopiaForge.UgcLiveSync
             }
         }
 
-        public void RegisterAssetOverride(UgcAssetOverride assetOverride)
+        public OperationResult<IUgcAssetOverrideLease> RegisterAssetOverride(UgcAssetOverride assetOverride)
         {
             if (assetOverride == null)
             {
-                return;
+                throw new ArgumentNullException(nameof(assetOverride));
+            }
+
+            if (disposed)
+            {
+                return OperationResult<IUgcAssetOverrideLease>.Failure(
+                    ModErrorCode.InvalidState,
+                    "UGC live sync has already been disposed.");
+            }
+
+            if (!assetOverride.Prefab.IsAlive)
+            {
+                return OperationResult<IUgcAssetOverrideLease>.Failure(
+                    ModErrorCode.InvalidState,
+                    "The prefab asset has already been released.");
+            }
+
+            if (overrideLeases.TryGetValue(assetOverride.AssetId, out var previousLease))
+            {
+                previousLease.Invalidate();
             }
 
             overrides.RemoveAll(item => string.Equals(item.AssetId, assetOverride.AssetId, StringComparison.Ordinal));
             overrides.Add(assetOverride);
+            var lease = new AssetOverrideLease(this, assetOverride);
+            overrideLeases[assetOverride.AssetId] = lease;
             if (CurrentSession != null && bridge.IsAvailable)
             {
+                bridge.ClearAssetOverrides();
                 bridge.ApplyAssetOverrides(overridesView);
             }
+
+            return OperationResult<IUgcAssetOverrideLease>.Success(lease);
         }
 
-        public void ClearAssetOverrides()
+        object IOwnerBoundExtensionFactory.CreateOwnerFacade(
+            Type contractType,
+            string ownerModId,
+            IModLifetime lifetime)
         {
-            overrides.Clear();
-            if (bridge.IsAvailable)
+            if (contractType != typeof(IUgcLiveSyncService))
             {
-                bridge.ClearAssetOverrides();
+                throw new ArgumentException("Unsupported UGC extension contract.", nameof(contractType));
             }
+
+            return new OwnerFacade(this, lifetime);
+        }
+
+        private bool OwnsSession(UgcSyncSession session)
+        {
+            return !disposed
+                && (ReferenceEquals(CurrentSession, session) || ReferenceEquals(pendingSession, session));
+        }
+
+        private void ReleaseSession(SyncLease lease)
+        {
+            if (OwnsSession(lease.Session))
+            {
+                Stop();
+            }
+
+            lease.Invalidate();
+        }
+
+        private bool OwnsOverride(AssetOverrideLease lease)
+        {
+            return !disposed
+                && overrideLeases.TryGetValue(lease.Override.AssetId, out var current)
+                && ReferenceEquals(current, lease);
+        }
+
+        private void ReleaseOverride(AssetOverrideLease lease)
+        {
+            if (OwnsOverride(lease))
+            {
+                overrideLeases.Remove(lease.Override.AssetId);
+                overrides.RemoveAll(item => ReferenceEquals(item, lease.Override));
+                if (bridge.IsAvailable)
+                {
+                    bridge.ClearAssetOverrides();
+                    if (CurrentSession != null)
+                    {
+                        bridge.ApplyAssetOverrides(overridesView);
+                    }
+                }
+            }
+
+            lease.Invalidate();
         }
 
         /// <summary>Pumped from the mod's per-frame Update on the Unity main thread.</summary>
         public void Pump(float deltaTime)
         {
-            if (sceneClaimReleasePending)
-            {
-                sceneClaimReleasePending = false;
-                sceneClaim?.Dispose();
-                sceneClaim = null;
-                if (pendingSceneFailure.Length > 0)
-                {
-                    var failure = pendingSceneFailure;
-                    pendingSceneFailure = string.Empty;
-                    FailPendingStart("scene", failure);
-                    return;
-                }
-            }
-
-            RetryDeferredSceneLoad();
             if (sceneLoadDispatched && awaitingScene)
             {
                 sceneDispatchRemaining -= Math.Max(0f, deltaTime);
@@ -468,15 +473,6 @@ namespace TopiaForge.UgcLiveSync
                 return;
             }
 
-            // A single-mode scene becoming active resolves our dispatch even when another user transition won;
-            // unrelated additive scene notifications do not. The target name itself also resolves the claim.
-            if (sceneClaim != null
-                && (string.Equals(sceneName, bridge.PlaySceneName, StringComparison.OrdinalIgnoreCase)
-                    || becameActive))
-            {
-                sceneClaimReleasePending = true;
-            }
-
             if (awaitingScene && becameActive && !bridge.IsImportControllerReady())
             {
                 sceneLoadDispatched = false;
@@ -484,34 +480,10 @@ namespace TopiaForge.UgcLiveSync
                     sceneName,
                     bridge.PlaySceneName,
                     StringComparison.OrdinalIgnoreCase);
-                var automaticShouldKeepYielding = pendingPriority == SceneTransitionPriority.Automatic
-                    && SceneCoordinator != null
-                    && (!targetArrived || (sceneClaim == null && SceneCoordinator.IsSceneBusy));
-                if (automaticShouldKeepYielding)
-                {
-                    // A later user transition won while our automatic load was in flight, or the request was
-                    // already deferred and another owner brought up the target without a usable controller.
-                    // Keep yielding and retry only after that owner's claim ends. Requiring a coordinator here
-                    // avoids leaving an unowned automatic request pending forever on an unusable active scene.
-                    deferredSceneLoad = true;
-                    logger.Info("UGC live sync: deferred scene load was superseded by '" + sceneName
-                        + "'; waiting to retry after the active scene owner releases its claim.");
-                }
-                else
-                {
-                    var message = targetArrived
-                        ? "The UGC play scene loaded without a usable import/live controller."
-                        : "The UGC play-scene load was superseded by active scene '" + sceneName + "'.";
-                    if (sceneClaimReleasePending)
-                    {
-                        // Keep the claim visible through the rest of this SceneLoaded dispatch, then fail on Pump.
-                        pendingSceneFailure = message;
-                    }
-                    else
-                    {
-                        FailPendingStart("scene", message);
-                    }
-                }
+                var message = targetArrived
+                    ? "The UGC play scene loaded without a usable import/live controller."
+                    : "The UGC play-scene load was superseded by active scene '" + sceneName + "'.";
+                FailPendingStart("scene", message);
 
                 return;
             }
@@ -519,7 +491,6 @@ namespace TopiaForge.UgcLiveSync
             if (awaitingScene && pendingTransport == UgcSyncTransport.LocalFolder && bridge.IsImportControllerReady())
             {
                 awaitingScene = false;
-                deferredSceneLoad = false;
                 sceneLoadDispatched = false;
                 BeginLocalWatch();
             }
@@ -527,7 +498,20 @@ namespace TopiaForge.UgcLiveSync
 
         public void Dispose()
         {
+            if (disposed)
+            {
+                return;
+            }
+
+            disposed = true;
             Stop();
+            foreach (var lease in new List<AssetOverrideLease>(overrideLeases.Values))
+            {
+                lease.Invalidate();
+            }
+
+            overrideLeases.Clear();
+            overrides.Clear();
         }
 
         private bool BeginLocalWatch()
@@ -940,7 +924,6 @@ namespace TopiaForge.UgcLiveSync
                 CurrentSession = pendingSession;
                 pendingSession = null;
                 awaitingScene = false;
-                deferredSceneLoad = false;
                 sceneLoadDispatched = false;
                 Raise(SessionStarted, CurrentSession, "SessionStarted");
             }
@@ -962,27 +945,10 @@ namespace TopiaForge.UgcLiveSync
             InvalidateAutomergeCallbacks();
             awaitingScene = false;
             pendingSession = null;
-            deferredSceneLoad = false;
             sceneLoadDispatched = false;
             sceneDispatchRemaining = 0f;
-            pendingSceneFailure = string.Empty;
-            pendingPriority = SceneTransitionPriority.UserInitiated;
-            pendingAutomergeDocumentUrl = string.Empty;
-            pendingAutomergeSyncServerUrl = string.Empty;
             pendingTransport = UgcSyncTransport.LocalFolder;
-            var failedClaim = sceneClaim;
-            sceneClaim = null;
-            sceneClaimReleasePending = false;
             Status = UgcLiveSyncStatus.Error;
-
-            try
-            {
-                failedClaim?.Dispose();
-            }
-            catch (Exception ex)
-            {
-                TryLogError(ex, "UGC live sync: failed to release the abandoned scene claim.");
-            }
 
             if (stopAutomerge && bridge.IsAvailable)
             {
@@ -1000,61 +966,6 @@ namespace TopiaForge.UgcLiveSync
 
             TryLogWarning("UGC live sync: " + message);
             RaiseSyncErrorSafely(new UgcSyncError(phase, message));
-        }
-
-        private void RetryDeferredSceneLoad()
-        {
-            if (!deferredSceneLoad || !awaitingScene || pendingSession == null)
-            {
-                return;
-            }
-
-            // A deferred automatic request should not wait forever once the blocking session ends. Re-acquire
-            // through the coordinator (rather than polling and loading directly) so a simultaneous claimant
-            // still wins deterministically. Automerge is re-armed immediately before its scene load because
-            // another UgcPlay launcher may have replaced the game's process-wide launch request meanwhile.
-            var coordinator = SceneCoordinator;
-            if (coordinator == null || coordinator.IsSceneBusy)
-            {
-                return;
-            }
-
-            var decision = coordinator.RequestTransition(new SceneTransitionRequest(
-                SceneOwnerId,
-                bridge.PlaySceneName,
-                SceneTransitionPriority.Automatic,
-                pendingTransport == UgcSyncTransport.Automerge
-                    ? "resume deferred UGC live sync (Automerge)"
-                    : "resume deferred UGC live sync"));
-            if (!decision.Approved)
-            {
-                return;
-            }
-
-            sceneClaim?.Dispose();
-            sceneClaim = decision.Claim;
-            deferredSceneLoad = false;
-            sceneLoadDispatched = false;
-            sceneDispatchRemaining = 0f;
-            pendingSceneFailure = string.Empty;
-
-            var dispatched = pendingTransport == UgcSyncTransport.Automerge
-                ? bridge.StartAutomerge(
-                    pendingAutomergeDocumentUrl,
-                    pendingAutomergeSyncServerUrl,
-                    sceneId,
-                    loadPlayScene: true,
-                    CreateAutomergeRevisionCallback())
-                : bridge.EnsurePlaySceneLoaded();
-            if (!dispatched)
-            {
-                FailPendingStart("load", "Could not resume the deferred UGC play-scene load.");
-                return;
-            }
-
-            BeginSceneDispatchTimeout();
-
-            logger.Info("UGC live sync: blocker released; resumed the deferred play-scene load.");
         }
 
         private void BeginSceneDispatchTimeout()
@@ -1397,6 +1308,313 @@ namespace TopiaForge.UgcLiveSync
             return value >= '0' && value <= '9'
                 || value >= 'a' && value <= 'f'
                 || value >= 'A' && value <= 'F';
+        }
+
+        private sealed class SyncLease : IUgcSyncLease
+        {
+            private UgcLiveSyncService? owner;
+
+            public SyncLease(UgcLiveSyncService owner, UgcSyncSession session)
+            {
+                this.owner = owner;
+                Session = session;
+            }
+
+            public UgcSyncSession Session { get; }
+
+            public bool IsActive
+            {
+                get
+                {
+                    var current = Volatile.Read(ref owner);
+                    return current != null && current.OwnsSession(Session);
+                }
+            }
+
+            public void Dispose()
+            {
+                var current = Interlocked.Exchange(ref owner, null);
+                current?.ReleaseSession(this);
+            }
+
+            public void Invalidate()
+            {
+                Interlocked.Exchange(ref owner, null);
+            }
+        }
+
+        private sealed class AssetOverrideLease : IUgcAssetOverrideLease
+        {
+            private UgcLiveSyncService? owner;
+
+            public AssetOverrideLease(UgcLiveSyncService owner, UgcAssetOverride assetOverride)
+            {
+                this.owner = owner;
+                Override = assetOverride;
+            }
+
+            public UgcAssetOverride Override { get; }
+
+            public bool IsActive
+            {
+                get
+                {
+                    var current = Volatile.Read(ref owner);
+                    return current != null && current.OwnsOverride(this);
+                }
+            }
+
+            public void Dispose()
+            {
+                var current = Interlocked.Exchange(ref owner, null);
+                current?.ReleaseOverride(this);
+            }
+
+            public void Invalidate()
+            {
+                Interlocked.Exchange(ref owner, null);
+            }
+        }
+
+        private sealed class OwnerFacade : IUgcLiveSyncService
+        {
+            private const string SessionStartedKey = "session-started";
+            private const string SnapshotImportedKey = "snapshot-imported";
+            private const string PatchAppliedKey = "patch-applied";
+            private const string SyncErrorKey = "sync-error";
+            private const string SessionStoppedKey = "session-stopped";
+
+            private readonly UgcLiveSyncService service;
+            private readonly IModLifetime lifetime;
+            private readonly object subscriptionSync = new object();
+            private readonly List<IEventSubscription> subscriptions = new List<IEventSubscription>();
+
+            public OwnerFacade(UgcLiveSyncService service, IModLifetime lifetime)
+            {
+                this.service = service;
+                this.lifetime = lifetime;
+            }
+
+            public UgcSyncSession? CurrentSession => service.CurrentSession;
+            public UgcLiveSyncStatus Status => service.Status;
+            public IReadOnlyList<UgcAssetOverride> AssetOverrides => service.AssetOverrides;
+
+            public event Action<UgcSyncSession>? SessionStarted
+            {
+                add => Add(SessionStartedKey, value, handler => service.SessionStarted += handler,
+                    handler => service.SessionStarted -= handler);
+                remove => Remove(SessionStartedKey, value);
+            }
+
+            public event Action<UgcSnapshotInfo>? SnapshotImported
+            {
+                add => Add(SnapshotImportedKey, value, handler => service.SnapshotImported += handler,
+                    handler => service.SnapshotImported -= handler);
+                remove => Remove(SnapshotImportedKey, value);
+            }
+
+            public event Action<UgcSnapshotInfo>? PatchApplied
+            {
+                add => Add(PatchAppliedKey, value, handler => service.PatchApplied += handler,
+                    handler => service.PatchApplied -= handler);
+                remove => Remove(PatchAppliedKey, value);
+            }
+
+            public event Action<UgcSyncError>? SyncError
+            {
+                add => Add(SyncErrorKey, value, handler => service.SyncError += handler,
+                    handler => service.SyncError -= handler);
+                remove => Remove(SyncErrorKey, value);
+            }
+
+            public event Action<UgcSyncSession>? SessionStopped
+            {
+                add => Add(SessionStoppedKey, value, handler => service.SessionStopped += handler,
+                    handler => service.SessionStopped -= handler);
+                remove => Remove(SessionStoppedKey, value);
+            }
+
+            public OperationResult<IUgcSyncLease> StartLocalSession(UgcLiveSyncRequest request) =>
+                Track(service.StartLocalSession(request));
+
+            public OperationResult<IUgcSyncLease> StartAutomergeSession(UgcLiveSyncRequest request) =>
+                Track(service.StartAutomergeSession(request));
+
+            public OperationResult<IUgcAssetOverrideLease> RegisterAssetOverride(UgcAssetOverride assetOverride) =>
+                Track(service.RegisterAssetOverride(assetOverride));
+
+            private OperationResult<IUgcSyncLease> Track(OperationResult<IUgcSyncLease> result)
+            {
+                if (!result.TryGetValue(out var lease))
+                {
+                    return result;
+                }
+
+                if (lifetime.IsStopping)
+                {
+                    lease.Dispose();
+                    return OperationResult<IUgcSyncLease>.Failure(
+                        ModErrorCode.Cancelled,
+                        "The mod is stopping and cannot retain a UGC session.");
+                }
+
+                try
+                {
+                    return OperationResult<IUgcSyncLease>.Success(
+                        new OwnerSyncLease(lease, lifetime.Track(lease)));
+                }
+                catch (ObjectDisposedException)
+                {
+                    return OperationResult<IUgcSyncLease>.Failure(
+                        ModErrorCode.Cancelled,
+                        "The mod stopped before its UGC session could be retained.");
+                }
+            }
+
+            private OperationResult<IUgcAssetOverrideLease> Track(
+                OperationResult<IUgcAssetOverrideLease> result)
+            {
+                if (!result.TryGetValue(out var lease))
+                {
+                    return result;
+                }
+
+                if (lifetime.IsStopping)
+                {
+                    lease.Dispose();
+                    return OperationResult<IUgcAssetOverrideLease>.Failure(
+                        ModErrorCode.Cancelled,
+                        "The mod is stopping and cannot retain a UGC asset override.");
+                }
+
+                try
+                {
+                    return OperationResult<IUgcAssetOverrideLease>.Success(
+                        new OwnerAssetOverrideLease(lease, lifetime.Track(lease)));
+                }
+                catch (ObjectDisposedException)
+                {
+                    return OperationResult<IUgcAssetOverrideLease>.Failure(
+                        ModErrorCode.Cancelled,
+                        "The mod stopped before its UGC asset override could be retained.");
+                }
+            }
+
+            private void Add<T>(
+                string key,
+                Action<T>? handler,
+                Action<Action<T>> subscribe,
+                Action<Action<T>> unsubscribe)
+            {
+                if (handler == null || lifetime.IsStopping)
+                {
+                    return;
+                }
+
+                var subscription = new EventSubscription<T>(key, handler, unsubscribe);
+                lock (subscriptionSync)
+                {
+                    subscriptions.Add(subscription);
+                }
+
+                subscribe(subscription.Wrapper);
+                try
+                {
+                    lifetime.Track(subscription);
+                }
+                catch (ObjectDisposedException)
+                {
+                    lock (subscriptionSync)
+                    {
+                        subscriptions.Remove(subscription);
+                    }
+                }
+            }
+
+            private void Remove<T>(string key, Action<T>? handler)
+            {
+                if (handler == null)
+                {
+                    return;
+                }
+
+                IEventSubscription? subscription = null;
+                lock (subscriptionSync)
+                {
+                    for (var index = subscriptions.Count - 1; index >= 0; index--)
+                    {
+                        if (subscriptions[index].Matches(key, handler))
+                        {
+                            subscription = subscriptions[index];
+                            subscriptions.RemoveAt(index);
+                            break;
+                        }
+                    }
+                }
+
+                subscription?.Dispose();
+            }
+
+            private interface IEventSubscription : IDisposable
+            {
+                bool Matches(string key, Delegate handler);
+            }
+
+            private sealed class EventSubscription<T> : IEventSubscription
+            {
+                private Action<Action<T>>? unsubscribe;
+                private readonly string key;
+                private readonly Action<T> handler;
+
+                public EventSubscription(string key, Action<T> handler, Action<Action<T>> unsubscribe)
+                {
+                    this.key = key;
+                    this.handler = handler;
+                    this.unsubscribe = unsubscribe;
+                    Wrapper = value => this.handler(value);
+                }
+
+                public Action<T> Wrapper { get; }
+                public bool Matches(string candidateKey, Delegate candidate) =>
+                    string.Equals(key, candidateKey, StringComparison.Ordinal) && handler == (Action<T>)candidate;
+
+                public void Dispose()
+                {
+                    Interlocked.Exchange(ref unsubscribe, null)?.Invoke(Wrapper);
+                }
+            }
+
+            private sealed class OwnerSyncLease : IUgcSyncLease
+            {
+                private readonly IUgcSyncLease lease;
+                private IDisposable? lifetimeLease;
+
+                public OwnerSyncLease(IUgcSyncLease lease, IDisposable lifetimeLease)
+                {
+                    this.lease = lease;
+                    this.lifetimeLease = lifetimeLease;
+                }
+
+                public UgcSyncSession Session => lease.Session;
+                public bool IsActive => lifetimeLease != null && lease.IsActive;
+                public void Dispose() => Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
+            }
+
+            private sealed class OwnerAssetOverrideLease : IUgcAssetOverrideLease
+            {
+                private readonly IUgcAssetOverrideLease lease;
+                private IDisposable? lifetimeLease;
+
+                public OwnerAssetOverrideLease(IUgcAssetOverrideLease lease, IDisposable lifetimeLease)
+                {
+                    this.lease = lease;
+                    this.lifetimeLease = lifetimeLease;
+                }
+
+                public UgcAssetOverride Override => lease.Override;
+                public bool IsActive => lifetimeLease != null && lease.IsActive;
+                public void Dispose() => Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
+            }
         }
     }
 }

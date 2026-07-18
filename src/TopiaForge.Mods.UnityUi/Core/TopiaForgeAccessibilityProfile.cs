@@ -9,8 +9,10 @@ namespace TopiaForge.Mods.UnityUi
     /// </summary>
     public sealed class TopiaForgeAccessibilityProfile : IEquatable<TopiaForgeAccessibilityProfile>
     {
+        /// <summary>Gets default.</summary>
         public static TopiaForgeAccessibilityProfile Default { get; } = new TopiaForgeAccessibilityProfile();
 
+        /// <summary>Creates a accessibility profile.</summary>
         public TopiaForgeAccessibilityProfile(
             bool highContrast = false,
             float uiScale = 1f,
@@ -23,12 +25,16 @@ namespace TopiaForge.Mods.UnityUi
             MotionIntensity = ClampFinite(motionIntensity, 0f, 2f, 1f);
         }
 
+        /// <summary>Gets whether the profile requests high-contrast colors.</summary>
         public bool HighContrast { get; }
 
+        /// <summary>Gets UI scale.</summary>
         public float UiScale { get; }
 
+        /// <summary>Gets whether the profile requests reduced motion.</summary>
         public bool ReducedMotion { get; }
 
+        /// <summary>Gets motion intensity.</summary>
         public float MotionIntensity { get; }
 
         /// <summary>Composes this profile with the current process-wide settings.</summary>
@@ -48,6 +54,7 @@ namespace TopiaForge.Mods.UnityUi
                     : ClampFinite(globalMotionIntensity * MotionIntensity, 0f, 2f, 1f));
         }
 
+        /// <inheritdoc/>
         public bool Equals(TopiaForgeAccessibilityProfile? other)
         {
             return other != null
@@ -57,8 +64,10 @@ namespace TopiaForge.Mods.UnityUi
                 && MotionIntensity.Equals(other.MotionIntensity);
         }
 
+        /// <inheritdoc/>
         public override bool Equals(object? obj) => Equals(obj as TopiaForgeAccessibilityProfile);
 
+        /// <inheritdoc/>
         public override int GetHashCode()
         {
             unchecked
@@ -96,12 +105,16 @@ namespace TopiaForge.Mods.UnityUi
             MotionIntensity = motionIntensity;
         }
 
+        /// <summary>Gets whether high-contrast colors are active.</summary>
         public bool HighContrast { get; }
 
+        /// <summary>Gets UI scale.</summary>
         public float UiScale { get; }
 
+        /// <summary>Gets whether reduced motion is active.</summary>
         public bool ReducedMotion { get; }
 
+        /// <summary>Gets motion intensity.</summary>
         public float MotionIntensity { get; }
     }
 }

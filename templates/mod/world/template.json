@@ -7,12 +7,10 @@
     "category": "Content",
     "description": "Custom world for Robotopia.",
     "tags": ["world", "content", "custom-world"],
-    "permissions": ["asset-bundles", "world-service"],
-    "vpmDependencies": {
-      "io.github.furroxide.topiaforge.assets": ">=0.1.0",
-      "io.github.furroxide.topiaforge.worlds": ">=0.5.0"
+    "capabilities": ["asset-bundles", "world-service"],
+    "dependencies": {
+      "io.github.furroxide.topiaforge.worlds": ">=1.0.0 <2.0.0"
     },
-    "loadAfter": ["io.github.furroxide.topiaforge.assets", "io.github.furroxide.topiaforge.worlds"],
-    "supportedSdkVersionRange": ">=0.1.1 <0.2.0"
+    "loadAfter": ["io.github.furroxide.topiaforge.worlds"]
   }
 }

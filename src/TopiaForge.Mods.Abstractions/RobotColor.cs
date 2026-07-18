@@ -3,9 +3,8 @@ using System;
 namespace TopiaForge.Mods
 {
     /// <summary>
-    /// A Unity-free RGBA colour (each component 0..1) used by robot-agent visual overrides so the
-    /// abstractions assembly never references <c>UnityEngine</c>. Framework mods convert to and from
-    /// <c>UnityEngine.Color</c> on the implementation side.
+    /// An engine-independent RGBA colour (each component 0..1) used by robot-agent visual overrides.
+    /// Runtime providers perform any native conversion behind the safe contract boundary.
     /// </summary>
     /// <remarks>
     /// Mirrors the role <see cref="Vec3"/> plays for positions: allocation-free, fixed shape, and

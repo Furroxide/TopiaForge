@@ -110,8 +110,10 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Window body — add content here.</summary>
         public TopiaForgeContainer Content { get; }
 
+        /// <summary>Gets whether the window is open.</summary>
         public bool IsOpen => open;
 
+        /// <summary>Raised after the window closes.</summary>
         public event Action? Closed;
 
         TopiaForgeLayerBand ITopiaForgeDismissable.Band => TopiaForgeLayerBand.Window;
@@ -121,12 +123,14 @@ namespace TopiaForge.Mods.UnityUi
             Close();
         }
 
+        /// <summary>Sets the title.</summary>
         public void SetTitle(string title)
         {
             ThrowIfTornDown();
             titleLabel.text = title;
         }
 
+        /// <summary>Shows this UI element.</summary>
         public void Show()
         {
             ThrowIfTornDown();
@@ -146,6 +150,7 @@ namespace TopiaForge.Mods.UnityUi
             BringToFront();
         }
 
+        /// <summary>Closes this UI element.</summary>
         public void Close()
         {
             if (tornDown || !open || closing)
@@ -170,6 +175,7 @@ namespace TopiaForge.Mods.UnityUi
             });
         }
 
+        /// <summary>Toggles this UI element between open and closed.</summary>
         public void Toggle()
         {
             if (open)
@@ -182,6 +188,7 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
+        /// <summary>Moves this window to the front of its layer band.</summary>
         public void BringToFront()
         {
             if (tornDown)
@@ -243,6 +250,7 @@ namespace TopiaForge.Mods.UnityUi
             PersistRect();
         }
 
+        /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
             fill.color = theme.Surface;

@@ -1,5 +1,6 @@
 using System;
-using System.IO;
+using System.Text;
+using System.Threading.Tasks;
 using TopiaForge.Mods;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -12,99 +13,100 @@ namespace TopiaForge.UgcLiveSync
     /// <c>TopiaForge.Worlds.WorldsMod</c>'s lifecycle discipline: every handler subscribed in <see cref="OnLoad"/>
     /// is removed in <see cref="OnUnload"/> because C# assemblies never unload under Mono.
     /// </summary>
-    public sealed class UgcLiveSyncMod : ITopiaForgeMod
+    public sealed class UgcLiveSyncMod : TopiaForgeMod
     {
         private const float AutoConnectMaxWaitSeconds = 12f;
         private const float CommandPollIntervalSeconds = 0.35f;
+        private const string StatusFileName = "topiaforge.ugc.livesync.status.json";
+        private const string CommandFileName = "topiaforge.ugc.livesync.command.json";
+        private static readonly ConfigDefinition<UgcLiveSyncConfig> ConfigContract =
+            new ConfigDefinition<UgcLiveSyncConfig>(1, () => new UgcLiveSyncConfig());
 
-        private IModContext? context;
         private UgcLiveSyncConfig? config;
         private UgcLiveSyncService? service;
         private UgcLiveOverlay? overlay;
         private GameObject? overlayObject;
+        private IUgcSyncLease? autoConnectLease;
         private bool pendingAutoConnect;
         private float autoConnectWait;
         private readonly UgcCommandPollGate commandPoll = new UgcCommandPollGate(CommandPollIntervalSeconds);
 
-        // Status handshake the launcher/CLI reads (game → launcher). Rewritten on every status transition.
-        private string statusFilePath = string.Empty;
-        private string commandFilePath = string.Empty;
+        // Status handshake the launcher/CLI reads (game → launcher). The files are owner-scoped SDK data,
+        // so the provider never receives or exposes host filesystem paths.
         private UgcLiveSyncStatusFile? status;
         private UgcLiveSyncStatus lastWrittenStatus = UgcLiveSyncStatus.Idle;
         private string lastWrittenTarget = string.Empty;
+        private Task<OperationResult<string>>? commandRead;
+        private Task<OperationResult<bool>>? statusWrite;
+        private string? queuedStatusJson;
 
-        public void OnLoad(IModContext context)
+        protected override void OnLoad()
         {
-            this.context = context;
-            config = context.LoadConfig(new UgcLiveSyncConfig());
-            context.SaveConfig(config);
+            var loaded = Context.Config.Load(ConfigContract);
+            config = loaded.TryGetValue(out var value) ? value : new UgcLiveSyncConfig();
+            Context.Config.Save(ConfigContract, config);
 
-            var bridge = new UgcGameBridge(context.Logger);
-            service = new UgcLiveSyncService(bridge, context.Logger)
+            var bridge = new UgcGameBridge(Context.Logger);
+            service = new UgcLiveSyncService(bridge, Context.Logger)
             {
-                CurrentMaxBytes = config.MaxSnapshotBytes,
-                // Scene-transition arbitration: play-scene loads yield to a live world/gamemode session
-                // (an automatic connect defers and attaches when the play scene arrives on its own).
-                SceneCoordinator = context.GetService<ISceneCoordinator>(),
-                SceneOwnerId = context.ModId
+                CurrentMaxBytes = config.MaxSnapshotBytes
             };
 
-            statusFilePath = UgcLiveSyncStatusFile.PathForConfig(context.Paths.ConfigPath);
-            commandFilePath = UgcLiveSyncCommandFile.PathForConfig(context.Paths.ConfigPath);
             status = new UgcLiveSyncStatusFile
             {
                 DefaultWatchFolder = bridge.GetDefaultWatchFolder(),
                 Transport = config.UsesAutomerge ? "automerge" : "localFolder",
-                ModVersion = context.Version?.ToString() ?? string.Empty,
+                ModVersion = Context.Identity.Version.ToString(),
             };
             service.SnapshotImported += OnSnapshotApplied;
             service.PatchApplied += OnSnapshotApplied;
+            Context.Lifetime.Defer(() => service.SnapshotImported -= OnSnapshotApplied);
+            Context.Lifetime.Defer(() => service.PatchApplied -= OnSnapshotApplied);
+            Context.Lifetime.Track(service);
 
-            context.GetService<IModServiceRegistry>()?.Register<IUgcLiveSyncService>(context.ModId, service);
+            var registration = Context.Extensions.Register<IUgcLiveSyncService>(service);
+            if (!registration.Succeeded)
+            {
+                throw new InvalidOperationException(registration.ErrorMessage);
+            }
 
             overlayObject = new GameObject("TopiaForgeUgcLiveSync");
             UnityEngine.Object.DontDestroyOnLoad(overlayObject);
             overlay = overlayObject.AddComponent<UgcLiveOverlay>();
-            overlay.Initialize(service, config, context);
+            overlay.Initialize(service, config, Context);
+            Context.Lifetime.Defer(() =>
+            {
+                if (overlayObject != null)
+                {
+                    UnityEngine.Object.Destroy(overlayObject);
+                    overlayObject = null;
+                }
+            });
 
             pendingAutoConnect = config.AutoConnectOnStart;
             autoConnectWait = AutoConnectMaxWaitSeconds;
             commandPoll.Reset();
 
-            context.Update += OnUpdate;
-            context.SceneLoaded += OnSceneLoaded;
-            context.Logger.Info("TopiaForge UgcLiveSync loaded (transport '" + config.Transport + "', auto-connect " + config.AutoConnectOnStart + ").");
+            Context.Events.SubscribeUpdate(OnUpdate);
+            Context.Events.SubscribeSceneLoaded(OnSceneLoaded);
+            Context.Logger.Info("TopiaForge UgcLiveSync loaded (transport '" + config.Transport + "', auto-connect " + config.AutoConnectOnStart + ").");
 
             WriteStatus();
         }
 
-        public void OnUnload()
+        protected override void OnUnload()
         {
-            if (context != null)
-            {
-                context.Update -= OnUpdate;
-                context.SceneLoaded -= OnSceneLoaded;
-                context.GetService<IModServiceRegistry>()?.UnregisterOwner(context.ModId);
-            }
-
             if (service != null)
             {
-                service.SnapshotImported -= OnSnapshotApplied;
-                service.PatchApplied -= OnSnapshotApplied;
-                service.Dispose();
+                service.Stop();
                 WriteStatus(); // capture the final Stopped state for the launcher.
             }
 
-            if (overlayObject != null)
-            {
-                UnityEngine.Object.Destroy(overlayObject);
-            }
-
+            autoConnectLease?.Dispose();
+            autoConnectLease = null;
             overlay = null;
-            overlayObject = null;
             service = null;
             config = null;
-            context = null;
             pendingAutoConnect = false;
         }
 
@@ -112,9 +114,11 @@ namespace TopiaForge.UgcLiveSync
         {
             if (commandPoll.Tick(Time.unscaledDeltaTime))
             {
-                HandleCommandFile();
+                BeginCommandRead();
             }
 
+            CompleteCommandRead();
+            CompleteStatusWrite();
             service?.Pump(deltaTime);
             TickAutoConnect(deltaTime);
             MaybeWriteStatus();
@@ -161,14 +165,14 @@ namespace TopiaForge.UgcLiveSync
 
         private void WriteStatus()
         {
-            if (service == null || config == null || status == null || string.IsNullOrEmpty(statusFilePath))
+            if (service == null || config == null || status == null)
             {
                 return;
             }
 
             status.Status = service.Status.ToString();
             status.Transport = config.UsesAutomerge ? "automerge" : "localFolder";
-            status.ModVersion = context?.Version?.ToString() ?? status.ModVersion;
+            status.ModVersion = Context.Identity.Version.ToString();
             status.UpdatedUtc = DateTime.UtcNow.ToString("o", System.Globalization.CultureInfo.InvariantCulture);
 
             var session = service.CurrentSession ?? service.PendingSession;
@@ -189,59 +193,130 @@ namespace TopiaForge.UgcLiveSync
                 status.ClearLiveSession(clearHistory: false);
             }
 
-            try
-            {
-                status.WriteTo(statusFilePath);
-            }
-            catch (Exception ex)
-            {
-                context?.Logger.Debug("UGC live sync: could not write status file: " + ex.Message);
-            }
+            queuedStatusJson = status.ToJson();
+            StartStatusWrite();
 
             lastWrittenStatus = service.Status;
             lastWrittenTarget = session?.Target ?? string.Empty;
         }
 
-        private void HandleCommandFile()
+        private void StartStatusWrite()
         {
-            if (string.IsNullOrEmpty(commandFilePath) || !File.Exists(commandFilePath))
+            if (statusWrite != null || queuedStatusJson == null)
             {
+                return;
+            }
+
+            var json = queuedStatusJson;
+            queuedStatusJson = null;
+            statusWrite = Context.Files.WriteDataTextAsync(
+                StatusFileName,
+                json,
+                Context.Lifetime.StoppingToken);
+        }
+
+        private void CompleteStatusWrite()
+        {
+            if (statusWrite == null || !statusWrite.IsCompleted)
+            {
+                return;
+            }
+
+            OperationResult<bool>? result = null;
+            try
+            {
+                result = statusWrite.GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                Context.Logger.Debug("UGC live sync: status write failed: " + ex.Message);
+            }
+
+            statusWrite = null;
+            if (result != null && !result.Succeeded && result.ErrorCode != ModErrorCode.Cancelled)
+            {
+                Context.Logger.Debug("UGC live sync: status write failed: " + result.ErrorMessage);
+            }
+
+            StartStatusWrite();
+        }
+
+        private void BeginCommandRead()
+        {
+            if (commandRead != null || !Context.Files.DataFileExists(CommandFileName))
+            {
+                return;
+            }
+
+            commandRead = Context.Files.ReadDataTextAsync(
+                CommandFileName,
+                Context.Lifetime.StoppingToken);
+        }
+
+        private void CompleteCommandRead()
+        {
+            if (commandRead == null || !commandRead.IsCompleted)
+            {
+                return;
+            }
+
+            OperationResult<string> result;
+            try
+            {
+                result = commandRead.GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                commandRead = null;
+                Context.Logger.Warn("UGC live sync: could not read command file: " + ex.Message);
+                return;
+            }
+
+            commandRead = null;
+            if (!result.TryGetValue(out var json))
+            {
+                if (result.ErrorCode != ModErrorCode.NotFound && result.ErrorCode != ModErrorCode.Cancelled)
+                {
+                    Context.Logger.Warn("UGC live sync: could not read command file: " + result.ErrorMessage);
+                }
+
                 return;
             }
 
             UgcLiveSyncCommandFile command;
             try
             {
-                command = UgcLiveSyncCommandFile.ReadFrom(commandFilePath);
+                if (Encoding.UTF8.GetByteCount(json) > UgcLiveSyncCommandFile.MaxFileBytes)
+                {
+                    throw new InvalidOperationException(
+                        "Command exceeds " + UgcLiveSyncCommandFile.MaxFileBytes + " bytes.");
+                }
+
+                command = UgcLiveSyncCommandFile.FromJson(json);
             }
             catch (Exception ex)
             {
-                context?.Logger.Warn("UGC live sync: ignoring malformed command file: " + ex.Message);
+                Context.Logger.Warn("UGC live sync: ignoring malformed command file: " + ex.Message);
                 TryDeleteCommandFile();
                 return;
             }
 
             TryDeleteCommandFile();
-            if (command.SchemaVersion != UgcLiveSyncCommandFile.CurrentSchemaVersion)
-            {
-                context?.Logger.Warn("UGC live sync: unsupported command schema version "
-                    + command.SchemaVersion + ".");
-                return;
-            }
-
             if (!command.IsFresh(DateTime.UtcNow))
             {
-                context?.Logger.Warn("UGC live sync: ignored a stale or invalidly dated command file.");
+                Context.Logger.Warn("UGC live sync: ignored a stale or invalidly dated command file.");
                 return;
             }
 
             if (!command.IsStop)
             {
-                context?.Logger.Warn("UGC live sync: unknown command '" + command.Command + "'.");
+                Context.Logger.Warn("UGC live sync: unknown command '" + command.Command + "'.");
                 return;
             }
 
             pendingAutoConnect = false;
+            autoConnectLease?.Dispose();
+            autoConnectLease = null;
             service?.Stop();
             if (command.Cleanup)
             {
@@ -249,7 +324,7 @@ namespace TopiaForge.UgcLiveSync
                 status?.ClearLiveSession(clearHistory: true);
             }
 
-            context?.Logger.Info("UGC live sync command: stopped active session"
+            Context.Logger.Info("UGC live sync command: stopped active session"
                 + (command.Cleanup ? " and cleared live connection state." : "."));
             WriteStatus();
         }
@@ -271,24 +346,16 @@ namespace TopiaForge.UgcLiveSync
 
         private void TryDeleteCommandFile()
         {
-            try
-            {
-                if (!string.IsNullOrEmpty(commandFilePath) && File.Exists(commandFilePath))
-                {
-                    File.Delete(commandFilePath);
-                }
-            }
-            catch (Exception ex)
-            {
-                context?.Logger.Debug("UGC live sync: could not delete command file: " + ex.Message);
-            }
+            _ = Context.Files.DeleteDataFileAsync(
+                CommandFileName,
+                Context.Lifetime.StoppingToken);
         }
 
         // Holds the auto-connect until the menu scene is reached (a clean transition, not a race against boot),
         // with a timeout fallback. Mirrors WorldsMod.OnUpdate.
         private void TickAutoConnect(float deltaTime)
         {
-            if (!pendingAutoConnect || service == null || config == null || context == null)
+            if (!pendingAutoConnect || service == null || config == null)
             {
                 return;
             }
@@ -303,12 +370,10 @@ namespace TopiaForge.UgcLiveSync
 
             pendingAutoConnect = false;
 
-            // Automatic priority: this connect was not a direct user action, so a needed play-scene load
-            // yields to whoever holds the scene (e.g. the Worlds auto-launcher, which fires on this same
-            // "menu reached" trigger and runs earlier in the frame). The session still starts — it just
-            // defers the scene load and attaches when the UGC play scene arrives on its own.
+            // Mark this as an automatic launch so diagnostics and future scene-policy adapters can distinguish
+            // startup behavior from an explicit in-game action.
             var request = new UgcLiveSyncRequest(
-                SceneTransitionPriority.Automatic,
+                WorldLoadPriority.Automatic,
                 watchFolder: config.WatchFolder,
                 editorUrl: config.EditorUrl,
                 documentUrl: config.DocumentUrl,
@@ -320,13 +385,15 @@ namespace TopiaForge.UgcLiveSync
                 ? service.StartAutomergeSession(request)
                 : service.StartLocalSession(request);
 
-            if (result.Ok)
+            if (result.TryGetValue(out var lease))
             {
-                context.Logger.Info("UGC live sync auto-connect: " + result.Message);
+                autoConnectLease?.Dispose();
+                autoConnectLease = lease;
+                Context.Logger.Info("UGC live sync auto-connect requested for '" + lease.Session.Target + "'.");
             }
             else
             {
-                context.Logger.Warn("UGC live sync auto-connect failed: " + result.Message);
+                Context.Logger.Warn("UGC live sync auto-connect failed: " + result.ErrorMessage);
             }
         }
     }

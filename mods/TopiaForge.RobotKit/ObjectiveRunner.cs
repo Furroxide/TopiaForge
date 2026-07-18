@@ -28,7 +28,7 @@ namespace TopiaForge.RobotKit
         private readonly Func<string, RobotTargetSnapshot?> resolveTarget;
         private readonly Func<float> now;
         private readonly Func<float> random01;                       // [0,1) — wander legs, flee escape angles
-        private readonly Func<object, IRobotAgent?>? resolveAgent;   // live object -> agent, for Reprogram delivery
+        private readonly Func<IEntity, IRobotAgent?>? resolveAgent; // live entity -> agent, for Reprogram delivery
         private readonly Action<IRobotAgent, RobotObjective>? deliver; // (recipient, payload); service closes over the sender
         private readonly Action<Exception>? reportFailure;
 
@@ -37,7 +37,7 @@ namespace TopiaForge.RobotKit
         private IReadOnlyList<Vec3>? route;      // materialised patrol route (PatrolTo resolves lazily)
         private Vec3 lastIssuedGoal;
         private bool goalIssued;
-        private object? chasing;                 // the live object a Follow is natively tracking
+        private IEntity? chasing;                // the live entity a Follow is natively tracking
         private float nextResolveAt;
         private float dwellUntil;
         private Vec3? wanderHome;                // materialised wander home (set-time position or last named resolve)
@@ -50,7 +50,7 @@ namespace TopiaForge.RobotKit
             Func<string, RobotTargetSnapshot?> resolveTarget,
             Func<float> now,
             Func<float>? random01 = null,
-            Func<object, IRobotAgent?>? resolveAgent = null,
+            Func<IEntity, IRobotAgent?>? resolveAgent = null,
             Action<IRobotAgent, RobotObjective>? deliver = null,
             Action<Exception>? reportFailure = null)
         {
@@ -70,6 +70,8 @@ namespace TopiaForge.RobotKit
         public RobotObjectiveState State => state;
 
         public int WaypointIndex => waypointIndex;
+
+        public bool IsActive => state != RobotObjectiveState.Cancelled;
 
         public bool IsCancelled => state == RobotObjectiveState.Cancelled;
 
@@ -102,6 +104,8 @@ namespace TopiaForge.RobotKit
                 }
             }
         }
+
+        public void Dispose() => Cancel();
 
         // Advance the objective one tick. Cheap; issues a movement intent only when something changed.
         public void Step()
@@ -408,7 +412,7 @@ namespace TopiaForge.RobotKit
 
             deliverAttemptAt = now() + ReResolveSeconds;
             var snapshot = resolveTarget(name!);
-            var live = snapshot?.GameObject;
+            var live = snapshot?.Entity;
             var recipient = live != null ? resolveAgent(live) : null;
             if (recipient == null || !recipient.IsAlive)
             {
@@ -514,7 +518,7 @@ namespace TopiaForge.RobotKit
 
         // The objective's current goal position: a fixed point immediately, a named target via the registry with
         // periodic re-resolution. False parks the robot in TargetMissing (and Stops it once) until a retry succeeds.
-        private bool TryCurrentTargetPosition(out Vec3 position, out object? liveObject)
+        private bool TryCurrentTargetPosition(out Vec3 position, out IEntity? liveObject)
         {
             liveObject = null;
             if (Objective.TargetPoint != null)
@@ -563,7 +567,7 @@ namespace TopiaForge.RobotKit
             }
 
             position = snapshot.Value.Position;
-            liveObject = snapshot.Value.GameObject;
+            liveObject = snapshot.Value.Entity;
             return true;
         }
 
@@ -591,8 +595,11 @@ namespace TopiaForge.RobotKit
 
         private void ApplyGait()
         {
-            agent.StopDistance = Objective.ArriveDistance;
-            agent.Gait = Objective.Gait;
+            agent.ConfigureMovement(new RobotMovementSettings(
+                Objective.Gait,
+                agent.MoveSpeed,
+                agent.TurnSpeed,
+                Objective.ArriveDistance));
         }
 
         private bool MovedBeyondSlack(Vec3 current, Vec3 issued)

@@ -117,6 +117,7 @@ namespace TopiaForge.Mods.UnityUi
             ApplyTheme(Theme);
         }
 
+        /// <summary>Sets this element's semantic color tone.</summary>
         public TopiaForgeBanner Tone(TopiaForgeTone value)
         {
             SetTone(value);
@@ -156,12 +157,14 @@ namespace TopiaForge.Mods.UnityUi
             TopiaForgeMotion.Punch(this);
         }
 
+        /// <summary>Hides this element without playing an exit animation.</summary>
         public void HideImmediate()
         {
             shownAt = -999f;
             Go.SetActive(false);
         }
 
+        /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
             var color = hasCustomColor ? theme.Emphasize(customColor) : theme.ToneColor(tone);

@@ -20,7 +20,9 @@ namespace TopiaForge.ModManager.Tests
 
             var coreAssembly = typeof(ModManifest).Assembly.Location;
             var definition = AssemblyName.GetAssemblyName(coreAssembly);
-            var providerAssembly = Path.Combine(provider.PackagePath, definition.Name + ".dll");
+            provider.Manifest.ApiAssemblies.Add("ref/" + definition.Name + ".dll");
+            var providerAssembly = Path.Combine(provider.PackagePath, "ref", definition.Name + ".dll");
+            Directory.CreateDirectory(Path.GetDirectoryName(providerAssembly)!);
             File.Copy(coreAssembly, providerAssembly);
 
             var catalog = new ModAssemblyResolutionCatalog(
@@ -55,6 +57,25 @@ namespace TopiaForge.ModManager.Tests
 
             Assert(mismatchRejected, "same-name/different-version assembly must not be silently unified");
 
+            provider.Manifest.ApiAssemblies.Clear();
+            var privateCatalog = new ModAssemblyResolutionCatalog(
+                new[] { provider, consumer, unrelated },
+                pluginDirectory: string.Empty);
+            Assert(privateCatalog.FindCandidate(consumer.Manifest.Id, definition) == null,
+                "a dependency's private DLL must not be visible unless apiAssemblies exports it");
+            provider.Manifest.ApiAssemblies.Add("ref/" + definition.Name + ".dll");
+
+            var incompatibleOptionalConsumer = Package(testRoot, "catalog.optional-incompatible");
+            incompatibleOptionalConsumer.Manifest!.OptionalDependencies.Add(provider.Manifest.Id, ">=2.0.0 <3.0.0");
+            Directory.CreateDirectory(incompatibleOptionalConsumer.PackagePath);
+            var optionalCatalog = new ModAssemblyResolutionCatalog(
+                new[] { provider, incompatibleOptionalConsumer },
+                pluginDirectory: string.Empty);
+            Assert(!optionalCatalog.IsOwnerVisible(incompatibleOptionalConsumer.Manifest.Id, provider.Manifest.Id),
+                "an optional provider outside its declared SemVer range must not be visible");
+            Assert(optionalCatalog.FindCandidate(incompatibleOptionalConsumer.Manifest.Id, definition) == null,
+                "an incompatible optional provider's apiAssemblies must not enter the consumer resolution scope");
+
             // A consumer bundling different bytes under the same requested filename would make resolution order
             // process-dependent. Preflight must reject it before any mod executes.
             File.Copy(typeof(ModAssemblyResolutionCatalogTests).Assembly.Location,
@@ -69,7 +90,7 @@ namespace TopiaForge.ModManager.Tests
         {
             var manifest = new ModManifest
             {
-                SchemaVersion = 3,
+                SchemaVersion = 4,
                 Id = id,
                 Name = id,
                 Version = "1.0.0",
@@ -79,7 +100,7 @@ namespace TopiaForge.ModManager.Tests
             };
             if (dependency != null)
             {
-                manifest.Dependencies.Add(new ModDependency { Id = dependency });
+                manifest.Dependencies.Add(dependency, "*");
             }
 
             var state = new ManagerState();

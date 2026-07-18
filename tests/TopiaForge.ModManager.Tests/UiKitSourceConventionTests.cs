@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -17,6 +18,7 @@ namespace TopiaForge.ModManager.Tests
             ComponentLookupHonorsUnityNullSemantics();
             CanvasSortingUsesAllocator();
             ProcessWideUiStateHasShutdownPath();
+            UnityUiReferencesStayInternal();
             FirstPartyModsDoNotConstructRawUnityUi();
             FirstPartyModsDoNotMutateGlobalTheme();
             UiKitFilesStayReviewable();
@@ -161,6 +163,52 @@ namespace TopiaForge.ModManager.Tests
             if (!source.Contains(expected, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(message);
+            }
+        }
+
+        private static void UnityUiReferencesStayInternal()
+        {
+            var repositoryRoot = Program.FindRepoRoot();
+            var expected = new HashSet<string>(new[]
+            {
+                "mods/TopiaForge.UgcLiveSync/TopiaForge.UgcLiveSync.csproj",
+                "mods/TopiaForge.UiGallery/TopiaForge.UiGallery.csproj",
+                "mods/TopiaForge.Worlds/TopiaForge.Worlds.csproj",
+                "src/TopiaForge.ModManager/TopiaForge.ModManager.csproj"
+            }, StringComparer.Ordinal);
+            var unityUiReference = new Regex(
+                @"<(?:Project|Package)Reference\b[^>]*\bInclude\s*=\s*""[^""]*TopiaForge\.Mods\.UnityUi(?:\.csproj)?""",
+                RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+            var actual = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var project in Directory.EnumerateFiles(
+                         repositoryRoot,
+                         "*.csproj",
+                         SearchOption.AllDirectories))
+            {
+                if (IsBuildOutput(project) || !unityUiReference.IsMatch(File.ReadAllText(project)))
+                {
+                    continue;
+                }
+
+                actual.Add(Path.GetRelativePath(repositoryRoot, project).Replace('\\', '/'));
+            }
+
+            if (!actual.SetEquals(expected))
+            {
+                throw new InvalidOperationException(
+                    "UnityUi references must remain restricted to loader-owned providers and the QA gallery. " +
+                    "Expected: " + string.Join(", ", expected.OrderBy(value => value, StringComparer.Ordinal)) +
+                    "; actual: " + string.Join(", ", actual.OrderBy(value => value, StringComparer.Ordinal)) + ".");
+            }
+
+            foreach (var relative in actual)
+            {
+                var project = File.ReadAllText(Path.Combine(repositoryRoot, relative));
+                RequireSource(
+                    project,
+                    "<TopiaForgeSafeProject>false</TopiaForgeSafeProject>",
+                    relative + " must explicitly opt out of safe-mod analysis as an internal provider project.");
             }
         }
 

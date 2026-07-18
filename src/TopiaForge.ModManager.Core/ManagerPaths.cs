@@ -19,6 +19,8 @@ namespace TopiaForge.ModManager.Core
             Logs = Path.Combine(Root, "logs");
             Staging = Path.Combine(Root, "staging");
             StateFile = Path.Combine(Root, "state.json");
+            StartupJournalFile = Path.Combine(Root, "startup-journal.json");
+            LastRunFile = Path.Combine(Logs, "last-run.json");
             ManagerLogFile = Path.Combine(Logs, "manager.log");
         }
 
@@ -31,6 +33,8 @@ namespace TopiaForge.ModManager.Core
         public string Logs { get; }
         public string Staging { get; }
         public string StateFile { get; }
+        public string StartupJournalFile { get; }
+        public string LastRunFile { get; }
         public string ManagerLogFile { get; }
 
         public void EnsureCreated()

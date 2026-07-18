@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 
 namespace TopiaForge.Mods
 {
@@ -14,7 +15,8 @@ namespace TopiaForge.Mods
     /// </summary>
     /// <remarks>
     /// Published by the <c>TopiaForge.RobotKit</c> framework mod and resolved with
-    /// <c>context.GetService&lt;IRobotObjectiveService&gt;()</c>, exactly like <see cref="IRobotAgentService"/>.
+    /// <c>context.RequireExtension&lt;IRobotObjectiveService&gt;()</c>, exactly like
+    /// <see cref="IRobotAgentService"/>.
     /// <para>
     /// Everything is poll-based and degrades gracefully: setting an objective returns a handle whose
     /// <see cref="IRobotObjectiveHandle.State"/> reports progress; a named target that currently resolves to nothing
@@ -29,15 +31,15 @@ namespace TopiaForge.Mods
         bool IsAvailable { get; }
 
         /// <summary>
-        /// Registers (or replaces) a named target the objective vocabulary can reference. Names are matched
+        /// Registers a named target the objective vocabulary can reference. Names are matched
         /// case-insensitively and normalised to upper case. The resolver is invoked on the service tick whenever an
         /// objective needs the target's current whereabouts; return <c>null</c> to say the target is currently
         /// missing (despawned, not yet loaded) — objectives then wait rather than fail.
         /// </summary>
-        void RegisterTarget(string name, RobotTargetKind kind, Func<RobotTargetSnapshot?> resolve);
-
-        /// <summary>Removes a named target. Objectives referencing it park in <see cref="RobotObjectiveState.TargetMissing"/>.</summary>
-        void UnregisterTarget(string name);
+        OperationResult<IRobotTargetRegistration> RegisterTarget(
+            string name,
+            RobotTargetKind kind,
+            Func<RobotTargetSnapshot?> resolve);
 
         /// <summary>All currently registered target names (upper-cased) — the closed set to offer an LLM brain.</summary>
         IReadOnlyList<string> TargetNames { get; }
@@ -53,15 +55,15 @@ namespace TopiaForge.Mods
 
         /// <summary>
         /// Programs the robot from a clean slate: any existing objective on the agent is cancelled and replaced.
-        /// Returns the handle for the new objective (also readable later via <see cref="GetObjective"/>).
+        /// Returns the handle for the new objective (also readable later via <see cref="TryGetObjective"/>).
         /// </summary>
-        IRobotObjectiveHandle SetObjective(IRobotAgent agent, RobotObjective objective);
+        OperationResult<IRobotObjectiveHandle> SetObjective(IRobotAgent agent, RobotObjective objective);
 
-        /// <summary>The agent's current objective handle, or <c>null</c> when it has none.</summary>
-        IRobotObjectiveHandle? GetObjective(IRobotAgent agent);
+        /// <summary>Tries to get the agent's current objective handle.</summary>
+        bool TryGetObjective(IRobotAgent agent, out IRobotObjectiveHandle? objective);
 
         /// <summary>Removes the agent's objective (if any) and stops it, leaving it idling natively.</summary>
-        void ClearObjective(IRobotAgent agent);
+        OperationResult<bool> ClearObjective(IRobotAgent agent);
 
         /// <summary>
         /// Raised on the service tick when a <see cref="RobotObjectiveKind.Reprogram"/> courier hands its payload to
@@ -69,6 +71,19 @@ namespace TopiaForge.Mods
         /// subscribers are reacting (toasts, emotes), not deciding. Subscriber exceptions are swallowed and logged.
         /// </summary>
         event Action<RobotProgramDelivery>? ProgramDelivered;
+    }
+
+    /// <summary>A lifetime-owned named target registration.</summary>
+    public interface IRobotTargetRegistration : IDisposable
+    {
+        /// <summary>Gets the normalized target name.</summary>
+        string Name { get; }
+
+        /// <summary>Gets the target category exposed to objective authors.</summary>
+        RobotTargetKind Kind { get; }
+
+        /// <summary>Gets whether this registration remains authoritative.</summary>
+        bool IsActive { get; }
     }
 
     /// <summary>What a <see cref="IRobotObjectiveService.ProgramDelivered"/> hand-over was: who couriered what to whom.</summary>
@@ -93,26 +108,26 @@ namespace TopiaForge.Mods
     }
 
     /// <summary>
-    /// What a registered named target resolves to <i>right now</i>. A non-null <see cref="GameObject"/> means the
-    /// target is a live scene object a robot can natively track (<see cref="IRobotAgent.Chase"/>); otherwise only
+    /// What a registered named target resolves to <i>right now</i>. A non-null <see cref="Entity"/> means the
+    /// target is a live scene entity a robot can natively track (<see cref="IRobotAgent.Chase"/>); otherwise only
     /// the <see cref="Position"/> is meaningful.
     /// </summary>
     public readonly struct RobotTargetSnapshot
     {
         /// <summary>Creates a snapshot of a target's current whereabouts.</summary>
         /// <param name="position">The target's current world position.</param>
-        /// <param name="gameObject">The live <c>UnityEngine.GameObject</c> (as <see cref="object"/>, SDK stays Unity-free), or <c>null</c> for a plain point.</param>
-        public RobotTargetSnapshot(Vec3 position, object? gameObject = null)
+        /// <param name="entity">The live SDK entity, or <c>null</c> for a plain point.</param>
+        public RobotTargetSnapshot(Vec3 position, IEntity? entity = null)
         {
             Position = position;
-            GameObject = gameObject;
+            Entity = entity;
         }
 
         /// <summary>The target's current world position.</summary>
         public Vec3 Position { get; }
 
-        /// <summary>The live scene object when the target is chaseable; <c>null</c> for a plain point.</summary>
-        public object? GameObject { get; }
+        /// <summary>The live scene entity when the target is chaseable; <c>null</c> for a plain point.</summary>
+        public IEntity? Entity { get; }
     }
 
     /// <summary>What kind of world thing a registered target is — used to describe targets to an LLM brain.</summary>
@@ -189,13 +204,22 @@ namespace TopiaForge.Mods
     public sealed class RobotObjective
     {
         private RobotObjective(RobotObjectiveKind kind, string? targetName, Vec3? targetPoint, IReadOnlyList<Vec3>? waypoints,
-            RobotObjective? payload = null)
+            RobotObjective? payload = null,
+            RobotObjectiveOptions? options = null)
         {
+            var tuning = options ?? RobotObjectiveOptions.Default;
             Kind = kind;
             TargetName = targetName;
             TargetPoint = targetPoint;
-            Waypoints = waypoints;
+            Waypoints = waypoints == null
+                ? null
+                : new ReadOnlyCollection<Vec3>(new List<Vec3>(waypoints));
             Payload = payload;
+            ArriveDistance = tuning.ArriveDistance;
+            DwellSeconds = tuning.DwellSeconds;
+            Gait = tuning.Gait;
+            WanderRadius = tuning.WanderRadius;
+            FleeDistance = tuning.FleeDistance;
         }
 
         /// <summary>The behaviour family.</summary>
@@ -214,84 +238,89 @@ namespace TopiaForge.Mods
         public RobotObjective? Payload { get; }
 
         /// <summary>How close (metres) to the current goal counts as arrived. Applied as the agent's <see cref="IRobotAgent.StopDistance"/>.</summary>
-        public float ArriveDistance { get; set; } = 1.5f;
+        public float ArriveDistance { get; }
 
         /// <summary>How long (seconds) a patrolling robot pauses at each waypoint before moving on.</summary>
-        public float DwellSeconds { get; set; } = 1.0f;
+        public float DwellSeconds { get; }
 
         /// <summary>The native speed tier the robot moves at while executing this objective.</summary>
-        public RobotGait Gait { get; set; } = RobotGait.Run;
+        public RobotGait Gait { get; }
 
         /// <summary>How far (metres) a wandering robot roams from its home spot.</summary>
-        public float WanderRadius { get; set; } = 8f;
+        public float WanderRadius { get; }
 
         /// <summary>How close (metres) a fled-from target may come before the robot hops away again.</summary>
-        public float FleeDistance { get; set; } = 8f;
+        public float FleeDistance { get; }
 
         /// <summary>Stand down and idle.</summary>
-        public static RobotObjective Idle()
+        public static RobotObjective Idle(RobotObjectiveOptions? options = null)
         {
-            return new RobotObjective(RobotObjectiveKind.Idle, null, null, null);
+            return new RobotObjective(RobotObjectiveKind.Idle, null, null, null, options: options);
         }
 
         /// <summary>Walk to the named target once and stay there (re-walks if the target moves away).</summary>
-        public static RobotObjective GoTo(string targetName)
+        public static RobotObjective GoTo(string targetName, RobotObjectiveOptions? options = null)
         {
-            return new RobotObjective(RobotObjectiveKind.GoTo, targetName ?? string.Empty, null, null);
+            return new RobotObjective(RobotObjectiveKind.GoTo, targetName ?? string.Empty, null, null, options: options);
         }
 
         /// <summary>Walk to a fixed world point once and stay there.</summary>
-        public static RobotObjective GoTo(Vec3 point)
+        public static RobotObjective GoTo(Vec3 point, RobotObjectiveOptions? options = null)
         {
-            return new RobotObjective(RobotObjectiveKind.GoTo, null, point, null);
+            return new RobotObjective(RobotObjectiveKind.GoTo, null, point, null, options: options);
         }
 
-        /// <summary>Continuously pursue the named target (natively when it is a live object). Never completes.</summary>
-        public static RobotObjective Follow(string targetName)
+        /// <summary>Continuously pursue the named target (natively when it is a live entity). Never completes.</summary>
+        public static RobotObjective Follow(string targetName, RobotObjectiveOptions? options = null)
         {
-            return new RobotObjective(RobotObjectiveKind.Follow, targetName ?? string.Empty, null, null);
+            return new RobotObjective(RobotObjectiveKind.Follow, targetName ?? string.Empty, null, null, options: options);
         }
 
         /// <summary>Loop over an explicit route of two or more points forever.</summary>
-        public static RobotObjective Patrol(IReadOnlyList<Vec3> waypoints)
+        public static RobotObjective Patrol(IReadOnlyList<Vec3> waypoints, RobotObjectiveOptions? options = null)
         {
-            return new RobotObjective(RobotObjectiveKind.Patrol, null, null, waypoints ?? Array.Empty<Vec3>());
+            return new RobotObjective(
+                RobotObjectiveKind.Patrol,
+                null,
+                null,
+                waypoints ?? Array.Empty<Vec3>(),
+                options: options);
         }
 
         /// <summary>
         /// Patrol between wherever the robot is when the objective is set and the named target — the one-target
         /// patrol shape an LLM can request with a single closed-set field.
         /// </summary>
-        public static RobotObjective PatrolTo(string targetName)
+        public static RobotObjective PatrolTo(string targetName, RobotObjectiveOptions? options = null)
         {
-            return new RobotObjective(RobotObjectiveKind.Patrol, targetName ?? string.Empty, null, null);
+            return new RobotObjective(RobotObjectiveKind.Patrol, targetName ?? string.Empty, null, null, options: options);
         }
 
         /// <summary>Roam around wherever the robot is when the objective is set, dwelling between random legs.</summary>
-        public static RobotObjective Wander()
+        public static RobotObjective Wander(RobotObjectiveOptions? options = null)
         {
-            return new RobotObjective(RobotObjectiveKind.Wander, null, null, null);
+            return new RobotObjective(RobotObjectiveKind.Wander, null, null, null, options: options);
         }
 
         /// <summary>Roam around the named target — the home drifts with it as it moves (re-resolved like Follow).</summary>
-        public static RobotObjective Wander(string targetName)
+        public static RobotObjective Wander(string targetName, RobotObjectiveOptions? options = null)
         {
-            return new RobotObjective(RobotObjectiveKind.Wander, targetName ?? string.Empty, null, null);
+            return new RobotObjective(RobotObjectiveKind.Wander, targetName ?? string.Empty, null, null, options: options);
         }
 
         /// <summary>Roam around a fixed world point.</summary>
-        public static RobotObjective Wander(Vec3 home)
+        public static RobotObjective Wander(Vec3 home, RobotObjectiveOptions? options = null)
         {
-            return new RobotObjective(RobotObjectiveKind.Wander, null, home, null);
+            return new RobotObjective(RobotObjectiveKind.Wander, null, home, null, options: options);
         }
 
         /// <summary>
         /// Keep away from the named target: whenever it comes within <see cref="FleeDistance"/>, hop directly away,
         /// re-evaluating as it moves. <see cref="RobotObjectiveState.Arrived"/> means "currently at a safe distance".
         /// </summary>
-        public static RobotObjective Flee(string targetName)
+        public static RobotObjective Flee(string targetName, RobotObjectiveOptions? options = null)
         {
-            return new RobotObjective(RobotObjectiveKind.Flee, targetName ?? string.Empty, null, null);
+            return new RobotObjective(RobotObjectiveKind.Flee, targetName ?? string.Empty, null, null, options: options);
         }
 
         /// <summary>
@@ -302,7 +331,10 @@ namespace TopiaForge.Mods
         /// <see cref="IRobotObjectiveService.ProgramDelivered"/>. The payload cannot itself be a Reprogram —
         /// couriers deliver programs, not chain letters.
         /// </summary>
-        public static RobotObjective Reprogram(string targetRobotName, RobotObjective payload)
+        public static RobotObjective Reprogram(
+            string targetRobotName,
+            RobotObjective payload,
+            RobotObjectiveOptions? options = null)
         {
             if (payload == null)
             {
@@ -314,7 +346,13 @@ namespace TopiaForge.Mods
                 throw new ArgumentException("A reprogram payload cannot itself be a Reprogram.", nameof(payload));
             }
 
-            return new RobotObjective(RobotObjectiveKind.Reprogram, targetRobotName ?? string.Empty, null, null, payload);
+            return new RobotObjective(
+                RobotObjectiveKind.Reprogram,
+                targetRobotName ?? string.Empty,
+                null,
+                null,
+                payload,
+                options);
         }
 
         /// <summary>A short human-readable description (e.g. <c>"FOLLOW PLAYER"</c>) for HUD badges and ground-truth facts.</summary>
@@ -336,6 +374,75 @@ namespace TopiaForge.Mods
                     return "REPROGRAM " + (TargetName ?? "ROBOT") + ": " + (Payload?.Describe() ?? "IDLE");
                 default:
                     return "IDLE";
+            }
+        }
+    }
+
+    /// <summary>Immutable movement and timing tuning copied into a <see cref="RobotObjective"/>.</summary>
+    public sealed class RobotObjectiveOptions
+    {
+        private static readonly RobotObjectiveOptions DefaultValue = new RobotObjectiveOptions();
+
+        /// <summary>Creates validated objective tuning.</summary>
+        /// <param name="arriveDistance">Distance in metres that counts as arrival.</param>
+        /// <param name="dwellSeconds">Pause duration at patrol and wander destinations.</param>
+        /// <param name="gait">Native locomotion gait used while executing the objective.</param>
+        /// <param name="wanderRadius">Maximum wander radius in metres.</param>
+        /// <param name="fleeDistance">Distance in metres a fleeing robot tries to maintain.</param>
+        public RobotObjectiveOptions(
+            float arriveDistance = 1.5f,
+            float dwellSeconds = 1f,
+            RobotGait gait = RobotGait.Run,
+            float wanderRadius = 8f,
+            float fleeDistance = 8f)
+        {
+            RequireFiniteNonNegative(arriveDistance, nameof(arriveDistance));
+            RequireFiniteNonNegative(dwellSeconds, nameof(dwellSeconds));
+            RequireFinitePositive(wanderRadius, nameof(wanderRadius));
+            RequireFinitePositive(fleeDistance, nameof(fleeDistance));
+            if (!Enum.IsDefined(typeof(RobotGait), gait))
+            {
+                throw new ArgumentOutOfRangeException(nameof(gait));
+            }
+
+            ArriveDistance = arriveDistance;
+            DwellSeconds = dwellSeconds;
+            Gait = gait;
+            WanderRadius = wanderRadius;
+            FleeDistance = fleeDistance;
+        }
+
+        /// <summary>Gets the shared default tuning.</summary>
+        public static RobotObjectiveOptions Default => DefaultValue;
+
+        /// <summary>Gets the distance in metres that counts as arrival.</summary>
+        public float ArriveDistance { get; }
+
+        /// <summary>Gets the pause duration at patrol and wander destinations.</summary>
+        public float DwellSeconds { get; }
+
+        /// <summary>Gets the native locomotion gait.</summary>
+        public RobotGait Gait { get; }
+
+        /// <summary>Gets the maximum wander radius in metres.</summary>
+        public float WanderRadius { get; }
+
+        /// <summary>Gets the distance in metres a fleeing robot tries to maintain.</summary>
+        public float FleeDistance { get; }
+
+        private static void RequireFiniteNonNegative(float value, string parameter)
+        {
+            if (value < 0f || float.IsNaN(value) || float.IsInfinity(value))
+            {
+                throw new ArgumentOutOfRangeException(parameter);
+            }
+        }
+
+        private static void RequireFinitePositive(float value, string parameter)
+        {
+            if (value <= 0f || float.IsNaN(value) || float.IsInfinity(value))
+            {
+                throw new ArgumentOutOfRangeException(parameter);
             }
         }
     }
@@ -366,10 +473,10 @@ namespace TopiaForge.Mods
     }
 
     /// <summary>
-    /// A live objective handle. Read-only view of the program and its progress; <see cref="Cancel"/> stops it (the
-    /// robot idles). Safe to keep polling after cancellation; never throws.
+    /// A live objective handle. Read-only view of the program and its progress; disposal stops it and idles the
+    /// robot. Safe to keep polling after disposal; never throws.
     /// </summary>
-    public interface IRobotObjectiveHandle
+    public interface IRobotObjectiveHandle : IDisposable
     {
         /// <summary>The program being executed.</summary>
         RobotObjective Objective { get; }
@@ -380,7 +487,7 @@ namespace TopiaForge.Mods
         /// <summary>The index of the waypoint a patrol is currently heading to (0 for non-patrol objectives).</summary>
         int WaypointIndex { get; }
 
-        /// <summary>Stops the objective and idles the robot. Idempotent.</summary>
-        void Cancel();
+        /// <summary>Gets whether this objective remains active.</summary>
+        bool IsActive { get; }
     }
 }

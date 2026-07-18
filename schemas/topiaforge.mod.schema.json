@@ -1,24 +1,10 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
-  "title": "TopiaForge Mod Manifest",
+  "title": "TopiaForge Mod Manifest V4",
+  "description": "Canonical manifest contract for trusted, in-process TopiaForge mods. Capabilities are disclosure metadata, not a security sandbox.",
   "type": "object",
-  "additionalProperties": true,
-  "not": {
-    "anyOf": [
-      { "required": ["id"] },
-      { "required": ["title"] },
-      { "required": ["gameVersion"] },
-      { "required": ["gameVersionRange"] },
-      { "required": ["loaderVersionRange"] },
-      { "required": ["sdkVersionRange"] },
-      { "required": ["packageHashes"] },
-      { "required": ["gamemodes"] },
-      { "required": ["legacyFolders"] },
-      { "required": ["legacyFiles"] },
-      { "required": ["legacyPackages"] }
-    ]
-  },
+  "maxProperties": 64,
   "required": [
     "schemaVersion",
     "name",
@@ -26,150 +12,200 @@
     "version",
     "author",
     "entryAssembly",
-    "entryType"
+    "entryType",
+    "supportedGameVersionRange",
+    "supportedLoaderVersionRange",
+    "supportedSdkVersionRange"
   ],
   "properties": {
-    "$schema": { "type": "string" },
-    "schemaVersion": { "const": 3 },
-    "name": {
-      "type": "string",
-      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$"
-    },
-    "displayName": { "type": "string", "minLength": 1 },
-    "version": {
-      "type": "string",
-      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
-    },
+    "$schema": { "type": "string", "maxLength": 512 },
+    "schemaVersion": { "const": 4 },
+    "name": { "$ref": "#/definitions/modId" },
+    "displayName": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "version": { "$ref": "#/definitions/semver" },
     "author": {
       "type": "object",
       "required": ["name"],
-      "additionalProperties": true,
+      "additionalProperties": false,
       "properties": {
-        "name": { "type": "string", "minLength": 1 },
-        "email": { "type": "string" },
-        "url": { "type": "string" }
+        "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 254 },
+        "url": { "type": "string", "maxLength": 2048 }
       }
     },
-    "description": { "type": "string" },
+    "description": { "type": "string", "maxLength": 4096 },
+    "entryAssembly": { "$ref": "#/definitions/dllPath" },
+    "entryType": { "type": "string", "minLength": 1, "maxLength": 512 },
+    "dependencies": { "$ref": "#/definitions/dependencyMap" },
+    "optionalDependencies": { "$ref": "#/definitions/dependencyMap" },
+    "conflicts": {
+      "type": "array",
+      "maxItems": 128,
+      "items": { "$ref": "#/definitions/conflict" }
+    },
+    "loadAfter": { "$ref": "#/definitions/orderHints" },
+    "loadBefore": { "$ref": "#/definitions/orderHints" },
+    "supportedGameVersionRange": { "$ref": "#/definitions/versionRange" },
+    "supportedLoaderVersionRange": { "$ref": "#/definitions/versionRange" },
+    "supportedSdkVersionRange": { "$ref": "#/definitions/versionRange" },
+    "category": { "type": "string", "maxLength": 64 },
+    "tags": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+    },
+    "icon": { "$ref": "#/definitions/portablePath" },
+    "screenshots": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": { "$ref": "#/definitions/portablePath" }
+    },
+    "homepage": { "type": "string", "maxLength": 2048 },
+    "source": { "type": "string", "maxLength": 2048 },
     "license": {
       "type": "string",
       "minLength": 1,
-      "description": "SPDX license expression. Public registry submissions must use a concrete expression; placeholders such as Unspecified and NOASSERTION are rejected at publication time."
+      "maxLength": 256,
+      "description": "SPDX license expression. Public registry submissions must use a concrete expression."
     },
     "licenseFiles": {
       "type": "array",
       "minItems": 1,
       "maxItems": 32,
       "uniqueItems": true,
-      "description": "Package-relative license or notice files that accompany the declared SPDX expression.",
-      "items": {
-        "type": "string",
-        "minLength": 1,
-        "maxLength": 240,
-        "pattern": "^(?!/)(?!.*\\\\)(?!.*:)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*[. ](?:/|$))[^\\u0000-\\u001F]+$"
-      }
+      "items": { "$ref": "#/definitions/portablePath" }
     },
-    "entryAssembly": {
-      "type": "string",
-      "minLength": 1,
-      "pattern": "^(?!/)(?!.*\\\\)(?!.*:)(?!.*[\\u0000-\\u001F])(?!.*(?:^|/)(?:\\.{1,2}|[Cc][Oo][Nn]|[Pp][Rr][Nn]|[Aa][Uu][Xx]|[Nn][Uu][Ll]|[Cc][Oo][Mm][1-9]|[Ll][Pp][Tt][1-9])(?:\\.|/|$))(?!.*[. ](?:/|$))(?!.*//).+$"
-    },
-    "entryType": { "type": "string", "minLength": 1 },
-    "vpmDependencies": {
-      "type": "object",
-      "propertyNames": {
-        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$"
-      },
-      "additionalProperties": { "type": "string" }
-    },
-    "dependencies": {
-      "type": "array",
-      "items": { "$ref": "#/definitions/dependency" }
-    },
-    "optionalDependencies": {
-      "type": "array",
-      "items": { "$ref": "#/definitions/dependency" }
-    },
-    "conflicts": {
-      "type": "array",
-      "items": { "$ref": "#/definitions/conflict" }
-    },
-    "loadAfter": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$"
-      }
-    },
-    "supportedGameVersionRange": { "type": "string" },
-    "supportedLoaderVersionRange": { "type": "string" },
-    "supportedSdkVersionRange": { "type": "string" },
-    "category": { "type": "string" },
-    "tags": {
-      "type": "array",
-      "items": { "type": "string" }
-    },
-    "icon": { "type": "string" },
-    "screenshots": {
-      "type": "array",
-      "items": { "type": "string" }
-    },
-    "homepage": { "type": "string" },
-    "source": { "type": "string" },
     "hashes": {
       "type": "object",
-      "additionalProperties": { "type": "string" }
+      "maxProperties": 8192,
+      "propertyNames": { "$ref": "#/definitions/portablePath" },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[A-Fa-f0-9]{64}$"
+      }
     },
-    "permissions": {
+    "capabilities": {
       "type": "array",
-      "items": { "type": "string" }
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": { "$ref": "#/definitions/capability" }
     },
+    "platforms": {
+      "type": "array",
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": { "enum": ["windows", "macos", "linux"] }
+    },
+    "architectures": {
+      "type": "array",
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": { "enum": ["x64", "arm64"] }
+    },
+    "contentTargets": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+      }
+    },
+    "builtWith": { "$ref": "#/definitions/builtWith" },
     "worldGamemodes": {
       "type": "array",
+      "maxItems": 64,
       "items": { "$ref": "#/definitions/gamemode" }
     },
     "apiAssemblies": {
       "type": "array",
-      "items": { "type": "string" }
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": { "$ref": "#/definitions/dllPath" }
     }
   },
+  "patternProperties": {
+    "^x-[A-Za-z0-9_.-]{1,64}$": true
+  },
+  "additionalProperties": false,
   "definitions": {
-    "dependency": {
+    "modId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+    },
+    "versionRange": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "dependencyMap": {
       "type": "object",
-      "required": ["id"],
-      "additionalProperties": true,
-      "not": { "required": ["version"] },
-      "properties": {
-        "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$"
-        },
-        "versionRange": { "type": "string" },
-        "optional": { "type": "boolean" }
-      }
+      "maxProperties": 128,
+      "propertyNames": { "$ref": "#/definitions/modId" },
+      "additionalProperties": { "$ref": "#/definitions/versionRange" }
+    },
+    "orderHints": {
+      "type": "array",
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": { "$ref": "#/definitions/modId" }
+    },
+    "portablePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*:)(?!.*[\\u0000-\\u001F])(?!.*(?:^|/)(?:\\.{1,2}|[Cc][Oo][Nn]|[Pp][Rr][Nn]|[Aa][Uu][Xx]|[Nn][Uu][Ll]|[Cc][Oo][Mm][1-9]|[Ll][Pp][Tt][1-9])(?:\\.|/|$))(?!.*[. ](?:/|$))(?!.*//).+$"
+    },
+    "dllPath": {
+      "allOf": [
+        { "$ref": "#/definitions/portablePath" },
+        { "pattern": "\\.[dD][lL][lL]$" }
+      ]
+    },
+    "capability": {
+      "enum": [
+        "asset-bundles", "filesystem", "filesystem-watch", "harmony-patch", "hud", "input",
+        "navigation", "network", "microphone", "particles", "physics", "physics-settings",
+        "player-control", "player-token", "prompt-overrides", "quality-settings", "remote-ai",
+        "render-settings", "robot-spawning", "scene-management", "speech-to-text", "time",
+        "ugc-livesync", "unsafe-native", "world-service"
+      ]
     },
     "conflict": {
       "type": "object",
       "required": ["id"],
-      "additionalProperties": true,
-      "not": { "required": ["version"] },
+      "additionalProperties": false,
       "properties": {
-        "id": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$"
-        },
-        "versionRange": { "type": "string" },
-        "reason": { "type": "string" }
+        "id": { "$ref": "#/definitions/modId" },
+        "versionRange": { "$ref": "#/definitions/versionRange" },
+        "reason": { "type": "string", "maxLength": 512 }
       }
     },
     "gamemode": {
       "type": "object",
       "required": ["id", "name"],
-      "additionalProperties": true,
+      "additionalProperties": false,
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "name": { "type": "string", "minLength": 1 },
-        "description": { "type": "string" }
+        "id": { "$ref": "#/definitions/modId" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "description": { "type": "string", "maxLength": 1024 }
+      }
+    },
+    "builtWith": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "sdkVersion": { "$ref": "#/definitions/semver" },
+        "loaderVersion": { "$ref": "#/definitions/semver" },
+        "gameVersion": { "$ref": "#/definitions/semver" },
+        "toolVersion": { "$ref": "#/definitions/semver" }
       }
     }
   }

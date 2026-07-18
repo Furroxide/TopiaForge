@@ -1,0 +1,14 @@
+<Project>
+  <PropertyGroup>
+    <TopiaForgeSafeProject Condition="'$(TopiaForgeSafeProject)' == ''">true</TopiaForgeSafeProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <CompilerVisibleProperty Include="TopiaForgeSafeProject" />
+    <CompilerVisibleProperty Include="IsTestProject" />
+  </ItemGroup>
+  <ItemGroup Condition="Exists('$(MSBuildProjectDirectory)/topiaforge.mod.json')">
+    <AdditionalFiles Include="$(MSBuildProjectDirectory)/topiaforge.mod.json"
+                     Visible="false"
+                     Condition="'@(AdditionalFiles->WithMetadataValue(`Identity`, `$(MSBuildProjectDirectory)/topiaforge.mod.json`))' == ''" />
+  </ItemGroup>
+</Project>

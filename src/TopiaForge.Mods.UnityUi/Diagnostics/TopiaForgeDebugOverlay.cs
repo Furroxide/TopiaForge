@@ -13,8 +13,10 @@ namespace TopiaForge.Mods.UnityUi
         private static TopiaForgeLabel? body;
         private static UiHost? host;
 
+        /// <summary>Gets whether the debug overlay is open.</summary>
         public static bool IsOpen => root != null && root.activeSelf;
 
+        /// <summary>Toggles this UI element between open and closed.</summary>
         public static void Toggle()
         {
             if (root == null)

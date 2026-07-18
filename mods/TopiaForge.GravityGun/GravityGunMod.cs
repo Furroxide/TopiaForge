@@ -2,45 +2,33 @@ using TopiaForge.Mods;
 
 namespace TopiaForge.GravityGun
 {
-    public sealed class GravityGunMod : ITopiaForgeMod
+    /// <summary>TopiaForge Gravity Gun entry point.</summary>
+    public sealed class GravityGunMod : TopiaForgeMod
     {
-        private IModContext? context;
-        private GravityGunController? controller;
+        private static readonly ConfigDefinition<GravityGunConfig> Config =
+            new ConfigDefinition<GravityGunConfig>(1, CreateConfig);
 
-        public void OnLoad(IModContext context)
+        /// <inheritdoc/>
+        protected override void OnLoad()
         {
-            this.context = context;
-            var config = context.LoadConfig(new GravityGunConfig());
-            config.Normalize();
-            context.SaveConfig(config);
-
-            controller = new GravityGunController(config, context.Logger);
-            context.Update += OnUpdate;
-            context.SceneLoaded += OnSceneLoaded;
-            context.Logger.Info("Gravity Gun loaded. Hold right mouse to grab rigidbodies, scroll to adjust distance, left mouse to throw.");
-        }
-
-        public void OnUnload()
-        {
-            if (context != null)
+            var result = Context.Config.Load(Config);
+            if (!result.TryGetValue(out var config))
             {
-                context.Update -= OnUpdate;
-                context.SceneLoaded -= OnSceneLoaded;
+                Context.Logger.Error(
+                    $"Gravity Gun configuration could not be loaded ({result.ErrorCode}): {result.ErrorMessage}");
+                return;
             }
 
-            controller?.Dispose();
-            controller = null;
-            context = null;
+            _ = new GravityGunController(Context, config);
+            Context.Logger.Info(
+                "Gravity Gun loaded. Hold right mouse to grab, scroll to adjust distance, and press left mouse to throw.");
         }
 
-        private void OnUpdate(float deltaTime)
+        private static GravityGunConfig CreateConfig()
         {
-            controller?.Update(deltaTime);
-        }
-
-        private void OnSceneLoaded(string sceneName)
-        {
-            controller?.OnSceneLoaded(sceneName);
+            var config = new GravityGunConfig();
+            config.Normalize();
+            return config;
         }
     }
 }

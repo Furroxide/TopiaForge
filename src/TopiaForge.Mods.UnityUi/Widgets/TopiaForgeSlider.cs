@@ -109,6 +109,7 @@ namespace TopiaForge.Mods.UnityUi
             ApplyTheme(Theme);
         }
 
+        /// <summary>Gets value.</summary>
         public float Value => slider.value;
 
         /// <summary>Dirty-checked programmatic update (does NOT fire onChanged).</summary>
@@ -123,11 +124,13 @@ namespace TopiaForge.Mods.UnityUi
             UpdateValueLabel(next);
         }
 
+        /// <summary>Sets whether the slider accepts input.</summary>
         public void SetEnabled(bool enabled)
         {
             slider.interactable = enabled;
         }
 
+        /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
             track.color = theme.SurfaceSunken;

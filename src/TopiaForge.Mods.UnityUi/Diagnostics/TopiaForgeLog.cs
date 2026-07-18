@@ -22,6 +22,7 @@ namespace TopiaForge.Mods.UnityUi
             errorSink ??= error;
         }
 
+        /// <summary>Writes an informational diagnostic message.</summary>
         public static void Info(string message)
         {
             if (infoSink != null)
@@ -34,6 +35,7 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
+        /// <summary>Writes a warning message.</summary>
         public static void Warn(string message)
         {
             if (warnSink != null)
@@ -46,6 +48,7 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
+        /// <summary>Writes an error message.</summary>
         public static void Error(string message)
         {
             if (errorSink != null)
@@ -58,6 +61,7 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
+        /// <summary>Writes an error message.</summary>
         public static void Error(Exception exception, string message)
         {
             Error(message + " (" + exception.GetType().Name + ": " + exception.Message + ")");

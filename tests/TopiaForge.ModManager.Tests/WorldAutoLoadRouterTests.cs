@@ -20,16 +20,16 @@ namespace TopiaForge.ModManager.Tests
             var route = WorldAutoLoadRouter.Resolve(
                 Worlds(),
                 MenuEntries(),
-                WellKnownIds.OpenSandboxWorldId,
+                WellKnownWorldIds.OpenSandboxWorld,
                 ZombiesGamemodeId,
                 preferSceneReplacement: false,
                 allowAdditiveFallback: true);
 
             Assert(route.Kind == WorldAutoLoadRouteKind.LoadSelection, "Open Sandbox auto-load should use the selected world directly");
             Assert(route.Request != null, "direct Open Sandbox auto-load should carry a load request");
-            Assert(route.Request!.WorldId == WellKnownIds.OpenSandboxWorldId, "Open Sandbox auto-load should not fall through to the gamemode menu");
+            Assert(route.Request!.WorldId == WellKnownWorldIds.OpenSandboxWorld, "Open Sandbox auto-load should not fall through to the gamemode menu");
             Assert(route.Request.GamemodeId == ZombiesGamemodeId, "Open Sandbox auto-load should keep the selected gamemode");
-            Assert(route.Request.Priority == SceneTransitionPriority.Automatic,
+            Assert(route.Request.Priority == WorldLoadPriority.Automatic,
                 "startup world loads must use automatic scene priority");
             Assert(string.IsNullOrWhiteSpace(route.Warning), "registered Open Sandbox should not warn");
         }
@@ -49,7 +49,7 @@ namespace TopiaForge.ModManager.Tests
             Assert(route.Request!.WorldId == "io.github.furroxide.topiaforge.worlds.level.city", "registered first-party world id should be preserved");
             Assert(route.Request.PreferSceneReplacement, "scene-replacement preference should be preserved");
             Assert(!route.Request.AllowAdditiveFallback, "additive fallback preference should be preserved");
-            Assert(route.Request.Priority == SceneTransitionPriority.Automatic,
+            Assert(route.Request.Priority == WorldLoadPriority.Automatic,
                 "first-party auto-load should preserve automatic scene priority");
         }
 
@@ -65,7 +65,7 @@ namespace TopiaForge.ModManager.Tests
 
             Assert(route.Kind == WorldAutoLoadRouteKind.LaunchMenuEntry, "missing world should fall back to the gamemode menu entry");
             Assert(route.MenuEntryId == "io.github.furroxide.topiaforge.zombies.menu", "missing world fallback should launch the matching gamemode menu entry");
-            Assert(route.Priority == SceneTransitionPriority.Automatic,
+            Assert(route.Priority == WorldLoadPriority.Automatic,
                 "menu-entry fallback from auto-load must remain automatic");
             Assert(route.Warning.Contains("io.github.furroxide.topiaforge.worlds.level.missing"), "missing world fallback should surface the stale world id");
         }
@@ -75,7 +75,7 @@ namespace TopiaForge.ModManager.Tests
             return new[]
             {
                 new WorldDefinition(
-                    WellKnownIds.OpenSandboxWorldId,
+                    WellKnownWorldIds.OpenSandboxWorld,
                     "Open Sandbox",
                     "Generated open-world sandbox arena."),
                 new WorldDefinition(

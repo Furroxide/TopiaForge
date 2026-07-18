@@ -146,6 +146,7 @@ namespace TopiaForge.ModManager.Core
                     state.Mods.Add(mod);
                 }
                 mod.Version = entry.Value;
+                mod.VersionPinned = true;
             }
         }
 

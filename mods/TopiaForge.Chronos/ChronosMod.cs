@@ -1,44 +1,30 @@
+using System;
 using TopiaForge.Mods;
 using UnityEngine;
 
 namespace TopiaForge.Chronos
 {
-    // Framework mod that publishes ITimeControlService — the single, leak-proof authority over game time. Mirrors the
-    // RobotKit lifecycle discipline (OnLoad-register / Update-tick / SceneLoaded-reset / OnUnload-unregister+dispose).
-    public sealed class ChronosMod : ITopiaForgeMod
+    /// <summary>Publishes lifetime-owned time-control services.</summary>
+    public sealed class ChronosMod : TopiaForgeMod
     {
-        private IModContext? context;
         private TimeControlService? service;
 
-        public void OnLoad(IModContext context)
+        /// <inheritdoc />
+        protected override void OnLoad()
         {
-            this.context = context;
-            service = new TimeControlService(context.ModId, context.Logger);
-
-            var registry = context.GetService<IModServiceRegistry>();
-            registry?.Register<ITimeControlService>(context.ModId, service);
-
-            context.Update += OnUpdate;
-            context.SceneLoaded += OnSceneLoaded;
-            context.Logger.Info("TopiaForge Chronos loaded; ITimeControlService registered (single-owner timeScale, leak-proof leases, Superhot/RTwP/turn-based ready).");
-        }
-
-        public void OnUnload()
-        {
-            if (context != null)
+            service = new TimeControlService(Context.Identity.Id, Context.Logger);
+            Context.Lifetime.Track(service);
+            var registration = Context.Extensions.Register<ITimeControlService>(service);
+            if (!registration.Succeeded)
             {
-                context.Update -= OnUpdate;
-                context.SceneLoaded -= OnSceneLoaded;
-                context.GetService<IModServiceRegistry>()?.UnregisterOwner(context.ModId);
+                throw new InvalidOperationException(registration.ErrorMessage);
             }
 
-            service?.Dispose();
-            service = null;
-            context = null;
+            Context.Events.SubscribeUpdate(OnUpdate);
+            Context.Events.SubscribeSceneLoaded(OnSceneLoaded);
+            Context.Logger.Info("TopiaForge Chronos loaded; time-control extension registered.");
         }
 
-        // The control plane (drivers + scheduler) runs on the UNSCALED clock — the runtime's deltaTime may already be
-        // scaled by our own timeScale, which would stall the ramp as the world slows.
         private void OnUpdate(float deltaTime) => service?.Tick(Time.unscaledDeltaTime);
 
         private void OnSceneLoaded(string sceneName) => service?.OnSceneChanged();

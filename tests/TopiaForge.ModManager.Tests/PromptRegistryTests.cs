@@ -1,5 +1,5 @@
 using System;
-using System.Linq;
+using System.Collections.Generic;
 using TopiaForge.Mods;
 using TopiaForge.Prompts;
 
@@ -9,89 +9,73 @@ namespace TopiaForge.ModManager.Tests
     {
         public static void Run()
         {
-            TestRegisterAndEffectiveOverride();
-            TestReplaceSameOwnerPrompt();
+            TestRegisterAndReplace();
             TestHandleDispose();
-            TestUnregisterOwner();
-            TestDisposeRetiresAllHandles();
+            TestValidationAndRegistryDispose();
+            TestConflictOwnsAnImmutableOverrideSnapshot();
             Console.WriteLine("All prompt registry tests passed.");
         }
 
-        private static void TestRegisterAndEffectiveOverride()
+        private static void TestRegisterAndReplace()
         {
-            var registry = new PromptOverrideRegistry();
-            registry.Register(new PromptOverrideRequest("alpha.mod", "robot.greeting", "alpha", priority: 1));
-            registry.Register(new PromptOverrideRequest("beta.mod", "robot.greeting", "beta", priority: 5));
+            var registry = new PromptOverrideRegistry("alpha.mod");
+            var firstResult = registry.Register(new PromptOverrideRequest("robot.greeting", "first", priority: 1));
+            Assert(firstResult.TryGetValue(out var first), "a valid override should register");
+            Assert(first!.Override.SourceId == "alpha.mod", "the owner-bound provider supplies the source id");
 
-            Assert(registry.TryGetEffectiveOverride("robot.greeting", out var effective), "effective override should resolve");
-            Assert(effective!.ModId == "beta.mod" && effective.ReplacementText == "beta", "highest-priority override should win");
-
-            var conflict = registry.GetConflicts().Single();
-            Assert(conflict.PromptId == "robot.greeting", "conflict should keep the prompt id");
-            Assert(conflict.EffectiveOverride!.ModId == "beta.mod", "conflict should expose the effective override");
-            Assert(conflict.Overrides.Count == 2 && conflict.Overrides[0].ModId == "beta.mod", "conflict overrides should be ordered by priority");
-        }
-
-        private static void TestReplaceSameOwnerPrompt()
-        {
-            var registry = new PromptOverrideRegistry();
-            var first = registry.Register(new PromptOverrideRequest("alpha.mod", "robot.greeting", "first"));
-            var second = registry.Register(new PromptOverrideRequest("alpha.mod", "robot.greeting", "second"));
-
-            Assert(first.IsDisposed, "replacing the same owner/prompt should retire the old handle");
-            Assert(!second.IsDisposed, "replacement handle should remain active");
-            Assert(registry.Overrides.Count == 1 && registry.Overrides[0].ReplacementText == "second", "replacement should keep one active override");
+            var secondResult = registry.Register(new PromptOverrideRequest("robot.greeting", "second", priority: 5));
+            Assert(secondResult.TryGetValue(out var second), "a replacement should register");
+            Assert(first.IsDisposed && !second!.IsDisposed, "same-source replacement should retire the prior lease");
+            Assert(registry.Overrides.Count == 1 && registry.Overrides[0].ReplacementText == "second",
+                "same-source replacement should leave one active override");
+            Assert(registry.TryGetEffectiveOverride("robot.greeting", out var effective)
+                && ReferenceEquals(effective, second!.Override), "the active replacement should resolve");
 
             first.Dispose();
-            Assert(registry.Overrides.Count == 1, "disposing a retired handle should not remove the replacement");
+            Assert(registry.Overrides.Count == 1, "disposing a retired lease must not remove its replacement");
         }
 
         private static void TestHandleDispose()
         {
-            var registry = new PromptOverrideRegistry();
-            var handle = registry.Register(new PromptOverrideRequest("alpha.mod", "robot.greeting", "hello"));
-            Assert(registry.Overrides.Count == 1, "registered override should be visible");
+            var registry = new PromptOverrideRegistry("alpha.mod");
+            var result = registry.Register(new PromptOverrideRequest("robot.greeting", "hello"));
+            Assert(result.TryGetValue(out var handle), "a valid override should register");
 
+            handle!.Dispose();
             handle.Dispose();
-            Assert(handle.IsDisposed, "handle should report disposed");
-            Assert(registry.Overrides.Count == 0, "disposing a handle should unregister the override");
-            Assert(!registry.TryGetEffectiveOverride("robot.greeting", out _), "disposed override should not resolve");
+            Assert(handle.IsDisposed, "prompt leases should dispose idempotently");
+            Assert(registry.Overrides.Count == 0 && !registry.TryGetEffectiveOverride("robot.greeting", out _),
+                "disposing a lease should remove its override");
         }
 
-        private static void TestUnregisterOwner()
+        private static void TestValidationAndRegistryDispose()
         {
-            var registry = new PromptOverrideRegistry();
-            var alpha = registry.Register(new PromptOverrideRequest("alpha.mod", "robot.greeting", "alpha"));
-            registry.Register(new PromptOverrideRequest("beta.mod", "robot.greeting", "beta"));
+            var registry = new PromptOverrideRegistry("alpha.mod");
+            var invalid = registry.Register(new PromptOverrideRequest("", "hello"));
+            Assert(!invalid.Succeeded && invalid.ErrorCode == ModErrorCode.InvalidArgument,
+                "blank prompt ids should fail with InvalidArgument");
 
-            registry.UnregisterOwner("alpha.mod");
-
-            Assert(alpha.IsDisposed, "owner cleanup should retire handles for that owner");
-            Assert(registry.Overrides.Count == 1 && registry.Overrides[0].ModId == "beta.mod", "owner cleanup should leave other owners alone");
-            Assert(registry.GetConflicts().Count == 0, "conflict should clear after one owner is removed");
-        }
-
-        private static void TestDisposeRetiresAllHandles()
-        {
-            var registry = new PromptOverrideRegistry();
-            var first = registry.Register(new PromptOverrideRequest("alpha.mod", "robot.greeting", "alpha"));
-            var second = registry.Register(new PromptOverrideRequest("beta.mod", "robot.farewell", "beta"));
-
+            var registered = registry.Register(new PromptOverrideRequest("robot.greeting", "hello"));
+            Assert(registered.TryGetValue(out var handle), "a valid override should register before disposal");
             registry.Dispose();
+            Assert(handle!.IsDisposed && registry.Overrides.Count == 0,
+                "provider disposal should retire every active lease");
 
-            Assert(first.IsDisposed && second.IsDisposed, "registry disposal should retire every owner handle");
-            Assert(registry.Overrides.Count == 0, "registry disposal should clear all overrides");
-            var threw = false;
-            try
-            {
-                registry.Register(new PromptOverrideRequest("late.mod", "robot.late", "late"));
-            }
-            catch (ObjectDisposedException)
-            {
-                threw = true;
-            }
+            var late = registry.Register(new PromptOverrideRequest("robot.late", "late"));
+            Assert(!late.Succeeded && late.ErrorCode == ModErrorCode.InvalidState,
+                "registration after provider disposal should fail with InvalidState");
+        }
 
-            Assert(threw, "registering against an unloaded registry should fail explicitly");
+        private static void TestConflictOwnsAnImmutableOverrideSnapshot()
+        {
+            var first = new PromptOverride("alpha.mod", "robot.greeting", "first", priority: 1);
+            var source = new List<PromptOverride> { first };
+            var conflict = new PromptConflict("robot.greeting", source, first);
+
+            source.Add(new PromptOverride("beta.mod", "robot.greeting", "second", priority: 2));
+
+            Assert(conflict.Overrides.Count == 1 && ReferenceEquals(conflict.Overrides[0], first),
+                "prompt conflicts must snapshot caller-owned override collections");
         }
 
         private static void Assert(bool condition, string message)

@@ -104,8 +104,10 @@ namespace TopiaForge.Mods.UnityUi
             Repaint();
         }
 
+        /// <summary>Gets selected.</summary>
         public int Selected => selected;
 
+        /// <summary>Registers a callback that receives the selected tab index.</summary>
         public TopiaForgeTabs OnSelected(Action<int> handler)
         {
             onSelected = handler;
@@ -141,6 +143,7 @@ namespace TopiaForge.Mods.UnityUi
             Select(((selected + delta) % count + count) % count);
         }
 
+        /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
             Repaint();

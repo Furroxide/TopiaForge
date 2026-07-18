@@ -116,34 +116,34 @@ namespace TopiaForge.ModManager.Tests
         private static void TestTurnOrderInitiative()
         {
             var order = new TurnOrder(energyPerTurn: 1f);
-            var fast = new object();
-            var slow = new object();
+            var fast = new TurnActorId("fast");
+            var slow = new TurnActorId("slow");
             order.Register(fast, 2f);
             order.Register(slow, 1f);
 
             order.AddEnergy(0.6f); // fast=1.2 (ready), slow=0.6 (not)
-            Assert(ReferenceEquals(order.NextReady(), fast), "the actor over threshold with most energy acts");
+            Assert(order.NextReady() == fast, "the actor over threshold with most energy acts");
 
             order.SpendTurn(fast); // fast=0.2 (carryover kept)
             Assert(order.NextReady() == null, "after spending, nobody is ready yet");
 
             order.AddEnergy(1f); // fast=2.2, slow=1.6 — both ready, fast has more
-            Assert(ReferenceEquals(order.NextReady(), fast), "the faster actor comes up again first");
+            Assert(order.NextReady() == fast, "the faster actor comes up again first");
         }
 
         private static void TestTurnOrderTieBreakAndUnregister()
         {
             var order = new TurnOrder(energyPerTurn: 1f);
-            var first = new object();
-            var second = new object();
+            var first = new TurnActorId("first");
+            var second = new TurnActorId("second");
             order.Register(first, 1f);
             order.Register(second, 1f);
             order.AddEnergy(1f); // both exactly at threshold ⇒ tie
-            Assert(ReferenceEquals(order.NextReady(), first), "equal energy tie-breaks to the earliest registered");
+            Assert(order.NextReady() == first, "equal energy tie-breaks to the earliest registered");
 
             Assert(order.Unregister(first) && order.Count == 1, "unregister removes an actor");
-            Assert(ReferenceEquals(order.NextReady(), second), "the remaining actor is next");
-            Assert(!order.Unregister(new object()), "unregistering an unknown token is a no-op");
+            Assert(order.NextReady() == second, "the remaining actor is next");
+            Assert(!order.Unregister(new TurnActorId("missing")), "unregistering an unknown token is a no-op");
         }
 
         private static void Assert(bool condition, string message)

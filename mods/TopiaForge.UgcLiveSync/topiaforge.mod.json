@@ -1,19 +1,19 @@
 {
   "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "name": "io.github.furroxide.topiaforge.ugc.livesync",
   "displayName": "TopiaForge UGC Live Sync",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "author": {
     "name": "TopiaForge"
   },
   "description": "Live UGC content sync: hot-reload level content into the running game from a watched export folder (the Unity Editor companion dev loop) or an external editor's live Automerge document. Preview/play only.",
   "entryAssembly": "TopiaForge.UgcLiveSync.dll",
   "entryType": "TopiaForge.UgcLiveSync.UgcLiveSyncMod",
-  "vpmDependencies": {},
+  "dependencies": {},
   "supportedGameVersionRange": "0.0.2227",
-  "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
-  "supportedSdkVersionRange": ">=0.1.3 <0.2.0",
+  "supportedLoaderVersionRange": ">=1.0.0 <2.0.0",
+  "supportedSdkVersionRange": ">=1.0.0 <2.0.0",
   "category": "Framework",
   "tags": [
     "ugc",
@@ -23,7 +23,7 @@
     "unity"
   ],
   "license": "NOASSERTION",
-  "permissions": [
+  "capabilities": [
     "scene-management",
     "ugc-livesync",
     "filesystem-watch",

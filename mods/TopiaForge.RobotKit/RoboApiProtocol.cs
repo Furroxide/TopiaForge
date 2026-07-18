@@ -70,27 +70,37 @@ namespace TopiaForge.RobotKit
 
         // Parse a /agent/check3 response body into a BrainQueryResult. `available` is the transport verdict (did the
         // call complete with a body at all); content success is decided here from the parsed `values`.
-        public static BrainQueryResult ParseCheck3Response(string? body, int maxValueChars = DefaultMaxValueChars)
+        public static OperationResult<BrainQueryResult> ParseCheck3Response(
+            string? body,
+            int maxValueChars = DefaultMaxValueChars)
         {
             if (MiniJson.Deserialize(body) is not Dictionary<string, object?> root)
             {
-                return new BrainQueryResult(true, false, EmptyValues, "malformed response");
+                return OperationResult<BrainQueryResult>.Failure(
+                    ModErrorCode.External,
+                    "The brain returned a malformed response.");
             }
 
             // App- or gateway-level error envelopes.
             if (root.TryGetValue("error", out var error) && error != null)
             {
-                return new BrainQueryResult(true, false, EmptyValues, Stringify(error, maxValueChars));
+                return OperationResult<BrainQueryResult>.Failure(
+                    ModErrorCode.External,
+                    "The brain rejected the query: " + Stringify(error, maxValueChars));
             }
 
             if (!root.TryGetValue("values", out var valuesObj) || valuesObj is not Dictionary<string, object?> values)
             {
                 if (root.TryGetValue("message", out var message) && message != null)
                 {
-                    return new BrainQueryResult(true, false, EmptyValues, Stringify(message, maxValueChars));
+                    return OperationResult<BrainQueryResult>.Failure(
+                        ModErrorCode.External,
+                        "The brain query failed: " + Stringify(message, maxValueChars));
                 }
 
-                return new BrainQueryResult(true, false, EmptyValues, "no values in response");
+                return OperationResult<BrainQueryResult>.Failure(
+                    ModErrorCode.External,
+                    "The brain response contained no values.");
             }
 
             var map = new Dictionary<string, string>(values.Count);
@@ -107,8 +117,11 @@ namespace TopiaForge.RobotKit
             // showed only "…static on the channel…" every turn and the verb was unwinnable. Genuine failures arrive as
             // the error/message envelopes handled above; the self-grade is preserved in the map for any consumer that
             // deliberately wants it (read Values["success"]).
-            var hasAnswer = map.Count > 0;
-            return new BrainQueryResult(true, hasAnswer, map, hasAnswer ? null : "empty response");
+            return map.Count > 0
+                ? OperationResult<BrainQueryResult>.Success(new BrainQueryResult(map))
+                : OperationResult<BrainQueryResult>.Failure(
+                    ModErrorCode.External,
+                    "The brain response was empty.");
         }
 
         // Parse a /agent/stt response into the transcript string. The verified base-game DTO is

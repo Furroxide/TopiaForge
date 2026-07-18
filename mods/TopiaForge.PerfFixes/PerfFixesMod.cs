@@ -11,22 +11,26 @@ namespace TopiaForge.PerfFixes
     /// visuals and gameplay unchanged and just make existing work cheaper (Camera.main caching, collision
     /// GC removal). Each fix is captured/reverted; Harmony patches are removed on unload.
     /// </summary>
-    public sealed class PerfFixesMod : ITopiaForgeMod
+    public sealed class PerfFixesMod : TopiaForgeMod
     {
         private const string HarmonyId = "io.github.furroxide.topiaforge.perffixes.harmony";
+        private static readonly ConfigDefinition<PerfFixesConfig> Config =
+            new ConfigDefinition<PerfFixesConfig>(1, () => new PerfFixesConfig());
 
-        private IModContext? context;
         private Harmony? harmony;
         private readonly List<IPerfApplier> appliers = new List<IPerfApplier>();
 
-        public void OnLoad(IModContext context)
+        /// <inheritdoc/>
+        protected override void OnLoad()
         {
-            this.context = context;
-            var logger = context.Logger;
+            var logger = Context.Logger;
 
-            var config = context.LoadConfig(new PerfFixesConfig());
-            // Do not re-persist: LoadConfig already seeds the on-disk defaults on first run, and re-saving
-            // would clobber a user's hand edits.
+            var configResult = Context.Config.Load(Config);
+            if (!configResult.TryGetValue(out var config))
+            {
+                logger.Error($"PerfFixes configuration could not be loaded ({configResult.ErrorCode}): {configResult.ErrorMessage}");
+                return;
+            }
 
             if (!config.Enabled)
             {
@@ -52,19 +56,14 @@ namespace TopiaForge.PerfFixes
                 DisableApplier(i, applier, "Apply");
             }
 
-            context.Update += OnUpdate;
-            context.SceneLoaded += OnSceneLoaded;
+            Context.Events.SubscribeUpdate(OnUpdate);
+            Context.Events.SubscribeSceneLoaded(OnSceneLoaded);
             logger.Info("TopiaForge Performance Fixes loaded (behavior-identical optimizations active).");
         }
 
-        public void OnUnload()
+        /// <inheritdoc/>
+        protected override void OnUnload()
         {
-            if (context != null)
-            {
-                context.Update -= OnUpdate;
-                context.SceneLoaded -= OnSceneLoaded;
-            }
-
             for (var i = appliers.Count - 1; i >= 0; i--)
             {
                 var applier = appliers[i];
@@ -77,12 +76,11 @@ namespace TopiaForge.PerfFixes
             }
             catch (Exception ex)
             {
-                context?.Logger.Error(ex, "PerfFixes: failed to unpatch Harmony.");
+                Context.Logger.Error(ex, "PerfFixes: failed to unpatch Harmony.");
             }
 
             appliers.Clear();
             harmony = null;
-            context = null;
         }
 
         private void OnUpdate(float deltaTime)
@@ -118,7 +116,7 @@ namespace TopiaForge.PerfFixes
             }
             catch (Exception ex)
             {
-                context?.Logger.Error(ex, $"PerfFixes: applier '{applier.Name}' failed during {phase}.");
+                Context.Logger.Error(ex, $"PerfFixes: applier '{applier.Name}' failed during {phase}.");
                 return false;
             }
         }
@@ -132,7 +130,7 @@ namespace TopiaForge.PerfFixes
             }
             catch (Exception ex)
             {
-                context?.Logger.Error(ex, $"PerfFixes: applier '{applier.Name}' failed during Update.");
+                Context.Logger.Error(ex, $"PerfFixes: applier '{applier.Name}' failed during Update.");
                 return false;
             }
         }
@@ -146,7 +144,7 @@ namespace TopiaForge.PerfFixes
             }
             catch (Exception ex)
             {
-                context?.Logger.Error(ex, $"PerfFixes: applier '{applier.Name}' failed during SceneLoaded.");
+                Context.Logger.Error(ex, $"PerfFixes: applier '{applier.Name}' failed during SceneLoaded.");
                 return false;
             }
         }
@@ -155,7 +153,7 @@ namespace TopiaForge.PerfFixes
         {
             Guard(applier.Revert, applier, "failure cleanup");
             appliers.RemoveAt(index);
-            context?.Logger.Warn($"PerfFixes: disabled applier '{applier.Name}' after {failedPhase} failure.");
+            Context.Logger.Warn($"PerfFixes: disabled applier '{applier.Name}' after {failedPhase} failure.");
         }
     }
 }

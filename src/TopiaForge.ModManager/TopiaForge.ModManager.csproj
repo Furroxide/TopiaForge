@@ -3,23 +3,63 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>TopiaForge.ModManager</AssemblyName>
     <RootNamespace>TopiaForge.ModManager</RootNamespace>
-    <Version>0.2.0</Version>
-    <AssemblyVersion>0.2.0.0</AssemblyVersion>
-    <FileVersion>0.2.0.0</FileVersion>
-    <InformationalVersion>0.2.0</InformationalVersion>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <InformationalVersion>1.0.0</InformationalVersion>
+    <TopiaForgeSafeProject>false</TopiaForgeSafeProject>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
+    <ProjectReference Include="..\TopiaForge.Mods.Chronos\TopiaForge.Mods.Chronos.csproj" />
+    <ProjectReference Include="..\TopiaForge.Mods.Interop.Unity\TopiaForge.Mods.Interop.Unity.csproj" />
+    <ProjectReference Include="..\TopiaForge.Mods.Prompts\TopiaForge.Mods.Prompts.csproj" />
+    <ProjectReference Include="..\TopiaForge.Mods.RobotKit\TopiaForge.Mods.RobotKit.csproj" />
+    <ProjectReference Include="..\TopiaForge.Mods.Ugc\TopiaForge.Mods.Ugc.csproj" />
+    <ProjectReference Include="..\TopiaForge.Mods.Worlds\TopiaForge.Mods.Worlds.csproj" />
     <ProjectReference Include="..\TopiaForge.ModManager.Core\TopiaForge.ModManager.Core.csproj" />
     <ProjectReference Include="..\TopiaForge.Mods.UnityUi\TopiaForge.Mods.UnityUi.csproj" />
   </ItemGroup>
 
+  <!-- System.Reflection.Metadata is used by the non-executing package validator in
+       ModManager.Core. Robotopia's Unity player provides System.Memory,
+       System.Buffers, and System.Runtime.CompilerServices.Unsafe, but it does not
+       provide Metadata or its Immutable dependency. Restore the exact packages
+       here and copy only those two missing assemblies beside the loader. -->
+  <ItemGroup>
+    <PackageReference Include="System.Collections.Immutable"
+                      Version="10.0.9"
+                      GeneratePathProperty="true"
+                      PrivateAssets="all" />
+    <PackageReference Include="System.Reflection.Metadata"
+                      Version="10.0.9"
+                      GeneratePathProperty="true"
+                      PrivateAssets="all" />
+  </ItemGroup>
+
+  <Target Name="CopyManagedValidatorRuntimeDependencies" AfterTargets="Build">
+    <ItemGroup>
+      <_ManagedValidatorRuntimeDependency Include="$(PkgSystem_Collections_Immutable)/lib/netstandard2.0/System.Collections.Immutable.dll" />
+      <_ManagedValidatorRuntimeDependency Include="$(PkgSystem_Reflection_Metadata)/lib/netstandard2.0/System.Reflection.Metadata.dll" />
+    </ItemGroup>
+    <Error Condition="!Exists('%(_ManagedValidatorRuntimeDependency.Identity)')"
+           Text="Pinned managed-validator runtime dependency was not restored: %(_ManagedValidatorRuntimeDependency.Identity)" />
+    <Copy SourceFiles="@(_ManagedValidatorRuntimeDependency)"
+          DestinationFolder="$(TargetDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
   <ItemGroup>
     <Reference Include="BepInEx" HintPath="$(BepInExCoreDir)\BepInEx.dll" Private="false" />
+    <Reference Include="GameCode" HintPath="$(RobotopiaManagedDir)\GameCode.dll" Private="false" />
+    <Reference Include="UniTask" HintPath="$(RobotopiaManagedDir)\UniTask.dll" Private="false" />
     <Reference Include="UnityEngine" HintPath="$(RobotopiaManagedDir)\UnityEngine.dll" Private="false" />
+    <Reference Include="UnityEngine.AudioModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.AudioModule.dll" Private="false" />
     <Reference Include="UnityEngine.CoreModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="UnityEngine.AssetBundleModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.AssetBundleModule.dll" Private="false" />
     <Reference Include="UnityEngine.InputLegacyModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.InputLegacyModule.dll" Private="false" />
+    <Reference Include="UnityEngine.PhysicsModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.PhysicsModule.dll" Private="false" />
     <Reference Include="UnityEngine.TextRenderingModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.TextRenderingModule.dll" Private="false" />
     <Reference Include="UnityEngine.UI" HintPath="$(RobotopiaManagedDir)\UnityEngine.UI.dll" Private="false" />
     <Reference Include="UnityEngine.UIModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.UIModule.dll" Private="false" />

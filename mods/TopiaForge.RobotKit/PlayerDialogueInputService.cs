@@ -5,6 +5,7 @@ using System.IO.Compression;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 using UnityEngine;
 
 namespace TopiaForge.RobotKit
@@ -15,7 +16,8 @@ namespace TopiaForge.RobotKit
     // thread at Stop(); the HTTP transcription runs off-thread and its result is marshalled back on the service Tick,
     // same idiom as the brain-query service. Typed text is handled by the consumer's UI with the shared
     // TopiaForge.Mods.TextInputBuffer; this service is the voice half.
-    internal sealed class PlayerDialogueInputService : IPlayerDialogueInputService, IDisposable
+    internal sealed class PlayerDialogueInputService : IPlayerDialogueInputService,
+        IOwnerBoundExtensionFactory, IDisposable
     {
         // The backend STT accepts ONLY 16 kHz mono (AudioUtil.GetPCMData throws otherwise), so do not change these.
         private const int SampleRate = 16000;
@@ -42,18 +44,22 @@ namespace TopiaForge.RobotKit
 
         public bool IsVoiceAvailable => !disposed && HasMicrophone() && client.HasToken;
 
-        public IVoiceCapture BeginVoiceCapture()
+        public OperationResult<IVoiceCapture> BeginVoiceCapture()
         {
             if (disposed || !IsVoiceAvailable)
             {
-                return VoiceCapture.Unavailable();
+                return OperationResult<IVoiceCapture>.Failure(
+                    ModErrorCode.Unavailable,
+                    "Voice capture is unavailable.");
             }
 
             for (var index = 0; index < active.Count; index++)
             {
                 if (!active[index].IsComplete)
                 {
-                    return VoiceCapture.Unavailable();
+                    return OperationResult<IVoiceCapture>.Failure(
+                        ModErrorCode.Conflict,
+                        "A voice capture is already in progress.");
                 }
             }
 
@@ -61,13 +67,28 @@ namespace TopiaForge.RobotKit
             var clip = Microphone.Start(device, true, ClipSeconds, SampleRate);
             if (clip == null)
             {
-                return VoiceCapture.Unavailable();
+                return OperationResult<IVoiceCapture>.Failure(
+                    ModErrorCode.External,
+                    "The microphone could not begin recording.");
             }
 
             LogAvailabilityOnce(device);
             var capture = new VoiceCapture(client, logger, serviceCts.Token, device, clip);
             active.Add(capture);
-            return capture;
+            return OperationResult<IVoiceCapture>.Success(capture);
+        }
+
+        object IOwnerBoundExtensionFactory.CreateOwnerFacade(
+            Type contractType,
+            string ownerModId,
+            IModLifetime lifetime)
+        {
+            if (contractType != typeof(IPlayerDialogueInputService))
+            {
+                throw new ArgumentException("Unsupported RobotKit dialogue extension contract.", nameof(contractType));
+            }
+
+            return new OwnerFacade(this, lifetime);
         }
 
         // Drain finished transcriptions back onto the main thread and drop completed captures.
@@ -174,6 +195,70 @@ namespace TopiaForge.RobotKit
                 + "' transcribes through /agent/stt (16 kHz mono).");
         }
 
+        private sealed class OwnerFacade : IPlayerDialogueInputService
+        {
+            private readonly PlayerDialogueInputService service;
+            private readonly IModLifetime lifetime;
+
+            public OwnerFacade(PlayerDialogueInputService service, IModLifetime lifetime)
+            {
+                this.service = service;
+                this.lifetime = lifetime;
+            }
+
+            public bool IsVoiceAvailable => !lifetime.IsStopping && service.IsVoiceAvailable;
+
+            public OperationResult<IVoiceCapture> BeginVoiceCapture()
+            {
+                if (lifetime.IsStopping)
+                {
+                    return OperationResult<IVoiceCapture>.Failure(
+                        ModErrorCode.Cancelled,
+                        "The mod is stopping and cannot begin voice capture.");
+                }
+
+                var result = service.BeginVoiceCapture();
+                if (!result.TryGetValue(out var capture))
+                {
+                    return result;
+                }
+
+                try
+                {
+                    return OperationResult<IVoiceCapture>.Success(
+                        new OwnerVoiceCapture(capture, lifetime.Track(capture)));
+                }
+                catch (ObjectDisposedException)
+                {
+                    return OperationResult<IVoiceCapture>.Failure(
+                        ModErrorCode.Cancelled,
+                        "The mod stopped before voice capture could be retained.");
+                }
+            }
+
+            private sealed class OwnerVoiceCapture : IVoiceCapture
+            {
+                private readonly IVoiceCapture capture;
+                private IDisposable? lifetimeLease;
+
+                public OwnerVoiceCapture(IVoiceCapture capture, IDisposable lifetimeLease)
+                {
+                    this.capture = capture;
+                    this.lifetimeLease = lifetimeLease;
+                }
+
+                public bool IsRecording => lifetimeLease != null && capture.IsRecording;
+                public Task<OperationResult<VoiceTranscriptResult>> StopAsync(
+                    CancellationToken cancellationToken = default) =>
+                    capture.StopAsync(cancellationToken);
+
+                public void Dispose()
+                {
+                    Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
+                }
+            }
+        }
+
         // One push-to-talk capture: records while held, transcribes on Stop. Microphone reads happen on the main
         // thread (ctor + Stop + Pump); only the HTTP call is off-thread.
         private sealed class VoiceCapture : IVoiceCapture
@@ -188,16 +273,10 @@ namespace TopiaForge.RobotKit
             private Task<string?>? sttTask;
             private bool recording;
             private bool complete;
-            private bool found;
-            private string text = string.Empty;
-            private string? error;
             private float recordStartTime;
-
-            private VoiceCapture()
-            {
-                complete = true;
-                error = "voice unavailable";
-            }
+            private readonly TaskCompletionSource<OperationResult<VoiceTranscriptResult>> completion =
+                new TaskCompletionSource<OperationResult<VoiceTranscriptResult>>(
+                    TaskCreationOptions.RunContinuationsAsynchronously);
 
             public VoiceCapture(RoboApiClient client, IModLogger logger, CancellationToken serviceToken, string? device, AudioClip clip)
             {
@@ -210,25 +289,25 @@ namespace TopiaForge.RobotKit
                 recordStartTime = Time.realtimeSinceStartup;
             }
 
-            public static VoiceCapture Unavailable() => new VoiceCapture();
-
             public bool IsRecording => recording;
+            internal bool IsComplete => complete;
 
-            public bool IsComplete => complete;
+            public async Task<OperationResult<VoiceTranscriptResult>> StopAsync(
+                CancellationToken cancellationToken = default)
+            {
+                Stop();
+                using (cancellationToken.Register(Cancel))
+                {
+                    return await completion.Task;
+                }
+            }
 
-            public bool Found => found;
-
-            public string Text => text;
-
-            public string? Error => error;
-
-            public void Stop()
+            private void Stop()
             {
                 if (!recording)
                 {
                     return;
                 }
-
                 recording = false;
                 try
                 {
@@ -241,7 +320,7 @@ namespace TopiaForge.RobotKit
                 }
             }
 
-            public void Cancel()
+            internal void Cancel()
             {
                 recording = false;
                 StopMic();
@@ -265,7 +344,12 @@ namespace TopiaForge.RobotKit
 
                 cts = null;
                 complete = true;
+                completion.TrySetResult(OperationResult<VoiceTranscriptResult>.Failure(
+                    ModErrorCode.Cancelled,
+                    "Voice capture was cancelled."));
             }
+
+            public void Dispose() => Cancel();
 
             // Poll the in-flight transcription; called by the service tick.
             public void Pump()
@@ -297,13 +381,14 @@ namespace TopiaForge.RobotKit
 
                 if (!string.IsNullOrWhiteSpace(transcript))
                 {
-                    text = transcript!.Trim();
-                    found = true;
-                    error = null;
+                    completion.TrySetResult(OperationResult<VoiceTranscriptResult>.Success(
+                        new VoiceTranscriptResult(transcript!.Trim())));
                 }
                 else
                 {
-                    error = "no transcript";
+                    completion.TrySetResult(OperationResult<VoiceTranscriptResult>.Failure(
+                        ModErrorCode.External,
+                        "Voice transcription returned no text."));
                 }
 
                 complete = true;
@@ -368,8 +453,10 @@ namespace TopiaForge.RobotKit
             private void CompleteEmpty(string reason)
             {
                 logger?.Debug("Voice capture rejected: " + reason);
-                error = reason;
                 complete = true;
+                completion.TrySetResult(OperationResult<VoiceTranscriptResult>.Failure(
+                    ModErrorCode.InvalidArgument,
+                    "Voice capture could not be transcribed: " + reason + "."));
             }
 
             private static float RmsDbfs(float[] samples)

@@ -21,11 +21,13 @@ namespace TopiaForge.Mods.UnityUi
             this.FixedHeight(TopiaForgeTokens.HeadingSize + 12f);
         }
 
+        /// <summary>Sets the title.</summary>
         public void SetTitle(string title)
         {
             heading.SetText(title);
         }
 
+        /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
             divider.SetColor(theme.Tint);
@@ -48,6 +50,7 @@ namespace TopiaForge.Mods.UnityUi
             valueLabel.Flex(1f, 0f);
         }
 
+        /// <summary>Sets the value.</summary>
         public void SetValue(string value)
         {
             valueLabel.SetText(value);
@@ -99,14 +102,19 @@ namespace TopiaForge.Mods.UnityUi
             ApplyTheme(Theme);
         }
 
+        /// <summary>Gets title.</summary>
         public TopiaForgeLabel Title { get; }
 
+        /// <summary>Gets subtitle.</summary>
         public TopiaForgeLabel Subtitle { get; }
 
+        /// <summary>Gets badge.</summary>
         public TopiaForgeBadge Badge { get; }
 
+        /// <summary>Gets selected.</summary>
         public bool Selected => selected;
 
+        /// <summary>Registers the callback invoked when the row is clicked.</summary>
         public TopiaForgeListRow OnClick(Action handler)
         {
             onClick = handler;
@@ -125,6 +133,7 @@ namespace TopiaForge.Mods.UnityUi
             ApplyTheme(Theme);
         }
 
+        /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
             fill.color = selected ? theme.SelectedTint : theme.SurfaceSunken;

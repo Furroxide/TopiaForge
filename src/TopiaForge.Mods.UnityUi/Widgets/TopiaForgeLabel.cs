@@ -73,18 +73,21 @@ namespace TopiaForge.Mods.UnityUi
             text.color = Theme.ToneColor(tone);
         }
 
+        /// <summary>Aligns this element to the center.</summary>
         public TopiaForgeLabel AlignCenter()
         {
             text.alignment = TextAlignmentOptions.Center;
             return this;
         }
 
+        /// <summary>Aligns this element to the right.</summary>
         public TopiaForgeLabel AlignRight()
         {
             text.alignment = TextAlignmentOptions.Right;
             return this;
         }
 
+        /// <summary>Aligns this element to the top left.</summary>
         public TopiaForgeLabel AlignTopLeft()
         {
             text.alignment = TextAlignmentOptions.TopLeft;
@@ -241,6 +244,7 @@ namespace TopiaForge.Mods.UnityUi
             layout.preferredHeight = preferred.y;
         }
 
+        /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
             if (!hasCustomColor)

@@ -2,30 +2,36 @@ using TopiaForge.Mods;
 
 namespace {{ASSEMBLY_NAME}}
 {
-    public sealed class {{TYPE_NAME}}Mod : ITopiaForgeMod
+    /// <summary>A small utility mod demonstrating validated config, logging, and commands.</summary>
+    public sealed class {{TYPE_NAME}}Mod : TopiaForgeMod
     {
-        private IModContext? context;
-
-        public void OnLoad(IModContext context)
+        protected override void OnLoad()
         {
-            this.context = context;
-            context.SceneLoaded += OnSceneLoaded;
-            context.Logger.Info("{{DISPLAY_NAME}} loaded.");
-        }
-
-        public void OnUnload()
-        {
-            if (context != null)
+            var loaded = Context.Config.Load({{TYPE_NAME}}Config.Definition);
+            if (!loaded.TryGetValue(out var config))
             {
-                context.SceneLoaded -= OnSceneLoaded;
+                Context.Logger.Error(
+                    "Config could not be loaded (" + loaded.ErrorCode + "): " + loaded.ErrorMessage);
+                return;
             }
 
-            context = null;
-        }
+            var command = Context.Commands.Register(
+                new CommandDefinition(
+                    "greet",
+                    "Prints this mod's configured greeting."),
+                _ =>
+                {
+                    Context.Logger.Info(config.Greeting);
+                    return OperationResult<string>.Success(config.Greeting);
+                });
+            if (!command.Succeeded)
+            {
+                Context.Logger.Error(
+                    "Command registration failed (" + command.ErrorCode + "): " + command.ErrorMessage);
+                return;
+            }
 
-        private void OnSceneLoaded(string sceneName)
-        {
-            context?.Logger.Info("Scene loaded: " + sceneName);
+            Context.Logger.Info("{{DISPLAY_NAME}} loaded. Run '{{MOD_ID}}:greet' to try its command.");
         }
     }
 }

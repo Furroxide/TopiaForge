@@ -34,6 +34,7 @@ namespace TopiaForge.Mods.UnityUi
             ApplyTheme(Theme);
         }
 
+        /// <summary>Gets image.</summary>
         public Image Image => image;
 
         /// <summary>Uses an atlas sprite (rounded fill/ring/icon) instead of the flat white fill.</summary>
@@ -44,6 +45,7 @@ namespace TopiaForge.Mods.UnityUi
             return this;
         }
 
+        /// <summary>Creates an image displaying a semantic icon.</summary>
         public TopiaForgeImage Icon(TopiaForgeIcon icon)
         {
             return Sprite(TopiaForgeSprites.Icon(icon));
@@ -77,6 +79,7 @@ namespace TopiaForge.Mods.UnityUi
             Rect.anchoredPosition = new Vector2(x, y);
         }
 
+        /// <summary>Sets the size.</summary>
         public void SetSize(float width, float height)
         {
             if (width == lastWidth && height == lastHeight)
@@ -89,6 +92,7 @@ namespace TopiaForge.Mods.UnityUi
             Rect.sizeDelta = new Vector2(width, height);
         }
 
+        /// <summary>Sets the color.</summary>
         public void SetColor(Color color)
         {
             hasCustomColor = true;
@@ -110,6 +114,7 @@ namespace TopiaForge.Mods.UnityUi
             ApplyTheme(Theme);
         }
 
+        /// <summary>Sets the alpha.</summary>
         public void SetAlpha(float alpha)
         {
             this.alpha = alpha;
@@ -121,6 +126,7 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
+        /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
             var color = hasCustomColor ? theme.Emphasize(customColor) : theme.ToneColor(tone);
@@ -131,6 +137,7 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
+        /// <summary>Sets the rotation.</summary>
         public void SetRotation(float degrees)
         {
             if (degrees == lastRotation)

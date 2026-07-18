@@ -142,8 +142,10 @@ namespace TopiaForge.Mods.UnityUi
             ApplyTheme(Theme);
         }
 
+        /// <summary>Gets value.</summary>
         public int Value => dropdown.value;
 
+        /// <summary>Sets the value.</summary>
         public void SetValue(int index)
         {
             if (dropdown.value == index)
@@ -155,6 +157,7 @@ namespace TopiaForge.Mods.UnityUi
             dropdown.RefreshShownValue();
         }
 
+        /// <summary>Sets whether the dropdown accepts input.</summary>
         public void SetEnabled(bool enabled)
         {
             dropdown.interactable = enabled;
@@ -179,6 +182,7 @@ namespace TopiaForge.Mods.UnityUi
             dropdown.RefreshShownValue();
         }
 
+        /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
             fill.color = theme.SurfaceSunken;
