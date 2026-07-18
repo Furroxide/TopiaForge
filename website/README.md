@@ -5,7 +5,7 @@ the three shared launcher packages. Files under `docs/` are canonical; `src/cont
 
 ## Local build
 
-Install Node.js 24.16 or newer, the repository-pinned .NET SDK, and Flutter 3.41.4 (Dart 3.11.1), then run:
+Install Node.js 24.16 or newer, the repository-pinned .NET SDK, and Flutter 3.44.6 (Dart 3.12.2), then run:
 
 ```sh
 dotnet tool restore

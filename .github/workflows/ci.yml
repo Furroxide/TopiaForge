@@ -44,7 +44,7 @@ jobs:
       - name: Set up Dart for packaged SDK acceptance payload
         uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
         with:
-          sdk: "3.11.1"
+          sdk: "3.12.2"
 
       - name: Verify exact .NET SDK
         run: test "$(dotnet --version)" = 10.0.301
@@ -158,7 +158,7 @@ jobs:
       - name: Set up Dart
         uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
         with:
-          sdk: "3.11.1"
+          sdk: "3.12.2"
 
       - name: Set up .NET
         if: matrix.package != 'packages/launcher_domain'
@@ -219,7 +219,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
-          flutter-version: "3.41.4"
+          flutter-version: "3.44.6"
           cache: true
 
       - name: Analyze and test shared UI
@@ -437,7 +437,7 @@ jobs:
       - name: Set up Flutter and Dart
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
-          flutter-version: "3.41.4"
+          flutter-version: "3.44.6"
           channel: stable
           cache: true
 

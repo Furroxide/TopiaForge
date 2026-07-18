@@ -9,7 +9,7 @@ $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$PinnedFlutter = "3.41.4"
+$PinnedFlutter = "3.44.6"
 . (Join-Path $PSScriptRoot "flutter-sdk.ps1")
 
 function Invoke-Checked {
