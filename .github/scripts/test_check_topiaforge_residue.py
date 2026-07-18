@@ -26,7 +26,13 @@ def zip_bytes(entries: dict[str, bytes]) -> bytes:
 class GeneratedPayloadAuditTests(unittest.TestCase):
     def run_audit(self, include: Path) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [sys.executable, str(AUDIT), "--include", str(include)],
+            [
+                sys.executable,
+                str(AUDIT),
+                "--include-only",
+                "--include",
+                str(include),
+            ],
             check=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -262,6 +268,31 @@ class GeneratedPayloadAuditTests(unittest.TestCase):
 
         self.assertEqual(1, result.returncode)
         self.assertIn("retired " + "Q" + "w-prefixed identifier", result.stderr)
+    def test_retired_sdk_interface_still_fails(self) -> None:
+        retired_interface = "I" + "Robotopia" + "Mod"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            source = Path(temporary_directory) / "Legacy.cs"
+            source.write_text(
+                f"public sealed class Legacy : {retired_interface} {{}}",
+                encoding="utf-8",
+            )
+
+            result = self.run_audit(source)
+
+        self.assertEqual(1, result.returncode)
+        self.assertIn("retired SDK interface", result.stderr)
+
+    def test_retired_sdk_interface_in_binary_strings_still_fails(self) -> None:
+        retired_interface = "I" + "Robotopia" + "Mod"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            assembly = Path(temporary_directory) / "Legacy.dll"
+            assembly.write_bytes(b"\0managed\0" + retired_interface.encode() + b"\0")
+
+            result = self.run_audit(assembly)
+
+        self.assertEqual(1, result.returncode)
+        self.assertIn("retired SDK interface", result.stderr)
+        self.assertIn(":strings:", result.stderr)
 
     def test_missing_include_is_an_actionable_tool_error(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

@@ -47,6 +47,7 @@ namespace TopiaForge.ModManager.Tests
                 root, "apps", "topiaforge_cli", "lib", "src", "live_acceptance_runner.dart");
             var acceptanceCommandPath = Path.Combine(
                 root, "apps", "topiaforge_cli", "bin", "topiaforge_acceptance_commands.dart");
+            var workflowPath = Path.Combine(root, ".github", "workflows", "game-sdk-acceptance.yml");
             var solution = File.ReadAllText(Path.Combine(root, "TopiaForge.slnx"));
             var docsPublisher = File.ReadAllText(
                 Path.Combine(root, "website", "scripts", "prepare-docs.mjs"));
@@ -88,6 +89,13 @@ namespace TopiaForge.ModManager.Tests
                    && harness.Contains("spec.caseIds", StringComparison.Ordinal)
                    && acceptanceCommand.Contains("'--all'", StringComparison.Ordinal),
                 "live acceptance must require the full canonical matrix by default");
+            var workflow = File.ReadAllText(workflowPath);
+            Assert(workflow.Contains("default: both", StringComparison.Ordinal)
+                   && workflow.Contains("default: full", StringComparison.Ordinal)
+                   && workflow.Contains("runs-on: [self-hosted, Windows", StringComparison.Ordinal)
+                   && workflow.Contains("runs-on: [self-hosted, Linux", StringComparison.Ordinal)
+                   && workflow.Contains("dart run bin/topiaforge.dart @arguments", StringComparison.Ordinal),
+                "live acceptance workflow must default to the full Windows and Linux/Proton gate");
             var rows = matrix.RootElement.GetProperty("rows").EnumerateArray().ToArray();
             Assert(rows.Length == 7, "the V1 matrix must contain exactly seven modder-goal rows");
             var rowIds = new HashSet<string>(StringComparer.Ordinal);
