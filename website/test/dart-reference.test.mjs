@@ -20,8 +20,8 @@ test('dartdoc plan includes only the three shared launcher packages', () => {
   assert.deepEqual(
     plan.map((entry) => entry.dependencyArgs),
     [
-      ['pub', 'get', '--enforce-lockfile'],
-      ['pub', 'get', '--enforce-lockfile'],
+      ['pub', 'get'],
+      ['pub', 'get'],
       ['pub', 'get'],
     ],
   );
