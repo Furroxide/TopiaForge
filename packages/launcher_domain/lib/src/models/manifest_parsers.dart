@@ -1,8 +1,9 @@
 part of '../models.dart';
 
-List<ModDependency> _vpmDependencyList(Object? value) {
+List<ModDependency> _dependencyMapList(Object? value, {bool optional = false}) {
   if (value is! Map) {
-    return const [];
+    if (value == null) return const [];
+    throw const FormatException('Dependencies must be an id-to-range map.');
   }
 
   return value.entries
@@ -10,6 +11,7 @@ List<ModDependency> _vpmDependencyList(Object? value) {
         (entry) => ModDependency(
           id: entry.key.toString(),
           versionRange: VersionRange.parse(entry.value?.toString()),
+          optional: optional,
         ),
       )
       .toList(growable: false);

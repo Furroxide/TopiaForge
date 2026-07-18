@@ -266,12 +266,15 @@ void main() {
           'mods': [
             {
               'manifest': {
-                'schemaVersion': 3,
+                'schemaVersion': 4,
                 'name': 'unsafe.mod',
                 'displayName': 'Unsafe',
                 'version': '1.0.0',
                 'entryAssembly': 'Unsafe.dll',
                 'entryType': 'Unsafe.Mod',
+                'supportedGameVersionRange': '*',
+                'supportedLoaderVersionRange': '*',
+                'supportedSdkVersionRange': '*',
               },
               'downloadUrl': 'https://packages.example/unsafe.topiaforgemod',
             },
@@ -367,13 +370,16 @@ void _writePackage(
       ArchiveFile.string(
         'topiaforge.mod.json',
         jsonEncode({
-          'schemaVersion': 3,
+          'schemaVersion': 4,
           'name': id,
           'displayName': id,
           'version': version,
           'author': {'name': 'Tester'},
           'entryAssembly': 'Mod.dll',
           'entryType': 'Test.Mod',
+          'supportedGameVersionRange': '*',
+          'supportedLoaderVersionRange': '*',
+          'supportedSdkVersionRange': '*',
         }),
       ),
     )

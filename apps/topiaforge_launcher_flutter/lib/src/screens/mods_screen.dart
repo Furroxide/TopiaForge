@@ -318,6 +318,7 @@ class _ModDetail extends StatelessWidget {
       ..._issuesForMod(state, mod.id),
     ];
     return ListView(
+      key: const Key('mod-detail-list'),
       padding: EdgeInsets.zero,
       children: [
         Text(mod.name, style: Theme.of(context).textTheme.titleMedium),
@@ -358,6 +359,22 @@ class _ModDetail extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
+            if (mod.repairableVersion case final repairVersion?)
+              FilledButton.icon(
+                onPressed: state.isBusy
+                    ? null
+                    : () => _confirm(
+                        context,
+                        title: 'Repair ${mod.name} $repairVersion?',
+                        message:
+                            'TopiaForge will reinstall version $repairVersion from a verified source, revalidate it, and replace missing or modified files.',
+                        confirmLabel: 'Repair',
+                        action: () =>
+                            _add(context, const SelectedModRepairRequested()),
+                      ),
+                icon: const Icon(Icons.build_circle),
+                label: const Text('Repair / Reinstall'),
+              ),
             if (update != null)
               OutlinedButton.icon(
                 onPressed: _canPreviewRegistryPackage(state, update)
@@ -392,8 +409,21 @@ class _ModDetail extends StatelessWidget {
         const SizedBox(height: 12),
         _keyValue('ID', mod.id),
         _keyValue('Version', mod.version),
+        if (mod.requestedVersion.isNotEmpty)
+          _keyValue('Requested', mod.requestedVersion),
+        if (mod.selectionReason.isNotEmpty)
+          _keyValue('Selection', mod.selectionReason),
         if (update != null) _keyValue('Latest', update.manifest.version),
         _keyValue('Package', mod.packagePath),
+        if (mod.installedVersions.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            'Installed versions',
+            style: Theme.of(context).textTheme.labelLarge,
+          ),
+          const SizedBox(height: 6),
+          ...mod.installedVersions.map(_installedVersionTile),
+        ],
         if (manifest != null) ...[
           _keyValue(
             'Author',

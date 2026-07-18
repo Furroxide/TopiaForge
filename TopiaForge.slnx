@@ -4,6 +4,7 @@
     <Project Path="src/TopiaForge.GameCompat.Extractor/TopiaForge.GameCompat.Extractor.csproj" />
     <Project Path="src/TopiaForge.ModManager.Core/TopiaForge.ModManager.Core.csproj" />
     <Project Path="src/TopiaForge.ModManager/TopiaForge.ModManager.csproj" />
+    <Project Path="src/TopiaForge.ModPackageValidator/TopiaForge.ModPackageValidator.csproj" />
     <Project Path="src/TopiaForge.Mods.Abstractions/TopiaForge.Mods.Abstractions.csproj" />
     <Project Path="src/TopiaForge.Mods.Analyzers/TopiaForge.Mods.Analyzers.csproj" />
     <Project Path="src/TopiaForge.Mods.Chronos/TopiaForge.Mods.Chronos.csproj" />
@@ -30,11 +31,16 @@
     <Project Path="mods/TopiaForge.Zombies/TopiaForge.Zombies.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/TopiaForge.ManagedRefs.Tests/TopiaForge.ManagedRefs.Tests.csproj" />
     <Project Path="tests/TopiaForge.SdkAcceptanceMod/TopiaForge.SdkAcceptanceMod.csproj" />
     <Project Path="tests/TopiaForge.Mods.Analyzers.Tests/TopiaForge.Mods.Analyzers.Tests.csproj" />
     <Project Path="tests/TopiaForge.ModManager.Tests/TopiaForge.ModManager.Tests.csproj" />
+    <Project Path="tests/TopiaForge.ModPackageValidator.Tests/TopiaForge.ModPackageValidator.Tests.csproj" />
     <Project Path="tests/TopiaForge.ModRuntime.Tests/TopiaForge.ModRuntime.Tests.csproj" />
     <Project Path="tests/TopiaForge.ValidTestMod.Api/TopiaForge.ValidTestMod.Api.csproj" />
     <Project Path="tests/TopiaForge.ValidTestMod/TopiaForge.ValidTestMod.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj" />
   </Folder>
 </Solution>

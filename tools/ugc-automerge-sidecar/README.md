@@ -20,7 +20,7 @@ topiaforge ugc check
 Or run directly:
 
 ```bash
-npm ci
+npm ci --ignore-scripts --no-audit --no-fund
 node index.mjs --file project.json --sync wss://your-sync-server --scene main
 node index.mjs --watch ./watch-folder --doc automerge:existing-doc-id
 node index.mjs --help | --check
@@ -39,4 +39,4 @@ node index.mjs --help | --check
   handling could race with a replacement publisher; consumers reject the stale PID, and explicit cleanup safely
   revokes the lease.
 
-Requires Node.js 20+.
+Requires Node.js 24.16.0 or newer; CI pins the minimum 24.16.0 toolchain.

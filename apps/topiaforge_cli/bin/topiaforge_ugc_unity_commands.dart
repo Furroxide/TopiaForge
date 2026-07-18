@@ -93,7 +93,8 @@ extension _TopiaForgeUgcCommands on _TopiaForgeCli {
       return process.exitCode;
     } on ProcessException catch (error) {
       stderr.writeln(
-        'Could not run Node.js (${error.message}). Install Node 20+ and retry.',
+        'Could not run Node.js (${error.message}). '
+        'Install ${UgcNodeVersionPolicy.requirement} and retry.',
       );
       return 1;
     }

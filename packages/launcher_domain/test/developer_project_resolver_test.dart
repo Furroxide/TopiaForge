@@ -159,7 +159,7 @@ ModManifest _manifest(
   List<String> apiAssemblies = const [],
 }) {
   return ModManifest(
-    schemaVersion: 3,
+    schemaVersion: 4,
     id: id,
     name: id,
     version: version,

@@ -114,6 +114,22 @@ void main() {
       ]);
     });
 
+    test('loadBefore orders its owner before the named mod', () {
+      final alpha = _manifest('alpha.mod', loadBefore: const ['beta.mod']);
+      final beta = _manifest('beta.mod');
+
+      final resolution = const DependencyPlanner().resolveInstalled([
+        _installed(beta),
+        _installed(alpha),
+      ]);
+
+      expect(resolution.hasBlockingIssues, isFalse);
+      expect(resolution.orderedMods.map((mod) => mod.id), [
+        'alpha.mod',
+        'beta.mod',
+      ]);
+    });
+
     test('a soft reverse edge cannot invalidate a hard dependency', () {
       final consumer = _manifest(
         'consumer.mod',
@@ -296,7 +312,6 @@ void main() {
       final warningOnly = _manifest(
         'warning.mod',
         license: 'not an spdx expression!',
-        permissions: const ['future-permission'],
       );
       final invalid = _manifest(
         'invalid.mod',
@@ -326,14 +341,15 @@ ModManifest _manifest(
   List<ModDependency> optionalDependencies = const [],
   List<ModConflict> conflicts = const [],
   List<String> loadAfter = const [],
+  List<String> loadBefore = const [],
   VersionRange gameVersionRange = const VersionRange.any(),
   VersionRange loaderVersionRange = const VersionRange.any(),
   VersionRange sdkVersionRange = const VersionRange.any(),
   String license = '',
-  List<String> permissions = const [],
+  List<String> capabilities = const [],
 }) {
   return ModManifest(
-    schemaVersion: 3,
+    schemaVersion: 4,
     id: id,
     name: id,
     version: version,
@@ -344,11 +360,12 @@ ModManifest _manifest(
     optionalDependencies: optionalDependencies,
     conflicts: conflicts,
     loadAfter: loadAfter,
+    loadBefore: loadBefore,
     gameVersionRange: gameVersionRange,
     loaderVersionRange: loaderVersionRange,
     sdkVersionRange: sdkVersionRange,
     license: license,
-    permissions: permissions,
+    capabilities: capabilities,
   );
 }
 

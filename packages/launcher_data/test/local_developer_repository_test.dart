@@ -69,7 +69,7 @@ void main() {
                 '1.0.0': {
                   'manifest': {
                     ..._manifestJson('feature.mod', '1.0.0'),
-                    'vpmDependencies': {'base.mod': '>=1.0.0'},
+                    'dependencies': {'base.mod': '>=1.0.0'},
                   },
                   'url': featurePackage.uri.toString(),
                   'sha256': sha256Of(featurePackage),
@@ -86,6 +86,13 @@ void main() {
       name: 'Creator Mod',
       includeUnityCompanion: true,
     );
+    final fallbackEntry = File(
+      p.join(workspace.projectRoot, 'CreatorModMod.cs'),
+    ).readAsStringSync();
+    expect(fallbackEntry, contains('CreatorModMod : TopiaForgeMod'));
+    expect(fallbackEntry, contains('protected override void OnLoad()'));
+    expect(fallbackEntry, contains('Context.Logger.Info'));
+    expect(fallbackEntry, isNot(contains('ITopiaForgeMod')));
     expect(workspace.project!.packageSources, isEmpty);
     // The Unity companion is scaffolded with a README + a sample runtime config, and the project records it.
     expect(workspace.project!.unityCompanion.enabled, isTrue);
@@ -364,7 +371,7 @@ void main() {
     const package = {
       'name': 'topiaforge-sidecar',
       'version': '1.0.0',
-      'engines': {'node': '>=20'},
+      'engines': {'node': '>=24.16.0'},
       'dependencies': <String, String>{},
     };
     File(
@@ -438,13 +445,16 @@ Map<String, Object?> _manifestJson(
   String version, {
   List<String> apiAssemblies = const [],
 }) => {
-  'schemaVersion': 3,
+  'schemaVersion': 4,
   'name': id,
   'displayName': id,
   'version': version,
   'author': {'name': 'TopiaForge'},
   'entryAssembly': '${_assemblyName(id)}.dll',
   'entryType': '$id.Entry',
+  'supportedGameVersionRange': '*',
+  'supportedLoaderVersionRange': '*',
+  'supportedSdkVersionRange': '*',
   if (apiAssemblies.isNotEmpty) 'apiAssemblies': apiAssemblies,
 };
 

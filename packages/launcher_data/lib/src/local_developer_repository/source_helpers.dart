@@ -328,14 +328,30 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
     String version,
     Map<String, Object?> versionJson,
   ) {
-    return {
+    final manifest = <String, Object?>{
       ...versionJson,
-      'schemaVersion': versionJson['schemaVersion'] ?? 3,
+      'schemaVersion': versionJson['schemaVersion'] ?? 4,
       'name': versionJson['name'] ?? packageId,
       'displayName':
           versionJson['displayName'] ?? packageJson['displayName'] ?? packageId,
       'version': versionJson['version'] ?? version,
     };
+    // Registry transport metadata belongs to the source document, not the
+    // strict V4 manifest synthesized from a VPM-style version entry.
+    for (final field in const <String>{
+      'manifest',
+      'downloadUrl',
+      'url',
+      'zipUrl',
+      'packageSha256',
+      'sha256',
+      'zipSHA256',
+      'changelog',
+      'changelogUrl',
+    }) {
+      manifest.remove(field);
+    }
+    return manifest;
   }
 
   Future<_PackageReadResult> _readPackage(
@@ -458,32 +474,4 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
     }
     return resolved.toString();
   }
-}
-
-class _SourceDocument {
-  const _SourceDocument({required this.content, required this.baseUri});
-
-  final String content;
-  final Uri baseUri;
-}
-
-class _PackageReadResult {
-  const _PackageReadResult({
-    required this.archive,
-    required this.manifest,
-    required this.bytes,
-    required this.sha256Hex,
-  });
-
-  final SafeZipArchive archive;
-  final ModManifest manifest;
-  final List<int> bytes;
-  final String sha256Hex;
-}
-
-Map<String, Object?> _objectMap(Object? value) {
-  if (value is! Map) {
-    return const {};
-  }
-  return value.map((key, mapValue) => MapEntry(key.toString(), mapValue));
 }

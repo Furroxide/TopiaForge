@@ -17,9 +17,16 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
       packages.add(_pickCurrentVersion(versions, stateById[entry.key]));
     }
 
-    packages.sort(
-      (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
-    );
+    packages.sort((left, right) {
+      final name = left.name.toLowerCase().compareTo(right.name.toLowerCase());
+      if (name != 0) return name;
+      final id = left.id.toLowerCase().compareTo(right.id.toLowerCase());
+      if (id != 0) return id;
+      final version = _compareVersionText(left.version, right.version);
+      return version != 0
+          ? version
+          : left.packagePath.compareTo(right.packagePath);
+    });
     return packages;
   }
 
@@ -42,7 +49,12 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
       for (final versionDir
           in idDir.listSync(followLinks: false).whereType<Directory>()) {
         versions.add(
-          await _readInstalledVersion(idDir, versionDir, effectiveState),
+          await _readInstalledVersion(
+            install,
+            idDir,
+            versionDir,
+            effectiveState,
+          ),
         );
       }
       versions.sort((left, right) {
@@ -69,6 +81,7 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
   }
 
   Future<InstalledMod> _readInstalledVersion(
+    GameInstall install,
     Directory idDir,
     Directory versionDir,
     Map<String, Map<dynamic, dynamic>> stateById,
@@ -84,6 +97,7 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
         uninstallPending: false,
         packagePath: versionDir.path,
         errors: const ['Missing topiaforge.mod.json.'],
+        repairable: true,
       );
     }
 
@@ -100,17 +114,39 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
             as Map<String, Object?>,
       );
       final stateItem = stateById[manifest.id.toLowerCase()];
-      final errors = <String>[
+      final structuralErrors = <String>[
         ...manifest
             .validate()
             .where((issue) => issue.isBlocking)
             .map((issue) => issue.message),
-        if (p.basename(idDir.path).toLowerCase() != manifest.id.toLowerCase())
+        if (p.basename(idDir.path) != manifest.id)
           'Package directory id does not match manifest id ${manifest.id}.',
         if (p.basename(versionDir.path) != manifest.version)
           'Package directory version does not match manifest version '
               '${manifest.version}.',
       ];
+      final compatibilityErrors = _dependencyPlanner
+          .runtimeCompatibilityIssues(
+            manifest,
+            gameVersion: install.gameVersion,
+            requireKnownGameVersion: true,
+            loaderVersion: _loaderVersion,
+            sdkVersion: _sdkVersion,
+            platform: _gamePlatform(install),
+            architecture: _gameArchitecture(install),
+            contentTargets: _gameContentTargets(install),
+          )
+          .map((issue) => issue.message)
+          .toList(growable: false);
+      final errors = <String>[...structuralErrors, ...compatibilityErrors];
+      final packageValidation = errors.isEmpty
+          ? await _validateInstalledPackage(versionDir, manifest)
+          : const _InstalledPackageValidation(
+              errors: [],
+              sourceSha256: '',
+              trust: '',
+            );
+      errors.addAll(packageValidation.errors);
       return InstalledMod(
         id: manifest.id,
         name: manifest.name,
@@ -123,6 +159,12 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
         packagePath: versionDir.path,
         manifest: manifest,
         errors: errors,
+        versionPinned: (stateItem?['versionPinned'] as bool?) ?? false,
+        requestedVersion: (stateItem?['version'] as String?) ?? '',
+        sourceSha256: packageValidation.sourceSha256,
+        trust: packageValidation.trust,
+        repairable:
+            structuralErrors.isNotEmpty || packageValidation.errors.isNotEmpty,
       );
     } on Object catch (error) {
       return InstalledMod(
@@ -134,6 +176,7 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
         uninstallPending: false,
         packagePath: versionDir.path,
         errors: ['Failed to read manifest: $error'],
+        repairable: true,
       );
     }
   }
@@ -142,28 +185,105 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
     List<InstalledMod> versions,
     Map<dynamic, dynamic>? stateItem,
   ) {
-    if (versions.length == 1) {
-      return versions.single;
-    }
-
-    final selectedVersion = stateItem?['version'] as String?;
-    if (selectedVersion != null) {
-      for (final version in versions) {
-        if (version.version.toLowerCase() == selectedVersion.toLowerCase()) {
-          return version;
-        }
+    final requestedVersion = (stateItem?['version'] as String?) ?? '';
+    final pinned = (stateItem?['versionPinned'] as bool?) ?? false;
+    InstalledMod selected;
+    String selectionReason;
+    if (pinned) {
+      final pinnedSelection = versions
+          .where((candidate) => candidate.version == requestedVersion)
+          .firstOrNull;
+      if (pinnedSelection == null) {
+        final first = versions.first;
+        selected = InstalledMod(
+          id: (stateItem?['id'] as String?) ?? first.id,
+          name: (stateItem?['name'] as String?) ?? first.name,
+          version: requestedVersion,
+          enabled: (stateItem?['enabled'] as bool?) ?? true,
+          restartRequired: (stateItem?['restartRequired'] as bool?) ?? false,
+          uninstallPending: (stateItem?['uninstallPending'] as bool?) ?? false,
+          packagePath: p.join(p.dirname(first.packagePath), requestedVersion),
+          installedAtUtc: (stateItem?['installedAtUtc'] as String?) ?? '',
+          updatedAtUtc: (stateItem?['updatedAtUtc'] as String?) ?? '',
+          errors: [
+            "Pinned version '$requestedVersion' is not installed; refusing to fall back. Repair or change the profile pin.",
+          ],
+          versionPinned: true,
+          requestedVersion: requestedVersion,
+          repairable: true,
+        );
+      } else {
+        selected = pinnedSelection;
+      }
+      selectionReason = "exact profile pin '$requestedVersion'";
+    } else {
+      final valid = versions.where((candidate) => candidate.isValid).toList()
+        ..sort(_compareInstalledVersionsDescending);
+      if (valid.isNotEmpty) {
+        selected = valid.first;
+        selectionReason = requestedVersion.isEmpty
+            ? "highest compatible version '${selected.version}' selected for an unpinned profile"
+            : requestedVersion == selected.version
+            ? "highest compatible unpinned version '${selected.version}' retained"
+            : "recovered unpinned selection from '$requestedVersion' to highest compatible version '${selected.version}'";
+      } else {
+        final deterministic = [...versions]
+          ..sort(_compareInstalledVersionsDescending);
+        selected = deterministic.first;
+        selectionReason =
+            "no compatible installed version is available; '${selected.version}' is shown for repair and launch remains blocked";
       }
     }
 
-    versions.sort((a, b) {
-      final aVersion = SemanticVersion.tryParse(a.version);
-      final bVersion = SemanticVersion.tryParse(b.version);
-      if (aVersion == null || bVersion == null) {
-        return b.version.compareTo(a.version);
-      }
-      return bVersion.compareTo(aVersion);
+    final statuses = <InstalledModVersionStatus>[
+      for (final version in versions)
+        InstalledModVersionStatus(
+          version: version.version,
+          packagePath: version.packagePath,
+          errors: version.errors,
+          selected: version.packagePath == selected.packagePath,
+          sourceSha256: version.sourceSha256,
+          trust: version.trust,
+          repairable: version.repairable,
+        ),
+    ];
+    if (!statuses.any((status) => status.selected)) {
+      statuses.add(
+        InstalledModVersionStatus(
+          version: selected.version,
+          packagePath: selected.packagePath,
+          errors: selected.errors,
+          selected: true,
+          repairable: selected.repairable,
+        ),
+      );
+    }
+    statuses.sort((left, right) {
+      final comparison = _compareVersionText(left.version, right.version);
+      return comparison != 0
+          ? comparison
+          : left.packagePath.compareTo(right.packagePath);
     });
-    return versions.first;
+    return InstalledMod(
+      id: selected.id,
+      name: selected.name,
+      version: selected.version,
+      enabled: selected.enabled,
+      restartRequired: selected.restartRequired,
+      uninstallPending: selected.uninstallPending,
+      packagePath: selected.packagePath,
+      manifest: selected.manifest,
+      installedAtUtc: selected.installedAtUtc,
+      updatedAtUtc: selected.updatedAtUtc,
+      errors: selected.errors,
+      versionPinned: pinned,
+      requestedVersion: requestedVersion,
+      selectionReason: selectionReason,
+      installedVersions: statuses,
+      sourceSha256: selected.sourceSha256,
+      trust: selected.trust,
+      repairable: selected.repairable,
+    );
   }
 
   Future<Map<String, Object?>> _readManagerState(GameInstall install) async {
@@ -228,3 +348,17 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
 const _maxLauncherManifestBytes = 1024 * 1024;
 
 const _maxManagerStateBytes = 16 * 1024 * 1024;
+
+int _compareInstalledVersionsDescending(InstalledMod left, InstalledMod right) {
+  final version = _compareVersionText(right.version, left.version);
+  return version != 0 ? version : left.packagePath.compareTo(right.packagePath);
+}
+
+int _compareVersionText(String left, String right) {
+  final leftVersion = SemanticVersion.tryParse(left);
+  final rightVersion = SemanticVersion.tryParse(right);
+  if (leftVersion == null || rightVersion == null) {
+    return left.compareTo(right);
+  }
+  return leftVersion.compareTo(rightVersion);
+}

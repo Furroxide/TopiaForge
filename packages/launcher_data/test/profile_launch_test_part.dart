@@ -326,6 +326,7 @@ Future<(LocalLauncherRepository, GameInstall)> _prepareProfileLaunchRepository({
     repositoryRoot: repositoryRoot.path,
     knownGamePath: gameRoot.path,
     gameProcessStarter: starter,
+    packageMetadataValidator: _acceptPackageMetadata,
   );
   var install = await repository.selectGameDirectory(gameRoot.path);
   final repair = await repository.installOrRepairRuntime(install);

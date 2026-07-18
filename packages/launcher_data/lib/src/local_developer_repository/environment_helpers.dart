@@ -140,20 +140,20 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
     final node = await _which('node');
     if (node.isEmpty) {
       checks.add(
-        const ToolCheck(
+        ToolCheck(
           name: 'Node.js',
           status: ToolStatus.missing,
           purpose: ToolPurpose.ugcAutomerge,
           detail: 'Not found (optional).',
           remediation:
-              'Install Node.js 20+ only if you publish via the UGC Automerge live-sync channel.',
+              'Install ${UgcNodeVersionPolicy.requirement} only if '
+              'you publish via the UGC Automerge live-sync channel.',
           url: 'https://nodejs.org/',
         ),
       );
     } else {
       final version = await _toolVersion('node', const ['--version']);
-      final major = _majorVersion(version);
-      final outdated = major != null && major < 20;
+      final outdated = !UgcNodeVersionPolicy.supports(version);
       checks.add(
         ToolCheck(
           name: 'Node.js',
@@ -161,7 +161,8 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
           purpose: ToolPurpose.ugcAutomerge,
           detail: version.isEmpty ? node : version,
           remediation: outdated
-              ? 'Upgrade to Node.js 20+ for the Automerge sidecar.'
+              ? 'Upgrade to ${UgcNodeVersionPolicy.requirement} for the '
+                    'Automerge sidecar.'
               : '',
           url: 'https://nodejs.org/',
         ),
@@ -265,7 +266,7 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
           severity: IssueSeverity.warning,
           message:
               'Could not complete npm ci (${error.runtimeType}). '
-              'Install Node.js 20+ and retry.',
+              'Install ${UgcNodeVersionPolicy.requirement} and retry.',
         ),
       );
     }

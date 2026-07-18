@@ -56,6 +56,7 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
       bepInExStatus: _detectBepInEx(gameRoot, layout),
       loaderStatus: await _detectLoader(gameRoot),
       layout: layout.kind,
+      architecture: _readGameArchitecture(File(layout.executablePath)),
       gameVersion: gameBuild?.version,
       gameVersionLabel: gameBuild?.label ?? '',
       issues: issues,
@@ -292,17 +293,12 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
   }
 
   Future<ComponentState> _detectLoader(Directory gameDir) async {
-    const loaderDlls = [
-      'TopiaForge.ModManager.dll',
-      'TopiaForge.ModManager.Core.dll',
-      'TopiaForge.Mods.Abstractions.dll',
-      'TopiaForge.Mods.UnityUi.dll',
-    ];
     final pluginDir = Directory(
       p.join(gameDir.path, 'BepInEx', 'plugins', 'TopiaForge.ModManager'),
     );
     final installed = [
-      for (final dll in loaderDlls) File(p.join(pluginDir.path, dll)),
+      for (final dll in topiaForgeRuntimeLoaderDlls)
+        File(p.join(pluginDir.path, dll)),
     ];
     final present = installed.where((file) => file.existsSync()).length;
     if (present == 0) {
@@ -323,13 +319,14 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
       ),
     );
     final built = [
-      for (final dll in loaderDlls) File(p.join(builtDir.path, dll)),
+      for (final dll in topiaForgeRuntimeLoaderDlls)
+        File(p.join(builtDir.path, dll)),
     ];
     if (!built.every((file) => file.existsSync())) {
       return ComponentState.ready;
     }
 
-    for (var index = 0; index < loaderDlls.length; index++) {
+    for (var index = 0; index < topiaForgeRuntimeLoaderDlls.length; index++) {
       if (!await _sameFileContents(installed[index], built[index])) {
         return ComponentState.partial;
       }

@@ -32,8 +32,10 @@ void main() {
         isTrue,
         reason: '${file.path}\n${result.errors.join('\n')}',
       );
-      // Runtime and JSON Schema V4 support ship with the SDK contract. The
-      // launcher's matching domain model arrives in the package-devex batch.
+      final blocking = ModManifest.fromJson(
+        json,
+      ).validate().where((issue) => issue.isBlocking);
+      expect(blocking, isEmpty, reason: file.path);
     }
   });
 
@@ -61,9 +63,7 @@ void main() {
         reason: 'schema accepted $path',
       );
       expect(
-        ModManifest.fromJson(
-          _legacyDomainManifest(json),
-        ).validate().any((issue) => issue.isBlocking),
+        ModManifest.fromJson(json).validate().any((issue) => issue.isBlocking),
         isTrue,
         reason: 'domain accepted $path',
       );
@@ -86,11 +86,52 @@ void main() {
         reason: 'schema accepted $version',
       );
       expect(
-        ModManifest.fromJson(
-          _legacyDomainManifest(json),
-        ).validate().any((issue) => issue.isBlocking),
+        ModManifest.fromJson(json).validate().any((issue) => issue.isBlocking),
         isTrue,
         reason: 'domain accepted $version',
+      );
+    }
+  });
+
+  test('shared V4 fixtures agree across schema and domain validators', () {
+    final root = _repoRoot();
+    final schema = _manifestSchema();
+    final fixtureRoot = _join(root.path, ['tests', 'fixtures', 'manifests']);
+    final cases = File(_join(fixtureRoot, ['corpus.txt']))
+        .readAsLinesSync()
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty && !line.startsWith('#'));
+
+    for (final testCase in cases) {
+      final separator = testCase.indexOf(' ');
+      final expectation = testCase.substring(0, separator);
+      final fixtureName = testCase.substring(separator + 1).trim();
+      final json =
+          jsonDecode(File(_join(fixtureRoot, [fixtureName])).readAsStringSync())
+              as Map<String, Object?>;
+      final expectedValid = expectation == 'valid';
+      final expectedSchemaValid = expectation != 'invalid-schema';
+      final schemaValid = schema.validate(json).isValid;
+      var domainValid = false;
+      try {
+        domainValid = ModManifest.fromJson(
+          json,
+        ).validate().every((issue) => !issue.isBlocking);
+      } on FormatException {
+        domainValid = false;
+      } on TypeError {
+        domainValid = false;
+      }
+
+      expect(
+        schemaValid,
+        expectedSchemaValid,
+        reason: 'JSON Schema disagreed for $fixtureName',
+      );
+      expect(
+        domainValid,
+        expectedValid,
+        reason: 'Dart validator disagreed for $fixtureName',
       );
     }
   });
@@ -119,11 +160,6 @@ Map<String, Object?> _validManifest() => {
   'supportedGameVersionRange': '*',
   'supportedLoaderVersionRange': '*',
   'supportedSdkVersionRange': '*',
-};
-
-Map<String, Object?> _legacyDomainManifest(Map<String, Object?> manifest) => {
-  ...manifest,
-  'schemaVersion': 3,
 };
 
 Directory _repoRoot() {

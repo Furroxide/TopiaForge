@@ -13,6 +13,13 @@ class InstalledMod {
     this.installedAtUtc = '',
     this.updatedAtUtc = '',
     this.errors = const [],
+    this.versionPinned = false,
+    this.requestedVersion = '',
+    this.selectionReason = '',
+    this.installedVersions = const [],
+    this.sourceSha256 = '',
+    this.trust = '',
+    this.repairable = false,
   });
 
   final String id;
@@ -26,8 +33,29 @@ class InstalledMod {
   final String installedAtUtc;
   final String updatedAtUtc;
   final List<String> errors;
+  final bool versionPinned;
+  final String requestedVersion;
+  final String selectionReason;
+  final List<InstalledModVersionStatus> installedVersions;
+  final String sourceSha256;
+  final String trust;
+  final bool repairable;
 
   bool get isValid => manifest != null && errors.isEmpty;
+
+  String? get repairableVersion {
+    for (final status in installedVersions) {
+      if (status.repairable &&
+          status.errors.isNotEmpty &&
+          (status.selected || status.version == requestedVersion)) {
+        return status.version;
+      }
+    }
+    for (final status in installedVersions.reversed) {
+      if (status.repairable && status.errors.isNotEmpty) return status.version;
+    }
+    return !isValid && repairable ? version : null;
+  }
 
   InstalledMod copyWith({
     bool? enabled,
@@ -47,8 +75,37 @@ class InstalledMod {
       installedAtUtc: installedAtUtc,
       updatedAtUtc: DateTime.now().toUtc().toIso8601String(),
       errors: errors,
+      versionPinned: versionPinned,
+      requestedVersion: requestedVersion,
+      selectionReason: selectionReason,
+      installedVersions: installedVersions,
+      sourceSha256: sourceSha256,
+      trust: trust,
+      repairable: repairable,
     );
   }
+}
+
+class InstalledModVersionStatus {
+  const InstalledModVersionStatus({
+    required this.version,
+    required this.packagePath,
+    required this.errors,
+    required this.selected,
+    this.sourceSha256 = '',
+    this.trust = '',
+    this.repairable = false,
+  });
+
+  final String version;
+  final String packagePath;
+  final List<String> errors;
+  final bool selected;
+  final String sourceSha256;
+  final String trust;
+  final bool repairable;
+
+  bool get isValid => errors.isEmpty;
 }
 
 enum ComponentState { missing, partial, ready }
@@ -185,6 +242,7 @@ class GameInstall {
     required this.bepInExStatus,
     required this.loaderStatus,
     this.layout = GameInstallLayout.windowsNative,
+    this.architecture = '',
     this.gameVersion,
     this.gameVersionLabel = '',
     this.issues = const [],
@@ -196,6 +254,11 @@ class GameInstall {
   final ComponentState bepInExStatus;
   final ComponentState loaderStatus;
   final GameInstallLayout layout;
+
+  /// Architecture reported by the selected game executable (`x64` or
+  /// `arm64`). An empty value means the executable could not be identified and
+  /// architecture-constrained packages must fail closed.
+  final String architecture;
 
   /// Canonical SemVer used for manifest compatibility checks. Robotopia game
   /// build `N` is represented as `0.0.N`; `null` means the launcher could not
@@ -227,6 +290,7 @@ class GameInstall {
     bepInExStatus: bepInExStatus,
     loaderStatus: loaderStatus,
     layout: layout,
+    architecture: architecture,
     gameVersion: clearGameVersion ? null : gameVersion ?? this.gameVersion,
     gameVersionLabel: gameVersionLabel ?? this.gameVersionLabel,
     issues: issues,

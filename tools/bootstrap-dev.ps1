@@ -130,14 +130,19 @@ if ($IsMacOS -and !$cocoaPods) {
 $nodeVersion = ""
 if ($node) {
     $nodeVersion = (& $node.Source --version).Trim()
-    if ($nodeVersion -notmatch '^v?(?<major>[0-9]+)' -or [int]$Matches.major -lt 20) {
-        Write-Warning "Node.js 20 or newer is required for the optional Automerge sidecar; found '$nodeVersion'. Skipping sidecar restore."
+    $requiredNodeVersion = [version]"24.16.0"
+    if ($nodeVersion -notmatch '^v?(?<version>[0-9]+\.[0-9]+\.[0-9]+)$' -or [version]$Matches.version -lt $requiredNodeVersion) {
+        Write-Warning "Node.js $requiredNodeVersion or newer is required for the documentation portal and optional Automerge sidecar; found '$nodeVersion'. Skipping documentation and sidecar restore."
         $node = $null
     }
     elseif (!$npm) {
-        Write-Warning "npm was not found on PATH. Skipping the optional Automerge sidecar restore."
+        Write-Warning "npm was not found on PATH. Skipping documentation and sidecar restore."
         $node = $null
     }
+}
+
+if ($Verify -and (!$node -or !$npm)) {
+    throw "Node.js 24.16.0 or newer with npm is required by -Verify for documentation and sidecar checks."
 }
 
 Write-Host "TopiaForge contributor bootstrap"
@@ -154,7 +159,7 @@ if ($node) {
     Write-Host "  Node: $nodeVersion"
 }
 else {
-    Write-Warning "A usable Node.js 20+/npm toolchain was not found; the optional Automerge sidecar will not be restored."
+    Write-Warning "A usable Node.js 24.16+/npm toolchain was not found; documentation and the optional Automerge sidecar will not be restored."
 }
 
 Invoke-Checked $git @("config", "core.hooksPath", ".githooks")
@@ -186,38 +191,56 @@ foreach ($package in @(
     Restore-FlutterPackage $package
 }
 
+$website = Join-Path $RepoRoot "website"
 $sidecar = Join-Path $RepoRoot "tools/ugc-automerge-sidecar"
+$websiteRestored = $false
 $sidecarRestored = $false
 if ($node -and $npm) {
-    if (!(Test-Path -LiteralPath (Join-Path $sidecar "package-lock.json"))) {
-        throw "The Automerge sidecar package-lock.json is missing; refusing a non-deterministic npm restore."
+    foreach ($npmPackage in @($website, $sidecar)) {
+        if (!(Test-Path -LiteralPath (Join-Path $npmPackage "package-lock.json"))) {
+            throw "The package-lock.json file is missing from $npmPackage; refusing a non-deterministic npm restore."
+        }
+        Invoke-Checked $npm.Source @("ci", "--ignore-scripts", "--no-audit", "--no-fund") $npmPackage
     }
-    Invoke-Checked $npm.Source @("ci", "--no-audit", "--no-fund") $sidecar
+    $websiteRestored = $true
     $sidecarRestored = $true
 }
-
-Invoke-Checked $dotnet @("restore", "TopiaForge.slnx")
 
 if (!$SkipManagedRefs) {
     if ([string]::IsNullOrWhiteSpace($CacheRoot)) {
         $CacheRoot = Get-DefaultCacheRoot
     }
     Write-Host "Managed-reference cache: $CacheRoot"
-    & (Join-Path $PSScriptRoot "restore-robotopia-managed-refs.ps1") `
-        -CacheRoot $CacheRoot `
-        -WriteLocalProps
-    if ($LASTEXITCODE -ne 0) {
-        throw "Managed-reference restore failed with exit code $LASTEXITCODE."
-    }
+    Invoke-Checked $dotnet @(
+        "run",
+        "--project", "tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj",
+        "-c", "Release",
+        "--",
+        "--cache-root", $CacheRoot,
+        "--write-local-props"
+    )
 }
 
+Invoke-Checked $dotnet @("restore", "TopiaForge.slnx")
+
 if ($Verify) {
+    Invoke-Checked $dotnet @(
+        "run", "--project", "tests/TopiaForge.ManagedRefs.Tests/TopiaForge.ManagedRefs.Tests.csproj",
+        "-c", "Release"
+    )
     Invoke-Checked $dotnet @("build", "TopiaForge.slnx", "-c", "Release", "--no-restore")
     Invoke-Checked $dotnet @(
         "run", "--project", "tests/TopiaForge.ModManager.Tests/TopiaForge.ModManager.Tests.csproj",
         "-c", "Release", "--no-build"
     )
-
+    Invoke-Checked $dotnet @(
+        "run", "--project", "tests/TopiaForge.ModRuntime.Tests/TopiaForge.ModRuntime.Tests.csproj",
+        "-c", "Release", "--no-build"
+    )
+    Invoke-Checked $dotnet @(
+        "run", "--project", "tests/TopiaForge.ModPackageValidator.Tests/TopiaForge.ModPackageValidator.Tests.csproj",
+        "-c", "Release", "--no-build"
+    )
     foreach ($package in @(
         "packages/launcher_domain",
         "packages/launcher_data",
@@ -238,6 +261,11 @@ if ($Verify) {
         Invoke-Checked $node.Source @("index.mjs", "--check") $sidecar
     }
 
+    if ($websiteRestored) {
+        Invoke-Checked $dotnet @("tool", "restore")
+        Invoke-Checked $npm.Source @("run", "check") $website
+    }
+
     $platform = if ($IsWindows) { "windows" } elseif ($IsMacOS) { "macos" } else { "linux" }
     Invoke-Checked $script:FlutterCommand @("build", $platform, "--debug") `
         (Join-Path $RepoRoot "apps/topiaforge_launcher_flutter")
@@ -246,5 +274,5 @@ if ($Verify) {
 
 Write-Host "TopiaForge bootstrap complete."
 if (!$Verify) {
-    Write-Host "Run again with -Verify to execute the complete contributor test suite."
+    Write-Host "Run again with -Verify to execute the local contributor verification suite."
 }

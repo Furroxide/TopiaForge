@@ -61,6 +61,9 @@ extension _PackageHelpers on LocalLauncherRepository {
       manifest: manifest,
       sha256Hex: actualSha,
       reference: reference.reference,
+      trust: expectedSha256.trim().isEmpty
+          ? _localUnverifiedPackageTrust
+          : _sha256VerifiedPackageTrust,
     );
   }
 
@@ -277,12 +280,14 @@ class _PackageReadResult {
     required this.manifest,
     required this.sha256Hex,
     required this.reference,
+    required this.trust,
   });
 
   final SafeZipArchive archive;
   final ModManifest manifest;
   final String sha256Hex;
   final String reference;
+  final String trust;
 }
 
 class _PackageReferenceBytes {

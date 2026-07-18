@@ -33,11 +33,22 @@ abstract interface class LauncherRepository {
     String packagePath,
     GameInstall install, {
     String expectedSha256 = '',
+    String sourceId = '',
   });
 
   Future<List<PackageSource>> savePackageSources(List<PackageSource> sources);
 
-  Future<List<InstalledMod>> installInboxPackages(GameInstall install);
+  /// Safely preflights, selects, installs, and consumes package-inbox files.
+  /// Expected candidate failures are returned as structured issues and the
+  /// rejected bytes remain available for inspection.
+  Future<PackageInboxInstallOutcome> installInboxPackages(GameInstall install);
+
+  /// Atomically reinstalls a damaged installed version from a matching
+  /// integrity-pinned registry entry or verified package cache entry.
+  Future<List<InstalledMod>> repairInstalledMod(
+    GameInstall install,
+    InstalledMod mod,
+  );
 
   Future<List<InstalledMod>> setModEnabled(
     GameInstall install,

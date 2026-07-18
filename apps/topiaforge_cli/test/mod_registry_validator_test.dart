@@ -249,7 +249,7 @@ Map<String, Object?> _manifestJson({
   Map<String, String> dependencies = const {},
 }) {
   return {
-    'schemaVersion': 3,
+    'schemaVersion': 4,
     'name': id,
     'displayName': id,
     'version': version,
@@ -258,7 +258,10 @@ Map<String, Object?> _manifestJson({
     'licenseFiles': ['LICENSE'],
     'entryAssembly': 'Mod.dll',
     'entryType': 'Test.Mod',
-    if (dependencies.isNotEmpty) 'vpmDependencies': dependencies,
+    'supportedGameVersionRange': '*',
+    'supportedLoaderVersionRange': '*',
+    'supportedSdkVersionRange': '*',
+    if (dependencies.isNotEmpty) 'dependencies': dependencies,
   };
 }
 

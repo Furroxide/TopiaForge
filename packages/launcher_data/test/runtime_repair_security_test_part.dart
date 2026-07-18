@@ -78,12 +78,7 @@ void _registerRuntimeRepairSecurityTests({
         'winhttp.dll': 'old proxy',
         'doorstop_config.ini': 'old config',
         p.join('BepInEx', 'core', 'BepInEx.dll'): 'old core',
-        for (final dll in [
-          'TopiaForge.ModManager.dll',
-          'TopiaForge.ModManager.Core.dll',
-          'TopiaForge.Mods.Abstractions.dll',
-          'TopiaForge.Mods.UnityUi.dll',
-        ])
+        for (final dll in topiaForgeRuntimeLoaderDlls)
           p.join('BepInEx', 'plugins', 'TopiaForge.ModManager', dll):
               'old $dll',
       };

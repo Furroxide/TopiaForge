@@ -58,6 +58,33 @@ void _registerReleaseProcessAndIoTests() {
     expect(environment, isNot(contains('WINDOWS_CERTIFICATE_PASSWORD')));
   });
 
+  test('release smoke process capture is output-bounded', () async {
+    final probe = p.join(
+      Directory.current.path,
+      'test',
+      'fixtures',
+      'game_compat_probe.dart',
+    );
+
+    await expectLater(
+      const ReleaseProcessRunner().runBoundedResult(
+        Platform.resolvedExecutable,
+        [probe],
+        environment: const {'TOPIAFORGE_GAME_COMPAT_PROBE_MODE': 'overflow'},
+        timeout: const Duration(seconds: 30),
+        maxStdoutBytes: 128 * 1024,
+        maxStderrBytes: 128 * 1024,
+      ),
+      throwsA(
+        isA<BoundedProcessException>().having(
+          (error) => error.failure,
+          'failure',
+          BoundedProcessFailure.stdoutLimitExceeded,
+        ),
+      ),
+    );
+  });
+
   test(
     'Windows release signer signs, timestamps, and verifies executables',
     () async {

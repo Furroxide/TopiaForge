@@ -34,7 +34,7 @@ void main() {
     final root = Directory(p.join(tempDir.path, name))
       ..createSync(recursive: true);
     File(p.join(root.path, 'topiaforge.mod.json')).writeAsStringSync(
-      jsonEncode({'schemaVersion': 3, 'name': name, 'version': '0.1.0'}),
+      jsonEncode({'schemaVersion': 4, 'name': name, 'version': '0.1.0'}),
     );
     return root;
   }

@@ -265,7 +265,7 @@ void main() {
     );
   });
 
-  test('launcher log rejects symbolic links', () async {
+  test('launcher log link cannot fail a durable source save', () async {
     if (Platform.isWindows) {
       return;
     }
@@ -275,17 +275,20 @@ void main() {
     await log.parent.create(recursive: true);
     await log.create(target.path);
 
-    await expectLater(
-      repository.savePackageSources([
-        PackageSource(
-          id: 'local',
-          name: 'Local',
-          url: Uri.directory(root.path).toString(),
-        ),
-      ]),
-      throwsA(predicate((error) => error.toString().contains('symbolic link'))),
-    );
+    final saved = await repository.savePackageSources([
+      PackageSource(
+        id: 'local',
+        name: 'Local',
+        url: Uri.directory(root.path).toString(),
+      ),
+    ]);
+
+    expect(saved.single.id, 'local');
     expect(await target.readAsString(), 'preserve me');
+    expect(
+      File(p.join(dataRoot.path, 'package_sources.json')).existsSync(),
+      isTrue,
+    );
   });
 
   test('launcher log is rotated before it can grow without bound', () async {

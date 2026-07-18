@@ -328,13 +328,16 @@ File _writeModPackage(File file, {List<ArchiveFile> extraEntries = const []}) {
 }
 
 const _modManifest = <String, Object?>{
-  'schemaVersion': 3,
+  'schemaVersion': 4,
   'name': 'safe.mod',
   'displayName': 'Safe Mod',
   'version': '1.0.0',
   'author': {'name': 'TopiaForge'},
   'entryAssembly': 'SafeMod.dll',
   'entryType': 'SafeMod.Entry',
+  'supportedGameVersionRange': '*',
+  'supportedLoaderVersionRange': '*',
+  'supportedSdkVersionRange': '*',
 };
 
 File _writeVpmPackage(

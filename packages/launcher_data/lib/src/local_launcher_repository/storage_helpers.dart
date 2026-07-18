@@ -240,7 +240,7 @@ extension _StorageHelpers on LocalLauncherRepository {
         );
         catalog = WorldCatalog.fromJson(decoded as Map<String, Object?>);
       } on Object catch (error) {
-        await _appendLauncherLog('World catalog read failed: $error');
+        await _appendLauncherLogBestEffort('World catalog read failed: $error');
         catalog = WorldCatalog.fallback();
       }
     }
@@ -304,12 +304,12 @@ extension _StorageHelpers on LocalLauncherRepository {
         if (decoded is Map<String, Object?>) {
           existing = decoded;
         } else {
-          await _appendLauncherLog(
+          await _appendLauncherLogBestEffort(
             'World config was not a JSON object; replacing it.',
           );
         }
       } on FormatException catch (error) {
-        await _appendLauncherLog(
+        await _appendLauncherLogBestEffort(
           'World config was malformed and will be replaced: $error',
         );
       }

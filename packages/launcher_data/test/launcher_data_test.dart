@@ -13,6 +13,7 @@ part 'launcher_data_diagnostics_test_part.dart';
 part 'launcher_data_ugc_test_part.dart';
 part 'profile_launch_test_part.dart';
 part 'runtime_repair_security_test_part.dart';
+part 'runtime_loader_payload_test_part.dart';
 
 void main() {
   late Directory root;
@@ -33,6 +34,7 @@ void main() {
       dataRoot: dataRoot.path,
       repositoryRoot: repoRoot.path,
       knownGamePath: gameRoot.path,
+      packageMetadataValidator: _acceptPackageMetadata,
     );
   });
 
@@ -63,14 +65,21 @@ void main() {
     repositoryRoot: () => repoRoot,
     gameRoot: () => gameRoot,
   );
+  _registerRuntimeLoaderPayloadTests(
+    repository: () => repository,
+    gameRoot: () => gameRoot,
+  );
 
   test('detects known install and repairs BepInEx plus loader', () async {
     final install = await repository.detectKnownInstall();
     expect(install, isNotNull);
     expect(install!.bepInExStatus, ComponentState.missing);
+    final blockedLog = Directory(p.join(dataRoot.path, 'logs', 'launcher.log'))
+      ..createSync(recursive: true);
 
     final report = await repository.installOrRepairRuntime(install);
     expect(report.ok, isTrue);
+    blockedLog.deleteSync();
 
     final repaired = await repository.selectGameDirectory(gameRoot.path);
     expect(repaired.bepInExStatus, ComponentState.ready);
@@ -464,3 +473,5 @@ void main() {
     expect(snapshot.launcherUpdates.channel, LauncherUpdateChannel.nightly);
   });
 }
+
+Future<List<String>> _acceptPackageMetadata(Directory _) async => const [];

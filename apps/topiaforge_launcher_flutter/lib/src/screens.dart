@@ -23,6 +23,7 @@ part 'screens/home_launch_pane.dart';
 part 'screens/home_profiles.dart';
 part 'screens/home_screen.dart';
 part 'screens/mods_screen.dart';
+part 'screens/mod_version_status.dart';
 part 'screens/setup_screen.dart';
 part 'screens/settings_screen.dart';
 part 'screens/screen_dialog_helpers.dart';

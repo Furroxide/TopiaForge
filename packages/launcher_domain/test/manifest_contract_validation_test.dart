@@ -4,24 +4,24 @@ import 'package:test/test.dart';
 void main() {
   group('ModManifest contract validation', () {
     test(
-      'preserves additive unknown fields through canonical serialization',
+      'preserves namespaced extension fields through canonical serialization',
       () {
         final manifest = ModManifest.fromJson({
-          'schemaVersion': 3,
+          'schemaVersion': 4,
           'name': 'sample.forward-compatible',
           'displayName': 'Forward Compatible',
           'version': '1.2.3',
           'author': {'name': 'Test'},
           'entryAssembly': 'ForwardCompatible.dll',
           'entryType': 'Sample.ForwardCompatible.Mod',
-          'futureObject': {
+          'x-future-object': {
             'enabled': true,
             'modes': ['one', 'two'],
           },
         });
 
-        expect(manifest.extraFields.keys, ['futureObject']);
-        expect(manifest.toJson()['futureObject'], {
+        expect(manifest.extraFields.keys, ['x-future-object']);
+        expect(manifest.toJson()['x-future-object'], {
           'enabled': true,
           'modes': ['one', 'two'],
         });
@@ -107,7 +107,7 @@ void main() {
     test('rejects the retired ai permission', () {
       final manifest = ModManifest.fromJson({
         ..._manifestJson(),
-        'permissions': ['ai'],
+        'capabilities': ['ai'],
       });
 
       expect(
@@ -242,7 +242,7 @@ void main() {
 
     test('accepts portable nested package paths', () {
       final manifest = ModManifest.fromJson({
-        ..._manifestJson(entryAssembly: r'bin\Validation.dll'),
+        ..._manifestJson(entryAssembly: 'bin/Validation.dll'),
         'apiAssemblies': ['refs/Validation.Api.dll'],
       });
 
@@ -281,11 +281,14 @@ Map<String, Object?> _manifestJson({
   String entryAssembly = 'Validation.dll',
   String version = '1.0.0',
 }) => {
-  'schemaVersion': 3,
+  'schemaVersion': 4,
   'name': 'validation.mod',
   'displayName': 'Validation Mod',
   'version': version,
   'author': author,
   'entryAssembly': entryAssembly,
   'entryType': 'Validation.Entry',
+  'supportedGameVersionRange': '*',
+  'supportedLoaderVersionRange': '*',
+  'supportedSdkVersionRange': '*',
 };

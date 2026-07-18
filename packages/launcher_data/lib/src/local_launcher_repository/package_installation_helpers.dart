@@ -11,6 +11,26 @@ void _requireSafeModId(String modId) {
 }
 
 extension _PackageInstallationHelpers on LocalLauncherRepository {
+  Future<List<PackageSource>> _savePackageSources(
+    List<PackageSource> sources,
+  ) async {
+    final normalized = sources.isEmpty ? _defaultPackageSources() : sources;
+    _validatePackageSources(normalized);
+    await _writeJsonFileAtomic(
+      _sourcesFile,
+      {
+        'formatVersion': _packageSourceFormatVersion,
+        'sources': normalized.map((source) => source.toJson()).toList(),
+      },
+      maxBytes: _maxPackageSourcesBytes,
+      label: 'Package sources',
+    );
+    await _appendLauncherLogBestEffort(
+      'Saved ${normalized.length} package sources.',
+    );
+    return normalized;
+  }
+
   Future<PackageInstallPlan> _previewPackageInstallPlan(
     String packagePath,
     GameInstall install, {
@@ -41,8 +61,11 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
       availableMods: registryMods,
       gameVersion: currentInstall.gameVersion,
       requireKnownGameVersion: true,
-      loaderVersion: LocalLauncherRepository._loaderVersion,
-      sdkVersion: LocalLauncherRepository._sdkVersion,
+      loaderVersion: _loaderVersion,
+      sdkVersion: _sdkVersion,
+      platform: _gamePlatform(currentInstall),
+      architecture: _gameArchitecture(currentInstall),
+      contentTargets: _gameContentTargets(currentInstall),
     );
   }
 
@@ -50,6 +73,8 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
     String packagePath,
     GameInstall install, {
     String expectedSha256 = '',
+    String sourceId = '',
+    String rootSourceKind = '',
   }) async {
     final currentInstall = await _validateGameDirectory(install.path);
     if (!currentInstall.canLaunch) {
@@ -69,11 +94,15 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
       installed,
       packageSha256: package.sha256Hex,
       packageUrl: package.reference,
+      sourceId: sourceId,
       availableMods: registryMods,
       gameVersion: currentInstall.gameVersion,
       requireKnownGameVersion: true,
-      loaderVersion: LocalLauncherRepository._loaderVersion,
-      sdkVersion: LocalLauncherRepository._sdkVersion,
+      loaderVersion: _loaderVersion,
+      sdkVersion: _sdkVersion,
+      platform: _gamePlatform(currentInstall),
+      architecture: _gameArchitecture(currentInstall),
+      contentTargets: _gameContentTargets(currentInstall),
     );
     final blocking = plan.issues.where((issue) => issue.isBlocking).toList();
     if (blocking.isNotEmpty) {
@@ -108,6 +137,15 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
           'manifest: ${manifestErrors.map((issue) => issue.message).join(' ')}',
         );
       }
+      if (_canonicalPackageManifest(actionPackage.manifest) !=
+          _canonicalPackageManifest(action.expectedManifest)) {
+        throw StateError(
+          'TFPKG170: Package for ${action.modId} ${action.version} contains a '
+          'manifest that does not exactly match the package-source manifest '
+          'approved by the install plan. Refresh the source and retry; the '
+          'package was not staged.',
+        );
+      }
       verifiedPackages[action.modId.toLowerCase()] = actionPackage;
     }
 
@@ -138,7 +176,17 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
           continue;
         }
         final actionPackage = verifiedPackages[action.modId.toLowerCase()]!;
-        staged.add(_stagePackageInstall(actionPackage, commitInstall));
+        staged.add(
+          await _stagePackageInstall(
+            actionPackage,
+            commitInstall,
+            source: _packageReceiptSource(
+              reference: actionPackage.reference,
+              sourceId: action.sourceId,
+              sourceKind: action.root ? rootSourceKind : 'registry',
+            ),
+          ),
+        );
         _upsertState(
           state,
           actionPackage.manifest,
@@ -180,16 +228,17 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
         install.clean(stateSaved: stateSaved);
       }
     }
-    await _appendLauncherLog(
+    await _appendLauncherLogBestEffort(
       'Installed ${plan.installActions.length} package(s) for ${package.manifest.id} from $packagePath.',
     );
     return _loadInstalledMods(commitInstall);
   }
 
-  _StagedPackageInstall _stagePackageInstall(
+  Future<_StagedPackageInstall> _stagePackageInstall(
     _PackageReadResult package,
-    GameInstall install,
-  ) {
+    GameInstall install, {
+    required String source,
+  }) async {
     if (!ModManifest.isValidId(package.manifest.id)) {
       throw StateError('Unsafe package id: ${package.manifest.id}.');
     }
@@ -204,6 +253,8 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
       ..createSync(recursive: true);
     try {
       package.archive.extractTo(staging);
+      await _validatePackageMetadataBeforeCommit(staging);
+      await _writePackageInstallReceipt(staging, package, source);
     } on Object {
       if (transactionRoot.existsSync()) {
         transactionRoot.deleteSync(recursive: true);
@@ -218,6 +269,20 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
       targetParentExisted: target.parent.existsSync(),
     );
   }
+}
+
+String _canonicalPackageManifest(ModManifest manifest) =>
+    _canonicalPackageJson(manifest.toJson());
+
+String _canonicalPackageJson(Object? value) {
+  if (value is Map) {
+    final keys = value.keys.map((key) => key.toString()).toList()..sort();
+    return '{${[for (final key in keys) '${jsonEncode(key)}:${_canonicalPackageJson(value[key])}'].join(',')}}';
+  }
+  if (value is List) {
+    return '[${value.map(_canonicalPackageJson).join(',')}]';
+  }
+  return jsonEncode(value);
 }
 
 class _StagedPackageInstall {

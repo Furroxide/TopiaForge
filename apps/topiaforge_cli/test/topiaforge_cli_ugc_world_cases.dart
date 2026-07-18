@@ -283,18 +283,18 @@ void _ugcAndWorldCliTests(_CliTestHarness Function() currentHarness) {
             )
             as Map<String, Object?>;
     expect(
-      (manifest['vpmDependencies'] as Map).keys,
+      (manifest['dependencies'] as Map).keys,
       contains('io.github.furroxide.topiaforge.worlds'),
     );
-    expect(manifest['permissions'], contains('asset-bundles'));
-    expect(manifest['permissions'], contains('world-service'));
+    expect(manifest['capabilities'], contains('asset-bundles'));
+    expect(manifest['capabilities'], contains('world-service'));
 
-    // The scaffolded mod code registers the bundle world with the derived bundle name.
+    // The scaffold uses the owner-bound Worlds contract and SDK asset service.
     final modSource = File(
       p.join(projectDir, 'TIslandMod.cs'),
     ).readAsStringSync();
     expect(modSource, contains('new BundleWorldContent('));
-    expect(modSource, contains('RegisterWorld('));
+    expect(modSource, contains('worlds.RegisterWorld('));
     expect(modSource, contains('AssetBundles/t-island.bundle'));
 
     final checked = await currentHarness().runCli([

@@ -12,7 +12,7 @@ ModManifest _manifest(
   VersionRange sdkVersionRange = const VersionRange.any(),
 }) {
   return ModManifest(
-    schemaVersion: 3,
+    schemaVersion: 4,
     id: id,
     name: id,
     version: version,

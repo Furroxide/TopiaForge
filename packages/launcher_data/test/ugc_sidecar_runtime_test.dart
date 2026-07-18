@@ -54,6 +54,19 @@ void main() {
       ),
     );
   });
+
+  test('rejects an end-of-life Node engine floor', () {
+    final manifest = File(p.join(sidecar.path, 'package.json'));
+    final json =
+        jsonDecode(manifest.readAsStringSync()) as Map<String, Object?>;
+    json['engines'] = {'node': '>=20'};
+    manifest.writeAsStringSync(jsonEncode(json));
+
+    expect(
+      () => TrustedUgcSidecar.inspectDirectory(sidecar),
+      throwsA(predicate((error) => error.toString().contains('>=24.16.0'))),
+    );
+  });
 }
 
 Directory _writeSidecar(Directory root) {
@@ -61,7 +74,7 @@ Directory _writeSidecar(Directory root) {
   const package = {
     'name': 'topiaforge-sidecar',
     'version': '1.0.0',
-    'engines': {'node': '>=20'},
+    'engines': {'node': '>=24.16.0'},
     'dependencies': {'safe-package': '1.0.0'},
   };
   final lock = {
@@ -73,7 +86,7 @@ Directory _writeSidecar(Directory root) {
       '': {
         'name': 'topiaforge-sidecar',
         'version': '1.0.0',
-        'engines': {'node': '>=20'},
+        'engines': {'node': '>=24.16.0'},
         'dependencies': {'safe-package': '1.0.0'},
       },
     },

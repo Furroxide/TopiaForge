@@ -8,20 +8,30 @@ import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 import 'package:topiaforge/src/launcher_update_index_builder.dart';
 import 'package:topiaforge/src/bounded_file_reader.dart';
+import 'package:topiaforge/src/game_compat_executable_locator.dart';
+import 'package:topiaforge/src/live_acceptance_models.dart';
+import 'package:topiaforge/src/live_acceptance_runner.dart';
 import 'package:topiaforge/src/mod_registry_index_builder.dart';
 import 'package:topiaforge/src/release_package_builder.dart';
 import 'package:topiaforge/src/release_package_models.dart';
+import 'package:topiaforge/src/release_package_io.dart';
 import 'package:topiaforge/src/release_package_validator.dart';
+import 'package:topiaforge/src/release_sdk_payload.dart';
 import 'package:topiaforge/src/registry_entry_builder.dart';
 import 'package:topiaforge/src/release_metadata.dart';
 import 'package:topiaforge/src/release_policy.dart';
 import 'package:topiaforge/src/ugc_live_sync_transitions.dart';
 
 part 'topiaforge_check_commands.dart';
+part 'topiaforge_acceptance_commands.dart';
+part 'topiaforge_dev_commands.dart';
 part 'topiaforge_environment_commands.dart';
 part 'topiaforge_help.dart';
 part 'topiaforge_mod_commands.dart';
+part 'topiaforge_mod_module_commands.dart';
 part 'topiaforge_new_commands.dart';
+part 'topiaforge_package_validation.dart';
+part 'topiaforge_scaffold_validation.dart';
 part 'topiaforge_registry_commands.dart';
 part 'topiaforge_release_commands.dart';
 part 'topiaforge_update_commands.dart';
@@ -74,12 +84,15 @@ class _TopiaForgeCli {
     return switch (command) {
       'new' => _new(rest),
       'mod' => _mod(rest),
+      'migrate-manifest' => _migrateManifest(rest),
       'check' => _check(rest),
+      'acceptance' => _acceptance(rest),
       'add' => _add(rest),
       'remove' => _remove(rest),
       'list' => _list(rest),
       'resolve' => _resolve(rest, restore: false),
       'restore' => _resolve(rest, restore: true),
+      'dev' => _dev(rest),
       'pack' => _pack(rest),
       'install' => _install(rest),
       'launch' => _launch(rest, restart: false),
@@ -203,7 +216,8 @@ class _TopiaForgeCli {
       includePrerelease: args.contains('--prerelease'),
     );
     stdout.writeln(
-      '${restore ? 'Restored' : 'Resolved'} ${workspace.lock?.packages.length ?? 0} package(s).',
+      '${restore ? 'Restored' : 'Resolved'} ${workspace.lock?.packages.length ?? 0} mod package(s).'
+      '${restore ? ' SDK NuGet packages and lock files are current.' : ''}',
     );
     _printIssues(workspace.issues);
     return workspace.hasBlockingIssues ? 1 : 0;
@@ -327,14 +341,24 @@ class _TopiaForgeCli {
 
   Future<int> _install(List<String> args) async {
     // Installing a prebuilt package is a consumer action (no toolchain needed); only the implicit pack path does.
-    final provided = args.firstOrNull;
+    String? provided;
+    for (var index = 0; index < args.length; index++) {
+      if (args[index] == '--game-dir') {
+        index++;
+      } else if (!args[index].startsWith('--')) {
+        provided = args[index];
+        break;
+      }
+    }
     if (provided == null && !await _ensureBuildTooling()) {
       return 1;
     }
     final packagePath =
         provided ??
         await developerRepository.packProject(Directory.current.path);
-    final launcher = LocalLauncherRepository();
+    final launcher = LocalLauncherRepository(
+      knownGamePath: _option(args, '--game-dir'),
+    );
     final install = await launcher.detectKnownInstall();
     if (install == null) {
       throw StateError(_noInstallRemedy);
@@ -345,9 +369,12 @@ class _TopiaForgeCli {
   }
 
   Future<int> _launch(List<String> args, {required bool restart}) async {
-    final launcher = LocalLauncherRepository();
+    final requestedGamePath = _option(args, '--game-dir');
+    final launcher = LocalLauncherRepository(knownGamePath: requestedGamePath);
     final snapshot = await launcher.loadSnapshot();
-    final install = snapshot.gameInstall;
+    final install = requestedGamePath == null
+        ? snapshot.gameInstall
+        : await launcher.detectKnownInstall();
     if (install == null) {
       throw StateError(_noInstallRemedy);
     }

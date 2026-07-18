@@ -322,7 +322,7 @@ class ModTemplateInfo {
 
 /// Everything `new mod` can customize at scaffold time: the template plus per-field manifest overrides. A null
 /// scalar / empty list means "not specified — keep the template's default".
-/// `hashes` (pack-time) and `schemaVersion` (pinned to 3) are deliberately not
+/// `hashes` (pack-time) and `schemaVersion` (pinned to 4) are deliberately not
 /// scaffoldable.
 class ModScaffoldOptions {
   const ModScaffoldOptions({
@@ -335,9 +335,10 @@ class ModScaffoldOptions {
     this.authorEmail,
     this.authorUrl,
     this.tags = const [],
-    this.permissions = const [],
+    this.capabilities = const [],
     this.screenshots = const [],
     this.loadAfter = const [],
+    this.loadBefore = const [],
     this.apiAssemblies = const [],
     this.dependencies = const [],
     this.optionalDependencies = const [],
@@ -367,9 +368,10 @@ class ModScaffoldOptions {
   final String? authorEmail;
   final String? authorUrl;
   final List<String> tags;
-  final List<String> permissions;
+  final List<String> capabilities;
   final List<String> screenshots;
   final List<String> loadAfter;
+  final List<String> loadBefore;
   final List<String> apiAssemblies;
   final List<ModDependency> dependencies;
   final List<ModDependency> optionalDependencies;
@@ -424,10 +426,10 @@ class ModScaffoldOptions {
       };
     }
     if (tags.isNotEmpty) merged['tags'] = tags;
-    if (permissions.isNotEmpty) {
-      merged['permissions'] = {
-        ..._stringList(merged['permissions']),
-        ...permissions,
+    if (capabilities.isNotEmpty) {
+      merged['capabilities'] = {
+        ..._stringList(merged['capabilities']),
+        ...capabilities,
       }.toList();
     }
     if (screenshots.isNotEmpty) merged['screenshots'] = screenshots;
@@ -437,18 +439,25 @@ class ModScaffoldOptions {
         ...loadAfter,
       }.toList();
     }
+    if (loadBefore.isNotEmpty) {
+      merged['loadBefore'] = {
+        ..._stringList(merged['loadBefore']),
+        ...loadBefore,
+      }.toList();
+    }
     if (apiAssemblies.isNotEmpty) merged['apiAssemblies'] = apiAssemblies;
     if (dependencies.isNotEmpty) {
-      final existing = _objectMap(merged['vpmDependencies']);
-      merged['vpmDependencies'] = {
+      final existing = _objectMap(merged['dependencies']);
+      merged['dependencies'] = {
         ...existing,
         for (final item in dependencies) item.id: item.versionRange.toString(),
       };
     }
     if (optionalDependencies.isNotEmpty) {
-      merged['optionalDependencies'] = optionalDependencies
-          .map((item) => item.toJson())
-          .toList();
+      merged['optionalDependencies'] = {
+        for (final item in optionalDependencies)
+          item.id: item.versionRange.toString(),
+      };
     }
     if (conflicts.isNotEmpty) {
       merged['conflicts'] = conflicts.map((item) => item.toJson()).toList();

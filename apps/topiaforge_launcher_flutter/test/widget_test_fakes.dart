@@ -5,6 +5,8 @@ class _FakeLauncherRepository extends _PublisherFakeLauncherRepository {
     LauncherSnapshot? snapshot,
     bool developerMode = false,
     this.packageInstallPlan,
+    this.repairedSnapshot,
+    this.inboxOutcome,
   }) : _snapshot =
            snapshot ??
            LauncherSnapshot(
@@ -20,7 +22,12 @@ class _FakeLauncherRepository extends _PublisherFakeLauncherRepository {
            );
   LauncherSnapshot _snapshot;
   final PackageInstallPlan? packageInstallPlan;
+  final LauncherSnapshot? repairedSnapshot;
+  final PackageInboxInstallOutcome? inboxOutcome;
   int installPackageCount = 0;
+  String lastInstallSourceId = '';
+  int repairInstalledModCount = 0;
+  InstalledMod? repairRequest;
   int restartCount = 0;
   int installOrRepairRuntimeCount = 0;
   final launchedProfileIds = <String>[];
@@ -105,8 +112,10 @@ class _FakeLauncherRepository extends _PublisherFakeLauncherRepository {
     String packagePath,
     GameInstall install, {
     String expectedSha256 = '',
+    String sourceId = '',
   }) async {
     installPackageCount += 1;
+    lastInstallSourceId = sourceId;
     return _snapshot.installedMods;
   }
 
@@ -118,8 +127,22 @@ class _FakeLauncherRepository extends _PublisherFakeLauncherRepository {
   }
 
   @override
-  Future<List<InstalledMod>> installInboxPackages(GameInstall install) async {
-    throw UnimplementedError();
+  Future<PackageInboxInstallOutcome> installInboxPackages(
+    GameInstall install,
+  ) async => inboxOutcome ?? (throw UnimplementedError());
+
+  @override
+  Future<List<InstalledMod>> repairInstalledMod(
+    GameInstall install,
+    InstalledMod mod,
+  ) async {
+    repairInstalledModCount += 1;
+    repairRequest = mod;
+    final repaired = repairedSnapshot;
+    if (repaired != null) {
+      _snapshot = repaired;
+    }
+    return _snapshot.installedMods;
   }
 
   @override
@@ -266,7 +289,7 @@ class _FakeDeveloperRepository implements DeveloperRepository {
   Future<ModManifest> readModManifest(String projectPath) {
     return Future.value(
       const ModManifest(
-        schemaVersion: 3,
+        schemaVersion: 4,
         id: 'sample.mod',
         name: 'Sample Mod',
         version: '0.1.0',

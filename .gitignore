@@ -7,6 +7,8 @@ tests/**/[Bb]in/
 tests/**/[Oo]bj/
 templates/**/[Bb]in/
 templates/**/[Oo]bj/
+/tools/TopiaForge.ManagedRefs/[Bb]in/
+/tools/TopiaForge.ManagedRefs/[Oo]bj/
 
 # Dart and Flutter generated output
 **/.dart_tool/
@@ -20,6 +22,11 @@ packages/**/[Bb]uild/
 # JavaScript and repository-local tool state
 **/node_modules/
 /.tools/
+/website/.astro/
+/website/dist/
+/website/obj/
+/website/src/content/docs/
+/website/public/source/
 
 # Generated distributables and local package caches
 /dist/

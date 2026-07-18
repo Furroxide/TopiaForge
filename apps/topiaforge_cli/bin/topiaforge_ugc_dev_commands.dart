@@ -305,7 +305,8 @@ extension _TopiaForgeUgcDevCommands on _TopiaForgeCli {
       );
     } on Object catch (error) {
       stdout.writeln(
-        'Warning: could not start the UGC sidecar ($error); staying on the local channel. Install Node 20+.',
+        'Warning: could not start the UGC sidecar ($error); staying on the local channel. '
+        'Install ${UgcNodeVersionPolicy.requirement}.',
       );
       return null;
     }

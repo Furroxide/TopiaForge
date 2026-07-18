@@ -16,6 +16,7 @@ part 'launcher_profile_actions.dart';
 part 'launcher_developer_ugc_actions.dart';
 part 'launcher_developer_project_actions.dart';
 part 'launcher_developer_actions.dart';
+part 'launcher_runtime_constraints.dart';
 
 class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
   LauncherBloc(this._repository, {DeveloperRepository? developerRepository})
@@ -215,11 +216,21 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
       );
       return;
     }
+    var sourceId = '';
+    for (final action
+        in state.installPlan?.installActions ??
+            const <PackageInstallAction>[]) {
+      if (action.root) {
+        sourceId = action.sourceId;
+        break;
+      }
+    }
     await _guard(emit, 'Installed package.', () async {
       await _repository.installPackage(
         packagePath,
         install,
         expectedSha256: state.previewedPackageSha256,
+        sourceId: sourceId,
       );
       emit(
         _snapshotState(
@@ -239,12 +250,13 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     if (install == null) {
       return;
     }
-    await _guard(emit, 'Installed inbox packages.', () async {
-      await _repository.installInboxPackages(install);
+    await _guard(emit, 'Processed package inbox.', () async {
+      final outcome = await _repository.installInboxPackages(install);
       emit(
         _snapshotState(
           await _repository.loadSnapshot(),
-          'Processed package inbox.',
+          _packageInboxMessage(outcome),
+          statusSeverity: outcome.severity,
         ),
       );
     });
@@ -272,6 +284,28 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
         );
       },
     );
+  }
+
+  Future<void> _onSelectedModRepairRequested(
+    SelectedModRepairRequested event,
+    Emitter<LauncherState> emit,
+  ) async {
+    final install = state.gameInstall;
+    final mod = state.selectedMod;
+    final repairVersion = mod?.repairableVersion;
+    if (install == null || mod == null || repairVersion == null) {
+      return;
+    }
+    await _guard(emit, 'Repaired ${mod.name} $repairVersion.', () async {
+      await _repository.repairInstalledMod(install, mod);
+      emit(
+        _snapshotState(
+          await _repository.loadSnapshot(),
+          'Repaired and revalidated ${mod.name} $repairVersion.',
+          selectedModId: mod.id,
+        ),
+      );
+    });
   }
 
   Future<void> _onAllModsDisabled(
@@ -367,6 +401,7 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     LauncherSnapshot snapshot,
     String statusMessage, {
     String? selectedModId,
+    IssueSeverity statusSeverity = IssueSeverity.info,
   }) {
     final selected =
         selectedModId ??
@@ -381,6 +416,9 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
       statusMessage: snapshot.gameInstall == null
           ? 'Select or detect a Robotopia install to begin.'
           : statusMessage,
+      statusSeverity: snapshot.gameInstall == null
+          ? IssueSeverity.info
+          : statusSeverity,
       gameInstall: snapshot.gameInstall,
       clearGameInstall: snapshot.gameInstall == null,
       profiles: snapshot.profiles,
@@ -396,6 +434,9 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
         snapshot.installedMods,
         gameVersion: snapshot.gameInstall?.gameVersion,
         requireKnownGameVersion: true,
+        platform: _launcherGamePlatform(snapshot.gameInstall),
+        architecture: _launcherGameArchitecture(snapshot.gameInstall),
+        contentTargets: _launcherGameContentTargets(snapshot.gameInstall),
       ),
       launcherUpdates: snapshot.launcherUpdates,
       selectedModId: selected,
@@ -432,4 +473,23 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
       );
     }
   }
+}
+
+String _packageInboxMessage(PackageInboxInstallOutcome outcome) {
+  final summary = switch (outcome.status) {
+    PackageInboxInstallStatus.success when outcome.candidateCount == 0 =>
+      'Package inbox is empty.',
+    PackageInboxInstallStatus.success =>
+      'Installed ${outcome.installedCount} package(s) and consumed '
+          '${outcome.consumedCount} inbox file(s).',
+    PackageInboxInstallStatus.partial =>
+      'Package inbox partially processed: ${outcome.installedCount} '
+          'installed, ${outcome.retainedCount} retained.',
+    PackageInboxInstallStatus.failure =>
+      'Package inbox failed: no packages installed; '
+          '${outcome.retainedCount} retained.',
+  };
+  return outcome.issues.isEmpty
+      ? summary
+      : '$summary ${outcome.issues.first.message}';
 }

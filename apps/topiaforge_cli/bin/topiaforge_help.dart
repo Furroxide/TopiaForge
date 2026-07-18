@@ -6,12 +6,15 @@ const _commands = [
   'help',
   'new',
   'mod',
+  'migrate-manifest',
   'check',
+  'acceptance',
   'add',
   'remove',
   'list',
   'resolve',
   'restore',
+  'dev',
   'pack',
   'install',
   'launch',
@@ -99,16 +102,25 @@ extension _HelpCommand on _TopiaForgeCli {
       '  topiaforge mod set <field> <value>     Update a manifest field (validated on write).',
     );
     stdout.writeln(
-      '  topiaforge mod add|remove <kind> <v>   Add/remove tag, permission, dependency, conflict, gamemode, ...',
+      '  topiaforge mod add|remove <kind> <v>   Add/remove capability, dependency, conflict, gamemode, ...',
+    );
+    stdout.writeln(
+      '  topiaforge mod add|remove <module>     Couple a V1 module PackageReference with its runtime dependency.',
     );
     stdout.writeln(
       '  topiaforge mod bump [major|minor|patch]  Increment the manifest version.',
+    );
+    stdout.writeln(
+      '  topiaforge migrate-manifest            Convert a schema-V3 manifest to V4.',
     );
     stdout.writeln(
       '  topiaforge check project [path]        Validate a developer project.',
     );
     stdout.writeln(
       '  topiaforge check package <path>        Validate a mod folder or .topiaforgemod (--sha256, --entry, --resolve).',
+    );
+    stdout.writeln(
+      '  topiaforge check scaffold <path>       Verify an extracted-release scaffold, SDK locks, and optional install receipt.',
     );
     stdout.writeln('');
     stdout.writeln('Packages & sources:');
@@ -128,10 +140,13 @@ extension _HelpCommand on _TopiaForgeCli {
       '  topiaforge resolve [--prerelease]      Compute the dependency plan and write topiaforge.lock.json.',
     );
     stdout.writeln(
-      '  topiaforge restore [--prerelease]      Resolve, download packages, and write lock + dev props.',
+      '  topiaforge restore [--prerelease]      Seed the SDK feed, restore NuGet/mod packages, and write lock files.',
     );
     stdout.writeln('');
     stdout.writeln('Build & run:');
+    stdout.writeln(
+      '  topiaforge dev [--no-launch --no-tail] Restore, build, test, pack, validate, and install.',
+    );
     stdout.writeln(
       '  topiaforge pack [--output dir]         Build and package the current mod project.',
     );
@@ -139,19 +154,22 @@ extension _HelpCommand on _TopiaForgeCli {
       '  topiaforge pack --all                  Pack every first-party mod under mods/.',
     );
     stdout.writeln(
-      '  topiaforge install [package]           Install a .topiaforgemod into the detected game.',
+      '  topiaforge install [package] [--game-dir p] Install a .topiaforgemod into Robotopia.',
     );
     stdout.writeln(
       '  topiaforge dev-install [--game-dir p]  Install the loader + dev mods into the game.',
     );
     stdout.writeln(
-      '  topiaforge launch                      Launch Robotopia.',
+      '  topiaforge launch [--game-dir p]       Launch Robotopia.',
     );
     stdout.writeln(
       '  topiaforge restart                     Restart Robotopia.',
     );
     stdout.writeln(
       '  topiaforge compat [--json]             Resolve declared game bindings against the install.',
+    );
+    stdout.writeln(
+      '  topiaforge acceptance run              Run the instrumented Robotopia V1 live gate.',
     );
     stdout.writeln('');
     stdout.writeln('UGC live-sync:');
@@ -223,6 +241,9 @@ extension _HelpCommand on _TopiaForgeCli {
     );
     stdout.writeln(
       '  topiaforge release build-package ...   Build a release zip (CI maintainers).',
+    );
+    stdout.writeln(
+      '  topiaforge release build-sdk-payload ... Build the extracted SDK/CLI acceptance payload.',
     );
     stdout.writeln(
       '  topiaforge release test-package ...    Smoke-test a release zip (CI maintainers).',

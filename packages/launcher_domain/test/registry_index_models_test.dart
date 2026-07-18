@@ -7,7 +7,7 @@ ModManifest _manifest({
   Map<String, Object?> extra = const {},
 }) {
   return ModManifest.fromJson({
-    'schemaVersion': 3,
+    'schemaVersion': 4,
     'name': id,
     'displayName': 'Jetpack',
     'version': version,
@@ -15,7 +15,10 @@ ModManifest _manifest({
     'entryAssembly': 'Jetpack.dll',
     'entryType': 'Author.Jetpack.JetpackMod',
     'description': 'Fly around.',
-    'vpmDependencies': {'io.github.furroxide.topiaforge.robotkit': '>=0.7.0'},
+    'dependencies': {'io.github.furroxide.topiaforge.robotkit': '>=0.7.0'},
+    'supportedGameVersionRange': '*',
+    'supportedLoaderVersionRange': '*',
+    'supportedSdkVersionRange': '*',
     ...extra,
   });
 }

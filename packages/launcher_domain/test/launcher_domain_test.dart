@@ -9,22 +9,19 @@ void main() {
   group('ModManifest', () {
     test('parses extended clean manifest fields', () {
       final manifest = ModManifest.fromJson({
-        'schemaVersion': 3,
+        'schemaVersion': 4,
         'name': 'author.spawn_tools',
         'displayName': 'Spawn Tools',
         'version': '1.2.0',
         'author': {'name': 'Author Name'},
         'entryAssembly': 'SpawnTools.dll',
         'entryType': 'SpawnTools.Entry',
-        'vpmDependencies': {
+        'dependencies': {
           'io.github.furroxide.topiaforge.core': '>=1.0.0 <2.0.0',
         },
-        'optionalDependencies': [
-          {
-            'id': 'io.github.furroxide.topiaforge.prompts',
-            'versionRange': '1.0.0',
-          },
-        ],
+        'optionalDependencies': {
+          'io.github.furroxide.topiaforge.prompts': '1.0.0',
+        },
         'conflicts': [
           {'id': 'community.prompt_patch', 'reason': 'Both override prompts.'},
         ],
@@ -34,7 +31,10 @@ void main() {
         'category': 'Tools',
         'tags': ['sdk', 'assetbundle'],
         'license': 'MIT',
-        'hashes': {'sha256': 'abc'},
+        'hashes': {
+          'SpawnTools.dll':
+              'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        },
         'apiAssemblies': ['ref/SpawnTools.Api.dll'],
       });
 
@@ -46,7 +46,10 @@ void main() {
       );
       expect(manifest.conflicts.single.id, 'community.prompt_patch');
       expect(manifest.tags, contains('assetbundle'));
-      expect(manifest.hashes['sha256'], 'abc');
+      expect(
+        manifest.hashes['SpawnTools.dll'],
+        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      );
       expect(manifest.apiAssemblies.single, 'ref/SpawnTools.Api.dll');
       expect(manifest.toJson()['name'], 'author.spawn_tools');
       expect(manifest.toJson()['displayName'], 'Spawn Tools');
@@ -55,7 +58,7 @@ void main() {
     test(r'preserves $schema through a fromJson/toJson round-trip', () {
       final manifest = ModManifest.fromJson({
         r'$schema': ModManifest.canonicalSchemaUrl,
-        'schemaVersion': 3,
+        'schemaVersion': 4,
         'name': 'author.schema_mod',
         'displayName': 'Schema Mod',
         'version': '1.0.0',
@@ -69,7 +72,7 @@ void main() {
       expect(json.keys.first, r'$schema');
 
       final withoutSchema = ModManifest.fromJson({
-        'schemaVersion': 3,
+        'schemaVersion': 4,
         'name': 'author.schema_mod',
         'displayName': 'Schema Mod',
         'version': '1.0.0',
@@ -89,25 +92,28 @@ void main() {
         'author': {'name': ''},
         'entryAssembly': '../Bad.dll',
         'entryType': '',
+        'supportedGameVersionRange': '*',
+        'supportedLoaderVersionRange': '*',
+        'supportedSdkVersionRange': '*',
       });
 
       final issues = manifest.validate();
       expect(issues.where((issue) => issue.isBlocking), hasLength(7));
     });
 
-    test('warns but does not block on unknown permissions', () {
-      final manifest = _manifest('permission.mod', permissions: ['new-scope']);
+    test('blocks unknown capabilities', () {
+      final manifest = _manifest('permission.mod', capabilities: ['new-scope']);
 
       final issues = manifest.validate();
 
-      expect(issues.where((issue) => issue.isBlocking), isEmpty);
+      expect(issues.where((issue) => issue.isBlocking), isNotEmpty);
       expect(issues.single.message, contains('unknown value new-scope'));
     });
 
     test('accepts canonical descriptive capabilities', () {
       final manifest = _manifest(
         'capabilities.mod',
-        permissions: const [
+        capabilities: const [
           'network',
           'remote-ai',
           'player-token',
@@ -440,11 +446,11 @@ ModManifest _manifest(
   List<ModConflict> conflicts = const [],
   List<String> loadAfter = const [],
   List<String> apiAssemblies = const [],
-  List<String> permissions = const [],
+  List<String> capabilities = const [],
   String license = '',
 }) {
   return ModManifest(
-    schemaVersion: 3,
+    schemaVersion: 4,
     id: id,
     name: id,
     version: version,
@@ -455,7 +461,7 @@ ModManifest _manifest(
     conflicts: conflicts,
     loadAfter: loadAfter,
     apiAssemblies: apiAssemblies,
-    permissions: permissions,
+    capabilities: capabilities,
     license: license,
   );
 }

@@ -46,7 +46,11 @@ LauncherSnapshot _readySnapshot({
   );
 }
 
-LauncherSnapshot _updateSnapshot({bool needsRepair = false}) {
+LauncherSnapshot _updateSnapshot({
+  bool needsRepair = false,
+  List<String> modErrors = const [],
+  List<InstalledModVersionStatus> installedVersions = const [],
+}) {
   final installedManifest = _manifest('timer.mod', version: '1.0.0');
   final registryManifest = _manifest('timer.mod', version: '1.1.0');
   return LauncherSnapshot(
@@ -68,6 +72,8 @@ LauncherSnapshot _updateSnapshot({bool needsRepair = false}) {
         uninstallPending: false,
         packagePath: 'C:\\Games\\Robotopia\\BepInEx\\TopiaForge',
         manifest: installedManifest,
+        errors: modErrors,
+        installedVersions: installedVersions,
       ),
     ],
     registryMods: [
@@ -89,7 +95,7 @@ LauncherSnapshot _updateSnapshot({bool needsRepair = false}) {
 
 ModManifest _manifest(String id, {required String version}) {
   return ModManifest(
-    schemaVersion: 3,
+    schemaVersion: 4,
     id: id,
     name: 'Timer Mod',
     version: version,
@@ -125,7 +131,7 @@ LauncherSnapshot _discoverySnapshot({bool developerMode = false}) {
 RegistryMod _registryMod(String id, String name, String category) {
   return RegistryMod(
     manifest: ModManifest(
-      schemaVersion: 3,
+      schemaVersion: 4,
       id: id,
       name: name,
       version: '1.0.0',

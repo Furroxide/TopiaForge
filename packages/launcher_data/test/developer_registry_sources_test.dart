@@ -116,13 +116,16 @@ void _writePackage(
       ArchiveFile.string(
         'topiaforge.mod.json',
         jsonEncode({
-          'schemaVersion': 3,
+          'schemaVersion': 4,
           'name': id,
           'displayName': id,
           'version': version,
           'author': {'name': 'Tester'},
           'entryAssembly': 'Mod.dll',
           'entryType': 'Test.Mod',
+          'supportedGameVersionRange': '*',
+          'supportedLoaderVersionRange': '*',
+          'supportedSdkVersionRange': '*',
         }),
       ),
     )

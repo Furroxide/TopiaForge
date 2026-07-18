@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 
 import 'bounded_process.dart';
@@ -114,8 +115,12 @@ final class UgcNodeToolchain {
       r'^v([0-9]+)(?:\.|$)',
     ).firstMatch(version.stdout.trim());
     final major = match == null ? null : int.tryParse(match.group(1)!);
-    if (version.exitCode != 0 || major == null || major < 20) {
-      throw StateError('The UGC publisher requires Node.js 20 or newer.');
+    if (version.exitCode != 0 ||
+        major == null ||
+        !UgcNodeVersionPolicy.supports(version.stdout)) {
+      throw StateError(
+        'The UGC publisher requires ${UgcNodeVersionPolicy.requirement}.',
+      );
     }
     final npmPath = await _locateExecutable('npm');
     final npmCli = _resolveNpmCli(node, npmPath);
@@ -205,11 +210,9 @@ void _validateLockfile(
 ) {
   final engines = _objectMap(package['engines']);
   final nodeRange = engines['node'];
-  final minimum = nodeRange is String
-      ? RegExp(r'>=\s*([0-9]+)').firstMatch(nodeRange)
-      : null;
-  if (minimum == null || int.parse(minimum.group(1)!) < 20) {
-    throw StateError('The UGC sidecar package must require Node.js 20+.');
+  final requiredRange = '>=${UgcNodeVersionPolicy.minimumVersion}';
+  if (nodeRange != requiredRange) {
+    throw StateError('The UGC sidecar package must require $requiredRange.');
   }
   if ((lock['lockfileVersion'] as num?)?.toInt() != 3 ||
       lock['requires'] != true) {

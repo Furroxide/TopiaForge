@@ -52,7 +52,7 @@ void main() {
 
 List<int> _package({List<ArchiveFile> extraEntries = const []}) {
   final manifest = {
-    'schemaVersion': 3,
+    'schemaVersion': 4,
     'name': 'test.secure',
     'displayName': 'Secure test',
     'version': '1.0.0',
@@ -61,6 +61,9 @@ List<int> _package({List<ArchiveFile> extraEntries = const []}) {
     'licenseFiles': ['LICENSE'],
     'entryAssembly': 'Mod.dll',
     'entryType': 'Test.Mod',
+    'supportedGameVersionRange': '*',
+    'supportedLoaderVersionRange': '*',
+    'supportedSdkVersionRange': '*',
   };
   final archive = Archive()
     ..addFile(ArchiveFile.string('topiaforge.mod.json', jsonEncode(manifest)))

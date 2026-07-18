@@ -22,13 +22,11 @@ final class _SidecarRuntime {
       maxStdoutBytes: 1024,
       maxStderrBytes: 4096,
     );
-    final major = RegExp(
-      r'^v([0-9]+)',
-    ).firstMatch(nodeVersion.stdout.trim())?.group(1);
     if (nodeVersion.exitCode != 0 ||
-        major == null ||
-        (int.tryParse(major) ?? 0) < 20) {
-      throw StateError('The UGC sidecar requires Node.js 20 or newer.');
+        !UgcNodeVersionPolicy.supports(nodeVersion.stdout)) {
+      throw StateError(
+        'The UGC sidecar requires ${UgcNodeVersionPolicy.requirement}.',
+      );
     }
     if (!requireDependencies) return;
 

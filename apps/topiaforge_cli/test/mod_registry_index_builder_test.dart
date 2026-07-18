@@ -258,7 +258,7 @@ Map<String, Object?> _manifestJson({
   required String version,
 }) {
   return {
-    'schemaVersion': 3,
+    'schemaVersion': 4,
     'name': id,
     'displayName': id,
     'version': version,
@@ -267,6 +267,9 @@ Map<String, Object?> _manifestJson({
     'licenseFiles': ['LICENSE'],
     'entryAssembly': 'Mod.dll',
     'entryType': 'Test.Mod',
+    'supportedGameVersionRange': '*',
+    'supportedLoaderVersionRange': '*',
+    'supportedSdkVersionRange': '*',
   };
 }
 

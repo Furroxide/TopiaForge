@@ -75,17 +75,41 @@ void _registryCliTests(_CliTestHarness Function() currentHarness) {
   });
 
   test('check package on a zip prints sha256 and structured issues', () async {
+    const entryAssembly = 'TopiaForge.ValidTestMod.dll';
+    final fixtureAssembly = File(
+      p.join(
+        Directory.current.path,
+        '..',
+        '..',
+        'tests',
+        'TopiaForge.ValidTestMod',
+        'bin',
+        'Release',
+        'netstandard2.1',
+        entryAssembly,
+      ),
+    );
+    expect(
+      fixtureAssembly.existsSync(),
+      isTrue,
+      reason: 'Build TopiaForge.slnx -c Release before running CLI tests.',
+    );
     final good = _writeTestPackage(
       currentHarness().temp,
       manifest: {
-        'schemaVersion': 3,
+        'schemaVersion': 4,
         'name': 'cli.checkable',
         'displayName': 'Checkable',
         'version': '1.0.0',
         'author': {'name': 'Tester'},
-        'entryAssembly': 'Mod.dll',
-        'entryType': 'Test.Mod',
+        'entryAssembly': entryAssembly,
+        'entryType': 'TopiaForge.ValidTestMod.ValidMod',
+        'supportedGameVersionRange': '*',
+        'supportedLoaderVersionRange': '*',
+        'supportedSdkVersionRange': '*',
       },
+      entryAssembly: entryAssembly,
+      entryAssemblyBytes: fixtureAssembly.readAsBytesSync(),
     );
 
     final checked = await currentHarness().runCli([
@@ -116,6 +140,31 @@ void _registryCliTests(_CliTestHarness Function() currentHarness) {
     expect(shaBad.exitCode, 1);
     expect(shaBad.stdout.toString(), contains('sha256 mismatch'));
 
+    final badPe = _writeTestPackage(
+      currentHarness().temp,
+      fileName: 'bad-pe.topiaforgemod',
+      manifest: {
+        'schemaVersion': 4,
+        'name': 'cli.bad-pe',
+        'displayName': 'Bad PE',
+        'version': '1.0.0',
+        'author': {'name': 'Tester'},
+        'entryAssembly': 'Mod.dll',
+        'entryType': 'Test.Mod',
+        'supportedGameVersionRange': '*',
+        'supportedLoaderVersionRange': '*',
+        'supportedSdkVersionRange': '*',
+      },
+    );
+    final rejectedPe = await currentHarness().runCli([
+      'check',
+      'package',
+      badPe.path,
+    ]);
+    expect(rejectedPe.exitCode, 1);
+    expect(rejectedPe.stderr.toString(), contains('TFPKG160'));
+    expect(rejectedPe.stderr.toString(), contains('not a valid PE image'));
+
     // An old schema manifest fails with structured issues, not a crash dump.
     final oldContract = _writeTestPackage(
       currentHarness().temp,
@@ -138,7 +187,7 @@ void _registryCliTests(_CliTestHarness Function() currentHarness) {
     expect(failed.exitCode, 1);
     expect(
       failed.stdout.toString(),
-      contains('error: schemaVersion must be 3.'),
+      contains('error: schemaVersion must be 4.'),
     );
     expect(failed.stderr.toString(), isNot(contains('Bad state:')));
   });
@@ -149,7 +198,7 @@ void _registryCliTests(_CliTestHarness Function() currentHarness) {
       final package = _writeTestPackage(
         currentHarness().temp,
         manifest: {
-          'schemaVersion': 3,
+          'schemaVersion': 4,
           'name': 'cli.publishable',
           'displayName': 'Publishable',
           'version': '1.0.0',
@@ -158,6 +207,9 @@ void _registryCliTests(_CliTestHarness Function() currentHarness) {
           'licenseFiles': ['LICENSE'],
           'entryAssembly': 'Mod.dll',
           'entryType': 'Test.Mod',
+          'supportedGameVersionRange': '*',
+          'supportedLoaderVersionRange': '*',
+          'supportedSdkVersionRange': '*',
         },
       );
       final registryDir = p.join(currentHarness().temp.path, 'registry');
@@ -205,12 +257,12 @@ void _registryCliTests(_CliTestHarness Function() currentHarness) {
       expect(duplicate.exitCode, 1);
       expect(duplicate.stdout.toString(), contains('already published'));
 
-      // A manifest with any finding (unknown permission = warning) is refused.
+      // A manifest with any finding (unknown capability) is refused.
       final warned = _writeTestPackage(
         currentHarness().temp,
         fileName: 'warned.topiaforgemod',
         manifest: {
-          'schemaVersion': 3,
+          'schemaVersion': 4,
           'name': 'cli.warned',
           'displayName': 'Warned',
           'version': '1.0.0',
@@ -219,7 +271,10 @@ void _registryCliTests(_CliTestHarness Function() currentHarness) {
           'licenseFiles': ['LICENSE'],
           'entryAssembly': 'Mod.dll',
           'entryType': 'Test.Mod',
-          'permissions': ['not-a-real-permission'],
+          'supportedGameVersionRange': '*',
+          'supportedLoaderVersionRange': '*',
+          'supportedSdkVersionRange': '*',
+          'capabilities': ['not-a-real-capability'],
         },
       );
       final refused = await currentHarness().runCli([

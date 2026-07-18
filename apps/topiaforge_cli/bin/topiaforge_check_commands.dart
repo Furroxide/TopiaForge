@@ -13,7 +13,10 @@ extension _TopiaForgeCheckCommands on _TopiaForgeCli {
         _option(args, '--project') ?? args.skip(1).firstOrNull,
       ),
       'package' => _checkPackage(args.skip(1).toList()),
-      _ => throw UsageError('Usage: topiaforge check project|package [path]'),
+      'scaffold' => _checkReleaseScaffold(args.skip(1).toList()),
+      _ => throw UsageError(
+        'Usage: topiaforge check project|package|scaffold [path]',
+      ),
     };
   }
 
@@ -81,6 +84,17 @@ extension _TopiaForgeCheckCommands on _TopiaForgeCli {
     final issues = manifest.validate();
     _printIssues(issues);
     var failed = issues.any((issue) => issue.isBlocking);
+    if (package != null) {
+      final assemblyErrors = await _managedPackageValidationErrors(path);
+      if (assemblyErrors.isEmpty) {
+        stdout.writeln('Managed assembly metadata is valid.');
+      } else {
+        for (final error in assemblyErrors) {
+          stderr.writeln('error: $error');
+        }
+        failed = true;
+      }
+    }
 
     final expectedSha = _option(args, '--sha256');
     if (expectedSha != null) {

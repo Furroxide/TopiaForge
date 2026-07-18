@@ -20,7 +20,7 @@
 //   * --session-file <path> atomically writes the live connection values (document URL, sync URL, scene,
 //     editor URL suffix, lastPublishedUtc) as JSON so the launcher/CLI can auto-detect them without parsing
 //     stdout. The same values are also printed on a single `TOPIAFORGE_UGC_SESSION {json}` line.
-//   * Heavy deps are imported lazily so --help / --check work before `npm ci`.
+//   * Heavy deps are imported lazily so --help / --check work before a locked dependency restore.
 
 import { newestProjectFile, readProject } from './project_file.mjs';
 import {
@@ -106,7 +106,7 @@ async function main() {
         `mode        : ${args.watch ? 'watch ' + args.watch : args.file ? 'file ' + args.file : '(none)'}\n` +
         `scene       : ${args.scene || '(first)'}\n` +
         `document    : ${args.doc || '(new)'}\n` +
-        `deps        : ${depsOk ? 'installed' : 'NOT installed — run `npm ci` in this folder'}\n`,
+        `deps        : ${depsOk ? 'installed' : 'NOT installed — run `npm ci --ignore-scripts` in this folder'}\n`,
     );
     if (!depsOk) process.exitCode = 1;
     return;

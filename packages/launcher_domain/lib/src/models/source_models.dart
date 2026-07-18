@@ -71,6 +71,7 @@ class PackageInstallAction {
     required this.modId,
     required this.name,
     required this.version,
+    required this.expectedManifest,
     required this.packageUrl,
     required this.packageSha256,
     this.sourceId = '',
@@ -82,6 +83,12 @@ class PackageInstallAction {
   final String modId;
   final String name;
   final String version;
+
+  /// Exact manifest advertised by the source and approved by the install
+  /// planner. Downloaded package bytes must contain the same canonical V4
+  /// manifest before they can be staged.
+  final ModManifest expectedManifest;
+
   final String packageUrl;
   final String packageSha256;
   final String sourceId;

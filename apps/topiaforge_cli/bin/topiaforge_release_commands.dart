@@ -4,14 +4,87 @@ extension _TopiaForgeReleaseCommands on _TopiaForgeCli {
   Future<int> _release(List<String> args) async {
     return switch (args.firstOrNull) {
       'build-package' => _releaseBuildPackage(args.skip(1).toList()),
+      'build-sdk-payload' => _releaseBuildSdkPayload(args.skip(1).toList()),
       'test-package' => _releaseTestPackage(args.skip(1).toList()),
       'validate-policy' => _releaseValidatePolicy(args.skip(1).toList()),
       'build-metadata' => _releaseBuildMetadata(args.skip(1).toList()),
       'verify-metadata' => _releaseVerifyMetadata(args.skip(1).toList()),
       _ => throw UsageError(
-        'Usage: topiaforge release build-package|test-package|validate-policy|build-metadata|verify-metadata ...',
+        'Usage: topiaforge release build-package|build-sdk-payload|test-package|validate-policy|build-metadata|verify-metadata ...',
       ),
     };
+  }
+
+  /// Produces the small extracted-release developer payload used by the CI
+  /// template matrix. It deliberately uses the same SDK writer, templates,
+  /// and compiled CLI as a platform release, without requiring a launcher UI.
+  Future<int> _releaseBuildSdkPayload(List<String> args) async {
+    final repoRoot = _releaseRepositoryRoot();
+    final output = _option(args, '--output');
+    final cli = _option(args, '--cli');
+    if (output == null ||
+        output.trim().isEmpty ||
+        cli == null ||
+        cli.trim().isEmpty) {
+      throw UsageError(
+        'Usage: topiaforge release build-sdk-payload --output <empty-dir> '
+        '--cli <compiled-cli> [--configuration Release]',
+      );
+    }
+    final cliFile = File(p.normalize(p.absolute(cli)));
+    if (!cliFile.existsSync()) {
+      throw StateError('Compiled CLI was not found: ${cliFile.path}');
+    }
+    final destination = Directory(p.normalize(p.absolute(output)));
+    final destinationPath = destination.absolute.path;
+    final repository = Directory(repoRoot).absolute.path;
+    if (p.equals(destinationPath, repository) ||
+        p.isWithin(destinationPath, repository) ||
+        p.equals(destinationPath, p.rootPrefix(destinationPath))) {
+      throw StateError(
+        'The SDK payload output cannot be the repository, one of its parents, or a filesystem root.',
+      );
+    }
+    if (p.equals(destinationPath, cliFile.path) ||
+        p.isWithin(destinationPath, cliFile.path)) {
+      throw StateError(
+        'The SDK payload output cannot contain the compiled CLI input.',
+      );
+    }
+    if (FileSystemEntity.typeSync(destinationPath, followLinks: false) ==
+        FileSystemEntityType.link) {
+      throw StateError('The SDK payload output cannot be a symbolic link.');
+    }
+    if (destination.existsSync()) destination.deleteSync(recursive: true);
+    destination.createSync(recursive: true);
+
+    ReleaseSdkPayloadWriter(
+      repositoryRoot: repoRoot,
+      configuration: _option(args, '--configuration') ?? 'Release',
+    ).write(destination.path);
+    const files = ReleaseFileOps();
+    for (final directory in const ['templates', 'tools', 'dist']) {
+      final source = Directory(p.join(repoRoot, directory));
+      if (source.existsSync()) {
+        files.copyDirectory(
+          source,
+          Directory(p.join(destination.path, directory)),
+        );
+      } else {
+        Directory(
+          p.join(destination.path, directory),
+        ).createSync(recursive: true);
+      }
+    }
+    final executableName = p.extension(cliFile.path).toLowerCase() == '.exe'
+        ? 'topiaforge.exe'
+        : 'topiaforge';
+    final executable = p.join(destination.path, executableName);
+    cliFile.copySync(executable);
+    await files.setExecutableBit(executable);
+    const ReleaseSdkPayloadValidator().validate(destination.path);
+    stdout.writeln(destination.path);
+    return 0;
   }
 
   Future<int> _releaseValidatePolicy(List<String> args) async {

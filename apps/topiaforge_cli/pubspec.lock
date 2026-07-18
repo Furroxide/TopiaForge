@@ -167,14 +167,14 @@ packages:
       path: "../../packages/launcher_data"
       relative: true
     source: path
-    version: "0.1.1"
+    version: "1.0.0"
   launcher_domain:
     dependency: "direct main"
     description:
       path: "../../packages/launcher_domain"
       relative: true
     source: path
-    version: "0.1.1"
+    version: "1.0.0"
   lints:
     dependency: "direct dev"
     description:

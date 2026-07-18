@@ -33,12 +33,7 @@ void _createRuntimeSources(Directory repoRoot) {
       'netstandard2.1',
     ),
   )..createSync(recursive: true);
-  for (final dll in [
-    'TopiaForge.ModManager.dll',
-    'TopiaForge.ModManager.Core.dll',
-    'TopiaForge.Mods.Abstractions.dll',
-    'TopiaForge.Mods.UnityUi.dll',
-  ]) {
+  for (final dll in topiaForgeRuntimeLoaderDlls) {
     File(p.join(loader.path, dll)).writeAsStringSync('');
   }
 }
@@ -138,18 +133,18 @@ Map<String, Object?> _manifestJson(
   String? loaderVersionRange,
   String? sdkVersionRange,
 }) => {
-  'schemaVersion': 3,
+  'schemaVersion': 4,
   'name': id,
   'displayName': id,
   'version': version,
   'author': {'name': 'TopiaForge'},
   'entryAssembly': '${_assemblyName(id)}.dll',
   'entryType': '$id.Entry',
-  'supportedGameVersionRange': ?gameVersionRange,
-  'supportedLoaderVersionRange': ?loaderVersionRange,
-  'supportedSdkVersionRange': ?sdkVersionRange,
+  'supportedGameVersionRange': gameVersionRange ?? '*',
+  'supportedLoaderVersionRange': loaderVersionRange ?? '*',
+  'supportedSdkVersionRange': sdkVersionRange ?? '*',
   if (dependencies.isNotEmpty)
-    'vpmDependencies': {
+    'dependencies': {
       for (final item in dependencies)
         item['id'] as String: (item['versionRange'] ?? item['version'] ?? '*')
             .toString(),

@@ -13,6 +13,11 @@ Directory _writeFixtureRepo(Directory temp) {
     }),
   );
   File(p.join(repo.path, '.fvmrc')).writeAsStringSync('{"flutter":"test"}');
+  _writeFile(repo, [
+    'apps',
+    'topiaforge_cli',
+    'pubspec.yaml',
+  ], 'name: topiaforge\nversion: 0.1.1\n');
   File(p.join(repo.path, 'README.md')).writeAsStringSync('readme');
   File(
     p.join(repo.path, 'THIRD_PARTY_NOTICES.md'),
@@ -30,6 +35,14 @@ Directory _writeFixtureRepo(Directory temp) {
   _writeFile(repo, ['bindings', 'binding.txt'], 'binding');
   _writeFile(repo, ['baselines', 'baseline.txt'], 'baseline');
   _writeFile(repo, ['templates', 'mod', 'template.txt'], 'template');
+  _writeFile(
+    repo,
+    ['templates', 'mod', 'minimal', '{{ASSEMBLY_NAME}}.csproj'],
+    '''<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile></PropertyGroup>
+  <ItemGroup><PackageReference Include="TopiaForge.Mods.Abstractions" Version="1.0.0" /></ItemGroup>
+</Project>''',
+  );
   _writeFile(repo, ['templates', 'mod', 'bin', 'ignored.txt'], 'ignored');
   _writeFile(repo, [
     'templates',
@@ -57,6 +70,22 @@ Directory _writeFixtureRepo(Directory temp) {
   ], 'generated solution');
   _writeFile(repo, ['dist', 'vpm', 'index.json'], jsonEncode({}));
   _writeFile(repo, ['dist', 'demo.topiaforgemod'], 'package');
+  _writeFixtureSdkProjects(repo);
+  for (final name in const [
+    'TopiaForge.ModPackageValidator.dll',
+    'TopiaForge.ModPackageValidator.deps.json',
+    'TopiaForge.ModPackageValidator.runtimeconfig.json',
+    'TopiaForge.ModManager.Core.dll',
+  ]) {
+    _writeFile(repo, [
+      'src',
+      'TopiaForge.ModPackageValidator',
+      'bin',
+      'Release',
+      'net10.0',
+      name,
+    ], 'validator fixture');
+  }
   for (final license in _bepInExLicenseNames) {
     _writeFile(repo, [
       'third_party',
@@ -142,6 +171,46 @@ Directory _writeFixtureRepo(Directory temp) {
   return repo;
 }
 
+void _writeFixtureSdkProjects(Directory repo) {
+  for (final package in topiaForgeSdkPackageIds) {
+    final analyzer = package == 'TopiaForge.Mods.Analyzers';
+    final target = analyzer ? 'netstandard2.0' : 'netstandard2.1';
+    _writeFile(
+      repo,
+      ['src', package, '$package.csproj'],
+      '<Project><PropertyGroup><TargetFramework>$target</TargetFramework>'
+      '<Version>1.0.0</Version></PropertyGroup></Project>',
+    );
+    _writeFile(repo, [
+      'src',
+      package,
+      'bin',
+      'Release',
+      target,
+      '$package.dll',
+    ], '$package implementation');
+    if (!analyzer) {
+      _writeFile(repo, [
+        'src',
+        package,
+        'bin',
+        'Release',
+        target,
+        '$package.xml',
+      ], '<doc />');
+      _writeFile(repo, [
+        'src',
+        package,
+        'obj',
+        'Release',
+        target,
+        'ref',
+        '$package.dll',
+      ], '$package reference');
+    }
+  }
+}
+
 const _bepInExLicenseNames = [
   'BepInEx-MIT.txt',
   'UnityDoorstop-LGPL-2.1.txt',
@@ -162,6 +231,103 @@ void _addDartNotices(Archive archive, {String prefix = ''}) {
     archive.addFile(
       ArchiveFile.string('${root}third_party/dart/LICENSES/$name', 'license'),
     );
+  }
+}
+
+void _addSdkPayload(Archive archive, {String prefix = ''}) {
+  const version = '1.0.0';
+  final base = prefix.isEmpty ? '' : '$prefix/';
+  final temp = Directory.systemTemp.createTempSync('topiaforge-sdk-fixture-');
+  try {
+    final references = <String, File>{};
+    final documentation = <String, File>{};
+    final analyzers = <String, File>{};
+    final runtime = <String, File>{};
+    for (final package in topiaForgeSdkPackageIds) {
+      final dll = File(p.join(temp.path, 'input', '$package.dll'))
+        ..createSync(recursive: true)
+        ..writeAsStringSync('$package assembly');
+      if (package == 'TopiaForge.Mods.Analyzers') {
+        analyzers[package] = dll;
+        continue;
+      }
+      references[package] = dll;
+      documentation[package] = File(p.join(temp.path, 'input', '$package.xml'))
+        ..writeAsStringSync('<doc />');
+      if (package == 'TopiaForge.Mods.Testing') runtime[package] = dll;
+    }
+    final pack = const SdkReferencePackWriter().write(
+      destination: Directory(p.join(temp.path, 'sdk', version)),
+      sdkVersion: version,
+      dotnetSdkVersion: _fixtureDotnetVersion,
+      toolVersion: '0.1.1',
+      references: references,
+      documentation: documentation,
+      analyzers: analyzers,
+      runtimeAssemblies: runtime,
+      runtimeSupportAssemblies: {
+        'TopiaForge.Mods.Testing': [
+          for (final packageId in topiaForgeTestingRuntimeSupportPackageIds)
+            references[packageId]!,
+        ],
+      },
+    );
+    for (final file in Directory(
+      p.join(temp.path, 'sdk'),
+    ).listSync(recursive: true).whereType<File>()) {
+      final relative = p.posix.joinAll(
+        p.split(p.relative(file.path, from: temp.path)),
+      );
+      archive.addFile(
+        ArchiveFile.bytes('$base$relative', file.readAsBytesSync()),
+      );
+    }
+    archive.addFile(
+      ArchiveFile.string(
+        '${base}sdk/index.json',
+        jsonEncode({
+          'schemaVersion': 1,
+          'defaultVersion': version,
+          'toolVersion': '0.1.1',
+          'versions': {
+            version: {'manifestSha256': pack.manifestSha256},
+          },
+        }),
+      ),
+    );
+    archive.addFile(
+      ArchiveFile.string(
+        '${base}global.json',
+        jsonEncode({
+          'sdk': {'version': _fixtureDotnetVersion, 'rollForward': 'disable'},
+        }),
+      ),
+    );
+    for (final name in const [
+      'TopiaForge.ModPackageValidator.dll',
+      'TopiaForge.ModPackageValidator.deps.json',
+      'TopiaForge.ModPackageValidator.runtimeconfig.json',
+      'TopiaForge.ModManager.Core.dll',
+    ]) {
+      archive.addFile(
+        ArchiveFile.string(
+          '${base}tools/package-validator/$name',
+          'validator fixture',
+        ),
+      );
+    }
+    archive.addFile(
+      ArchiveFile.string(
+        '${base}templates/mod/minimal/Test.csproj',
+        '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>'
+            '<RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>'
+            '</PropertyGroup><ItemGroup><PackageReference '
+            'Include="TopiaForge.Mods.Abstractions" Version="1.0.0" />'
+            '</ItemGroup></Project>',
+      ),
+    );
+  } finally {
+    temp.deleteSync(recursive: true);
   }
 }
 

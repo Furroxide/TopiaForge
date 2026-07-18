@@ -45,18 +45,44 @@ class PackageInstallPlan {
 class DependencyPlanner {
   const DependencyPlanner();
 
+  List<LauncherIssue> runtimeCompatibilityIssues(
+    ModManifest manifest, {
+    String? gameVersion,
+    bool requireKnownGameVersion = false,
+    String? loaderVersion,
+    String? sdkVersion,
+    String? platform,
+    String? architecture,
+    List<String> contentTargets = const [],
+  }) => _runtimeCompatibilityIssues(
+    manifest,
+    gameVersion: gameVersion,
+    requireKnownGameVersion: requireKnownGameVersion,
+    loaderVersion: loaderVersion,
+    sdkVersion: sdkVersion,
+    platform: platform,
+    architecture: architecture,
+    contentTargets: contentTargets,
+  );
+
   DependencyResolutionResult resolveInstalled(
     List<InstalledMod> mods, {
     String? gameVersion,
     bool requireKnownGameVersion = false,
     String loaderVersion = TopiaForgeRuntimeVersions.loaderVersion,
     String sdkVersion = TopiaForgeRuntimeVersions.sdkVersion,
+    String? platform,
+    String? architecture,
+    List<String> contentTargets = const [],
   }) => _resolveInstalled(
     mods,
     gameVersion: gameVersion,
     requireKnownGameVersion: requireKnownGameVersion,
     loaderVersion: loaderVersion,
     sdkVersion: sdkVersion,
+    platform: platform,
+    architecture: architecture,
+    contentTargets: contentTargets,
   );
 
   PackageInstallPlan previewInstall(
@@ -71,6 +97,9 @@ class DependencyPlanner {
     String? loaderVersion,
     String? sdkVersion,
     bool requireKnownGameVersion = false,
+    String? platform,
+    String? architecture,
+    List<String> contentTargets = const [],
   }) {
     final issues = [...candidate.validate()];
     final installed = {
@@ -87,6 +116,9 @@ class DependencyPlanner {
         requireKnownGameVersion: requireKnownGameVersion,
         loaderVersion: loaderVersion,
         sdkVersion: sdkVersion,
+        platform: platform,
+        architecture: architecture,
+        contentTargets: contentTargets,
       ),
     );
 
@@ -98,6 +130,9 @@ class DependencyPlanner {
       requireKnownGameVersion: requireKnownGameVersion,
       loaderVersion: loaderVersion,
       sdkVersion: sdkVersion,
+      platform: platform,
+      architecture: architecture,
+      contentTargets: contentTargets,
     );
     issues.addAll(dependencyPlan.issues);
     final installActions = [...dependencyPlan.actions];
@@ -114,6 +149,7 @@ class DependencyPlanner {
         modId: candidate.id,
         name: candidate.name,
         version: candidate.version,
+        expectedManifest: candidate,
         packageUrl: packageUrl,
         packageSha256: packageSha256,
         sourceId: sourceId,
@@ -161,6 +197,9 @@ class DependencyPlanner {
       requireKnownGameVersion: requireKnownGameVersion,
       loaderVersion: loaderVersion,
       sdkVersion: sdkVersion,
+      platform: platform,
+      architecture: architecture,
+      contentTargets: contentTargets,
     );
 
     final existing = installed[candidate.id.toLowerCase()];
@@ -200,9 +239,9 @@ class DependencyPlanner {
       installActions: installActions,
       requiredPermissions: List.unmodifiable(
         {
-          ...candidate.permissions,
+          ...candidate.capabilities,
           for (final manifest in dependencyPlan.selectedManifests.values)
-            ...manifest.permissions,
+            ...manifest.capabilities,
         }.toList()..sort(),
       ),
     );
@@ -219,6 +258,9 @@ void _appendProspectiveConflicts(
   required bool requireKnownGameVersion,
   required String? loaderVersion,
   required String? sdkVersion,
+  required String? platform,
+  required String? architecture,
+  required List<String> contentTargets,
 }) {
   final planned = <String, ModManifest>{
     ...dependencies,
@@ -240,6 +282,9 @@ void _appendProspectiveConflicts(
             requireKnownGameVersion: requireKnownGameVersion,
             loaderVersion: loaderVersion,
             sdkVersion: sdkVersion,
+            platform: platform,
+            architecture: architecture,
+            contentTargets: contentTargets,
           ))
         mod.id.toLowerCase(): mod.manifest!,
     ...planned,

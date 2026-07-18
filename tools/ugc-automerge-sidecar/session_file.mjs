@@ -12,6 +12,8 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 
+import { readBoundedDescriptor } from './bounded_read.mjs';
+
 export const DEFAULT_MAX_SESSION_BYTES = 64 * 1024;
 
 export class SessionFileError extends Error {
@@ -83,7 +85,15 @@ export function readSessionFile(
         `Session lease exceeds the ${maxBytes}-byte limit: ${sessionPath}`,
       );
     }
-    bytes = readBounded(descriptor, maxBytes, sessionPath, fileSystem);
+    bytes = readBoundedDescriptor(descriptor, {
+      maxBytes,
+      chunkBytes: 4096,
+      fileSystem,
+      createTooLargeError: () => new SessionFileError(
+        'too-large',
+        `Session lease exceeds the ${maxBytes}-byte limit: ${sessionPath}`,
+      ),
+    });
     const afterRead = fileSystem.fstatSync(descriptor);
     if (afterRead.size !== opened.size || afterRead.mtimeMs !== opened.mtimeMs) {
       throw new SessionFileError(
@@ -137,25 +147,6 @@ export function readSessionFile(
     );
   }
   return session;
-}
-
-function readBounded(descriptor, maxBytes, sessionPath, fileSystem) {
-  const chunks = [];
-  let total = 0;
-  const buffer = Buffer.allocUnsafe(Math.min(4096, maxBytes + 1));
-  while (true) {
-    const count = fileSystem.readSync(descriptor, buffer, 0, buffer.length, null);
-    if (count === 0) break;
-    total += count;
-    if (total > maxBytes) {
-      throw new SessionFileError(
-        'too-large',
-        `Session lease exceeds the ${maxBytes}-byte limit: ${sessionPath}`,
-      );
-    }
-    chunks.push(Buffer.from(buffer.subarray(0, count)));
-  }
-  return Buffer.concat(chunks, total);
 }
 
 function requireSameRegularFile(expected, actual, sessionPath) {

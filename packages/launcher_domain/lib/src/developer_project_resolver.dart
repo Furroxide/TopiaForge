@@ -65,6 +65,7 @@ class DeveloperProjectResolver {
           modId: mod.manifest.id,
           name: mod.manifest.name,
           version: mod.manifest.version,
+          expectedManifest: mod.manifest,
           packageUrl: mod.downloadUrl,
           packageSha256: mod.packageSha256,
           sourceId: mod.sourceId,
