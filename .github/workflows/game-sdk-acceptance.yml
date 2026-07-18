@@ -11,7 +11,7 @@ on:
           - windows
           - linux-proton
           - both
-        default: windows
+        default: both
       scope:
         description: Complete launch gate or a nonblocking diagnostic subset
         required: true

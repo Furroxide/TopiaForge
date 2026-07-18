@@ -90,7 +90,8 @@ namespace TopiaForge.ModManager.Tests
                    && acceptanceCommand.Contains("'--all'", StringComparison.Ordinal),
                 "live acceptance must require the full canonical matrix by default");
             var workflow = File.ReadAllText(workflowPath);
-            Assert(workflow.Contains("default: full", StringComparison.Ordinal)
+            Assert(workflow.Contains("default: both", StringComparison.Ordinal)
+                   && workflow.Contains("default: full", StringComparison.Ordinal)
                    && workflow.Contains("runs-on: [self-hosted, Windows", StringComparison.Ordinal)
                    && workflow.Contains("runs-on: [self-hosted, Linux", StringComparison.Ordinal)
                    && workflow.Contains("dart run bin/topiaforge.dart @arguments", StringComparison.Ordinal),
