@@ -59,7 +59,8 @@ class WorldAuthoringConfig {
     modPath: modPath ?? this.modPath,
   );
 
-  /// Derives a bundle name from a mod/world id: lowercase, non [a-z0-9-] runs collapsed to '-'.
+  /// Derives a bundle name from a mod/world id: lowercase, non-`[a-z0-9-]`
+  /// runs collapsed to `-`.
   static String deriveBundleName(String id) {
     final lowered = id.toLowerCase();
     final cleaned = lowered

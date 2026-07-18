@@ -24,12 +24,19 @@ if (!existsSync(resolve(siteRoot, 'index.html'))) {
 const htmlFiles = collectHtml(siteRoot);
 const failures = new Set();
 const documentCache = new Map();
+let checkedHtmlCount = 0;
 
 for (const source of htmlFiles) {
   const document = readFileSync(source, 'utf8');
-  const attributes = document.matchAll(/\b(?:href|src)=["']([^"'<>]+)["']/giu);
+  if (!/<html\b/iu.test(document)) {
+    continue;
+  }
+  checkedHtmlCount++;
+  const attributes = document.matchAll(
+    /(?<![A-Za-z0-9_-])(?:href|src)=["']([^"'<>]+)["']/giu,
+  );
   for (const match of attributes) {
-    const rawTarget = match[1];
+    const rawTarget = decodeHtmlAttribute(match[1]);
     if (isExternalOrEmbedded(rawTarget)) {
       continue;
     }
@@ -81,7 +88,7 @@ if (failures.size > 0) {
   process.exit(1);
 }
 
-console.log(`Built links: pass (${htmlFiles.length} HTML files)`);
+console.log(`Built links: pass (${checkedHtmlCount} standalone HTML files)`);
 
 function collectHtml(root) {
   const found = [];
@@ -123,4 +130,21 @@ function resolveDestination(candidate) {
 
 function display(path) {
   return relative(siteRoot, path).split(sep).join('/');
+}
+
+function decodeHtmlAttribute(value) {
+  return value.replace(
+    /&(?:#(\d+)|#x([0-9a-f]+)|(amp|quot|apos|lt|gt));/giu,
+    (_entity, decimal, hexadecimal, named) => {
+      if (decimal) return String.fromCodePoint(Number.parseInt(decimal, 10));
+      if (hexadecimal) return String.fromCodePoint(Number.parseInt(hexadecimal, 16));
+      return {
+        amp: '&',
+        quot: '"',
+        apos: "'",
+        lt: '<',
+        gt: '>',
+      }[named.toLowerCase()];
+    },
+  );
 }

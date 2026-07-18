@@ -30,15 +30,21 @@ embedded before final Developer ID signing and notarization.
 Native desktop launcher icons are generated from:
 
 ```text
+../../packages/launcher_ui/assets/brand/topiaforge-icon.png
 assets/brand/topiaforge-app-icon.png
 ```
 
-Use the globally activated Dart package, not a `pubspec.yaml` dev dependency:
+The shared 144x144 pixel mark is the canonical source. The local brand tool
+places it on the dark rounded launcher tile with nearest-neighbor scaling and
+emits the 1024x1024 desktop master, Linux Snap icon, and website assets.
+`icons_launcher` then produces the Windows and macOS variants:
 
 ```powershell
-dart pub global activate icons_launcher 3.1.0
-dart pub global run icons_launcher:create --path icons_launcher.yaml
+dart run tool/generate_brand_assets.dart
+dart run icons_launcher:create --path icons_launcher.yaml
 ```
 
-Run the commands from this app directory. The generator updates the Windows
-`.ico`, macOS app icon asset catalog, and Linux Snap icon under `snap/gui`.
+Run both commands from this app directory. Together they update the Windows
+`.ico`, macOS app icon asset catalog, Linux Snap icon under `snap/gui`, and the
+developer website's wordmark and favicon. Linux generation stays in the local
+tool because the package name differs from the launcher's custom Snap app name.

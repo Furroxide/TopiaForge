@@ -30,3 +30,7 @@
 .hero .tagline {
   max-width: 48rem;
 }
+
+.site-title img {
+  image-rendering: pixelated;
+}

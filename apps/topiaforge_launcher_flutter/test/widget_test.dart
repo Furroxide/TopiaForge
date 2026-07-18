@@ -56,6 +56,12 @@ void main() {
     expect(find.text('Choose the folder myself'), findsOneWidget);
     expect(find.text('Pick your mods'), findsOneWidget);
     expect(
+      tester
+          .widgetList<TopiaForgeLogo>(find.byType(TopiaForgeLogo))
+          .map((logo) => logo.height),
+      containsAll(<double>[36, 54]),
+    );
+    expect(
       find.descendant(
         of: find.byType(NavigationRail),
         matching: find.byType(Badge),

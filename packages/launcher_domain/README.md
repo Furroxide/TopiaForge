@@ -35,5 +35,6 @@ Run `dart analyze` and `dart test` from this directory after contract changes.
 Breaking serialized changes must increment their discriminator across every
 C# and Dart consumer.
 
-See [CompatibilityPolicy.md](../../docs/CompatibilityPolicy.md) and
-[Modding.md](../../docs/Modding.md) for ecosystem-facing policy.
+See the [compatibility policy](https://docs.topiaforge.dev/reference/compatibility/)
+and [SDK overview](https://docs.topiaforge.dev/reference/sdk-overview/) for
+ecosystem-facing policy.

@@ -5,5 +5,3 @@ icons_launcher:
       enable: true
     windows:
       enable: true
-    linux:
-      enable: true
