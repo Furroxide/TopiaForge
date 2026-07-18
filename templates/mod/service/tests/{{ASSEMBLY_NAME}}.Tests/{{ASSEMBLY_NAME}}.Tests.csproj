@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>{{ASSEMBLY_NAME}}.Tests</AssemblyName>
+    <RootNamespace>{{ASSEMBLY_NAME}}.Tests</RootNamespace>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode Condition="'$(ContinuousIntegrationBuild)' == 'true' and Exists('$(MSBuildProjectDirectory)/packages.lock.json')">true</RestoreLockedMode>
+    <TopiaForgeSafeProject>false</TopiaForgeSafeProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\{{ASSEMBLY_NAME}}.csproj" />
+    <ProjectReference Include="..\..\contracts\{{ASSEMBLY_NAME}}.Api\{{ASSEMBLY_NAME}}.Api.csproj" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.0" PrivateAssets="all" />
+    <PackageReference Include="NUnit" Version="4.3.2" />
+    <PackageReference Include="NUnit3TestAdapter" Version="5.0.0" PrivateAssets="all" />
+    <PackageReference Include="TopiaForge.Mods.Abstractions" Version="{{SDK_VERSION}}" />
+    <PackageReference Include="TopiaForge.Mods.Testing" Version="{{SDK_VERSION}}" />
+  </ItemGroup>
+  <Target Name="EnsureTopiaForgeSdk" BeforeTargets="ResolveAssemblyReferences"
+          Condition="!Exists('..\..\topiaforge.dev.props')">
+    <Error Text="TopiaForge SDK references are missing. Run 'topiaforge restore' in the mod project." />
+  </Target>
+</Project>

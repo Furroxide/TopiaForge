@@ -13,20 +13,26 @@ namespace TopiaForge.Mods.UnityUi
         /// </summary>
         public event Action? AccessibilityProfileChanged;
 
+        /// <summary>Gets accessibility profile.</summary>
         public TopiaForgeAccessibilityProfile AccessibilityProfile => accessibilityProfile;
 
+        /// <summary>Gets effective accessibility.</summary>
         public TopiaForgeEffectiveAccessibility EffectiveAccessibility => accessibilityProfile.Resolve(
             TopiaForgeTheme.HighContrast,
             TopiaForgeTheme.UiScale,
             TopiaForgeTheme.ReducedMotion,
             TopiaForgeTheme.MotionScale);
 
+        /// <summary>Gets effective high contrast.</summary>
         public bool EffectiveHighContrast => EffectiveAccessibility.HighContrast;
 
+        /// <summary>Gets effective UI scale.</summary>
         public float EffectiveUiScale => EffectiveAccessibility.UiScale;
 
+        /// <summary>Gets effective reduced motion.</summary>
         public bool EffectiveReducedMotion => EffectiveAccessibility.ReducedMotion;
 
+        /// <summary>Gets effective motion.</summary>
         public float EffectiveMotion => EffectiveAccessibility.MotionIntensity;
 
         /// <summary>

@@ -7,10 +7,8 @@
     "category": "Content",
     "description": "Asset content mod for Robotopia.",
     "tags": ["assets", "content"],
-    "permissions": ["asset-bundles", "filesystem"],
-    "vpmDependencies": {
-      "io.github.furroxide.topiaforge.assets": ">=0.1.0"
-    },
-    "loadAfter": ["io.github.furroxide.topiaforge.assets"]
+    "capabilities": ["asset-bundles", "filesystem"],
+    "dependencies": {},
+    "loadAfter": []
   }
 }

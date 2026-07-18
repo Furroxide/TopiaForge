@@ -1,0 +1,11 @@
+<Project>
+  <ItemGroup Condition="'$(RobotopiaManagedDir)' != ''">
+    <Reference Include="UnityEngine" HintPath="$(RobotopiaManagedDir)/UnityEngine.dll" Private="false" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(RobotopiaManagedDir)/UnityEngine.CoreModule.dll" Private="false" />
+  </ItemGroup>
+  <Target Name="TopiaForgeRequireUnityInteropReferences" BeforeTargets="ResolveAssemblyReferences">
+    <Error Code="TF1101"
+           Condition="'$(RobotopiaManagedDir)' == '' or !Exists('$(RobotopiaManagedDir)/UnityEngine.CoreModule.dll')"
+           Text="TopiaForge.Mods.Interop.Unity requires Robotopia's managed references. Run 'topiaforge restore' with Robotopia installed. Prefer the safe SDK when native interop is unnecessary. See https://docs.topiaforge.dev/diagnostics/TF1101" />
+  </Target>
+</Project>

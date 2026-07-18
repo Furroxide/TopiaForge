@@ -6,6 +6,9 @@ namespace TopiaForge.ModManager.Core
     [DataContract]
     public sealed class ModManifest
     {
+        [DataMember(Name = "$schema", EmitDefaultValue = false)]
+        public string SchemaUrl { get; set; } = string.Empty;
+
         [DataMember(Name = "schemaVersion", IsRequired = true)]
         public int SchemaVersion { get; set; }
 
@@ -30,14 +33,11 @@ namespace TopiaForge.ModManager.Core
         [DataMember(Name = "entryType")]
         public string EntryType { get; set; } = string.Empty;
 
-        [DataMember(Name = "vpmDependencies")]
-        public Dictionary<string, string> VpmDependencies { get; set; } = new Dictionary<string, string>();
-
         [DataMember(Name = "dependencies")]
-        public List<ModDependency> Dependencies { get; set; } = new List<ModDependency>();
+        public Dictionary<string, string> Dependencies { get; set; } = new Dictionary<string, string>();
 
         [DataMember(Name = "optionalDependencies")]
-        public List<ModDependency> OptionalDependencies { get; set; } = new List<ModDependency>();
+        public Dictionary<string, string> OptionalDependencies { get; set; } = new Dictionary<string, string>();
 
         [DataMember(Name = "conflicts")]
         public List<ModConflict> Conflicts { get; set; } = new List<ModConflict>();
@@ -45,14 +45,17 @@ namespace TopiaForge.ModManager.Core
         [DataMember(Name = "loadAfter")]
         public List<string> LoadAfter { get; set; } = new List<string>();
 
+        [DataMember(Name = "loadBefore")]
+        public List<string> LoadBefore { get; set; } = new List<string>();
+
         [DataMember(Name = "supportedGameVersionRange")]
-        public string SupportedGameVersionRange { get; set; } = string.Empty;
+        public string SupportedGameVersionRange { get; set; } = "*";
 
         [DataMember(Name = "supportedLoaderVersionRange")]
-        public string SupportedLoaderVersionRange { get; set; } = string.Empty;
+        public string SupportedLoaderVersionRange { get; set; } = "*";
 
         [DataMember(Name = "supportedSdkVersionRange")]
-        public string SupportedSdkVersionRange { get; set; } = string.Empty;
+        public string SupportedSdkVersionRange { get; set; } = "*";
 
         [DataMember(Name = "category")]
         public string Category { get; set; } = string.Empty;
@@ -60,8 +63,21 @@ namespace TopiaForge.ModManager.Core
         [DataMember(Name = "tags")]
         public List<string> Tags { get; set; } = new List<string>();
 
-        [DataMember(Name = "icon")]
+        [IgnoreDataMember]
         public string Icon { get; set; } = string.Empty;
+
+        [DataMember(Name = "icon", EmitDefaultValue = false)]
+        private string? SerializedIcon
+        {
+            get => string.IsNullOrEmpty(Icon) ? null : Icon;
+            set
+            {
+                IconWasPresent = true;
+                Icon = value ?? string.Empty;
+            }
+        }
+
+        internal bool IconWasPresent { get; private set; }
 
         [DataMember(Name = "screenshots")]
         public List<string> Screenshots { get; set; } = new List<string>();
@@ -72,20 +88,67 @@ namespace TopiaForge.ModManager.Core
         [DataMember(Name = "source")]
         public string Source { get; set; } = string.Empty;
 
-        [DataMember(Name = "license")]
+        [IgnoreDataMember]
         public string License { get; set; } = string.Empty;
 
-        [DataMember(Name = "licenseFiles")]
+        [DataMember(Name = "license", EmitDefaultValue = false)]
+        private string? SerializedLicense
+        {
+            get => string.IsNullOrEmpty(License) ? null : License;
+            set
+            {
+                LicenseWasPresent = true;
+                License = value ?? string.Empty;
+            }
+        }
+
+        internal bool LicenseWasPresent { get; private set; }
+
+        [IgnoreDataMember]
         public List<string> LicenseFiles { get; set; } = new List<string>();
+
+        [DataMember(Name = "licenseFiles", EmitDefaultValue = false)]
+        private List<string>? SerializedLicenseFiles
+        {
+            get => LicenseFiles == null || LicenseFiles.Count == 0 ? null : LicenseFiles;
+            set
+            {
+                LicenseFilesWasPresent = true;
+                LicenseFiles = value ?? new List<string>();
+            }
+        }
+
+        internal bool LicenseFilesWasPresent { get; private set; }
 
         [DataMember(Name = "hashes")]
         public Dictionary<string, string> Hashes { get; set; } = new Dictionary<string, string>();
 
-        [DataMember(Name = "permissions")]
-        public List<string> Permissions { get; set; } = new List<string>();
+        [DataMember(Name = "capabilities")]
+        public List<string> Capabilities { get; set; } = new List<string>();
+
+        [DataMember(Name = "platforms")]
+        public List<string> Platforms { get; set; } = new List<string>();
+
+        [DataMember(Name = "architectures")]
+        public List<string> Architectures { get; set; } = new List<string>();
+
+        [DataMember(Name = "contentTargets")]
+        public List<string> ContentTargets { get; set; } = new List<string>();
+
+        [DataMember(Name = "builtWith", EmitDefaultValue = false)]
+        public ModBuildMetadata? BuiltWith { get; set; }
 
         [DataMember(Name = "apiAssemblies")]
         public List<string> ApiAssemblies { get; set; } = new List<string>();
+
+        [DataMember(Name = "worldGamemodes")]
+        public List<ModGamemode> WorldGamemodes { get; set; } = new List<ModGamemode>();
+
+        [DataMember(Name = "vpmDependencies", EmitDefaultValue = false)]
+        private Dictionary<string, string>? UnsupportedVpmDependencies { get; set; }
+
+        [DataMember(Name = "permissions", EmitDefaultValue = false)]
+        private List<string>? UnsupportedPermissions { get; set; }
 
         [DataMember(Name = "id", EmitDefaultValue = false)]
         private string? UnsupportedId { get; set; }
@@ -122,6 +185,8 @@ namespace TopiaForge.ModManager.Core
 
         internal IEnumerable<string> UnsupportedFieldNames()
         {
+            if (UnsupportedVpmDependencies != null) yield return "vpmDependencies";
+            if (UnsupportedPermissions != null) yield return "permissions";
             if (UnsupportedId != null) yield return "id";
             if (UnsupportedTitle != null) yield return "title";
             if (UnsupportedGameVersion != null) yield return "gameVersion";
@@ -135,6 +200,22 @@ namespace TopiaForge.ModManager.Core
             if (UnsupportedLegacyPackages != null) yield return "legacyPackages";
         }
 
+    }
+
+    [DataContract]
+    public sealed class ModBuildMetadata
+    {
+        [DataMember(Name = "sdkVersion", EmitDefaultValue = false)]
+        public string SdkVersion { get; set; } = string.Empty;
+
+        [DataMember(Name = "loaderVersion", EmitDefaultValue = false)]
+        public string LoaderVersion { get; set; } = string.Empty;
+
+        [DataMember(Name = "gameVersion", EmitDefaultValue = false)]
+        public string GameVersion { get; set; } = string.Empty;
+
+        [DataMember(Name = "toolVersion", EmitDefaultValue = false)]
+        public string ToolVersion { get; set; } = string.Empty;
     }
 
     [DataContract]
@@ -184,5 +265,18 @@ namespace TopiaForge.ModManager.Core
 
         [DataMember(Name = "reason")]
         public string Reason { get; set; } = string.Empty;
+    }
+
+    [DataContract]
+    public sealed class ModGamemode
+    {
+        [DataMember(Name = "id", IsRequired = true)]
+        public string Id { get; set; } = string.Empty;
+
+        [DataMember(Name = "name", IsRequired = true)]
+        public string Name { get; set; } = string.Empty;
+
+        [DataMember(Name = "description")]
+        public string Description { get; set; } = string.Empty;
     }
 }

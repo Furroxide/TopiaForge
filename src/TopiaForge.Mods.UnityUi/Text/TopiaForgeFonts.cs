@@ -19,8 +19,10 @@ namespace TopiaForge.Mods.UnityUi
         private static TMP_FontAsset? bold;
         private static TMP_FontAsset? display;
 
+        /// <summary>Gets or sets resolved tier.</summary>
         public static string ResolvedTier { get; private set; } = "unresolved";
 
+        /// <summary>Gets body.</summary>
         public static TMP_FontAsset? Body
         {
             get
@@ -30,6 +32,7 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
+        /// <summary>Gets bold.</summary>
         public static TMP_FontAsset? Bold
         {
             get
@@ -39,6 +42,7 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
+        /// <summary>Gets display.</summary>
         public static TMP_FontAsset? Display
         {
             get
@@ -54,6 +58,7 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>True when display styles share the body asset (fallback tiers).</summary>
         public static bool UseFauxDisplay => EnsureResolved() && ReferenceEquals(display, body);
 
+        /// <summary>Gets a motion preset adjusted for the active accessibility settings.</summary>
         public static TMP_FontAsset? For(TopiaForgeTextStyle style)
         {
             EnsureResolved();

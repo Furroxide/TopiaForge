@@ -13,5 +13,9 @@ A world gamemode mod ({{MOD_ID}}) that registers with the Worlds service and app
 
 - `{{TYPE_NAME}}Mod.cs` — the gamemode lifecycle (start, tick, end conditions).
 - `topiaforge.mod.json` — the `worldGamemodes` entry defines the menu id/name/description (`topiaforge mod add gamemode id:Name:desc`); depends on `io.github.furroxide.topiaforge.worlds` and `io.github.furroxide.topiaforge.robotkit`.
+- `tests/{{ASSEMBLY_NAME}}.Tests/` — an NUnit lifecycle test with a deterministic Worlds fake and leak assertions.
+
+The registration leases, event subscriptions, and update callback are all released automatically when the
+mod unloads or fails partway through loading.
 
 New to modding? Follow `docs/YourFirstMod.md` in the TopiaForge repository; see `docs/RobotKit.md` for robots and standard agents.

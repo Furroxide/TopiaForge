@@ -6,6 +6,7 @@ using UnityEngine.UI;
 
 namespace TopiaForge.Mods.UnityUi
 {
+    /// <summary>Defines the supported button style values.</summary>
     public enum TopiaForgeButtonStyle
     {
         /// <summary>Brand-orange primary action.</summary>
@@ -137,6 +138,7 @@ namespace TopiaForge.Mods.UnityUi
 
         private bool HasShadow => style == TopiaForgeButtonStyle.Filled || style == TopiaForgeButtonStyle.Danger || style == TopiaForgeButtonStyle.Outline;
 
+        /// <summary>Gets button.</summary>
         public Button Button => button;
 
         /// <summary>Moves keyboard/controller focus to this button.</summary>
@@ -189,6 +191,7 @@ namespace TopiaForge.Mods.UnityUi
             ApplyTheme(Theme);
         }
 
+        /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
             if (!enabledState)

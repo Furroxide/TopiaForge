@@ -483,8 +483,11 @@ namespace TopiaForge.ModManager.Tests
 
             public int WaypointIndex => 0;
 
-            public void Cancel()
+            public bool IsActive { get; private set; } = true;
+
+            public void Dispose()
             {
+                IsActive = false;
             }
         }
     }

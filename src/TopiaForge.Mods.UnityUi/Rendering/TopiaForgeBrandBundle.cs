@@ -22,10 +22,14 @@ namespace TopiaForge.Mods.UnityUi
         private static AssetBundle? bundle;
         private static Stream? bundleStream; // must stay open for the bundle's lifetime
 
+        /// <summary>Gets whether the embedded brand asset bundle is loaded.</summary>
         public static bool IsLoaded => bundle != null;
 
+        /// <summary>Gets or sets body font.</summary>
         public static TMP_FontAsset? BodyFont { get; private set; }
+        /// <summary>Gets or sets bold font.</summary>
         public static TMP_FontAsset? BoldFont { get; private set; }
+        /// <summary>Gets or sets display font.</summary>
         public static TMP_FontAsset? DisplayFont { get; private set; }
 
         /// <summary>Attempts the embedded-bundle load once; subsequent calls are free.</summary>

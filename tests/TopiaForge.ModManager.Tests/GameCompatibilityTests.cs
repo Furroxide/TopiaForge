@@ -12,6 +12,9 @@ namespace TopiaForge.ModManager.Tests
         {
             TestGameBuildNormalization();
             TestCompatibilityContext();
+            TestRuntimeCompatibility();
+            TestCompatibleVersionSelection(root);
+            TestShuffledVersionSelection(root);
             TestRegistryAndInstallerThreadContext(root);
             TestInstalledBuildReader(root);
             Console.WriteLine("GameCompatibilityTests passed.");
@@ -37,8 +40,8 @@ namespace TopiaForge.ModManager.Tests
         {
             var manifest = ValidManifest("compat.context");
             manifest.SupportedGameVersionRange = "0.0.2227";
-            manifest.SupportedLoaderVersionRange = ">=0.2.0 <0.3.0";
-            manifest.SupportedSdkVersionRange = ">=0.1.0 <0.2.0";
+            manifest.SupportedLoaderVersionRange = ">=1.0.0 <2.0.0";
+            manifest.SupportedSdkVersionRange = ">=1.0.0 <2.0.0";
 
             Assert(ManifestValidator.Validate(manifest).Count == 0,
                 "context-free compatibility wrapper should syntax-check without requiring a game install");
@@ -65,9 +68,167 @@ namespace TopiaForge.ModManager.Tests
 
             var wrongLoader = ManifestValidator.Validate(
                 manifest,
-                new ManifestValidationContext("0.0.2227", loaderVersion: "0.3.0", requireKnownGameVersion: true));
-            Assert(wrongLoader.Any(error => error.Contains("does not include loader 0.3.0", StringComparison.Ordinal)),
+                new ManifestValidationContext("0.0.2227", loaderVersion: "2.0.0", requireKnownGameVersion: true));
+            Assert(wrongLoader.Any(error => error.Contains("does not include loader 2.0.0", StringComparison.Ordinal)),
                 "validation should use the supplied loader version rather than a global constant");
+        }
+
+        private static void TestRuntimeCompatibility()
+        {
+            Assert(ManifestValidationContext.NormalizePlatform(" Proton ") == "windows" &&
+                   ManifestValidationContext.NormalizePlatform("darwin") == "macos",
+                "host platform aliases should normalize to manifest platform ids");
+            Assert(ManifestValidationContext.NormalizeArchitecture("AMD64") == "x64" &&
+                   ManifestValidationContext.NormalizeArchitecture("aarch64") == "arm64",
+                "host architecture aliases should normalize to manifest architecture ids");
+
+            var manifest = ValidManifest("compat.runtime");
+            manifest.Platforms.Add("windows");
+            manifest.Architectures.Add("x64");
+            manifest.ContentTargets.Add("code");
+            var proton = RuntimeContext("Proton", "AMD64", "CODE");
+            var matched = ManifestRuntimeCompatibility.Evaluate(manifest, proton);
+            Assert(matched.Status == ManifestRuntimeCompatibility.MatchedStatus &&
+                   ManifestValidator.Validate(manifest, proton).Count == 0,
+                "a Proton-hosted Windows game should match Windows x64 code packages");
+
+            var wrongPlatform = RuntimeContext("macOS", "x64", "code");
+            Assert(ManifestValidator.Validate(manifest, wrongPlatform)
+                    .Any(error => error.Contains("host platform macos", StringComparison.Ordinal)),
+                "a platform mismatch should fail validation with the normalized host value");
+            var wrongArchitecture = RuntimeContext("windows", "arm64", "code");
+            Assert(ManifestValidator.Validate(manifest, wrongArchitecture)
+                    .Any(error => error.Contains("host architecture arm64", StringComparison.Ordinal)),
+                "an architecture mismatch should fail validation");
+            var wrongContent = RuntimeContext("windows", "x64", "standalonewindows64");
+            Assert(ManifestValidator.Validate(manifest, wrongContent)
+                    .Any(error => error.Contains("host-supported target", StringComparison.Ordinal)),
+                "a content-target mismatch should fail validation");
+
+            var portable = ValidManifest("compat.portable");
+            var unknownHost = RuntimeContext(string.Empty, string.Empty);
+            var portableDecision = ManifestRuntimeCompatibility.Evaluate(portable, unknownHost);
+            Assert(portableDecision.Status == ManifestRuntimeCompatibility.PortableStatus &&
+                   ManifestValidator.Validate(portable, unknownHost).Count == 0,
+                "empty runtime constraint lists should remain portable even when host details are unknown");
+            Assert(ManifestValidator.Validate(manifest, unknownHost)
+                    .Any(error => error.Contains("unknown", StringComparison.OrdinalIgnoreCase)),
+                "a constrained package should fail closed when strict host details are unknown");
+
+            var authoring = new ManifestValidationContext(
+                platform: "macos",
+                architecture: "arm64",
+                contentTargets: new[] { "standaloneosx" });
+            Assert(ManifestRuntimeCompatibility.Evaluate(manifest, authoring).Status ==
+                   ManifestRuntimeCompatibility.NotEvaluatedStatus &&
+                   ManifestValidator.Validate(manifest, authoring).Count == 0,
+                "authoring validation should syntax-check cross-target packages without applying the local host");
+        }
+
+        private static void TestCompatibleVersionSelection(string root)
+        {
+            var testRoot = Path.Combine(root, "runtime-compatible-selection");
+            var paths = new ManagerPaths(Path.Combine(testRoot, "BepInEx"));
+            paths.EnsureCreated();
+            const string id = "compat.selection";
+
+            // Create candidates in deliberately non-SemVer order. Selection must be based on normalized id,
+            // SemVer, compatibility, and path rather than filesystem enumeration order.
+            WriteInstalledPackage(paths, id, "2.0.0", "macos", "x64", "standaloneosx");
+            WriteInstalledPackage(paths, id, "1.0.0", null, null, null);
+            WriteInstalledPackage(paths, id, "1.5.0", "windows", "x64", "code");
+            var context = RuntimeContext("proton", "amd64", "code", "standalonewindows64");
+            var state = new ManagerState
+            {
+                Mods = new[]
+                {
+                    new InstalledModState { Id = id, Version = "1.0.0", Enabled = true }
+                }.ToList()
+            };
+
+            var selected = new ModRegistry().Scan(paths, state, context).Single();
+            var selectedDecision = ManifestRuntimeCompatibility.Evaluate(selected.Manifest!, context);
+            Assert(selected.IsValid && selected.Manifest!.Version == "1.5.0" &&
+                   selectedDecision.Status == ManifestRuntimeCompatibility.MatchedStatus,
+                "an unpinned package should select the highest compatible SemVer");
+            Assert(selected.SelectionReason.Contains("recovered unpinned selection", StringComparison.Ordinal) &&
+                   selected.SelectionReason.Contains("1.0.0", StringComparison.Ordinal) &&
+                   selected.SelectionReason.Contains("1.5.0", StringComparison.Ordinal),
+                "an automatic unpinned recovery must be explicit in diagnostics");
+
+            var pinnedState = new ManagerState
+            {
+                Mods = new[]
+                {
+                    new InstalledModState
+                    {
+                        Id = id,
+                        Version = "2.0.0",
+                        VersionPinned = true,
+                        Enabled = true
+                    }
+                }.ToList()
+            };
+            var pinned = new ModRegistry().Scan(paths, pinnedState, context).Single();
+            var rejectedDecision = ManifestRuntimeCompatibility.Evaluate(pinned.Manifest!, context);
+            Assert(pinned.Manifest!.Version == "2.0.0" && !pinned.IsValid &&
+                   rejectedDecision.Status == ManifestRuntimeCompatibility.RejectedStatus &&
+                   pinned.Errors.Any(error => error.Contains("host platform", StringComparison.Ordinal)),
+                "an incompatible exact pin should fail closed instead of falling back");
+
+            var report = new LastRunReport
+            {
+                Packages = new[]
+                {
+                    new LastRunPackage
+                    {
+                        Id = id,
+                        Version = pinned.Manifest.Version,
+                        Selection = pinned.SelectionReason,
+                        Compatibility = rejectedDecision.Status,
+                        CompatibilityReasons = rejectedDecision.Errors.ToList()
+                    }
+                }.ToList()
+            };
+            var restored = JsonUtil.Deserialize<LastRunReport>(JsonUtil.Serialize(report));
+            Assert(restored.Packages.Single().Compatibility == ManifestRuntimeCompatibility.RejectedStatus &&
+                   restored.Packages.Single().CompatibilityReasons.SequenceEqual(rejectedDecision.Errors) &&
+                   restored.Packages.Single().Selection.Contains("exact profile pin", StringComparison.Ordinal),
+                "last-run compatibility and deterministic selection decisions should round-trip");
+        }
+
+        private static void TestShuffledVersionSelection(string root)
+        {
+            var permutations = new[]
+            {
+                new[] { "1.0.0", "1.5.0", "2.0.0" },
+                new[] { "1.0.0", "2.0.0", "1.5.0" },
+                new[] { "1.5.0", "1.0.0", "2.0.0" },
+                new[] { "1.5.0", "2.0.0", "1.0.0" },
+                new[] { "2.0.0", "1.0.0", "1.5.0" },
+                new[] { "2.0.0", "1.5.0", "1.0.0" }
+            };
+            var context = RuntimeContext("windows", "x64", "code");
+            for (var index = 0; index < permutations.Length; index++)
+            {
+                var paths = new ManagerPaths(Path.Combine(root, "selection-permutation-" + index, "BepInEx"));
+                paths.EnsureCreated();
+                foreach (var version in permutations[index])
+                {
+                    WriteInstalledPackage(
+                        paths,
+                        "compat.shuffle",
+                        version,
+                        version == "2.0.0" ? "macos" : null,
+                        null,
+                        null);
+                }
+
+                var state = new ManagerState();
+                var selected = new ModRegistry().Scan(paths, state, context).Single();
+                Assert(selected.IsValid && selected.Manifest!.Version == "1.5.0",
+                    "selection must be invariant across every candidate creation-order permutation");
+            }
         }
 
         private static void TestRegistryAndInstallerThreadContext(string root)
@@ -82,7 +243,10 @@ namespace TopiaForge.ModManager.Tests
             using (var archive = ZipFile.Open(package, ZipArchiveMode.Create))
             {
                 WriteEntry(archive, "topiaforge.mod.json", JsonUtil.Serialize(manifest));
-                WriteEntry(archive, manifest.EntryAssembly, "placeholder");
+                var assemblyEntry = archive.CreateEntry(manifest.EntryAssembly);
+                using var output = assemblyEntry.Open();
+                using var input = File.OpenRead(Path.Combine(AppContext.BaseDirectory, manifest.EntryAssembly));
+                input.CopyTo(output);
             }
 
             var strictUnknown = new ManifestValidationContext(requireKnownGameVersion: true);
@@ -127,14 +291,57 @@ namespace TopiaForge.ModManager.Tests
         {
             return new ModManifest
             {
-                SchemaVersion = 3,
+                SchemaVersion = 4,
                 Id = id,
                 Name = id,
                 Version = "1.0.0",
                 Author = new ModAuthor { Name = "Test Author" },
-                EntryAssembly = id + ".dll",
-                EntryType = id + ".Entry"
+                EntryAssembly = "TopiaForge.ValidTestMod.dll",
+                EntryType = "TopiaForge.ValidTestMod.ValidMod"
             };
+        }
+
+        private static ManifestValidationContext RuntimeContext(
+            string platform,
+            string architecture,
+            params string[] contentTargets)
+        {
+            return new ManifestValidationContext(
+                gameVersion: "0.0.2227",
+                loaderVersion: "1.0.0",
+                sdkVersion: "1.0.0",
+                requireKnownGameVersion: true,
+                platform: platform,
+                architecture: architecture,
+                contentTargets: contentTargets,
+                enforceRuntimeCompatibility: true);
+        }
+
+        private static void WriteInstalledPackage(
+            ManagerPaths paths,
+            string id,
+            string version,
+            string? platform,
+            string? architecture,
+            string? contentTarget)
+        {
+            var manifest = ValidManifest(id);
+            manifest.Version = version;
+            if (platform != null) manifest.Platforms.Add(platform);
+            if (architecture != null) manifest.Architectures.Add(architecture);
+            if (contentTarget != null) manifest.ContentTargets.Add(contentTarget);
+            var packagePath = paths.GetPackagePath(id, version);
+            Directory.CreateDirectory(packagePath);
+            JsonUtil.SaveFile(Path.Combine(packagePath, "topiaforge.mod.json"), manifest);
+            File.Copy(
+                Path.Combine(AppContext.BaseDirectory, manifest.EntryAssembly),
+                Path.Combine(packagePath, manifest.EntryAssembly),
+                overwrite: true);
+            var sourcePath = Path.Combine(paths.Staging, id + "-" + version + ".topiaforgemod");
+            File.WriteAllText(sourcePath, id + "@" + version);
+            JsonUtil.SaveFile(
+                Path.Combine(packagePath, PackageInstallReceipt.FileName),
+                PackageInstallReceipt.Create(sourcePath, packagePath, manifest));
         }
 
         private static void WriteEntry(ZipArchive archive, string name, string value)

@@ -11,7 +11,7 @@ namespace TopiaForge.Mods
     /// <remarks>
     /// The game is <b>preview/play only</b>: this service consumes snapshots and patches the scene; it never
     /// writes edits back to the source document. It is published by the <c>TopiaForge.UgcLiveSync</c> framework
-    /// mod and resolved with <c>context.GetService&lt;IUgcLiveSyncService&gt;()</c>, the same way
+    /// mod and resolved with <c>context.RequireExtension&lt;IUgcLiveSyncService&gt;()</c>, the same way
     /// <see cref="IWorldGamemodeService"/> is consumed.
     /// </remarks>
     public interface IUgcLiveSyncService
@@ -40,34 +40,48 @@ namespace TopiaForge.Mods
         /// <summary>Raised when a snapshot is rejected or a sync step fails; the running scene is left intact.</summary>
         event Action<UgcSyncError>? SyncError;
 
-        /// <summary>Raised once when a session stops (explicit <see cref="Stop"/>, scene exit, or unload).</summary>
+        /// <summary>Raised once when a session stops through lease disposal, scene exit, or unload.</summary>
         event Action<UgcSyncSession>? SessionStopped;
 
         /// <summary>
         /// Starts the local-folder channel: watches <see cref="UgcLiveSyncRequest.WatchFolder"/> for exported
         /// <c>UgcExportProject</c> files (<c>.json</c>/<c>.json.gz</c>) and applies each new snapshot live.
         /// </summary>
-        UgcLiveSyncResult StartLocalSession(UgcLiveSyncRequest request);
+        OperationResult<IUgcSyncLease> StartLocalSession(UgcLiveSyncRequest request);
 
         /// <summary>
         /// Starts the Automerge channel: subscribes to the editor's live document
         /// (<see cref="UgcLiveSyncRequest.DocumentUrl"/> or <see cref="UgcLiveSyncRequest.EditorUrl"/>) over the
         /// <see cref="UgcLiveSyncRequest.SyncServerUrl"/> and applies revisions live.
         /// </summary>
-        UgcLiveSyncResult StartAutomergeSession(UgcLiveSyncRequest request);
-
-        /// <summary>Stops the current session (if any) and releases the watcher / live connection.</summary>
-        void Stop();
+        OperationResult<IUgcSyncLease> StartAutomergeSession(UgcLiveSyncRequest request);
 
         /// <summary>
         /// Registers a runtime asset override so the given UGC asset id resolves to a modder-supplied prefab.
-        /// The prefab must be a loaded <c>UnityEngine.GameObject</c> (for example from <see cref="IAssetBundleService"/>).
+        /// The prefab must come from the current mod's owner-bound asset service.
         /// Takes effect on the next import/rebuild.
         /// </summary>
-        void RegisterAssetOverride(UgcAssetOverride assetOverride);
+        OperationResult<IUgcAssetOverrideLease> RegisterAssetOverride(UgcAssetOverride assetOverride);
+    }
 
-        /// <summary>Clears all registered asset overrides; built-in/placeholder resolution resumes.</summary>
-        void ClearAssetOverrides();
+    /// <summary>A lifetime-owned UGC live-sync session.</summary>
+    public interface IUgcSyncLease : IDisposable
+    {
+        /// <summary>Gets the session started by this lease.</summary>
+        UgcSyncSession Session { get; }
+
+        /// <summary>Gets whether the session is still owned by this lease.</summary>
+        bool IsActive { get; }
+    }
+
+    /// <summary>A lifetime-owned UGC asset override.</summary>
+    public interface IUgcAssetOverrideLease : IDisposable
+    {
+        /// <summary>Gets the registered override.</summary>
+        UgcAssetOverride Override { get; }
+
+        /// <summary>Gets whether the override remains registered.</summary>
+        bool IsActive { get; }
     }
 
     /// <summary>Which channel a live-sync session uses.</summary>
@@ -111,8 +125,9 @@ namespace TopiaForge.Mods
     /// <summary>Parameters for starting a live-sync session. Unused fields for a given channel are ignored.</summary>
     public sealed class UgcLiveSyncRequest
     {
+        /// <summary>Creates a live-sync request for either the local-folder or Automerge transport.</summary>
         public UgcLiveSyncRequest(
-            SceneTransitionPriority priority = SceneTransitionPriority.UserInitiated,
+            WorldLoadPriority priority = WorldLoadPriority.UserInitiated,
             string watchFolder = "",
             string editorUrl = "",
             string documentUrl = "",
@@ -121,7 +136,7 @@ namespace TopiaForge.Mods
             string filePattern = "*.json;*.json.gz",
             int debounceMilliseconds = 200)
         {
-            if (!Enum.IsDefined(typeof(SceneTransitionPriority), priority))
+            if (!Enum.IsDefined(typeof(WorldLoadPriority), priority))
             {
                 throw new ArgumentOutOfRangeException(nameof(priority));
             }
@@ -159,16 +174,16 @@ namespace TopiaForge.Mods
 
         /// <summary>
         /// Scene-transition priority when the session must load the UGC play scene first. Explicit user
-        /// actions keep the default (<see cref="SceneTransitionPriority.UserInitiated"/>); automatic triggers
-        /// (auto-connect on start) pass <see cref="SceneTransitionPriority.Automatic"/> so the load defers
-        /// instead of stomping a live world/gamemode session (see <see cref="ISceneCoordinator"/>).
+        /// actions keep the default (<see cref="WorldLoadPriority.UserInitiated"/>); automatic triggers
+        /// pass <see cref="WorldLoadPriority.Automatic"/> so the load defers.
         /// </summary>
-        public SceneTransitionPriority Priority { get; }
+        public WorldLoadPriority Priority { get; }
     }
 
     /// <summary>Describes an active live-sync session.</summary>
     public sealed class UgcSyncSession
     {
+        /// <summary>Creates metadata for an active UGC synchronization session.</summary>
         public UgcSyncSession(UgcSyncTransport transport, string target, string sceneId, DateTime startedAtUtc)
         {
             Transport = transport;
@@ -193,6 +208,7 @@ namespace TopiaForge.Mods
     /// <summary>Metadata about a snapshot that was imported or patched into the running scene.</summary>
     public sealed class UgcSnapshotInfo
     {
+        /// <summary>Creates metadata describing one applied UGC snapshot.</summary>
         public UgcSnapshotInfo(
             string projectName,
             string sceneId,
@@ -240,28 +256,34 @@ namespace TopiaForge.Mods
     public sealed class UgcAssetOverride
     {
         /// <param name="assetId">UGC asset id (e.g. <c>@author/my-prop</c>) as referenced by exported entities.</param>
-        /// <param name="prefab">A loaded <c>UnityEngine.GameObject</c> prefab; validated by the service.</param>
+        /// <param name="prefab">A prefab loaded through the safe asset service.</param>
         /// <param name="localPositionOffset">Optional local-space offset (x,y,z) aligning the prefab to the UGC origin.</param>
-        public UgcAssetOverride(string assetId, object prefab, float[]? localPositionOffset = null)
+        public UgcAssetOverride(string assetId, IPrefabAsset prefab, Vec3? localPositionOffset = null)
         {
+            if (string.IsNullOrWhiteSpace(assetId))
+            {
+                throw new ArgumentException("A UGC asset id is required.", nameof(assetId));
+            }
+
             AssetId = assetId;
-            Prefab = prefab;
+            Prefab = prefab ?? throw new ArgumentNullException(nameof(prefab));
             LocalPositionOffset = localPositionOffset;
         }
 
         /// <summary>UGC asset id this override resolves.</summary>
         public string AssetId { get; }
 
-        /// <summary>The prefab object (a <c>UnityEngine.GameObject</c>); kept as <see cref="object"/> to keep the SDK Unity-free.</summary>
-        public object Prefab { get; }
+        /// <summary>The opaque prefab asset.</summary>
+        public IPrefabAsset Prefab { get; }
 
         /// <summary>Optional <c>[x, y, z]</c> local-space offset; <c>null</c> means zero.</summary>
-        public float[]? LocalPositionOffset { get; }
+        public Vec3? LocalPositionOffset { get; }
     }
 
     /// <summary>A non-fatal error raised while syncing; the running scene is preserved.</summary>
     public sealed class UgcSyncError
     {
+        /// <summary>Creates a non-fatal synchronization error for a named phase.</summary>
         public UgcSyncError(string phase, string message)
         {
             Phase = phase;
@@ -275,35 +297,4 @@ namespace TopiaForge.Mods
         public string Message { get; }
     }
 
-    /// <summary>Result of a request to start a live-sync session.</summary>
-    public sealed class UgcLiveSyncResult
-    {
-        private UgcLiveSyncResult(bool ok, UgcSyncSession? session, string message)
-        {
-            Ok = ok;
-            Session = session;
-            Message = message;
-        }
-
-        /// <summary><c>true</c> when the session started (or is starting).</summary>
-        public bool Ok { get; }
-
-        /// <summary>The started session, when <see cref="Ok"/> is <c>true</c>.</summary>
-        public UgcSyncSession? Session { get; }
-
-        /// <summary>Human-readable status / failure detail.</summary>
-        public string Message { get; }
-
-        /// <summary>Creates a success result.</summary>
-        public static UgcLiveSyncResult Success(UgcSyncSession session, string message)
-        {
-            return new UgcLiveSyncResult(true, session, message);
-        }
-
-        /// <summary>Creates a failure result.</summary>
-        public static UgcLiveSyncResult Fail(string message)
-        {
-            return new UgcLiveSyncResult(false, null, message);
-        }
-    }
 }

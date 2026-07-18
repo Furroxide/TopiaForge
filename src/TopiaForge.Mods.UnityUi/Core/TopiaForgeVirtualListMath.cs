@@ -9,6 +9,7 @@ namespace TopiaForge.Mods.UnityUi
     /// </summary>
     public static class TopiaForgeVirtualListMath
     {
+        /// <summary>The overscan design-token value.</summary>
         public const int Overscan = 1;
 
         /// <summary>Total content height for itemCount rows.</summary>

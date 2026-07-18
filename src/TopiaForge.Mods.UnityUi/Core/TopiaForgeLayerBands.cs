@@ -6,10 +6,15 @@ namespace TopiaForge.Mods.UnityUi
     /// <summary>Sorting bands replacing the old hardcoded canvas orders (31800/31900/32000).</summary>
     public enum TopiaForgeLayerBand
     {
+        /// <summary>Selects the HUD option.</summary>
         Hud,
+        /// <summary>Selects the window option.</summary>
         Window,
+        /// <summary>Selects the modal option.</summary>
         Modal,
+        /// <summary>Selects the toast option.</summary>
         Toast,
+        /// <summary>Selects the debug option.</summary>
         Debug,
     }
 
@@ -20,11 +25,17 @@ namespace TopiaForge.Mods.UnityUi
     /// </summary>
     public sealed class TopiaForgeLayerBands
     {
+        /// <summary>The default HUD base design-token value.</summary>
         public const int DefaultHudBase = 30000;
+        /// <summary>The default window base design-token value.</summary>
         public const int DefaultWindowBase = 30800;
+        /// <summary>The default modal base design-token value.</summary>
         public const int DefaultModalBase = 31400;
+        /// <summary>The default toast base design-token value.</summary>
         public const int DefaultToastBase = 31800;
+        /// <summary>The default debug base design-token value.</summary>
         public const int DefaultDebugBase = 31900;
+        /// <summary>The default ceiling design-token value.</summary>
         public const int DefaultCeiling = 32000;
 
         private readonly int[] bases;
@@ -33,11 +44,13 @@ namespace TopiaForge.Mods.UnityUi
         private readonly SortedSet<int>[] released;
         private readonly Dictionary<int, int>[] allocationCounts;
 
+        /// <summary>Creates layer-band ranges using the default band size.</summary>
         public TopiaForgeLayerBands()
             : this(DefaultHudBase, DefaultWindowBase, DefaultModalBase, DefaultToastBase, DefaultDebugBase, DefaultCeiling)
         {
         }
 
+        /// <summary>Creates layer-band ranges using the supplied bases and band size.</summary>
         public TopiaForgeLayerBands(int hudBase, int windowBase, int modalBase, int toastBase, int debugBase, int ceiling)
         {
             if (!(hudBase < windowBase && windowBase < modalBase && modalBase < toastBase && toastBase < debugBase && debugBase < ceiling))
@@ -66,6 +79,7 @@ namespace TopiaForge.Mods.UnityUi
             };
         }
 
+        /// <summary>Gets the base sorting order for a layer band.</summary>
         public int BaseOf(TopiaForgeLayerBand band)
         {
             return bases[(int)band];

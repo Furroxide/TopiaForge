@@ -76,13 +76,13 @@ namespace TopiaForge.RobotKit
             };
             outputs.AddRange(extras);
 
-            return new BrainQueryRequest(sb.ToString(), outputs)
-            {
-                Usage = string.IsNullOrEmpty(config.Usage) ? "robot-conversation" : config.Usage,
-                SuccessDescription = "Return a short in-character reply and a valid reaction.",
-                Temperature = config.Temperature,
-                UseReasoning = false,
-            };
+            return new BrainQueryRequest(
+                sb.ToString(),
+                outputs,
+                string.IsNullOrEmpty(config.Usage) ? "robot-conversation" : config.Usage,
+                "Return a short in-character reply and a valid reaction.",
+                config.Temperature,
+                false);
         }
 
         // The static facts overlaid with this turn's live facts (a live key wins), so per-turn state such as

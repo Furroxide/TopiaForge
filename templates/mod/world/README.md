@@ -17,7 +17,8 @@ playable world (it appears under GAMEMODES, paired with the Sandbox gamemode by 
 
 ## Quick start (without Unity)
 
-`topiaforge check package .` → `topiaforge pack` → `topiaforge install` → `topiaforge launch`.
+`topiaforge restore` → `dotnet test tests/{{ASSEMBLY_NAME}}.Tests` → `topiaforge check package .` →
+`topiaforge pack` → `topiaforge install` → `topiaforge launch`.
 The world only becomes playable once a bundle exists in `AssetBundles/` (see the authoring loop above).
 
 See `docs/CustomWorlds.md` in the TopiaForge repository for the full walkthrough, and

@@ -3,70 +3,124 @@ using TopiaForge.Mods;
 
 namespace TopiaForge.Sandbox
 {
-    /// <summary>
-    /// The Sandbox gamemode content layer. TopiaForge Worlds owns the Open Sandbox world/arena and registers
-    /// the sandbox gamemode; this mod attaches the actual creator gameplay (spawn menu, undo/freeze tools,
-    /// HUD) to any session running that gamemode — the same provider/consumer split Zombies uses.
-    /// </summary>
-    public sealed class SandboxMod : ITopiaForgeMod
+    /// <summary>Freeform Robotopia sandbox authored entirely against V1 SDK contracts.</summary>
+    public sealed class SandboxMod : TopiaForgeMod
     {
-        // Owned by TopiaForge.Worlds (WorldsService.SandboxGamemodeId). Kept as a local constant so this mod
-        // binds to the stable id, not to the Worlds assembly.
-        public const string GamemodeId = "io.github.furroxide.topiaforge.worlds.sandbox";
+        /// <summary>Gets the Worlds provider's built-in sandbox gamemode id.</summary>
+        public const string GamemodeId = WellKnownWorldIds.SandboxGamemode;
 
-        private IModContext? context;
-        private SandboxConfig? config;
+        private static readonly ConfigDefinition<SandboxConfig> ConfigContract =
+            new ConfigDefinition<SandboxConfig>(
+                1,
+                () => new SandboxConfig(),
+                value =>
+                {
+                    value.Normalize();
+                    return OperationResult<bool>.Success(true);
+                });
+
+        private SandboxConfig config = new SandboxConfig();
         private IWorldGamemodeService? worlds;
+        private IRobotAgentService? robots;
         private SandboxController? controller;
-        private IDisposable? cleanupPauseAction;
+        private IDisposable? controllerLifetime;
+        private IDisposable? pauseActionLifetime;
 
-        public void OnLoad(IModContext context)
+        /// <inheritdoc />
+        protected override void OnLoad()
         {
-            this.context = context;
-            config = context.LoadConfig(new SandboxConfig());
-            config.Normalize();
-            context.SaveConfig(config);
+            LoadConfig();
+            RegisterCommands();
 
-            worlds = context.GetService<IWorldGamemodeService>();
-            if (worlds == null)
+            if (!Context.Extensions.TryGet<IWorldGamemodeService>(out var worldsService)
+                || worldsService == null)
             {
-                context.Logger.Warn("TopiaForge Worlds service is not available; the Sandbox gamemode stays vanilla.");
+                Context.Logger.Warn("The Worlds module is unavailable; Sandbox commands will stay inactive.");
+                return;
+            }
+            worlds = worldsService;
+
+            if (!Context.Extensions.TryGet<IRobotAgentService>(out var robotService)
+                || robotService == null)
+            {
+                Context.Logger.Warn("RobotKit is unavailable; Sandbox cannot create safe robot entities.");
+                return;
+            }
+            robots = robotService;
+
+            worldsService.SessionChanged += OnSessionChanged;
+            worldsService.SessionEnded += OnSessionEnded;
+            Context.Lifetime.Defer(() =>
+            {
+                worldsService.SessionChanged -= OnSessionChanged;
+                worldsService.SessionEnded -= OnSessionEnded;
+            });
+
+            if (worldsService.CurrentSession != null)
+            {
+                OnSessionChanged(worldsService.CurrentSession);
+            }
+
+            Context.Logger.Info("Sandbox V1 loaded with safe input, UI, physics, Worlds, and RobotKit services.");
+        }
+
+        /// <inheritdoc />
+        protected override void OnUnload()
+        {
+            StopController();
+        }
+
+        private void LoadConfig()
+        {
+            var loaded = Context.Config.Load(ConfigContract);
+            if (!loaded.TryGetValue(out var value))
+            {
+                Context.Logger.Warn("Sandbox config could not be loaded: " + loaded.ErrorMessage);
+                config = new SandboxConfig();
+                config.Normalize();
+                Context.Config.Save(ConfigContract, config);
                 return;
             }
 
-            worlds.SessionChanged += OnSessionChanged;
-            worlds.SessionEnded += OnSessionEnded;
-            if (worlds.CurrentSession != null)
+            config = value;
+            config.Normalize();
+            var saved = Context.Config.Save(ConfigContract, config);
+            if (!saved.Succeeded)
             {
-                OnSessionChanged(worlds.CurrentSession);
+                Context.Logger.Warn("Sandbox config normalization could not be saved: " + saved.ErrorMessage);
             }
-
-            context.Update += OnUpdate;
-            context.Logger.Info("Sandbox gamemode content loaded (spawn menu, tools, robots).");
         }
 
-        public void OnUnload()
+        private void RegisterCommands()
         {
-            if (context != null)
-            {
-                context.Update -= OnUpdate;
-            }
-
-            if (worlds != null)
-            {
-                worlds.SessionChanged -= OnSessionChanged;
-                worlds.SessionEnded -= OnSessionEnded;
-            }
-
-            StopController();
-            worlds = null;
-            config = null;
-            context = null;
+            RegisterCommand(
+                new CommandDefinition("sandbox-spawn", "Spawn a safe RobotKit robot at the aim point."),
+                invocation => controller?.SpawnRobot()
+                    ?? OperationResult<string>.Failure(ModErrorCode.InvalidState, "Start the Sandbox gamemode first."));
+            RegisterCommand(
+                new CommandDefinition("sandbox-undo", "Remove the most recently spawned sandbox robot."),
+                invocation => controller?.Undo()
+                    ?? OperationResult<string>.Failure(ModErrorCode.InvalidState, "Start the Sandbox gamemode first."));
+            RegisterCommand(
+                new CommandDefinition("sandbox-clear", "Remove every robot spawned by this Sandbox session."),
+                invocation => controller?.CleanUpEverything()
+                    ?? OperationResult<string>.Failure(ModErrorCode.InvalidState, "Start the Sandbox gamemode first."));
+            RegisterCommand(
+                new CommandDefinition("sandbox-status", "Describe the active Sandbox session."),
+                invocation => controller == null
+                    ? OperationResult<string>.Failure(ModErrorCode.InvalidState, "Start the Sandbox gamemode first.")
+                    : OperationResult<string>.Success(controller.DescribeStatus()));
         }
 
-        private void OnUpdate(float deltaTime)
+        private void RegisterCommand(
+            CommandDefinition definition,
+            Func<CommandInvocation, OperationResult<string>> handler)
         {
-            controller?.Update(deltaTime);
+            var result = Context.Commands.Register(definition, handler);
+            if (!result.Succeeded)
+            {
+                Context.Logger.Warn("Could not register /" + definition.Name + ": " + result.ErrorMessage);
+            }
         }
 
         private void OnSessionChanged(WorldSession session)
@@ -77,38 +131,47 @@ namespace TopiaForge.Sandbox
                 return;
             }
 
-            if (context == null || config == null)
+            if (robots == null)
             {
                 return;
             }
 
             StopController();
-            controller = new SandboxController(context, config);
-            controller.Start(session);
+            controller = new SandboxController(Context, config, robots);
+            controllerLifetime = Context.Lifetime.Track(controller);
 
-            // Surface the big red button in the TopiaForgeUi pause companion too, so a cluttered stage can be reset
-            // without opening the spawn menu. The vanilla exit needs no interceptor: end-session-then-exit
-            // (the Worlds default) already tears the sandbox down via SessionEnded below.
-            var pauseMenu = context.GetService<IWorldPauseMenuService>();
-            cleanupPauseAction = pauseMenu?.RegisterAction(new WorldPauseAction(
-                "io.github.furroxide.topiaforge.sandbox.cleanup",
-                "CLEAN UP EVERYTHING",
-                () => controller?.CleanUpEverything(),
-                closePauseMenu: true,
-                order: 0,
-                destructive: true));
+            if (Context.Extensions.TryGet<IWorldPauseMenuService>(out var pauseMenu)
+                && pauseMenu != null)
+            {
+                var result = pauseMenu.RegisterAction(new WorldPauseAction(
+                    "sandbox-cleanup",
+                    "CLEAN UP SANDBOX",
+                    () => controller?.CleanUpEverything(),
+                    closePauseMenu: true,
+                    order: 0,
+                    destructive: true));
+                if (result.TryGetValue(out var registration))
+                {
+                    pauseActionLifetime = registration;
+                }
+                else
+                {
+                    Context.Logger.Debug("Sandbox pause action unavailable: " + result.ErrorMessage);
+                }
+            }
         }
 
-        private void OnSessionEnded(WorldSessionEnd end)
+        private void OnSessionEnded(WorldSessionEnd ended)
         {
             StopController();
         }
 
         private void StopController()
         {
-            cleanupPauseAction?.Dispose();
-            cleanupPauseAction = null;
-            controller?.Dispose();
+            pauseActionLifetime?.Dispose();
+            pauseActionLifetime = null;
+            controllerLifetime?.Dispose();
+            controllerLifetime = null;
             controller = null;
         }
     }

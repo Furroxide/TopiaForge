@@ -131,7 +131,7 @@ namespace TopiaForge.ModManager.Tests
         {
             var (service, clock) = NewService();
             var agent = new FakeRobotAgent();
-            var player = new object();
+            var player = new FakeEntity("player");
             service.RegisterTarget("PLAYER", RobotTargetKind.Player,
                 () => new RobotTargetSnapshot(new Vec3(3f, 0f, 0f), player));
 
@@ -263,7 +263,7 @@ namespace TopiaForge.ModManager.Tests
 
             Assert(handle.State == RobotObjectiveState.Cancelled, "a null agent should return an inert cancelled handle");
             Assert(ReferenceEquals(handle.Objective, objective), "the inert handle should preserve the requested objective");
-            handle.Cancel();
+            handle.Dispose();
         }
 
         private static void TestInvalidAgentIdentityReturnsCancelledHandle()
@@ -300,7 +300,7 @@ namespace TopiaForge.ModManager.Tests
             var handle = service.SetObjective(agent, RobotObjective.Idle());
             agent.ThrowOnIsAlive = true;
 
-            handle.Cancel();
+            handle.Dispose();
 
             Assert(handle.State == RobotObjectiveState.Cancelled,
                 "objective cancellation remains terminal when agent cleanup throws");
@@ -574,11 +574,11 @@ namespace TopiaForge.ModManager.Tests
         private static void TestReprogramDeliversPayloadAndRaisesEvent()
         {
             var recipient = new FakeRobotAgent { Position = new Vec3(10f, 0f, 0f) };
-            var (service, clock, _) = NewRunnerService(obj => ReferenceEquals(obj, recipient.GameObject) ? recipient : null);
+            var (service, clock, _) = NewRunnerService(entity => ReferenceEquals(entity, recipient) ? recipient : null);
             var messenger = new FakeRobotAgent();
-            var player = new object();
+            var player = new FakeEntity("player");
             service.RegisterTarget("ROBOT 2", RobotTargetKind.Robot,
-                () => new RobotTargetSnapshot(recipient.Position, recipient.GameObject));
+                () => new RobotTargetSnapshot(recipient.Position, recipient));
             service.RegisterTarget("PLAYER", RobotTargetKind.Player,
                 () => new RobotTargetSnapshot(new Vec3(5f, 0f, 0f), player));
 
@@ -617,9 +617,9 @@ namespace TopiaForge.ModManager.Tests
         private static void TestReprogramTargetMissingMidJourney()
         {
             var recipient = new FakeRobotAgent { Position = new Vec3(10f, 0f, 0f) };
-            var (service, clock, _) = NewRunnerService(obj => ReferenceEquals(obj, recipient.GameObject) ? recipient : null);
+            var (service, clock, _) = NewRunnerService(entity => ReferenceEquals(entity, recipient) ? recipient : null);
             var messenger = new FakeRobotAgent();
-            RobotTargetSnapshot? snapshot = new RobotTargetSnapshot(recipient.Position, recipient.GameObject);
+            RobotTargetSnapshot? snapshot = new RobotTargetSnapshot(recipient.Position, recipient);
             service.RegisterTarget("ROBOT 2", RobotTargetKind.Robot, () => snapshot);
 
             var deliveries = new List<RobotProgramDelivery>();
@@ -634,7 +634,7 @@ namespace TopiaForge.ModManager.Tests
             service.Tick(0.016f);
             Assert(handle.State == RobotObjectiveState.TargetMissing, "a vanished recipient parks the courier");
 
-            snapshot = new RobotTargetSnapshot(recipient.Position, recipient.GameObject);
+            snapshot = new RobotTargetSnapshot(recipient.Position, recipient);
             clock.Now += 2.5f;
             service.Tick(0.016f);
             Assert(handle.State == RobotObjectiveState.Seeking, "the courier resumes when the recipient returns");
@@ -649,7 +649,8 @@ namespace TopiaForge.ModManager.Tests
         {
             var (service, clock, _) = NewRunnerService(_ => null); // nothing maps back to an agent
             var messenger = new FakeRobotAgent();
-            service.RegisterTarget("CRATE", RobotTargetKind.Prop, () => new RobotTargetSnapshot(new Vec3(6f, 0f, 0f), new object()));
+            service.RegisterTarget("CRATE", RobotTargetKind.Prop, () =>
+                new RobotTargetSnapshot(new Vec3(6f, 0f, 0f), new FakeEntity("crate")));
 
             var deliveries = new List<RobotProgramDelivery>();
             service.ProgramDelivered += delivery => deliveries.Add(delivery);
@@ -671,10 +672,10 @@ namespace TopiaForge.ModManager.Tests
         private static void TestReprogramReplacesRecipientsExistingObjective()
         {
             var recipient = new FakeRobotAgent { Position = new Vec3(10f, 0f, 0f) };
-            var (service, _, _) = NewRunnerService(obj => ReferenceEquals(obj, recipient.GameObject) ? recipient : null);
+            var (service, _, _) = NewRunnerService(entity => ReferenceEquals(entity, recipient) ? recipient : null);
             var messenger = new FakeRobotAgent();
             service.RegisterTarget("ROBOT 2", RobotTargetKind.Robot,
-                () => new RobotTargetSnapshot(recipient.Position, recipient.GameObject));
+                () => new RobotTargetSnapshot(recipient.Position, recipient));
 
             var previous = service.SetObjective(recipient, RobotObjective.GoTo(new Vec3(50f, 0f, 0f)));
             var payload = RobotObjective.Idle();
@@ -706,7 +707,7 @@ namespace TopiaForge.ModManager.Tests
         // The wander/flee/reprogram fixture: a scripted random source and (optionally) the live-object -> agent
         // mapping a Reprogram courier needs to hand its payload over.
         private static (RobotObjectiveService Service, FakeClock Clock, FakeRandom Random) NewRunnerService(
-            Func<object, IRobotAgent?>? resolveAgent = null)
+            Func<IEntity, IRobotAgent?>? resolveAgent = null)
         {
             var clock = new FakeClock();
             var random = new FakeRandom();
@@ -752,14 +753,14 @@ namespace TopiaForge.ModManager.Tests
             private bool isAlive = true;
 
             public List<Vec3> MoveToCalls { get; } = new List<Vec3>();
-            public List<object> ChaseCalls { get; } = new List<object>();
+            public List<IEntity> ChaseCalls { get; } = new List<IEntity>();
             public int StopCalls { get; private set; }
             public bool ThrowOnId { get; set; }
             public bool ThrowOnIsAlive { get; set; }
             public bool ThrowOnMoveTo { get; set; }
 
             public string Id => ThrowOnId ? throw new InvalidOperationException("id failed") : id;
-            public object GameObject { get; } = new object();
+            public string Name => "Fake robot";
             public bool IsAlive
             {
                 get => ThrowOnIsAlive ? throw new InvalidOperationException("liveness failed") : isAlive;
@@ -775,7 +776,7 @@ namespace TopiaForge.ModManager.Tests
             public float StopDistance { get; set; }
             public RobotGait Gait { get; set; }
 
-            public void MoveTo(Vec3 position)
+            public OperationResult<bool> MoveTo(Vec3 position)
             {
                 if (ThrowOnMoveTo)
                 {
@@ -783,45 +784,80 @@ namespace TopiaForge.ModManager.Tests
                 }
 
                 MoveToCalls.Add(position);
+                return OperationResult<bool>.Success(true);
             }
 
-            public void Chase(object targetGameObject)
+            public OperationResult<bool> Chase(IEntity target)
             {
-                ChaseCalls.Add(targetGameObject);
+                ChaseCalls.Add(target);
+                return OperationResult<bool>.Success(true);
             }
 
-            public void Stop()
+            public OperationResult<bool> Stop()
             {
                 StopCalls++;
+                return OperationResult<bool>.Success(true);
             }
 
-            public void SetBrainMode(RobotBrainMode mode)
+            public OperationResult<bool> SetBrainMode(RobotBrainMode mode)
             {
                 BrainMode = mode;
+                return OperationResult<bool>.Success(true);
             }
 
-            public void SetTint(RobotColor color) { }
+            public OperationResult<bool> ConfigureMovement(RobotMovementSettings settings)
+            {
+                Gait = settings.Gait;
+                MoveSpeed = settings.MoveSpeed;
+                TurnSpeed = settings.TurnSpeed;
+                StopDistance = settings.StopDistance;
+                return OperationResult<bool>.Success(true);
+            }
 
-            public void SetEmote(string emojiShortcode) { }
+            public OperationResult<bool> SetTint(RobotColor color) => OperationResult<bool>.Success(true);
 
-            public void SetName(string name) { }
+            public OperationResult<bool> SetEmote(string emojiShortcode) => OperationResult<bool>.Success(true);
 
-            public void SetScale(float scale) { }
+            public OperationResult<bool> SetName(string name) => OperationResult<bool>.Success(true);
 
-            public void SetInteraction(RobotInteractionOptions options) { }
+            public OperationResult<bool> SetScale(float scale) => OperationResult<bool>.Success(true);
 
-            public bool ApplyDamage(float amount, RobotDamageType type, string source) => false;
+            public OperationResult<bool> SetInteraction(RobotInteractionOptions options) =>
+                OperationResult<bool>.Success(true);
 
-            public void Kill(RobotDamageType type, string source) { }
+            public OperationResult<bool> ApplyDamage(float amount, RobotDamageType type, string source) =>
+                OperationResult<bool>.Success(false);
 
-            public void Ragdoll() { }
-
-            public void Knockback(Vec3 impulse) { }
-
-            public void Despawn()
+            public OperationResult<bool> Kill(RobotDamageType type, string source)
             {
                 IsAlive = false;
+                return OperationResult<bool>.Success(true);
             }
+
+            public OperationResult<bool> Ragdoll() => OperationResult<bool>.Success(true);
+
+            public OperationResult<bool> Knockback(Vec3 impulse) => OperationResult<bool>.Success(true);
+
+            public OperationResult<bool> Despawn()
+            {
+                IsAlive = false;
+                return OperationResult<bool>.Success(true);
+            }
+
+            public void Dispose() => IsAlive = false;
+        }
+
+        private sealed class FakeEntity : IEntity
+        {
+            public FakeEntity(string id)
+            {
+                Id = id;
+            }
+
+            public string Id { get; }
+            public string Name => Id;
+            public bool IsAlive => true;
+            public Vec3 Position => Vec3.Zero;
         }
 
         private sealed class NullLogger : IModLogger

@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace TopiaForge.Mods
 {
@@ -12,27 +15,25 @@ namespace TopiaForge.Mods
     /// </summary>
     /// <remarks>
     /// Published by the <c>TopiaForge.RobotKit</c> framework mod and resolved with
-    /// <c>context.GetService&lt;IRobotConversationService&gt;()</c>, exactly like <see cref="IRobotBrainQueryService"/>
-    /// and <see cref="IRobotAgentService"/>.
+    /// <c>context.RequireExtension&lt;IRobotConversationService&gt;()</c>, exactly like
+    /// <see cref="IRobotBrainQueryService"/> and <see cref="IRobotAgentService"/>.
     /// <para>
     /// The backend brain call is single-shot and stateless, so the conversation carries its own transcript and
-    /// re-sends a compact history each turn. Every turn is <b>asynchronous and never blocks a frame</b>: call
-    /// <see cref="IRobotConversation.Submit"/>, then poll <see cref="IRobotConversation.IsThinking"/> /
-    /// <see cref="IRobotConversation.TurnReady"/> each frame (the completion is marshalled back on the service tick,
-    /// same idiom as <see cref="IRobotBrainQuery"/>).
+    /// re-sends a compact history each turn. Await <see cref="IRobotConversation.SubmitAsync"/>; it never blocks a
+    /// game frame.
     /// </para>
     /// <para>
-    /// <b>Dual channel.</b> Each turn yields two things: a free-text <see cref="IRobotConversation.LastReply"/> (the
-    /// robot's spoken line — HUD flavour) and a <see cref="IRobotConversation.LastDecision"/> drawn from the closed
+    /// <b>Dual channel.</b> Each turn yields a free-text <see cref="RobotConversationTurnResult.Reply"/> and a
+    /// <see cref="RobotConversationTurnResult.Decision"/> drawn from the closed
     /// set the caller supplied (<see cref="RobotConversationRequest.DecisionOptions"/>). <b>Only the decision should
     /// drive game state.</b> The conversation does not interpret or gate the decision — the consumer owns the win
     /// condition (e.g. clamp a powerful decision behind a disposition threshold) so eloquent player text can never be
     /// an "I-win" button.
     /// </para>
     /// <para>
-    /// Everything degrades gracefully: when the backend is unreachable, <see cref="IsAvailable"/> is <c>false</c>,
-    /// a submitted turn completes with an empty reply/decision, and the consumer falls back to its own deterministic
-    /// outcome. Each turn spends one backend call against the player's token, so conversations are naturally
+    /// Everything degrades gracefully: when the backend is unreachable, <see cref="IsAvailable"/> is <c>false</c>
+    /// and a submitted turn completes with a stable unavailable result, so the consumer can choose its own
+    /// deterministic outcome. Each turn spends one backend call against the player's token, so conversations are naturally
     /// short — bound them with <see cref="RobotConversationRequest.MaxTurns"/>.
     /// </para>
     /// </remarks>
@@ -46,38 +47,18 @@ namespace TopiaForge.Mods
         bool IsAvailable { get; }
 
         /// <summary>
-        /// Begins a conversation with a robot's brain. Returns a handle immediately; nothing is sent until the first
-        /// <see cref="IRobotConversation.Submit"/>. Abandon a conversation with <see cref="IRobotConversation.End"/>
-        /// (or just drop the handle). Never throws.
+        /// Begins a conversation with a robot's brain and returns a lifetime-owned handle.
         /// </summary>
-        IRobotConversation BeginConversation(RobotConversationRequest request);
+        OperationResult<IRobotConversation> BeginConversation(RobotConversationRequest request);
     }
 
     /// <summary>
-    /// A live, multi-turn conversation handle. Drive it by <see cref="Submit"/>-ting the player's line, then polling
-    /// <see cref="IsThinking"/> until <see cref="TurnReady"/> latches the robot's <see cref="LastReply"/> and
-    /// <see cref="LastDecision"/>. Safe to keep polling; never throws.
+    /// A lifetime-owned, asynchronous multi-turn conversation handle.
     /// </summary>
-    public interface IRobotConversation
+    public interface IRobotConversation : IDisposable
     {
-        /// <summary><c>true</c> when the backend was reachable for this conversation; mirrors the service.</summary>
-        bool IsAvailable { get; }
-
-        /// <summary><c>true</c> while a submitted turn is still in flight (the brain is "thinking").</summary>
-        bool IsThinking { get; }
-
-        /// <summary>
-        /// <c>true</c> once a submitted turn has completed and its <see cref="LastReply"/>/<see cref="LastDecision"/>
-        /// are readable. Stays <c>true</c> until the next <see cref="Submit"/> (so a poller can react on any frame).
-        /// </summary>
-        bool TurnReady { get; }
-
-        /// <summary>
-        /// <c>true</c> once the conversation is finished — either <see cref="End"/> was called or
-        /// <see cref="MaxTurns"/> completed turns were reached. A finished conversation ignores further
-        /// <see cref="Submit"/>s.
-        /// </summary>
-        bool Ended { get; }
+        /// <summary>Gets whether the conversation has ended.</summary>
+        bool IsEnded { get; }
 
         /// <summary>Number of completed turns so far (0 before the first reply lands).</summary>
         int TurnCount { get; }
@@ -85,36 +66,37 @@ namespace TopiaForge.Mods
         /// <summary>The hard cap on completed turns for this conversation (from the request).</summary>
         int MaxTurns { get; }
 
-        /// <summary>The robot's spoken line from the most recent completed turn (free text); empty before then.</summary>
-        string LastReply { get; }
+        /// <summary>Submits one player line and asynchronously returns the immutable robot turn.</summary>
+        Task<OperationResult<RobotConversationTurnResult>> SubmitAsync(
+            string playerText,
+            CancellationToken cancellationToken = default);
+    }
 
-        /// <summary>
-        /// The robot's chosen reaction from the most recent completed turn — one of
-        /// <see cref="RobotConversationRequest.DecisionOptions"/>, or empty when the brain produced none / was
-        /// unavailable. The consumer maps and gates this; the conversation does not.
-        /// </summary>
-        string LastDecision { get; }
+    /// <summary>Immutable output from one completed robot conversation turn.</summary>
+    public sealed class RobotConversationTurnResult
+    {
+        /// <summary>Creates a completed conversation turn.</summary>
+        public RobotConversationTurnResult(
+            string reply,
+            string decision,
+            IReadOnlyDictionary<string, string> values)
+        {
+            Reply = reply ?? string.Empty;
+            Decision = decision ?? string.Empty;
+            Values = new ReadOnlyDictionary<string, string>(
+                values == null
+                    ? new Dictionary<string, string>()
+                    : new Dictionary<string, string>(values, StringComparer.Ordinal));
+        }
 
-        /// <summary>
-        /// Every raw output value from the most recent completed turn — the reply, the decision, and any
-        /// <see cref="RobotConversationRequest.ExtraOutputs"/> fields, keyed by field name. Empty before the first
-        /// turn and when the turn failed. As with the decision, the consumer maps and gates these values; the
-        /// conversation does not.
-        /// </summary>
-        IReadOnlyDictionary<string, string> LastValues { get; }
+        /// <summary>Gets the robot's spoken line.</summary>
+        public string Reply { get; }
 
-        /// <summary>A short diagnostic for the most recent turn when it did not produce a usable answer; else <c>null</c>.</summary>
-        string? LastError { get; }
+        /// <summary>Gets the closed-set decision.</summary>
+        public string Decision { get; }
 
-        /// <summary>
-        /// Submit the player's line and begin a turn. No-op when the conversation has <see cref="Ended"/>, is already
-        /// <see cref="IsThinking"/>, or the text is empty. The text is treated as untrusted and is wrapped/sanitised
-        /// before it reaches the brain.
-        /// </summary>
-        void Submit(string playerText);
-
-        /// <summary>Finish the conversation. Idempotent; abandons any in-flight turn. After this <see cref="Ended"/> is <c>true</c>.</summary>
-        void End();
+        /// <summary>Gets every structured output value.</summary>
+        public IReadOnlyDictionary<string, string> Values { get; }
     }
 
     /// <summary>
@@ -127,10 +109,46 @@ namespace TopiaForge.Mods
         /// <summary>Creates a conversation request.</summary>
         /// <param name="systemFrame">The persona/voice/rules framing for the robot (who it is, the fiction, tone, what NOT to do).</param>
         /// <param name="decisionOptions">The closed set of reactions the robot must choose from each turn (the decision enum).</param>
-        public RobotConversationRequest(string systemFrame, IReadOnlyList<string> decisionOptions)
+        /// <param name="groundTruthFacts">Optional immutable authoritative facts included on every turn.</param>
+        /// <param name="liveFacts">Optional callback that supplies facts immediately before each turn.</param>
+        /// <param name="maxTurns">Maximum number of completed turns.</param>
+        /// <param name="temperature">Sampling temperature; zero is the most deterministic.</param>
+        /// <param name="usage">A stable diagnostic label for the conversation.</param>
+        /// <param name="replyGuidance">Optional guidance for the spoken reply.</param>
+        /// <param name="decisionGuidance">Optional guidance defining the available decisions.</param>
+        /// <param name="maxReplyChars">Maximum number of characters accepted in a reply.</param>
+        /// <param name="extraOutputs">Optional additional structured output fields.</param>
+        public RobotConversationRequest(
+            string systemFrame,
+            IReadOnlyList<string> decisionOptions,
+            IReadOnlyDictionary<string, string>? groundTruthFacts = null,
+            Func<IReadOnlyDictionary<string, string>?>? liveFacts = null,
+            int maxTurns = 3,
+            float temperature = 0.7f,
+            string usage = "robot-conversation",
+            string? replyGuidance = null,
+            string? decisionGuidance = null,
+            int maxReplyChars = 200,
+            IReadOnlyList<BrainOutputField>? extraOutputs = null)
         {
             SystemFrame = systemFrame ?? string.Empty;
-            DecisionOptions = decisionOptions ?? System.Array.Empty<string>();
+            DecisionOptions = decisionOptions == null
+                ? Array.Empty<string>()
+                : new ReadOnlyCollection<string>(new List<string>(decisionOptions));
+            GroundTruthFacts = groundTruthFacts == null
+                ? null
+                : new ReadOnlyDictionary<string, string>(
+                    new Dictionary<string, string>(groundTruthFacts, StringComparer.Ordinal));
+            LiveFacts = liveFacts;
+            MaxTurns = maxTurns;
+            Temperature = temperature;
+            Usage = usage ?? string.Empty;
+            ReplyGuidance = replyGuidance;
+            DecisionGuidance = decisionGuidance;
+            MaxReplyChars = maxReplyChars;
+            ExtraOutputs = extraOutputs == null
+                ? null
+                : new ReadOnlyCollection<BrainOutputField>(new List<BrainOutputField>(extraOutputs));
         }
 
         /// <summary>The persona/voice/rules framing for the robot. Owns tone and the "stay in character" guardrails.</summary>
@@ -144,7 +162,7 @@ namespace TopiaForge.Mods
         /// gaslit about (e.g. <c>hp</c>, <c>faction</c>, <c>was-just-zapped</c>). Keys/values are short strings.
         /// Optional.
         /// </summary>
-        public IReadOnlyDictionary<string, string>? GroundTruthFacts { get; set; }
+        public IReadOnlyDictionary<string, string>? GroundTruthFacts { get; }
 
         /// <summary>
         /// Live facts recomputed at the start of every submitted turn and merged OVER
@@ -152,34 +170,33 @@ namespace TopiaForge.Mods
         /// fresh across a multi-turn conversation. A <c>null</c> return or a throwing provider degrades to the
         /// static facts only. Optional.
         /// </summary>
-        public Func<IReadOnlyDictionary<string, string>?>? LiveFacts { get; set; }
+        public Func<IReadOnlyDictionary<string, string>?>? LiveFacts { get; }
 
         /// <summary>Hard cap on completed turns before the conversation auto-ends. Default 3.</summary>
-        public int MaxTurns { get; set; } = 3;
+        public int MaxTurns { get; }
 
         /// <summary>Sampling temperature for the robot's replies (0 = most deterministic). Clamped by the backend.</summary>
-        public float Temperature { get; set; } = 0.7f;
+        public float Temperature { get; }
 
         /// <summary>Telemetry/debug label for the backend. Optional; defaults to a generic label.</summary>
-        public string Usage { get; set; } = "robot-conversation";
+        public string Usage { get; }
 
         /// <summary>How to steer the spoken line (e.g. "a short in-character line, max ~14 words"). Optional.</summary>
-        public string? ReplyGuidance { get; set; }
+        public string? ReplyGuidance { get; }
 
         /// <summary>How to steer the decision (what each option means). Optional.</summary>
-        public string? DecisionGuidance { get; set; }
+        public string? DecisionGuidance { get; }
 
         /// <summary>Hard cap on the robot's spoken line length, in characters. Default 200.</summary>
-        public int MaxReplyChars { get; set; } = 200;
+        public int MaxReplyChars { get; }
 
         /// <summary>
         /// Additional structured output fields the robot must fill each turn beyond the built-in reply/decision —
         /// e.g. a closed-set <c>target</c> field naming what a chosen action applies to. Keep the set small and
         /// closed-set where possible (each field costs the brain accuracy and latency). Fields named
-        /// <c>reply</c>/<c>decision</c> are ignored. Read the values from
-        /// <see cref="IRobotConversation.LastValues"/>. Optional.
+        /// <c>reply</c>/<c>decision</c> are ignored. Read the values from the returned turn result. Optional.
         /// </summary>
-        public IReadOnlyList<BrainOutputField>? ExtraOutputs { get; set; }
+        public IReadOnlyList<BrainOutputField>? ExtraOutputs { get; }
     }
 
     /// <summary>
@@ -190,7 +207,7 @@ namespace TopiaForge.Mods
     /// </summary>
     /// <remarks>
     /// Published by <c>TopiaForge.RobotKit</c> and resolved with
-    /// <c>context.GetService&lt;IPlayerDialogueInputService&gt;()</c>. Voice degrades gracefully: when no microphone
+    /// <c>context.RequireExtension&lt;IPlayerDialogueInputService&gt;()</c>. Voice degrades gracefully: when no microphone
     /// is present or the backend is unreachable, <see cref="IsVoiceAvailable"/> is <c>false</c> and the consumer falls
     /// back to typed text.
     /// </remarks>
@@ -200,39 +217,34 @@ namespace TopiaForge.Mods
         bool IsVoiceAvailable { get; }
 
         /// <summary>
-        /// Begin capturing from the microphone immediately (push-to-talk down). Returns a pollable handle; call
-        /// <see cref="IVoiceCapture.Stop"/> when the key is released to end recording and start transcription, then
-        /// poll <see cref="IVoiceCapture.IsComplete"/> for the text. Returns a handle that completes immediately as
-        /// unavailable when voice is off; never throws.
+        /// Begins microphone capture and returns a lifetime-owned handle, or a stable unavailable result.
         /// </summary>
-        IVoiceCapture BeginVoiceCapture();
+        OperationResult<IVoiceCapture> BeginVoiceCapture();
     }
 
     /// <summary>
-    /// A pollable push-to-talk capture: record while the key is held, <see cref="Stop"/> on release to transcribe,
-    /// then poll <see cref="IsComplete"/> and read <see cref="Text"/>. Never throws.
+    /// A lifetime-owned push-to-talk capture. Await <see cref="StopAsync"/> when the key is released.
     /// </summary>
-    public interface IVoiceCapture
+    public interface IVoiceCapture : IDisposable
     {
-        /// <summary><c>true</c> while the microphone is still recording (before <see cref="Stop"/>/<see cref="Cancel"/>).</summary>
+        /// <summary><c>true</c> while the microphone is still recording.</summary>
         bool IsRecording { get; }
 
-        /// <summary><c>true</c> once transcription has finished (whether or not any words came back, or it failed).</summary>
-        bool IsComplete { get; }
+        /// <summary>Stops recording and asynchronously returns a transcript with stable failure codes.</summary>
+        Task<OperationResult<VoiceTranscriptResult>> StopAsync(
+            CancellationToken cancellationToken = default);
+    }
 
-        /// <summary><c>true</c> when a non-empty transcript came back. Valid once <see cref="IsComplete"/> is true.</summary>
-        bool Found { get; }
+    /// <summary>Immutable successful voice transcription.</summary>
+    public sealed class VoiceTranscriptResult
+    {
+        /// <summary>Creates a voice transcription.</summary>
+        public VoiceTranscriptResult(string text)
+        {
+            Text = text ?? string.Empty;
+        }
 
-        /// <summary>The transcript. Empty until <see cref="IsComplete"/>, and empty when nothing usable came back.</summary>
-        string Text { get; }
-
-        /// <summary>A short diagnostic when transcription failed; else <c>null</c>.</summary>
-        string? Error { get; }
-
-        /// <summary>Stop recording (push-to-talk released) and begin transcription. Idempotent.</summary>
-        void Stop();
-
-        /// <summary>Abandon the capture entirely: stop recording with no transcription. Idempotent.</summary>
-        void Cancel();
+        /// <summary>Gets the transcribed text.</summary>
+        public string Text { get; }
     }
 }

@@ -11,20 +11,27 @@ namespace TopiaForge.Performance
     /// applier set, applies each lever (capturing originals), and re-asserts on Update/SceneLoaded.
     /// Everything is reverted on unload (in reverse order), then Harmony patches are removed.
     /// </summary>
-    public sealed class PerformanceMod : ITopiaForgeMod
+    public sealed class PerformanceMod : TopiaForgeMod
     {
         private const string HarmonyId = "io.github.furroxide.topiaforge.performance.harmony";
+        private static readonly ConfigDefinition<PerformanceConfig> Config =
+            new ConfigDefinition<PerformanceConfig>(1, () => new PerformanceConfig());
 
-        private IModContext? context;
         private Harmony? harmony;
         private readonly List<IPerfApplier> appliers = new List<IPerfApplier>();
 
-        public void OnLoad(IModContext context)
+        /// <inheritdoc/>
+        protected override void OnLoad()
         {
-            this.context = context;
-            var logger = context.Logger;
+            var logger = Context.Logger;
 
-            var config = context.LoadConfig(new PerformanceConfig());
+            var configResult = Context.Config.Load(Config);
+            if (!configResult.TryGetValue(out var config))
+            {
+                logger.Error($"Performance configuration could not be loaded ({configResult.ErrorCode}): {configResult.ErrorMessage}");
+                return;
+            }
+
             config.Normalize();                 // sanitize the mode string + clamp raw user values first
             PerformancePreset.Apply(config);    // resolve the preset onto per-lever fields (unless override_manual)
             config.Normalize();                 // clamp anything the preset set
@@ -60,19 +67,14 @@ namespace TopiaForge.Performance
                 DisableApplier(i, applier, "Apply");
             }
 
-            context.Update += OnUpdate;
-            context.SceneLoaded += OnSceneLoaded;
+            Context.Events.SubscribeUpdate(OnUpdate);
+            Context.Events.SubscribeSceneLoaded(OnSceneLoaded);
             logger.Info($"TopiaForge Performance loaded (mode: {config.PerformanceMode}).");
         }
 
-        public void OnUnload()
+        /// <inheritdoc/>
+        protected override void OnUnload()
         {
-            if (context != null)
-            {
-                context.Update -= OnUpdate;
-                context.SceneLoaded -= OnSceneLoaded;
-            }
-
             // Revert in reverse application order so quality/asset state unwinds cleanly.
             for (var i = appliers.Count - 1; i >= 0; i--)
             {
@@ -86,12 +88,11 @@ namespace TopiaForge.Performance
             }
             catch (Exception ex)
             {
-                context?.Logger.Error(ex, "Performance: failed to unpatch Harmony.");
+                Context.Logger.Error(ex, "Performance: failed to unpatch Harmony.");
             }
 
             appliers.Clear();
             harmony = null;
-            context = null;
         }
 
         private void OnUpdate(float deltaTime)
@@ -127,7 +128,7 @@ namespace TopiaForge.Performance
             }
             catch (Exception ex)
             {
-                context?.Logger.Error(ex, $"Performance: applier '{applier.Name}' failed during {phase}.");
+                Context.Logger.Error(ex, $"Performance: applier '{applier.Name}' failed during {phase}.");
                 return false;
             }
         }
@@ -141,7 +142,7 @@ namespace TopiaForge.Performance
             }
             catch (Exception ex)
             {
-                context?.Logger.Error(ex, $"Performance: applier '{applier.Name}' failed during Update.");
+                Context.Logger.Error(ex, $"Performance: applier '{applier.Name}' failed during Update.");
                 return false;
             }
         }
@@ -155,7 +156,7 @@ namespace TopiaForge.Performance
             }
             catch (Exception ex)
             {
-                context?.Logger.Error(ex, $"Performance: applier '{applier.Name}' failed during SceneLoaded.");
+                Context.Logger.Error(ex, $"Performance: applier '{applier.Name}' failed during SceneLoaded.");
                 return false;
             }
         }
@@ -164,7 +165,7 @@ namespace TopiaForge.Performance
         {
             Guard(applier.Revert, applier, "failure cleanup");
             appliers.RemoveAt(index);
-            context?.Logger.Warn($"Performance: disabled applier '{applier.Name}' after {failedPhase} failure.");
+            Context.Logger.Warn($"Performance: disabled applier '{applier.Name}' after {failedPhase} failure.");
         }
     }
 }

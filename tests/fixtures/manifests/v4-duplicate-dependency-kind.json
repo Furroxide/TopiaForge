@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 4,
+  "name": "fixtures.v4-duplicate-dependency-kind",
+  "displayName": "Duplicate dependency kind",
+  "version": "1.0.0",
+  "author": { "name": "TopiaForge Tests" },
+  "entryAssembly": "Fixture.dll",
+  "entryType": "Fixtures.V4Mod",
+  "supportedGameVersionRange": "*",
+  "supportedLoaderVersionRange": "*",
+  "supportedSdkVersionRange": "*",
+  "dependencies": { "fixtures.shared": ">=1.0.0" },
+  "optionalDependencies": { "fixtures.shared": "*" }
+}

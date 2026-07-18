@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../topiaforge.dev.props" Condition="Exists('../../topiaforge.dev.props')" />
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <AssemblyName>{{ASSEMBLY_NAME}}.Api</AssemblyName>
+    <RootNamespace>{{ASSEMBLY_NAME}}</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode Condition="'$(ContinuousIntegrationBuild)' == 'true' and Exists('$(MSBuildProjectDirectory)/packages.lock.json')">true</RestoreLockedMode>
+    <TopiaForgeSafeProject>true</TopiaForgeSafeProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="TopiaForge.Mods.Abstractions" Version="{{SDK_VERSION}}" />
+    <PackageReference Include="TopiaForge.Mods.Analyzers" Version="{{SDK_VERSION}}" PrivateAssets="all" />
+  </ItemGroup>
+  <Target Name="EnsureTopiaForgeSdk" BeforeTargets="ResolveAssemblyReferences"
+          Condition="!Exists('../../topiaforge.dev.props')">
+    <Error Text="TopiaForge SDK references are missing. Run 'topiaforge restore' in the mod project." />
+  </Target>
+</Project>

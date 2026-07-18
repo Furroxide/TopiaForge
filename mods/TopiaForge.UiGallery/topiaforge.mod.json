@@ -1,19 +1,24 @@
 {
   "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "name": "io.github.furroxide.topiaforge.uigallery",
   "displayName": "TopiaForge UI Gallery",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "author": {
     "name": "TopiaForge"
   },
   "description": "Developer tool: a living catalog of every TopiaForgeUi widget in both brand schemes, with live high-contrast, UI-scale, and motion toggles. Toggle with F8. Not shipped in releases.",
   "entryAssembly": "TopiaForge.UiGallery.dll",
   "entryType": "TopiaForge.UiGallery.UiGalleryMod",
-  "vpmDependencies": {},
+  "dependencies": {
+    "io.github.furroxide.topiaforge.worlds": ">=1.0.0 <2.0.0"
+  },
+  "loadAfter": [
+    "io.github.furroxide.topiaforge.worlds"
+  ],
   "supportedGameVersionRange": "0.0.2227",
-  "supportedLoaderVersionRange": ">=0.2.0 <0.3.0",
-  "supportedSdkVersionRange": ">=0.1.0 <0.2.0",
+  "supportedLoaderVersionRange": ">=1.0.0 <2.0.0",
+  "supportedSdkVersionRange": ">=1.0.0 <2.0.0",
   "category": "DevTool",
   "tags": [
     "dev-only",
@@ -22,7 +27,7 @@
     "sdk"
   ],
   "license": "NOASSERTION",
-  "permissions": [
+  "capabilities": [
     "hud",
     "input"
   ]

@@ -35,6 +35,7 @@ namespace TopiaForge.Mods.UnityUi
             return this;
         }
 
+        /// <summary>Sets this element's semantic color tone.</summary>
         public TopiaForgePipRow Tone(TopiaForgeTone value)
         {
             filledTone = value;
@@ -93,6 +94,7 @@ namespace TopiaForge.Mods.UnityUi
             Repaint();
         }
 
+        /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
             Repaint();

@@ -152,16 +152,34 @@ namespace TopiaForge.UgcLiveSync
 
             foreach (var item in overrides)
             {
-                if (item.Prefab is not GameObject prefab)
+                // Safe contracts intentionally keep Unity objects opaque. This provider is the native adapter,
+                // so it unwraps the manager-owned prefab handle only inside the implementation assembly.
+                var prefabProperty = item.Prefab.GetType().GetProperty(
+                    "Prefab",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                GameObject? prefab;
+                try
                 {
-                    logger.Warn("UGC live sync: asset override '" + item.AssetId + "' is not a GameObject; skipped.");
+                    prefab = prefabProperty?.GetValue(item.Prefab) as GameObject;
+                }
+                catch (Exception ex)
+                {
+                    logger.Debug("UGC live sync: could not unwrap asset override '" + item.AssetId + "': " + ex.Message);
+                    continue;
+                }
+
+                if (prefab == null)
+                {
+                    logger.Warn("UGC live sync: asset override '" + item.AssetId
+                        + "' was not created by the active TopiaForge asset provider; skipped.");
                     continue;
                 }
 
                 Vector3? offset = null;
-                if (item.LocalPositionOffset is { Length: >= 3 } o)
+                if (item.LocalPositionOffset.HasValue)
                 {
-                    offset = new Vector3(o[0], o[1], o[2]);
+                    var value = item.LocalPositionOffset.Value;
+                    offset = new Vector3(value.X, value.Y, value.Z);
                 }
 
                 try

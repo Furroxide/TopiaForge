@@ -27,8 +27,11 @@ namespace TopiaForge.Mods.UnityUi
         /// </summary>
         public TopiaForgeAccessibilityProfile AccessibilityProfile { get; set; } = TopiaForgeAccessibilityProfile.Default;
 
+        /// <summary>Gets or sets log info.</summary>
         public Action<string>? LogInfo { get; set; }
+        /// <summary>Gets or sets log warn.</summary>
         public Action<string>? LogWarn { get; set; }
+        /// <summary>Gets or sets log error.</summary>
         public Action<string>? LogError { get; set; }
     }
 }

@@ -7,7 +7,9 @@ namespace TopiaForge.Mods.UnityUi
     /// <summary>Persistence seam for window rects and other small UI state.</summary>
     public interface ITopiaForgeStateStore
     {
+        /// <summary>Attempts to read a value by key.</summary>
         bool TryRead(string key, out string value);
+        /// <summary>Writes a diagnostic message.</summary>
         void Write(string key, string value);
     }
 
@@ -22,17 +24,20 @@ namespace TopiaForge.Mods.UnityUi
         private readonly Dictionary<string, string> entries = new Dictionary<string, string>(StringComparer.Ordinal);
         private bool loaded;
 
+        /// <summary>Creates a file state store.</summary>
         public TopiaForgeFileStateStore(string directory)
         {
             path = Path.Combine(directory, "topiaforge-ui.state");
         }
 
+        /// <summary>Attempts to read a value from memory by key.</summary>
         public bool TryRead(string key, out string value)
         {
             EnsureLoaded();
             return entries.TryGetValue(key, out value!);
         }
 
+        /// <summary>Writes a diagnostic message.</summary>
         public void Write(string key, string value)
         {
             EnsureLoaded();
@@ -105,11 +110,13 @@ namespace TopiaForge.Mods.UnityUi
     {
         private readonly Dictionary<string, string> entries = new Dictionary<string, string>(StringComparer.Ordinal);
 
+        /// <summary>Attempts to read a value from the persisted state file.</summary>
         public bool TryRead(string key, out string value)
         {
             return entries.TryGetValue(key, out value!);
         }
 
+        /// <summary>Writes a diagnostic message.</summary>
         public void Write(string key, string value)
         {
             entries[key] = value;

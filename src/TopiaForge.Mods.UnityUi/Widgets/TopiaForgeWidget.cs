@@ -6,6 +6,7 @@ namespace TopiaForge.Mods.UnityUi
     /// <summary>Implemented by widgets that re-tint when the theme changes.</summary>
     public interface ITopiaForgeThemeAware
     {
+        /// <summary>Applies the resolved theme to this UI element.</summary>
         void ApplyTheme(TopiaForgeResolvedTheme theme);
     }
 
@@ -19,6 +20,7 @@ namespace TopiaForge.Mods.UnityUi
         private CanvasGroup? visibilityGroup;
         private bool visible = true;
 
+        /// <summary>Creates a widget.</summary>
         protected TopiaForgeWidget(UiHost host, TopiaForgeScheme scheme, GameObject go)
         {
             Host = host;
@@ -32,13 +34,19 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
+        /// <summary>Gets host.</summary>
         public UiHost Host { get; }
+        /// <summary>Gets scheme.</summary>
         public TopiaForgeScheme Scheme { get; }
+        /// <summary>Gets go.</summary>
         public GameObject Go { get; }
+        /// <summary>Gets rect.</summary>
         public RectTransform Rect { get; }
 
+        /// <summary>Gets visible.</summary>
         public bool Visible => visible;
 
+        /// <summary>Gets theme.</summary>
         protected TopiaForgeResolvedTheme Theme => Host.Theme(Scheme);
 
         /// <summary>
@@ -91,6 +99,7 @@ namespace TopiaForge.Mods.UnityUi
     /// </summary>
     public static class TopiaForgeWidgetChainers
     {
+        /// <summary>Configures fixed for this widget.</summary>
         public static T Fixed<T>(this T widget, float width, float height) where T : TopiaForgeWidget
         {
             var layout = widget.EnsureLayoutElement();
@@ -101,6 +110,7 @@ namespace TopiaForge.Mods.UnityUi
             return widget;
         }
 
+        /// <summary>Configures fixed width for this widget.</summary>
         public static T FixedWidth<T>(this T widget, float width) where T : TopiaForgeWidget
         {
             var layout = widget.EnsureLayoutElement();
@@ -109,6 +119,7 @@ namespace TopiaForge.Mods.UnityUi
             return widget;
         }
 
+        /// <summary>Configures fixed height for this widget.</summary>
         public static T FixedHeight<T>(this T widget, float height) where T : TopiaForgeWidget
         {
             var layout = widget.EnsureLayoutElement();
@@ -117,6 +128,7 @@ namespace TopiaForge.Mods.UnityUi
             return widget;
         }
 
+        /// <summary>Configures flex for this widget.</summary>
         public static T Flex<T>(this T widget, float width = 1f, float height = 1f) where T : TopiaForgeWidget
         {
             var layout = widget.EnsureLayoutElement();
@@ -125,6 +137,7 @@ namespace TopiaForge.Mods.UnityUi
             return widget;
         }
 
+        /// <summary>Configures fill width for this widget.</summary>
         public static T FillWidth<T>(this T widget) where T : TopiaForgeWidget
         {
             var layout = widget.EnsureLayoutElement();

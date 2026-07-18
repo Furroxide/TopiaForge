@@ -1,0 +1,83 @@
+# TopiaForge.Mods.Ugc public API baseline
+# Format version: 2
+# Regenerate with: dotnet run --project tests/TopiaForge.ModManager.Tests -c Release -- --print-sdk-api-baseline topiaforge.mods.ugc
+# Review every change. Breaking changes require explicit V1 compatibility approval.
+
+assembly TopiaForge.Mods.Ugc, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null
+target-framework .NETStandard,Version=v2.1
+
+type public interface TopiaForge.Mods.IUgcAssetOverrideLease : System.IDisposable
+  property System.Boolean IsActive { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.UgcAssetOverride Override { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IUgcLiveSyncService
+  event System.Action<TopiaForge.Mods.UgcSnapshotInfo>? PatchApplied { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
+  event System.Action<TopiaForge.Mods.UgcSnapshotInfo>? SnapshotImported { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
+  event System.Action<TopiaForge.Mods.UgcSyncError>? SyncError { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
+  event System.Action<TopiaForge.Mods.UgcSyncSession>? SessionStarted { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
+  event System.Action<TopiaForge.Mods.UgcSyncSession>? SessionStopped { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUgcAssetOverrideLease> RegisterAssetOverride(TopiaForge.Mods.UgcAssetOverride assetOverride)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUgcSyncLease> StartAutomergeSession(TopiaForge.Mods.UgcLiveSyncRequest request)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUgcSyncLease> StartLocalSession(TopiaForge.Mods.UgcLiveSyncRequest request)
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.UgcAssetOverride> AssetOverrides { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.UgcLiveSyncStatus Status { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.UgcSyncSession? CurrentSession { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IUgcSyncLease : System.IDisposable
+  property System.Boolean IsActive { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.UgcSyncSession Session { get [abstract,virtual,newslot]; }
+
+type public sealed class TopiaForge.Mods.UgcAssetOverride : System.Object
+  constructor .ctor(System.String assetId, TopiaForge.Mods.IPrefabAsset prefab, System.Nullable<TopiaForge.Mods.Vec3> localPositionOffset = null)
+  property System.Nullable<TopiaForge.Mods.Vec3> LocalPositionOffset { get; }
+  property System.String AssetId { get; }
+  property TopiaForge.Mods.IPrefabAsset Prefab { get; }
+
+type public sealed class TopiaForge.Mods.UgcLiveSyncRequest : System.Object
+  constructor .ctor(TopiaForge.Mods.WorldLoadPriority priority = 1 (UserInitiated), System.String watchFolder = "", System.String editorUrl = "", System.String documentUrl = "", System.String syncServerUrl = "", System.String sceneId = "", System.String filePattern = "*.json;*.json.gz", System.Int32 debounceMilliseconds = 200)
+  property System.Int32 DebounceMilliseconds { get; }
+  property System.String DocumentUrl { get; }
+  property System.String EditorUrl { get; }
+  property System.String FilePattern { get; }
+  property System.String SceneId { get; }
+  property System.String SyncServerUrl { get; }
+  property System.String WatchFolder { get; }
+  property TopiaForge.Mods.WorldLoadPriority Priority { get; }
+
+type public enum TopiaForge.Mods.UgcLiveSyncStatus : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.UgcLiveSyncStatus Connected = 3 (Connected)
+  field const TopiaForge.Mods.UgcLiveSyncStatus Error = 6 (Error)
+  field const TopiaForge.Mods.UgcLiveSyncStatus Idle = 0 (Idle)
+  field const TopiaForge.Mods.UgcLiveSyncStatus Starting = 1 (Starting)
+  field const TopiaForge.Mods.UgcLiveSyncStatus Stopped = 7 (Stopped)
+  field const TopiaForge.Mods.UgcLiveSyncStatus Unavailable = 5 (Unavailable)
+  field const TopiaForge.Mods.UgcLiveSyncStatus WaitingForScene = 2 (WaitingForScene)
+  field const TopiaForge.Mods.UgcLiveSyncStatus Watching = 4 (Watching)
+
+type public sealed class TopiaForge.Mods.UgcSnapshotInfo : System.Object
+  constructor .ctor(System.String projectName, System.String sceneId, System.String sceneName, System.Int32 entityCount, System.String revisionLabel, System.Boolean isFullRebuild, System.DateTime appliedAtUtc)
+  property System.Boolean IsFullRebuild { get; }
+  property System.DateTime AppliedAtUtc { get; }
+  property System.Int32 EntityCount { get; }
+  property System.String ProjectName { get; }
+  property System.String RevisionLabel { get; }
+  property System.String SceneId { get; }
+  property System.String SceneName { get; }
+
+type public sealed class TopiaForge.Mods.UgcSyncError : System.Object
+  constructor .ctor(System.String phase, System.String message)
+  property System.String Message { get; }
+  property System.String Phase { get; }
+
+type public sealed class TopiaForge.Mods.UgcSyncSession : System.Object
+  constructor .ctor(TopiaForge.Mods.UgcSyncTransport transport, System.String target, System.String sceneId, System.DateTime startedAtUtc)
+  property System.DateTime StartedAtUtc { get; }
+  property System.String SceneId { get; }
+  property System.String Target { get; }
+  property TopiaForge.Mods.UgcSyncTransport Transport { get; }
+
+type public enum TopiaForge.Mods.UgcSyncTransport : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.UgcSyncTransport Automerge = 1 (Automerge)
+  field const TopiaForge.Mods.UgcSyncTransport LocalFolder = 0 (LocalFolder)

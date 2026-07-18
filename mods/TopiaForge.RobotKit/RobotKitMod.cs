@@ -7,9 +7,9 @@ namespace TopiaForge.RobotKit
     // that come up native (body, animation, native locomotion) and are driven by the game's own pathing — then
     // override only the behaviour and visuals they need, without re-deriving the GameCode reflection themselves.
     // Mirrors the TopiaForge.Worlds lifecycle discipline.
-    public sealed class RobotKitMod : ITopiaForgeMod
+    public sealed class RobotKitMod : TopiaForgeMod
     {
-        private IModContext? context;
+        private IModLogger? logger;
         private RobotAgentService? service;
         private RobotBrainQueryService? brainService;
         private RobotConversationService? conversationService;
@@ -21,52 +21,42 @@ namespace TopiaForge.RobotKit
         private bool conversationTickFailed;
         private bool dialogueTickFailed;
 
-        public void OnLoad(IModContext context)
+        protected override void OnLoad()
         {
-            this.context = context;
+            logger = Context.Logger;
 
-            service = new RobotAgentService(context.Logger);
-            brainService = new RobotBrainQueryService(context.Logger);
-            conversationService = new RobotConversationService(brainService, context.Logger);
-            dialogueInputService = new PlayerDialogueInputService(context.Logger);
+            service = new RobotAgentService(logger);
+            brainService = new RobotBrainQueryService(logger);
+            conversationService = new RobotConversationService(brainService, logger);
+            dialogueInputService = new PlayerDialogueInputService(logger);
             // The objective service resolves Reprogram courier recipients back to agent handles via the agent
             // service (live-object reference -> IRobotAgent), staying Unity-free itself.
-            objectiveService = new RobotObjectiveService(context.Logger, null, obj => service?.FindAgentByGameObject(obj));
+            objectiveService = new RobotObjectiveService(
+                logger,
+                null,
+                entity => service?.FindAgentByEntity(entity),
+                null,
+                Context.Identity.Id);
 
-            var registry = context.GetService<IModServiceRegistry>();
-            registry?.Register<IRobotAgentService>(context.ModId, service);
-            registry?.Register<IRobotBrainQueryService>(context.ModId, brainService);
-            registry?.Register<IRobotConversationService>(context.ModId, conversationService);
-            registry?.Register<IPlayerDialogueInputService>(context.ModId, dialogueInputService);
-            registry?.Register<IRobotObjectiveService>(context.ModId, objectiveService);
+            Context.Lifetime.Track(service);
+            Context.Lifetime.Track(brainService);
+            Context.Lifetime.Track(objectiveService);
+            Context.Lifetime.Track(dialogueInputService);
+            Context.Lifetime.Track(conversationService);
+            RegisterExtension<IRobotAgentService>(service);
+            RegisterExtension<IRobotBrainQueryService>(brainService);
+            RegisterExtension<IRobotConversationService>(conversationService);
+            RegisterExtension<IPlayerDialogueInputService>(dialogueInputService);
+            RegisterExtension<IRobotObjectiveService>(objectiveService);
 
-            context.Update += OnUpdate;
-            context.SceneLoaded += OnSceneLoaded;
-            context.Logger.Info("TopiaForge RobotKit loaded; IRobotAgentService + IRobotBrainQueryService + IRobotConversationService + IPlayerDialogueInputService + IRobotObjectiveService registered (poll IsAvailable once a level is loaded).");
+            Context.Events.SubscribeUpdate(OnUpdate);
+            Context.Events.SubscribeSceneLoaded(OnSceneLoaded);
+            logger.Info("TopiaForge RobotKit loaded; safe robot extensions registered.");
         }
 
-        public void OnUnload()
+        protected override void OnUnload()
         {
-            if (context != null)
-            {
-                context.Update -= OnUpdate;
-                context.SceneLoaded -= OnSceneLoaded;
-                context.GetService<IModServiceRegistry>()?.UnregisterOwner(context.ModId);
-            }
-
-            // Dispose consumers before their providers, and isolate teardown so one broken adapter cannot strand
-            // the remaining services or their Unity objects.
-            DisposeSafely(conversationService, "conversation service");
-            conversationService = null;
-            DisposeSafely(dialogueInputService, "dialogue input service");
-            dialogueInputService = null;
-            DisposeSafely(objectiveService, "objective service");
-            objectiveService = null;
-            DisposeSafely(brainService, "brain service");
-            brainService = null;
-            DisposeSafely(service, "agent service");
-            service = null;
-            context = null;
+            // Runtime lifetime releases subscriptions, registrations, then services in reverse order.
         }
 
         private void OnUpdate(float deltaTime)
@@ -138,7 +128,7 @@ namespace TopiaForge.RobotKit
         {
             if (!alreadyReported)
             {
-                context?.Logger.Error(exception, "RobotKit " + component
+                logger?.Error(exception, "RobotKit " + component
                     + " tick failed; other RobotKit services will continue.");
             }
 
@@ -153,7 +143,7 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception exception)
             {
-                context?.Logger.Error(exception, "RobotKit failed during " + operation + ".");
+                logger?.Error(exception, "RobotKit failed during " + operation + ".");
             }
         }
 
@@ -165,7 +155,16 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception exception)
             {
-                context?.Logger.Error(exception, "RobotKit failed to dispose its " + name + ".");
+                logger?.Error(exception, "RobotKit failed to dispose its " + name + ".");
+            }
+        }
+
+        private void RegisterExtension<T>(T provider) where T : class
+        {
+            var registration = Context.Extensions.Register(provider);
+            if (!registration.Succeeded)
+            {
+                throw new InvalidOperationException(registration.ErrorMessage);
             }
         }
     }

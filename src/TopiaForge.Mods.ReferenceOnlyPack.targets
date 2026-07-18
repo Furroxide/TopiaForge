@@ -1,0 +1,44 @@
+<Project>
+  <!-- The game loader owns runtime implementations. Public SDK packages expose compile-time contracts only;
+       this keeps ordinary PackageReference consumption aligned with the release CLI's embedded feed. -->
+  <PropertyGroup>
+    <Authors Condition="'$(Authors)' == ''">TopiaForge</Authors>
+    <Description Condition="'$(Description)' == ''">TopiaForge V1 mod SDK contract package.</Description>
+    <PackageLicenseExpression Condition="'$(PackageLicenseExpression)' == ''">MIT</PackageLicenseExpression>
+    <_TopiaForgeUsesDefaultReadme Condition="'$(PackageReadmeFile)' == ''">true</_TopiaForgeUsesDefaultReadme>
+    <PackageReadmeFile Condition="'$(PackageReadmeFile)' == ''">README.md</PackageReadmeFile>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <!-- NU5131 validates legacy nuspec <references>/packages.config behavior. V1 supports
+         PackageReference only, where the ref/<tfm> convention is the authoritative compile surface. -->
+    <NoWarn>$(NoWarn);NU5131</NoWarn>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);TopiaForgePackReferenceContract</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(_TopiaForgeUsesDefaultReadme)' == 'true'">
+    <None Include="$(MSBuildThisFileDirectory)TopiaForge.Mods.PackageREADME.md"
+          Pack="true" PackagePath="README.md" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)TopiaForge.Mods.Package.props"
+          Pack="true" PackagePath="build/$(PackageId).props" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)TopiaForge.Mods.Package.targets"
+          Pack="true" PackagePath="build/$(PackageId).targets" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)TopiaForge.Mods.Package.props"
+          Pack="true" PackagePath="buildTransitive/$(PackageId).props" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)TopiaForge.Mods.Package.targets"
+          Pack="true" PackagePath="buildTransitive/$(PackageId).targets" Visible="false" />
+  </ItemGroup>
+
+  <Target Name="TopiaForgePackReferenceContract" DependsOnTargets="Build">
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="$(IntermediateOutputPath)ref/$(AssemblyName).dll">
+        <PackagePath>ref/$(TargetFramework)/$(AssemblyName).dll</PackagePath>
+      </TfmSpecificPackageFile>
+      <TfmSpecificPackageFile Include="$(TargetDir)$(AssemblyName).xml"
+                              Condition="Exists('$(TargetDir)$(AssemblyName).xml')">
+        <PackagePath>ref/$(TargetFramework)/$(AssemblyName).xml</PackagePath>
+      </TfmSpecificPackageFile>
+    </ItemGroup>
+  </Target>
+</Project>

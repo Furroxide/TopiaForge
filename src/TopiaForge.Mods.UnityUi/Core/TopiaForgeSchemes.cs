@@ -7,6 +7,7 @@ namespace TopiaForge.Mods.UnityUi
     /// </summary>
     public static class TopiaForgeSchemes
     {
+        /// <summary>Resolves the effective value for the current theme.</summary>
         public static TopiaForgeSchemeColors Resolve(TopiaForgeScheme scheme, TopiaForgeRgba? accentOverride, bool highContrast)
         {
             return scheme == TopiaForgeScheme.Paper
@@ -14,6 +15,7 @@ namespace TopiaForge.Mods.UnityUi
                 : ResolveHud(accentOverride, highContrast);
         }
 
+        /// <summary>Resolves colors for the paper tool-window scheme.</summary>
         public static TopiaForgeSchemeColors ResolvePaper(TopiaForgeRgba? accentOverride, bool highContrast)
         {
             var accent = accentOverride.HasValue
@@ -62,6 +64,7 @@ namespace TopiaForge.Mods.UnityUi
             return colors;
         }
 
+        /// <summary>Resolves colors for the gameplay HUD scheme.</summary>
         public static TopiaForgeSchemeColors ResolveHud(TopiaForgeRgba? accentOverride, bool highContrast)
         {
             var accent = accentOverride ?? TopiaForgePalette.Accent;

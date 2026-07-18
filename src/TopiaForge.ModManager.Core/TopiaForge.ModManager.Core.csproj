@@ -3,9 +3,13 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>TopiaForge.ModManager.Core</AssemblyName>
     <RootNamespace>TopiaForge.ModManager.Core</RootNamespace>
-    <Version>0.2.0</Version>
-    <AssemblyVersion>0.2.0.0</AssemblyVersion>
-    <FileVersion>0.2.0.0</FileVersion>
-    <InformationalVersion>0.2.0</InformationalVersion>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <InformationalVersion>1.0.0</InformationalVersion>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Reflection.Metadata" Version="10.0.9" />
+  </ItemGroup>
 </Project>

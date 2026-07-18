@@ -92,10 +92,12 @@ namespace TopiaForge.Mods.UnityUi
             Repaint();
         }
 
+        /// <summary>Gets key.</summary>
         public TopiaForgeKey Key => key;
 
         internal bool Capturing => capturing;
 
+        /// <summary>Sets the key.</summary>
         public void SetKey(TopiaForgeKey next)
         {
             if (key == next)
@@ -107,6 +109,7 @@ namespace TopiaForge.Mods.UnityUi
             Repaint();
         }
 
+        /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
             Repaint();

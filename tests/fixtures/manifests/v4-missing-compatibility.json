@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 4,
+  "name": "fixtures.v4-missing-range",
+  "displayName": "Missing Compatibility Range",
+  "version": "1.0.0",
+  "author": { "name": "TopiaForge Tests" },
+  "entryAssembly": "Fixture.dll",
+  "entryType": "Fixtures.V4Mod",
+  "supportedGameVersionRange": "*",
+  "supportedLoaderVersionRange": "*"
+}

@@ -30,8 +30,10 @@ namespace TopiaForge.Mods.UnityUi
 
             return Create(new TopiaForgeUiOptions
             {
-                OwnerId = context.ModId,
-                DataDirectory = context.Paths.DataPath,
+                OwnerId = context.Identity.Id,
+                // The safe SDK never exposes a filesystem path. Context.Ui supplies persistent window state;
+                // direct kit hosts intentionally use the in-memory state store.
+                DataDirectory = null,
                 LogInfo = context.Logger.Info,
                 LogWarn = context.Logger.Warn,
                 LogError = context.Logger.Error,

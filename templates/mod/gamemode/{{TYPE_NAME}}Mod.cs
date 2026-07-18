@@ -1,87 +1,69 @@
+using System;
 using TopiaForge.Mods;
 
 namespace {{ASSEMBLY_NAME}}
 {
-    /// <summary>
-    /// Registers the "{{DISPLAY_NAME}}" gamemode with the Worlds service so it appears in the game's
-    /// level-select menu, and runs its session loop while a session is active. Requires the io.github.furroxide.topiaforge.worlds
-    /// and io.github.furroxide.topiaforge.robotkit framework mods (declared in topiaforge.mod.json).
-    /// </summary>
-    public sealed class {{TYPE_NAME}}Mod : ITopiaForgeMod
+    /// <summary>Registers a lifetime-owned gamemode and runs its active-session update loop.</summary>
+    public sealed class {{TYPE_NAME}}Mod : TopiaForgeMod
     {
         public const string GamemodeId = "{{MOD_ID}}.mode";
 
-        private IModContext? context;
-        private IWorldGamemodeService? worlds;
         private WorldSession? session;
 
-        public void OnLoad(IModContext context)
+        protected override void OnLoad()
         {
-            this.context = context;
-            worlds = context.GetService<IWorldGamemodeService>();
-            if (worlds == null)
-            {
-                context.Logger.Warn("TopiaForge Worlds service is not available; {{DISPLAY_NAME}} cannot register its gamemode.");
-                return;
-            }
-
-            worlds.RegisterGamemode(new GamemodeDefinition(
+            var worlds = Context.RequireExtension<IWorldGamemodeService>();
+            EnsureRegistered(worlds.RegisterGamemode(new GamemodeDefinition(
                 GamemodeId,
                 "{{DISPLAY_NAME}}",
-                "Custom gamemode scaffolded from the gamemode template."));
-            worlds.RegisterMenuEntry(new GamemodeMenuEntry(
+                "Custom gamemode scaffolded from the gamemode template.")));
+            EnsureRegistered(worlds.RegisterMenuEntry(new GamemodeMenuEntry(
                 "{{MOD_ID}}.menu",
                 "{{DISPLAY_NAME}}",
                 "Custom gamemode scaffolded from the gamemode template.",
                 GamemodeId,
-                worldId: string.Empty));
+                WellKnownWorldIds.OpenSandboxWorld)));
 
             worlds.SessionChanged += OnSessionChanged;
             worlds.SessionEnded += OnSessionEnded;
-            context.Update += OnUpdate;
-            context.Logger.Info("{{DISPLAY_NAME}} gamemode registered.");
-        }
-
-        public void OnUnload()
-        {
-            if (worlds != null)
+            Context.Lifetime.Defer(() =>
             {
                 worlds.SessionChanged -= OnSessionChanged;
                 worlds.SessionEnded -= OnSessionEnded;
-            }
+            });
+            Context.Events.SubscribeUpdate(OnUpdate);
+            Context.Logger.Info("{{DISPLAY_NAME}} gamemode registered.");
+        }
 
-            if (context != null)
-            {
-                context.Update -= OnUpdate;
-            }
-
+        protected override void OnUnload()
+        {
             session = null;
-            worlds = null;
-            context = null;
         }
 
         private void OnSessionChanged(WorldSession newSession)
         {
-            if (newSession.GamemodeId != GamemodeId)
+            if (!string.Equals(newSession.GamemodeId, GamemodeId, StringComparison.Ordinal))
             {
                 session = null;
                 return;
             }
 
             session = newSession;
-            context?.Logger.Info("{{DISPLAY_NAME}} session started in world " + newSession.WorldId + ".");
-            // Spawn agents via context.GetService<IRobotAgentService>() and set up the round here.
+            Context.Logger.Info("{{DISPLAY_NAME}} session started in world " + newSession.WorldId + ".");
+
+            // RobotKit is already declared by this scaffold. Resolve it when your round needs to spawn or
+            // command robots: Context.RequireExtension<IRobotAgentService>().
         }
 
         private void OnSessionEnded(WorldSessionEnd end)
         {
-            if (session == null)
+            if (session == null || !string.Equals(end.Session.GamemodeId, GamemodeId, StringComparison.Ordinal))
             {
                 return;
             }
 
             session = null;
-            context?.Logger.Info("{{DISPLAY_NAME}} session ended.");
+            Context.Logger.Info("{{DISPLAY_NAME}} session ended (" + end.Reason + ").");
         }
 
         private void OnUpdate(float deltaTime)
@@ -92,6 +74,14 @@ namespace {{ASSEMBLY_NAME}}
             }
 
             // Per-frame gamemode logic (wave timers, win conditions, HUD updates) goes here.
+        }
+
+        private static void EnsureRegistered(OperationResult<IWorldRegistration> result)
+        {
+            if (!result.Succeeded)
+            {
+                throw new InvalidOperationException("Gamemode registration failed: " + result.ErrorMessage);
+            }
         }
     }
 }

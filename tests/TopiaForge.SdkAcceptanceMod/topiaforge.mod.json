@@ -1,0 +1,49 @@
+{
+  "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+  "schemaVersion": 4,
+  "name": "dev.topiaforge.sdk-acceptance",
+  "displayName": "TopiaForge SDK Live Acceptance",
+  "version": "1.0.0",
+  "author": {
+    "name": "TopiaForge"
+  },
+  "description": "Non-distributable safe-SDK live acceptance probe for supported Robotopia test hosts.",
+  "entryAssembly": "TopiaForge.SdkAcceptanceMod.dll",
+  "entryType": "TopiaForge.SdkAcceptance.SdkAcceptanceMod",
+  "dependencies": {
+    "io.github.furroxide.topiaforge.chronos": ">=1.0.0 <2.0.0",
+    "io.github.furroxide.topiaforge.prompts": ">=1.0.0 <2.0.0",
+    "io.github.furroxide.topiaforge.robotkit": ">=1.0.0 <2.0.0",
+    "io.github.furroxide.topiaforge.worlds": ">=1.0.0 <2.0.0"
+  },
+  "optionalDependencies": {
+    "dev.topiaforge.sdk-acceptance.missing-provider": ">=1.0.0 <2.0.0",
+    "io.github.furroxide.topiaforge.ugc.livesync": ">=1.0.0 <2.0.0"
+  },
+  "supportedGameVersionRange": "0.0.2227",
+  "supportedLoaderVersionRange": ">=1.0.0 <2.0.0",
+  "supportedSdkVersionRange": ">=1.0.0 <2.0.0",
+  "platforms": ["windows", "linux"],
+  "architectures": ["x64"],
+  "contentTargets": ["code"],
+  "category": "Developer",
+  "tags": ["acceptance", "safe-sdk", "non-distributable"],
+  "license": "NOASSERTION",
+  "capabilities": [
+    "asset-bundles",
+    "filesystem",
+    "hud",
+    "input",
+    "microphone",
+    "navigation",
+    "physics",
+    "player-control",
+    "player-token",
+    "remote-ai",
+    "robot-spawning",
+    "scene-management",
+    "speech-to-text",
+    "world-service"
+  ],
+  "x-topiaforge-non-distributable": true
+}

@@ -11,13 +11,15 @@ namespace TopiaForge.ModManager
 {
     public sealed class ModRuntime
     {
-        // Diagnostic owner for registrations protected by ModServiceRegistry's framework-only path.
-        private const string FrameworkServiceOwnerId = "io.github.furroxide.topiaforge.modmanager";
-
+        private const float CapabilityRefreshIntervalSeconds = 1f;
         private readonly ManagerPaths paths;
-        private readonly ManagerFileLogger logger;
+        private readonly IModRuntimeLogger logger;
         private readonly ModServiceRegistry serviceRegistry;
         private readonly SceneCoordinator sceneCoordinator;
+        private readonly IRuntimeGameplayHost coreGameplayServices;
+        private readonly RuntimeInfo runtimeInfo;
+        private readonly ManifestValidationContext validationContext;
+        private readonly IModLoadObserver? loadObserver;
         private readonly List<LoadedMod> loadedMods = new List<LoadedMod>();
         private readonly List<string> loadedModIds = new List<string>();
         private readonly ReadOnlyCollection<string> loadedModIdsView;
@@ -28,16 +30,67 @@ namespace TopiaForge.ModManager
         private readonly Dictionary<string, string> failedMods = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private ModAssemblyResolutionCatalog? assemblyCatalog;
         private string? loadingOwnerId;
+        private bool initialSceneDeliveryAttempted;
+        private int? sceneDeliveredBeforeInitialReplay;
+        private int? replayedInitialSceneAwaitingNativeCallback;
+        private float capabilityRefreshRemaining;
 
-        public ModRuntime(ManagerPaths paths, ManagerFileLogger logger)
+        public ModRuntime(
+            ManagerPaths paths,
+            ManagerFileLogger logger,
+            ManifestValidationContext? validationContext = null)
+            : this(paths, logger, validationContext, null)
         {
-            this.paths = paths;
-            this.logger = logger;
+        }
+
+        internal ModRuntime(
+            ManagerPaths paths,
+            ManagerFileLogger logger,
+            ManifestValidationContext? validationContext,
+            IModLoadObserver? loadObserver)
+            : this(
+                paths,
+                logger,
+                validationContext,
+                loadObserver,
+                new CoreGameplayServices())
+        {
+        }
+
+        internal ModRuntime(
+            ManagerPaths paths,
+            IModRuntimeLogger logger,
+            ManifestValidationContext? validationContext,
+            IModLoadObserver? loadObserver,
+            IRuntimeGameplayHost coreGameplayServices)
+        {
+            // The runtime itself owns lifecycle dispatch, so establish the thread invariant here even when a
+            // non-Unity gameplay host is supplied (for example by integration tests or a future host adapter).
+            // CoreGameplayServices captures the same thread as a defensive check for its direct construction.
+            UnityMainThreadGuard.CaptureCurrentThread();
+            this.paths = paths ?? throw new ArgumentNullException(nameof(paths));
+            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            this.loadObserver = loadObserver;
+            this.validationContext = validationContext == null
+                ? ManifestValidationContext.ForCurrentRuntime()
+                : validationContext.EnforceRuntimeCompatibility
+                    ? validationContext
+                    : new ManifestValidationContext(
+                        gameVersion: validationContext.GameVersion,
+                        loaderVersion: validationContext.LoaderVersion,
+                        sdkVersion: validationContext.SdkVersion,
+                        requireKnownGameVersion: validationContext.RequireKnownGameVersion,
+                        enforceRuntimeCompatibility: true);
+            runtimeInfo = new RuntimeInfo(this.validationContext.GameVersion);
             serviceRegistry = new ModServiceRegistry();
+            runtimeInfo.SetCapabilityRefresher(RefreshRuntimeCapabilities);
             // Manager-owned framework service: scene-transition arbitration is available to every mod from
             // the first OnLoad and cannot be shadowed or removed through the public mod registry.
             sceneCoordinator = new SceneCoordinator(logger.Info);
-            serviceRegistry.RegisterFramework<ISceneCoordinator>(FrameworkServiceOwnerId, sceneCoordinator);
+            this.coreGameplayServices = coreGameplayServices
+                ?? throw new ArgumentNullException(nameof(coreGameplayServices));
+            coreGameplayServices.FixedUpdate += DispatchFixedUpdate;
+            coreGameplayServices.LateUpdate += DispatchLateUpdate;
             pluginAssemblyPath = Path.GetDirectoryName(typeof(ModRuntime).Assembly.Location) ?? string.Empty;
             loadedModIdsView = loadedModIds.AsReadOnly();
             AppDomain.CurrentDomain.AssemblyResolve += ResolveAssembly;
@@ -53,12 +106,18 @@ namespace TopiaForge.ModManager
 
         public void Load(IEnumerable<ModPackage> orderedPackages)
         {
+            UnityMainThreadGuard.AssertCurrent();
             if (orderedPackages == null)
             {
                 throw new ArgumentNullException(nameof(orderedPackages));
             }
 
             var packages = orderedPackages.ToList();
+            var availableManifests = packages
+                .Where(package => package.Manifest != null)
+                .Select(package => package.Manifest!)
+                .ToArray();
+            runtimeInfo.ConfigureProviders(packages);
             assemblyCatalog = new ModAssemblyResolutionCatalog(packages, pluginAssemblyPath);
             foreach (var entry in assemblyCatalog.ValidateScopes())
             {
@@ -69,7 +128,12 @@ namespace TopiaForge.ModManager
 
             foreach (var package in packages)
             {
-                Load(package);
+                Load(package, availableManifests);
+                if (package.Manifest != null
+                    && failedMods.TryGetValue(package.Manifest.Id, out var providerFailure))
+                {
+                    runtimeInfo.MarkProviderFailed(package.Manifest, providerFailure);
+                }
             }
         }
 
@@ -85,6 +149,14 @@ namespace TopiaForge.ModManager
 
         public void DispatchUpdate(float deltaTime)
         {
+            UnityMainThreadGuard.AssertCurrent();
+            coreGameplayServices.BeginFrame(deltaTime);
+            capabilityRefreshRemaining -= Math.Max(0f, deltaTime);
+            if (capabilityRefreshRemaining <= 0f)
+            {
+                RefreshRuntimeCapabilities();
+                capabilityRefreshRemaining = CapabilityRefreshIntervalSeconds;
+            }
             var count = loadedMods.Count;
             for (var index = 0; index < count; index++)
             {
@@ -102,10 +174,73 @@ namespace TopiaForge.ModManager
                     }
                 }
             }
+
         }
 
         public void DispatchSceneLoaded(string sceneName)
         {
+            UnityMainThreadGuard.AssertCurrent();
+            DispatchSceneLoadedCore(sceneName);
+        }
+
+        internal bool DispatchInitialScene(int sceneHandle, string sceneName, bool isValid)
+        {
+            UnityMainThreadGuard.AssertCurrent();
+            if (initialSceneDeliveryAttempted)
+            {
+                return false;
+            }
+
+            initialSceneDeliveryAttempted = true;
+            if (!isValid || string.IsNullOrWhiteSpace(sceneName))
+            {
+                sceneDeliveredBeforeInitialReplay = null;
+                return false;
+            }
+
+            if (sceneDeliveredBeforeInitialReplay == sceneHandle)
+            {
+                // A native callback won the narrow subscribe-to-active-scene race. It already delivered the
+                // active scene, so the explicit replay must not deliver it a second time.
+                sceneDeliveredBeforeInitialReplay = null;
+                return false;
+            }
+
+            sceneDeliveredBeforeInitialReplay = null;
+            replayedInitialSceneAwaitingNativeCallback = sceneHandle;
+            DispatchSceneLoadedCore(sceneName);
+            return true;
+        }
+
+        internal bool DispatchSceneLoaded(int sceneHandle, string sceneName, bool isValid)
+        {
+            UnityMainThreadGuard.AssertCurrent();
+            if (!isValid || string.IsNullOrWhiteSpace(sceneName))
+            {
+                return false;
+            }
+
+            if (!initialSceneDeliveryAttempted)
+            {
+                sceneDeliveredBeforeInitialReplay = sceneHandle;
+            }
+            else if (replayedInitialSceneAwaitingNativeCallback.HasValue)
+            {
+                var duplicateInitialCallback = replayedInitialSceneAwaitingNativeCallback.Value == sceneHandle;
+                replayedInitialSceneAwaitingNativeCallback = null;
+                if (duplicateInitialCallback)
+                {
+                    return false;
+                }
+            }
+
+            DispatchSceneLoadedCore(sceneName);
+            return true;
+        }
+
+        private void DispatchSceneLoadedCore(string sceneName)
+        {
+            RefreshRuntimeCapabilities();
             var count = loadedMods.Count;
             for (var index = 0; index < count; index++)
             {
@@ -123,25 +258,51 @@ namespace TopiaForge.ModManager
                     }
                 }
             }
+
+            RefreshRuntimeCapabilities();
         }
 
         public void UnloadAll()
         {
+            UnityMainThreadGuard.AssertCurrent();
             for (var index = loadedMods.Count - 1; index >= 0; index--)
             {
                 var loaded = loadedMods[index];
+                var failed = false;
                 try
                 {
                     loaded.Instance.OnUnload();
-                    CleanupOwnedFrameworkServices(loaded.Manifest.Id);
-                    serviceRegistry.UnregisterOwner(loaded.Manifest.Id);
-                    logger.Info("Unloaded mod " + loaded.Manifest.Id + ".");
                 }
                 catch (Exception ex)
                 {
+                    failed = true;
                     logger.Error(ex, "Mod failed during OnUnload: " + loaded.Manifest.Id);
+                }
+
+                try
+                {
+                    loaded.Context.DisposeLifetime();
+                }
+                catch (Exception ex)
+                {
+                    failed = true;
+                    logger.Error(ex, "Mod lifetime cleanup failed for " + loaded.Manifest.Id + ".");
+                }
+
+                try
+                {
                     CleanupOwnedFrameworkServices(loaded.Manifest.Id);
                     serviceRegistry.UnregisterOwner(loaded.Manifest.Id);
+                }
+                catch (Exception ex)
+                {
+                    failed = true;
+                    logger.Error(ex, "Mod service cleanup failed for " + loaded.Manifest.Id + ".");
+                }
+
+                if (!failed)
+                {
+                    logger.Info("Unloaded mod " + loaded.Manifest.Id + ".");
                 }
             }
 
@@ -153,10 +314,14 @@ namespace TopiaForge.ModManager
             updateFailureLogged.Clear();
             sceneFailureLogged.Clear();
             failedMods.Clear();
+            runtimeInfo.SetCapabilityRefresher(null);
+            coreGameplayServices.FixedUpdate -= DispatchFixedUpdate;
+            coreGameplayServices.LateUpdate -= DispatchLateUpdate;
+            coreGameplayServices.Dispose();
             AppDomain.CurrentDomain.AssemblyResolve -= ResolveAssembly;
         }
 
-        private void Load(ModPackage package)
+        private void Load(ModPackage package, IReadOnlyCollection<ModManifest> availableManifests)
         {
             if (!package.IsValid)
             {
@@ -168,6 +333,15 @@ namespace TopiaForge.ModManager
             }
 
             var manifest = package.Manifest!;
+
+            var compatibility = ManifestRuntimeCompatibility.Evaluate(manifest, validationContext);
+            if (!compatibility.IsCompatible)
+            {
+                var reason = string.Join("; ", compatibility.Errors);
+                failedMods[manifest.Id] = reason;
+                logger.Warn("Skipping " + manifest.Id + ": runtime compatibility rejected the package: " + reason);
+                return;
+            }
 
             if (failedMods.ContainsKey(manifest.Id))
             {
@@ -186,8 +360,11 @@ namespace TopiaForge.ModManager
                 return;
             }
 
-            ITopiaForgeMod? instance = null;
+            IModEntrypoint? instance = null;
+            ModContext? context = null;
             var onLoadStarted = false;
+            var loadObserverStarted = false;
+            var loadObserverCompleted = false;
             try
             {
                 var assemblyPath = Path.Combine(package.PackagePath, manifest.EntryAssembly);
@@ -195,6 +372,18 @@ namespace TopiaForge.ModManager
                 {
                     failedMods[manifest.Id] = "entry assembly not found";
                     logger.Warn("Skipping " + manifest.Id + ": entry assembly not found.");
+                    return;
+                }
+
+                // The registry verifies receipts during its deterministic scan, but bytes may change before
+                // this callback reaches Assembly.LoadFrom. Recheck the complete inventory at the last safe
+                // point so modified package code is never knowingly executed; users can repair/reinstall it.
+                var receiptErrors = PackageInstallReceipt.Verify(package.PackagePath, manifest);
+                if (receiptErrors.Count > 0)
+                {
+                    var reason = "package integrity changed before load: " + string.Join("; ", receiptErrors);
+                    failedMods[manifest.Id] = reason;
+                    logger.Warn("Skipping " + manifest.Id + ": " + reason);
                     return;
                 }
 
@@ -209,27 +398,62 @@ namespace TopiaForge.ModManager
                     return;
                 }
 
-                if (!typeof(ITopiaForgeMod).IsAssignableFrom(type))
+                if (!typeof(TopiaForgeMod).IsAssignableFrom(type))
                 {
-                    failedMods[manifest.Id] = "entry type does not implement ITopiaForgeMod";
-                    logger.Warn("Skipping " + manifest.Id + ": entry type does not implement ITopiaForgeMod.");
+                    failedMods[manifest.Id] = "entry type does not derive from TopiaForgeMod";
+                    logger.Warn("Skipping " + manifest.Id + ": entry type does not derive from TopiaForgeMod.");
                     return;
                 }
 
-                instance = (ITopiaForgeMod)Activator.CreateInstance(type);
-                var context = new ModContext(manifest, paths, package.PackagePath, logger.ForMod(manifest.Id), serviceRegistry);
+                if (!(Activator.CreateInstance(type) is TopiaForgeMod v1Mod))
+                {
+                    throw new InvalidOperationException("The mod entry type could not be activated.");
+                }
+
+                instance = new V1ModEntrypoint(v1Mod);
+
+                context = new ModContext(
+                    manifest,
+                    paths,
+                    package.PackagePath,
+                    logger.ForMod(manifest.Id),
+                    serviceRegistry,
+                    runtimeInfo,
+                    coreGameplayServices,
+                    availableManifests);
+                loadObserverStarted = true;
+                loadObserver?.OnLoading(manifest.Id);
                 onLoadStarted = true;
                 instance.OnLoad(context);
+                loadObserverCompleted = true;
+                loadObserver?.OnLoadCompleted(manifest.Id, succeeded: true);
                 // Log before committing to loadedMods. Even a custom/failing log sink must leave this path in
                 // the partial-load catch, where OnUnload and owner cleanup run, rather than stranding a ghost.
                 logger.Info("Loaded mod " + manifest.Id + " " + manifest.Version + ".");
                 loadedMods.Add(new LoadedMod(manifest, instance, context));
                 loadedModIds.Add(manifest.Id);
+                runtimeInfo.MarkProviderLoaded(manifest);
+                RefreshRuntimeCapabilities();
             }
             catch (Exception ex)
             {
-                failedMods[manifest.Id] = ex.GetType().Name + ": " + ex.Message;
+                var rootException = UnwrapInvocationException(ex);
+                failedMods[manifest.Id] = rootException.GetType().Name + ": " + rootException.Message;
+                runtimeInfo.MarkProviderFailed(manifest, failedMods[manifest.Id]);
                 Exception? unloadFailure = null;
+                if (loadObserverStarted && !loadObserverCompleted)
+                {
+                    loadObserverCompleted = true;
+                    try
+                    {
+                        loadObserver?.OnLoadCompleted(manifest.Id, succeeded: false);
+                    }
+                    catch (Exception observerException)
+                    {
+                        unloadFailure = observerException;
+                    }
+                }
+
                 if (onLoadStarted && instance != null)
                 {
                     try
@@ -240,7 +464,19 @@ namespace TopiaForge.ModManager
                     }
                     catch (Exception unloadException)
                     {
-                        unloadFailure = unloadException;
+                        unloadFailure = CombineCleanupFailures(unloadFailure, unloadException);
+                    }
+                }
+
+                if (context != null)
+                {
+                    try
+                    {
+                        context.DisposeLifetime();
+                    }
+                    catch (Exception lifetimeException)
+                    {
+                        unloadFailure = CombineCleanupFailures(unloadFailure, lifetimeException);
                     }
                 }
 
@@ -259,6 +495,32 @@ namespace TopiaForge.ModManager
             {
                 loadingOwnerId = null;
             }
+        }
+
+        private void DispatchFixedUpdate(GameTimeSample sample)
+        {
+            UnityMainThreadGuard.AssertCurrent();
+            var count = loadedMods.Count;
+            for (var index = 0; index < count; index++)
+            {
+                loadedMods[index].Context.RaiseFixedUpdate(sample);
+            }
+        }
+
+        private void DispatchLateUpdate(GameTimeSample sample)
+        {
+            UnityMainThreadGuard.AssertCurrent();
+            var count = loadedMods.Count;
+            for (var index = 0; index < count; index++)
+            {
+                loadedMods[index].Context.RaiseLateUpdate(sample);
+            }
+        }
+
+        private void RefreshRuntimeCapabilities()
+        {
+            UnityMainThreadGuard.AssertCurrent();
+            RuntimeCapabilityProbe.Refresh(runtimeInfo, serviceRegistry);
         }
 
         private Assembly? ResolveAssembly(object sender, ResolveEventArgs args)
@@ -321,6 +583,21 @@ namespace TopiaForge.ModManager
             return resolved;
         }
 
+        private static Exception CombineCleanupFailures(Exception? current, Exception next)
+        {
+            return current == null ? next : new AggregateException(current, next);
+        }
+
+        private static Exception UnwrapInvocationException(Exception exception)
+        {
+            while (exception is TargetInvocationException invocation && invocation.InnerException != null)
+            {
+                exception = invocation.InnerException;
+            }
+
+            return exception;
+        }
+
         private string? ResolveRequesterOwner(Assembly? assembly)
         {
             if (assembly == null)
@@ -361,24 +638,6 @@ namespace TopiaForge.ModManager
         {
             try
             {
-                serviceRegistry.Get<IAssetBundleService>()?.UnloadOwner(ownerModId);
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ex, "Asset service cleanup failed for " + ownerModId + ".");
-            }
-
-            try
-            {
-                serviceRegistry.Get<IPromptOverrideRegistry>()?.UnregisterOwner(ownerModId);
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ex, "Prompt override cleanup failed for " + ownerModId + ".");
-            }
-
-            try
-            {
                 sceneCoordinator.ReleaseOwner(ownerModId);
             }
             catch (Exception ex)
@@ -389,7 +648,7 @@ namespace TopiaForge.ModManager
 
         private sealed class LoadedMod
         {
-            public LoadedMod(ModManifest manifest, ITopiaForgeMod instance, ModContext context)
+            public LoadedMod(ModManifest manifest, IModEntrypoint instance, ModContext context)
             {
                 Manifest = manifest;
                 Instance = instance;
@@ -397,8 +656,35 @@ namespace TopiaForge.ModManager
             }
 
             public ModManifest Manifest { get; }
-            public ITopiaForgeMod Instance { get; }
+            public IModEntrypoint Instance { get; }
             public ModContext Context { get; }
         }
+
+        private interface IModEntrypoint
+        {
+            void OnLoad(IModContext context);
+            void OnUnload();
+        }
+
+        private sealed class V1ModEntrypoint : IModEntrypoint
+        {
+            private readonly TopiaForgeMod mod;
+
+            public V1ModEntrypoint(TopiaForgeMod mod)
+            {
+                this.mod = mod;
+            }
+
+            public void OnLoad(IModContext context)
+            {
+                mod.Load(context);
+            }
+
+            public void OnUnload()
+            {
+                mod.Unload();
+            }
+        }
+
     }
 }

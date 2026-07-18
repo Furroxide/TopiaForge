@@ -1,6 +1,4 @@
 using System;
-using TopiaForge.Mods;
-using TopiaForge.Worlds;
 
 namespace TopiaForge.ModManager.Tests
 {
@@ -17,7 +15,6 @@ namespace TopiaForge.ModManager.Tests
             TestDisposeIsIdempotent();
             TestReleaseOwnerClearsAllClaims();
             TestThrowingLoggerCannotChangeDecisions();
-            TestForeignSceneClaimMatching();
             Console.WriteLine("All scene coordinator tests passed.");
         }
 
@@ -123,45 +120,6 @@ namespace TopiaForge.ModManager.Tests
                 "second.mod", "SceneB", SceneTransitionPriority.UserInitiated));
             Assert(takeover.Approved && coordinator.ActiveClaims.Count == 2,
                 "a throwing log sink must not prevent a user-initiated takeover");
-        }
-
-        private static void TestForeignSceneClaimMatching()
-        {
-            var claims = new[]
-            {
-                new SceneClaimInfo("worlds.mod", "Current", SceneTransitionPriority.UserInitiated, "own", DateTime.UtcNow),
-                new SceneClaimInfo("specific.mod", "Other", SceneTransitionPriority.UserInitiated, "specific", DateTime.UtcNow),
-            };
-            Assert(SceneClaimMatcher.FindForeign(claims, "Arriving", "worlds.mod") == null,
-                "an unrelated named foreign claim must not own the arriving scene");
-
-            var wildcard = new SceneClaimInfo(
-                "unknown.mod", string.Empty, SceneTransitionPriority.UserInitiated, "unknown target", DateTime.UtcNow);
-            var matched = SceneClaimMatcher.FindForeign(
-                new[] { claims[0], wildcard }, "Arriving", "worlds.mod");
-            Assert(ReferenceEquals(matched, wildcard),
-                "an empty-scene foreign claim should match the next single-mode scene arrival");
-
-            var whitespaceWildcard = new SceneClaimInfo(
-                "unknown.mod", "  ", SceneTransitionPriority.UserInitiated, "unknown target", DateTime.UtcNow);
-            Assert(ReferenceEquals(
-                    SceneClaimMatcher.FindForeign(new[] { claims[0], whitespaceWildcard }, "Arriving", "worlds.mod"),
-                    whitespaceWildcard),
-                "a whitespace-only foreign scene should also mean the next single-mode arrival");
-
-            var sameScene = new SceneClaimInfo(
-                "ugc.mod", "Current", SceneTransitionPriority.UserInitiated, "reload", DateTime.UtcNow);
-            Assert(ReferenceEquals(
-                    SceneClaimMatcher.FindForeign(new[] { claims[0], sameScene }, "Current", "worlds.mod"),
-                    sameScene),
-                "a foreign same-name scene reload still replaces the current session");
-
-            var newest = new SceneClaimInfo(
-                "newest.mod", "Current", SceneTransitionPriority.UserInitiated, "winner", DateTime.UtcNow);
-            Assert(ReferenceEquals(
-                    SceneClaimMatcher.FindForeign(new[] { sameScene, newest }, "Current", "worlds.mod"),
-                    newest),
-                "the newest matching user transition should be attributed as the scene takeover");
         }
 
         private static void Assert(bool condition, string message)

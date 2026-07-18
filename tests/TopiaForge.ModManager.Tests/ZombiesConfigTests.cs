@@ -20,7 +20,7 @@ namespace TopiaForge.ModManager.Tests
         {
             var config = new ZombiesConfig();
 
-            Assert(config.TargetWorldId == WellKnownIds.OpenSandboxWorldId,
+            Assert(config.TargetWorldId == WellKnownWorldIds.OpenSandboxWorld,
                 "Zombies default target world should be Open Sandbox");
         }
 
@@ -30,7 +30,7 @@ namespace TopiaForge.ModManager.Tests
 
             config.Normalize();
 
-            Assert(config.TargetWorldId == WellKnownIds.OpenSandboxWorldId,
+            Assert(config.TargetWorldId == WellKnownWorldIds.OpenSandboxWorld,
                 "blank Zombies targetWorldId should migrate to Open Sandbox");
         }
 
@@ -38,7 +38,7 @@ namespace TopiaForge.ModManager.Tests
         {
             var config = JsonUtil.Deserialize<ZombiesConfig>("{}");
 
-            Assert(config.TargetWorldId == WellKnownIds.OpenSandboxWorldId,
+            Assert(config.TargetWorldId == WellKnownWorldIds.OpenSandboxWorld,
                 "missing Zombies targetWorldId should deserialize to Open Sandbox");
         }
 

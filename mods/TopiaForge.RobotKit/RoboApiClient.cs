@@ -66,11 +66,16 @@ namespace TopiaForge.RobotKit
 
         // Run one /agent/check3 call. Returns an unavailable result (never throws) when there is no token, the call
         // times out, the network fails, or the gateway rejects the token (401, which also invalidates the cache).
-        public async Task<BrainQueryResult> Check3Async(BrainQueryRequest request, float timeoutSeconds, CancellationToken ct)
+        public async Task<OperationResult<BrainQueryResult>> Check3Async(
+            BrainQueryRequest request,
+            float timeoutSeconds,
+            CancellationToken ct)
         {
             if (!backendEnabled || !TryGetToken(out var token))
             {
-                return BrainQueryResult.Unavailable;
+                return OperationResult<BrainQueryResult>.Failure(
+                    ModErrorCode.Unavailable,
+                    "Robot brain credentials are unavailable.");
             }
 
             try
@@ -92,23 +97,37 @@ namespace TopiaForge.RobotKit
                 {
                     // The 24h token rotated/expired; drop it so the next attempt re-reads the file.
                     InvalidateToken();
-                    return new BrainQueryResult(false, false, EmptyResult.Values, "unauthorized");
+                    return OperationResult<BrainQueryResult>.Failure(
+                        ModErrorCode.Unavailable,
+                        "Robot brain credentials were rejected.");
                 }
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    return new BrainQueryResult(false, false, EmptyResult.Values, "http " + (int)response.StatusCode);
+                    return OperationResult<BrainQueryResult>.Failure(
+                        ModErrorCode.External,
+                        "Robot brain request failed with HTTP " + (int)response.StatusCode + ".");
                 }
 
                 var text = await ReadBoundedContentAsync(response.Content, MaxCheck3ResponseBytes, timeoutCts.Token)
                     .ConfigureAwait(false);
                 return RoboApiProtocol.ParseCheck3Response(text);
             }
+            catch (OperationCanceledException ex)
+            {
+                logger.Debug("RoboAPI brain query failed: " + ex.GetType().Name + ": " + ex.Message);
+                return OperationResult<BrainQueryResult>.Failure(
+                    ModErrorCode.Cancelled,
+                    ct.IsCancellationRequested
+                        ? "Robot brain query was cancelled."
+                        : "Robot brain query timed out.");
+            }
             catch (Exception ex)
             {
-                // Timeout (OperationCanceledException), DNS/connect failure, etc. — all degrade to unavailable.
                 logger.Debug("RoboAPI brain query failed: " + ex.GetType().Name + ": " + ex.Message);
-                return new BrainQueryResult(false, false, EmptyResult.Values, ex.GetType().Name);
+                return OperationResult<BrainQueryResult>.Failure(
+                    ModErrorCode.External,
+                    "Robot brain query could not reach the backend.");
             }
         }
 
@@ -287,6 +306,5 @@ namespace TopiaForge.RobotKit
             return new UTF8Encoding(false, true).GetString(output.GetBuffer(), 0, total);
         }
 
-        private static readonly BrainQueryResult EmptyResult = BrainQueryResult.Unavailable;
     }
 }

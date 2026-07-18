@@ -115,6 +115,7 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Dialog body — add content here before Show().</summary>
         public TopiaForgeContainer Content { get; }
 
+        /// <summary>Raised after the modal closes.</summary>
         public event Action? Closed;
 
         internal GameObject CanvasRoot => canvasRoot;
@@ -126,6 +127,7 @@ namespace TopiaForge.Mods.UnityUi
             Close();
         }
 
+        /// <summary>Shows this UI element.</summary>
         public void Show()
         {
             if (tornDown)
@@ -145,6 +147,7 @@ namespace TopiaForge.Mods.UnityUi
             TopiaForgeMotion.ModalIn(dialog);
         }
 
+        /// <summary>Closes this UI element.</summary>
         public void Close()
         {
             if (tornDown || closing)

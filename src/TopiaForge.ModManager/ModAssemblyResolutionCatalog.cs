@@ -93,8 +93,7 @@ namespace TopiaForge.ModManager
                 return null;
             }
 
-            var candidates = CandidateDirectories(requesterOwner)
-                .Select(directory => Path.Combine(directory, requested.Name + ".dll"))
+            var candidates = CandidateFiles(requesterOwner, requested.Name)
                 .Where(File.Exists)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
@@ -167,9 +166,25 @@ namespace TopiaForge.ModManager
             var errors = new List<string>();
             // Only package-owned files are preflighted. The loader directory may contain unrelated BepInEx
             // plugins/native helpers; framework candidates are identity-checked lazily when actually requested.
-            var files = PackageDirectories(owner)
+            var files = OwnerPrivateDirectories(owner)
                 .Where(Directory.Exists)
                 .SelectMany(directory => Directory.GetFiles(directory, "*.dll", SearchOption.TopDirectoryOnly))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            foreach (var provider in RequiredOwners(owner))
+            {
+                try
+                {
+                    files.AddRange(ExportedAssemblyFiles(provider));
+                }
+                catch (Exception ex)
+                {
+                    errors.Add("Required dependency '" + provider + "' has an invalid API export: " + ex.Message);
+                }
+            }
+
+            files = files
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
                 .ToList();
@@ -206,11 +221,11 @@ namespace TopiaForge.ModManager
             return errors;
         }
 
-        private IEnumerable<string> CandidateDirectories(string? owner)
+        private IEnumerable<string> CandidateFiles(string? owner, string assemblyName)
         {
             if (pluginDirectory.Length > 0)
             {
-                yield return pluginDirectory;
+                yield return Path.Combine(pluginDirectory, assemblyName + ".dll");
             }
 
             if (string.IsNullOrWhiteSpace(owner))
@@ -218,45 +233,119 @@ namespace TopiaForge.ModManager
                 yield break;
             }
 
-            foreach (var directory in PackageDirectories(owner))
+            foreach (var directory in OwnerPrivateDirectories(owner))
             {
-                yield return directory;
+                yield return Path.Combine(directory, assemblyName + ".dll");
             }
-        }
 
-        private IEnumerable<string> PackageDirectories(string owner)
-        {
-            foreach (var visibleOwner in new[] { owner }.Concat(VisibleOwners(owner)))
+            foreach (var provider in RequiredOwners(owner).Concat(OptionalOwners(owner)))
             {
-                if (!packages.TryGetValue(visibleOwner, out var package))
+                foreach (var exported in ExportedAssemblyFiles(provider, assemblyName))
                 {
-                    continue;
-                }
-
-                yield return Path.GetFullPath(package.PackagePath);
-                var entryDirectory = Path.GetDirectoryName(package.Manifest!.EntryAssembly);
-                if (!string.IsNullOrEmpty(entryDirectory))
-                {
-                    yield return Path.GetFullPath(Path.Combine(package.PackagePath, entryDirectory));
+                    yield return exported;
                 }
             }
         }
 
-        private IEnumerable<string> VisibleOwners(string owner)
+        private IEnumerable<string> OwnerPrivateDirectories(string owner)
         {
             if (!packages.TryGetValue(owner, out var package))
             {
                 yield break;
             }
 
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var dependency in DependencyResolver.GetRequiredDependencies(package.Manifest!)
-                .Concat(package.Manifest!.OptionalDependencies ?? new List<ModDependency>())
-                .Concat((package.Manifest.Dependencies ?? new List<ModDependency>()).Where(item => item.Optional)))
+            yield return Path.GetFullPath(package.PackagePath);
+            var entryDirectory = Path.GetDirectoryName(package.Manifest!.EntryAssembly);
+            if (!string.IsNullOrEmpty(entryDirectory))
             {
-                if (seen.Add(dependency.Id) && packages.ContainsKey(dependency.Id))
+                yield return Path.GetFullPath(Path.Combine(package.PackagePath, entryDirectory));
+            }
+        }
+
+        private IEnumerable<string> ExportedAssemblyFiles(string owner, string? assemblyName = null)
+        {
+            if (!packages.TryGetValue(owner, out var package))
+            {
+                yield break;
+            }
+
+            foreach (var relativePath in package.Manifest!.ApiAssemblies ?? new List<string>())
+            {
+                if (!string.IsNullOrEmpty(assemblyName) &&
+                    !string.Equals(
+                        Path.GetFileNameWithoutExtension(relativePath),
+                        assemblyName,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                string fullPath;
+                try
+                {
+                    fullPath = PathSafety.CombineRelativeChild(
+                        package.PackagePath,
+                        relativePath.Replace('/', Path.DirectorySeparatorChar));
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidDataException(
+                        "Package '" + owner + "' declares an unsafe apiAssemblies path '" + relativePath + "'.",
+                        ex);
+                }
+
+                if (!File.Exists(fullPath))
+                {
+                    throw new FileNotFoundException(
+                        "Package '" + owner + "' exports a missing API assembly '" + relativePath + "'.",
+                        fullPath);
+                }
+
+                yield return fullPath;
+            }
+        }
+
+        private IEnumerable<string> VisibleOwners(string owner)
+        {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var dependency in RequiredOwners(owner).Concat(OptionalOwners(owner)))
+            {
+                if (seen.Add(dependency))
+                {
+                    yield return dependency;
+                }
+            }
+        }
+
+        private IEnumerable<string> RequiredOwners(string owner)
+        {
+            if (!packages.TryGetValue(owner, out var package))
+            {
+                yield break;
+            }
+
+            foreach (var dependency in DependencyResolver.GetRequiredDependencies(package.Manifest!))
+            {
+                if (packages.ContainsKey(dependency.Id))
                 {
                     yield return dependency.Id;
+                }
+            }
+        }
+
+        private IEnumerable<string> OptionalOwners(string owner)
+        {
+            if (!packages.TryGetValue(owner, out var package))
+            {
+                yield break;
+            }
+
+            foreach (var dependency in package.Manifest!.OptionalDependencies ?? new Dictionary<string, string>())
+            {
+                if (packages.TryGetValue(dependency.Key, out var provider) &&
+                    VersionUtil.AllowsRange(provider.Manifest!.Version, dependency.Value))
+                {
+                    yield return dependency.Key;
                 }
             }
         }

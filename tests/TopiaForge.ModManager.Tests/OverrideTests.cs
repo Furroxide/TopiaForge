@@ -70,11 +70,9 @@ namespace TopiaForge.ModManager.Tests
                 {
                     new BrainOutputField("action", "the reaction", BrainFieldType.String, new[] { "comply", "resist" }),
                     new BrainOutputField("bark", "a line", BrainFieldType.String),
-                })
-            {
-                Temperature = 0.5f,
-                Usage = "zombies-override",
-            };
+                },
+                usage: "zombies-override",
+                temperature: 0.5f);
 
             var body = MiniJson.Deserialize(RoboApiProtocol.BuildCheck3Body(request)) as Dictionary<string, object?>;
             Assert(body != null, "body should be a JSON object");
@@ -97,29 +95,31 @@ namespace TopiaForge.ModManager.Tests
         private static void TestCheck3ResponseParsing()
         {
             var ok = RoboApiProtocol.ParseCheck3Response("{\"values\":{\"action\":\"comply\",\"bark\":\"fine.\",\"success\":true}}");
-            Assert(ok.Available && ok.Succeeded, "a values response should be available and succeeded");
-            Assert(ok.TryGet("action", out var action) && action == "comply", "action should parse");
-            Assert(ok.TryGet("bark", out var bark) && bark == "fine.", "bark should parse");
+            Assert(ok.Succeeded, "a values response should succeed");
+            Assert(ok.Value!.TryGet("action", out var action) && action == "comply", "action should parse");
+            Assert(ok.Value.TryGet("bark", out var bark) && bark == "fine.", "bark should parse");
 
             // The model's own `success` self-grade is noisy (a hostile robot that correctly picks a refusal
             // self-grades success:false) and must NOT suppress a well-formed answer — otherwise the reply/decision get
             // discarded (the JACK-IN "static on the channel" bug). A non-empty values object succeeds regardless, and
             // the self-grade is preserved as a readable value.
             var selfGradedFail = RoboApiProtocol.ParseCheck3Response("{\"values\":{\"action\":\"resist\",\"reply\":\"never\",\"success\":false}}");
-            Assert(selfGradedFail.Available && selfGradedFail.Succeeded, "a well-formed values response succeeds regardless of the model's success self-grade");
-            Assert(selfGradedFail.TryGet("action", out var refusal) && refusal == "resist", "answer fields stay readable even when success:false");
-            Assert(selfGradedFail.TryGet("success", out var grade) && grade == "false", "the success self-grade is preserved as a value");
+            Assert(selfGradedFail.Succeeded, "a well-formed values response succeeds regardless of the model's success self-grade");
+            Assert(selfGradedFail.Value!.TryGet("action", out var refusal) && refusal == "resist", "answer fields stay readable even when success:false");
+            Assert(selfGradedFail.Value.TryGet("success", out var grade) && grade == "false", "the success self-grade is preserved as a value");
 
             // An empty values object carries no answer, so it does not succeed (the graceful degrade path).
             var empty = RoboApiProtocol.ParseCheck3Response("{\"values\":{}}");
-            Assert(empty.Available && !empty.Succeeded, "an empty values object has no answer and does not succeed");
+            Assert(!empty.Succeeded && empty.ErrorCode == ModErrorCode.External,
+                "an empty values object has no answer and returns a stable external failure");
 
             var numberCoerced = RoboApiProtocol.ParseCheck3Response("{\"values\":{\"n\":3,\"f\":2.5}}");
-            Assert(numberCoerced.TryGet("n", out var n) && n == "3", "integer value should stringify without a decimal");
-            Assert(numberCoerced.TryGet("f", out var f) && f == "2.5", "float value should stringify");
+            Assert(numberCoerced.Value!.TryGet("n", out var n) && n == "3", "integer value should stringify without a decimal");
+            Assert(numberCoerced.Value.TryGet("f", out var f) && f == "2.5", "float value should stringify");
 
             var error = RoboApiProtocol.ParseCheck3Response("{\"error\":\"/agent/check3 error: bad\"}");
-            Assert(error.Available && !error.Succeeded && error.Error != null && error.Error!.Contains("bad"), "error envelope should surface the message");
+            Assert(!error.Succeeded && error.ErrorCode == ModErrorCode.External && error.ErrorMessage.Contains("bad"),
+                "error envelope should surface a stable external failure");
 
             var malformed = RoboApiProtocol.ParseCheck3Response("not json");
             Assert(!malformed.Succeeded, "malformed response should not succeed");
@@ -138,7 +138,7 @@ namespace TopiaForge.ModManager.Tests
             var big = new string('x', 50);
             var json = "{\"values\":{\"bark\":\"" + big + "\"}}";
             var result = RoboApiProtocol.ParseCheck3Response(json, 10);
-            Assert(result.TryGet("bark", out var bark) && bark.Length == 10, "returned values should be clamped to the cap");
+            Assert(result.Value!.TryGet("bark", out var bark) && bark.Length == 10, "returned values should be clamped to the cap");
         }
 
         private static void TestDecisionDeterminism()

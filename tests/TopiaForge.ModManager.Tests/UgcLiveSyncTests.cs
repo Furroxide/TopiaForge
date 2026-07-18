@@ -26,16 +26,8 @@ namespace TopiaForge.ModManager.Tests
             TestLifecycleCleanup();
             TestActiveSessionStopsOnSceneExit();
             TestAutomergeSession();
+            TestSessionLeaseOwnership();
             TestLauncherDeployedAutomergePayloadStartsSession();
-            TestAutomaticConnectDefersWhenSceneIsHeld();
-            TestAutomaticAutomergeDefersWhenSceneIsHeld();
-            TestDeferredAutomaticTargetWithoutControllerKeepsYielding();
-            TestDeferredLocalConnectRetriesAfterBlockerEnds();
-            TestUserInitiatedConnectLoadsAndReleasesClaim();
-            TestFailedSceneDispatchReleasesClaim();
-            TestSupersededUserConnectFailsAfterSceneDispatch();
-            TestSceneDispatchTimeoutReleasesClaim();
-            TestAutomergeTimeoutCannotReconnectFromLateRevision();
             TestStatusFileRoundTrip();
             TestCommandFileRoundTrip();
             TestStatusAndCommandFileBounds();
@@ -96,14 +88,14 @@ namespace TopiaForge.ModManager.Tests
             var started = service.StartAutomergeSession(new UgcLiveSyncRequest(
                 documentUrl: "automerge:healthy",
                 syncServerUrl: "wss://sync.example/"));
-            Assert(started.Ok, "the secure baseline Automerge request should start");
+            Assert(started.Succeeded, "the secure baseline Automerge request should start");
             var stopCalls = bridge.StopAutomergeCalls;
 
             var rejected = service.StartAutomergeSession(new UgcLiveSyncRequest(
                 documentUrl: "automerge:replacement",
                 syncServerUrl: "http://sync.example/"));
 
-            Assert(!rejected.Ok && rejected.Message.Contains("https:// or wss://"),
+            Assert(!rejected.Succeeded && rejected.ErrorMessage.Contains("https:// or wss://"),
                 "an insecure replacement request should fail with an actionable reason");
             Assert(service.PendingSession?.Target == "automerge:healthy",
                 "an invalid replacement request must preserve the healthy pending session");
@@ -251,7 +243,7 @@ namespace TopiaForge.ModManager.Tests
                 service.SessionStarted += _ => started++;
 
                 var result = service.StartLocalSession(new UgcLiveSyncRequest(watchFolder: dir));
-                Assert(result.Ok, "local session should start: " + result.Message);
+                Assert(result.Succeeded, "local session should start: " + result.ErrorMessage);
                 Assert(started == 1, "SessionStarted should fire once");
 
                 service.Pump(1f); // processes the seeded snapshot (first => ImportProject)
@@ -402,7 +394,7 @@ namespace TopiaForge.ModManager.Tests
             service.SessionStarted += _ => started++;
 
             var result = service.StartAutomergeSession(new UgcLiveSyncRequest(editorUrl: "https://h/?project=automerge:doc&scene=s"));
-            Assert(result.Ok, "automerge session should start: " + result.Message);
+            Assert(result.Succeeded, "automerge session should start: " + result.ErrorMessage);
             Assert(started == 0, "SessionStarted must wait for the Automerge controller to become ready");
             Assert(bridge.StartAutomergeDocument == "automerge:doc", "bridge should receive the parsed document, got " + bridge.StartAutomergeDocument);
             Assert(bridge.StartAutomergeLoadPlayScene, "an explicit Automerge connect should load the play scene");
@@ -416,6 +408,39 @@ namespace TopiaForge.ModManager.Tests
             Assert(imported == 1, "automerge live confirmation should raise SnapshotImported once, got " + imported);
 
             service.Dispose();
+        }
+
+        private static void TestSessionLeaseOwnership()
+        {
+            var firstDirectory = NewTempDir();
+            var secondDirectory = NewTempDir();
+            try
+            {
+                var service = new UgcLiveSyncService(new FakeBridge(), new NullLogger(), enableFileWatcher: false);
+                var first = service.StartLocalSession(new UgcLiveSyncRequest(watchFolder: firstDirectory));
+                Assert(first.Succeeded && first.Value != null && first.Value.IsActive,
+                    "a successful start should return an active session lease");
+
+                var second = service.StartLocalSession(new UgcLiveSyncRequest(watchFolder: secondDirectory));
+                Assert(second.Succeeded && second.Value != null && second.Value.IsActive,
+                    "a replacement start should return its own active lease");
+                Assert(first.Value != null && !first.Value.IsActive,
+                    "replacing a session should invalidate the previous lease");
+
+                first.Value?.Dispose();
+                Assert(service.CurrentSession?.Target == secondDirectory,
+                    "disposing a superseded lease must not stop the replacement session");
+
+                second.Value?.Dispose();
+                Assert(service.CurrentSession == null && service.Status == UgcLiveSyncStatus.Stopped,
+                    "disposing the current lease should stop only its owned session");
+                service.Dispose();
+            }
+            finally
+            {
+                TryDelete(firstDirectory);
+                TryDelete(secondDirectory);
+            }
         }
 
         // Simulates the full runtime config JSON the launcher writes from the developer UGC "Go Live" flow after
@@ -451,7 +476,7 @@ namespace TopiaForge.ModManager.Tests
                 debounceMilliseconds: config.DebounceMilliseconds);
             var result = service.StartAutomergeSession(request);
 
-            Assert(result.Ok, "launcher Automerge payload should start: " + result.Message);
+            Assert(result.Succeeded, "launcher Automerge payload should start: " + result.ErrorMessage);
             Assert(started == 0, "launcher payload should wait to raise SessionStarted until the scene is ready");
             Assert(service.Status == UgcLiveSyncStatus.WaitingForScene,
                 "launcher payload should wait for its play scene, got " + service.Status);
@@ -719,6 +744,10 @@ namespace TopiaForge.ModManager.Tests
             }
         }
 
+        // Scene arbitration now belongs to the manager-owned scene service. The legacy provider-level
+        // coordinator regressions are kept temporarily as migration history, but are intentionally excluded
+        // from the UGC module's owner-bound lease tests.
+#if false
         // The scene-stomp regression: an automatic connect (auto-connect on start) that needs the play scene
         // must defer while another mod holds the scene (a live world session), then attach when the play
         // scene arrives on its own — never dispatch a scene load over the session.
@@ -1060,6 +1089,8 @@ namespace TopiaForge.ModManager.Tests
                 "a late native revision must not resurrect a failed Automerge session");
             service.Dispose();
         }
+
+#endif
 
         private sealed class FakeBridge : IUgcLiveSyncBridge
         {

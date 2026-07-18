@@ -30,6 +30,7 @@ namespace TopiaForge.Mods.UnityUi
             TopiaForgeTween.ScaleTo(dialog, 0.94f, 1f, TopiaForgeTokens.DurationSlow, TopiaForgeEase.OutBack);
         }
 
+        /// <summary>Gets the modal exit-motion preset.</summary>
         public static void ModalOut(TopiaForgeWidget dialog, Action onDone)
         {
             TopiaForgeTween.FadeTo(dialog, 1f, 0f, TopiaForgeTokens.DurationFast, TopiaForgeEase.OutQuad, onDone);
@@ -42,6 +43,7 @@ namespace TopiaForge.Mods.UnityUi
             TopiaForgeTween.MoveX(toast, restingX + 40f, restingX, TopiaForgeTokens.DurationBase, TopiaForgeEase.OutCubic);
         }
 
+        /// <summary>Gets the toast exit-motion preset.</summary>
         public static void ToastOut(TopiaForgeWidget toast, float restingX, Action onDone)
         {
             TopiaForgeTween.FadeTo(toast, 1f, 0f, TopiaForgeTokens.DurationBase, TopiaForgeEase.OutQuad, onDone);
@@ -74,8 +76,11 @@ namespace TopiaForge.Mods.UnityUi
     /// </summary>
     public sealed class TopiaForgePulse : MonoBehaviour
     {
+        /// <summary>Gets frequency.</summary>
         public float Frequency = 2f;
+        /// <summary>Gets alpha amplitude.</summary>
         public float AlphaAmplitude = 0.12f;
+        /// <summary>Gets scale amplitude.</summary>
         public float ScaleAmplitude = 0.02f;
 
         private Graphic? graphic;

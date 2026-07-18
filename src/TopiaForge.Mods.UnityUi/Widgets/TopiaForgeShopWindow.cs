@@ -43,9 +43,12 @@ namespace TopiaForge.Mods.UnityUi
             Pane = pane;
         }
 
+        /// <summary>Gets window.</summary>
         public TopiaForgeWindow Window { get; }
+        /// <summary>Gets pane.</summary>
         public TopiaForgeShopPane Pane { get; }
 
+        /// <summary>Gets whether the shop window is open.</summary>
         public bool IsOpen => Window.IsOpen;
 
         /// <summary>Fires when the window closes — ESC and the X button alike.</summary>
@@ -55,16 +58,19 @@ namespace TopiaForge.Mods.UnityUi
             remove => Window.Closed -= value;
         }
 
+        /// <summary>Shows this UI element.</summary>
         public void Show()
         {
             Window.Show();
         }
 
+        /// <summary>Closes this UI element.</summary>
         public void Close()
         {
             Window.Close();
         }
 
+        /// <summary>Toggles this UI element between open and closed.</summary>
         public void Toggle()
         {
             Window.Toggle();

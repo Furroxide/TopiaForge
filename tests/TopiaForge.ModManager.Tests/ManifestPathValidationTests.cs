@@ -91,7 +91,7 @@ namespace TopiaForge.ModManager.Tests
         {
             return new ModManifest
             {
-                SchemaVersion = 3,
+                SchemaVersion = 4,
                 Id = "manifest.paths",
                 Name = "Manifest Paths",
                 Version = "1.0.0",

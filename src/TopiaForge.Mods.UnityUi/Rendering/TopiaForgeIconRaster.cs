@@ -5,12 +5,19 @@ namespace TopiaForge.Mods.UnityUi
     /// <summary>Procedural icons rasterized into the atlas (no icon-font dependency).</summary>
     public enum TopiaForgeIcon
     {
+        /// <summary>Selects the check option.</summary>
         Check,
+        /// <summary>Selects the cross option.</summary>
         Cross,
+        /// <summary>Selects the chevron down option.</summary>
         ChevronDown,
+        /// <summary>Selects the chevron right option.</summary>
         ChevronRight,
+        /// <summary>Selects the magnifier option.</summary>
         Magnifier,
+        /// <summary>Selects the grip option.</summary>
         Grip,
+        /// <summary>Selects the warning option.</summary>
         Warning,
     }
 

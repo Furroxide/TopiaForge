@@ -2,45 +2,27 @@ using TopiaForge.Mods;
 
 namespace {{ASSEMBLY_NAME}}
 {
-    public sealed class {{TYPE_NAME}}Mod : ITopiaForgeMod
+    /// <summary>Input-driven aim scanner built entirely on safe SDK services.</summary>
+    public sealed class {{TYPE_NAME}}Mod : TopiaForgeMod
     {
-        private IModContext? context;
-        private {{TYPE_NAME}}Controller? controller;
-
-        public void OnLoad(IModContext context)
+        protected override void OnLoad()
         {
-            this.context = context;
-            var config = context.LoadConfig(new {{TYPE_NAME}}Config());
-            config.Normalize();
-            context.SaveConfig(config);
-
-            controller = new {{TYPE_NAME}}Controller(config, context.Logger);
-            context.Update += OnUpdate;
-            context.SceneLoaded += OnSceneLoaded;
-            context.Logger.Info("{{DISPLAY_NAME}} loaded.");
-        }
-
-        public void OnUnload()
-        {
-            if (context != null)
+            var loaded = Context.Config.Load({{TYPE_NAME}}Config.Definition);
+            if (!loaded.TryGetValue(out var config))
             {
-                context.Update -= OnUpdate;
-                context.SceneLoaded -= OnSceneLoaded;
+                Context.Logger.Error(
+                    "Config could not be loaded (" + loaded.ErrorCode + "): " + loaded.ErrorMessage);
+                return;
             }
 
-            controller?.Dispose();
-            controller = null;
-            context = null;
-        }
+            var controller = new {{TYPE_NAME}}Controller(Context, config);
+            if (!controller.IsActive)
+            {
+                return;
+            }
 
-        private void OnUpdate(float deltaTime)
-        {
-            controller?.Update(deltaTime);
-        }
-
-        private void OnSceneLoaded(string sceneName)
-        {
-            controller?.OnSceneLoaded(sceneName);
+            Context.Logger.Info(
+                "{{DISPLAY_NAME}} loaded. Press " + config.ActionKey + " to scan the entity under your aim.");
         }
     }
 }

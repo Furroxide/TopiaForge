@@ -5,10 +5,17 @@
     <Project Path="src/TopiaForge.ModManager.Core/TopiaForge.ModManager.Core.csproj" />
     <Project Path="src/TopiaForge.ModManager/TopiaForge.ModManager.csproj" />
     <Project Path="src/TopiaForge.Mods.Abstractions/TopiaForge.Mods.Abstractions.csproj" />
+    <Project Path="src/TopiaForge.Mods.Analyzers/TopiaForge.Mods.Analyzers.csproj" />
+    <Project Path="src/TopiaForge.Mods.Chronos/TopiaForge.Mods.Chronos.csproj" />
+    <Project Path="src/TopiaForge.Mods.Interop.Unity/TopiaForge.Mods.Interop.Unity.csproj" />
+    <Project Path="src/TopiaForge.Mods.Prompts/TopiaForge.Mods.Prompts.csproj" />
+    <Project Path="src/TopiaForge.Mods.RobotKit/TopiaForge.Mods.RobotKit.csproj" />
+    <Project Path="src/TopiaForge.Mods.Testing/TopiaForge.Mods.Testing.csproj" />
     <Project Path="src/TopiaForge.Mods.UnityUi/TopiaForge.Mods.UnityUi.csproj" />
+    <Project Path="src/TopiaForge.Mods.Ugc/TopiaForge.Mods.Ugc.csproj" />
+    <Project Path="src/TopiaForge.Mods.Worlds/TopiaForge.Mods.Worlds.csproj" />
   </Folder>
   <Folder Name="/mods/">
-    <Project Path="mods/TopiaForge.Assets/TopiaForge.Assets.csproj" />
     <Project Path="mods/TopiaForge.Chronos/TopiaForge.Chronos.csproj" />
     <Project Path="mods/TopiaForge.GravityGun/TopiaForge.GravityGun.csproj" />
     <Project Path="mods/TopiaForge.NoFeedbackUrl/TopiaForge.NoFeedbackUrl.csproj" />
@@ -23,6 +30,11 @@
     <Project Path="mods/TopiaForge.Zombies/TopiaForge.Zombies.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/TopiaForge.SdkAcceptanceMod/TopiaForge.SdkAcceptanceMod.csproj" />
+    <Project Path="tests/TopiaForge.Mods.Analyzers.Tests/TopiaForge.Mods.Analyzers.Tests.csproj" />
     <Project Path="tests/TopiaForge.ModManager.Tests/TopiaForge.ModManager.Tests.csproj" />
+    <Project Path="tests/TopiaForge.ModRuntime.Tests/TopiaForge.ModRuntime.Tests.csproj" />
+    <Project Path="tests/TopiaForge.ValidTestMod.Api/TopiaForge.ValidTestMod.Api.csproj" />
+    <Project Path="tests/TopiaForge.ValidTestMod/TopiaForge.ValidTestMod.csproj" />
   </Folder>
 </Solution>

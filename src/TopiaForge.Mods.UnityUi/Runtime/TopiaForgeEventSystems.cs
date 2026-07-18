@@ -13,6 +13,7 @@ namespace TopiaForge.Mods.UnityUi
     {
         private static GameObject? ownedEventSystem;
 
+        /// <summary>Ensures that a compatible Unity event system is available.</summary>
         public static void EnsureEventSystem()
         {
             if (Object.FindFirstObjectByType<EventSystem>() != null)

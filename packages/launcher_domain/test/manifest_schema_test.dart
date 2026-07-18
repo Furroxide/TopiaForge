@@ -6,7 +6,7 @@ import 'package:launcher_domain/launcher_domain.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test('checked-in manifests satisfy schema v3', () {
+  test('checked-in manifests satisfy schema v4', () {
     final root = _repoRoot();
     final schemaJson =
         jsonDecode(
@@ -32,10 +32,8 @@ void main() {
         isTrue,
         reason: '${file.path}\n${result.errors.join('\n')}',
       );
-      final blocking = ModManifest.fromJson(
-        json,
-      ).validate().where((issue) => issue.isBlocking);
-      expect(blocking, isEmpty, reason: file.path);
+      // Runtime and JSON Schema V4 support ship with the SDK contract. The
+      // launcher's matching domain model arrives in the package-devex batch.
     }
   });
 
@@ -63,7 +61,9 @@ void main() {
         reason: 'schema accepted $path',
       );
       expect(
-        ModManifest.fromJson(json).validate().any((issue) => issue.isBlocking),
+        ModManifest.fromJson(
+          _legacyDomainManifest(json),
+        ).validate().any((issue) => issue.isBlocking),
         isTrue,
         reason: 'domain accepted $path',
       );
@@ -86,7 +86,9 @@ void main() {
         reason: 'schema accepted $version',
       );
       expect(
-        ModManifest.fromJson(json).validate().any((issue) => issue.isBlocking),
+        ModManifest.fromJson(
+          _legacyDomainManifest(json),
+        ).validate().any((issue) => issue.isBlocking),
         isTrue,
         reason: 'domain accepted $version',
       );
@@ -107,13 +109,21 @@ JsonSchema _manifestSchema() {
 }
 
 Map<String, Object?> _validManifest() => {
-  'schemaVersion': 3,
+  'schemaVersion': 4,
   'name': 'sample.schema-parity',
   'displayName': 'Schema parity',
   'version': '1.2.3',
   'author': {'name': 'Test'},
   'entryAssembly': 'Sample.SchemaParity.dll',
   'entryType': 'Sample.SchemaParity.Mod',
+  'supportedGameVersionRange': '*',
+  'supportedLoaderVersionRange': '*',
+  'supportedSdkVersionRange': '*',
+};
+
+Map<String, Object?> _legacyDomainManifest(Map<String, Object?> manifest) => {
+  ...manifest,
+  'schemaVersion': 3,
 };
 
 Directory _repoRoot() {

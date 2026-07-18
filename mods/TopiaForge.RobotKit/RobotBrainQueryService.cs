@@ -1,127 +1,116 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 using UnityEngine;
 
 namespace TopiaForge.RobotKit
 {
-    // Publishes IRobotBrainQueryService: starts a /agent/check3 brain query off the main thread and marshals its
-    // result back onto the service tick, so consumers poll a handle and never touch threads or the network. Mirrors
-    // the ReachableSpawnSearch lifecycle (tick-driven, cancel-on-dispose). A small concurrency cap protects the
-    // metered backend from a runaway caller; excess requests complete immediately as unavailable so the consumer's
-    // deterministic fallback stands.
-    internal sealed class RobotBrainQueryService : IRobotBrainQueryService, IDisposable
+    // Async owner-cancellable adapter over the game's brain backend. No Task or native transport handle crosses
+    // the public contract; consumers receive a stable OperationResult and the runtime supplies lifetime cancellation.
+    internal sealed class RobotBrainQueryService : IRobotBrainQueryService,
+        IOwnerBoundExtensionFactory, IDisposable
     {
         private const float HardTimeoutSeconds = 3f;
         private const int MaxConcurrent = 4;
 
         private readonly RoboApiClient client;
-        private readonly CancellationTokenSource serviceCts = new CancellationTokenSource();
-        private readonly List<PendingQuery> pending = new List<PendingQuery>();
         private readonly IModLogger logger;
-
+        private readonly CancellationTokenSource serviceCts = new CancellationTokenSource();
+        private CancellationTokenSource sceneCts = new CancellationTokenSource();
+        private int activeQueries;
         private bool disposed;
         private bool loggedAvailability;
 
         public RobotBrainQueryService(IModLogger logger)
         {
             this.logger = logger;
-
-            // Application.persistentDataPath must be read on the main thread (it is here, at mod load); the resolved
-            // path string is then safe to use from the background HTTP task.
             var tokenPath = Path.Combine(Application.persistentDataPath, "robo_token.json");
             client = new RoboApiClient(tokenPath, Guid.NewGuid().ToString("N"), logger);
         }
 
         public bool IsAvailable => !disposed && client.HasToken;
 
-        public IRobotBrainQuery BeginQuery(BrainQueryRequest request)
+        public async Task<OperationResult<BrainQueryResult>> QueryAsync(
+            BrainQueryRequest request,
+            CancellationToken cancellationToken = default)
         {
-            var handle = new PendingQuery();
-            if (disposed || request == null || !client.HasToken || pending.Count >= MaxConcurrent)
+            if (request == null)
             {
-                handle.CompleteUnavailable();
-                return handle;
+                throw new ArgumentNullException(nameof(request));
             }
 
-            // The backend rejects a request with more than RoboApiProtocol.MaxOutputs fields as a whole-turn 400
-            // ("Too many outputs"), which otherwise degrades opaquely to "unavailable". Warn loudly so a consumer
-            // that over-requests fields sees the cause instead of a silent brain-offline symptom.
-            if (request.Outputs != null && request.Outputs.Count > RoboApiProtocol.MaxOutputs)
+            if (disposed)
             {
-                logger.Warn("RobotKit brain query has " + request.Outputs.Count + " output fields; the backend caps "
-                    + "a request at " + RoboApiProtocol.MaxOutputs + " and will reject this turn. Reduce the "
-                    + "request's fields (a conversation may add at most " + (RoboApiProtocol.MaxOutputs - 2)
-                    + " ExtraOutputs beyond reply+decision).");
+                return OperationResult<BrainQueryResult>.Failure(
+                    ModErrorCode.InvalidState,
+                    "RobotKit brain service has been disposed.");
+            }
+
+            if (!client.HasToken)
+            {
+                return OperationResult<BrainQueryResult>.Failure(
+                    ModErrorCode.Unavailable,
+                    "Robot brain credentials are unavailable.");
+            }
+
+            if (request.Outputs.Count == 0 || request.Outputs.Count > RoboApiProtocol.MaxOutputs)
+            {
+                return OperationResult<BrainQueryResult>.Failure(
+                    ModErrorCode.InvalidArgument,
+                    "A brain query requires 1 to " + RoboApiProtocol.MaxOutputs + " output fields.");
+            }
+
+            if (Interlocked.Increment(ref activeQueries) > MaxConcurrent)
+            {
+                Interlocked.Decrement(ref activeQueries);
+                return OperationResult<BrainQueryResult>.Failure(
+                    ModErrorCode.Conflict,
+                    "RobotKit already has the maximum number of brain queries in flight.");
             }
 
             try
             {
-                var cts = CancellationTokenSource.CreateLinkedTokenSource(serviceCts.Token);
-                handle.Cts = cts;
-                handle.Task = client.Check3Async(request, HardTimeoutSeconds, cts.Token);
-                pending.Add(handle);
                 LogAvailabilityOnce();
+                using (var linked = CancellationTokenSource.CreateLinkedTokenSource(
+                    cancellationToken,
+                    serviceCts.Token,
+                    sceneCts.Token))
+                {
+                    return await client.Check3Async(request, HardTimeoutSeconds, linked.Token);
+                }
             }
-            catch (Exception ex)
+            finally
             {
-                logger.Debug("RobotKit brain query could not start: " + ex.Message);
-                handle.Cts?.Dispose();
-                handle.Cts = null;
-                handle.CompleteUnavailable();
+                Interlocked.Decrement(ref activeQueries);
             }
-
-            return handle;
         }
 
-        // Drain finished queries onto the main thread. Check3Async never throws, so a completed task carries a result;
-        // the defensive catch covers a cancelled/faulted task all the same.
+        object IOwnerBoundExtensionFactory.CreateOwnerFacade(
+            Type contractType,
+            string ownerModId,
+            IModLifetime lifetime)
+        {
+            if (contractType != typeof(IRobotBrainQueryService))
+            {
+                throw new ArgumentException("Unsupported RobotKit brain extension contract.", nameof(contractType));
+            }
+
+            return new OwnerFacade(this, lifetime);
+        }
+
+        // Kept as a no-op pump so the provider's unified tick remains stable; query completion is Task-native now.
         public void Tick(float deltaTime)
         {
-            if (disposed)
-            {
-                return;
-            }
-
-            for (var index = pending.Count - 1; index >= 0; index--)
-            {
-                var query = pending[index];
-                var task = query.Task;
-                if (task == null || !task.IsCompleted)
-                {
-                    continue;
-                }
-
-                BrainQueryResult result;
-                try
-                {
-                    result = task.Status == TaskStatus.RanToCompletion ? task.Result : BrainQueryResult.Unavailable;
-                }
-                catch (Exception ex)
-                {
-                    logger.Debug("RobotKit brain query completion failed: " + ex.Message);
-                    result = BrainQueryResult.Unavailable;
-                }
-
-                query.CompleteWith(result);
-                query.Cts?.Dispose();
-                pending.RemoveAt(index);
-            }
         }
 
         public void OnSceneChanged()
         {
-            // The signed-in user (and therefore the token) may change between scenes. Old-scene requests cannot
-            // have a valid consumer after the robots are gone, so cancel them rather than occupying the cap.
-            for (var index = 0; index < pending.Count; index++)
-            {
-                CancelPending(pending[index], "scene change");
-            }
-
-            pending.Clear();
+            var previous = Interlocked.Exchange(ref sceneCts, new CancellationTokenSource());
+            previous.Cancel();
+            previous.Dispose();
             client.InvalidateToken();
         }
 
@@ -133,46 +122,10 @@ namespace TopiaForge.RobotKit
             }
 
             disposed = true;
-            try
-            {
-                serviceCts.Cancel();
-            }
-            catch (Exception ex)
-            {
-                logger.Debug("RobotKit brain service cancellation failed during unload: " + ex.Message);
-            }
-
-            foreach (var query in pending)
-            {
-                CancelPending(query, "unload");
-            }
-
-            pending.Clear();
+            serviceCts.Cancel();
+            sceneCts.Cancel();
+            sceneCts.Dispose();
             serviceCts.Dispose();
-        }
-
-        private void CancelPending(PendingQuery query, string reason)
-        {
-            try
-            {
-                query.Cts?.Cancel();
-            }
-            catch (Exception ex)
-            {
-                logger.Debug("RobotKit brain query cancellation failed during " + reason + ": " + ex.Message);
-            }
-
-            try
-            {
-                query.Cts?.Dispose();
-            }
-            catch (Exception ex)
-            {
-                logger.Debug("RobotKit brain query cleanup failed during " + reason + ": " + ex.Message);
-            }
-
-            query.Cts = null;
-            query.CompleteUnavailable();
         }
 
         private void LogAvailabilityOnce()
@@ -183,36 +136,32 @@ namespace TopiaForge.RobotKit
             }
 
             loggedAvailability = true;
-            logger.Info("RobotKit: brain queries enabled — robot decisions can consult the RoboAPI backend (llama-3.3-70b).");
+            logger.Info("RobotKit: structured brain queries are available.");
         }
 
-        // The pollable handle. Its result is written by the tick (main thread) and read by the consumer (main thread),
-        // so no cross-thread state escapes the Task itself.
-        private sealed class PendingQuery : IRobotBrainQuery
+        private sealed class OwnerFacade : IRobotBrainQueryService
         {
-            private BrainQueryResult result = BrainQueryResult.Unavailable;
-            private bool complete;
+            private readonly RobotBrainQueryService service;
+            private readonly IModLifetime lifetime;
 
-            public Task<BrainQueryResult>? Task { get; set; }
-
-            public CancellationTokenSource? Cts { get; set; }
-
-            public bool IsComplete => complete;
-
-            public bool Found => complete && result.Succeeded;
-
-            public BrainQueryResult Result => result;
-
-            public void CompleteWith(BrainQueryResult value)
+            public OwnerFacade(RobotBrainQueryService service, IModLifetime lifetime)
             {
-                result = value ?? BrainQueryResult.Unavailable;
-                complete = true;
+                this.service = service;
+                this.lifetime = lifetime;
             }
 
-            public void CompleteUnavailable()
+            public bool IsAvailable => !lifetime.IsStopping && service.IsAvailable;
+
+            public async Task<OperationResult<BrainQueryResult>> QueryAsync(
+                BrainQueryRequest request,
+                CancellationToken cancellationToken = default)
             {
-                result = BrainQueryResult.Unavailable;
-                complete = true;
+                using (var linked = CancellationTokenSource.CreateLinkedTokenSource(
+                    cancellationToken,
+                    lifetime.StoppingToken))
+                {
+                    return await service.QueryAsync(request, linked.Token);
+                }
             }
         }
     }

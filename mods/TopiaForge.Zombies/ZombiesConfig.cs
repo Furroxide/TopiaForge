@@ -15,7 +15,7 @@ namespace TopiaForge.Zombies
         // arena gets the framework HDRP sky/exposure/sun. Set it to a world id from the Worlds catalog.json
         // (e.g. "io.github.furroxide.topiaforge.worlds.level.firstlevel") to opt into a specific level.
         [DataMember(Name = "targetWorldId")]
-        public string TargetWorldId { get; set; } = WellKnownIds.OpenSandboxWorldId;
+        public string TargetWorldId { get; set; } = WellKnownWorldIds.OpenSandboxWorld;
 
         [DataMember(Name = "startingCountdownSeconds")]
         public float StartingCountdownSeconds { get; set; }
@@ -516,7 +516,7 @@ namespace TopiaForge.Zombies
 
         private void SeedDefaults()
         {
-            TargetWorldId = WellKnownIds.OpenSandboxWorldId;
+            TargetWorldId = WellKnownWorldIds.OpenSandboxWorld;
             StartingCountdownSeconds = 3f;
             InterWaveDelaySeconds = 8f;
             BaseZombiesPerWave = 5;
@@ -679,7 +679,7 @@ namespace TopiaForge.Zombies
         public void Normalize()
         {
             TargetWorldId = string.IsNullOrWhiteSpace(TargetWorldId)
-                ? WellKnownIds.OpenSandboxWorldId
+                ? WellKnownWorldIds.OpenSandboxWorld
                 : TargetWorldId.Trim();
 
             StartingCountdownSeconds = Clamp(StartingCountdownSeconds, 0.5f, 20f);

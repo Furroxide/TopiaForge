@@ -2,30 +2,21 @@ using TopiaForge.Mods;
 
 namespace TopiaForge.Prompts
 {
-    public sealed class PromptsMod : ITopiaForgeMod
+    /// <summary>Publishes the owner-bound prompt override extension.</summary>
+    public sealed class PromptsMod : TopiaForgeMod
     {
-        private IModContext? context;
-        private PromptOverrideRegistry? registry;
-
-        public void OnLoad(IModContext context)
+        /// <inheritdoc />
+        protected override void OnLoad()
         {
-            this.context = context;
-            registry = new PromptOverrideRegistry();
-            context.GetService<IModServiceRegistry>()?.Register<IPromptOverrideRegistry>(context.ModId, registry);
-            context.Logger.Info("TopiaForge Prompts loaded; IPromptOverrideRegistry registered.");
-        }
-
-        public void OnUnload()
-        {
-            registry?.Dispose();
-            registry = null;
-
-            if (context != null)
+            var registry = new PromptOverrideRegistry(Context.Identity.Id);
+            Context.Lifetime.Track(registry);
+            var registration = Context.Extensions.Register<IPromptOverrideRegistry>(registry);
+            if (!registration.Succeeded)
             {
-                context.GetService<IModServiceRegistry>()?.UnregisterOwner(context.ModId);
+                throw new System.InvalidOperationException(registration.ErrorMessage);
             }
 
-            context = null;
+            Context.Logger.Info("TopiaForge Prompts loaded; prompt override extension registered.");
         }
     }
 }

@@ -37,7 +37,7 @@ namespace TopiaForge.ModManager.Core
                 return false;
             }
 
-            if (path.Length > MaxPathChars)
+            if (UnicodeScalarLength(path) > MaxPathChars)
             {
                 error = "path exceeds the portable " + MaxPathChars + " character limit";
                 return false;
@@ -98,7 +98,7 @@ namespace TopiaForge.ModManager.Core
 
         private static bool IsUnsafeSegment(string segment)
         {
-            if (segment.Length == 0 || segment.Length > MaxSegmentChars || segment == "." || segment == ".." ||
+            if (segment.Length == 0 || UnicodeScalarLength(segment) > MaxSegmentChars || segment == "." || segment == ".." ||
                 segment.IndexOf(':') >= 0 || segment.EndsWith(" ", StringComparison.Ordinal) ||
                 segment.EndsWith(".", StringComparison.Ordinal))
             {
@@ -145,6 +145,24 @@ namespace TopiaForge.ModManager.Core
                 .ToUpperInvariant()
                 .Replace("\u00DF", "SS")
                 .Replace("\u1E9E", "SS");
+        }
+
+        private static int UnicodeScalarLength(string value)
+        {
+            var length = 0;
+            for (var index = 0; index < value.Length; index++)
+            {
+                if (char.IsHighSurrogate(value[index]) &&
+                    index + 1 < value.Length &&
+                    char.IsLowSurrogate(value[index + 1]))
+                {
+                    index++;
+                }
+
+                length++;
+            }
+
+            return length;
         }
     }
 }

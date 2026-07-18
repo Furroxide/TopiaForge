@@ -7,7 +7,7 @@ namespace TopiaForge.Zombies
     // deterministic given a robot's seeded mind — it is the always-on authority that resolves at frame 0 with zero
     // network, so the cast feels instant and works offline. A live LLM answer (when available) only ENRICHES it via
     // ApplyBrainModulation, which can upgrade a failed cast toward the player's intent but never harden an outcome the
-    // player has already been shown. Kept free of UnityEngine/ZombiesConfig so it unit-tests on net8.0.
+    // player has already been shown. Kept engine-independent so it unit-tests on net8.0.
 
     // The player's command. Each maps to a target outcome with its own persuasiveness/difficulty.
     internal enum OverrideCommand
@@ -285,13 +285,12 @@ namespace TopiaForge.Zombies
                 new BrainOutputField("bark", "A short in-character line you say out loud (<= 10 words).", BrainFieldType.String),
             };
 
-            return new BrainQueryRequest(prompt, outputs)
-            {
-                Usage = "zombies-override",
-                SuccessDescription = "Return a valid action and a short spoken bark.",
-                Temperature = temperature,
-                UseReasoning = false,
-            };
+            return new BrainQueryRequest(
+                prompt,
+                outputs,
+                usage: "zombies-override",
+                successDescription: "Return a valid action and a short spoken bark.",
+                temperature: temperature);
         }
 
         // A crowd-level broadcast query: the whole swarm answers with one voice (a single line). Used purely as
@@ -308,13 +307,12 @@ namespace TopiaForge.Zombies
                 new BrainOutputField("bark", "The swarm's single short spoken line (<= 10 words).", BrainFieldType.String),
             };
 
-            return new BrainQueryRequest(prompt, outputs)
-            {
-                Usage = "zombies-broadcast",
-                SuccessDescription = "Return one short spoken line for the swarm.",
-                Temperature = temperature,
-                UseReasoning = false,
-            };
+            return new BrainQueryRequest(
+                prompt,
+                outputs,
+                usage: "zombies-broadcast",
+                successDescription: "Return one short spoken line for the swarm.",
+                temperature: temperature);
         }
 
         private static string CorruptionWord(float corruption)

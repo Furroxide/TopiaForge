@@ -26,6 +26,7 @@ namespace TopiaForge.ModManager.Tests
             var manifests = LoadManifests(root);
             var baseline = LoadBaseline(root);
 
+            AssertSafeSdkConsumersHaveNoBindingManifest(root);
             AssertBaselineIsCanonicalAndComplete(root, baseline);
             AssertRetiredFormatsRejected(baseline, manifests[0]);
 
@@ -92,6 +93,22 @@ namespace TopiaForge.ModManager.Tests
             Assert(File.Exists(path),
                 "surface baseline missing — capture it with `dotnet run --project src/TopiaForge.GameCompat.Extractor -- baseline` and commit baselines/gamecode.surface.baseline.json");
             return SurfaceSnapshot.Parse(File.ReadAllText(path));
+        }
+
+        private static void AssertSafeSdkConsumersHaveNoBindingManifest(string root)
+        {
+            var bindingsDirectory = Path.Combine(root, "bindings");
+            foreach (var modId in new[]
+                     {
+                         "io.github.furroxide.topiaforge.gravitygun",
+                         "io.github.furroxide.topiaforge.sandbox",
+                         "io.github.furroxide.topiaforge.zombies"
+                     })
+            {
+                Assert(
+                    !File.Exists(Path.Combine(bindingsDirectory, modId + ".gamebindings.json")),
+                    modId + " is a safe SDK consumer and must not declare native game bindings");
+            }
         }
 
         private static void AssertBaselineIsCanonicalAndComplete(string root, SurfaceSnapshot baseline)

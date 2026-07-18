@@ -83,6 +83,7 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
+        /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
             var accent = theme.ToneColor(tone);

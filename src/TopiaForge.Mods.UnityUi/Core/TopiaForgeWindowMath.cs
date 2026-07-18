@@ -5,11 +5,16 @@ namespace TopiaForge.Mods.UnityUi
     /// <summary>Unity-free rect value for window clamp/snap math and persistence.</summary>
     public readonly struct TopiaForgeRect
     {
+        /// <summary>Gets x.</summary>
         public readonly float X;
+        /// <summary>Gets y.</summary>
         public readonly float Y;
+        /// <summary>Gets width.</summary>
         public readonly float Width;
+        /// <summary>Gets height.</summary>
         public readonly float Height;
 
+        /// <summary>Creates a rect.</summary>
         public TopiaForgeRect(float x, float y, float width, float height)
         {
             X = x;
@@ -18,6 +23,7 @@ namespace TopiaForge.Mods.UnityUi
             Height = height;
         }
 
+        /// <inheritdoc/>
         public override string ToString()
         {
             return FormattableString.Invariant($"TopiaForgeRect({X:0.#}, {Y:0.#}, {Width:0.#}x{Height:0.#})");
@@ -31,7 +37,9 @@ namespace TopiaForge.Mods.UnityUi
     /// </summary>
     public static class TopiaForgeWindowMath
     {
+        /// <summary>The snap threshold design-token value.</summary>
         public const float SnapThreshold = 12f;
+        /// <summary>The max viewport fraction design-token value.</summary>
         public const float MaxViewportFraction = 0.9f;
 
         /// <summary>Caps a window size to the viewport fraction and a sane minimum.</summary>

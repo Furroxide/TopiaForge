@@ -73,10 +73,13 @@ namespace TopiaForge.Mods.UnityUi
             ApplyTheme(Theme);
         }
 
+        /// <summary>Gets input.</summary>
         public TMP_InputField Input => input;
 
+        /// <summary>Gets text.</summary>
         public string Text => input.text;
 
+        /// <summary>Gets whether the text field currently has input focus.</summary>
         public bool IsFocused => input.isFocused;
 
         /// <summary>Enter-to-submit hook (Packages path field, conversation send).</summary>
@@ -150,6 +153,12 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
+        /// <summary>Sets the maximum accepted character count; zero removes the limit.</summary>
+        public void SetCharacterLimit(int maximumLength)
+        {
+            input.characterLimit = maximumLength < 0 ? 0 : maximumLength;
+        }
+
         /// <summary>Error state: danger ring until cleared.</summary>
         public void SetError(bool hasError)
         {
@@ -162,6 +171,7 @@ namespace TopiaForge.Mods.UnityUi
             Repaint();
         }
 
+        /// <summary>Applies the resolved theme to this UI element.</summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
             Repaint();

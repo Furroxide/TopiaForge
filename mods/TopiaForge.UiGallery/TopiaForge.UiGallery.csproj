@@ -3,21 +3,17 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>TopiaForge.UiGallery</AssemblyName>
     <RootNamespace>TopiaForge.UiGallery</RootNamespace>
-    <Version>0.2.0</Version>
-    <AssemblyVersion>0.2.0.0</AssemblyVersion>
-    <FileVersion>0.2.0.0</FileVersion>
-    <InformationalVersion>0.2.0</InformationalVersion>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <InformationalVersion>1.0.0</InformationalVersion>
+    <TopiaForgeSafeProject>false</TopiaForgeSafeProject>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Worlds\TopiaForge.Mods.Worlds.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.UnityUi\TopiaForge.Mods.UnityUi.csproj" />
   </ItemGroup>
 
-  <!-- Game/Unity assemblies are referenced for compile only (Private=false): they exist at runtime in the
-       game's Managed folder. -->
-  <ItemGroup>
-    <Reference Include="UnityEngine" HintPath="$(RobotopiaManagedDir)\UnityEngine.dll" Private="false" />
-    <Reference Include="UnityEngine.CoreModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.CoreModule.dll" Private="false" />
-  </ItemGroup>
 </Project>

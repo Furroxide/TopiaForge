@@ -5,14 +5,23 @@ namespace TopiaForge.Mods.UnityUi
     /// <summary>Screen/panel docking positions.</summary>
     public enum TopiaForgeCorner
     {
+        /// <summary>Selects the top left option.</summary>
         TopLeft,
+        /// <summary>Selects the top option.</summary>
         Top,
+        /// <summary>Selects the top right option.</summary>
         TopRight,
+        /// <summary>Selects the left option.</summary>
         Left,
+        /// <summary>Selects the center option.</summary>
         Center,
+        /// <summary>Selects the right option.</summary>
         Right,
+        /// <summary>Selects the bottom left option.</summary>
         BottomLeft,
+        /// <summary>Selects the bottom option.</summary>
         Bottom,
+        /// <summary>Selects the bottom right option.</summary>
         BottomRight,
     }
 
@@ -23,6 +32,7 @@ namespace TopiaForge.Mods.UnityUi
     /// </summary>
     public static class TopiaForgeAnchors
     {
+        /// <summary>Calculates a rectangle docked to the requested screen edge.</summary>
         public static void Dock(RectTransform rect, TopiaForgeCorner corner, float margin = TopiaForgeTokens.SafeMargin)
         {
             var anchor = AnchorOf(corner);
@@ -42,6 +52,7 @@ namespace TopiaForge.Mods.UnityUi
             rect.sizeDelta = new Vector2(width, height);
         }
 
+        /// <summary>Calculates a rectangle stretched to the requested anchors.</summary>
         public static void Stretch(RectTransform rect, float left = 0f, float top = 0f, float right = 0f, float bottom = 0f)
         {
             rect.anchorMin = Vector2.zero;

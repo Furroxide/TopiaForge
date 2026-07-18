@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace TopiaForge.Mods
 {
@@ -9,23 +11,22 @@ namespace TopiaForge.Mods
     /// start from a default out-of-the-box robot and override only the behaviour and visuals it needs. Movement
     /// leans on the game's own pathing/locomotion (the robot walks, routes around geometry, animates, and recovers
     /// from being stuck exactly like a native robot); the mod expresses intent (go here, chase this) rather than
-    /// re-implementing navigation. Also exposes the small amount of player access (position, the player object,
-    /// damage, control suspension) that wave/combat gamemodes need.
+    /// re-implementing navigation. Native engine objects never cross this contract boundary.
     /// </summary>
     /// <remarks>
     /// Published by the <c>TopiaForge.RobotKit</c> framework mod and resolved with
-    /// <c>context.GetService&lt;IRobotAgentService&gt;()</c>, the same way <see cref="IWorldGamemodeService"/> is
-    /// consumed. Declare a dependency on <c>io.github.furroxide.topiaforge.robotkit</c> (and <c>loadAfter</c> it) so the service is
+    /// <c>context.Extensions.TryGet&lt;IRobotAgentService&gt;()</c>. Declare a dependency on
+    /// <c>io.github.furroxide.topiaforge.robotkit</c> so the service is
     /// registered before your <c>OnLoad</c> runs. All operations degrade gracefully: when the game symbols this
-    /// relies on are absent, <see cref="IsAvailable"/> is <c>false</c> and spawning returns <c>null</c> rather
-    /// than throwing.
+    /// relies on are absent, <see cref="IsAvailable"/> is <c>false</c> and spawning returns a stable
+    /// <see cref="ModErrorCode.Unavailable"/> result rather than throwing.
     /// </remarks>
     public interface IRobotAgentService
     {
         /// <summary>
         /// <c>true</c> when a spawnable robot prefab and the control symbols were resolved, so
         /// <see cref="Spawn"/> can produce robots. <c>false</c> means the game build does not expose what the
-        /// service needs (spawning will return <c>null</c>). Robot prefabs only exist once a gameplay level is
+        /// service needs (spawning returns an unavailable result). Robot prefabs only exist once a gameplay level is
         /// loaded, so poll this rather than assuming it at startup.
         /// </summary>
         bool IsAvailable { get; }
@@ -39,7 +40,7 @@ namespace TopiaForge.Mods
 
         /// <summary>
         /// All robots the service is currently managing. An agent that has died (or been despawned) is removed on
-        /// the next service tick, so this can briefly include an agent whose <see cref="IRobotAgent.IsAlive"/> is
+        /// the next service tick, so this can briefly include an agent whose <see cref="IEntity.IsAlive"/> is
         /// already <c>false</c>; check that property if you need a strictly-alive view.
         /// </summary>
         IReadOnlyList<IRobotAgent> ActiveAgents { get; }
@@ -48,11 +49,10 @@ namespace TopiaForge.Mods
         /// Spawns a standard-agent robot at <see cref="RobotAgentSpawnRequest.Position"/>. The robot comes up
         /// native (body, animation, locomotion); its brain is dormant by default
         /// (<see cref="RobotBrainMode.Dormant"/>) so the mod owns its decisions, or fully autonomous if
-        /// requested. Returns a handle to drive it, or <c>null</c> when <see cref="IsAvailable"/> is <c>false</c>
-        /// or no prefab could be resolved. The spawned <c>UnityEngine.GameObject</c> is exposed via
-        /// <see cref="IRobotAgent.GameObject"/> so the caller can attach its own gameplay component.
+        /// requested. Returns a successful opaque agent handle, or a stable failure result when the service is
+        /// unavailable or no prefab could be resolved.
         /// </summary>
-        IRobotAgent? Spawn(RobotAgentSpawnRequest request);
+        OperationResult<IRobotAgent> Spawn(RobotAgentSpawnRequest request);
 
         /// <summary>
         /// The distinct robot types (prefabs) the current level exposes, ordered default-first — the list to offer
@@ -63,85 +63,68 @@ namespace TopiaForge.Mods
         IReadOnlyList<RobotTypeDescriptor> RobotTypes { get; }
 
         /// <summary>
-        /// <c>true</c> when the given <c>UnityEngine.GameObject</c> (prefab or instance, kept as
-        /// <see cref="object"/> to stay Unity-free) is a robot — i.e. it carries the game's robot body. Use it to
-        /// keep robots out of prop catalogs. Cheap, never throws, <c>false</c> for non-GameObjects.
+        /// <c>true</c> when an opaque entity is a RobotKit-managed robot.
         /// </summary>
-        bool IsRobotPrefab(object gameObject);
-
-        /// <summary>
-        /// Gets the real player's world position. Returns <c>false</c> when there is no resolved
-        /// <c>PlayerController</c> (e.g. a camera-only scene); callers that want a camera fallback should handle
-        /// that themselves.
-        /// </summary>
-        bool TryGetPlayerPosition(out Vec3 position);
-
-        /// <summary>
-        /// Gets the real player's <c>UnityEngine.GameObject</c> (kept as <see cref="object"/> to keep the SDK
-        /// Unity-free), suitable as a <see cref="IRobotAgent.Chase"/> target so the robot tracks the live player
-        /// natively. Returns <c>false</c> when there is no resolved player.
-        /// </summary>
-        bool TryGetPlayerObject(out object gameObject);
-
-        /// <summary>
-        /// Applies <paramref name="amount"/> of damage to the player's health (labelled with
-        /// <paramref name="source"/>). Returns <c>false</c> when no player health component is resolved.
-        /// </summary>
-        bool DamagePlayer(float amount, string source);
-
-        /// <summary>
-        /// Enables or disables the player's first-person controller. Disable it to freeze look/move input and
-        /// stop the controller re-locking the cursor (e.g. while a game-over screen is up); re-enable to restore.
-        /// </summary>
-        void SetPlayerControlsEnabled(bool enabled);
+        bool TryGetRobot(IEntity entity, out IRobotAgent? agent);
 
         /// <summary>
         /// Begins an asynchronous search for a spawn point near <see cref="ReachableSpawnRequest.Origin"/> that an
         /// agent can stand on <i>and</i> actually reach the player from — it reuses the game's own pathfinder to
         /// confirm a complete navigation path exists, so enemies never land on rooftops, ledges, walled-off pockets,
-        /// or islands the player cannot get to. The search runs across frames under the engine's pathfinding budget;
-        /// poll the returned handle's <see cref="IReachableSpawn.IsComplete"/>, then read
-        /// <see cref="IReachableSpawn.Found"/> / <see cref="IReachableSpawn.Position"/>. Cheap to start; the handle is
-        /// driven by the service tick (call it from your own update loop and just poll). When the scene has no
+        /// or islands the player cannot get to. The search runs asynchronously across frames under the engine's
+        /// pathfinding budget. When the scene has no
         /// pathfinder (<see cref="IsNavigationAvailable"/> is <c>false</c>) the search degrades to a best-effort
-        /// grounded point with no reachability guarantee. Abandon a handle simply by dropping it; the service tears
-        /// the in-flight search down on the next scene change or when the service is disposed.
+        /// grounded point with no reachability guarantee. Caller cancellation and the owning mod lifetime both stop
+        /// an in-flight search; scene changes also invalidate unfinished work.
         /// </summary>
-        IReachableSpawn BeginFindReachableSpawn(ReachableSpawnRequest request);
+        Task<OperationResult<ReachableSpawnResult>> FindReachableSpawnAsync(
+            ReachableSpawnRequest request,
+            CancellationToken cancellationToken = default);
     }
 
-    /// <summary>
-    /// A pollable handle for an in-flight <see cref="IRobotAgentService.BeginFindReachableSpawn"/> search. Poll
-    /// <see cref="IsComplete"/> each frame; once it is <c>true</c>, read <see cref="Found"/> and (if found)
-    /// <see cref="Position"/>. The handle never throws and is safe to keep polling after completion.
-    /// </summary>
-    public interface IReachableSpawn
+    /// <summary>Immutable successful result of a reachable spawn search.</summary>
+    public sealed class ReachableSpawnResult
     {
-        /// <summary>
-        /// <c>true</c> once the search has finished — either a reachable point was found or every candidate was
-        /// exhausted. Until then the service is still pathfinding candidates across frames.
-        /// </summary>
-        bool IsComplete { get; }
+        /// <summary>Creates a reachable spawn result.</summary>
+        public ReachableSpawnResult(Vec3 position)
+        {
+            Position = position;
+        }
 
-        /// <summary>
-        /// <c>true</c> when a usable spawn point was found. Valid only once <see cref="IsComplete"/> is <c>true</c>;
-        /// <c>false</c> means no candidate near the origin was both standable and reachable from the player (the
-        /// caller should delay and retry rather than spawn anywhere).
-        /// </summary>
-        bool Found { get; }
-
-        /// <summary>The chosen spawn point, ground-snapped to the navigation grid. Valid only when <see cref="Found"/> is <c>true</c>.</summary>
-        Vec3 Position { get; }
+        /// <summary>Gets the chosen ground-snapped position.</summary>
+        public Vec3 Position { get; }
     }
 
-    /// <summary>Parameters for <see cref="IRobotAgentService.BeginFindReachableSpawn"/>.</summary>
+    /// <summary>Immutable parameters for <see cref="IRobotAgentService.FindReachableSpawnAsync"/>.</summary>
     public sealed class ReachableSpawnRequest
     {
         /// <summary>Creates a request that searches a ring around <paramref name="origin"/> (typically the player position).</summary>
         /// <param name="origin">Centre of the search ring — usually the player's world position.</param>
-        public ReachableSpawnRequest(Vec3 origin)
+        /// <param name="reachableFrom">Optional point that must have a complete path to a candidate.</param>
+        /// <param name="minRadius">Closest candidate radius in metres.</param>
+        /// <param name="maxRadius">Farthest candidate radius in metres.</param>
+        /// <param name="maxCandidates">Maximum number of candidates to inspect.</param>
+        /// <param name="verticalScan">Height above a candidate at which to begin the ground scan.</param>
+        /// <param name="groundProbeDepth">Length of the downward ground scan.</param>
+        /// <param name="heightOffset">Vertical offset applied to the selected ground point.</param>
+        public ReachableSpawnRequest(
+            Vec3 origin,
+            Vec3? reachableFrom = null,
+            float minRadius = 8f,
+            float maxRadius = 24f,
+            int maxCandidates = 16,
+            float verticalScan = 3f,
+            float groundProbeDepth = 12f,
+            float heightOffset = 0.25f)
         {
             Origin = origin;
+            ReachableFrom = reachableFrom;
+            MinRadius = minRadius;
+            MaxRadius = maxRadius;
+            MaxCandidates = maxCandidates;
+            VerticalScan = verticalScan;
+            GroundProbeDepth = groundProbeDepth;
+            HeightOffset = heightOffset;
         }
 
         /// <summary>Centre of the search ring; candidates are generated around this point.</summary>
@@ -151,29 +134,29 @@ namespace TopiaForge.Mods
         /// The point a candidate must be reachable from (a complete navigation path must connect them). <c>null</c>
         /// uses <see cref="Origin"/>. For a wave gamemode this is the player position.
         /// </summary>
-        public Vec3? ReachableFrom { get; set; }
+        public Vec3? ReachableFrom { get; }
 
         /// <summary>
         /// Closest a candidate may be generated to <see cref="Origin"/>, in metres. Keep this comfortably above
         /// zero: candidates generated almost on top of the reachability anchor are skipped (the native pathfinder
         /// treats a start already at the goal as trivially reachable, which would bypass route validation).
         /// </summary>
-        public float MinRadius { get; set; } = 8f;
+        public float MinRadius { get; }
 
         /// <summary>Farthest a candidate may be generated from <see cref="Origin"/>, in metres.</summary>
-        public float MaxRadius { get; set; } = 24f;
+        public float MaxRadius { get; }
 
         /// <summary>How many ring candidates to try before giving up (each is ground-tested, then reachability-tested).</summary>
-        public int MaxCandidates { get; set; } = 16;
+        public int MaxCandidates { get; }
 
         /// <summary>Metres above a ring point to begin the downward ground probe (clears low overhangs at the sample point).</summary>
-        public float VerticalScan { get; set; } = 3f;
+        public float VerticalScan { get; }
 
         /// <summary>Length of the downward ground probe ray, in metres.</summary>
-        public float GroundProbeDepth { get; set; } = 12f;
+        public float GroundProbeDepth { get; }
 
         /// <summary>Vertical offset added to the chosen ground point so the robot is not seated in the floor.</summary>
-        public float HeightOffset { get; set; } = 0.25f;
+        public float HeightOffset { get; }
     }
 
     /// <summary>
@@ -183,33 +166,17 @@ namespace TopiaForge.Mods
     /// Override visuals (<see cref="SetTint"/>, <see cref="SetEmote"/>, <see cref="SetName"/>,
     /// <see cref="SetScale"/>) and wire combat through the native health/ragdoll pipeline
     /// (<see cref="ApplyDamage"/>, <see cref="Kill"/>, <see cref="Ragdoll"/>, <see cref="Knockback"/>) — or
-    /// attach your own component to <see cref="GameObject"/> for anything beyond this surface.
+    /// compose additional behavior through SDK services.
     /// </summary>
-    public interface IRobotAgent
+    public interface IRobotAgent : IEntity, IDisposable
     {
-        /// <summary>Stable id for this robot for the lifetime of the spawn.</summary>
-        string Id { get; }
-
-        /// <summary>The spawned <c>UnityEngine.GameObject</c> (kept as <see cref="object"/> to keep the SDK Unity-free).</summary>
-        object GameObject { get; }
-
-        /// <summary>
-        /// <c>false</c> once the robot has been despawned, its game object destroyed, or it has died (the native
-        /// death pipeline ran). A non-lethal ragdoll/knockdown does <i>not</i> set this <c>false</c> — the robot
-        /// self-recovers and stays alive.
-        /// </summary>
-        bool IsAlive { get; }
-
-        /// <summary>The robot's current world position (at its feet/base).</summary>
-        Vec3 Position { get; }
-
         /// <summary>
         /// Approximate world position of the robot's head — the top-centre of its live rendered volume,
         /// scale-aware (so it tracks <see cref="SetScale"/>). Use it for hit-zone tests (e.g. headshots: compare a
         /// ray-hit height against this) and to anchor world-space combat HUD such as floating damage numbers or a
         /// health pip above an enemy, rather than hard-coding the native robot's height in your mod. Degrades
         /// gracefully: when no renderers are resolvable (e.g. mid-teardown) it estimates the head from
-        /// <see cref="Position"/> plus the native robot's nominal height.
+        /// <see cref="IEntity.Position"/> plus the native robot's nominal height.
         /// </summary>
         Vec3 HeadPosition { get; }
 
@@ -222,7 +189,7 @@ namespace TopiaForge.Mods
         /// reprogram/override an autonomous robot. To <see cref="RobotBrainMode.Autonomous"/>: mod intents are
         /// cleared and the native brain is best-effort woken back up. Idempotent; never throws.
         /// </summary>
-        void SetBrainMode(RobotBrainMode mode);
+        OperationResult<bool> SetBrainMode(RobotBrainMode mode);
 
         /// <summary><c>true</c> while the robot is actively walking toward an intent target this frame.</summary>
         bool IsMoving { get; }
@@ -238,48 +205,51 @@ namespace TopiaForge.Mods
         /// <see cref="Gait"/>). <c>0</c> keeps the prefab's native speed. Best-effort: ignored if the game build
         /// does not expose the speed field.
         /// </summary>
-        float MoveSpeed { get; set; }
+        float MoveSpeed { get; }
 
         /// <summary>Optional best-effort override of the native turn speed in degrees per second; <c>0</c> keeps the prefab default.</summary>
-        float TurnSpeed { get; set; }
+        float TurnSpeed { get; }
 
         /// <summary>How close (metres) to the target counts as arrived; the native walk stops there.</summary>
-        float StopDistance { get; set; }
+        float StopDistance { get; }
 
         /// <summary>Which native speed tier the robot moves at (walk/run/sprint).</summary>
-        RobotGait Gait { get; set; }
+        RobotGait Gait { get; }
+
+        /// <summary>Applies immutable movement tuning to the live agent.</summary>
+        OperationResult<bool> ConfigureMovement(RobotMovementSettings settings);
 
         /// <summary>Walks to a fixed world position once and stops there (a single native walk).</summary>
-        void MoveTo(Vec3 position);
+        OperationResult<bool> MoveTo(Vec3 position);
 
         /// <summary>
-        /// Continuously pursues a live <c>UnityEngine.GameObject</c> (e.g. the player) — the native locomotion
+        /// Continuously pursues a live SDK entity (e.g. the player) — the native locomotion
         /// tracks and re-paths to the target as it moves, stopping within <see cref="StopDistance"/>. Cheap to
-        /// call once; pass the same object to keep chasing. Pass a different object to retarget.
+        /// call once; pass the same entity to keep chasing. Pass a different entity to retarget.
         /// </summary>
-        void Chase(object targetGameObject);
+        OperationResult<bool> Chase(IEntity target);
 
         /// <summary>Clears the current intent so the robot stops moving and idles natively.</summary>
-        void Stop();
+        OperationResult<bool> Stop();
 
         /// <summary>Tints the whole robot via a material property block (cheap, non-destructive). The default keeps native colours.</summary>
-        void SetTint(RobotColor color);
+        OperationResult<bool> SetTint(RobotColor color);
 
         /// <summary>Sets the robot's facial emote from an emoji shortcode (native expression system); empty clears it.</summary>
-        void SetEmote(string emojiShortcode);
+        OperationResult<bool> SetEmote(string emojiShortcode);
 
-        /// <summary>Renames the underlying game object (e.g. for clarity in the hierarchy/logs).</summary>
-        void SetName(string name);
+        /// <summary>Renames the opaque robot entity for diagnostics and framework UI.</summary>
+        OperationResult<bool> SetName(string name);
 
         /// <summary>Uniformly scales the robot (1 = native size).</summary>
-        void SetScale(float scale);
+        OperationResult<bool> SetScale(float scale);
 
         /// <summary>
         /// Updates how the player can interact with this robot: native talk, disabled native talk, a native talk
         /// distance override, or a custom synchronous callback. Custom interactions take precedence over native
         /// talk while installed.
         /// </summary>
-        void SetInteraction(RobotInteractionOptions options);
+        OperationResult<bool> SetInteraction(RobotInteractionOptions options);
 
         /// <summary>
         /// Deals damage through the robot's native <c>Health</c> component (driving the native hurt/death/ragdoll
@@ -287,22 +257,51 @@ namespace TopiaForge.Mods
         /// is always-on, so enemies with their own hit-points are better off tracking damage in the mod and
         /// calling <see cref="Kill"/> when defeated.
         /// </summary>
-        bool ApplyDamage(float amount, RobotDamageType type, string source);
+        OperationResult<bool> ApplyDamage(float amount, RobotDamageType type, string source);
 
         /// <summary>
         /// Forces the robot's native death (ragdoll + corpse cleanup) immediately — the right call when the mod
         /// tracks its own hit-points and the enemy is defeated. Safe to call more than once.
         /// </summary>
-        void Kill(RobotDamageType type, string source);
+        OperationResult<bool> Kill(RobotDamageType type, string source);
 
         /// <summary>Knocks the robot down into a native ragdoll without killing it; it self-recovers after a few seconds.</summary>
-        void Ragdoll();
+        OperationResult<bool> Ragdoll();
 
         /// <summary>Applies a physical impulse (native): a strong enough impulse knocks the robot into a ragdoll, like a hit reaction.</summary>
-        void Knockback(Vec3 impulse);
+        OperationResult<bool> Knockback(Vec3 impulse);
 
         /// <summary>Removes and destroys this robot. Safe to call more than once.</summary>
-        void Despawn();
+        OperationResult<bool> Despawn();
+    }
+
+    /// <summary>Immutable movement tuning for a RobotKit agent.</summary>
+    public sealed class RobotMovementSettings
+    {
+        /// <summary>Creates movement tuning.</summary>
+        public RobotMovementSettings(
+            RobotGait gait = RobotGait.Run,
+            float moveSpeed = 0f,
+            float turnSpeed = 0f,
+            float stopDistance = 0f)
+        {
+            Gait = gait;
+            MoveSpeed = moveSpeed;
+            TurnSpeed = turnSpeed;
+            StopDistance = stopDistance;
+        }
+
+        /// <summary>Gets the native gait.</summary>
+        public RobotGait Gait { get; }
+
+        /// <summary>Gets the optional movement-speed override.</summary>
+        public float MoveSpeed { get; }
+
+        /// <summary>Gets the optional turn-speed override.</summary>
+        public float TurnSpeed { get; }
+
+        /// <summary>Gets the arrival distance.</summary>
+        public float StopDistance { get; }
     }
 
     /// <summary>Parameters for <see cref="IRobotAgentService.Spawn"/>.</summary>
@@ -311,10 +310,42 @@ namespace TopiaForge.Mods
         /// <summary>Creates a spawn request at a world position, optionally facing a direction.</summary>
         /// <param name="position">World position to spawn at.</param>
         /// <param name="facing">Optional initial facing direction (need not be normalized); <c>null</c> keeps prefab rotation.</param>
-        public RobotAgentSpawnRequest(Vec3 position, Vec3? facing = null)
+        /// <param name="brainMode">Initial native brain policy.</param>
+        /// <param name="gait">Initial native movement gait.</param>
+        /// <param name="moveSpeed">Optional movement-speed override in metres per second.</param>
+        /// <param name="turnSpeed">Optional turn-speed override in degrees per second.</param>
+        /// <param name="stopDistance">Arrival distance in metres.</param>
+        /// <param name="tint">Optional whole-body color tint.</param>
+        /// <param name="name">Optional diagnostic and UI name.</param>
+        /// <param name="scale">Uniform scale, where one is native size.</param>
+        /// <param name="interaction">Player interaction policy.</param>
+        /// <param name="robotTypeId">Optional robot type descriptor identifier.</param>
+        public RobotAgentSpawnRequest(
+            Vec3 position,
+            Vec3? facing = null,
+            RobotBrainMode brainMode = RobotBrainMode.Dormant,
+            RobotGait gait = RobotGait.Run,
+            float moveSpeed = 0f,
+            float turnSpeed = 0f,
+            float stopDistance = 0f,
+            RobotColor? tint = null,
+            string? name = null,
+            float scale = 1f,
+            RobotInteractionOptions? interaction = null,
+            string? robotTypeId = null)
         {
             Position = position;
             Facing = facing;
+            BrainMode = brainMode;
+            Gait = gait;
+            MoveSpeed = moveSpeed;
+            TurnSpeed = turnSpeed;
+            StopDistance = stopDistance;
+            Tint = tint;
+            Name = name;
+            Scale = scale;
+            Interaction = interaction ?? RobotInteractionOptions.NativeTalk();
+            RobotTypeId = robotTypeId;
         }
 
         /// <summary>World position to spawn the robot at.</summary>
@@ -327,40 +358,40 @@ namespace TopiaForge.Mods
         /// Whether the robot's brain is dormant (default — mod drives it) or autonomous (the native LLM agent
         /// thinks for itself). See <see cref="RobotBrainMode"/>.
         /// </summary>
-        public RobotBrainMode BrainMode { get; set; } = RobotBrainMode.Dormant;
+        public RobotBrainMode BrainMode { get; }
 
         /// <summary>Which native speed tier the robot moves at; defaults to <see cref="RobotGait.Run"/>.</summary>
-        public RobotGait Gait { get; set; } = RobotGait.Run;
+        public RobotGait Gait { get; }
 
         /// <summary>Optional gait-speed override in m/s applied to the spawned robot; <c>0</c> keeps the prefab default.</summary>
-        public float MoveSpeed { get; set; }
+        public float MoveSpeed { get; }
 
         /// <summary>Optional turn-speed override in deg/s; <c>0</c> keeps the prefab default.</summary>
-        public float TurnSpeed { get; set; }
+        public float TurnSpeed { get; }
 
         /// <summary>Initial <see cref="IRobotAgent.StopDistance"/> (metres).</summary>
-        public float StopDistance { get; set; }
+        public float StopDistance { get; }
 
         /// <summary>Optional whole-body tint applied on spawn; <c>null</c> keeps native colours.</summary>
-        public RobotColor? Tint { get; set; }
+        public RobotColor? Tint { get; }
 
-        /// <summary>Optional name for the spawned game object; <c>null</c> keeps a default.</summary>
-        public string? Name { get; set; }
+        /// <summary>Optional name for the spawned robot entity; <c>null</c> keeps a default.</summary>
+        public string? Name { get; }
 
         /// <summary>Uniform spawn scale (1 = native size).</summary>
-        public float Scale { get; set; } = 1f;
+        public float Scale { get; }
 
         /// <summary>
         /// Player-facing interaction policy for the spawned robot. Defaults to the game's native talk prompt.
         /// </summary>
-        public RobotInteractionOptions Interaction { get; set; } = RobotInteractionOptions.NativeTalk();
+        public RobotInteractionOptions Interaction { get; }
 
         /// <summary>
         /// Which robot type (prefab) to spawn — an <see cref="RobotTypeDescriptor.Id"/> from
         /// <see cref="IRobotAgentService.RobotTypes"/>. <c>null</c> (default) spawns the default type. An unknown
         /// id logs a warning and falls back to the default rather than failing the spawn.
         /// </summary>
-        public string? RobotTypeId { get; set; }
+        public string? RobotTypeId { get; }
     }
 
     /// <summary>One spawnable robot type (a distinct robot prefab the current level exposes).</summary>
@@ -396,58 +427,62 @@ namespace TopiaForge.Mods
     /// </summary>
     public sealed class RobotInteractionOptions
     {
+        private RobotInteractionOptions(
+            RobotNativeTalkMode nativeTalkMode,
+            float nativeTalkDistance,
+            RobotCustomInteraction? customInteraction)
+        {
+            NativeTalkMode = nativeTalkMode;
+            NativeTalkDistance = nativeTalkDistance;
+            CustomInteraction = customInteraction;
+        }
+
         /// <summary>Whether the base game's native talk interaction should be available.</summary>
-        public RobotNativeTalkMode NativeTalkMode { get; set; } = RobotNativeTalkMode.Enabled;
+        public RobotNativeTalkMode NativeTalkMode { get; }
 
         /// <summary>
         /// Optional native talk distance override in metres. Values less than or equal to zero keep the prefab's
         /// default speak distance.
         /// </summary>
-        public float NativeTalkDistance { get; set; }
+        public float NativeTalkDistance { get; }
 
         /// <summary>
         /// Optional custom player interaction. When present, RobotKit disables native talk on this agent so the
         /// custom prompt is selected reliably.
         /// </summary>
-        public RobotCustomInteraction? CustomInteraction { get; set; }
+        public RobotCustomInteraction? CustomInteraction { get; }
 
         /// <summary>Default policy: keep native talk enabled at the prefab's distance.</summary>
         public static RobotInteractionOptions NativeTalk()
         {
-            return new RobotInteractionOptions();
+            return new RobotInteractionOptions(RobotNativeTalkMode.Enabled, 0f, null);
         }
 
         /// <summary>Keep native talk enabled, overriding the prefab's speak distance.</summary>
         public static RobotInteractionOptions NativeTalkAtDistance(float distance)
         {
-            return new RobotInteractionOptions { NativeTalkDistance = distance };
+            return new RobotInteractionOptions(RobotNativeTalkMode.Enabled, distance, null);
         }
 
         /// <summary>Disable the base game's native talk prompt for this robot.</summary>
         public static RobotInteractionOptions DisableNativeTalk()
         {
-            return new RobotInteractionOptions { NativeTalkMode = RobotNativeTalkMode.Disabled };
+            return new RobotInteractionOptions(RobotNativeTalkMode.Disabled, 0f, null);
         }
 
         /// <summary>Use a custom prompt and callback instead of the native talk prompt.</summary>
         public static RobotInteractionOptions Custom(RobotCustomInteraction interaction)
         {
-            return new RobotInteractionOptions
-            {
-                NativeTalkMode = RobotNativeTalkMode.Disabled,
-                CustomInteraction = interaction
-            };
+            return new RobotInteractionOptions(
+                RobotNativeTalkMode.Disabled,
+                0f,
+                interaction ?? throw new ArgumentNullException(nameof(interaction)));
         }
 
         /// <summary>Returns a shallow copy; callback delegates are intentionally reused.</summary>
         public RobotInteractionOptions Clone()
         {
-            return new RobotInteractionOptions
-            {
-                NativeTalkMode = NativeTalkMode,
-                NativeTalkDistance = NativeTalkDistance,
-                CustomInteraction = CustomInteraction
-            };
+            return this;
         }
     }
 
@@ -455,40 +490,47 @@ namespace TopiaForge.Mods
     public sealed class RobotCustomInteraction
     {
         /// <summary>Creates a custom interaction with the prompt shown in the game's interaction UI.</summary>
-        public RobotCustomInteraction(string prompt, Action<RobotInteractionContext>? interact = null)
+        public RobotCustomInteraction(
+            string prompt,
+            Action<RobotInteractionContext>? interact = null,
+            float distance = 3f,
+            float screenRectExpansion = 0f,
+            Func<RobotInteractionContext, bool>? canInteract = null)
         {
             Prompt = prompt ?? string.Empty;
             Interact = interact;
+            Distance = distance;
+            ScreenRectExpansion = screenRectExpansion;
+            CanInteract = canInteract;
         }
 
         /// <summary>Prompt shown while the robot is the selected interactable.</summary>
-        public string Prompt { get; set; }
+        public string Prompt { get; }
 
         /// <summary>Maximum player-hand distance in metres. Values less than or equal to zero use 3 metres.</summary>
-        public float Distance { get; set; } = 3f;
+        public float Distance { get; }
 
         /// <summary>How far the robot's screen-space bounds expand for center-reticle selection.</summary>
-        public float ScreenRectExpansion { get; set; }
+        public float ScreenRectExpansion { get; }
 
         /// <summary>Optional per-frame gate for whether the prompt can be selected.</summary>
-        public Func<RobotInteractionContext, bool>? CanInteract { get; set; }
+        public Func<RobotInteractionContext, bool>? CanInteract { get; }
 
         /// <summary>Synchronous callback invoked when the player activates the prompt.</summary>
-        public Action<RobotInteractionContext>? Interact { get; set; }
+        public Action<RobotInteractionContext>? Interact { get; }
     }
 
     /// <summary>Unity-free context passed to custom RobotKit interaction callbacks.</summary>
     public sealed class RobotInteractionContext
     {
+        /// <summary>Creates a callback context from the selected robot and sampled hand positions.</summary>
         public RobotInteractionContext(
             IRobotAgent agent,
-            object? hand,
             Vec3 agentPosition,
             Vec3 handPosition,
             float distance)
         {
             Agent = agent ?? throw new ArgumentNullException(nameof(agent));
-            Hand = hand;
             AgentPosition = agentPosition;
             HandPosition = handPosition;
             Distance = distance;
@@ -496,9 +538,6 @@ namespace TopiaForge.Mods
 
         /// <summary>The agent whose custom interaction is being queried or invoked.</summary>
         public IRobotAgent Agent { get; }
-
-        /// <summary>The native player hand transform, exposed as <see cref="object"/> to keep the SDK Unity-free.</summary>
-        public object? Hand { get; }
 
         /// <summary>The agent's current world position.</summary>
         public Vec3 AgentPosition { get; }

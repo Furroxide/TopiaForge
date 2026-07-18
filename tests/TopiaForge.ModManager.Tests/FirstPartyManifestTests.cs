@@ -11,7 +11,8 @@ namespace TopiaForge.ModManager.Tests
     internal static class FirstPartyManifestTests
     {
         private const string GameRange = "0.0.2227";
-        private const string LoaderRange = ">=0.2.0 <0.3.0";
+        private const string LoaderRange = ">=1.0.0 <2.0.0";
+        private const string SdkRange = ">=1.0.0 <2.0.0";
 
         internal static void Run()
         {
@@ -22,14 +23,14 @@ namespace TopiaForge.ModManager.Tests
                     SearchOption.AllDirectories)
                 .OrderBy(path => path, StringComparer.Ordinal)
                 .ToList();
-            Assert(manifestPaths.Count == 13, "exactly 13 first-party manifests should be release-audited");
+            Assert(manifestPaths.Count == 12, "exactly 12 first-party manifests should be release-audited");
 
             var manifests = new Dictionary<string, ModManifest>(StringComparer.OrdinalIgnoreCase);
             foreach (var path in manifestPaths)
             {
-                var manifest = JsonUtil.LoadFile(path, new ModManifest());
+                var manifest = ModManifestJson.LoadFile(path);
                 manifests.Add(manifest.Id, manifest);
-                Assert(manifest.SchemaVersion == 3,
+                Assert(manifest.SchemaVersion == 4,
                     manifest.Id + " must use the TopiaForge manifest schema discriminator");
                 Assert(manifest.Id.StartsWith("io.github.furroxide.topiaforge.", StringComparison.Ordinal),
                     manifest.Id + " must live under the first-party TopiaForge identifier namespace");
@@ -39,10 +40,12 @@ namespace TopiaForge.ModManager.Tests
                 Assert(manifest.SupportedGameVersionRange == GameRange,
                     manifest.Id + " must pin the audited Robotopia build 2227");
                 Assert(manifest.SupportedLoaderVersionRange == LoaderRange,
-                    manifest.Id + " must declare the compatible 0.2 loader line");
+                    manifest.Id + " must declare the compatible V1 loader line");
+                Assert(manifest.SupportedSdkVersionRange == SdkRange,
+                    manifest.Id + " must declare the compatible V1 SDK line");
                 Assert(manifest.License == "NOASSERTION",
                     manifest.Id + " must use the fail-closed SPDX sentinel until owner licensing is resolved");
-                Assert(!manifest.Permissions.Contains("ai", StringComparer.OrdinalIgnoreCase),
+                Assert(!manifest.Capabilities.Contains("ai", StringComparer.OrdinalIgnoreCase),
                     manifest.Id + " must use descriptive capabilities instead of the ambiguous ai alias");
 
                 var errors = ManifestValidator.Validate(
@@ -62,25 +65,67 @@ namespace TopiaForge.ModManager.Tests
             }
 
             ValidateCatalogReferences(manifests);
+            ValidateSafeTemplates(repoRoot);
 
             AssertCapabilities(
                 manifests["io.github.furroxide.topiaforge.robotkit"],
                 "network", "remote-ai", "player-token", "microphone", "speech-to-text");
-            AssertCapabilities(
+            AssertLacksCapabilities(
                 manifests["io.github.furroxide.topiaforge.sandbox"],
                 "network", "remote-ai", "player-token", "microphone", "speech-to-text");
-            AssertCapabilities(
+            AssertLacksCapabilities(
                 manifests["io.github.furroxide.topiaforge.zombies"],
                 "remote-ai", "player-token", "microphone", "speech-to-text");
+            AssertAdvancedInterop(manifests, manifestPaths);
             Console.WriteLine("FirstPartyManifestTests passed.");
+        }
+
+        private static void AssertAdvancedInterop(
+            IReadOnlyDictionary<string, ModManifest> manifests,
+            IReadOnlyList<string> manifestPaths)
+        {
+            var advancedIds = new HashSet<string>(new[]
+            {
+                "io.github.furroxide.topiaforge.performance",
+                "io.github.furroxide.topiaforge.perffixes",
+                "io.github.furroxide.topiaforge.no-feedback-url"
+            }, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var manifest in manifests.Values)
+            {
+                var isAdvanced = advancedIds.Contains(manifest.Id);
+                Assert(manifest.Capabilities.Contains("unsafe-native", StringComparer.OrdinalIgnoreCase) == isAdvanced,
+                    manifest.Id + " must keep native access isolated to the three allowlisted advanced mods");
+                var manifestPath = manifestPaths.Single(path => string.Equals(
+                    ModManifestJson.LoadFile(path).Id,
+                    manifest.Id,
+                    StringComparison.OrdinalIgnoreCase));
+                var projectPath = Directory.GetFiles(Path.GetDirectoryName(manifestPath)!, "*.csproj").Single();
+                var project = XDocument.Load(projectPath);
+                var hasInteropReference = project.Descendants("ProjectReference").Any(reference =>
+                    (((string?)reference.Attribute("Include")) ?? string.Empty)
+                    .Contains("TopiaForge.Mods.Interop.Unity", StringComparison.Ordinal));
+                Assert(hasInteropReference == isAdvanced,
+                    manifest.Id + " must " + (isAdvanced ? "use" : "not depend on")
+                    + " the unstable native interop package");
+            }
         }
 
         private static void AssertCapabilities(ModManifest manifest, params string[] required)
         {
             foreach (var capability in required)
             {
-                Assert(manifest.Permissions.Contains(capability, StringComparer.OrdinalIgnoreCase),
+                Assert(manifest.Capabilities.Contains(capability, StringComparer.OrdinalIgnoreCase),
                     manifest.Id + " must disclose capability " + capability);
+            }
+        }
+
+        private static void AssertLacksCapabilities(ModManifest manifest, params string[] forbidden)
+        {
+            foreach (var capability in forbidden)
+            {
+                Assert(!manifest.Capabilities.Contains(capability, StringComparer.OrdinalIgnoreCase),
+                    manifest.Id + " must not disclose unused capability " + capability);
             }
         }
 
@@ -108,21 +153,29 @@ namespace TopiaForge.ModManager.Tests
             var source = string.Join("\n", sourceFiles.Select(File.ReadAllText));
             var entryTypeName = manifest.EntryType.Substring(manifest.EntryType.LastIndexOf('.') + 1);
             var escapedType = Regex.Escape(entryTypeName);
+            var derivesFromV1Base = Regex.IsMatch(
+                source,
+                @"\bclass\s+" + escapedType + @"\b[^\{]*:\s*[^\{]*\bTopiaForgeMod\b",
+                RegexOptions.CultureInvariant);
+            var implementsLegacyContract = Regex.IsMatch(
+                source,
+                @"\bclass\s+" + escapedType + @"\b[^\{]*:\s*[^\{]*\bITopiaForgeMod\b",
+                RegexOptions.CultureInvariant);
+            Assert(derivesFromV1Base && !implementsLegacyContract,
+                manifest.Id + " entryType must derive exclusively from the V1 TopiaForgeMod base class");
             Assert(Regex.IsMatch(
                     source,
-                    @"\bclass\s+" + escapedType + @"\b[^\{]*:\s*[^\{]*\bITopiaForgeMod\b",
+                    @"\bprotected\s+override\s+void\s+OnLoad\s*\(\s*\)",
                     RegexOptions.CultureInvariant),
-                manifest.Id + " entryType must implement ITopiaForgeMod in checked-in source");
-            Assert(Regex.IsMatch(
-                    source,
-                    @"\bpublic\s+void\s+OnLoad\s*\(\s*IModContext\s+\w+\s*\)",
-                    RegexOptions.CultureInvariant),
-                manifest.Id + " entryType must expose OnLoad(IModContext)");
-            Assert(Regex.IsMatch(
-                    source,
-                    @"\bpublic\s+void\s+OnUnload\s*\(\s*\)",
-                    RegexOptions.CultureInvariant),
-                manifest.Id + " entryType must expose OnUnload()");
+                manifest.Id + " V1 entryType must override TopiaForgeMod.OnLoad()");
+
+            if (manifest.Id == "io.github.furroxide.topiaforge.gravitygun"
+                || manifest.Id == "io.github.furroxide.topiaforge.sandbox"
+                || manifest.Id == "io.github.furroxide.topiaforge.zombies"
+                || manifest.Id == "io.github.furroxide.topiaforge.uigallery")
+            {
+                ValidateSafeConsumerSource(manifest, project, source);
+            }
 
             foreach (Match match in Regex.Matches(
                          source,
@@ -139,11 +192,45 @@ namespace TopiaForge.ModManager.Tests
             }
         }
 
+        private static void ValidateSafeConsumerSource(
+            ModManifest manifest,
+            XDocument project,
+            string source)
+        {
+            var forbiddenFragments = new[]
+            {
+                "UnityEngine",
+                "GameCode",
+                "Harmony",
+                "System.Reflection",
+                "ITopiaForgeMod",
+                ".Hotkey("
+            };
+            foreach (var fragment in forbiddenFragments)
+            {
+                Assert(!source.Contains(fragment, StringComparison.Ordinal),
+                    manifest.Id + " safe consumer source contains forbidden API fragment " + fragment);
+            }
+
+            Assert(!Regex.IsMatch(
+                    source,
+                    @"\bobject(?:\?|\s+[A-Za-z_][A-Za-z0-9_]*)",
+                    RegexOptions.CultureInvariant),
+                manifest.Id + " safe consumer source must not traffic in raw native object handles");
+            Assert(!project.Descendants("Reference").Any(reference =>
+            {
+                var include = (string?)reference.Attribute("Include") ?? string.Empty;
+                return include.StartsWith("Unity", StringComparison.OrdinalIgnoreCase)
+                    || include.IndexOf("GameCode", StringComparison.OrdinalIgnoreCase) >= 0
+                    || include.IndexOf("Harmony", StringComparison.OrdinalIgnoreCase) >= 0;
+            }), manifest.Id + " safe consumer project must not reference engine, game, or patch assemblies");
+        }
+
         private static void ValidateCatalogReferences(IReadOnlyDictionary<string, ModManifest> manifests)
         {
             foreach (var manifest in manifests.Values)
             {
-                foreach (var dependency in manifest.VpmDependencies ?? new Dictionary<string, string>())
+                foreach (var dependency in manifest.Dependencies ?? new Dictionary<string, string>())
                 {
                     Assert(manifests.TryGetValue(dependency.Key, out var target),
                         manifest.Id + " dependency " + dependency.Key + " is not a first-party catalog entry");
@@ -159,6 +246,79 @@ namespace TopiaForge.ModManager.Tests
                     Assert(!string.Equals(manifest.Id, loadAfter, StringComparison.OrdinalIgnoreCase),
                         manifest.Id + " cannot load after itself");
                 }
+            }
+        }
+
+        private static void ValidateSafeTemplates(string repoRoot)
+        {
+            var templatesRoot = Path.Combine(repoRoot, "templates", "mod");
+            var templates = Directory.GetDirectories(templatesRoot)
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .ToArray();
+            Assert(templates.Length == 7,
+                "V1 must ship exactly seven canonical mod templates");
+
+            foreach (var template in templates)
+            {
+                var id = Path.GetFileName(template);
+                var mainProject = Directory.GetFiles(template, "*.csproj", SearchOption.TopDirectoryOnly).Single();
+                var projectText = File.ReadAllText(mainProject);
+                var hasExpectedProjectReferences = id == "service"
+                    ? projectText.Contains(
+                        "ProjectReference Include=\"contracts\\{{ASSEMBLY_NAME}}.Api\\{{ASSEMBLY_NAME}}.Api.csproj\"",
+                        StringComparison.Ordinal)
+                    : !projectText.Contains("ProjectReference", StringComparison.Ordinal);
+                Assert(hasExpectedProjectReferences
+                    && projectText.Contains("TopiaForge.Mods.Abstractions", StringComparison.Ordinal)
+                    && projectText.Contains("PackageReference", StringComparison.Ordinal)
+                    && projectText.Contains("TopiaForgeSafeProject", StringComparison.Ordinal),
+                    id + " template must use the safe exact-version SDK package contract");
+
+                if (id == "service")
+                {
+                    var contractProjects = Directory.GetFiles(
+                        Path.Combine(template, "contracts"),
+                        "*.csproj",
+                        SearchOption.AllDirectories);
+                    Assert(contractProjects.Length == 1
+                        && File.ReadAllText(contractProjects[0]).Contains("TopiaForgeSafeProject", StringComparison.Ordinal)
+                        && !string.Equals(Path.GetFileName(mainProject), Path.GetFileName(contractProjects[0]), StringComparison.Ordinal),
+                        "service template must isolate its exported API in one safe contract project");
+                }
+
+                var source = string.Join("\n", Directory.GetFiles(template, "*.cs", SearchOption.TopDirectoryOnly)
+                    .OrderBy(path => path, StringComparer.Ordinal)
+                    .Select(File.ReadAllText));
+                foreach (var forbidden in new[]
+                         {
+                             "UnityEngine", "GameCode", "Harmony", "System.Reflection", "ITopiaForgeMod"
+                         })
+                {
+                    Assert(!source.Contains(forbidden, StringComparison.Ordinal),
+                        id + " template contains forbidden safe-project API " + forbidden);
+                }
+
+                Assert(source.Contains("TopiaForgeMod", StringComparison.Ordinal)
+                    && source.Contains("protected override void OnLoad()", StringComparison.Ordinal),
+                    id + " template must demonstrate the V1 authoring base class");
+                Assert(!Regex.IsMatch(
+                        source,
+                        @"InputBinding\.(?:Key|GamepadButton)\s*\(\s*\""F(?:8|10)\""",
+                        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase),
+                    id + " template must not bind a reserved framework action");
+
+                var testProjects = Directory.GetFiles(
+                    Path.Combine(template, "tests"),
+                    "*.csproj",
+                    SearchOption.AllDirectories);
+                var testSources = Directory.GetFiles(
+                    Path.Combine(template, "tests"),
+                    "*.cs",
+                    SearchOption.AllDirectories);
+                Assert(testProjects.Length == 1 && testSources.Length > 0
+                    && File.ReadAllText(testProjects[0]).Contains("TopiaForge.Mods.Testing", StringComparison.Ordinal)
+                    && testSources.Any(path => File.ReadAllText(path).Contains("[Test]", StringComparison.Ordinal)),
+                    id + " template must include a real NUnit behavior test using TopiaForge.Mods.Testing");
             }
         }
 

@@ -13,6 +13,7 @@ namespace TopiaForge.Mods.UnityUi
         private static CursorLockMode savedLockState;
         private static bool savedVisible;
 
+        /// <summary>Gets active leases.</summary>
         public static int ActiveLeases => activeLeases;
 
         internal static void AddLease()
@@ -78,6 +79,7 @@ namespace TopiaForge.Mods.UnityUi
     {
         private bool active;
 
+        /// <summary>Sets whether this cursor ownership token is active.</summary>
         public void SetActive(bool shouldOwnCursor)
         {
             if (shouldOwnCursor)
@@ -90,6 +92,7 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
+        /// <summary>Acquires an ownership token for this resource.</summary>
         public void Acquire()
         {
             if (active)
@@ -101,6 +104,7 @@ namespace TopiaForge.Mods.UnityUi
             TopiaForgeCursor.AddLease();
         }
 
+        /// <summary>Releases a previously acquired ownership token.</summary>
         public void Release()
         {
             if (!active)

@@ -118,16 +118,16 @@ namespace TopiaForge.Zombies
                     "peacefully; CONVERT = switch sides and fight the other infected robots for the human.";
             }
 
-            return new RobotConversationRequest(frame, DecisionOptions)
-            {
-                GroundTruthFacts = facts,
-                Temperature = temperature,
-                MaxTurns = maxTurns,
-                Usage = isAlly ? "zombies-renegotiate" : "zombies-jackin",
-                ReplyGuidance = "Your short, in-character spoken line back to the human (max ~14 words).",
-                DecisionGuidance = decisionGuidance,
-                MaxReplyChars = 140,
-            };
+            return new RobotConversationRequest(
+                frame,
+                DecisionOptions,
+                groundTruthFacts: facts,
+                maxTurns: maxTurns,
+                temperature: temperature,
+                usage: isAlly ? "zombies-renegotiate" : "zombies-jackin",
+                replyGuidance: "Your short, in-character spoken line back to the human (max ~14 words).",
+                decisionGuidance: decisionGuidance,
+                maxReplyChars: 140);
         }
 
         private static string LoyaltyWord(float loyalty)

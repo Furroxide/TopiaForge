@@ -6,7 +6,7 @@ namespace TopiaForge.Chronos
     // registration order, used as a stable tie-break so equal-energy actors resolve deterministically.
     internal sealed class TurnActor
     {
-        public object Token = null!;
+        public TopiaForge.Mods.TurnActorId Id;
         public float Speed;
         public float Energy;
         public long Seq;
@@ -29,16 +29,16 @@ namespace TopiaForge.Chronos
 
         public int Count => actors.Count;
 
-        public bool Register(object token, float speed)
+        public bool Register(TopiaForge.Mods.TurnActorId actor, float speed)
         {
-            if (token == null || Find(token) != null)
+            if (Find(actor) != null)
             {
                 return false;
             }
 
             actors.Add(new TurnActor
             {
-                Token = token,
+                Id = actor,
                 Speed = speed > 0.01f ? speed : 0.01f,
                 Energy = 0f,
                 Seq = seqCounter++,
@@ -46,11 +46,11 @@ namespace TopiaForge.Chronos
             return true;
         }
 
-        public bool Unregister(object token)
+        public bool Unregister(TopiaForge.Mods.TurnActorId actor)
         {
             for (var index = 0; index < actors.Count; index++)
             {
-                if (ReferenceEquals(actors[index].Token, token))
+                if (actors[index].Id == actor)
                 {
                     actors.RemoveAt(index);
                     return true;
@@ -60,7 +60,7 @@ namespace TopiaForge.Chronos
             return false;
         }
 
-        public bool Contains(object token) => Find(token) != null;
+        public bool Contains(TopiaForge.Mods.TurnActorId actor) => Find(actor) != null;
 
         // Accumulate energy for every actor (call only while waiting for the next turn, not mid-action, so a stalled
         // turn can't let others jump the queue).
@@ -79,7 +79,7 @@ namespace TopiaForge.Chronos
 
         // The actor that should act now: the one at/over the threshold with the most energy (tie-break: earliest
         // registered). Null when nobody is ready yet.
-        public object? NextReady()
+        public TopiaForge.Mods.TurnActorId? NextReady()
         {
             TurnActor? best = null;
             for (var index = 0; index < actors.Count; index++)
@@ -96,24 +96,24 @@ namespace TopiaForge.Chronos
                 }
             }
 
-            return best?.Token;
+            return best?.Id;
         }
 
         // Spend one turn's worth of energy on the actor that just acted (carryover kept so speed maps to frequency).
-        public void SpendTurn(object token)
+        public void SpendTurn(TopiaForge.Mods.TurnActorId actor)
         {
-            var actor = Find(token);
-            if (actor != null)
+            var found = Find(actor);
+            if (found != null)
             {
-                actor.Energy -= energyPerTurn;
+                found.Energy -= energyPerTurn;
             }
         }
 
-        private TurnActor? Find(object token)
+        private TurnActor? Find(TopiaForge.Mods.TurnActorId actor)
         {
             for (var index = 0; index < actors.Count; index++)
             {
-                if (ReferenceEquals(actors[index].Token, token))
+                if (actors[index].Id == actor)
                 {
                     return actors[index];
                 }

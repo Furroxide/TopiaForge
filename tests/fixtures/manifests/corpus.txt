@@ -1,0 +1,38 @@
+# Expected result followed by the shared JSON fixture name. "invalid-schema"
+# is rejected by the canonical JSON Schema and both validators;
+# "invalid-semantic" is structurally valid JSON rejected by both validators.
+valid v4-valid.json
+valid v4-valid-extension-payload.json
+invalid-schema v4-missing-compatibility.json
+invalid-schema v4-unknown-field.json
+invalid-schema v4-unknown-author-field.json
+invalid-schema v4-unknown-built-with-field.json
+invalid-schema v4-unknown-conflict-field.json
+invalid-schema v4-unknown-gamemode-field.json
+invalid-schema v4-unknown-capability.json
+invalid-schema v4-unsafe-api-assembly-path.json
+invalid-schema v4-duplicate-capability.json
+invalid-schema v4-empty-built-with.json
+invalid-schema v4-invalid-extension-name.json
+invalid-semantic v4-self-ordering.json
+invalid-semantic v4-duplicate-dependency-kind.json
+invalid-schema v4-overlong-schema-url.json
+invalid-schema v4-overlong-display-name.json
+invalid-schema v4-overlong-author-name.json
+invalid-schema v4-overlong-author-email.json
+invalid-schema v4-overlong-url-fields.json
+invalid-schema v4-overlong-description.json
+invalid-schema v4-overlong-entry-type.json
+invalid-schema v4-overlong-category.json
+invalid-schema v4-empty-license.json
+invalid-schema v4-overlong-license.json
+invalid-schema v4-overlong-version-range.json
+invalid-schema v4-invalid-tags.json
+invalid-schema v4-unsafe-media-paths.json
+invalid-schema v4-empty-license-files.json
+invalid-schema v4-invalid-hash-path.json
+invalid-schema v4-invalid-hash-digest.json
+invalid-schema v4-overlong-conflict-fields.json
+invalid-schema v4-overlong-gamemode-fields.json
+invalid-schema v4-duplicate-api-assembly.json
+invalid-schema v4-too-many-root-fields.json

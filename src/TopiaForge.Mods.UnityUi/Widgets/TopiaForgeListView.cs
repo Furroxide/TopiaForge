@@ -65,8 +65,10 @@ namespace TopiaForge.Mods.UnityUi
             this.Flex(1f, 1f);
         }
 
+        /// <summary>Gets selected index.</summary>
         public int SelectedIndex => selectedIndex;
 
+        /// <summary>Gets selected item.</summary>
         public T? SelectedItem => selectedIndex >= 0 && selectedIndex < items.Count ? items[selectedIndex] : default;
 
         /// <summary>Binder invoked for every (row, item, index) that becomes visible.</summary>
@@ -76,6 +78,7 @@ namespace TopiaForge.Mods.UnityUi
             return this;
         }
 
+        /// <summary>Registers a callback that receives the selected item index.</summary>
         public TopiaForgeListView<T> OnSelected(Action<int> handler)
         {
             onSelected = handler;
@@ -98,6 +101,25 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Selects an index programmatically, scrolls it into view, and notifies.</summary>
         public void Select(int index)
         {
+            SetSelection(index, notify: true);
+        }
+
+        /// <summary>Selects an index programmatically without notifying the consumer.</summary>
+        public void SetSelectedIndex(int index)
+        {
+            SetSelection(index, notify: false);
+        }
+
+        /// <summary>Sets whether list rows accept pointer, keyboard, or controller input.</summary>
+        public void SetEnabled(bool enabled)
+        {
+            var group = EnsureCanvasGroup();
+            group.interactable = enabled;
+            group.blocksRaycasts = enabled;
+        }
+
+        private void SetSelection(int index, bool notify)
+        {
             if (index < -1 || index >= items.Count)
             {
                 return;
@@ -112,7 +134,7 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             Refresh(force: true);
-            if (index >= 0)
+            if (notify && index >= 0)
             {
                 TopiaForgeCallbacks.Invoke(onSelected, index, "List selection");
             }

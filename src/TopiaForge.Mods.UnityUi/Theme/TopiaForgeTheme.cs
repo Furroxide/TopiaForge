@@ -19,6 +19,7 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Bumped on every change; consumers compare against their applied version.</summary>
         public static int Version { get; private set; } = 1;
 
+        /// <summary>Raised after any global theme or accessibility setting changes.</summary>
         public static event Action? Changed;
 
         /// <summary>Accessibility: re-tones colors for legibility (ports Zombies' HudColor mode).</summary>

@@ -1,11 +1,11 @@
 {
   "id": "ui",
   "label": "UI / HUD mod",
-  "description": "TopiaForgeUi window toggled with a hotkey (modeled on the UI Gallery mod).",
+  "description": "Safe TopiaForge UI-service window toggled by a configurable named action.",
   "manifestDefaults": {
     "category": "DevTool",
     "description": "TopiaForgeUi window mod for Robotopia.",
     "tags": ["ui"],
-    "permissions": ["hud", "input"]
+    "capabilities": ["hud", "input"]
   }
 }

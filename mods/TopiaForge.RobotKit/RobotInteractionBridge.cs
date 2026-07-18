@@ -104,7 +104,6 @@ namespace TopiaForge.RobotKit
             var handPosition = hand.position;
             return new RobotInteractionContext(
                 agent!,
-                hand,
                 agent!.Position,
                 new Vec3(handPosition.x, handPosition.y, handPosition.z),
                 distance);
