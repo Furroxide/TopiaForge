@@ -243,7 +243,7 @@ extension _DiagnosticsHelpers on LocalLauncherRepository {
       install.path,
       if (configured is String) configured,
       ?_knownGamePath,
-    }.where((path) => path.trim().isNotEmpty).toList();
+    }.map((path) => path.trim()).where((path) => path.isNotEmpty).toList();
   }
 }
 

@@ -88,7 +88,7 @@ This installs BepInEx 5.4.23.5 and the manager plugin into the detected Robotopi
 | Platform | Built-in discovery |
 | --- | --- |
 | Windows | `%LOCALAPPDATA%\Tomato Cake\launcher\Robotopia`, plus Robotopia manifests in declared Steam libraries |
-| macOS | `~/Library/Application Support/Tomato Cake/launcher/Robotopia.app` (BepInEx installs beside the app), plus Robotopia manifests in declared Steam libraries |
+| macOS | `~/Library/Application Support/Tomato Cake/launcher` (the folder containing `Robotopia.app`; BepInEx installs beside the app), plus Robotopia manifests in declared Steam libraries |
 | Linux | Robotopia manifests in Steam libraries declared by `libraryfolders.vdf`, including the Windows payload used by Proton |
 
 Steam discovery requires an app manifest whose name and install directory are both exactly `Robotopia`; TopiaForge does not guess a Steam app id or recursively scan Wine/Proton prefixes. For another store or a custom prefix, pass `--game-dir` pointing at the Windows-layout Robotopia folder. On Linux, launch Robotopia with `WINEDLLOVERRIDES="winhttp=n,b"` so the mod loader injects. The `ROBOTOPIA_GAME_DIR` environment variable overrides automatic detection on every platform.
