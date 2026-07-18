@@ -14,9 +14,16 @@ void _registerDiagnosticDataTests({
     );
 
     final launcherLog = File(p.join(dataRoot().path, 'logs', 'launcher.log'));
+    final configuredGamePath = p.join(dataRoot().path, 'configured-game');
+    final settingsFile = File(p.join(dataRoot().path, 'settings.json'));
+    final settings = (jsonDecode(settingsFile.readAsStringSync()) as Map)
+        .cast<String, Object?>();
+    settings['gamePath'] = '  $configuredGamePath  ';
+    settingsFile.writeAsStringSync(jsonEncode(settings));
     launcherLog.writeAsStringSync(
       '${launcherLog.readAsStringSync()}\n'
       '{"accessToken":"launcher-secret","path":"${game.path}"}\n'
+      'Configured game path: $configuredGamePath\n'
       'https://user:password@example.invalid/path?token=query-secret\n'
       'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.signaturevalue\n'
       'session_token=standalone-session-secret\n',
@@ -61,6 +68,7 @@ void _registerDiagnosticDataTests({
     expect(contents, contains('earlier content omitted'));
     expect(contents, contains('"gameVersion": "0.0.2227"'));
     expect(contents, isNot(contains(game.path)));
+    expect(contents, isNot(contains(configuredGamePath)));
     expect(contents, isNot(contains('launcher-secret')));
     expect(contents, isNot(contains('query-secret')));
     expect(contents, isNot(contains('manager-secret')));

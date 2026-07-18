@@ -66,10 +66,8 @@ class _FakeLauncherRepository extends _PublisherFakeLauncherRepository {
   }
 
   @override
-  Future<GameInstall?> detectKnownInstall() async => null;
-  @override
-  Future<GameInstall> selectGameDirectory(String path) async {
-    throw UnimplementedError();
+  void onGameInstallSelected(GameInstall install) {
+    _snapshot = _replaceGameInstall(_snapshot, install);
   }
 
   @override

@@ -6,6 +6,7 @@ LauncherSnapshot _replaceGameInstall(
 ) {
   return LauncherSnapshot(
     gameInstall: install,
+    gameInstallCandidates: snapshot.gameInstallCandidates,
     profiles: snapshot.profiles,
     selectedProfileId: snapshot.selectedProfileId,
     installedMods: snapshot.installedMods,
@@ -17,6 +18,79 @@ LauncherSnapshot _replaceGameInstall(
     developerMode: snapshot.developerMode,
     sourceStatuses: snapshot.sourceStatuses,
     launcherLog: snapshot.launcherLog,
+  );
+}
+
+LauncherSnapshot _multipleInstallSnapshot() {
+  const primary = GameInstall(
+    path: r'C:\Games\Robotopia',
+    executablePath: r'C:\Games\Robotopia\Robotopia.exe',
+    bepInExStatus: ComponentState.ready,
+    loaderStatus: ComponentState.ready,
+  );
+  const secondary = GameInstall(
+    path: r'D:\SteamLibrary\steamapps\common\Robotopia',
+    executablePath: r'D:\SteamLibrary\steamapps\common\Robotopia\Robotopia.exe',
+    bepInExStatus: ComponentState.ready,
+    loaderStatus: ComponentState.ready,
+  );
+  return LauncherSnapshot(
+    gameInstall: primary,
+    gameInstallCandidates: const [
+      GameInstallCandidate(
+        install: primary,
+        sources: [
+          GameInstallDiscoverySource(
+            id: 'tomato-cake',
+            label: 'Tomato Cake',
+            precedence: 30,
+          ),
+        ],
+      ),
+      GameInstallCandidate(
+        install: secondary,
+        sources: [
+          GameInstallDiscoverySource(
+            id: 'steam',
+            label: 'Steam',
+            precedence: 40,
+          ),
+        ],
+      ),
+    ],
+    profiles: [LauncherProfile.defaultProfile()],
+    selectedProfileId: 'default',
+    installedMods: const [],
+    registryMods: const [],
+    packageSources: const [],
+    worldCatalog: WorldCatalog.fallback(),
+    recentLog: '',
+  );
+}
+
+LauncherSnapshot _singleRecoveryInstallSnapshot() {
+  final base = _multipleInstallSnapshot();
+  return LauncherSnapshot(
+    gameInstall: const GameInstall(
+      path: r'X:\Removed\Robotopia',
+      executablePath: r'X:\Removed\Robotopia\Robotopia.exe',
+      bepInExStatus: ComponentState.missing,
+      loaderStatus: ComponentState.missing,
+      issues: [
+        LauncherIssue(
+          severity: IssueSeverity.error,
+          message: 'The saved install was removed.',
+        ),
+      ],
+    ),
+    gameInstallCandidates: [base.gameInstallCandidates.last],
+    profiles: base.profiles,
+    selectedProfileId: base.selectedProfileId,
+    installedMods: base.installedMods,
+    registryMods: base.registryMods,
+    packageSources: base.packageSources,
+    worldCatalog: base.worldCatalog,
+    recentLog: base.recentLog,
   );
 }
 

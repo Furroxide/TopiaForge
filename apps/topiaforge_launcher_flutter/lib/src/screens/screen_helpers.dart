@@ -259,6 +259,98 @@ Future<void> _chooseGameFolder(BuildContext context) async {
   }
 }
 
+class _GameInstallCandidateSelector extends StatelessWidget {
+  const _GameInstallCandidateSelector({required this.state});
+
+  final LauncherState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final candidates = state.gameInstallCandidates;
+    final currentPath = state.gameInstall?.path;
+    final selectedPath =
+        candidates.any((candidate) => candidate.install.path == currentPath)
+        ? currentPath
+        : null;
+    final selected = candidates.where(
+      (candidate) => candidate.install.path == selectedPath,
+    );
+    final sourceSummary = selected.isEmpty
+        ? 'Choose one of the validated installations below.'
+        : 'Found by ${selected.first.sourceSummary}.';
+
+    return BorderedPane(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Detected installations',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              StatusPill(
+                label: '${candidates.length} found',
+                tone: StatusTone.info,
+                icon: Icons.storage,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            key: const Key('game-install-candidate-selector'),
+            initialValue: selectedPath,
+            isExpanded: true,
+            decoration: InputDecoration(
+              labelText: 'Robotopia installation',
+              helperText: sourceSummary,
+            ),
+            items: [
+              for (final candidate in candidates)
+                DropdownMenuItem(
+                  value: candidate.install.path,
+                  child: Text(
+                    '${candidate.primarySource.label} — ${candidate.install.path}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+            onChanged: state.isBusy
+                ? null
+                : (path) {
+                    if (path != null && path != currentPath) {
+                      _add(context, GameDirectorySelected(path));
+                    }
+                  },
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Only manifest-backed or documented locations are listed. If your install is elsewhere, choose it manually.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: state.isBusy ? null : () => _chooseGameFolder(context),
+            icon: const Icon(Icons.folder_open),
+            label: const Text('Choose Another Folder'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+bool _shouldShowGameInstallSelector(LauncherState state) {
+  final candidates = state.gameInstallCandidates;
+  if (candidates.isEmpty) return false;
+  final currentPath = state.gameInstall?.path;
+  return candidates.length > 1 ||
+      !candidates.any((candidate) => candidate.install.path == currentPath);
+}
+
 Future<void> _choosePackage(BuildContext context) async {
   const typeGroup = XTypeGroup(
     label: 'TopiaForge packages',

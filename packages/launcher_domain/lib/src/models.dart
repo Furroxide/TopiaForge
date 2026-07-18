@@ -9,6 +9,7 @@ part 'models/developer_ugc_models.dart';
 part 'models/ugc_live_sync_cleanup_models.dart';
 part 'models/ugc_publisher_models.dart';
 part 'models/install_models.dart';
+part 'models/game_install_discovery_models.dart';
 part 'models/package_inbox_models.dart';
 part 'models/json_helpers.dart';
 part 'models/ecosystem_identifier_contracts.dart';

@@ -43,7 +43,7 @@ void main() {
     expect(
       install.executablePath,
       p.join(
-        launcherDir.path,
+        launcherDir.resolveSymbolicLinksSync(),
         'Robotopia.app',
         'Contents',
         'MacOS',

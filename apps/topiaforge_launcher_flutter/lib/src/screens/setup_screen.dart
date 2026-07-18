@@ -48,6 +48,10 @@ class SetupScreen extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 16),
+                if (_shouldShowGameInstallSelector(state)) ...[
+                  _GameInstallCandidateSelector(state: state),
+                  const SizedBox(height: 14),
+                ],
                 BorderedPane(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

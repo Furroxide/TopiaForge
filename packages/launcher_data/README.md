@@ -28,6 +28,32 @@ Future<void> inspectInstall() async {
 package-authoring workflows. Both enforce bounded reads, safe archive paths,
 atomic persistence, and no-follow checks at trust boundaries.
 
+## Game discovery
+
+Game discovery is adapter-based and injected into `LocalLauncherRepository`.
+The built-in service considers, in order:
+
+1. the player's saved selection;
+2. `ROBOTOPIA_GAME_DIR`;
+3. the documented Tomato Cake location on Windows or macOS; and
+4. Steam library manifests on Windows, macOS, and Linux/Proton.
+
+Steam discovery does not assume an app id or scan arbitrary prefixes. It reads
+Steam's declared `libraryfolders.vdf` files and accepts only an app manifest
+whose exact `name` and `installdir` are both `Robotopia`. Every path is then
+validated by the normal Robotopia layout validator, canonicalized,
+de-duplicated, and returned with source provenance. A manually selected folder
+is the fallback for custom stores or layouts and is saved for future launches.
+
+Tests can inject a `GameInstallDiscoveryService` or individual
+`GameInstallDiscoveryAdapter` implementations. Passing the legacy
+`knownGamePath` constructor argument intentionally creates a fixed-only service
+that bypasses saved settings, so an explicit CLI `--game-dir` always wins and
+repository tests never inspect the developer machine. Multi-install enumeration
+is exposed through the optional domain `GameInstallDiscoveryRepository`
+capability; consumers of a plain `LauncherRepository` can retain the existing
+single-install `detectKnownInstall()` contract.
+
 Run `dart analyze` and `dart test` from this directory. Tests use temporary
 roots and injectable process starters; do not point them at a real game install.
 
