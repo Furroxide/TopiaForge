@@ -62,7 +62,7 @@ packaging copies the exact license texts resolved by `apps/topiaforge_cli/.dart_
 
 | Component | Pinned release resolution | License |
 | --- | --- | --- |
-| Dart SDK | 3.11.1 | BSD-3-Clause |
+| Dart SDK | 3.12.2 | BSD-3-Clause |
 | archive | 4.0.9 | MIT |
 | async | 2.13.1 | BSD-3-Clause |
 | boolean_selector | 2.1.2 | BSD-3-Clause |
@@ -90,7 +90,7 @@ packaging copies the exact license texts resolved by `apps/topiaforge_cli/.dart_
 | uri | 1.0.0 | BSD-3-Clause |
 | web | 1.1.1 | BSD-3-Clause |
 
-The Flutter 3.41.4 launcher embeds Flutter, Dart, plugins, and package dependencies. Flutter generates the complete
+The Flutter 3.44.6 launcher embeds Flutter, Dart, plugins, and package dependencies. Flutter generates the complete
 `flutter_assets/NOTICES.Z` notice bundle during each platform build; release validation requires that bundle inside
 the shipped launcher.
 

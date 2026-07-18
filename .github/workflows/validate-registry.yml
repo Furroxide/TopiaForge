@@ -29,7 +29,7 @@ jobs:
       - name: Set up Dart
         uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
         with:
-          sdk: "3.11.1"
+          sdk: "3.12.2"
 
       - name: Restore CLI packages
         working-directory: apps/topiaforge_cli

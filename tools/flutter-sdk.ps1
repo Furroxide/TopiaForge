@@ -26,5 +26,5 @@ function Resolve-TopiaForgeSdkCommand {
     }
 
     throw "$Tool was not found in '$RepositoryRoot/.fvm/flutter_sdk/bin' or on PATH. " +
-        "Follow docs/ContributorSetup.md to select Flutter 3.41.4 with FVM and configure PATH."
+        "Follow docs/ContributorSetup.md to select Flutter 3.44.6 with FVM and configure PATH."
 }

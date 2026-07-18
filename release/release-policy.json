@@ -4,8 +4,8 @@
   "toolchains": {
     "dotnetSdk": "10.0.301",
     "dotnetRuntime": "10.0.9",
-    "dart": "3.11.1",
-    "flutter": "3.41.4",
+    "dart": "3.12.2",
+    "flutter": "3.44.6",
     "nodeMinimum": "20.0.0",
     "unity": "6000.0.23f1"
   },
