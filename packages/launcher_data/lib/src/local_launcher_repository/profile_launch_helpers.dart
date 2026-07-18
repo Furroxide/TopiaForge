@@ -145,8 +145,11 @@ extension _ProfileLaunchHelpers on LocalLauncherRepository {
       selectedMods,
       gameVersion: install.gameVersion,
       requireKnownGameVersion: true,
-      loaderVersion: LocalLauncherRepository._loaderVersion,
-      sdkVersion: LocalLauncherRepository._sdkVersion,
+      loaderVersion: _loaderVersion,
+      sdkVersion: _sdkVersion,
+      platform: _gamePlatform(install),
+      architecture: _gameArchitecture(install),
+      contentTargets: _gameContentTargets(install),
     );
     final blocking = resolution.issues
         .where((issue) => issue.isBlocking)
@@ -186,6 +189,13 @@ extension _ProfileLaunchHelpers on LocalLauncherRepository {
     installedAtUtc: mod.installedAtUtc,
     updatedAtUtc: mod.updatedAtUtc,
     errors: mod.errors,
+    versionPinned: mod.versionPinned,
+    requestedVersion: mod.requestedVersion,
+    selectionReason: mod.selectionReason,
+    installedVersions: mod.installedVersions,
+    sourceSha256: mod.sourceSha256,
+    trust: mod.trust,
+    repairable: mod.repairable,
   );
 
   Map<String, String> _profileLaunchEnvironment(
@@ -226,7 +236,7 @@ extension _ProfileLaunchHelpers on LocalLauncherRepository {
         await file.delete();
       }
     } on FileSystemException catch (error) {
-      await _appendLauncherLog(
+      await _appendLauncherLogBestEffort(
         'Could not remove unused profile launch configuration: $error',
       );
     }

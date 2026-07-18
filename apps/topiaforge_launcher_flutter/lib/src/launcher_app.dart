@@ -372,7 +372,13 @@ class _StatusBar extends StatelessWidget {
                 state.statusMessage,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: switch (state.statusSeverity) {
+                    IssueSeverity.warning => TopiaForgePalette.warning,
+                    IssueSeverity.error => TopiaForgePalette.danger,
+                    IssueSeverity.info => null,
+                  },
+                ),
               ),
             ),
             if (state.errorMessage != null)

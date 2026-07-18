@@ -68,11 +68,18 @@ provenance json). Rebuild the .NET solution afterwards so the embedded resource 
 
 ## Lifecycle smoke
 
-After the Release SDK/UI assemblies exist, run `TopiaForge.UiLifecycleSmoke.Run` in
-batch mode with `-robotopiaManagedDir <game Data/Managed>`. The harness enters play
-mode, creates and disposes 16 hosts with windows, modals, hotkeys, tweens, profile
-changes, and clears, then fails unless canvases, allocator capacity, cursor leases,
+After the Release runtime/UI assemblies exist, run
+`TopiaForge.UiLifecycleSmoke.Run` in batch mode with
+`-robotopiaManagedDir <game Data/Managed>` and
+`-topiaforgeLifecycleEvidence <output.json>`. The harness first loads the exact
+Robotopia Memory/Buffers/Unsafe profile dependencies, the shipped
+Metadata/Immutable pair, Abstractions, Worlds, and then UnityUi. It executes the
+metadata-only package validator under Unity Mono before entering play mode. It
+then creates and disposes 16 hosts with windows, modals, hotkeys, tweens, profile
+changes, and clears, failing unless canvases, allocator capacity, cursor leases,
 dismiss entries, hotkeys, theme subscriptions, and tweens all return to baseline.
-This caught and now guards Unity fake-null component lookup regressions.
+Success writes machine-readable evidence; the protected Unity workflow verifies
+and uploads it. This caught and now guards Unity fake-null component lookup
+regressions.
 
 `*.bundle` is Git LFS-tracked (see `.gitattributes`).

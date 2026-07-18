@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:launcher_data/launcher_data.dart';
 import 'package:path/path.dart' as p;
 
 import 'release_archive_policy.dart';
@@ -24,6 +25,28 @@ class ReleaseProcessRunner {
       includeParentEnvironment: false,
       runInShell: runInShell,
     );
+  }
+
+  Future<ProcessResult> runBoundedResult(
+    String executable,
+    List<String> arguments, {
+    String? workingDirectory,
+    Map<String, String>? environment,
+    Duration timeout = const Duration(minutes: 2),
+    int maxStdoutBytes = 2 * 1024 * 1024,
+    int maxStderrBytes = 2 * 1024 * 1024,
+  }) async {
+    final result = await runBoundedProcess(
+      executable,
+      arguments,
+      workingDirectory: workingDirectory,
+      environment: releaseChildEnvironment(environment),
+      includeParentEnvironment: false,
+      timeout: timeout,
+      maxStdoutBytes: maxStdoutBytes,
+      maxStderrBytes: maxStderrBytes,
+    );
+    return ProcessResult(0, result.exitCode, result.stdout, result.stderr);
   }
 
   Future<void> runChecked(

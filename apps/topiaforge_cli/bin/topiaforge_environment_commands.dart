@@ -20,7 +20,7 @@ extension _TopiaForgeEnvironmentCommands on _TopiaForgeCli {
     final compat = await _runGameCompat();
     if (compat == null) {
       stdout.writeln(
-        '  (skipped — build the checker: dotnet build src/TopiaForge.GameCompat.Extractor -c Release)',
+        '  (skipped — the packaged GameCompat checker was not found; reinstall TopiaForge or build it from source)',
       );
     } else {
       for (final line in (compat.stdout as String).trimRight().split('\n')) {
@@ -105,7 +105,7 @@ extension _TopiaForgeEnvironmentCommands on _TopiaForgeCli {
     if (result == null) {
       stderr.writeln('Could not run the GameCompat extractor.');
       stderr.writeln(
-        '  Build it: dotnet build src/TopiaForge.GameCompat.Extractor -c Release',
+        '  Repair the TopiaForge release, or build src/TopiaForge.GameCompat.Extractor from source.',
       );
       return 1;
     }
@@ -121,16 +121,28 @@ extension _TopiaForgeEnvironmentCommands on _TopiaForgeCli {
     String? managed,
     bool json = false,
   }) async {
-    final root = _findRepoRoot();
-    if (root == null) {
-      return null;
-    }
     final verifyArgs = <String>[
       'verify',
       if (managed != null) ...['--managed', managed],
       '--format',
       json ? 'json' : 'text',
     ];
+
+    final packaged = const GameCompatExecutableLocator().findPackaged(
+      resolvedExecutable: Platform.resolvedExecutable,
+    );
+    if (packaged != null) {
+      return _runGameCompatExecutable(
+        packaged,
+        verifyArgs,
+        workingDirectory: File(packaged).parent.path,
+      );
+    }
+
+    final root = _findRepoRoot();
+    if (root == null) {
+      return null;
+    }
 
     for (final config in ['Release', 'Debug']) {
       final binDir =
@@ -141,7 +153,11 @@ extension _TopiaForgeEnvironmentCommands on _TopiaForgeCli {
       ]) {
         final exe = '$binDir/$name';
         if (File(exe).existsSync()) {
-          return Process.run(exe, verifyArgs, workingDirectory: root);
+          return _runGameCompatExecutable(
+            exe,
+            verifyArgs,
+            workingDirectory: root,
+          );
         }
       }
     }
@@ -187,6 +203,41 @@ extension _TopiaForgeEnvironmentCommands on _TopiaForgeCli {
       stderr.writeln(
         'GameCompat could not start the verified .NET host '
         '${dotnet.executable}: '
+        '${_environmentErrorMessage(error)}',
+      );
+      return null;
+    }
+  }
+
+  Future<ProcessResult?> _runGameCompatExecutable(
+    String executable,
+    List<String> arguments, {
+    required String workingDirectory,
+  }) async {
+    try {
+      final run = await runBoundedProcess(
+        executable,
+        arguments,
+        workingDirectory: workingDirectory,
+        timeout: _gameCompatTimeout,
+        maxStdoutBytes: _gameCompatOutputLimit ~/ 2,
+        maxStderrBytes: _gameCompatOutputLimit ~/ 2,
+      );
+      return ProcessResult(0, run.exitCode, run.stdout, run.stderr);
+    } on BoundedProcessException catch (error) {
+      stderr.writeln(
+        _environmentBoundedProcessFailure(
+          'GameCompat extractor',
+          executable,
+          error,
+          timeout: _gameCompatTimeout,
+          combinedOutputLimit: _gameCompatOutputLimit,
+        ),
+      );
+      return null;
+    } on Object catch (error) {
+      stderr.writeln(
+        'GameCompat could not start $executable: '
         '${_environmentErrorMessage(error)}',
       );
       return null;
@@ -398,15 +449,17 @@ String _environmentErrorMessage(Object error) =>
 String _environmentBoundedProcessFailure(
   String operation,
   String executable,
-  BoundedProcessException error,
-) => switch (error.failure) {
+  BoundedProcessException error, {
+  Duration timeout = _environmentDotnetTimeout,
+  int combinedOutputLimit = _environmentDotnetOutputLimit,
+}) => switch (error.failure) {
   BoundedProcessFailure.timeout =>
-    '$operation timed out after ${_environmentDotnetTimeout.inMinutes} minutes '
+    '$operation timed out after ${timeout.inMinutes} minutes '
         'and was terminated: $executable.',
   BoundedProcessFailure.stdoutLimitExceeded ||
   BoundedProcessFailure.stderrLimitExceeded =>
     '$operation exceeded the '
-        '${_environmentDotnetOutputLimit ~/ (1024 * 1024)} MiB combined '
+        '${combinedOutputLimit ~/ (1024 * 1024)} MiB combined '
         'output limit and was terminated: $executable.',
   BoundedProcessFailure.outputReadFailed =>
     '$operation output could not be read; the process was terminated: '
@@ -418,3 +471,5 @@ String _environmentBoundedProcessFailure(
 
 const _environmentDotnetTimeout = Duration(minutes: 10);
 const _environmentDotnetOutputLimit = 16 * 1024 * 1024;
+const _gameCompatTimeout = Duration(minutes: 2);
+const _gameCompatOutputLimit = 4 * 1024 * 1024;

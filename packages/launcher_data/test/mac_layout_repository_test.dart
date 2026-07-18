@@ -131,12 +131,7 @@ void _createRuntimeSources(Directory repoRoot) {
       'netstandard2.1',
     ),
   )..createSync(recursive: true);
-  for (final dll in [
-    'TopiaForge.ModManager.dll',
-    'TopiaForge.ModManager.Core.dll',
-    'TopiaForge.Mods.Abstractions.dll',
-    'TopiaForge.Mods.UnityUi.dll',
-  ]) {
+  for (final dll in topiaForgeRuntimeLoaderDlls) {
     File(p.join(loader.path, dll)).writeAsStringSync('');
   }
 }

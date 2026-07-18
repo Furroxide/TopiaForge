@@ -34,6 +34,9 @@ _InstallDependencyPlan _resolveInstallDependencies(
   bool requireKnownGameVersion = false,
   String? loaderVersion,
   String? sdkVersion,
+  String? platform,
+  String? architecture,
+  List<String> contentTargets = const [],
 }) {
   final validAvailable = available
       .where(
@@ -45,6 +48,9 @@ _InstallDependencyPlan _resolveInstallDependencies(
               requireKnownGameVersion: requireKnownGameVersion,
               loaderVersion: loaderVersion,
               sdkVersion: sdkVersion,
+              platform: platform,
+              architecture: architecture,
+              contentTargets: contentTargets,
             ),
       )
       .toList(growable: false);
@@ -88,6 +94,9 @@ _InstallDependencyPlan _resolveInstallDependencies(
         requireKnownGameVersion: requireKnownGameVersion,
         loaderVersion: loaderVersion,
         sdkVersion: sdkVersion,
+        platform: platform,
+        architecture: architecture,
+        contentTargets: contentTargets,
       );
       if (choice == null) {
         nextChoices.remove(key);
@@ -170,6 +179,9 @@ _DependencyChoice? _chooseDependency(
   required bool requireKnownGameVersion,
   required String? loaderVersion,
   required String? sdkVersion,
+  required String? platform,
+  required String? architecture,
+  required List<String> contentTargets,
 }) {
   bool allows(String version) => ranges.every((range) => range.allows(version));
   final existing = installed[key];
@@ -182,6 +194,9 @@ _DependencyChoice? _chooseDependency(
         requireKnownGameVersion: requireKnownGameVersion,
         loaderVersion: loaderVersion,
         sdkVersion: sdkVersion,
+        platform: platform,
+        architecture: architecture,
+        contentTargets: contentTargets,
       )) {
     return _DependencyChoice(
       mod: RegistryMod(manifest: existing.manifest!),
@@ -264,6 +279,7 @@ void _appendDependencyAction(
       modId: choice.mod.manifest.id,
       name: choice.mod.manifest.name,
       version: choice.mod.manifest.version,
+      expectedManifest: choice.mod.manifest,
       packageUrl: enableOnly ? '' : choice.mod.downloadUrl,
       packageSha256: enableOnly ? '' : choice.mod.packageSha256,
       sourceId: enableOnly ? '' : choice.mod.sourceId,
@@ -285,6 +301,9 @@ bool _supportsRuntime(
   required bool requireKnownGameVersion,
   required String? loaderVersion,
   required String? sdkVersion,
+  required String? platform,
+  required String? architecture,
+  required List<String> contentTargets,
 }) {
   return (manifest.gameVersionRange.isAny ||
           ((gameVersion == null || gameVersion.isEmpty)
@@ -295,7 +314,14 @@ bool _supportsRuntime(
           manifest.loaderVersionRange.allows(loaderVersion)) &&
       (sdkVersion == null ||
           manifest.sdkVersionRange.isAny ||
-          manifest.sdkVersionRange.allows(sdkVersion));
+          manifest.sdkVersionRange.allows(sdkVersion)) &&
+      (manifest.platforms.isEmpty ||
+          (platform != null && manifest.platforms.contains(platform))) &&
+      (manifest.architectures.isEmpty ||
+          (architecture != null &&
+              manifest.architectures.contains(architecture))) &&
+      (manifest.contentTargets.isEmpty ||
+          manifest.contentTargets.any(contentTargets.contains));
 }
 
 List<LauncherIssue> _runtimeCompatibilityIssues(
@@ -304,6 +330,9 @@ List<LauncherIssue> _runtimeCompatibilityIssues(
   required bool requireKnownGameVersion,
   required String? loaderVersion,
   required String? sdkVersion,
+  String? platform,
+  String? architecture,
+  List<String> contentTargets = const [],
 }) {
   final issues = <LauncherIssue>[];
   if (!manifest.gameVersionRange.isAny) {
@@ -356,6 +385,44 @@ List<LauncherIssue> _runtimeCompatibilityIssues(
         message:
             '${manifest.name} supports SDK ${manifest.sdkVersionRange}, not '
             '$sdkVersion.',
+      ),
+    );
+  }
+  if (manifest.platforms.isNotEmpty &&
+      (platform == null || !manifest.platforms.contains(platform))) {
+    issues.add(
+      LauncherIssue(
+        severity: IssueSeverity.error,
+        subjectId: manifest.id,
+        message: platform == null
+            ? '${manifest.name} requires a known host platform.'
+            : '${manifest.name} does not support host platform $platform.',
+      ),
+    );
+  }
+  if (manifest.architectures.isNotEmpty &&
+      (architecture == null ||
+          !manifest.architectures.contains(architecture))) {
+    issues.add(
+      LauncherIssue(
+        severity: IssueSeverity.error,
+        subjectId: manifest.id,
+        message: architecture == null
+            ? '${manifest.name} requires a known host architecture.'
+            : '${manifest.name} does not support host architecture $architecture.',
+      ),
+    );
+  }
+  if (manifest.contentTargets.isNotEmpty &&
+      !manifest.contentTargets.any(contentTargets.contains)) {
+    issues.add(
+      LauncherIssue(
+        severity: IssueSeverity.error,
+        subjectId: manifest.id,
+        message: contentTargets.isEmpty
+            ? '${manifest.name} requires known host content targets.'
+            : '${manifest.name} does not support any host content target '
+                  '(${contentTargets.join(', ')}).',
       ),
     );
   }

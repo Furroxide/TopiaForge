@@ -7,6 +7,7 @@ class LauncherState {
     required this.section,
     required this.isBusy,
     required this.statusMessage,
+    this.statusSeverity = IssueSeverity.info,
     required this.profiles,
     required this.selectedProfileId,
     required this.installedMods,
@@ -68,6 +69,7 @@ class LauncherState {
   final LauncherSection section;
   final bool isBusy;
   final String statusMessage;
+  final IssueSeverity statusSeverity;
   final GameInstall? gameInstall;
   final List<LauncherProfile> profiles;
   final String selectedProfileId;
@@ -194,6 +196,7 @@ class LauncherState {
     LauncherSection? section,
     bool? isBusy,
     String? statusMessage,
+    IssueSeverity? statusSeverity,
     GameInstall? gameInstall,
     bool clearGameInstall = false,
     List<LauncherProfile>? profiles,
@@ -241,6 +244,9 @@ class LauncherState {
       section: section ?? this.section,
       isBusy: isBusy ?? this.isBusy,
       statusMessage: statusMessage ?? this.statusMessage,
+      statusSeverity:
+          statusSeverity ??
+          (statusMessage != null ? IssueSeverity.info : this.statusSeverity),
       gameInstall: clearGameInstall ? null : gameInstall ?? this.gameInstall,
       profiles: profiles ?? this.profiles,
       selectedProfileId: selectedProfileId ?? this.selectedProfileId,

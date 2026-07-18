@@ -18,6 +18,7 @@ part 'widget_test_developer_fake_helpers.dart';
 part 'widget_test_publisher_fake.dart';
 part 'widget_lifecycle_test_cases.dart';
 part 'widget_install_test_cases.dart';
+part 'widget_mod_repair_test_cases.dart';
 part 'widget_accessibility_test_cases.dart';
 part 'widget_profile_launch_test_cases.dart';
 part 'widget_test_snapshots.dart';
@@ -29,6 +30,7 @@ void main() {
   registerUgcBlocTests();
   registerLauncherLifecycleTests();
   registerInstallConfirmationWidgetTests();
+  registerModRepairTests();
   registerAccessibilityWidgetTests();
 
   // Home's GlowButton pulses on a repeating AnimationController, which would

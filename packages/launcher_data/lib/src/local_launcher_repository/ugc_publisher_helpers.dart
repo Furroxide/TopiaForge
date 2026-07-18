@@ -96,7 +96,8 @@ extension _UgcPublisherHelpers on LocalLauncherRepository {
       return UgcPublisherStartResult(
         started: false,
         message:
-            'Could not start Node (${error.message}). Install Node 20+ to publish via Automerge.',
+            'Could not start Node (${error.message}). Install '
+            '${UgcNodeVersionPolicy.requirement} to publish via Automerge.',
       );
     } on FileSystemException catch (error) {
       return UgcPublisherStartResult(

@@ -51,10 +51,12 @@ jobs:
 
       - name: Resolve Robotopia refs cache key
         id: refs-cache
-        shell: pwsh
         env:
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-        run: ./tools/restore-robotopia-managed-refs.ps1 -Source public -CacheKeyOnly
+        run: >-
+          dotnet run
+          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
+          -c Release -- --source public --cache-key-only
 
       - name: Cache Robotopia managed refs
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -63,11 +65,13 @@ jobs:
           key: ${{ steps.refs-cache.outputs.key }}
 
       - name: Restore Robotopia managed refs
-        shell: pwsh
         env:
           ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-        run: ./tools/restore-robotopia-managed-refs.ps1 -Source public -RequireLatest
+        run: >-
+          dotnet run
+          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
+          -c Release -- --source public --require-latest
 
       - name: Verify formatting
         run: |
@@ -113,10 +117,26 @@ jobs:
           sdk: "3.11.1"
 
       - name: Set up .NET
-        if: matrix.package == 'apps/topiaforge_cli'
+        if: matrix.package != 'packages/launcher_domain'
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: "10.0.301"
+
+      - name: Prepare managed-reference fixtures
+        if: matrix.package != 'packages/launcher_domain'
+        env:
+          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y p7zip-full
+          dotnet run \
+            --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj \
+            -c Release -- --source public --write-local-props
+
+      - name: Build CLI test fixtures
+        if: matrix.package == 'apps/topiaforge_cli'
+        run: |
+          dotnet build TopiaForge.slnx -c Release --nologo
 
       - name: Analyze
         working-directory: ${{ matrix.package }}
@@ -311,7 +331,12 @@ jobs:
         run: git lfs fsck
 
       - name: Verify local Markdown links and anchors
-        run: ruby tools/check-markdown-links.rb
+        run: |
+          if [[ -f tools/check-markdown-links.rb ]]; then
+            ruby tools/check-markdown-links.rb
+          else
+            echo "Markdown link validation moves to the developer portal batch."
+          fi
 
   # Scaffold + validate + pack every mod template so template rot is caught
   # on the PR that causes it, not at the next release.
@@ -340,33 +365,33 @@ jobs:
           sdk: "3.11.1"
 
       - name: Install archive dependencies
-        if: matrix.template == 'ui'
         run: |
           sudo apt-get update
           sudo apt-get install -y p7zip-full
 
       - name: Resolve Robotopia refs cache key
-        if: matrix.template == 'ui'
         id: refs-cache
-        shell: pwsh
         env:
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-        run: ./tools/restore-robotopia-managed-refs.ps1 -Source public -CacheKeyOnly
+        run: >-
+          dotnet run
+          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
+          -c Release -- --source public --cache-key-only
 
       - name: Cache Robotopia managed refs
-        if: matrix.template == 'ui'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/robotopia-managed-refs-cache
           key: ${{ steps.refs-cache.outputs.key }}
 
       - name: Restore Robotopia managed refs
-        if: matrix.template == 'ui'
-        shell: pwsh
         env:
           ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-        run: ./tools/restore-robotopia-managed-refs.ps1 -Source public -RequireLatest
+        run: >-
+          dotnet run
+          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
+          -c Release -- --source public --require-latest
 
       # Scaffolds inside the checkout (not RUNNER_TEMP) so the generated
       # ProjectReference to src/TopiaForge.Mods.Abstractions stays a relative
@@ -376,6 +401,8 @@ jobs:
         working-directory: apps/topiaforge_cli
         run: |
           dart pub get --enforce-lockfile
+          dotnet build ../../src/TopiaForge.ModPackageValidator/TopiaForge.ModPackageValidator.csproj \
+            -c Release --nologo
           dart run bin/topiaforge.dart new mod "ci.${{ matrix.template }}" \
             --template "${{ matrix.template }}" \
             --name "CI ${{ matrix.template }}" \

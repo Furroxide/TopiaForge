@@ -1,6 +1,8 @@
 part of '../local_launcher_repository.dart';
 
 typedef PackageInstallCommitHook = FutureOr<void> Function(int committedCount);
+typedef PackageMetadataValidator =
+    Future<List<String>> Function(Directory packageRoot);
 typedef RuntimeRepairCommitHook = FutureOr<void> Function(int committedCount);
 typedef UgcInspectionReadHook = FutureOr<void> Function(String snapshotPath);
 typedef GameProcessStarter = Future<int> Function(GameProcessRequest request);

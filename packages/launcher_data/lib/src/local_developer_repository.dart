@@ -15,6 +15,7 @@ import 'package_contract.dart';
 import 'public_url.dart';
 import 'safe_zip_archive.dart';
 import 'secure_http.dart';
+import 'sdk_reference_pack.dart';
 import 'ugc_sidecar_runtime.dart';
 
 part 'local_developer_repository/io_helpers.dart';
@@ -27,7 +28,10 @@ part 'local_developer_repository/license_scaffolding.dart';
 part 'local_developer_repository/environment_helpers.dart';
 part 'local_developer_repository/project_registry.dart';
 part 'local_developer_repository/source_helpers.dart';
+part 'local_developer_repository/source_models.dart';
 part 'local_developer_repository/package_restore.dart';
+part 'local_developer_repository/sdk_restore.dart';
+part 'local_developer_repository/sdk_restore_models.dart';
 part 'local_developer_repository/unity_vpm.dart';
 part 'local_developer_repository/unity_package_scaffolding.dart';
 part 'local_developer_repository/unity_vpm_network.dart';
@@ -152,6 +156,11 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
     }
     await _writeProject(root.path, project);
     await _scaffoldModFromTemplate(root.path, id, name, options, withCompanion);
+    final sdk = await _initializeSdkProject(root.path);
+    if (sdk != null) {
+      await _ensureSdkPackageReferences(root.path, sdk);
+      await _writeDevProps(root.path, null, sdk: sdk);
+    }
     await _ensureProjectGitignore(root.path);
     // Registry writes are best-effort; project files stay valid if this fails.
     try {
@@ -184,8 +193,13 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
     );
     var lock = resolution.lock;
     if (restore && !resolution.hasBlockingIssues) {
+      final sdk = await _restoreProjectSdk(root.path);
       lock = await _restoreLockedPackages(root.path, lock);
-      await _writeDevProps(root.path, lock);
+      await _writeDevProps(root.path, lock, sdk: sdk);
+      if (sdk != null) {
+        await _ensureSdkPackageReferences(root.path, sdk);
+        await _restoreNuGetPackages(root.path, sdk);
+      }
       await _ensureProjectGitignore(root.path);
     }
     await _writeLock(root.path, lock);
@@ -349,6 +363,12 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
     String configuration = 'Release',
   }) async {
     final root = _requireProjectRoot(projectPath);
+    final sdk = await _restoreProjectSdk(root.path);
+    await _writeDevProps(root.path, await _readLock(root.path), sdk: sdk);
+    if (sdk != null) {
+      await _ensureSdkPackageReferences(root.path, sdk);
+      await _restoreNuGetPackages(root.path, sdk);
+    }
     return _packModProject(
       root,
       outputDir: outputDir,

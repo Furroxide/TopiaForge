@@ -89,11 +89,9 @@ extension LocalLauncherRuntimeRepair on LocalLauncherRepository {
           }
           await transaction.complete();
           completed = true;
+          actions.add('Installed or repaired BepInEx $_bepInExVersion.');
           actions.add(
-            'Installed or repaired BepInEx ${LocalLauncherRepository._bepInExVersion}.',
-          );
-          actions.add(
-            'Installed or repaired TopiaForge loader ${LocalLauncherRepository._loaderVersion}.',
+            'Installed or repaired TopiaForge loader $_loaderVersion.',
           );
           if (layout.kind == GameInstallLayout.linuxProton) {
             actions.add(
@@ -122,7 +120,7 @@ extension LocalLauncherRuntimeRepair on LocalLauncherRepository {
 
     final refreshed = await _validateGameDirectory(install.path);
     issues.addAll(refreshed.issues.where((issue) => issue.isBlocking));
-    await _appendLauncherLog('Repair actions: ${actions.join('; ')}');
+    await _appendLauncherLogBestEffort('Repair actions: ${actions.join('; ')}');
     return RepairReport(actions: actions, issues: issues);
   }
 
@@ -145,7 +143,7 @@ extension LocalLauncherRuntimeRepair on LocalLauncherRepository {
         LauncherIssue(
           severity: IssueSeverity.error,
           message:
-              'Bundled BepInEx ${LocalLauncherRepository._bepInExVersion} '
+              'Bundled BepInEx $_bepInExVersion '
               '(${layout.bepInExBundleDirName}) was not found.',
         ),
       );
@@ -232,15 +230,9 @@ extension LocalLauncherRuntimeRepair on LocalLauncherRepository {
         'netstandard2.1',
       ),
     );
-    final loaderDlls = [
-      'TopiaForge.ModManager.dll',
-      'TopiaForge.ModManager.Core.dll',
-      'TopiaForge.Mods.Abstractions.dll',
-      'TopiaForge.Mods.UnityUi.dll',
-    ];
     if (FileSystemEntity.typeSync(loaderSource.path, followLinks: false) !=
             FileSystemEntityType.directory ||
-        !loaderDlls.every(
+        !topiaForgeRuntimeLoaderDlls.every(
           (dll) =>
               FileSystemEntity.typeSync(
                 p.join(loaderSource.path, dll),
@@ -263,7 +255,7 @@ extension LocalLauncherRuntimeRepair on LocalLauncherRepository {
       label: 'Built loader source',
     );
 
-    for (final dll in loaderDlls) {
+    for (final dll in topiaForgeRuntimeLoaderDlls) {
       final source = File(p.join(loaderSource.path, dll));
       await transaction.addSource(
         source,

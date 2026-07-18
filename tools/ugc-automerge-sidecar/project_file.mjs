@@ -5,11 +5,12 @@ import {
   fstatSync,
   lstatSync,
   openSync,
-  readSync,
   readdirSync,
 } from 'node:fs';
 import path from 'node:path';
 import { gunzipSync } from 'node:zlib';
+
+import { readBoundedDescriptor } from './bounded_read.mjs';
 
 export const DEFAULT_MAX_PROJECT_BYTES = 16 * 1024 * 1024;
 
@@ -42,7 +43,12 @@ export function readProject(
         `Project snapshot exceeds the ${maxBytes}-byte input limit: ${filePath}`,
       );
     }
-    bytes = readBounded(descriptor, maxBytes, filePath);
+    bytes = readBoundedDescriptor(descriptor, {
+      maxBytes,
+      createTooLargeError: () => new Error(
+        `Project snapshot exceeds the ${maxBytes}-byte input limit: ${filePath}`,
+      ),
+    });
   } finally {
     closeSync(descriptor);
   }
@@ -64,24 +70,6 @@ export function readProject(
     throw new Error('Project JSON must be an object (a UgcExportProject).');
   }
   return project;
-}
-
-function readBounded(descriptor, maxBytes, filePath) {
-  const chunks = [];
-  let total = 0;
-  const buffer = Buffer.allocUnsafe(Math.min(64 * 1024, maxBytes + 1));
-  while (true) {
-    const count = readSync(descriptor, buffer, 0, buffer.length, null);
-    if (count === 0) break;
-    total += count;
-    if (total > maxBytes) {
-      throw new Error(
-        `Project snapshot exceeds the ${maxBytes}-byte input limit: ${filePath}`,
-      );
-    }
-    chunks.push(Buffer.from(buffer.subarray(0, count)));
-  }
-  return Buffer.concat(chunks, total);
 }
 
 export function newestProjectFile(folder) {

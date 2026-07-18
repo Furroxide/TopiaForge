@@ -2,9 +2,9 @@ import 'package:launcher_domain/launcher_domain.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test('install plan aggregates root and dependency permissions', () {
+  test('install plan aggregates root and dependency capabilities', () {
     final dependency = ModManifest(
-      schemaVersion: 3,
+      schemaVersion: 4,
       id: 'dependency.mod',
       name: 'Dependency',
       version: '1.0.0',
@@ -12,10 +12,10 @@ void main() {
       description: 'Dependency',
       entryAssembly: 'Dependency.dll',
       entryType: 'Dependency.Mod',
-      permissions: const ['filesystem', 'network'],
+      capabilities: const ['filesystem', 'network'],
     );
     final root = ModManifest(
-      schemaVersion: 3,
+      schemaVersion: 4,
       id: 'root.mod',
       name: 'Root',
       version: '1.0.0',
@@ -23,7 +23,7 @@ void main() {
       description: 'Root',
       entryAssembly: 'Root.dll',
       entryType: 'Root.Mod',
-      permissions: const ['input', 'network'],
+      capabilities: const ['input', 'network'],
       dependencies: const [ModDependency(id: 'dependency.mod')],
     );
 

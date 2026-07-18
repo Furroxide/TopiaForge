@@ -111,6 +111,27 @@ void main() {
 Directory _createPackagedRoot(Directory repoRoot) {
   Directory(p.join(repoRoot.path, 'tools')).createSync(recursive: true);
   Directory(p.join(repoRoot.path, 'templates')).createSync(recursive: true);
+  final fixture = File(p.join(repoRoot.path, 'fixture', 'Sdk.dll'))
+    ..createSync(recursive: true)
+    ..writeAsStringSync('sdk');
+  final docs = File(p.join(repoRoot.path, 'fixture', 'Sdk.xml'))
+    ..writeAsStringSync('<doc />');
+  final pack = const SdkReferencePackWriter().write(
+    destination: Directory(p.join(repoRoot.path, 'sdk', '1.0.0')),
+    sdkVersion: '1.0.0',
+    dotnetSdkVersion: '10.0.301',
+    references: {'TopiaForge.Mods.Abstractions': fixture},
+    documentation: {'TopiaForge.Mods.Abstractions': docs},
+  );
+  File(p.join(repoRoot.path, 'sdk', 'index.json')).writeAsStringSync(
+    jsonEncode({
+      'schemaVersion': 1,
+      'defaultVersion': '1.0.0',
+      'versions': {
+        '1.0.0': {'manifestSha256': pack.manifestSha256},
+      },
+    }),
+  );
   return Directory(p.join(repoRoot.path, 'dist'))..createSync(recursive: true);
 }
 
@@ -143,13 +164,16 @@ File _createPackage(
 }
 
 Map<String, Object?> _manifestJson(String id, String version) => {
-  'schemaVersion': 3,
+  'schemaVersion': 4,
   'name': id,
   'displayName': id,
   'version': version,
   'author': {'name': 'TopiaForge'},
   'entryAssembly': '${_assemblyName(id)}.dll',
   'entryType': '$id.Entry',
+  'supportedGameVersionRange': '0.0.2227',
+  'supportedLoaderVersionRange': '>=1.0.0 <2.0.0',
+  'supportedSdkVersionRange': '>=1.0.0 <2.0.0',
 };
 
 String _assemblyName(String id) {

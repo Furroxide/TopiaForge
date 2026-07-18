@@ -1,37 +1,5 @@
 part of '../local_developer_repository.dart';
 
-String _canonicalPathForRelativeReference(String input) {
-  var current = p.normalize(p.absolute(input));
-  final missingSegments = <String>[];
-  while (FileSystemEntity.typeSync(current, followLinks: true) ==
-      FileSystemEntityType.notFound) {
-    final parent = p.dirname(current);
-    if (parent == current) {
-      return p.normalize(p.absolute(input));
-    }
-    missingSegments.insert(0, p.basename(current));
-    current = parent;
-  }
-
-  try {
-    final type = FileSystemEntity.typeSync(current, followLinks: true);
-    final resolved = type == FileSystemEntityType.directory
-        ? Directory(current).resolveSymbolicLinksSync()
-        : File(current).resolveSymbolicLinksSync();
-    return missingSegments.isEmpty
-        ? resolved
-        : p.joinAll([resolved, ...missingSegments]);
-  } on FileSystemException {
-    return p.normalize(p.absolute(input));
-  }
-}
-
-String _canonicalRelativeReference(String target, {required String from}) =>
-    p.relative(
-      _canonicalPathForRelativeReference(target),
-      from: _canonicalPathForRelativeReference(from),
-    );
-
 extension LocalDeveloperIoHelpers on LocalDeveloperRepository {
   Directory? _findProjectRoot(String startPath) {
     var current = FileSystemEntity.isDirectorySync(startPath)
@@ -138,15 +106,6 @@ extension LocalDeveloperIoHelpers on LocalDeveloperRepository {
     String name,
   ) async {
     final assembly = _assemblyName(id);
-    final abstractionsProject = _canonicalRelativeReference(
-      p.join(
-        _repositoryRoot.path,
-        'src',
-        'TopiaForge.Mods.Abstractions',
-        'TopiaForge.Mods.Abstractions.csproj',
-      ),
-      from: root,
-    );
     await File(p.join(root, '$assembly.csproj')).writeAsString('''
 <Project Sdk="Microsoft.NET.Sdk">
   <Import Project="topiaforge.dev.props" Condition="Exists('topiaforge.dev.props')" />
@@ -157,9 +116,10 @@ extension LocalDeveloperIoHelpers on LocalDeveloperRepository {
     <AssemblyName>$assembly</AssemblyName>
     <RootNamespace>$assembly</RootNamespace>
   </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="$abstractionsProject" Private="false" />
-  </ItemGroup>
+  <Target Name="EnsureTopiaForgeSdk" BeforeTargets="ResolveAssemblyReferences"
+          Condition="!Exists('topiaforge.dev.props')">
+    <Error Text="TopiaForge SDK references are missing. Run 'topiaforge restore' in this project." />
+  </Target>
 </Project>
 ''');
     await File(p.join(root, '${_typeName(id)}Mod.cs')).writeAsString('''
@@ -167,14 +127,14 @@ using TopiaForge.Mods;
 
 namespace $assembly
 {
-    public sealed class ${_typeName(id)}Mod : ITopiaForgeMod
+    public sealed class ${_typeName(id)}Mod : TopiaForgeMod
     {
-        public void OnLoad(IModContext context)
+        protected override void OnLoad()
         {
-            context.Logger.Info("$name loaded.");
+            Context.Logger.Info("$name loaded.");
         }
 
-        public void OnUnload()
+        protected override void OnUnload()
         {
         }
     }
@@ -245,9 +205,13 @@ namespace $assembly
     _writeDeveloperTextAtomic(file, buffer.toString());
   }
 
-  Future<void> _writeDevProps(String root, DeveloperLock lock) async {
+  Future<void> _writeDevProps(
+    String root,
+    DeveloperLock? lock, {
+    SdkReferencePack? sdk,
+  }) async {
     final references = <String>[];
-    for (final package in lock.packages) {
+    for (final package in lock?.packages ?? const <LockedPackage>[]) {
       for (final assembly in package.apiAssemblies) {
         final hintPath = p.join(
           root,
@@ -259,19 +223,113 @@ namespace $assembly
           assembly,
         );
         references.add('''
-    <Reference Include="${p.basenameWithoutExtension(assembly)}">
-      <HintPath>$hintPath</HintPath>
+    <Reference Include="${_xmlMsBuildValue(p.basenameWithoutExtension(assembly))}">
+      <HintPath>${_xmlMsBuildValue(hintPath)}</HintPath>
       <Private>false</Private>
     </Reference>''');
       }
     }
+    final sdkVersion = sdk?.version ?? '';
+    final sdkFeed = sdk == null ? '' : _xmlMsBuildValue(sdk.feed.path);
+    final nugetCache = sdk == null
+        ? ''
+        : _xmlMsBuildValue(
+            p.join(
+              _dataRoot.path,
+              'sdk-nuget-cache',
+              sdk.version,
+              sdk.manifestSha256,
+            ),
+          );
+    final managedDir = _resolveRobotopiaManagedDir();
+    final managedProperty = managedDir.isEmpty
+        ? ''
+        : '    <RobotopiaManagedDir Condition="\'\$(RobotopiaManagedDir)\' == \'\'">${_xmlMsBuildValue(managedDir)}</RobotopiaManagedDir>';
     _writeDeveloperTextAtomic(File(p.join(root, 'topiaforge.dev.props')), '''
 <Project>
+  <PropertyGroup>
+    <TopiaForgeSdkVersion>$sdkVersion</TopiaForgeSdkVersion>
+    <TopiaForgeSdkFeed>$sdkFeed</TopiaForgeSdkFeed>
+    <TopiaForgeNuGetCache>$nugetCache</TopiaForgeNuGetCache>
+    <RestoreAdditionalProjectSources>\$(RestoreAdditionalProjectSources);\$(TopiaForgeSdkFeed)</RestoreAdditionalProjectSources>
+    <RestorePackagesPath>\$(TopiaForgeNuGetCache)</RestorePackagesPath>
+$managedProperty
+  </PropertyGroup>
   <ItemGroup>
 ${references.join('\n')}
   </ItemGroup>
 </Project>
 ''');
+  }
+
+  String _resolveRobotopiaManagedDir() {
+    for (final key in const ['RobotopiaManagedDir', 'ROBOTOPIA_MANAGED_DIR']) {
+      final value = Platform.environment[key]?.trim() ?? '';
+      if (value.isNotEmpty && Directory(value).existsSync()) {
+        return Directory(value).absolute.path;
+      }
+    }
+
+    String fromGameRoot(String gameRoot) {
+      final root = Directory(gameRoot).absolute.path;
+      final mac = p.join(root, 'Contents', 'Resources', 'Data', 'Managed');
+      if (Directory(mac).existsSync()) return mac;
+      final windows = p.join(root, 'Robotopia_Data', 'Managed');
+      return Directory(windows).existsSync() ? windows : '';
+    }
+
+    final environmentGame =
+        Platform.environment['ROBOTOPIA_GAME_DIR']?.trim() ?? '';
+    if (environmentGame.isNotEmpty) {
+      final managed = fromGameRoot(environmentGame);
+      if (managed.isNotEmpty) return managed;
+    }
+
+    final settings = File(p.join(_dataRoot.path, 'settings.json'));
+    if (settings.existsSync()) {
+      try {
+        final decoded = jsonDecode(
+          utf8.decode(
+            _readDeveloperFileBoundedSync(
+              settings,
+              maxBytes: _maxDeveloperManifestBytes,
+              label: 'TopiaForge settings',
+            ),
+          ),
+        );
+        final gamePath = decoded is Map ? decoded['gamePath'] : null;
+        if (gamePath is String && gamePath.trim().isNotEmpty) {
+          final managed = fromGameRoot(gamePath);
+          if (managed.isNotEmpty) return managed;
+        }
+      } on Object {
+        // An invalid launcher settings file must not break safe SDK restore.
+      }
+    }
+
+    final localProps = File(
+      p.join(_repositoryRoot.path, 'Directory.Build.local.props'),
+    );
+    if (localProps.existsSync()) {
+      try {
+        final text = utf8.decode(
+          _readDeveloperFileBoundedSync(
+            localProps,
+            maxBytes: _maxDeveloperManifestBytes,
+            label: 'Directory.Build.local.props',
+          ),
+        );
+        final match = RegExp(
+          r'<RobotopiaManagedDir>\s*([^<]+?)\s*</RobotopiaManagedDir>',
+        ).firstMatch(text);
+        if (match != null && Directory(match.group(1)!).existsSync()) {
+          return Directory(match.group(1)!).absolute.path;
+        }
+      } on Object {
+        // Source checkouts without local configuration remain safe-only.
+      }
+    }
+    return '';
   }
 
   Future<String> _which(String executable) async {
@@ -352,6 +410,12 @@ ${references.join('\n')}
   String _prettyJson(Object? value) =>
       const JsonEncoder.withIndent('  ').convert(value);
 }
+
+String _xmlMsBuildValue(String input) => input
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
 
 String _findDeveloperRepoRoot(String? workingDirectory) {
   return _findTopiaForgeRoot(workingDirectory);

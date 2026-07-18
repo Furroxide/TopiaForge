@@ -91,7 +91,9 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
           }
         }
       } on Object catch (error) {
-        await _appendLauncherLog('Package source ${source.id} failed: $error');
+        await _appendLauncherLogBestEffort(
+          'Package source ${source.id} failed: $error',
+        );
         statuses.add(
           PackageSourceStatus(
             sourceId: source.id,
@@ -249,7 +251,9 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
           ),
         );
       } on Object catch (error) {
-        await _appendLauncherLog('Skipped package ${file.path}: $error');
+        await _appendLauncherLogBestEffort(
+          'Skipped package ${file.path}: $error',
+        );
       }
     }
     return byIdVersion.values.toList();
@@ -379,16 +383,12 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
         final versionJson = _objectMap(versionEntry.value);
         final manifestJson = _objectMap(versionJson['manifest']);
         final manifestSource = manifestJson.isEmpty
-            ? <String, Object?>{
-                ...versionJson,
-                'schemaVersion': versionJson['schemaVersion'] ?? 3,
-                'name': versionJson['name'] ?? packageId,
-                'displayName':
-                    versionJson['displayName'] ??
-                    packageJson['displayName'] ??
-                    packageId,
-                'version': versionJson['version'] ?? versionEntry.key,
-              }
+            ? _manifestFromRegistryVersion(
+                packageId,
+                packageJson,
+                versionEntry.key,
+                versionJson,
+              )
             : manifestJson;
         final rawUrl =
             (versionJson['downloadUrl'] as String?) ??
@@ -418,6 +418,36 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
     return mods;
   }
 
+  Map<String, Object?> _manifestFromRegistryVersion(
+    String packageId,
+    Map<String, Object?> packageJson,
+    String version,
+    Map<String, Object?> versionJson,
+  ) {
+    final manifest = <String, Object?>{
+      ...versionJson,
+      'schemaVersion': versionJson['schemaVersion'] ?? 4,
+      'name': versionJson['name'] ?? packageId,
+      'displayName':
+          versionJson['displayName'] ?? packageJson['displayName'] ?? packageId,
+      'version': versionJson['version'] ?? version,
+    };
+    for (final field in const <String>{
+      'manifest',
+      'downloadUrl',
+      'url',
+      'zipUrl',
+      'packageSha256',
+      'sha256',
+      'zipSHA256',
+      'changelog',
+      'changelogUrl',
+    }) {
+      manifest.remove(field);
+    }
+    return manifest;
+  }
+
   String _resolvePackageUrl(String rawUrl, Uri baseUri) {
     if (rawUrl.trim().isEmpty) {
       return '';
@@ -445,32 +475,4 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
     }
     return resolved.toString();
   }
-}
-
-const _maxRegistryDocumentBytes = 16 * 1024 * 1024;
-
-class _SourceDocument {
-  const _SourceDocument({required this.content, required this.baseUri});
-
-  final String content;
-  final Uri baseUri;
-}
-
-class _RegistryLoadOutcome {
-  const _RegistryLoadOutcome({
-    required this.mods,
-    required this.candidates,
-    required this.statuses,
-  });
-
-  final List<RegistryMod> mods;
-  final List<RegistryMod> candidates;
-  final List<PackageSourceStatus> statuses;
-}
-
-Map<String, Object?> _objectMap(Object? value) {
-  if (value is! Map) {
-    return const {};
-  }
-  return value.map((key, mapValue) => MapEntry(key.toString(), mapValue));
 }
