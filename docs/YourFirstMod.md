@@ -1,6 +1,6 @@
 ---
 title: Your first mod
-description: Create, test, install, and run a safe Robotopia mod in four commands.
+description: Create, test, install, and run a safe mod for Robotopia in four commands.
 ---
 
 # Your first mod

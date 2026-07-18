@@ -42,7 +42,7 @@ Remote brain text is untrusted presentation. Drive Robotopia state only from bou
 or a closed set of decisions, and keep a deterministic local fallback for missing token, offline,
 timeout, cancellation, malformed response, or an unavailable Robotopia binding.
 
-Declare `network`, `remote-ai`, and `player-token` when a Robotopia mod uses remote brain calls for
+Declare `network`, `remote-ai`, and `player-token` when a mod for Robotopia uses remote brain calls for
 a player-facing feature. Add `microphone` and `speech-to-text` for voice capture. Features remain
 opt-in and off by default until the Robotopia player enables them.
 

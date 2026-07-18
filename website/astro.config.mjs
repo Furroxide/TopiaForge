@@ -28,7 +28,7 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'TopiaForge',
-      description: 'Build Robotopia mods with the safe TopiaForge V1 SDK.',
+      description: 'Build mods for Robotopia with the safe TopiaForge V1 SDK.',
       customCss: ['./src/styles/custom.css'],
       social: [
         {

@@ -1,11 +1,11 @@
 ---
 title: Development loop
-description: Restore, build, test, pack, validate, install, and launch a Robotopia mod with one command.
+description: Restore, build, test, pack, validate, install, and launch a mod for Robotopia with one command.
 ---
 
 # Development loop
 
-From a generated Robotopia mod project, run:
+From a generated mod project for Robotopia, run:
 
 ```sh
 topiaforge dev

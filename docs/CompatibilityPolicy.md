@@ -1,6 +1,6 @@
 ---
 title: Compatibility policy
-description: V1 source, binary, manifest, runtime, and package compatibility guarantees for Robotopia mods.
+description: V1 source, binary, manifest, runtime, and package compatibility guarantees for mods targeting Robotopia.
 ---
 
 # Compatibility policy

@@ -1,6 +1,6 @@
 ---
 title: TopiaForge V1 mod SDK
-description: Build Robotopia mods without taking a dependency on Unity or Robotopia internals.
+description: Build mods for Robotopia without taking a dependency on Unity or Robotopia internals.
 template: splash
 hero:
   tagline: A clean, typed Robotopia SDK for utility mods, gameplay abilities, worlds, robots, story content, and UI.

@@ -1,11 +1,11 @@
 ---
 title: TopiaForge V1 SDK for Robotopia
-description: Understand the safe Robotopia mod authoring model, templates, packages, and lifecycle.
+description: Understand the safe mod authoring model, templates, packages, and lifecycle for Robotopia.
 ---
 
 # TopiaForge V1 SDK for Robotopia
 
-TopiaForge is the supported authoring boundary for Robotopia mods. Safe mods compile only against
+TopiaForge is the supported authoring boundary for mods targeting Robotopia. Safe mods compile only against
 reference packages supplied by the TopiaForge release. They do not need a source checkout, engine
 editor, Robotopia assemblies, reflection handles, or engine object types.
 

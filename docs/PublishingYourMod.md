@@ -5,7 +5,7 @@ description: Validate, pack, host, and publish an immutable self-hosted package 
 
 # Publish a mod
 
-End-to-end: from a working Robotopia mod to a registry that players can add to the TopiaForge launcher. Community submissions to the
+End-to-end: from a working mod for Robotopia to a registry that players can add to the TopiaForge launcher. Community submissions to the
 TopiaForge official registry are **closed for the initial release** while namespace ownership, moderation, malware
 response, revocation, appeals, and installed-user response are defined. A merge to `registry/**` does not publish a
 community package. Do not describe a package as officially reviewed or endorsed.
