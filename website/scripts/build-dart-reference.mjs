@@ -19,18 +19,21 @@ export const dartReferencePackages = Object.freeze([
     label: 'Launcher domain',
     description: 'Framework-independent launcher models, planning, and policy.',
     dependencyCommand: 'dart',
+    enforceLockfile: true,
   }),
   Object.freeze({
     name: 'launcher_data',
     label: 'Launcher data',
     description: 'Filesystem, process, archive, persistence, and repository services.',
     dependencyCommand: 'dart',
+    enforceLockfile: true,
   }),
   Object.freeze({
     name: 'launcher_ui',
     label: 'Launcher UI',
     description: 'Shared Flutter BLoC state and presentation components.',
     dependencyCommand: 'flutter',
+    enforceLockfile: false,
   }),
 ]);
 
@@ -42,7 +45,11 @@ export function createDartdocPlan(
     ...entry,
     packageRoot: resolve(root, 'packages', entry.name),
     output: resolve(destination, entry.name),
-    dependencyArgs: ['pub', 'get', '--enforce-lockfile'],
+    dependencyArgs: [
+      'pub',
+      'get',
+      ...(entry.enforceLockfile ? ['--enforce-lockfile'] : []),
+    ],
     dartdocArgs: [
       'doc',
       '--validate-links',

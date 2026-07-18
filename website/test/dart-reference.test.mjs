@@ -17,8 +17,15 @@ test('dartdoc plan includes only the three shared launcher packages', () => {
     plan.map((entry) => entry.dependencyCommand),
     ['dart', 'dart', 'flutter'],
   );
+  assert.deepEqual(
+    plan.map((entry) => entry.dependencyArgs),
+    [
+      ['pub', 'get', '--enforce-lockfile'],
+      ['pub', 'get', '--enforce-lockfile'],
+      ['pub', 'get'],
+    ],
+  );
   for (const entry of plan) {
-    assert.deepEqual(entry.dependencyArgs, ['pub', 'get', '--enforce-lockfile']);
     assert.equal(entry.dartdocArgs[0], 'doc');
     assert.ok(entry.dartdocArgs.includes('--validate-links'));
     assert.equal(entry.dartdocArgs.at(-1), '.');
