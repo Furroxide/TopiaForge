@@ -133,7 +133,7 @@ jobs:
       - name: Set up Flutter and Dart
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
-          flutter-version: "3.41.4"
+          flutter-version: "3.44.6"
           channel: stable
           cache: true
 
@@ -141,8 +141,8 @@ jobs:
         run: |
           test "$(node --version)" = v24.16.0
           test "$(dotnet --version)" = 10.0.301
-          test "$(dart --version 2>&1 | awk '{print $4}')" = 3.11.1
-          test "$(flutter --version --machine | jq -r .frameworkVersion)" = 3.41.4
+          test "$(dart --version 2>&1 | awk '{print $4}')" = 3.12.2
+          test "$(flutter --version --machine | jq -r .frameworkVersion)" = 3.44.6
 
       - name: Install managed-reference archive dependency
         run: |

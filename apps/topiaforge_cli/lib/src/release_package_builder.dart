@@ -345,7 +345,7 @@ class ReleasePackageBuilder {
     }
     throw StateError(
       'Dart was not found at $projectDart or on PATH. '
-      'Follow docs/ContributorSetup.md to select Flutter 3.41.4 with FVM.',
+      'Follow docs/ContributorSetup.md to select Flutter 3.44.6 with FVM.',
     );
   }
 
@@ -359,7 +359,7 @@ class ReleasePackageBuilder {
     }
     throw StateError(
       'Flutter was not found at $projectFlutter or on PATH. '
-      'Follow docs/ContributorSetup.md to select Flutter 3.41.4 with FVM.',
+      'Follow docs/ContributorSetup.md to select Flutter 3.44.6 with FVM.',
     );
   }
 

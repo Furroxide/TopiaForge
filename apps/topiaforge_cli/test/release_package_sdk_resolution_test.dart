@@ -282,7 +282,7 @@ void _writeReleaseNoticeFixtures(Directory repo) {
     'cache',
     'dart-sdk',
     'version',
-  ], '3.11.1');
+  ], '3.12.2');
 
   final packageNames = dartCliLicenseNames
       .where((name) => name.endsWith('-LICENSE.txt'))

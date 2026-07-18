@@ -7,8 +7,8 @@ launcher, and optional UGC sidecar. Mod users do not need this toolchain, and mo
 ## Supported contributor hosts
 
 TopiaForge is developed and packaged on Windows and macOS, with launcher builds also maintained for Linux.
-The repository pins Flutter **3.41.4** (Dart **3.11.1**) because that is the SDK used by the recovered working
-tree and its lock files. Configure that FVM-managed SDK on `PATH`, then use ordinary `flutter` and `dart`
+The repository pins Flutter **3.44.6** (Dart **3.12.2**) as its current stable toolchain. Configure that
+FVM-managed SDK on `PATH`, then use ordinary `flutter` and `dart`
 commands throughout this repository.
 
 Required tools:
@@ -16,7 +16,7 @@ Required tools:
 - .NET SDK **10.0.301**. The checked-in `global.json` requires that exact SDK, and release tooling embeds .NET runtime
   **10.0.9** so extractor bytes and notices are reproducible. Unity-facing runtime and mod projects continue to target
   `netstandard2.1` for Robotopia's Mono runtime.
-- [FVM](https://fvm.app/) and its managed Flutter 3.41.4 SDK.
+- [FVM](https://fvm.app/) and its managed Flutter 3.44.6 SDK.
 - Git and Git LFS.
 - PowerShell 7 (`pwsh`) and 7-Zip.
 - Node.js **24.16.0** or newer for the documentation portal and optional Automerge UGC sidecar.
@@ -55,8 +55,8 @@ method, ensure its executable directory is on `PATH` before continuing.
 Install the pinned SDK and make it FVM's machine-wide default:
 
 ```powershell
-fvm install 3.41.4 --skip-pub-get
-fvm global 3.41.4
+fvm install 3.44.6 --skip-pub-get
+fvm global 3.44.6
 ```
 
 `fvm global` prints the exact SDK directory to add when it is not already on `PATH`. With FVM's default cache
@@ -88,7 +88,7 @@ if (($userPath -split ";") -notcontains $sdkBin) {
 Open a new terminal after changing a shell profile or the Windows user `Path`.
 
 [Sidekick](https://github.com/leoafarias/sidekick) is a recommended GUI alternative for browsing, installing,
-and selecting Flutter SDK releases on Windows, macOS, and Linux. Select Flutter 3.41.4 in Sidekick, then still
+and selecting Flutter SDK releases on Windows, macOS, and Linux. Select Flutter 3.44.6 in Sidekick, then still
 configure the selected/default SDK's `bin` directory on `PATH` and run the verification below; the GUI does not
 replace terminal or IDE SDK selection.
 
@@ -110,7 +110,7 @@ flutter --version
 dart --version
 ```
 
-The expected versions are Flutter **3.41.4** and Dart **3.11.1**.
+The expected versions are Flutter **3.44.6** and Dart **3.12.2**.
 
 ### Alternative: project-specific SDK
 
@@ -118,8 +118,8 @@ To leave the machine-wide Flutter default unchanged, create the ignored project-
 root:
 
 ```powershell
-fvm install 3.41.4 --skip-pub-get
-fvm use 3.41.4 --force --skip-pub-get
+fvm install 3.44.6 --skip-pub-get
+fvm use 3.44.6 --force --skip-pub-get
 ```
 
 Then prepend the local SDK for the current terminal. Run this from the repository root before changing into an
@@ -152,7 +152,7 @@ From the repository root:
 pwsh ./tools/bootstrap-dev.ps1
 ```
 
-The bootstrap validates host tools, enables the tracked Git hooks, installs Flutter 3.41.4 through FVM,
+The bootstrap validates host tools, enables the tracked Git hooks, installs Flutter 3.44.6 through FVM,
 restores Dart/Flutter/npm/NuGet dependencies, and prepares compile-only Robotopia managed references. It sets
 `core.hooksPath` to `.githooks`: the tracked hooks run Git LFS integration, and `commit-msg` removes AI co-author
 trailers before a commit is created.

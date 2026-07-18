@@ -114,7 +114,7 @@ Directory _writeFixtureRepo(Directory temp) {
     'cache',
     'dart-sdk',
     'version',
-  ], '3.11.1\n');
+  ], '3.12.2\n');
   final packageEntries = <Map<String, Object>>[];
   for (final package in _dartCliLicensePackageNames) {
     final packageRoot = Directory(

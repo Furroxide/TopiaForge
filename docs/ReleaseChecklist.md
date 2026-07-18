@@ -22,7 +22,7 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
 - [ ] Review and commit the remediation without discarding unrelated user work; freeze one candidate SHA.
 - [ ] Create a protected, annotated `v1.0.0` tag on that SHA through the approved administrator process.
 - [ ] Confirm `global.json` resolves exactly .NET SDK `10.0.301` with roll-forward disabled and runtime `10.0.9`.
-- [ ] Confirm Dart `3.11.1`, Flutter `3.41.4`, Node `24.16.0`, and Unity `6000.0.23f1` on every applicable runner.
+- [ ] Confirm Dart `3.12.2`, Flutter `3.44.6`, Node `24.16.0`, and Unity `6000.0.23f1` on every applicable runner.
 - [ ] Probe the public latest-build manifest and verify both pinned build-2227 archive paths and SHA-256 values.
 - [ ] Confirm all LFS objects, immutable BepInEx inputs, UnityDoorstop source, and managed references are present.
 

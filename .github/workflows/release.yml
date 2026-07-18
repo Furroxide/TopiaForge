@@ -51,7 +51,7 @@ jobs:
       - name: Set up Dart
         uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
         with:
-          sdk: "3.11.1"
+          sdk: "3.12.2"
 
       - name: Set up .NET
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
@@ -141,7 +141,7 @@ jobs:
       - name: Set up Dart
         uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
         with:
-          sdk: "3.11.1"
+          sdk: "3.12.2"
 
       - name: Restore release metadata builder
         working-directory: apps/topiaforge_cli
