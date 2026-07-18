@@ -31,8 +31,8 @@ namespace TopiaForge.ModManager
         private ModAssemblyResolutionCatalog? assemblyCatalog;
         private string? loadingOwnerId;
         private bool initialSceneDeliveryAttempted;
-        private int? sceneDeliveredBeforeInitialReplay;
-        private int? replayedInitialSceneAwaitingNativeCallback;
+        private readonly HashSet<int> scenesDeliveredBeforeInitialReplay = new HashSet<int>();
+        private readonly HashSet<int> replayedInitialScenesAwaitingNativeCallback = new HashSet<int>();
         private float capabilityRefreshRemaining;
 
         public ModRuntime(
@@ -150,6 +150,9 @@ namespace TopiaForge.ModManager
         public void DispatchUpdate(float deltaTime)
         {
             UnityMainThreadGuard.AssertCurrent();
+            // Native sceneLoaded echoes can only race the startup replay before the first game-loop turn. After
+            // that boundary, a callback for a reused handle is a real later load and must not be suppressed.
+            replayedInitialScenesAwaitingNativeCallback.Clear();
             coreGameplayServices.BeginFrame(deltaTime);
             capabilityRefreshRemaining -= Math.Max(0f, deltaTime);
             if (capabilityRefreshRemaining <= 0f)
@@ -180,36 +183,79 @@ namespace TopiaForge.ModManager
         public void DispatchSceneLoaded(string sceneName)
         {
             UnityMainThreadGuard.AssertCurrent();
-            DispatchSceneLoadedCore(new SceneLoadEvent(sceneName, SceneLoadMode.Single, true));
+            DispatchSceneLoadedCore(
+                new SceneLoadEvent(sceneName, SceneLoadMode.Single, true),
+                sceneInstanceId: 0,
+                isInitial: false);
         }
 
         internal bool DispatchInitialScene(int sceneHandle, string sceneName, bool isValid)
         {
+            return DispatchInitialScenes(new[]
+            {
+                new InitialSceneReplay(
+                    sceneHandle,
+                    sceneName,
+                    isValid,
+                    SceneLoadMode.Single,
+                    isActive: true)
+            });
+        }
+
+        internal bool DispatchInitialScenes(IEnumerable<InitialSceneReplay> scenes)
+        {
             UnityMainThreadGuard.AssertCurrent();
+            if (scenes == null)
+            {
+                throw new ArgumentNullException(nameof(scenes));
+            }
+
             if (initialSceneDeliveryAttempted)
             {
                 return false;
             }
 
             initialSceneDeliveryAttempted = true;
-            if (!isValid || string.IsNullOrWhiteSpace(sceneName))
+            var activeDelivered = false;
+            foreach (var scene in scenes)
             {
-                sceneDeliveredBeforeInitialReplay = null;
-                return false;
+                if (!scene.IsValid || string.IsNullOrWhiteSpace(scene.SceneName))
+                {
+                    continue;
+                }
+
+                if (scenesDeliveredBeforeInitialReplay.Remove(scene.SceneHandle))
+                {
+                    // A native callback won the subscribe-to-snapshot race for this exact scene instance.
+                    continue;
+                }
+
+                if (!replayedInitialScenesAwaitingNativeCallback.Add(scene.SceneHandle))
+                {
+                    continue;
+                }
+                if (scene.IsActive)
+                {
+                    DispatchSceneLoadedCore(
+                        new SceneLoadEvent(scene.SceneName, scene.Mode, isActive: true),
+                        scene.SceneHandle,
+                        isInitial: true);
+                    activeDelivered = true;
+                }
+                else
+                {
+                    DispatchInitialBackgroundSceneCore(new SceneLifecycleEvent(
+                        scene.SceneHandle,
+                        scene.SceneName,
+                        SceneLifecyclePhase.Loaded,
+                        scene.Mode,
+                        isActive: false,
+                        isInitial: true));
+                }
             }
 
-            if (sceneDeliveredBeforeInitialReplay == sceneHandle)
-            {
-                // A native callback won the narrow subscribe-to-active-scene race. It already delivered the
-                // active scene, so the explicit replay must not deliver it a second time.
-                sceneDeliveredBeforeInitialReplay = null;
-                return false;
-            }
-
-            sceneDeliveredBeforeInitialReplay = null;
-            replayedInitialSceneAwaitingNativeCallback = sceneHandle;
-            DispatchSceneLoadedCore(new SceneLoadEvent(sceneName, SceneLoadMode.Single, true));
-            return true;
+            scenesDeliveredBeforeInitialReplay.Clear();
+            return activeDelivered;
         }
 
         internal bool DispatchSceneLoaded(int sceneHandle, string sceneName, bool isValid)
@@ -237,23 +283,73 @@ namespace TopiaForge.ModManager
 
             if (!initialSceneDeliveryAttempted)
             {
-                sceneDeliveredBeforeInitialReplay = sceneHandle;
+                scenesDeliveredBeforeInitialReplay.Add(sceneHandle);
             }
-            else if (replayedInitialSceneAwaitingNativeCallback.HasValue)
+            else if (replayedInitialScenesAwaitingNativeCallback.Remove(sceneHandle))
             {
-                var duplicateInitialCallback = replayedInitialSceneAwaitingNativeCallback.Value == sceneHandle;
-                replayedInitialSceneAwaitingNativeCallback = null;
-                if (duplicateInitialCallback)
-                {
-                    return false;
-                }
+                return false;
             }
 
-            DispatchSceneLoadedCore(new SceneLoadEvent(sceneName, mode, isActive));
+            DispatchSceneLoadedCore(
+                new SceneLoadEvent(sceneName, mode, isActive),
+                sceneHandle,
+                isInitial: false);
             return true;
         }
 
+        internal readonly struct InitialSceneReplay
+        {
+            public InitialSceneReplay(
+                int sceneHandle,
+                string sceneName,
+                bool isValid,
+                SceneLoadMode mode,
+                bool isActive)
+            {
+                SceneHandle = sceneHandle;
+                SceneName = sceneName;
+                IsValid = isValid;
+                Mode = mode;
+                IsActive = isActive;
+            }
+
+            public int SceneHandle { get; }
+            public string SceneName { get; }
+            public bool IsValid { get; }
+            public SceneLoadMode Mode { get; }
+            public bool IsActive { get; }
+        }
+
         internal bool DispatchSceneActivated(int sceneHandle, string sceneName, bool isValid, SceneLoadMode mode)
+        {
+            return DispatchSceneActivated(
+                sceneHandle,
+                sceneName,
+                isValid,
+                mode,
+                publishDetailedLoadEvent: true);
+        }
+
+        internal bool DispatchSceneLifecycleActivated(
+            int sceneHandle,
+            string sceneName,
+            bool isValid,
+            SceneLoadMode mode)
+        {
+            return DispatchSceneActivated(
+                sceneHandle,
+                sceneName,
+                isValid,
+                mode,
+                publishDetailedLoadEvent: false);
+        }
+
+        private bool DispatchSceneActivated(
+            int sceneHandle,
+            string sceneName,
+            bool isValid,
+            SceneLoadMode mode,
+            bool publishDetailedLoadEvent)
         {
             UnityMainThreadGuard.AssertCurrent();
             if (!isValid || string.IsNullOrWhiteSpace(sceneName))
@@ -261,13 +357,53 @@ namespace TopiaForge.ModManager
                 return false;
             }
 
-            DispatchSceneActivatedCore(new SceneLoadEvent(sceneName, mode, true));
+            DispatchSceneActivatedCore(
+                new SceneLoadEvent(sceneName, mode, true),
+                sceneHandle,
+                publishDetailedLoadEvent);
             return true;
         }
 
-        private void DispatchSceneLoadedCore(SceneLoadEvent scene)
+        internal bool DispatchSceneUnloaded(
+            int sceneHandle,
+            string sceneName,
+            bool isValid,
+            SceneLoadMode mode)
+        {
+            UnityMainThreadGuard.AssertCurrent();
+            if (!isValid || string.IsNullOrWhiteSpace(sceneName))
+            {
+                return false;
+            }
+
+            DispatchSceneUnloadedCore(new SceneLifecycleEvent(
+                sceneHandle,
+                sceneName,
+                SceneLifecyclePhase.Unloaded,
+                mode,
+                isActive: false));
+            return true;
+        }
+
+        private void DispatchSceneLoadedCore(SceneLoadEvent scene, int sceneInstanceId, bool isInitial)
         {
             RefreshRuntimeCapabilities();
+            var loadedLifecycle = new SceneLifecycleEvent(
+                sceneInstanceId,
+                scene.SceneName,
+                SceneLifecyclePhase.Loaded,
+                scene.Mode,
+                scene.IsActive,
+                isInitial);
+            var activatedLifecycle = scene.IsActive
+                ? new SceneLifecycleEvent(
+                    sceneInstanceId,
+                    scene.SceneName,
+                    SceneLifecyclePhase.Activated,
+                    scene.Mode,
+                    isActive: true,
+                    isInitial: isInitial)
+                : null;
             var count = loadedMods.Count;
             for (var index = 0; index < count; index++)
             {
@@ -275,6 +411,14 @@ namespace TopiaForge.ModManager
                 try
                 {
                     loaded.Context.RaiseSceneLoaded(scene);
+                    loaded.Context.RaiseSceneLifecycle(loadedLifecycle);
+                    if (activatedLifecycle != null)
+                    {
+                        // Normalize Unity's callback-order differences: when Unity reports a scene as active at load,
+                        // always publish Loaded before Activated. The plugin suppresses any immediately following
+                        // native activeSceneChanged echo.
+                        loaded.Context.RaiseSceneLifecycle(activatedLifecycle);
+                    }
                     sceneFailureLogged.Remove(loaded.Manifest.Id);
                 }
                 catch (Exception ex)

@@ -55,6 +55,13 @@ lifetime before invoking load and releases resources in reverse order after unlo
 failure. Cleanup is idempotent. A provider must isolate subscriber exceptions so one mod cannot
 prevent another subscriber from receiving an event.
 
+Scene lifecycle delivery is normalized per scene instance: `Loaded` precedes `Activated`, an unload is
+published only for a previously known or valid native scene, startup replay/native echo pairs are deduplicated,
+and process-local instance ids correlate equal additive scene names without becoming persistent identifiers.
+Startup replay includes lifecycle-only `Loaded` events for already-loaded background additive scenes before the
+active scene's normalized `Loaded`/`Activated` pair. Legacy scene-loaded subscriptions retain their existing
+active-scene-only startup behavior and one-callback-per-load behavior afterward.
+
 ## Robotopia and platform compatibility
 
 Robotopia uses numeric build identifiers. TopiaForge maps build 2227 to SemVer `0.0.2227` for range

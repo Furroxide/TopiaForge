@@ -13,6 +13,7 @@ namespace TopiaForge.ModManager.Tests
         {
             TestSemanticVersion();
             TestOperationResult();
+            TestSceneLifecycleEvent();
             TestLifetimeCleanup();
             TestBaseClassAndContext(Path.Combine(root, "sdk-lifecycle"));
             Console.WriteLine("SdkLifecycleTests passed.");
@@ -53,6 +54,43 @@ namespace TopiaForge.ModManager.Tests
             AssertThrows<ArgumentOutOfRangeException>(
                 () => OperationResult<string>.Failure(ModErrorCode.None, "bad"),
                 "failure without an error code should be rejected");
+        }
+
+        private static void TestSceneLifecycleEvent()
+        {
+            AssertThrows<ArgumentException>(
+                () => new SceneLifecycleEvent(
+                    1,
+                    "Gameplay",
+                    SceneLifecyclePhase.Activated,
+                    SceneLoadMode.Single,
+                    isActive: false),
+                "an Activated lifecycle transition must reject inactive state");
+
+            var initialBackground = new SceneLifecycleEvent(
+                2,
+                "Lighting",
+                SceneLifecyclePhase.Loaded,
+                SceneLoadMode.Additive,
+                isActive: false,
+                isInitial: true);
+            Assert(initialBackground.IsInitial && !initialBackground.IsActive,
+                "initial replay metadata should support already-loaded background scenes");
+
+            var detailedOnlyEvents = new DetailedOnlyModEvents();
+            SceneLifecycleEvent? fallback = null;
+            detailedOnlyEvents.SubscribeSceneLifecycle(scene => fallback = scene);
+            detailedOnlyEvents.Raise(new SceneLoadEvent(
+                "Lighting",
+                SceneLoadMode.Additive,
+                isActive: false));
+            Assert(fallback != null
+                && fallback.SceneInstanceId == 0
+                && fallback.SceneName == "Lighting"
+                && fallback.Phase == SceneLifecyclePhase.Loaded
+                && fallback.Mode == SceneLoadMode.Additive
+                && !fallback.IsActive,
+                "lifecycle fallback should preserve detailed load mode and active metadata when available");
         }
 
         private static void TestLifetimeCleanup()
@@ -268,6 +306,24 @@ namespace TopiaForge.ModManager.Tests
             {
                 DisposeCount++;
             }
+        }
+
+        private sealed class DetailedOnlyModEvents : IModEvents, ISceneLoadEventSource
+        {
+            private Action<SceneLoadEvent>? detailedSceneLoaded;
+
+            public IDisposable SubscribeUpdate(Action<float> handler) => new CountingDisposable();
+            public IDisposable SubscribeFixedUpdate(Action<GameTimeSample> handler) => new CountingDisposable();
+            public IDisposable SubscribeLateUpdate(Action<GameTimeSample> handler) => new CountingDisposable();
+            public IDisposable SubscribeSceneLoaded(Action<string> handler) => new CountingDisposable();
+
+            public IDisposable SubscribeSceneLoaded(Action<SceneLoadEvent> handler)
+            {
+                detailedSceneLoaded = handler;
+                return new CountingDisposable();
+            }
+
+            public void Raise(SceneLoadEvent scene) => detailedSceneLoaded?.Invoke(scene);
         }
 
         private sealed class CapturedLogger : IModLogger

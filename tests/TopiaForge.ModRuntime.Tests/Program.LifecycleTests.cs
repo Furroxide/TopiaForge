@@ -75,6 +75,49 @@ namespace TopiaForge.ModRuntime.Tests
                 "cleanup-first");
         }
 
+        private static void TestInitialBackgroundSceneReplay(string root)
+        {
+            var fixture = NewFixture(
+                root,
+                "initial-background-scenes",
+                "TopiaForge.ValidTestMod.RuntimeInitialSceneReplayMod");
+            using var runtime = fixture.CreateRuntime();
+            runtime.Load(new[] { fixture.Package });
+
+            Assert(runtime.DispatchInitialScenes(
+                    new RuntimeUnderTest.InitialSceneReplay(
+                        45,
+                        "Lighting",
+                        isValid: true,
+                        mode: SceneLoadMode.Additive,
+                        isActive: false),
+                    new RuntimeUnderTest.InitialSceneReplay(
+                        46,
+                        "Menu",
+                        isValid: true,
+                        mode: SceneLoadMode.Single,
+                        isActive: true)),
+                "startup replay should include background additive scenes before the active scene");
+            Assert(!runtime.DispatchSceneLoaded(
+                    45,
+                    "Lighting",
+                    isValid: true,
+                    mode: SceneLoadMode.Additive,
+                    isActive: false)
+                && !runtime.DispatchSceneLoaded(46, "Menu", isValid: true),
+                "one native echo per replayed initial scene instance should be suppressed");
+            runtime.UnloadAll();
+
+            AssertTrace(
+                fixture.TracePath,
+                "initial-lifecycle:Lighting:45:Loaded:Additive:background:initial",
+                "initial-legacy:Menu",
+                "initial-detail:Menu:Single:active",
+                "initial-lifecycle:Menu:46:Loaded:Single:active:initial",
+                "initial-lifecycle:Menu:46:Activated:Single:active:initial",
+                "unload");
+        }
+
         private static void TestNativeInitialSceneRaceIsDeduplicated(string root)
         {
             var fixture = NewFixture(root, "initial-scene-race", "TopiaForge.ValidTestMod.RuntimeSuccessMod");
@@ -140,6 +183,64 @@ namespace TopiaForge.ModRuntime.Tests
                 "scene-detail:ActivatedArena:Additive:active:authoritative",
                 "scene-legacy:Replacement",
                 "scene-detail:Replacement:Single:background:authoritative",
+                "unload");
+        }
+
+        private static void TestCompleteSceneLifecycleDelivery(string root)
+        {
+            var fixture = NewFixture(root, "scene-lifecycle", "TopiaForge.ValidTestMod.RuntimeSceneLifecycleMod");
+            using var runtime = fixture.CreateRuntime();
+            runtime.Load(new[] { fixture.Package });
+
+            Assert(runtime.DispatchInitialScene(81, "Menu", isValid: true),
+                "the initial scene should publish one normalized loaded/activated pair");
+            Assert(!runtime.DispatchSceneLoaded(81, "Menu", isValid: true),
+                "the native echo after initial replay must not duplicate lifecycle events");
+            Assert(runtime.DispatchSceneLoaded(
+                    82,
+                    "Shared",
+                    isValid: true,
+                    SceneLoadMode.Additive,
+                    isActive: false),
+                "a background additive scene should publish its loaded phase");
+            Assert(runtime.DispatchSceneLoaded(
+                    83,
+                    "Shared",
+                    isValid: true,
+                    SceneLoadMode.Additive,
+                    isActive: false),
+                "equal scene names must remain distinguishable by instance id");
+            Assert(runtime.DispatchSceneActivated(82, "Shared", isValid: true, SceneLoadMode.Additive),
+                "later activation should publish a distinct lifecycle phase");
+            Assert(runtime.DispatchSceneUnloaded(82, "Shared", isValid: true, SceneLoadMode.Additive),
+                "scene unload should reach lifecycle subscribers");
+            Assert(!runtime.DispatchSceneUnloaded(0, string.Empty, isValid: false, SceneLoadMode.Single),
+                "invalid unload callbacks must not reach mods");
+            Assert(runtime.DispatchSceneLoaded(
+                    84,
+                    "Replacement",
+                    isValid: true,
+                    SceneLoadMode.Single,
+                    isActive: false),
+                "single replacements should publish load before Unity's activation callback");
+            Assert(runtime.DispatchSceneLifecycleActivated(
+                    84,
+                    "Replacement",
+                    isValid: true,
+                    SceneLoadMode.Single),
+                "the later activeSceneChanged callback should publish exact activation without replaying legacy detail");
+            runtime.UnloadAll();
+
+            AssertTrace(
+                fixture.TracePath,
+                "scene-lifecycle:Menu:81:Loaded:Single:active:initial",
+                "scene-lifecycle:Menu:81:Activated:Single:active:initial",
+                "scene-lifecycle:Shared:82:Loaded:Additive:background:native",
+                "scene-lifecycle:Shared:83:Loaded:Additive:background:native",
+                "scene-lifecycle:Shared:82:Activated:Additive:active:native",
+                "scene-lifecycle:Shared:82:Unloaded:Additive:background:native",
+                "scene-lifecycle:Replacement:84:Loaded:Single:background:native",
+                "scene-lifecycle:Replacement:84:Activated:Single:active:native",
                 "unload");
         }
 

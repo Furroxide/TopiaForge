@@ -11,14 +11,13 @@ namespace TopiaForge.Mods.Testing
         private readonly FakeModEvents events;
         private readonly FakeModLifetime lifetime;
         private readonly Action<string>? legacyNotification;
-        private readonly List<SceneSnapshot> loaded = new List<SceneSnapshot>();
-        private readonly Dictionary<string, SceneLoadMode> loadedModes =
-            new Dictionary<string, SceneLoadMode>(StringComparer.Ordinal);
+        private readonly List<LoadedScene> loaded = new List<LoadedScene>();
         private readonly List<string> history = new List<string>();
         private readonly Queue<PendingLoad> pending = new Queue<PendingLoad>();
         private readonly List<Action<CheckpointSnapshot>> checkpointHandlers =
             new List<Action<CheckpointSnapshot>>();
         private CheckpointSnapshot? checkpoint;
+        private int nextSceneInstanceId = 1;
 
         /// <summary>Creates fake scene state.</summary>
         public FakeSceneService(
@@ -31,8 +30,11 @@ namespace TopiaForge.Mods.Testing
             this.lifetime = lifetime ?? throw new ArgumentNullException(nameof(lifetime));
             if (!string.IsNullOrWhiteSpace(initialScene))
             {
-                loaded.Add(new SceneSnapshot(initialScene, true, true));
-                loadedModes[initialScene] = SceneLoadMode.Single;
+                loaded.Add(new LoadedScene(
+                    NextSceneInstanceId(),
+                    initialScene,
+                    SceneLoadMode.Single,
+                    isActive: true));
                 history.Add(initialScene);
             }
 
@@ -83,7 +85,7 @@ namespace TopiaForge.Mods.Testing
             {
                 if (candidate.IsActive)
                 {
-                    scene = candidate;
+                    scene = candidate.ToSnapshot();
                     return true;
                 }
             }
@@ -93,8 +95,16 @@ namespace TopiaForge.Mods.Testing
         }
 
         /// <inheritdoc/>
-        public IReadOnlyList<SceneSnapshot> GetLoadedScenes() =>
-            new List<SceneSnapshot>(loaded).AsReadOnly();
+        public IReadOnlyList<SceneSnapshot> GetLoadedScenes()
+        {
+            var snapshots = new List<SceneSnapshot>(loaded.Count);
+            foreach (var scene in loaded)
+            {
+                snapshots.Add(scene.ToSnapshot());
+            }
+
+            return snapshots.AsReadOnly();
+        }
 
         /// <inheritdoc/>
         public bool TryGetCheckpoint(out CheckpointSnapshot? current)
@@ -180,32 +190,41 @@ namespace TopiaForge.Mods.Testing
             Apply(new SceneLoadRequest(sceneName, mode));
         }
 
-        /// <summary>Activates an already loaded scene and emits a detail-only authoritative transition.</summary>
+        /// <summary>
+        /// Activates the earliest loaded scene with this name and emits a detail-only authoritative transition.
+        /// Re-activating the active instance succeeds without emitting a duplicate transition.
+        /// </summary>
         public bool Activate(string sceneName)
         {
-            var found = false;
+            var targetIndex = -1;
             for (var index = 0; index < loaded.Count; index++)
             {
-                if (string.Equals(loaded[index].Name, sceneName, StringComparison.Ordinal))
+                if (string.Equals(loaded[index].SceneName, sceneName, StringComparison.Ordinal))
                 {
-                    found = true;
+                    targetIndex = index;
                     break;
                 }
             }
 
-            if (!found || !loadedModes.TryGetValue(sceneName, out var mode))
+            if (targetIndex < 0)
             {
                 return false;
             }
 
-            for (var index = 0; index < loaded.Count; index++)
+            var target = loaded[targetIndex];
+            if (target.IsActive)
             {
-                var candidate = loaded[index];
-                var active = string.Equals(candidate.Name, sceneName, StringComparison.Ordinal);
-                loaded[index] = new SceneSnapshot(candidate.Name, candidate.IsLoaded, active);
+                return true;
             }
 
-            events.RaiseSceneActivated(new SceneLoadEvent(sceneName, mode, isActive: true));
+            for (var index = 0; index < loaded.Count; index++)
+            {
+                loaded[index].IsActive = index == targetIndex;
+            }
+
+            events.RaiseSceneActivated(
+                new SceneLoadEvent(target.SceneName, target.Mode, isActive: true),
+                target.SceneInstanceId);
             return true;
         }
 
@@ -252,18 +271,39 @@ namespace TopiaForge.Mods.Testing
         {
             if (request.Mode == SceneLoadMode.Single)
             {
+                var replaced = new List<LoadedScene>(loaded);
                 loaded.Clear();
-                loadedModes.Clear();
+                foreach (var replacedScene in replaced)
+                {
+                    events.RaiseSceneUnloaded(
+                        replacedScene.SceneInstanceId,
+                        replacedScene.SceneName,
+                        replacedScene.Mode);
+                }
             }
 
             var isActive = request.Mode == SceneLoadMode.Single;
-            var snapshot = new SceneSnapshot(request.SceneName, true, isActive);
-            loaded.Add(snapshot);
-            loadedModes[request.SceneName] = request.Mode;
+            var sceneInstanceId = NextSceneInstanceId();
+            var scene = new LoadedScene(sceneInstanceId, request.SceneName, request.Mode, isActive);
+            var snapshot = scene.ToSnapshot();
+            loaded.Add(scene);
             history.Add(request.SceneName);
-            events.RaiseSceneLoaded(new SceneLoadEvent(request.SceneName, request.Mode, isActive));
+            events.RaiseSceneLoaded(
+                new SceneLoadEvent(request.SceneName, request.Mode, isActive),
+                sceneInstanceId,
+                isInitial: false);
             legacyNotification?.Invoke(request.SceneName);
             return snapshot;
+        }
+
+        private int NextSceneInstanceId()
+        {
+            if (nextSceneInstanceId == int.MaxValue)
+            {
+                throw new InvalidOperationException("The fake scene instance id space was exhausted.");
+            }
+
+            return nextSceneInstanceId++;
         }
 
         private bool TryTakePending(out PendingLoad item)
@@ -308,6 +348,29 @@ namespace TopiaForge.Mods.Testing
                 Linked.Dispose();
                 Operation.Dispose();
             }
+        }
+
+        private sealed class LoadedScene
+        {
+            public LoadedScene(
+                int sceneInstanceId,
+                string sceneName,
+                SceneLoadMode mode,
+                bool isActive)
+            {
+                SceneInstanceId = sceneInstanceId;
+                SceneName = sceneName;
+                Mode = mode;
+                IsActive = isActive;
+            }
+
+            public int SceneInstanceId { get; }
+            public string SceneName { get; }
+            public SceneLoadMode Mode { get; }
+            public bool IsActive { get; set; }
+
+            public SceneSnapshot ToSnapshot() =>
+                new SceneSnapshot(SceneName, isLoaded: true, isActive: IsActive);
         }
 
         private sealed class CheckpointSubscription : IDisposable

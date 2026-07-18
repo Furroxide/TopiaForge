@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using TopiaForge.Mods;
 using UnityEngine;
 
@@ -27,6 +28,48 @@ namespace TopiaForge.Mods.Interop.Unity
         /// <param name="component">Receives the component when present.</param>
         /// <returns><see langword="true"/> when the entity and component both exist.</returns>
         bool TryGetComponent<T>(IEntity entity, out T? component) where T : Component;
+
+        /// <summary>
+        /// Creates a uniquely identified Harmony patch owner scoped to the current mod. The returned lease is
+        /// automatically tracked by the mod lifetime and removes every patch owned by its Harmony instance when
+        /// disposed or when the mod unloads.
+        /// </summary>
+        /// <param name="purpose">A short stable label describing the patch group.</param>
+        /// <returns>The lifetime-owned Harmony lease.</returns>
+        /// <exception cref="InvalidOperationException">
+        /// Called outside Robotopia's game thread. Queue creation through the SDK scheduler before retrying.
+        /// </exception>
+        IHarmonyLease CreateHarmonyLease(string purpose);
+    }
+
+    /// <summary>
+    /// Owns one uniquely identified Harmony patch group. This unstable contract is available only from the explicit
+    /// interop package; it is not part of the safe SDK surface. Patch application and the first disposal must run on
+    /// Robotopia's game thread. Disposal remains idempotent after teardown and may then be repeated from any thread.
+    /// </summary>
+    public interface IHarmonyLease : IDisposable
+    {
+        /// <summary>
+        /// Applies supported Harmony patch methods under this lease's unique owner id. Null patch phases are omitted.
+        /// </summary>
+        /// <param name="original">The original method or constructor to patch.</param>
+        /// <param name="prefix">Optional prefix method.</param>
+        /// <param name="postfix">Optional postfix method.</param>
+        /// <param name="transpiler">Optional transpiler method.</param>
+        /// <param name="finalizer">Optional finalizer method.</param>
+        /// <exception cref="InvalidOperationException">
+        /// Called outside Robotopia's game thread. Queue the patch through the SDK scheduler before retrying.
+        /// </exception>
+        /// <exception cref="ObjectDisposedException">The lease has already begun teardown.</exception>
+        void Patch(
+            MethodBase original,
+            MethodInfo? prefix = null,
+            MethodInfo? postfix = null,
+            MethodInfo? transpiler = null,
+            MethodInfo? finalizer = null);
+
+        /// <summary>Gets whether teardown has already run.</summary>
+        bool IsDisposed { get; }
     }
 
     /// <summary>Internal host hook implemented only by the TopiaForge game runtime.</summary>
@@ -62,6 +105,22 @@ namespace TopiaForge.Mods.Interop.Unity
             throw new InvalidOperationException(
                 "Unity interop is unavailable. Add TopiaForge.Mods.Interop.Unity and declare the 'unsafe-native' capability. " +
                 "This API is intentionally unstable and is not covered by V1 compatibility guarantees.");
+        }
+
+        /// <summary>
+        /// Creates a uniquely identified Harmony owner whose teardown is guaranteed by the current mod lifetime.
+        /// The manifest must declare <c>unsafe-native</c>.
+        /// </summary>
+        /// <param name="context">The current mod context.</param>
+        /// <param name="purpose">A short stable label describing the patch group.</param>
+        /// <returns>The owner-scoped, lifetime-tracked patch lease.</returns>
+        /// <exception cref="InvalidOperationException">
+        /// Called outside Robotopia's game thread, or native interop is unavailable. Queue creation through the SDK
+        /// scheduler when invoking from worker-originated code.
+        /// </exception>
+        public static IHarmonyLease CreateHarmonyLease(this IModContext context, string purpose)
+        {
+            return RequireUnityInterop(context).CreateHarmonyLease(purpose);
         }
     }
 }

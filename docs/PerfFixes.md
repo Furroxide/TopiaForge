@@ -36,8 +36,8 @@ the garbage is gone. If a future Robotopia update ever makes the reimplementatio
 self-disables and falls back to the original method.
 
 ## Reversibility
-The single global flag (`reuseCollisionCallbacks`) is captured and restored. The two Harmony patches are
-removed with `UnpatchSelf()` on unload, and their caches/gates are cleared. Targets are resolved by name
+The single global flag (`reuseCollisionCallbacks`) is captured and restored. The two Harmony patches share an
+owner-scoped, lifetime-tracked lease that removes them on unload, and their caches/gates are cleared. Targets are resolved by name
 (`AccessTools`), so a renamed Robotopia member downgrades that one fix to a logged no-op rather than breaking
 the mod.
 

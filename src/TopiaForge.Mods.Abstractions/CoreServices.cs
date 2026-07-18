@@ -16,6 +16,106 @@ namespace TopiaForge.Mods
         Additive = 1
     }
 
+    /// <summary>Identifies the normalized phase of a scene instance's runtime lifecycle.</summary>
+    public enum SceneLifecyclePhase
+    {
+        /// <summary>The scene finished loading and can be queried by mods.</summary>
+        Loaded = 0,
+
+        /// <summary>The scene became Unity's active scene.</summary>
+        Activated = 1,
+
+        /// <summary>The scene was removed from the set of loaded scenes.</summary>
+        Unloaded = 2
+    }
+
+    /// <summary>
+    /// Describes one normalized scene-instance lifecycle transition without exposing a native scene object.
+    /// The instance id is process-local and exists only to correlate duplicate scene names; it must not be persisted.
+    /// </summary>
+    public sealed class SceneLifecycleEvent
+    {
+        /// <summary>Creates a scene lifecycle notification.</summary>
+        /// <param name="sceneInstanceId">
+        /// Process-local scene identity, or zero when an older/fake host cannot provide one.
+        /// </param>
+        /// <param name="sceneName">Name of the scene instance.</param>
+        /// <param name="phase">The normalized lifecycle phase.</param>
+        /// <param name="mode">
+        /// How a native scene was loaded. Initial snapshots use normalized active/background modes because their
+        /// original load history is unavailable.
+        /// </param>
+        /// <param name="isActive">Whether this scene is active after the transition.</param>
+        /// <param name="isInitial">Whether this is the runtime's startup replay of an already loaded scene.</param>
+        public SceneLifecycleEvent(
+            int sceneInstanceId,
+            string sceneName,
+            SceneLifecyclePhase phase,
+            SceneLoadMode mode,
+            bool isActive,
+            bool isInitial = false)
+        {
+            if (sceneInstanceId < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(sceneInstanceId));
+            }
+
+            if (string.IsNullOrWhiteSpace(sceneName))
+            {
+                throw new ArgumentException("A scene name is required.", nameof(sceneName));
+            }
+
+            if (!Enum.IsDefined(typeof(SceneLifecyclePhase), phase))
+            {
+                throw new ArgumentOutOfRangeException(nameof(phase));
+            }
+
+            if (!Enum.IsDefined(typeof(SceneLoadMode), mode))
+            {
+                throw new ArgumentOutOfRangeException(nameof(mode));
+            }
+
+            if (phase == SceneLifecyclePhase.Unloaded && isActive)
+            {
+                throw new ArgumentException("An unloaded scene cannot remain active.", nameof(isActive));
+            }
+
+            if (phase == SceneLifecyclePhase.Activated && !isActive)
+            {
+                throw new ArgumentException("An activated scene must be active.", nameof(isActive));
+            }
+
+            SceneInstanceId = sceneInstanceId;
+            SceneName = sceneName;
+            Phase = phase;
+            Mode = mode;
+            IsActive = isActive;
+            IsInitial = isInitial;
+        }
+
+        /// <summary>
+        /// Gets the process-local scene identity. Zero means the host cannot distinguish equal scene names.
+        /// </summary>
+        public int SceneInstanceId { get; }
+
+        /// <summary>Gets the scene name.</summary>
+        public string SceneName { get; }
+
+        /// <summary>Gets the normalized lifecycle phase.</summary>
+        public SceneLifecyclePhase Phase { get; }
+
+        /// <summary>
+        /// Gets the native load mode, or the normalized active/background mode for an initial snapshot.
+        /// </summary>
+        public SceneLoadMode Mode { get; }
+
+        /// <summary>Gets whether the scene is active after this transition.</summary>
+        public bool IsActive { get; }
+
+        /// <summary>Gets whether this notification was synthesized from the runtime's initial loaded-scene snapshot.</summary>
+        public bool IsInitial { get; }
+    }
+
     /// <summary>
     /// Describes a successful scene load or later active-scene transition without exposing engine scene objects.
     /// Detailed subscribers may see the same additively loaded scene again when it later becomes active; legacy

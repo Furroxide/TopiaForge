@@ -73,6 +73,22 @@ or an SDK async continuation. If background work needs to re-enter Robotopia, qu
 `Context.Scheduler.NextFrame` and handle its result. Calling an engine adapter directly from a worker
 thread fails before touching Unity with `TFSDK100` and points to that remediation.
 
+## Event dispatch and failure isolation
+
+Event subscriptions are delivered in registration order from an immutable snapshot. Subscribing or
+disposing while an event is being delivered affects the next delivery, not the current one. The runtime
+rebuilds that snapshot only when subscriptions change, so healthy frame, fixed-frame, and late-frame
+delivery adds zero steady-state allocations beyond work performed by the subscriber itself.
+
+Every subscription has an independent failure circuit. A successful invocation resets its failure streak.
+The first failure is logged with the callback method and event phase, repeated exception details are
+suppressed, and a third consecutive failure logs the circuit transition and disables only that subscription.
+Intermittent failures remain in the same suppressed diagnostic episode until 60 consecutive healthy callbacks
+rearm one future failure log, preventing an alternating throw/success callback from flooding logs indefinitely.
+Other subscribers continue in order. An opened circuit remains disabled for that subscription's lifetime;
+dispose it and create a new subscription to retry deliberately. Lifetime teardown still removes both active
+and disabled subscriptions.
+
 ## Scene transition semantics
 
 The original scene callback remains available when only the loaded scene name matters. It fires
@@ -105,6 +121,29 @@ therefore observe an additive scene once when it loads and again if it later bec
 falls back to `Single` plus active metadata on older hosts, and both overloads return
 lifetime-owned subscriptions. SDK scene-load continuations resume on Robotopia's main thread; do
 not opt out with `ConfigureAwait(false)` before making another engine-facing call.
+
+Use the complete lifecycle stream when teardown or duplicate additive scene names matter:
+
+```csharp
+Context.Events.SubscribeSceneLifecycle(scene =>
+{
+    Context.Logger.Debug($"{scene.SceneName} #{scene.SceneInstanceId}: {scene.Phase}");
+});
+```
+
+`Phase` is `Loaded`, `Activated`, or `Unloaded`. `SceneInstanceId` is a process-local correlation key,
+so equal scene names loaded additively can still be distinguished; never persist it. `Mode` retains the
+original mode for native transitions. Startup history is unavailable, so initial replay normalizes the active
+snapshot to `Single` and background snapshots to `Additive`. `IsActive` describes state after the transition,
+and `IsInitial` marks startup replay of a scene that was already loaded when TopiaForge became ready.
+Already-loaded background additive scenes receive
+lifecycle-only `Loaded` notifications before the active scene retains its legacy/detailed load callback and receives
+`Loaded` then `Activated` lifecycle notifications. A scene reported active at load is likewise normalized as
+`Loaded` then `Activated`.
+When Unity publishes `sceneLoaded` before `activeSceneChanged`, `Activated` follows only after the native
+activation. The startup replay and its native echo are deduplicated. Simpler/older event hosts can provide a
+load-only fallback with instance id zero; unload-aware mods should check host support through
+`ISceneLifecycleEventSource` when that distinction is mandatory.
 
 ## Lifetime ownership
 

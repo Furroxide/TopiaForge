@@ -56,7 +56,7 @@ namespace TopiaForge.ModManager
                 new OwnerAssetService(packagePath, lifetime, entities),
                 new OwnerAudioService(lifetime),
                 new OwnerUiService(ownerModId, dataPath, lifetime, logger),
-                new OwnerUnityInteropService(entities));
+                new OwnerUnityInteropService(ownerModId, lifetime, entities));
         }
 
         public GameTimeSample BeginFrame(float deltaTime)

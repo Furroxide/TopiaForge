@@ -145,6 +145,7 @@ namespace TopiaForge.ModManager
         internal void RaiseUpdate(float deltaTime) => modEvents.RaiseUpdate(deltaTime);
         internal void RaiseSceneLoaded(SceneLoadEvent scene) => modEvents.RaiseSceneLoaded(scene);
         internal void RaiseSceneActivated(SceneLoadEvent scene) => modEvents.RaiseSceneActivated(scene);
+        internal void RaiseSceneLifecycle(SceneLifecycleEvent scene) => modEvents.RaiseSceneLifecycle(scene);
         internal void RaiseFixedUpdate(GameTimeSample sample) => modEvents.RaiseFixedUpdate(sample);
         internal void RaiseLateUpdate(GameTimeSample sample) => modEvents.RaiseLateUpdate(sample);
         internal void DisposeLifetime() => ownerLifetime.Dispose();

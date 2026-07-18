@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
-using HarmonyLib;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Interop.Unity;
 using TopiaForge.PerfFixes.Appliers;
 
 namespace TopiaForge.PerfFixes
@@ -13,11 +13,10 @@ namespace TopiaForge.PerfFixes
     /// </summary>
     public sealed class PerfFixesMod : TopiaForgeMod
     {
-        private const string HarmonyId = "io.github.furroxide.topiaforge.perffixes.harmony";
         private static readonly ConfigDefinition<PerfFixesConfig> Config =
             new ConfigDefinition<PerfFixesConfig>(1, () => new PerfFixesConfig());
 
-        private Harmony? harmony;
+        private IHarmonyLease? harmonyLease;
         private readonly List<IPerfApplier> appliers = new List<IPerfApplier>();
 
         /// <inheritdoc/>
@@ -38,11 +37,11 @@ namespace TopiaForge.PerfFixes
                 return;
             }
 
-            harmony = new Harmony(HarmonyId);
+            harmonyLease = Context.CreateHarmonyLease("performance-fixes");
 
             appliers.Add(new ReuseCollisionCallbacksApplier(config, logger));
-            appliers.Add(new CameraMainCacheApplier(config, logger, harmony));
-            appliers.Add(new CollisionProxyApplier(config, logger, harmony));
+            appliers.Add(new CameraMainCacheApplier(config, logger, harmonyLease));
+            appliers.Add(new CollisionProxyApplier(config, logger, harmonyLease));
 
             for (var i = 0; i < appliers.Count;)
             {
@@ -72,15 +71,13 @@ namespace TopiaForge.PerfFixes
 
             try
             {
-                harmony?.UnpatchSelf();
+                harmonyLease?.Dispose();
             }
-            catch (Exception ex)
+            finally
             {
-                Context.Logger.Error(ex, "PerfFixes: failed to unpatch Harmony.");
+                appliers.Clear();
+                harmonyLease = null;
             }
-
-            appliers.Clear();
-            harmony = null;
         }
 
         private void OnUpdate(float deltaTime)

@@ -318,6 +318,9 @@ type public interface TopiaForge.Mods.IRuntimeInfo
   property TopiaForge.Mods.SemanticVersion LoaderVersion { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.SemanticVersion SdkVersion { get [abstract,virtual,newslot]; }
 
+type public interface TopiaForge.Mods.ISceneLifecycleEventSource
+  method [abstract,virtual,newslot] System.IDisposable SubscribeSceneLifecycle(System.Action<TopiaForge.Mods.SceneLifecycleEvent> handler)
+
 type public interface TopiaForge.Mods.ISceneLoadEventSource
   method [abstract,virtual,newslot] System.IDisposable SubscribeSceneLoaded(System.Action<TopiaForge.Mods.SceneLoadEvent> handler)
 
@@ -461,6 +464,7 @@ type public enum TopiaForge.Mods.ModErrorCode : System.Int32
   field const TopiaForge.Mods.ModErrorCode Unknown = 10 (Unknown)
 
 type public static class TopiaForge.Mods.ModEventExtensions : System.Object
+  method extension [static] System.IDisposable SubscribeSceneLifecycle(TopiaForge.Mods.IModEvents events, System.Action<TopiaForge.Mods.SceneLifecycleEvent> handler)
   method extension [static] System.IDisposable SubscribeSceneLoaded(TopiaForge.Mods.IModEvents events, System.Action<TopiaForge.Mods.SceneLoadEvent> handler)
 
 type public sealed class TopiaForge.Mods.ModIdentity : System.Object
@@ -548,6 +552,21 @@ type public readonly struct TopiaForge.Mods.RgbaColor : System.ValueType, System
   property TopiaForge.Mods.RgbaColor Clamped { get; }
   property static TopiaForge.Mods.RgbaColor Clear { get [static]; }
   property static TopiaForge.Mods.RgbaColor White { get [static]; }
+
+type public sealed class TopiaForge.Mods.SceneLifecycleEvent : System.Object
+  constructor .ctor(System.Int32 sceneInstanceId, System.String sceneName, TopiaForge.Mods.SceneLifecyclePhase phase, TopiaForge.Mods.SceneLoadMode mode, System.Boolean isActive, System.Boolean isInitial = false)
+  property System.Boolean IsActive { get; }
+  property System.Boolean IsInitial { get; }
+  property System.Int32 SceneInstanceId { get; }
+  property System.String SceneName { get; }
+  property TopiaForge.Mods.SceneLifecyclePhase Phase { get; }
+  property TopiaForge.Mods.SceneLoadMode Mode { get; }
+
+type public enum TopiaForge.Mods.SceneLifecyclePhase : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.SceneLifecyclePhase Activated = 1 (Activated)
+  field const TopiaForge.Mods.SceneLifecyclePhase Loaded = 0 (Loaded)
+  field const TopiaForge.Mods.SceneLifecyclePhase Unloaded = 2 (Unloaded)
 
 type public sealed class TopiaForge.Mods.SceneLoadEvent : System.Object
   constructor .ctor(System.String sceneName, TopiaForge.Mods.SceneLoadMode mode, System.Boolean isActive)

@@ -1,20 +1,19 @@
 using System;
 using System.Reflection;
-using HarmonyLib;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Interop.Unity;
 
 namespace TopiaForge.NoFeedbackUrl
 {
     public sealed class NoFeedbackUrlMod : TopiaForgeMod
     {
-        private const string HarmonyId = "io.github.furroxide.topiaforge.no-feedback-url.harmony";
         private static readonly ConfigDefinition<NoFeedbackUrlConfig> Config =
             new ConfigDefinition<NoFeedbackUrlConfig>(1, () => new NoFeedbackUrlConfig());
 
         private static bool allowFeedbackPageLaunchThisSession;
         private static IModLogger? logger;
 
-        private Harmony? harmony;
+        private IHarmonyLease? harmonyLease;
 
         /// <inheritdoc/>
         protected override void OnLoad()
@@ -22,7 +21,7 @@ namespace TopiaForge.NoFeedbackUrl
             logger = Context.Logger;
             allowFeedbackPageLaunchThisSession = ConfigureLaunchPolicy(Context);
 
-            harmony = new Harmony(HarmonyId);
+            harmonyLease = Context.CreateHarmonyLease("feedback-url");
 
             var target = typeof(global::OpenFeedBackURL).GetMethod(
                 "OpenFeedbackTask",
@@ -42,7 +41,7 @@ namespace TopiaForge.NoFeedbackUrl
                 return;
             }
 
-            harmony.Patch(target, prefix: new HarmonyMethod(prefix));
+            harmonyLease.Patch(target, prefix: prefix);
             Context.Logger.Info("No Feedback URL loaded.");
         }
 
@@ -51,7 +50,7 @@ namespace TopiaForge.NoFeedbackUrl
         {
             try
             {
-                harmony?.UnpatchSelf();
+                harmonyLease?.Dispose();
                 Context.Logger.Info("No Feedback URL unloaded.");
             }
             catch (Exception ex)
@@ -60,7 +59,7 @@ namespace TopiaForge.NoFeedbackUrl
             }
             finally
             {
-                harmony = null;
+                harmonyLease = null;
                 logger = null;
                 allowFeedbackPageLaunchThisSession = false;
             }

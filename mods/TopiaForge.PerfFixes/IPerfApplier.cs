@@ -2,7 +2,7 @@ namespace TopiaForge.PerfFixes
 {
     /// <summary>One behavior-identical performance fix. Captures any global state it changes in
     /// <see cref="Apply"/> and restores it in <see cref="Revert"/>; Harmony patches are removed centrally
-    /// by the mod's single <c>UnpatchSelf()</c>.</summary>
+    /// by the mod's owner-scoped Harmony lease.</summary>
     internal interface IPerfApplier
     {
         string Name { get; }

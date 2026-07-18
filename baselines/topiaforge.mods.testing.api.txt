@@ -230,16 +230,21 @@ type public sealed class TopiaForge.Mods.Testing.FakeModContext : System.Object,
   property TopiaForge.Mods.Testing.InMemoryModFiles Files { get; }
   property TopiaForge.Mods.Testing.InMemoryModStorageService Storage { get; }
 
-type public sealed class TopiaForge.Mods.Testing.FakeModEvents : System.Object, TopiaForge.Mods.IModEvents, TopiaForge.Mods.ISceneLoadEventSource
+type public sealed class TopiaForge.Mods.Testing.FakeModEvents : System.Object, TopiaForge.Mods.IModEvents, TopiaForge.Mods.ISceneLifecycleEventSource, TopiaForge.Mods.ISceneLoadEventSource
   constructor .ctor(TopiaForge.Mods.Testing.FakeModLifetime lifetime, TopiaForge.Mods.Testing.CapturedModLogger logger)
   method System.Void RaiseFixedUpdate(TopiaForge.Mods.GameTimeSample sample)
   method System.Void RaiseLateUpdate(TopiaForge.Mods.GameTimeSample sample)
   method System.Void RaiseSceneActivated(TopiaForge.Mods.SceneLoadEvent scene)
+  method System.Void RaiseSceneActivated(TopiaForge.Mods.SceneLoadEvent scene, System.Int32 sceneInstanceId)
+  method System.Void RaiseSceneLifecycle(TopiaForge.Mods.SceneLifecycleEvent scene)
   method System.Void RaiseSceneLoaded(System.String sceneName)
   method System.Void RaiseSceneLoaded(TopiaForge.Mods.SceneLoadEvent scene)
+  method System.Void RaiseSceneLoaded(TopiaForge.Mods.SceneLoadEvent scene, System.Int32 sceneInstanceId, System.Boolean isInitial)
+  method System.Void RaiseSceneUnloaded(System.Int32 sceneInstanceId, System.String sceneName, TopiaForge.Mods.SceneLoadMode mode)
   method System.Void RaiseUpdate(System.Single deltaTime)
   method [virtual,final,newslot] System.IDisposable SubscribeFixedUpdate(System.Action<TopiaForge.Mods.GameTimeSample> handler)
   method [virtual,final,newslot] System.IDisposable SubscribeLateUpdate(System.Action<TopiaForge.Mods.GameTimeSample> handler)
+  method [virtual,final,newslot] System.IDisposable SubscribeSceneLifecycle(System.Action<TopiaForge.Mods.SceneLifecycleEvent> handler)
   method [virtual,final,newslot] System.IDisposable SubscribeSceneLoaded(System.Action<System.String> handler)
   method [virtual,final,newslot] System.IDisposable SubscribeSceneLoaded(System.Action<TopiaForge.Mods.SceneLoadEvent> handler)
   method [virtual,final,newslot] System.IDisposable SubscribeUpdate(System.Action<System.Single> handler)

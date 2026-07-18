@@ -38,6 +38,7 @@ namespace TopiaForge.ModManager
         private readonly Dictionary<int, SceneLoadMode> loadedSceneModes =
             new Dictionary<int, SceneLoadMode>();
         private readonly HashSet<int> suppressNextActivation = new HashSet<int>();
+        private readonly HashSet<int> lifecycleActivationPublishedAtLoad = new HashSet<int>();
         private int lastActiveSceneHandle;
         private StartupJournal? startupJournal;
         private StartupRecoveryDecision startupRecovery = StartupRecoveryDecision.None;
