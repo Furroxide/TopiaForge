@@ -1,0 +1,73 @@
+{
+  "$schema": "https://raw.githubusercontent.com/dotnet/docfx/main/schemas/docfx.schema.json",
+  "metadata": [
+    {
+      "src": [
+        {
+          "src": "../",
+          "files": [
+            "src/TopiaForge.Mods.Abstractions/TopiaForge.Mods.Abstractions.csproj",
+            "src/TopiaForge.Mods.Chronos/TopiaForge.Mods.Chronos.csproj",
+            "src/TopiaForge.Mods.Prompts/TopiaForge.Mods.Prompts.csproj",
+            "src/TopiaForge.Mods.RobotKit/TopiaForge.Mods.RobotKit.csproj",
+            "src/TopiaForge.Mods.Ugc/TopiaForge.Mods.Ugc.csproj",
+            "src/TopiaForge.Mods.Worlds/TopiaForge.Mods.Worlds.csproj",
+            "src/TopiaForge.Mods.Testing/TopiaForge.Mods.Testing.csproj",
+            "src/TopiaForge.Mods.Interop.Unity/TopiaForge.Mods.Interop.Unity.csproj"
+          ]
+        }
+      ],
+      "dest": "obj/api",
+      "disableGitFeatures": true,
+      "properties": {
+        "Configuration": "Release"
+      }
+    }
+  ],
+  "build": {
+    "content": [
+      {
+        "src": "api",
+        "files": [
+          "index.md"
+        ]
+      },
+      {
+        "src": "api",
+        "files": [
+          "TopiaForge.md",
+          "TopiaForge.Mods.Interop.md"
+        ],
+        "dest": "api"
+      },
+      {
+        "src": "obj/api",
+        "files": [
+          "**/*.yml"
+        ],
+        "dest": "api"
+      }
+    ],
+    "output": "dist/api/csharp",
+    "template": [
+      "default",
+      "modern"
+    ],
+    "postProcessors": [
+      "ExtractSearchIndex"
+    ],
+    "globalMetadata": {
+      "_appName": "TopiaForge V1 C# API",
+      "_appTitle": "TopiaForge V1 C# API",
+      "_appFooter": "TopiaForge V1 SDK reference",
+      "_enableSearch": true,
+      "_disableContribution": true
+    },
+    "disableGitFeatures": true
+  },
+  "rules": {
+    "InvalidHref": "error",
+    "InvalidInputFile": "error",
+    "NoFilesFound": "error"
+  }
+}

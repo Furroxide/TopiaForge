@@ -18,6 +18,7 @@ Run these before handoff when touching the relevant areas:
 ```powershell
 dotnet build TopiaForge.slnx -c Release
 dotnet run --project tests\TopiaForge.ModManager.Tests\TopiaForge.ModManager.Tests.csproj -c Release
+dotnet run --project tests\TopiaForge.ModRuntime.Tests\TopiaForge.ModRuntime.Tests.csproj -c Release
 dart test packages\launcher_domain
 dart test packages\launcher_data
 dart analyze packages\launcher_domain

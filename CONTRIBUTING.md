@@ -26,6 +26,14 @@ the repository owner first.
 - Build all in-game UI through TopiaForgeUi and keep non-generated Dart files at 500 lines or fewer.
 - Treat manifests, archives, registries, process arguments, and downloaded content as untrusted input.
 
+## Documentation terminology
+
+- Name **Robotopia** on first reference and whenever the prose discusses its installation, builds, player,
+  systems, content, UI, or live-game verification. Use “the game” only as a nearby pronoun after Robotopia is clear.
+- Keep generic wording for actual cross-boundary concepts and identifiers such as “game-side loader”,
+  `GameVersion`, and `supportedGameVersionRange`; do not rename public APIs merely for branding.
+- Describe TopiaForge as the Robotopia modding framework and SDK, not as a game-agnostic ecosystem.
+
 ## Verification
 
 Run the checks relevant to your change, including every command required by `AGENTS.md`. The full pre-PR baseline is:
@@ -39,6 +47,9 @@ Push-Location packages/launcher_data; dart format --output=none --set-exit-if-ch
 Push-Location apps/topiaforge_cli; dart format --output=none --set-exit-if-changed bin lib test; dart analyze; dart test; Pop-Location
 Push-Location packages/launcher_ui; dart format --output=none --set-exit-if-changed lib test; flutter analyze; flutter test; Pop-Location
 Push-Location apps/topiaforge_launcher_flutter; dart format --output=none --set-exit-if-changed lib test; flutter analyze; flutter test; Pop-Location
+
+dotnet tool restore
+Push-Location website; npm ci --ignore-scripts --no-audit --no-fund; npm run check; Pop-Location
 ```
 
 Unity authoring and TopiaForgeUi changes must use exactly Unity `6000.0.23f1`; include the batch-mode command and resulting

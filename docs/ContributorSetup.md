@@ -15,11 +15,11 @@ Required tools:
 
 - .NET SDK **10.0.301**. The checked-in `global.json` requires that exact SDK, and release tooling embeds .NET runtime
   **10.0.9** so extractor bytes and notices are reproducible. Unity-facing runtime and mod projects continue to target
-  `netstandard2.1` for the game player's Mono runtime.
+  `netstandard2.1` for Robotopia's Mono runtime.
 - [FVM](https://fvm.app/) and its managed Flutter 3.41.4 SDK.
 - Git and Git LFS.
 - PowerShell 7 (`pwsh`) and 7-Zip.
-- Node.js 20 or newer for the optional Automerge UGC sidecar.
+- Node.js **24.16.0** or newer for the documentation portal and optional Automerge UGC sidecar.
 - Xcode and CocoaPods for macOS launcher builds, or Visual Studio Build Tools with Desktop C++ for Windows builds.
 
 macOS prerequisites:
@@ -152,8 +152,10 @@ From the repository root:
 pwsh ./tools/bootstrap-dev.ps1
 ```
 
-The bootstrap validates host tools, enables the tracked Git LFS hooks, installs Flutter 3.41.4 through FVM,
-restores Dart/Flutter/npm/NuGet dependencies, and prepares compile-only Robotopia managed references.
+The bootstrap validates host tools, enables the tracked Git hooks, installs Flutter 3.41.4 through FVM,
+restores Dart/Flutter/npm/NuGet dependencies, and prepares compile-only Robotopia managed references. It sets
+`core.hooksPath` to `.githooks`: the tracked hooks run Git LFS integration, and `commit-msg` removes AI co-author
+trailers before a commit is created.
 
 Managed references come from the Windows archive pinned in `.github/robotopia-game-build.json`. The first run
 downloads a SHA-256-verified archive of about **2.17 GB**, extracts only the managed assemblies, deletes the
@@ -168,10 +170,17 @@ temporary archive, and retains the smaller reference cache at:
 The restore writes ignored `Directory.Build.local.props`, allowing ordinary `dotnet build` and IDE builds to
 find the cached assemblies without a persistent `ROBOTOPIA_GAME_DIR` environment variable.
 
-Release and CI gates invoke `restore-robotopia-managed-refs.ps1 -RequireLatest`. That switch intentionally performs
-an online public-compatibility check before using any cache or restore source: it requires the latest public manifest
-to match the pinned build, path, and SHA-256 for **both** Windows and macOS, then probes both public archives. A
-bundled or offline restore that should not contact the public service must omit `-RequireLatest`.
+The managed-reference bootstrap is an independently buildable C# tool, so it can run before the game-dependent
+solution is restored or built:
+
+```powershell
+dotnet run --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj -c Release -- --help
+```
+
+Release and CI gates pass `--require-latest` to that tool. The option intentionally performs an online
+public-compatibility check before using any cache or restore source: it requires the latest public manifest to match
+the pinned build, path, and SHA-256 for **both** Windows and macOS, then probes both public archives. A bundled or
+offline restore that should not contact the public service must omit `--require-latest`.
 
 Bootstrap options:
 
@@ -181,8 +190,10 @@ pwsh ./tools/bootstrap-dev.ps1 -SkipManagedRefs
 pwsh ./tools/bootstrap-dev.ps1 -Verify
 ```
 
-`-SkipManagedRefs` is useful for Dart/Flutter-only work. `-Verify` runs the complete repository checks and builds
-the current host's debug launcher after setup.
+`-SkipManagedRefs` is useful for Dart/Flutter-only work. `-Verify` runs the C# manager, runtime-integration,
+managed-reference, and scaffold-validator harnesses; all Dart, Flutter, documentation, and Automerge checks; then
+builds the current host's debug launcher. Platform signing, release publication, and live Robotopia acceptance remain
+CI or authorized test-host gates rather than bootstrap tasks.
 
 ## Daily commands
 

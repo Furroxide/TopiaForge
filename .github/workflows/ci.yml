@@ -338,6 +338,82 @@ jobs:
             echo "Markdown link validation moves to the developer portal batch."
           fi
 
+  docs:
+    name: Build V1 guides and C# API reference
+    needs: [csharp-tests, template-matrix]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ASTRO_TELEMETRY_DISABLED: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.16.0"
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: "10.0.301"
+
+      - name: Install managed-reference archive dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y p7zip-full
+
+      - name: Resolve Robotopia refs cache key
+        id: refs-cache
+        env:
+          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
+        run: >-
+          dotnet run
+          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
+          -c Release -- --source public --cache-key-only
+
+      - name: Cache Robotopia managed refs
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/robotopia-managed-refs-cache
+          key: ${{ steps.refs-cache.outputs.key }}
+
+      - name: Restore Robotopia managed refs
+        env:
+          ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
+          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
+        run: >-
+          dotnet run
+          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
+          -c Release -- --source public --require-latest
+
+      - name: Restore pinned documentation tools
+        run: dotnet tool restore
+
+      - name: Restore and build documentation
+        working-directory: website
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run check
+          test -f dist/index.html
+          test -f dist/pagefind/pagefind.js
+          test -f dist/diagnostics/TF1001/index.html
+          test -f dist/diagnostics/TFDEV170/index.html
+          test -f dist/diagnostics/TFSCF170/index.html
+          test -f dist/diagnostics/TFSCF171/index.html
+          test -f dist/reference/capability-matrix/index.html
+          test -f dist/reference/live-game-acceptance/index.html
+          cmp ../docs/capability-matrix.json dist/source/docs/capability-matrix.json
+          cmp ../tests/live-game-acceptance.json dist/source/tests/live-game-acceptance.json
+          test -f dist/api/csharp/index.html
+          test -f dist/api/csharp/api/TopiaForge.Mods.IModContext.html
+          test -f dist/api/csharp/api/TopiaForge.Mods.Interop.Unity.IUnityInteropService.html
+
   # Scaffold + validate + pack every mod template so template rot is caught
   # on the PR that causes it, not at the next release.
   template-matrix:
@@ -423,6 +499,7 @@ jobs:
       - flutter-tests
       - sidecar-checks
       - repository-audits
+      - docs
       - template-matrix
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -434,9 +511,10 @@ jobs:
           FLUTTER: ${{ needs.flutter-tests.result }}
           SIDECAR: ${{ needs.sidecar-checks.result }}
           REPOSITORY: ${{ needs.repository-audits.result }}
+          DOCS: ${{ needs.docs.result }}
           TEMPLATES: ${{ needs.template-matrix.result }}
         run: |
           set -euo pipefail
-          for result in "$CSHARP" "$DART" "$FLUTTER" "$SIDECAR" "$REPOSITORY" "$TEMPLATES"; do
+          for result in "$CSHARP" "$DART" "$FLUTTER" "$SIDECAR" "$REPOSITORY" "$DOCS" "$TEMPLATES"; do
             test "$result" = success
           done

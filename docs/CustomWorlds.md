@@ -1,144 +1,45 @@
-# Custom Worlds — ship your own Blender/Unity world as a playable Robotopia world
+---
+title: Custom Robotopia worlds and gamemodes
+description: Register bundle-backed Robotopia worlds and modes through the safe Worlds module.
+---
 
-A mod can register a **fully custom world** — geometry modeled in Blender (or anywhere), assembled in
-Unity, shipped as a prefab in an AssetBundle. Launching it loads the game's clean play stage (a real
-player spawns natively), places your world at the player spawn, and tears it down when the session
-ends. Custom worlds appear in the in-game **GAMEMODES** menu and work with the Sandbox gamemode's
-spawn menu out of the box.
+# Custom Robotopia worlds and gamemodes
 
-```
-Blender (.fbx/.gltf)  →  Unity world project  →  world prefab  →  AssetBundle  →  .topiaforgemod
-                          (topiaforge new           Assets/World/     AssetBundles/     installed via the
-                           unity-world)            World.prefab      <name>.bundle     launcher / CLI
-                                                                         │
-                                        game: UgcPlay scene + native player spawn + your world
-```
+The Worlds module is TopiaForge's safe authoring boundary for custom Robotopia worlds and gamemodes.
+It owns mod-defined worlds, gamemodes, menu entries, scene transitions, pause actions, shops, and
+one authoritative `WorldSession`. Consumer mods never coordinate scenes or global teardown directly.
 
-## Prerequisites
+## Start from a compiled scaffold
 
-- `topiaforge doctor` — the repository-pinned .NET SDK 10.0.301 (build/pack) and, for bundle builds, **Unity 6000.0.23f1
-  (1c4764c07fb4)**. Unity-authored bundles must be serialized by the same editor version as the game player.
-  Doctor warns when your installed editors don't qualify and prints the Hub install hint.
-
-The current world builder targets `StandaloneWindows64`. Authoring can run on Windows, macOS, or Linux when
-that Unity module is installed, but the resulting custom-world bundles are currently supported only by the
-Windows player (natively or through Proton/Wine), not the native macOS player.
-
-## Scaffold and pair (once)
-
-```powershell
-topiaforge new mod my.world --template world          # the C# mod that ships + registers the world
-topiaforge new unity-world MyWorld --mod ..\my.world  # the Unity authoring project, paired
+```sh
+topiaforge new mod example.world --template world --name "Example World" --author "You" --license MIT --version 1.0.0
+topiaforge restore --project example.world
 ```
 
-Pairing writes `topiaforge.world.json` at the Unity project root (`worldId`, `bundleName`,
-`worldPrefab`, `modPath`). Pair an existing project instead with
-`topiaforge world link --project <unityProj> --mod <modDir>`. The scaffolded mod is a single
-registration call:
+The world template uses `TopiaForge.Mods.Worlds`, the core asset service, `BundleWorldContent`, and
+lifetime-owned `IWorldRegistration` handles. The gamemode template adds session events and a
+per-frame Robotopia gameplay loop. Both have NUnit lifecycle tests and are built, packed, relocated, and validated
+from the extracted release in CI.
 
-```csharp
-context.RegisterWorldFromBundle(worlds, new BundleWorldOptions
-{
-    Id = "my.world.world",
-    Name = "My World",
-    BundleRelativePath = "AssetBundles/my-world.bundle",
-    // Content = new CustomWorldOptions { SpawnPointName = "SpawnPoint", KillPlaneDepth = 100f, ... }
-});
-```
+## Authoring flow
 
-and `UnregisterWorld` + `UnloadOwner` on unload. Manifest: `vpmDependencies` on `io.github.furroxide.topiaforge.worlds
->= 0.5.0` and `io.github.furroxide.topiaforge.assets`, `supportedSdkVersionRange >= 0.1.1`.
+1. Build a Robotopia-compatible prefab bundle for a declared `contentTargets` value.
+2. Place it under the mod's `AssetBundles/` content root.
+3. Register a `WorldDefinition` and `ICustomWorldContent` through `IWorldGamemodeService`.
+4. Register a `GamemodeMenuEntry` that pairs the world with a gamemode.
+5. Test create, session start/end, unload, and reload with `TopiaForge.Mods.Testing`.
 
-## Author the world (Blender → Unity)
+`BundleWorldContent.CreateAsync()` loads and spawns through opaque asset/entity handles. Returned
+content and registrations are released automatically after session teardown, unload, or failed load.
 
-Full crib sheet: the template's `Assets/World/README.md`. The contract, in short — one prefab
-(default `Assets/World/World.prefab`) where:
+## Pause and save behavior
 
-- a descendant named **`SpawnPoint`** marks where the player stands (≥ 1 m above walkable ground);
-- **no custom MonoBehaviours** — the game cannot resolve modder scripts inside content bundles; only
-  native Unity/HDRP components survive (colliders, lights, Volumes, reflection probes, audio, LODs);
-- **colliders on all walkable geometry** (MeshCollider for Blender imports);
-- optionally a **global HDRP Volume** child (suggested name `Environment`) with your own
-  sky/exposure — its presence suppresses the framework's default gradient sky + sun;
-- no cameras/event systems (the game's play scene owns those).
+World pause actions are registered through the Worlds provider and remain owner-bound. Story state
+belongs in `Context.Storage` under mod-owned keys. End the current session with an explicit
+`WorldSessionEndReason`; do not infer teardown from arbitrary scene polling.
 
-`TopiaForge → Validate World Prefab` checks all of this in-editor; the build runs the same validation.
+Live acceptance for custom Robotopia worlds is Windows/Proton-only for V1. Other Robotopia code mods
+remain portable when their manifest constraints and content are portable.
 
-## Build the bundle
-
-- In-editor: **TopiaForge → Build World Bundle** (from `io.github.furroxide.topiaforge.world-companion`, preinstalled
-  in the template).
-- Headless: `topiaforge world build [--project <path|name>] [--mod <dir>] [--bundle <name>]
-  [--unity <Unity.exe>] [--dry-run]` — locates an eligible editor (explicit → `UNITY_EDITOR_PATH` →
-  Unity Hub scan), runs `-batchmode -executeMethod
-  TopiaForge.WorldCompanion.Editor.WorldBundleBuilder.Build`, and verifies the bundle landed at
-  `<mod>/AssetBundles/<name>.bundle` (with a provenance `.manifest.json`: sha256, editor version,
-  asset list). Failures print the tail of `Logs/topiaforge-world-build.log`.
-
-## Play
-
-```powershell
-topiaforge world play        # build → pack → install → launch, one command
-```
-
-or compose the steps yourself (`world build`, `pack`, `install`, `launch` / `dev-install`). In-game,
-the world shows up under **GAMEMODES** (paired with the Sandbox gamemode by default — Q spawn menu,
-props, robots all work inside your world).
-
-## Runtime semantics (what the Worlds framework does)
-
-- The bundle prefab is loaded lazily on the world's first launch (via io.github.furroxide.topiaforge.assets, cached).
-- Content is created **before** the scene switch, so a broken bundle fails the launch with a clear
-  message while you are still on the menu.
-- The world is moved so its `SpawnPoint` coincides with the native player spawn (no player teleport).
-- A fall more than `KillPlaneDepth` (default 100 m) below the spawn respawns the player at the spawn.
-- Session end (pause-menu exit, another launch superseding, mod unload) destroys the world content;
-  `UnregisterWorld` during a live session ends it cleanly.
-- Placement failure falls back to the generated sandbox arena rather than stranding the player.
-
-### Gamemode pause actions
-
-Gamemodes can add session-scoped commands to the TopiaForgeUi pause companion. Always keep and dispose the
-registration when the session ends. Mark irreversible or progress-resetting commands as destructive so
-the provider shows the standard confirmation before invoking the callback:
-
-```csharp
-var pause = context.GetService<IWorldPauseMenuService>();
-var cleanup = pause?.RegisterAction(new WorldPauseAction(
-    "my.gamemode.reset",
-    "RESET RUN",
-    ResetRun,
-    closePauseMenu: true,
-    order: 0,
-    destructive: true));
-
-// Session end / mod unload:
-cleanup?.Dispose();
-```
-
-Worlds only inspects and rewires the game's existing exit button; Robotopia-owned pause visuals are
-created through TopiaForgeUi, inherit theme/accessibility settings, use allocator-managed canvas ordering, and
-surface callback failures as diagnostics plus an error toast.
-
-## Command reference
-
-| Command | What it does |
-|---|---|
-| `topiaforge new unity-world <name> [--dir Path]` | Scaffold the Unity authoring project (add `--mod <modDir>` to pair it in the same step). |
-| `topiaforge world link --project <unityProj> --mod <modDir> [--bundle name] [--prefab assetPath]` | Pair an existing Unity project with the mod that ships its bundle (writes `topiaforge.world.json`). |
-| `topiaforge world build [--project <unityProj\|name>] [--mod <modDir>] [--bundle name] [--unity Unity.exe] [--dry-run]` | Headless bundle build into `<mod>/AssetBundles/`; `--dry-run` prints the resolved project/mod/bundle/editor without launching Unity. |
-| `topiaforge world play [--project <unityProj\|name>] [--mod <modDir>] [--bundle name] [--unity Unity.exe] [--configuration cfg]` | Build → pack → install → launch, one command. |
-
-Ready to ship the world to other players? See [PublishingYourMod.md](PublishingYourMod.md).
-
-## Troubleshooting
-
-- **"No eligible Unity editor"** — install 6000.0.23f1 (Hub → Installs → Archive, or headless:
-  `"Unity Hub.exe" -- --headless install --version 6000.0.23f1 --changeset 1c4764c07fb4`).
-- **Validation: custom component** — a script from your project/package is on the prefab; replace it
-  with native components or move behaviour into the mod's C# (attach at runtime).
-- **World loads but looks washed out** — no global Volume and `ApplyDefaultEnvironment = false`; use
-  the default environment or ship your own Volume.
-- **Player falls through the floor** — missing colliders on the imported meshes.
-- **`manager.log` says the bundle has N prefabs** — pin `PrefabAssetName` in `BundleWorldOptions` or
-  keep exactly one prefab in the bundle.
+See [Specialist modules](Modules.md#worlds), [Manifest V4](ManifestV4.md#runtime-and-content-constraints),
+and [Test a mod](TestingMods.md).

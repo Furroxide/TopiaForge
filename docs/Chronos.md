@@ -1,93 +1,46 @@
-# Chronos — game-time control framework
+---
+title: Chronos
+description: Coordinate Robotopia time effects and turns through lifetime-owned V1 leases.
+---
 
-`TopiaForge.Chronos` is a framework mod that publishes **`ITimeControlService`** — the single, leak-proof
-authority over Unity's `Time.timeScale` / `Time.fixedDeltaTime` for the whole mod ecosystem. It's the reusable
-foundation for time-bending gamemodes: a hard **freeze** (turn-based / RPG pause / freeze-to-talk), a
-continuous or input-driven **slow-mo** (Superhot), bounded **stepping**, and a full **turn scheduler**.
+# Chronos
 
-Resolve it with `context.GetService<ITimeControlService>()` and declare a dependency on `io.github.furroxide.topiaforge.chronos`
-(`loadAfter` it). All ops degrade gracefully — when the engine hooks can't be resolved, `IsAvailable` is
-`false` and effects become no-ops rather than throwing.
+Chronos is TopiaForge's optional V1 module for coordinating Robotopia time. It provides freezing, slow
+motion, player exemption, dynamic drivers, and turn scheduling so mods do not fight over
+Robotopia's global timing state.
 
-## Why a single owner (the leak the studio hit)
+## Add Chronos
 
-`Time.timeScale` is a global mutable singleton. The game's own slow-mo was cut because it was a fire-and-forget
-write with no owner and no reset — it leaked into menus and the next gamemode. Chronos fixes that structurally:
-
-- **One writer.** Chronos is the only mod-side writer of `timeScale`/`fixedDeltaTime`.
-- **Derived, never last-writer-wins.** Every effect is a ref-counted, owner-tagged **lease**; the effective
-  scale is derived from *all* active leases — any freeze ⇒ `0`, else the product of slow factors × the driver
-  base. Two flows can't clobber each other.
-- **`fixedDeltaTime` co-scaled off a once-captured baseline** (`base × max(scale, floor)`), never the live
-  value — so the physics step slows smoothly in slow-mo and can't drift across gamemode loads.
-- **Force-reset on every teardown** — scene change, owner teardown (`UnregisterOwner` releases *only* that
-  mod's leases), dispose, and even a thrown frame (try/finally around the tick). Leak-into-the-next-gamemode is
-  structurally impossible.
-- **Coexists with a native pause.** If Chronos sees an external `timeScale==0` it didn't set (the game's
-  `FreezeGame`/pause menu), it yields instead of fighting.
-
-## Two clocks
-
-Read these instead of `Time.*` directly so your code freezes (or doesn't) with the world correctly:
-
-- **WorldClock** — *scaled* (`WorldDeltaTime`/`WorldTime`): native robots, physics, sim entities.
-- **ControlClock** — *unscaled* (`ControlDeltaTime`/`ControlTime`): the player (when exempt), HUD, UI,
-  countdowns, and the drivers themselves.
-
-## Surface
-
-```csharp
-public interface ITimeControlService
-{
-    bool IsAvailable { get; }
-    float WorldScale { get; } float WorldDeltaTime { get; } float WorldTime { get; }
-    float ControlDeltaTime { get; } float ControlTime { get; }
-    bool IsFrozen { get; } TimeMode Mode { get; }
-
-    ITimeLease Freeze(string usage, bool suspendPlayer = false); // scale 0; optionally disable the FPS controller + free the cursor
-    ITimeLease Slow(string usage, float scale);                  // steady slow-mo (leases multiply)
-    ITimeLease ExemptPlayer(string usage);                       // keep the player full-speed while the world is slow (Superhot)
-    ITimeLease SetDriver(string usage, ITimeDriver driver);      // recompute the scale each control tick (e.g. Superhot ramp)
-    void Step(float seconds); void StepFixed(int ticks);         // advance a frozen world by a bounded slice (RTwP / turn)
-    ITurnScheduler BeginTurnBased(string usage, TurnSchedulerOptions options);
-    void ForceReset();
-}
+```sh
+topiaforge mod add chronos
+topiaforge restore
 ```
 
-Every effect returns an `ITimeLease` — **dispose it to remove the effect** (idempotent). Leases are the whole
-safety story.
+Resolve `ITimeControlService` with `Context.RequireExtension<ITimeControlService>()`. The module
+command also declares `io.github.furroxide.topiaforge.chronos` as a required runtime dependency.
 
-## The three modes
+## Lease model
 
-- **Superhot** — `SetDriver(new SuperhotTimeDriver())` + `ExemptPlayer(...)`. The driver ramps the world scale
-  from how much the player is moving/aiming/firing (idle → ~0.03 floor, acting → 1.0, asymmetric: snap up, ease
-  down), and the exemption scales the native FPS controller's move speed up by `1/scale` so *you* stay
-  full-speed (look is already frame-based, so it needs no compensation). `SuperhotTimeDriver` is a pure,
-  Unity-free `ITimeDriver` in the SDK — reuse or replace it.
-- **RPG real-time-with-pause** — toggle a `Freeze(...)` lease; the player command UI reads the ControlClock so
-  it stays live while the world is at 0; `Step()` advances "one beat".
-- **Turn-based** — `BeginTurnBased(...)` hard-freezes the world and returns an `ITurnScheduler` that runs
-  registered actors in initiative/energy order, **lifting time only for the actor that is acting** (others
-  idle), then re-freezing. Drive it: while `State == AwaitingAction`, command `CurrentActor` (and make sure no
-  other actor has a queued move — it'd advance during the lift), call `BeginAction()`, then `EndAction()` when
-  it finishes. Dispose the scheduler to end turn-based mode.
+`Freeze`, `Slow`, `ExemptPlayer`, `SetDriver`, and `BeginTurnBased` return disposable leases. The
+effective world scale is derived from all active leases instead of using last-writer-wins state.
+Releasing a lease restores the state implied by remaining leases; mod lifetime cleanup handles
+partial loads and unload automatically.
 
-## Reference consumer — Zombies
+Use Chronos service clocks for behavior that should obey world scale or continue while Robotopia's
+world is paused. UI, input, and deadlines generally use control time. Simulation actors and world
+timers use world time.
 
-`TopiaForge.Zombies` (v0.9.0) dogfoods Chronos two ways: the **JACK-IN** freeze-to-talk acquires a `Freeze`
-lease (so native robots + physics halt at `timeScale 0`, not just a per-entity stop), and a **`superhotMode`**
-config toggle acquires a `SetDriver(SuperhotTimeDriver)` + `ExemptPlayer` lease for a "the horde only moves
-when you do" mode. Both are released through the same lease discipline on every teardown.
+## Turn scheduling
 
-## Limitations (from the GameCode decompile)
+`ITurnScheduler` registers typed `TurnActorId` values and advances them using bounded options.
+Dispose the scheduler to end the mode and release its freeze. Keep actor decisions asynchronous and
+cancellable; never block a frame waiting for a turn action.
 
-- The player FPS controller runs on *scaled* time and has no unscaled path, so Superhot requires the
-  reflect-scale exemption (guarded; degrades to "player also slowed" if the controller fields can't be
-  resolved between builds).
-- `timeScale` is global: you can't exempt one *native* robot from slow-mo (only the player, via reflection,
-  and your own mod components via the ControlClock). The native engine only exposes a per-robot opt-out for the
-  current conversation target.
-- `timeScale=0` halts `FixedUpdate`/coroutines — Chronos timers and any UI must live on the ControlClock; the
-  turn scheduler steps by lifting time rather than relying on a dead `FixedUpdate`.
-- Audio: native FMOD pauses wholesale and the local TTS already reads `timeScale`; Chronos does not pitch-shift
-  audio in slow-mo in this version.
+## Graceful availability
+
+Check `IsAvailable` and explain an unavailable Robotopia binding through runtime capability
+metadata. A mod should disable only its time-bending feature, release any already-acquired leases,
+and preserve ordinary Robotopia gameplay.
+
+See [Specialist modules](Modules.md#chronos) and the generated C# API reference for requests,
+drivers, signals, modes, and scheduler members.

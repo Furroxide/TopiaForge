@@ -3,7 +3,7 @@
 The TopiaForge launcher's **Developer** tab is a Creator-Companion-style cockpit for building content for
 Robotopia — the equivalent of VRChat's Creator Companion (VCC). It manages multiple projects, detects Unity,
 installs/restores VPM packages, scaffolds new projects/packages from templates, and drives UGC live-sync into the
-running game. Everything is also available from the `topiaforge` CLI.
+running Robotopia instance. Everything is also available from the `topiaforge` CLI.
 
 Enable it in **Settings → Developer mode** (off by default; consumers never see it).
 
@@ -38,7 +38,7 @@ launcher never downloads or installs Unity.
 - **Mod templates** (`templates/mod/<id>/`) — seven directory templates for C# mods (`minimal`, `gameplay`,
   `gamemode`, `service`, `ui`, `asset`, `world`), each with a `template.json` (metadata + manifest defaults) and
   `{{TOKEN}}`-substituted sources. Scaffold with `topiaforge new mod <id> --template <id>`; list them with
-  `topiaforge list templates`. See [Modding.md](Modding.md#scaffolding-and-manifest-management-from-the-cli).
+  `topiaforge list templates`. See [Modding.md](Modding.md#choose-a-template).
 - **Unity world** (`templates/TopiaForge.UnityWorldTemplate/`) — a starter Unity project for authoring UGC levels:
   a sample scene, `Packages/manifest.json` + `Packages/vpm-manifest.json` (UGC companion + the embedded
   resolver), a VCC-style `Packages/.gitignore`, and a pinned Unity 6 version. The `template-world` analog.
@@ -54,8 +54,8 @@ write a machine-local repository path into the project. The embedded recovery br
 and offers the explicit resolve command; it never performs network or archive work during Unity startup.
 
 CLI: `topiaforge new unity-world <name> [--dir path] [--live-sync [--watch folder]]`. For the full one-command
-authoring loop (create/resolve the project, seed the companion, deploy the game config, and launch Unity
-connected) use `topiaforge ugc dev` — see [UgcLiveSync.md](UgcLiveSync.md#cli-ugc-setup-and-ugc-dev-one-command-authoring-loop).
+authoring loop (create/resolve the project, seed the companion, deploy the Robotopia runtime config, and launch Unity
+connected) use `topiaforge ugc dev` — see [UgcLiveSync.md](UgcLiveSync.md#local-authoring-loop).
 
 ## Packages (VPM)
 
@@ -66,7 +66,7 @@ listing formats, the resolver, and the `topiaforge unity …` CLI.
 ## UGC Live Sync cockpit
 
 The **UGC Live Sync** pane (see [UgcLiveSync.md](UgcLiveSync.md)) auto-detects connection values, shows live
-diagnostics from the game, and offers a one-button **Go Live** that runs the whole pipeline with no manual
+diagnostics from Robotopia, and offers a one-button **Go Live** that runs the whole pipeline with no manual
 scripts.
 
 ## VRChat-feature → TopiaForge parity
@@ -82,5 +82,5 @@ scripts.
 | Safe recovery after clone | Read-only `io.github.furroxide.topiaforge.vpm-resolver` warning + explicit launcher/CLI Resolve All |
 | `vpm-package-maker` | `topiaforge unity new-package` |
 | Unity version detect/open | `listUnityEditors` + Open in Unity (detect-only) |
-| ClientSim (in-editor preview) | **UGC Live Sync** (preview in the real game) |
+| ClientSim (in-editor preview) | **UGC Live Sync** (preview in a running Robotopia instance) |
 | Settings folder / project list | `%APPDATA%\TopiaForgeLauncher\` (`developer_projects.json`, `vpm_sources.json`) |

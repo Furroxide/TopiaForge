@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 1,
+  "rows": [
+    {
+      "id": "utility",
+      "goal": "Utility mods",
+      "apiTypes": [
+        "TopiaForge.Mods.IModConfigService, TopiaForge.Mods.Abstractions",
+        "TopiaForge.Mods.IModStorageService, TopiaForge.Mods.Abstractions",
+        "TopiaForge.Mods.ILocalizationService, TopiaForge.Mods.Abstractions",
+        "TopiaForge.Mods.ICommandService, TopiaForge.Mods.Abstractions",
+        "TopiaForge.Mods.IDiagnosticsService, TopiaForge.Mods.Abstractions"
+      ],
+      "sampleProjects": [
+        "tests/TopiaForge.SdkAcceptanceMod/TopiaForge.SdkAcceptanceMod.csproj"
+      ],
+      "guide": "docs/CoreServices.md",
+      "fakeTypes": [
+        "TopiaForge.Mods.Testing.InMemoryModConfigService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.InMemoryModStorageService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeLocalizationService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeCommandService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeDiagnosticsService, TopiaForge.Mods.Testing"
+      ],
+      "acceptanceCases": [
+        "authoring.config-storage-localization-commands"
+      ]
+    },
+    {
+      "id": "input-ui",
+      "goal": "Input and UI",
+      "apiTypes": [
+        "TopiaForge.Mods.IInputService, TopiaForge.Mods.Abstractions",
+        "TopiaForge.Mods.IUiService, TopiaForge.Mods.Abstractions",
+        "TopiaForge.Mods.UiNode, TopiaForge.Mods.Abstractions",
+        "TopiaForge.Mods.UiVirtualList, TopiaForge.Mods.Abstractions",
+        "TopiaForge.Mods.UiAccessibilityPreferences, TopiaForge.Mods.Abstractions"
+      ],
+      "sampleProjects": [
+        "mods/TopiaForge.Sandbox/TopiaForge.Sandbox.csproj",
+        "tests/TopiaForge.SdkAcceptanceMod/TopiaForge.SdkAcceptanceMod.csproj"
+      ],
+      "guide": "docs/UiKit.md",
+      "fakeTypes": [
+        "TopiaForge.Mods.Testing.FakeInputService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeUiService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeUiSurface, TopiaForge.Mods.Testing"
+      ],
+      "acceptanceCases": [
+        "input.devices-and-focus",
+        "ui.accessibility-and-focus"
+      ]
+    },
+    {
+      "id": "gameplay",
+      "goal": "Gameplay abilities",
+      "apiTypes": [
+        "TopiaForge.Mods.IPlayerService, TopiaForge.Mods.Abstractions",
+        "TopiaForge.Mods.IEntityService, TopiaForge.Mods.Abstractions",
+        "TopiaForge.Mods.IPhysicsService, TopiaForge.Mods.Abstractions",
+        "TopiaForge.Mods.IGameTime, TopiaForge.Mods.Abstractions",
+        "TopiaForge.Mods.IModScheduler, TopiaForge.Mods.Abstractions"
+      ],
+      "sampleProjects": [
+        "mods/TopiaForge.GravityGun/TopiaForge.GravityGun.csproj",
+        "tests/TopiaForge.SdkAcceptanceMod/TopiaForge.SdkAcceptanceMod.csproj"
+      ],
+      "guide": "docs/Modding.md",
+      "fakeTypes": [
+        "TopiaForge.Mods.Testing.FakePlayerService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeEntityService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakePhysicsService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.DeterministicGameTime, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.DeterministicModScheduler, TopiaForge.Mods.Testing"
+      ],
+      "acceptanceCases": [
+        "lifecycle.frame-fixed-late",
+        "player.health-and-control",
+        "lifecycle.ten-cycles"
+      ]
+    },
+    {
+      "id": "interactions-content",
+      "goal": "Interactions and content",
+      "apiTypes": [
+        "TopiaForge.Mods.IInteractionService, TopiaForge.Mods.Abstractions",
+        "TopiaForge.Mods.IItemService, TopiaForge.Mods.Abstractions",
+        "TopiaForge.Mods.IAssetService, TopiaForge.Mods.Abstractions",
+        "TopiaForge.Mods.IAudioService, TopiaForge.Mods.Abstractions"
+      ],
+      "sampleProjects": [
+        "tests/TopiaForge.SdkAcceptanceMod/TopiaForge.SdkAcceptanceMod.csproj"
+      ],
+      "guide": "docs/CoreServices.md",
+      "fakeTypes": [
+        "TopiaForge.Mods.Testing.FakeInteractionService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeItemService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeAssetService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeAudioService, TopiaForge.Mods.Testing"
+      ],
+      "acceptanceCases": [
+        "world.physics-entities-items-interactions",
+        "content.prefab-spawn-destroy",
+        "content.audio",
+        "compat.graceful-unavailable"
+      ]
+    },
+    {
+      "id": "worlds-modes",
+      "goal": "Worlds and modes",
+      "apiTypes": [
+        "TopiaForge.Mods.ISceneService, TopiaForge.Mods.Abstractions",
+        "TopiaForge.Mods.IWorldGamemodeService, TopiaForge.Mods.Worlds",
+        "TopiaForge.Mods.IUgcLiveSyncService, TopiaForge.Mods.Ugc"
+      ],
+      "sampleProjects": [
+        "tests/TopiaForge.SdkAcceptanceMod/TopiaForge.SdkAcceptanceMod.csproj"
+      ],
+      "guide": "docs/CustomWorlds.md",
+      "fakeTypes": [
+        "TopiaForge.Mods.Testing.FakeSceneService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeWorldGamemodeService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeUgcLiveSyncService, TopiaForge.Mods.Testing"
+      ],
+      "acceptanceCases": [
+        "lifecycle.initial-scene",
+        "worlds.session-teardown"
+      ]
+    },
+    {
+      "id": "robots-story",
+      "goal": "Robots and story",
+      "apiTypes": [
+        "TopiaForge.Mods.IRobotAgentService, TopiaForge.Mods.RobotKit",
+        "TopiaForge.Mods.IRobotObjectiveService, TopiaForge.Mods.RobotKit",
+        "TopiaForge.Mods.IRobotConversationService, TopiaForge.Mods.RobotKit",
+        "TopiaForge.Mods.IPlayerDialogueInputService, TopiaForge.Mods.RobotKit",
+        "TopiaForge.Mods.IRobotBrainQueryService, TopiaForge.Mods.RobotKit"
+      ],
+      "sampleProjects": [
+        "mods/TopiaForge.Sandbox/TopiaForge.Sandbox.csproj",
+        "mods/TopiaForge.Zombies/TopiaForge.Zombies.csproj",
+        "tests/TopiaForge.SdkAcceptanceMod/TopiaForge.SdkAcceptanceMod.csproj"
+      ],
+      "guide": "docs/RobotKit.md",
+      "fakeTypes": [
+        "TopiaForge.Mods.Testing.FakeRobotKit, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeRobotAgentService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeRobotObjectiveService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeRobotConversationService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakePlayerDialogueInputService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeRobotBrainQueryService, TopiaForge.Mods.Testing"
+      ],
+      "acceptanceCases": [
+        "robots.objectives-dialogue-voice"
+      ]
+    },
+    {
+      "id": "mod-integration",
+      "goal": "Mod integration",
+      "apiTypes": [
+        "TopiaForge.Mods.IExtensionService, TopiaForge.Mods.Abstractions",
+        "TopiaForge.Mods.ExtensionCardinality, TopiaForge.Mods.Abstractions",
+        "TopiaForge.Mods.IPromptOverrideRegistry, TopiaForge.Mods.Prompts",
+        "TopiaForge.Mods.ITimeControlService, TopiaForge.Mods.Chronos"
+      ],
+      "sampleProjects": [
+        "tests/TopiaForge.SdkAcceptanceMod/TopiaForge.SdkAcceptanceMod.csproj"
+      ],
+      "guide": "docs/Modules.md",
+      "fakeTypes": [
+        "TopiaForge.Mods.Testing.FakeExtensionService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakePromptOverrideRegistry, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeTimeControlService, TopiaForge.Mods.Testing"
+      ],
+      "acceptanceCases": [
+        "integration.provider-scope"
+      ]
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # Registry Format
 
-How mods reach players: **package sources**. A source is anything the launcher and CLI can turn into a
+How mods for Robotopia reach players: **package sources**. A source is anything the TopiaForge launcher and CLI can turn into a
 catalog of installable `.topiaforgemod` packages. This page specifies the wire formats and shows how to host your own
 source. The built-in official source initially contains release-generated first-party packages only; community
 submissions are closed until registry governance is approved. Follow [PublishingYourMod.md](PublishingYourMod.md) for
