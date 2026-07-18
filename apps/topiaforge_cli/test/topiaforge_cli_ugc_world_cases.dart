@@ -284,10 +284,7 @@ void _ugcAndWorldCliTests(_CliTestHarness Function() currentHarness) {
             as Map<String, Object?>;
     expect(
       (manifest['vpmDependencies'] as Map).keys,
-      containsAll([
-        'io.github.furroxide.topiaforge.assets',
-        'io.github.furroxide.topiaforge.worlds',
-      ]),
+      contains('io.github.furroxide.topiaforge.worlds'),
     );
     expect(manifest['permissions'], contains('asset-bundles'));
     expect(manifest['permissions'], contains('world-service'));
@@ -296,7 +293,8 @@ void _ugcAndWorldCliTests(_CliTestHarness Function() currentHarness) {
     final modSource = File(
       p.join(projectDir, 'TIslandMod.cs'),
     ).readAsStringSync();
-    expect(modSource, contains('RegisterWorldFromBundle'));
+    expect(modSource, contains('new BundleWorldContent('));
+    expect(modSource, contains('RegisterWorld('));
     expect(modSource, contains('AssetBundles/t-island.bundle'));
 
     final checked = await currentHarness().runCli([

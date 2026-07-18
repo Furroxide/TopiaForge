@@ -13,9 +13,9 @@
         "launcherDomain": "0.1.1",
         "launcherData": "0.1.1",
         "launcherUi": "0.1.1",
-        "loader": "0.2.0",
-        "loaderCore": "0.2.0",
-        "sdk": "0.1.3",
+        "loader": "1.0.0",
+        "loaderCore": "1.0.0",
+        "sdk": "1.0.0",
         "unityUi": "1.0.0",
         "gameCompatExtractor": "1.1.0",
         "gameCompatSurface": "1.1.0",
@@ -28,38 +28,36 @@
         "io.github.furroxide.topiaforge.ugc-companion": "0.1.1"
       },
       "mods": {
-        "io.github.furroxide.topiaforge.assets": "0.1.0",
-        "io.github.furroxide.topiaforge.chronos": "0.1.0",
-        "io.github.furroxide.topiaforge.gravitygun": "0.1.5",
-        "io.github.furroxide.topiaforge.no-feedback-url": "0.1.1",
-        "io.github.furroxide.topiaforge.perffixes": "0.1.0",
-        "io.github.furroxide.topiaforge.performance": "0.2.0",
-        "io.github.furroxide.topiaforge.prompts": "0.1.0",
-        "io.github.furroxide.topiaforge.robotkit": "0.8.0",
-        "io.github.furroxide.topiaforge.sandbox": "0.3.1",
-        "io.github.furroxide.topiaforge.ugc.livesync": "0.3.0",
-        "io.github.furroxide.topiaforge.worlds": "0.6.0",
-        "io.github.furroxide.topiaforge.zombies": "0.12.1"
+        "io.github.furroxide.topiaforge.chronos": "1.0.0",
+        "io.github.furroxide.topiaforge.gravitygun": "1.0.0",
+        "io.github.furroxide.topiaforge.no-feedback-url": "1.0.0",
+        "io.github.furroxide.topiaforge.perffixes": "1.0.0",
+        "io.github.furroxide.topiaforge.performance": "1.0.0",
+        "io.github.furroxide.topiaforge.prompts": "1.0.0",
+        "io.github.furroxide.topiaforge.robotkit": "1.0.0",
+        "io.github.furroxide.topiaforge.sandbox": "1.0.0",
+        "io.github.furroxide.topiaforge.ugc.livesync": "1.0.0",
+        "io.github.furroxide.topiaforge.worlds": "1.0.0",
+        "io.github.furroxide.topiaforge.zombies": "1.0.0"
       },
       "excludedDeveloperMods": {
-        "io.github.furroxide.topiaforge.uigallery": "0.2.0"
+        "io.github.furroxide.topiaforge.uigallery": "1.0.0"
       },
       "artifacts": [
         "TopiaForge-linux-x64.zip",
         "TopiaForge-macos-universal.zip",
         "TopiaForge-windows-x64.zip",
-        "io.github.furroxide.topiaforge.assets-0.1.0.topiaforgemod",
-        "io.github.furroxide.topiaforge.chronos-0.1.0.topiaforgemod",
-        "io.github.furroxide.topiaforge.gravitygun-0.1.5.topiaforgemod",
-        "io.github.furroxide.topiaforge.no-feedback-url-0.1.1.topiaforgemod",
-        "io.github.furroxide.topiaforge.perffixes-0.1.0.topiaforgemod",
-        "io.github.furroxide.topiaforge.performance-0.2.0.topiaforgemod",
-        "io.github.furroxide.topiaforge.prompts-0.1.0.topiaforgemod",
-        "io.github.furroxide.topiaforge.robotkit-0.8.0.topiaforgemod",
-        "io.github.furroxide.topiaforge.sandbox-0.3.1.topiaforgemod",
-        "io.github.furroxide.topiaforge.ugc.livesync-0.3.0.topiaforgemod",
-        "io.github.furroxide.topiaforge.worlds-0.6.0.topiaforgemod",
-        "io.github.furroxide.topiaforge.zombies-0.12.1.topiaforgemod"
+        "io.github.furroxide.topiaforge.chronos-1.0.0.topiaforgemod",
+        "io.github.furroxide.topiaforge.gravitygun-1.0.0.topiaforgemod",
+        "io.github.furroxide.topiaforge.no-feedback-url-1.0.0.topiaforgemod",
+        "io.github.furroxide.topiaforge.perffixes-1.0.0.topiaforgemod",
+        "io.github.furroxide.topiaforge.performance-1.0.0.topiaforgemod",
+        "io.github.furroxide.topiaforge.prompts-1.0.0.topiaforgemod",
+        "io.github.furroxide.topiaforge.robotkit-1.0.0.topiaforgemod",
+        "io.github.furroxide.topiaforge.sandbox-1.0.0.topiaforgemod",
+        "io.github.furroxide.topiaforge.ugc.livesync-1.0.0.topiaforgemod",
+        "io.github.furroxide.topiaforge.worlds-1.0.0.topiaforgemod",
+        "io.github.furroxide.topiaforge.zombies-1.0.0.topiaforgemod"
       ]
     }
   ]
