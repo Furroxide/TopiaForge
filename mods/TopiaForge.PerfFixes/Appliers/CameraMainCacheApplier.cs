@@ -1,6 +1,6 @@
 using System.Reflection;
-using HarmonyLib;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Interop.Unity;
 using UnityEngine;
 
 namespace TopiaForge.PerfFixes.Appliers
@@ -22,9 +22,9 @@ namespace TopiaForge.PerfFixes.Appliers
 
         private readonly PerfFixesConfig config;
         private readonly IModLogger logger;
-        private readonly Harmony harmony;
+        private readonly IHarmonyLease harmony;
 
-        public CameraMainCacheApplier(PerfFixesConfig config, IModLogger logger, Harmony harmony)
+        public CameraMainCacheApplier(PerfFixesConfig config, IModLogger logger, IHarmonyLease harmony)
         {
             this.config = config;
             this.logger = logger;
@@ -62,7 +62,7 @@ namespace TopiaForge.PerfFixes.Appliers
 
         public override void Revert()
         {
-            // Patch removal is centralized in the mod's UnpatchSelf; just stop serving the cache.
+            // Patch removal is centralized in the mod's owner-scoped lease; just stop serving the cache.
             active = false;
             cachedFrame = -1;
             cachedCamera = null;

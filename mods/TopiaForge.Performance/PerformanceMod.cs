@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
-using HarmonyLib;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Interop.Unity;
 using TopiaForge.Performance.Appliers;
 
 namespace TopiaForge.Performance
@@ -13,11 +13,10 @@ namespace TopiaForge.Performance
     /// </summary>
     public sealed class PerformanceMod : TopiaForgeMod
     {
-        private const string HarmonyId = "io.github.furroxide.topiaforge.performance.harmony";
         private static readonly ConfigDefinition<PerformanceConfig> Config =
             new ConfigDefinition<PerformanceConfig>(1, () => new PerformanceConfig());
 
-        private Harmony? harmony;
+        private IHarmonyLease? harmonyLease;
         private readonly List<IPerfApplier> appliers = new List<IPerfApplier>();
 
         /// <inheritdoc/>
@@ -46,13 +45,13 @@ namespace TopiaForge.Performance
                 return;
             }
 
-            harmony = new Harmony(HarmonyId);
+            harmonyLease = Context.CreateHarmonyLease("performance");
 
             appliers.Add(new EngineApplier(config, logger));
             appliers.Add(new VolumeApplier(config, logger));
             appliers.Add(new AssetApplier(config, logger));
             appliers.Add(new CameraDynResApplier(config, logger));
-            appliers.Add(new PatchApplier(config, logger, harmony));
+            appliers.Add(new PatchApplier(config, logger, harmonyLease));
             appliers.Add(new NavTuningApplier(config, logger));
 
             for (var i = 0; i < appliers.Count;)
@@ -84,15 +83,13 @@ namespace TopiaForge.Performance
 
             try
             {
-                harmony?.UnpatchSelf();
+                harmonyLease?.Dispose();
             }
-            catch (Exception ex)
+            finally
             {
-                Context.Logger.Error(ex, "Performance: failed to unpatch Harmony.");
+                appliers.Clear();
+                harmonyLease = null;
             }
-
-            appliers.Clear();
-            harmony = null;
         }
 
         private void OnUpdate(float deltaTime)

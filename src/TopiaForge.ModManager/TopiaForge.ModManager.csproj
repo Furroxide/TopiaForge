@@ -52,6 +52,7 @@
 
   <ItemGroup>
     <Reference Include="BepInEx" HintPath="$(BepInExCoreDir)\BepInEx.dll" Private="false" />
+    <Reference Include="0Harmony" HintPath="$(BepInExCoreDir)\0Harmony.dll" Private="false" />
     <Reference Include="GameCode" HintPath="$(RobotopiaManagedDir)\GameCode.dll" Private="false" />
     <Reference Include="UniTask" HintPath="$(RobotopiaManagedDir)\UniTask.dll" Private="false" />
     <Reference Include="UnityEngine" HintPath="$(RobotopiaManagedDir)\UnityEngine.dll" Private="false" />

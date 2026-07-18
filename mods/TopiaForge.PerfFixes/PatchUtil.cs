@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using HarmonyLib;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Interop.Unity;
 
 namespace TopiaForge.PerfFixes
 {
@@ -12,7 +13,7 @@ namespace TopiaForge.PerfFixes
     /// </summary>
     internal static class PatchUtil
     {
-        public static bool TryPatchPrefix(Harmony harmony, IModLogger logger, string typeName, string methodName,
+        public static bool TryPatchPrefix(IHarmonyLease harmony, IModLogger logger, string typeName, string methodName,
             Type[]? args, MethodInfo prefix)
         {
             var target = Resolve(logger, typeName, methodName, args);
@@ -23,7 +24,7 @@ namespace TopiaForge.PerfFixes
 
             try
             {
-                harmony.Patch(target, prefix: new HarmonyMethod(prefix));
+                harmony.Patch(target, prefix: prefix);
                 logger.Debug($"PerfFixes: patched {typeName}.{methodName}.");
                 return true;
             }

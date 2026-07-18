@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using HarmonyLib;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Interop.Unity;
 using UnityEngine;
 
 namespace TopiaForge.Performance.Appliers
@@ -23,12 +24,12 @@ namespace TopiaForge.Performance.Appliers
 
         private readonly PerformanceConfig config;
         private readonly IModLogger logger;
-        private readonly Harmony harmony;
+        private readonly IHarmonyLease harmony;
 
         private int origQualityLevel = -1;
         private bool capturedQuality;
 
-        public PatchApplier(PerformanceConfig config, IModLogger logger, Harmony harmony)
+        public PatchApplier(PerformanceConfig config, IModLogger logger, IHarmonyLease harmony)
         {
             this.config = config;
             this.logger = logger;
@@ -95,7 +96,7 @@ namespace TopiaForge.Performance.Appliers
                 }
             }
 
-            // Harmony unpatch is performed once at the mod level (harmony.UnpatchSelf()).
+            // Harmony unpatch is performed once by the mod's owner-scoped lease.
             log = null;
         }
 
@@ -128,7 +129,7 @@ namespace TopiaForge.Performance.Appliers
 
             try
             {
-                harmony.Patch(target, postfix: new HarmonyMethod(Own(patchMethod)));
+                harmony.Patch(target, postfix: Own(patchMethod));
                 logger.Debug($"Performance: patched {typeName}.{methodName} (postfix).");
             }
             catch (Exception ex)
@@ -147,7 +148,7 @@ namespace TopiaForge.Performance.Appliers
 
             try
             {
-                harmony.Patch(target, prefix: new HarmonyMethod(Own(patchMethod)));
+                harmony.Patch(target, prefix: Own(patchMethod));
                 logger.Debug($"Performance: patched {typeName}.{methodName} (prefix).");
             }
             catch (Exception ex)

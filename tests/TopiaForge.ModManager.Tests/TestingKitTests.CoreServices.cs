@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Testing;
@@ -72,19 +73,29 @@ namespace TopiaForge.ModManager.Tests
             context.Scenes.Load("PuzzleRoom");
 
             var sceneTransitions = new List<SceneLoadEvent>();
+            var sceneLifecycle = new List<SceneLifecycleEvent>();
             var legacySceneTransitions = 0;
             context.Events.SubscribeSceneLoaded((string _) => legacySceneTransitions++);
             context.Events.SubscribeSceneLoaded((SceneLoadEvent scene) => sceneTransitions.Add(scene));
+            context.Events.SubscribeSceneLifecycle(scene => sceneLifecycle.Add(scene));
             context.Scenes.Load("Lighting", SceneLoadMode.Additive);
+            var lightingInstanceId = sceneLifecycle[0].SceneInstanceId;
             Assert(context.Scenes.ActiveScene == "PuzzleRoom"
                 && sceneTransitions.Count == 1
-                && !sceneTransitions[0].IsAuthoritativeReplacement,
-                "the fake mirrors production background-additive load semantics");
+                && !sceneTransitions[0].IsAuthoritativeReplacement
+                && sceneLifecycle.Count == 1
+                && lightingInstanceId > 0
+                && sceneLifecycle[0].Phase == SceneLifecyclePhase.Loaded
+                && !sceneLifecycle[0].IsActive,
+                "the fake mirrors production background-additive load semantics with a stable instance id");
             Assert(context.Scenes.Activate("Lighting")
                 && context.Scenes.ActiveScene == "Lighting"
                 && sceneTransitions.Count == 2
                 && sceneTransitions[1].Mode == SceneLoadMode.Additive
-                && sceneTransitions[1].IsAuthoritativeReplacement,
+                && sceneTransitions[1].IsAuthoritativeReplacement
+                && sceneLifecycle.Count == 2
+                && sceneLifecycle[1].SceneInstanceId == lightingInstanceId
+                && sceneLifecycle[1].Phase == SceneLifecyclePhase.Activated,
                 "explicit additive activation emits a detail-only authoritative transition");
             Assert(context.Scenes.Activate("PuzzleRoom")
                 && sceneTransitions.Count == 3
@@ -97,6 +108,47 @@ namespace TopiaForge.ModManager.Tests
                 && new SceneLoadEvent("StreamingLoader", SceneLoadMode.Single, isActive: true)
                     .IsAuthoritativeReplacement,
                 "temporary active additive loader scenes do not reset gameplay providers, while single loads do");
+
+            var duplicateStart = sceneLifecycle.Count;
+            context.Scenes.Load("Shared", SceneLoadMode.Additive);
+            context.Scenes.Load("Shared", SceneLoadMode.Additive);
+            var firstSharedId = sceneLifecycle[duplicateStart].SceneInstanceId;
+            var secondSharedId = sceneLifecycle[duplicateStart + 1].SceneInstanceId;
+            Assert(firstSharedId > 0
+                && secondSharedId > 0
+                && firstSharedId != secondSharedId
+                && context.Scenes.GetLoadedScenes().Count(scene => scene.Name == "Shared") == 2,
+                "equal-name additive scenes should remain separate instances with unique correlation ids");
+
+            var beforeSharedActivation = sceneLifecycle.Count;
+            Assert(context.Scenes.Activate("Shared")
+                && sceneLifecycle.Count == beforeSharedActivation + 1
+                && sceneLifecycle[^1].SceneInstanceId == firstSharedId
+                && sceneLifecycle[^1].Phase == SceneLifecyclePhase.Activated
+                && context.Scenes.GetLoadedScenes().Count(scene => scene.Name == "Shared" && scene.IsActive) == 1,
+                "name-based activation should deterministically activate only the earliest equal-name instance");
+            var afterSharedActivation = sceneLifecycle.Count;
+            Assert(context.Scenes.Activate("Shared") && sceneLifecycle.Count == afterSharedActivation,
+                "re-activating the active fake scene must not emit a duplicate lifecycle transition");
+
+            var replacementStart = sceneLifecycle.Count;
+            context.Scenes.Load("Replacement", SceneLoadMode.Single);
+            var replacementLifecycle = sceneLifecycle.Skip(replacementStart).ToArray();
+            Assert(replacementLifecycle.Length == 6
+                && replacementLifecycle[0].SceneName == "PuzzleRoom"
+                && replacementLifecycle[0].Mode == SceneLoadMode.Single
+                && replacementLifecycle[1].SceneName == "Lighting"
+                && replacementLifecycle[1].SceneInstanceId == lightingInstanceId
+                && replacementLifecycle[2].SceneInstanceId == firstSharedId
+                && replacementLifecycle[3].SceneInstanceId == secondSharedId
+                && replacementLifecycle.Take(4).All(scene =>
+                    scene.Phase == SceneLifecyclePhase.Unloaded && !scene.IsActive)
+                && replacementLifecycle[4].Phase == SceneLifecyclePhase.Loaded
+                && replacementLifecycle[5].Phase == SceneLifecyclePhase.Activated
+                && replacementLifecycle[4].SceneInstanceId == replacementLifecycle[5].SceneInstanceId
+                && context.Scenes.GetLoadedScenes().Count == 1
+                && context.Scenes.ActiveScene == "Replacement",
+                "a fake Single load should unload every prior instance before its normalized loaded/activated pair");
 
             var checkpointCalls = 0;
             context.Scenes.SubscribeCheckpointChanged(_ => throw new InvalidOperationException("expected"));

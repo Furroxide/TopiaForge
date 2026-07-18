@@ -11,7 +11,10 @@ namespace TopiaForge.ModManager
 {
     public sealed partial class ModRuntime
     {
-        private void DispatchSceneActivatedCore(SceneLoadEvent scene)
+        private void DispatchSceneActivatedCore(
+            SceneLoadEvent scene,
+            int sceneInstanceId,
+            bool publishDetailedLoadEvent)
         {
             RefreshRuntimeCapabilities();
             var count = loadedMods.Count;
@@ -20,9 +23,19 @@ namespace TopiaForge.ModManager
                 var loaded = loadedMods[index];
                 try
                 {
-                    // Activation is delivered only to the optional detailed stream. Legacy string-only subscribers
-                    // retain their one-callback-per-load behavior.
-                    loaded.Context.RaiseSceneActivated(scene);
+                    // Legacy string-only subscribers retain their one-callback-per-load behavior. The detailed
+                    // load stream keeps its established activation callback for additive transitions; Single loads
+                    // can suppress that compatibility callback while still publishing an exact lifecycle activation.
+                    if (publishDetailedLoadEvent)
+                    {
+                        loaded.Context.RaiseSceneActivated(scene);
+                    }
+                    loaded.Context.RaiseSceneLifecycle(new SceneLifecycleEvent(
+                        sceneInstanceId,
+                        scene.SceneName,
+                        SceneLifecyclePhase.Activated,
+                        scene.Mode,
+                        isActive: true));
                     sceneFailureLogged.Remove(loaded.Manifest.Id);
                 }
                 catch (Exception ex)
@@ -33,6 +46,40 @@ namespace TopiaForge.ModManager
                     }
                 }
             }
+        }
+
+        private void DispatchSceneUnloadedCore(SceneLifecycleEvent scene)
+        {
+            DispatchSceneLifecycleCore(scene, "SceneUnloaded");
+        }
+
+        private void DispatchInitialBackgroundSceneCore(SceneLifecycleEvent scene)
+        {
+            DispatchSceneLifecycleCore(scene, "InitialSceneLoaded");
+        }
+
+        private void DispatchSceneLifecycleCore(SceneLifecycleEvent scene, string phase)
+        {
+            RefreshRuntimeCapabilities();
+            var count = loadedMods.Count;
+            for (var index = 0; index < count && index < loadedMods.Count; index++)
+            {
+                var loaded = loadedMods[index];
+                try
+                {
+                    loaded.Context.RaiseSceneLifecycle(scene);
+                    sceneFailureLogged.Remove(loaded.Manifest.Id);
+                }
+                catch (Exception ex)
+                {
+                    if (sceneFailureLogged.Add(loaded.Manifest.Id))
+                    {
+                        logger.Error(ex, "Mod failed during " + phase + " '" + scene.SceneName + "': " + loaded.Manifest.Id);
+                    }
+                }
+            }
+
+            RefreshRuntimeCapabilities();
         }
 
         private void DispatchFixedUpdate(GameTimeSample sample)

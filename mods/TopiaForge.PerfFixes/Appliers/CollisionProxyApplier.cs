@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Interop.Unity;
 using UnityEngine;
 using UnityEngine.Pool;
 
@@ -22,9 +23,9 @@ namespace TopiaForge.PerfFixes.Appliers
 
         private readonly PerfFixesConfig config;
         private readonly IModLogger logger;
-        private readonly HarmonyLib.Harmony harmony;
+        private readonly IHarmonyLease harmony;
 
-        public CollisionProxyApplier(PerfFixesConfig config, IModLogger logger, HarmonyLib.Harmony harmony)
+        public CollisionProxyApplier(PerfFixesConfig config, IModLogger logger, IHarmonyLease harmony)
         {
             this.config = config;
             this.logger = logger;
@@ -59,7 +60,7 @@ namespace TopiaForge.PerfFixes.Appliers
 
         public override void Revert()
         {
-            // Patch removal is centralized in the mod's UnpatchSelf; just stop serving.
+            // Patch removal is centralized in the mod's owner-scoped lease; just stop serving.
             active = false;
         }
 
