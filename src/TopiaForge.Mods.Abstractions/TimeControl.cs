@@ -59,7 +59,8 @@ namespace TopiaForge.Mods
         /// <summary>
         /// Hard-freezes the world (scale 0): turn-based, an RPG pause, or a freeze-to-talk beat. Returns a lease;
         /// dispose it (or <see cref="ITimeLease.Release"/>) to lift the freeze. <paramref name="suspendPlayer"/> also
-        /// disables the player's first-person controller + frees the cursor for a modal UI (restored on release).
+        /// acquires the shared player-control lease so movement/look suspension composes with other mods and the
+        /// controller's prior state is restored only after the final lease releases. Cursor behavior remains UI-owned.
         /// </summary>
         OperationResult<ITimeLease> Freeze(string usage, bool suspendPlayer = false);
 

@@ -6,9 +6,9 @@ using UnityEngine;
 namespace TopiaForge.Chronos
 {
     // Owns all reflection into the native player so Chronos needs no GameCode reference and no RobotKit dependency.
-    // Two jobs: (1) SUSPEND the player for a hard freeze (disable the FirstPersonController so move+look stop, free
-    // the cursor for a modal UI); (2) EXEMPT the player for Superhot (scale its move speed UP by 1/worldScale so it
-    // stays full-speed while the world crawls). Verified from the GameCode decompile: the player is
+    // Exempts the player for Superhot by scaling move speed UP by 1/worldScale so it stays full-speed while the
+    // world crawls. Hard-freeze suspension goes through IPlayerService.AcquireControl so it composes safely with
+    // every other mod's control lease. Verified from the GameCode decompile: the player is
     // PlayerController.FindPlayer().FPSController (a FirstPersonController); move uses private groundSpeed/airSpeed
     // and is scaled by Time.* (so 1/scale compensates), while LOOK reads raw per-frame mouse delta × mouseSensitivity
     // with no dt — already full-speed at any timeScale, so it needs no compensation. Everything is guarded: if a
@@ -32,54 +32,10 @@ namespace TopiaForge.Chronos
         private float baseAir;
         private bool exemptActive;
 
-        // Suspend state (component disabled + cursor freed).
-        private Behaviour? suspendedFps;
-        private CursorLockMode savedLockState;
-        private bool savedCursorVisible;
-
         public PlayerTimeExemption(IModLogger logger)
         {
             this.logger = logger;
         }
-
-        // --- SUSPEND (hard freeze) -------------------------------------------------------------------------------
-
-        public void Suspend()
-        {
-            if (suspendedFps != null)
-            {
-                return; // already suspended
-            }
-
-            var fps = ResolveFps();
-            if (fps == null)
-            {
-                return;
-            }
-
-            suspendedFps = fps;
-            savedLockState = Cursor.lockState;
-            savedCursorVisible = Cursor.visible;
-            fps.enabled = false;
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
-        }
-
-        public void ReleaseSuspend()
-        {
-            if (suspendedFps == null)
-            {
-                return;
-            }
-
-            suspendedFps.enabled = true;
-            // Restore the cursor exactly as it was before we suspended; the re-enabled controller re-locks it itself.
-            Cursor.lockState = savedLockState;
-            Cursor.visible = savedCursorVisible;
-            suspendedFps = null;
-        }
-
-        public bool IsSuspended => suspendedFps != null;
 
         // --- EXEMPT (Superhot: keep the player full-speed while the world is slow) -------------------------------
 
@@ -256,7 +212,7 @@ namespace TopiaForge.Chronos
             }
 
             resolveFailedLogged = true;
-            logger.Warn("Chronos player time-hook unavailable (" + message + "); player exemption/suspend degrade to no-op.");
+            logger.Warn("Chronos player time-hook unavailable (" + message + "); player exemption degrades to no-op.");
         }
     }
 }

@@ -16,7 +16,6 @@ namespace TopiaForge.ModManager.Tests
             TestNudgeMovesAndClamps();
             TestConvertThresholdScalesWithResistance();
             TestRequestFramingHostileVsAlly();
-            TestTurnRefillAddsTimeAndCapsAtWindow();
             Console.WriteLine("All conversation-director tests passed.");
         }
 
@@ -75,21 +74,6 @@ namespace TopiaForge.ModManager.Tests
             Assert(ally.SystemFrame.Contains("switched sides") || ally.SystemFrame.Contains("FOR a lone human"), "ally frame is a loyalty check-in");
             Assert(ally.GroundTruthFacts != null && ally.GroundTruthFacts.ContainsKey("your-loyalty"), "ally ground truth carries loyalty");
             Assert(ally.Usage == "zombies-renegotiate", "ally usage label distinguishes a renegotiation");
-        }
-
-        private static void TestTurnRefillAddsTimeAndCapsAtWindow()
-        {
-            var extended = ConversationDirector.RefillDeadline(now: 10f, deadline: 14f, windowSeconds: 22f, refillSeconds: 4f);
-            Assert(Math.Abs(extended - 18f) < 1e-6f, "turn refill adds to remaining time");
-
-            var capped = ConversationDirector.RefillDeadline(now: 10f, deadline: 31f, windowSeconds: 22f, refillSeconds: 4f);
-            Assert(Math.Abs(capped - 32f) < 1e-6f, "turn refill cannot exceed a full window from now");
-
-            var recovered = ConversationDirector.RefillDeadline(now: 10f, deadline: 8f, windowSeconds: 22f, refillSeconds: 4f);
-            Assert(Math.Abs(recovered - 14f) < 1e-6f, "a late robot reply still grants the next exchange time");
-
-            var disabled = ConversationDirector.RefillDeadline(now: 10f, deadline: 12f, windowSeconds: 22f, refillSeconds: 0f);
-            Assert(Math.Abs(disabled - 12f) < 1e-6f, "zero refill leaves deadline unchanged");
         }
 
         private static ConversationTuning Tuning()

@@ -7,8 +7,8 @@ using TopiaForge.Zombies;
 namespace TopiaForge.ModManager.Tests
 {
     // Unit tests for the Unity-free pieces of the OVERRIDE feature: the RoboAPI wire protocol (+ MiniJson), and the
-    // deterministic "robot psychology" decision resolver with its soften-only brain modulation. No UnityEngine and no
-    // network — these compile straight into the net8.0 test assembly via the csproj Compile includes.
+    // deterministic "robot psychology" decision resolver. No UnityEngine and no network — these compile straight
+    // into the net8.0 test assembly via the csproj Compile includes.
     internal static class OverrideTests
     {
         public static void Run()
@@ -21,8 +21,6 @@ namespace TopiaForge.ModManager.Tests
             TestValueClamping();
             TestDecisionDeterminism();
             TestDecisionExtremes();
-            TestSoftenOnlyModulation();
-            TestParseBrainAction();
             TestMindSeeding();
             Console.WriteLine("All OVERRIDE tests passed.");
         }
@@ -166,35 +164,6 @@ namespace TopiaForge.ModManager.Tests
             // The same Brute does not enrage on a non-JoinMe failure.
             var freezeFail = OverrideDecision.Resolve(OverrideCommand.Freeze, brute, 0.95f, 2f);
             Assert(freezeFail.Outcome == HijackOutcome.Resist && !freezeFail.Enraged, "a failed Freeze should not enrage");
-        }
-
-        private static void TestSoftenOnlyModulation()
-        {
-            // A failed JoinMe can be rescued to Convert by a complying brain (enrage cleared).
-            var rejected = new OverrideResolution(HijackOutcome.Resist, true);
-            var rescued = OverrideDecision.ApplyBrainModulation(OverrideCommand.JoinMe, rejected, RobotDecision.Comply);
-            Assert(rescued.Outcome == HijackOutcome.Convert && !rescued.Enraged, "a complying brain should upgrade a failed JoinMe to Convert and clear enrage");
-
-            // A shown success is never hardened by a refusing brain.
-            var converted = new OverrideResolution(HijackOutcome.Convert, false);
-            var kept = OverrideDecision.ApplyBrainModulation(OverrideCommand.JoinMe, converted, RobotDecision.Resist);
-            Assert(kept.Outcome == HijackOutcome.Convert, "a refusing brain must never downgrade a shown Convert");
-
-            // The brain can never push past the command's target outcome.
-            var frozen = new OverrideResolution(HijackOutcome.Resist, false);
-            var capped = OverrideDecision.ApplyBrainModulation(OverrideCommand.Freeze, frozen, RobotDecision.Comply);
-            Assert(capped.Outcome == HijackOutcome.Freeze, "a Freeze command can only upgrade up to Freeze, never Convert");
-        }
-
-        private static void TestParseBrainAction()
-        {
-            Assert(OverrideDecision.ParseBrainAction("comply") == RobotDecision.Comply, "comply maps to Comply");
-            Assert(OverrideDecision.ParseBrainAction("  COMPLY ") == RobotDecision.Comply, "action parsing trims and lowercases");
-            Assert(OverrideDecision.ParseBrainAction("freeze") == RobotDecision.Freeze, "freeze maps to Freeze");
-            Assert(OverrideDecision.ParseBrainAction("flee") == RobotDecision.Flee, "flee maps to Flee");
-            Assert(OverrideDecision.ParseBrainAction("resist") == RobotDecision.Resist, "resist maps to Resist");
-            Assert(OverrideDecision.ParseBrainAction("???") == RobotDecision.Unknown, "an unknown action maps to Unknown");
-            Assert(OverrideDecision.ParseBrainAction(null) == RobotDecision.Unknown, "null action maps to Unknown");
         }
 
         private static void TestMindSeeding()

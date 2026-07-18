@@ -7,7 +7,7 @@
   "author": {
     "name": "TopiaForge"
   },
-  "description": "Safe-SDK wave survival built from Worlds, RobotKit, Chronos, named input, player aim, physics queries, audio cues, and TopiaForgeUi surfaces. Fight readable infected robot archetypes with the zapper, broadcast a temporary stand-down, survive escalating waves, and restart cleanly without direct game or engine APIs.",
+  "description": "A safe-SDK wave-survival showcase built from Worlds, RobotKit, Chronos, named input, physics, dialogue, audio, and TopiaForgeUi. Fight distinct infected archetypes with headshots and charged piercing fire, build combos, recruit wavering allies through deterministic or explicitly enabled live JACK IN conversations, buy run upgrades, and restart or return to the menu cleanly.",
   "entryAssembly": "TopiaForge.Zombies.dll",
   "entryType": "TopiaForge.Zombies.ZombiesMod",
   "dependencies": {
@@ -34,17 +34,27 @@
     "combo",
     "safe-sdk",
     "stand-down",
+    "jack-in",
+    "allies",
+    "requisitions",
     "chronos"
   ],
   "license": "NOASSERTION",
   "capabilities": [
     "world-service",
     "robot-spawning",
+    "navigation",
     "input",
     "physics",
     "hud",
     "time",
-    "player-control"
+    "player-control",
+    "scene-management",
+    "network",
+    "remote-ai",
+    "player-token",
+    "microphone",
+    "speech-to-text"
   ],
   "worldGamemodes": [
     {

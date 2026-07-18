@@ -18,9 +18,13 @@
     <ProjectReference Include="..\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
     <Compile Include="..\TopiaForge.Mods.Abstractions\BrainQuery.cs" Link="BrainQuery.cs" />
     <Compile Include="..\TopiaForge.Mods.Abstractions\Dialogue.cs" Link="Dialogue.cs" />
+    <Compile Include="..\TopiaForge.Mods.Abstractions\RobotAgent.cs" Link="RobotAgent.cs" />
     <Compile Include="..\TopiaForge.Mods.Abstractions\RobotColor.cs" Link="RobotColor.cs" />
     <Compile Include="..\TopiaForge.Mods.Abstractions\RobotControl.cs" Link="RobotControl.cs" />
+    <Compile Include="..\TopiaForge.Mods.Abstractions\RobotEnums.cs" Link="RobotEnums.cs" />
+    <Compile Include="..\TopiaForge.Mods.Abstractions\RobotInteractions.cs" Link="RobotInteractions.cs" />
     <Compile Include="..\TopiaForge.Mods.Abstractions\RobotObjectives.cs" Link="RobotObjectives.cs" />
+    <Compile Include="..\TopiaForge.Mods.Abstractions\RobotSpawning.cs" Link="RobotSpawning.cs" />
     <Compile Include="..\TopiaForge.Mods.Abstractions\RobotTargetFacts.cs" Link="RobotTargetFacts.cs" />
     <Compile Include="..\TopiaForge.Mods.Abstractions\TextInputBuffer.cs" Link="TextInputBuffer.cs" />
   </ItemGroup>

@@ -12,6 +12,7 @@ namespace TopiaForge.ModManager.Tests
         {
             TestWalletEarnSpendReset();
             TestWalletEvents();
+            TestWalletEarnSaturates();
             TestItemGuardsAndClamps();
             TestPurchaseRuleOrder();
             TestPurchaseDebitsOnlyOnSuccess();
@@ -60,6 +61,28 @@ namespace TopiaForge.ModManager.Tests
             Assert(events == 2, "an ignored earn raises nothing");
             wallet.Reset(0);
             Assert(events == 3 && lastBalance == 0, "Reset raises BalanceChanged");
+        }
+
+        private static void TestWalletEarnSaturates()
+        {
+            var wallet = new ShopWallet(int.MaxValue - 5);
+            var events = 0;
+            var lastBalance = -1;
+            wallet.BalanceChanged += balance =>
+            {
+                events++;
+                lastBalance = balance;
+            };
+
+            wallet.Earn(10);
+            Assert(wallet.Balance == int.MaxValue,
+                "Earn should saturate at int.MaxValue instead of wrapping a rich wallet negative");
+            Assert(events == 1 && lastBalance == int.MaxValue,
+                "a saturating earn should publish the resulting maximum balance once");
+
+            wallet.Earn(1);
+            Assert(wallet.Balance == int.MaxValue && events == 1,
+                "earning at the maximum should be a no-op and should not publish a false balance change");
         }
 
         private static void TestItemGuardsAndClamps()

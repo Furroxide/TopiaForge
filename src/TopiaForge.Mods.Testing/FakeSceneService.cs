@@ -12,6 +12,8 @@ namespace TopiaForge.Mods.Testing
         private readonly FakeModLifetime lifetime;
         private readonly Action<string>? legacyNotification;
         private readonly List<SceneSnapshot> loaded = new List<SceneSnapshot>();
+        private readonly Dictionary<string, SceneLoadMode> loadedModes =
+            new Dictionary<string, SceneLoadMode>(StringComparer.Ordinal);
         private readonly List<string> history = new List<string>();
         private readonly Queue<PendingLoad> pending = new Queue<PendingLoad>();
         private readonly List<Action<CheckpointSnapshot>> checkpointHandlers =
@@ -30,6 +32,7 @@ namespace TopiaForge.Mods.Testing
             if (!string.IsNullOrWhiteSpace(initialScene))
             {
                 loaded.Add(new SceneSnapshot(initialScene, true, true));
+                loadedModes[initialScene] = SceneLoadMode.Single;
                 history.Add(initialScene);
             }
 
@@ -49,10 +52,10 @@ namespace TopiaForge.Mods.Testing
             }
         }
 
-        /// <summary>Gets every successfully activated scene name in order.</summary>
+        /// <summary>Gets every successfully loaded scene name in order.</summary>
         public IReadOnlyList<string> History => history.AsReadOnly();
 
-        /// <summary>Gets the number of manually pending loads.</summary>
+        /// <summary>Gets the number of manually pending consumer results.</summary>
         public int PendingLoadCount
         {
             get
@@ -135,6 +138,17 @@ namespace TopiaForge.Mods.Testing
                 throw new ArgumentNullException(nameof(request));
             }
 
+            // Mirror UnitySceneService's single native-load slot. A cancelled consumer result does not release
+            // that slot because the already-dispatched native load still owns it until completion is observed.
+            // Check the slot before cancellation and completion policy exactly as production does: once A owns the
+            // backend, even an already-cancelled B is a conflicting dispatch rather than an admitted operation.
+            if (pending.Count != 0)
+            {
+                return Task.FromResult(OperationResult<SceneSnapshot>.Failure(
+                    ModErrorCode.Conflict,
+                    "Another fake scene load is already in progress."));
+            }
+
             if (cancellationToken.IsCancellationRequested || lifetime.StoppingToken.IsCancellationRequested)
             {
                 return Task.FromResult(OperationResult<SceneSnapshot>.Failure(
@@ -147,6 +161,8 @@ namespace TopiaForge.Mods.Testing
                 return Task.FromResult(OperationResult<SceneSnapshot>.Success(Apply(request)));
             }
 
+            // Result cancellation and native completion are independent: cancellation suppresses the consumer's
+            // result, while CompleteNextLoad still applies the already-dispatched native replacement.
             var linked = CancellationTokenSource.CreateLinkedTokenSource(
                 cancellationToken,
                 lifetime.StoppingToken);
@@ -155,10 +171,42 @@ namespace TopiaForge.Mods.Testing
             return operation.Task;
         }
 
-        /// <summary>Changes the active scene synchronously and emits a load notification.</summary>
+        /// <summary>
+        /// Loads a scene synchronously and emits a notification. Like production, an additive load remains in the
+        /// background until <see cref="Activate"/> is called.
+        /// </summary>
         public void Load(string sceneName, SceneLoadMode mode = SceneLoadMode.Single)
         {
             Apply(new SceneLoadRequest(sceneName, mode));
+        }
+
+        /// <summary>Activates an already loaded scene and emits a detail-only authoritative transition.</summary>
+        public bool Activate(string sceneName)
+        {
+            var found = false;
+            for (var index = 0; index < loaded.Count; index++)
+            {
+                if (string.Equals(loaded[index].Name, sceneName, StringComparison.Ordinal))
+                {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found || !loadedModes.TryGetValue(sceneName, out var mode))
+            {
+                return false;
+            }
+
+            for (var index = 0; index < loaded.Count; index++)
+            {
+                var candidate = loaded[index];
+                var active = string.Equals(candidate.Name, sceneName, StringComparison.Ordinal);
+                loaded[index] = new SceneSnapshot(candidate.Name, candidate.IsLoaded, active);
+            }
+
+            events.RaiseSceneActivated(new SceneLoadEvent(sceneName, mode, isActive: true));
+            return true;
         }
 
         /// <summary>Successfully completes the oldest manually pending scene load.</summary>
@@ -171,7 +219,9 @@ namespace TopiaForge.Mods.Testing
 
             try
             {
-                return item.Operation.Succeed(Apply(item.Request));
+                var snapshot = Apply(item.Request);
+                item.Operation.Succeed(snapshot);
+                return true;
             }
             finally
             {
@@ -189,7 +239,8 @@ namespace TopiaForge.Mods.Testing
 
             try
             {
-                return item.Operation.Fail(errorCode, message);
+                item.Operation.Fail(errorCode, message);
+                return true;
             }
             finally
             {
@@ -202,35 +253,25 @@ namespace TopiaForge.Mods.Testing
             if (request.Mode == SceneLoadMode.Single)
             {
                 loaded.Clear();
-            }
-            else
-            {
-                for (var index = 0; index < loaded.Count; index++)
-                {
-                    var existing = loaded[index];
-                    loaded[index] = new SceneSnapshot(existing.Name, existing.IsLoaded, false);
-                }
+                loadedModes.Clear();
             }
 
-            var snapshot = new SceneSnapshot(request.SceneName, true, true);
+            var isActive = request.Mode == SceneLoadMode.Single;
+            var snapshot = new SceneSnapshot(request.SceneName, true, isActive);
             loaded.Add(snapshot);
+            loadedModes[request.SceneName] = request.Mode;
             history.Add(request.SceneName);
-            events.RaiseSceneLoaded(request.SceneName);
+            events.RaiseSceneLoaded(new SceneLoadEvent(request.SceneName, request.Mode, isActive));
             legacyNotification?.Invoke(request.SceneName);
             return snapshot;
         }
 
         private bool TryTakePending(out PendingLoad item)
         {
-            while (pending.Count != 0)
+            if (pending.Count != 0)
             {
                 item = pending.Dequeue();
-                if (!item.Operation.IsCompleted)
-                {
-                    return true;
-                }
-
-                item.DisposeRegistrations();
+                return true;
             }
 
             item = null!;
@@ -239,9 +280,11 @@ namespace TopiaForge.Mods.Testing
 
         private void CancelPendingLoads()
         {
-            while (pending.Count != 0)
+            // Owner shutdown suppresses consumer results, but mirrors production by retaining already-dispatched
+            // native replacements until the backend completion control consumes them.
+            foreach (var item in pending)
             {
-                pending.Dequeue().DisposeRegistrations();
+                item.DisposeRegistrations();
             }
         }
 
@@ -260,7 +303,6 @@ namespace TopiaForge.Mods.Testing
             public SceneLoadRequest Request { get; }
             public ControlledOperation<SceneSnapshot> Operation { get; }
             public CancellationTokenSource Linked { get; }
-
             public void DisposeRegistrations()
             {
                 Linked.Dispose();

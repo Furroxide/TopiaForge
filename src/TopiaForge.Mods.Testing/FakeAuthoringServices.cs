@@ -163,6 +163,7 @@ namespace TopiaForge.Mods.Testing
             commands.Add(definition.Name, registration);
             return lifetime.TrackResult<ICommandRegistration>(
                 registration,
+                registration.AttachLifetimeLease,
                 "The fake mod stopped before its command could be registered.");
         }
 
@@ -198,6 +199,7 @@ namespace TopiaForge.Mods.Testing
         private sealed class Registration : ICommandRegistration
         {
             private Action<Registration>? release;
+            private IDisposable? lifetimeLease;
 
             public Registration(
                 string qualifiedName,
@@ -215,11 +217,23 @@ namespace TopiaForge.Mods.Testing
             public CommandDefinition Definition { get; }
             public Func<CommandInvocation, OperationResult<string>> Handler { get; }
 
+            public void AttachLifetimeLease(IDisposable lease)
+            {
+                lifetimeLease = lease ?? throw new ArgumentNullException(nameof(lease));
+            }
+
             public void Dispose()
             {
                 var callback = release;
                 release = null;
-                callback?.Invoke(this);
+                try
+                {
+                    callback?.Invoke(this);
+                }
+                finally
+                {
+                    System.Threading.Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
+                }
             }
         }
     }
@@ -323,6 +337,7 @@ namespace TopiaForge.Mods.Testing
             set.Registrations.Add(registration);
             return lifetime.TrackResult<IExtensionRegistration>(
                 registration,
+                registration.AttachLifetimeLease,
                 "The fake mod stopped before its extension provider could be registered.");
         }
 
@@ -366,6 +381,7 @@ namespace TopiaForge.Mods.Testing
         private sealed class ExtensionRegistration : IExtensionRegistration
         {
             private Action<ExtensionRegistration>? release;
+            private IDisposable? lifetimeLease;
 
             public ExtensionRegistration(object provider, Action<ExtensionRegistration> release)
             {
@@ -376,11 +392,23 @@ namespace TopiaForge.Mods.Testing
             public object Provider { get; }
             public bool IsActive => release != null;
 
+            public void AttachLifetimeLease(IDisposable lease)
+            {
+                lifetimeLease = lease ?? throw new ArgumentNullException(nameof(lease));
+            }
+
             public void Dispose()
             {
                 var callback = release;
                 release = null;
-                callback?.Invoke(this);
+                try
+                {
+                    callback?.Invoke(this);
+                }
+                finally
+                {
+                    System.Threading.Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
+                }
             }
         }
     }

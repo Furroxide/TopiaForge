@@ -76,12 +76,13 @@ namespace TopiaForge.ModManager
                     result.ErrorMessage));
             }
 
-            lifetime.Track(operation);
+            // Unity cannot cancel a dispatched AsyncOperation. The backend owns it until native completion while
+            // the result state independently honors caller and owner cancellation.
             return operation.Task;
         }
     }
 
-    internal sealed class UnitySceneBackend : IDisposable
+    internal sealed partial class UnitySceneBackend : IDisposable
     {
         private readonly object sync = new object();
         private readonly List<Action<CheckpointSnapshot>> checkpointSubscribers =
@@ -239,8 +240,33 @@ namespace TopiaForge.ModManager
                         "Scene '" + request.SceneName + "' is not available in the game build.");
                 }
 
-                activeLoad = new SceneLoadState(this, request.SceneName, operation, stoppingToken, callerToken);
-                return OperationResult<SceneLoadState>.Success(activeLoad);
+                var state = new SceneLoadState(
+                    this,
+                    request.SceneName,
+                    operation);
+
+                // Publish before arming. Unity invokes AsyncOperation.completed synchronously when an
+                // operation has already finished, so the callback must be able to observe this state.
+                activeLoad = state;
+                try
+                {
+                    state.Arm(stoppingToken, callerToken);
+                }
+                catch (Exception exception)
+                {
+                    if (ReferenceEquals(activeLoad, state))
+                    {
+                        activeLoad = null;
+                    }
+
+                    state.AbortArming();
+                    return OperationResult<SceneLoadState>.Failure(
+                        ModErrorCode.External,
+                        "The native scene load started, but TopiaForge could not subscribe to its completion: "
+                            + exception.Message);
+                }
+
+                return OperationResult<SceneLoadState>.Success(state);
             }
         }
 
@@ -294,166 +320,82 @@ namespace TopiaForge.ModManager
             return new SceneSnapshot(scene.name, scene.isLoaded, active);
         }
 
-        private CheckpointSnapshot? ResolveCheckpoint()
-        {
-            try
-            {
-                var type = ResolveCheckpointManagerType();
-                if (type == null)
-                {
-                    return null;
-                }
-
-                var manager = ReadMember(null, type, "Instance", "instance", "Current")
-                    ?? Resources.FindObjectsOfTypeAll(type).FirstOrDefault();
-                var checkpoint = ReadMember(manager, type, "CurrentCheckpoint", "currentCheckpoint", "Checkpoint")
-                    ?? ReadMember(null, type, "CurrentCheckpoint", "currentCheckpoint", "Checkpoint");
-                if (checkpoint == null)
-                {
-                    return null;
-                }
-
-                var checkpointType = checkpoint.GetType();
-                var id = ReadString(checkpoint, checkpointType, "CheckpointId", "checkpointId", "Id", "id");
-                if (string.IsNullOrWhiteSpace(id) && checkpoint is UnityEngine.Object native)
-                {
-                    id = native.name;
-                }
-
-                if (string.IsNullOrWhiteSpace(id))
-                {
-                    return null;
-                }
-
-                var sceneName = ReadString(checkpoint, checkpointType, "SceneName", "sceneName");
-                if (string.IsNullOrWhiteSpace(sceneName))
-                {
-                    sceneName = SceneManager.GetActiveScene().name ?? string.Empty;
-                }
-
-                var position = checkpoint is Component component
-                    ? component.transform.position
-                    : ReadVector(checkpoint, checkpointType, "Position", "position");
-                return new CheckpointSnapshot(id, sceneName, UnityPhysicsBackend.FromUnity(position));
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private Type? ResolveCheckpointManagerType()
-        {
-            if (checkpointTypeResolved)
-            {
-                return checkpointManagerType;
-            }
-
-            checkpointTypeResolved = true;
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                try
-                {
-                    checkpointManagerType = assembly.GetTypes().FirstOrDefault(candidate =>
-                        string.Equals(candidate.Name, "CheckpointManager", StringComparison.Ordinal));
-                    if (checkpointManagerType != null)
-                    {
-                        break;
-                    }
-                }
-                catch (ReflectionTypeLoadException exception)
-                {
-                    checkpointManagerType = exception.Types.FirstOrDefault(candidate => candidate != null
-                        && string.Equals(candidate.Name, "CheckpointManager", StringComparison.Ordinal));
-                    if (checkpointManagerType != null)
-                    {
-                        break;
-                    }
-                }
-            }
-
-            return checkpointManagerType;
-        }
-
-        private static object? ReadMember(object? instance, Type type, params string[] names)
-        {
-            var flags = BindingFlags.Public | BindingFlags.NonPublic
-                | (instance == null ? BindingFlags.Static : BindingFlags.Instance);
-            foreach (var name in names)
-            {
-                var value = type.GetProperty(name, flags)?.GetValue(instance, null)
-                    ?? type.GetField(name, flags)?.GetValue(instance);
-                if (value != null)
-                {
-                    return value;
-                }
-            }
-
-            return null;
-        }
-
-        private static string ReadString(object instance, Type type, params string[] names) =>
-            ReadMember(instance, type, names) as string ?? string.Empty;
-
-        private static Vector3 ReadVector(object instance, Type type, params string[] names) =>
-            ReadMember(instance, type, names) is Vector3 value ? value : Vector3.zero;
-
-        private sealed class CheckpointSubscription : IDisposable
-        {
-            private Action? unsubscribe;
-
-            public CheckpointSubscription(Action? unsubscribe)
-            {
-                this.unsubscribe = unsubscribe;
-            }
-
-            public void Dispose()
-            {
-                Interlocked.Exchange(ref unsubscribe, null)?.Invoke();
-            }
-        }
-
-        internal sealed class SceneLoadState : IDisposable
+        internal sealed class SceneLoadState
         {
             private readonly UnitySceneBackend backend;
             private readonly string sceneName;
             private readonly AsyncOperation operation;
             private readonly TaskCompletionSource<OperationResult<SceneSnapshot>> completion =
                 new TaskCompletionSource<OperationResult<SceneSnapshot>>();
-            private readonly CancellationTokenRegistration stoppingRegistration;
-            private readonly CancellationTokenRegistration callerRegistration;
+            private CancellationTokenRegistration stoppingRegistration;
+            private CancellationTokenRegistration callerRegistration;
+            private int armStarted;
             private int resultFinished;
             private int nativeFinished;
 
             public SceneLoadState(
                 UnitySceneBackend backend,
                 string sceneName,
-                AsyncOperation operation,
-                CancellationToken stoppingToken,
-                CancellationToken callerToken)
+                AsyncOperation operation)
             {
                 this.backend = backend;
                 this.sceneName = sceneName;
                 this.operation = operation;
-                stoppingRegistration = stoppingToken.Register(Cancel);
-                callerRegistration = callerToken.CanBeCanceled ? callerToken.Register(Cancel) : default;
-                operation.completed += OnCompleted;
             }
 
             public Task<OperationResult<SceneSnapshot>> Task => completion.Task;
 
-            public void Dispose()
+            public void Arm(CancellationToken stoppingToken, CancellationToken callerToken)
             {
-                Cancel();
+                if (Interlocked.Exchange(ref armStarted, 1) != 0)
+                {
+                    throw new InvalidOperationException("A scene-load state can only be armed once.");
+                }
+
+                var completionSubscriptionEstablished = false;
+                try
+                {
+                    operation.completed += OnCompleted;
+                    completionSubscriptionEstablished = true;
+                    stoppingRegistration = stoppingToken.Register(Cancel);
+                    callerRegistration = callerToken.CanBeCanceled ? callerToken.Register(Cancel) : default;
+                }
+                catch (Exception exception)
+                {
+                    if (!completionSubscriptionEstablished)
+                    {
+                        throw;
+                    }
+
+                    // The native operation is already dispatched and cannot be cancelled. Keep its completed
+                    // handler/backend ownership intact, but settle the public result rather than leaking a task
+                    // when cancellation registration cannot be established.
+                    Complete(OperationResult<SceneSnapshot>.Failure(
+                        ModErrorCode.External,
+                        "The native scene load started, but its result could not be monitored safely: "
+                            + exception.Message));
+                }
+
+                // Registration invokes synchronously when cancellation wins the narrow race after BeginLoad's
+                // preflight check. Dispose registrations assigned after that callback before leaving Arm.
+                if (Volatile.Read(ref resultFinished) != 0)
+                {
+                    DisposeResultRegistrations();
+                }
+            }
+
+            public void AbortArming()
+            {
+                Complete(OperationResult<SceneSnapshot>.Failure(
+                    ModErrorCode.External,
+                    "The native scene load could not be monitored."));
+                StopNativeTracking();
             }
 
             public void DisposeFromBackend()
             {
                 Cancel();
-                if (Interlocked.Exchange(ref nativeFinished, 1) == 0)
-                {
-                    operation.completed -= OnCompleted;
-                }
+                StopNativeTracking();
             }
 
             public void Complete(OperationResult<SceneSnapshot> result)
@@ -463,9 +405,14 @@ namespace TopiaForge.ModManager
                     return;
                 }
 
-                stoppingRegistration.Dispose();
-                callerRegistration.Dispose();
-                completion.TrySetResult(result);
+                try
+                {
+                    DisposeResultRegistrations();
+                }
+                finally
+                {
+                    completion.TrySetResult(result);
+                }
             }
 
             private void Cancel()
@@ -475,11 +422,16 @@ namespace TopiaForge.ModManager
                     return;
                 }
 
-                stoppingRegistration.Dispose();
-                callerRegistration.Dispose();
-                completion.TrySetResult(OperationResult<SceneSnapshot>.Failure(
-                    ModErrorCode.Cancelled,
-                    "The scene load was cancelled."));
+                try
+                {
+                    DisposeResultRegistrations();
+                }
+                finally
+                {
+                    completion.TrySetResult(OperationResult<SceneSnapshot>.Failure(
+                        ModErrorCode.Cancelled,
+                        "The scene load was cancelled."));
+                }
             }
 
             private void OnCompleted(AsyncOperation _)
@@ -490,8 +442,52 @@ namespace TopiaForge.ModManager
                     return;
                 }
 
-                operation.completed -= OnCompleted;
-                backend.Complete(this, sceneName);
+                try
+                {
+                    operation.completed -= OnCompleted;
+                }
+                finally
+                {
+                    backend.Complete(this, sceneName);
+                }
+            }
+
+            private void StopNativeTracking()
+            {
+                if (Interlocked.Exchange(ref nativeFinished, 1) != 0)
+                {
+                    return;
+                }
+
+                try
+                {
+                    operation.completed -= OnCompleted;
+                }
+                catch
+                {
+                    // Backend disposal and failed arming are terminal. Cleanup must not mask their result.
+                }
+            }
+
+            private void DisposeResultRegistrations()
+            {
+                try
+                {
+                    stoppingRegistration.Dispose();
+                }
+                catch
+                {
+                    // Result completion must remain terminal even if the runtime rejects registration cleanup.
+                }
+
+                try
+                {
+                    callerRegistration.Dispose();
+                }
+                catch
+                {
+                    // The result-finished guard makes any surviving callback harmless.
+                }
             }
         }
     }

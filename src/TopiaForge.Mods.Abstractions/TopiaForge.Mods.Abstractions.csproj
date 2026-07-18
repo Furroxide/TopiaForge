@@ -23,9 +23,13 @@
     <Compile Remove="Dialogue.cs" />
     <Compile Remove="PauseMenu.cs" />
     <Compile Remove="Prompts.cs" />
+    <Compile Remove="RobotAgent.cs" />
     <Compile Remove="RobotColor.cs" />
     <Compile Remove="RobotControl.cs" />
+    <Compile Remove="RobotEnums.cs" />
+    <Compile Remove="RobotInteractions.cs" />
     <Compile Remove="RobotObjectives.cs" />
+    <Compile Remove="RobotSpawning.cs" />
     <Compile Remove="RobotTargetFacts.cs" />
     <Compile Remove="Shop.cs" />
     <Compile Remove="SuperhotTimeDriver.cs" />

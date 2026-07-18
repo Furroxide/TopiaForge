@@ -4,8 +4,12 @@ using TopiaForge.Mods;
 namespace TopiaForge.Zombies
 {
     [DataContract]
-    public sealed class ZombiesConfig
+    public sealed partial class ZombiesConfig
     {
+        // Keep the serialized contract readable here. Defaults and input validation live in responsibility-named
+        // partials so mod authors can find the setting surface without wading through persistence mechanics.
+        private static readonly ZombiesConfig DocumentedDefaults = CreateDocumentedDefaults();
+
         public ZombiesConfig()
         {
             SeedDefaults();
@@ -82,9 +86,6 @@ namespace TopiaForge.Zombies
 
         [DataMember(Name = "zapperImpactForce")]
         public float ZapperImpactForce { get; set; }
-
-        [DataMember(Name = "zapperBeamLifetimeSeconds")]
-        public float ZapperBeamLifetimeSeconds { get; set; }
 
         // --- Enemy archetypes (master switch + per-type table) ------------------------------------------------
         // false = legacy uniform-green infected robots (every enemy is the Grunt); a safety/AB switch.
@@ -187,34 +188,7 @@ namespace TopiaForge.Zombies
         [DataMember(Name = "comboMaxMultiplier")]
         public int ComboMaxMultiplier { get; set; }
 
-        // --- HUD juice ----------------------------------------------------------------------------------------
-        [DataMember(Name = "crosshairBaseGapPixels")]
-        public float CrosshairBaseGapPixels { get; set; }
-
-        [DataMember(Name = "crosshairBloomGapPixels")]
-        public float CrosshairBloomGapPixels { get; set; }
-
-        [DataMember(Name = "hitMarkerSeconds")]
-        public float HitMarkerSeconds { get; set; }
-
-        [DataMember(Name = "floatingNumberRiseSeconds")]
-        public float FloatingNumberRiseSeconds { get; set; }
-
-        [DataMember(Name = "floatingNumberMaxConcurrent")]
-        public int FloatingNumberMaxConcurrent { get; set; }
-
-        [DataMember(Name = "damageFlashSeconds")]
-        public float DamageFlashSeconds { get; set; }
-
-        [DataMember(Name = "damageFlashMaxAlpha")]
-        public float DamageFlashMaxAlpha { get; set; }
-
-        [DataMember(Name = "lowIntegrityVignetteThreshold")]
-        public float LowIntegrityVignetteThreshold { get; set; }
-
-        [DataMember(Name = "criticalIntegrityThreshold")]
-        public float CriticalIntegrityThreshold { get; set; }
-
+        // --- HUD accessibility --------------------------------------------------------------------------------
         [DataMember(Name = "hudScale")]
         public float HudScale { get; set; }
 
@@ -224,30 +198,20 @@ namespace TopiaForge.Zombies
         [DataMember(Name = "hudHighContrast")]
         public bool HudHighContrast { get; set; }
 
-        // --- Beam ---------------------------------------------------------------------------------------------
-        [DataMember(Name = "beamWidthStart")]
-        public float BeamWidthStart { get; set; }
-
-        [DataMember(Name = "beamWidthEnd")]
-        public float BeamWidthEnd { get; set; }
-
-        [DataMember(Name = "beamJitterAmplitude")]
-        public float BeamJitterAmplitude { get; set; }
-
         // --- OVERRIDE: command the infected robots' AI brain ---------------------------------------------------
         // Master switch for the whole OVERRIDE/BROADCAST verb (false = pure-shooter v0.6.0 behaviour).
         [DataMember(Name = "overrideEnabled")]
         public bool OverrideEnabled { get; set; }
 
-        // When true (and the RobotKit brain service + token are available) a successful cast can consult the live
-        // RoboAPI LLM (llama-3.3-70b) to soften the outcome and bark a line. false = fully deterministic + offline,
-        // and never reads the token or touches the network. The deterministic outcome is always the authority.
+        // Opts JACK IN into RobotKit's multi-turn live conversation service when that service is available. false
+        // keeps every single-target outcome deterministic and offline and never reads a token or touches the network.
         [DataMember(Name = "useLiveBrain")]
         public bool UseLiveBrain { get; set; }
 
-        // KeyCode names (parsed leniently; fall back to E/Q if invalid).
-        [DataMember(Name = "overrideKey")]
-        public string OverrideKey { get; set; } = "E";
+        // Schema-1 compatibility only. Migration moves this retired binding to JackInKey, then clears it so new
+        // configuration files expose only controls that the runtime actually consumes.
+        [DataMember(Name = "overrideKey", EmitDefaultValue = false)]
+        private string? LegacyOverrideKey { get; set; }
 
         [DataMember(Name = "broadcastKey")]
         public string BroadcastKey { get; set; } = "Q";
@@ -301,18 +265,8 @@ namespace TopiaForge.Zombies
         [DataMember(Name = "allyRetargetSeconds")]
         public float AllyRetargetSeconds { get; set; }
 
-        // How long a robot waits for the live brain answer before committing to the deterministic outcome only.
-        [DataMember(Name = "liveBrainWindowSeconds")]
-        public float LiveBrainWindowSeconds { get; set; }
-
         [DataMember(Name = "brainTemperature")]
         public float BrainTemperature { get; set; }
-
-        [DataMember(Name = "barkMaxChars")]
-        public int BarkMaxChars { get; set; }
-
-        [DataMember(Name = "speechBubbleSeconds")]
-        public float SpeechBubbleSeconds { get; set; }
 
         // Persuasion tuning: a global difficulty scale (>1 harder), the seeded trait ranges, and corruption ramp.
         [DataMember(Name = "overrideDifficulty")]
@@ -346,8 +300,8 @@ namespace TopiaForge.Zombies
         public bool SuperhotMode { get; set; }
 
         // --- JACK IN: free-form LLM conversation with one robot (freezes the horde) ---------------------------
-        // Master switch for the talk-to-a-robot verb. When off (or the brain is unavailable) single-target influence
-        // is disabled and the player relies on the zapper + the deterministic Q broadcast.
+        // Enables the multi-turn JACK IN conversation window. When off or unavailable, JACK IN still resolves through
+        // the immediate deterministic offline path; the zapper and deterministic Q broadcast remain available too.
         [DataMember(Name = "conversationEnabled")]
         public bool ConversationEnabled { get; set; }
 
@@ -360,12 +314,9 @@ namespace TopiaForge.Zombies
         [DataMember(Name = "jackInKey")]
         public string JackInKey { get; set; } = "E";
 
-        // Hold-to-talk voice key, and the text/voice toggle (mirrors the base game's Tab toggle).
+        // Hold-to-talk voice key. Text/voice mode is switched with a declarative, focus-safe UI button.
         [DataMember(Name = "voiceKey")]
         public string VoiceKey { get; set; } = "V";
-
-        [DataMember(Name = "toggleInputModeKey")]
-        public string ToggleInputModeKey { get; set; } = "Tab";
 
         // How long (real seconds, unscaled) a single conversation may stay open before it auto-resumes the horde.
         [DataMember(Name = "conversationWindowSeconds")]
@@ -416,7 +367,7 @@ namespace TopiaForge.Zombies
         // --- Ally "politics": a talked-in ally is a relationship, not a timer (Civ-style loyalty) ---------------
         // Loyalty (0..1) is seeded from how persuaded the robot was, drifts down over time (faster the more corrupt
         // it is), rises when it fights for you, and falls when you shoot it. Below the waver threshold it telegraphs;
-        // at zero it defects back to the swarm. Re-jack-in to renegotiate and shore it up.
+        // at zero it defects back to the swarm. JACK IN spends a charge to stabilize a wavering ally.
         [DataMember(Name = "loyaltySeedMin")]
         public float LoyaltySeedMin { get; set; }
 
@@ -502,373 +453,5 @@ namespace TopiaForge.Zombies
 
         [DataMember(Name = "shopComboWindowBonusSeconds")]
         public float ShopComboWindowBonusSeconds { get; set; }
-
-        // DataContractJsonSerializer constructs instances with FormatterServices.GetUninitializedObject,
-        // which bypasses both the constructor and C# property initializers. Without this hook any field
-        // missing from the JSON would deserialize to 0 and then be clamped to its floor by Normalize()
-        // instead of resolving to the intended default. Seed every member before members are read so that
-        // absent fields keep their real defaults while present ones still override them.
-        [OnDeserializing]
-        private void OnDeserializing(StreamingContext context)
-        {
-            SeedDefaults();
-        }
-
-        private void SeedDefaults()
-        {
-            TargetWorldId = WellKnownWorldIds.OpenSandboxWorld;
-            StartingCountdownSeconds = 3f;
-            InterWaveDelaySeconds = 8f;
-            BaseZombiesPerWave = 5;
-            ZombiesPerWaveIncrement = 3;
-            MaxAliveZombies = 12;
-            SpawnRadius = 28f;
-            MinSpawnDistance = 10f;
-            SpawnHeightOffset = 0.25f;
-            SpawnIntervalSeconds = 0.75f;
-            SpawnSearchAttempts = 18;
-            PlayerIntegrity = 100f;
-            ZombieHealth = 45f;
-            ZombieMoveSpeed = 3.2f;
-            ZombieTurnSpeed = 480f;
-            ZombieAttackRange = 2.35f;
-            ZombieAttackCooldownSeconds = 1.1f;
-            ZombieAttackDamage = 10f;
-            ScorePerKill = 100;
-            // Repurposed for the new HP table / snappier feel: was 30 / 0.22 / 0.06.
-            ZapperDamage = 22f;
-            ZapperRange = 42f;
-            ZapperCooldownSeconds = 0.16f;
-            ZapperImpactForce = 7f;
-            ZapperBeamLifetimeSeconds = 0.10f;
-
-            ArchetypesEnabled = true;
-            SprinterHealthMult = 0.4f;
-            SprinterSpeed = 6.2f;
-            SprinterScale = 0.8f;
-            SprinterScore = 130;
-            BruteHealthMult = 4.9f;
-            BruteSpeed = 2.0f;
-            BruteScale = 1.6f;
-            BruteScore = 350;
-            BruteAttackMult = 2.2f;
-            BruteEasyHeadFraction = 0.70f;
-            BruteMaxAlive = 2;
-            RuntHealthMult = 0.22f;
-            RuntSpeed = 5.0f;
-            RuntScale = 0.55f;
-            RuntScore = 40;
-            RuntPackMin = 4;
-            RuntPackMax = 6;
-            EnableEnemyEmotes = true;
-
-            HeadshotDamageMultiplier = 2.0f;
-            HeadshotHeightFraction = 0.78f;
-            HeadshotFlatBonusScore = 25;
-            ChargeShotEnabled = true;
-            ChargeShotSeconds = 0.55f;
-            ChargeShotDamage = 55f;
-            ChargeShotCooldownSeconds = 0.9f;
-            ChargeShotPierces = true;
-            BigHitRagdollFraction = 0.45f;
-
-            ComboWindowSeconds = 2.5f;
-            ComboKillsPerTier = 4;
-            ComboMaxMultiplier = 5;
-
-            CrosshairBaseGapPixels = 6f;
-            CrosshairBloomGapPixels = 14f;
-            HitMarkerSeconds = 0.12f;
-            FloatingNumberRiseSeconds = 0.7f;
-            FloatingNumberMaxConcurrent = 16;
-            DamageFlashSeconds = 0.35f;
-            DamageFlashMaxAlpha = 0.35f;
-            LowIntegrityVignetteThreshold = 0.35f;
-            CriticalIntegrityThreshold = 0.15f;
-            HudScale = 1f;
-            HudMotionIntensity = 1f;
-            HudHighContrast = false;
-
-            BeamWidthStart = 0.10f;
-            BeamWidthEnd = 0.03f;
-            BeamJitterAmplitude = 0.12f;
-
-            OverrideEnabled = true;
-            // Remote AI is explicit opt-in. A fresh or migrated config must not read the player token or call
-            // RoboAPI merely because the gameplay mod was installed.
-            UseLiveBrain = false;
-            OverrideKey = "E";
-            BroadcastKey = "Q";
-            OverrideCharges = 3;
-            OverrideChargeRegenSeconds = 9f;
-            BroadcastChargeCost = 2;
-            BroadcastCooldownSeconds = 22f;
-            BroadcastRadius = 14f;
-            MaxConvertedAllies = 4;
-            ConvertDurationSeconds = 14f;
-            FreezeSeconds = 2.5f;
-            StandDownSeconds = 4.5f;
-            FleeSeconds = 3.5f;
-            EnrageSeconds = 10f;
-            EnrageSpeedMult = 1.35f;
-            EnrageDamageMult = 1.6f;
-            AllyDamage = 12f;
-            AllyAttackCooldownSeconds = 0.8f;
-            AllyRetargetSeconds = 0.5f;
-            LiveBrainWindowSeconds = 1.6f;
-            BrainTemperature = 0.8f;
-            BarkMaxChars = 90;
-            SpeechBubbleSeconds = 3f;
-            OverrideDifficulty = 1f;
-            SuggestibilityMin = 0.15f;
-            SuggestibilityMax = 0.70f;
-            LoyaltyMin = 0.10f;
-            LoyaltyMax = 0.70f;
-            CorruptionBase = 0.15f;
-            CorruptionPerWave = 0.06f;
-            BiasAmplitude = 0.12f;
-            OverrideResistGrunt = 0.25f;
-            OverrideResistSprinter = 0.35f;
-            OverrideResistBrute = 0.70f;
-            OverrideResistRunt = 0.15f;
-
-            SuperhotMode = false;
-            ConversationEnabled = false;
-            UseVoiceInput = false;
-            JackInKey = "E";
-            VoiceKey = "V";
-            ToggleInputModeKey = "Tab";
-            ConversationWindowSeconds = 22f;
-            ConversationTurnRefillSeconds = 4f;
-            ConversationMaxTurns = 3;
-            PressureRampPerSecond = 0.06f;
-            PressureSpawnBoost = 0.6f;
-            ConvSeedBias = 0.35f;
-            ConvertThreshold = 0.72f;
-            ConvertResistanceWeight = 0.3f;
-            ConvertNudge = 0.3f;
-            StandDownNudge = 0.16f;
-            FleeNudge = 0.06f;
-            RefuseNudge = -0.14f;
-            EnrageDispositionFloor = 0.12f;
-            LoyaltySeedMin = 0.55f;
-            LoyaltySeedMax = 1.0f;
-            LoyaltyDecayPerSecond = 0.012f;
-            LoyaltyCorruptionWeight = 0.8f;
-            LoyaltyPerAssist = 0.05f;
-            LoyaltyShotPenalty = 0.18f;
-            LoyaltyWaverThreshold = 0.3f;
-
-            ShopEnabled = true;
-            ShopKey = "B";
-            ShopCreditsPerScore = 1f;
-            ShopRepairPrice = 400;
-            ShopRepairAmount = 50f;
-            ShopPlatingPrice = 900;
-            ShopPlatingBonus = 25f;
-            ShopZapperGainPrice = 700;
-            ShopZapperGainMult = 1.25f;
-            ShopRapidCoilsPrice = 700;
-            ShopRapidCoilsMult = 0.85f;
-            ShopUplinkCellPrice = 1000;
-            ShopUplinkSurgePrice = 500;
-            ShopComboStabilizerPrice = 600;
-            ShopComboWindowBonusSeconds = 0.75f;
-        }
-
-        public void Normalize()
-        {
-            TargetWorldId = string.IsNullOrWhiteSpace(TargetWorldId)
-                ? WellKnownWorldIds.OpenSandboxWorld
-                : TargetWorldId.Trim();
-
-            StartingCountdownSeconds = Clamp(StartingCountdownSeconds, 0.5f, 20f);
-            InterWaveDelaySeconds = Clamp(InterWaveDelaySeconds, 1f, 60f);
-            BaseZombiesPerWave = Clamp(BaseZombiesPerWave, 1, 200);
-            ZombiesPerWaveIncrement = Clamp(ZombiesPerWaveIncrement, 0, 100);
-            MaxAliveZombies = Clamp(MaxAliveZombies, 1, 80);
-            SpawnRadius = Clamp(SpawnRadius, 4f, 250f);
-            MinSpawnDistance = Clamp(MinSpawnDistance, 0f, SpawnRadius);
-            SpawnHeightOffset = Clamp(SpawnHeightOffset, -4f, 8f);
-            SpawnIntervalSeconds = Clamp(SpawnIntervalSeconds, 0.05f, 20f);
-            SpawnSearchAttempts = Clamp(SpawnSearchAttempts, 1, 100);
-            PlayerIntegrity = Clamp(PlayerIntegrity, 1f, 10000f);
-            ZombieHealth = Clamp(ZombieHealth, 1f, 10000f);
-            ZombieMoveSpeed = Clamp(ZombieMoveSpeed, 0.25f, 25f);
-            ZombieTurnSpeed = Clamp(ZombieTurnSpeed, 30f, 3000f);
-            ZombieAttackRange = Clamp(ZombieAttackRange, 0.5f, 20f);
-            ZombieAttackCooldownSeconds = Clamp(ZombieAttackCooldownSeconds, 0.05f, 20f);
-            ZombieAttackDamage = Clamp(ZombieAttackDamage, 0.1f, 10000f);
-            ScorePerKill = Clamp(ScorePerKill, 0, 1000000);
-            ZapperDamage = Clamp(ZapperDamage, 0.1f, 10000f);
-            ZapperRange = Clamp(ZapperRange, 1f, 1000f);
-            ZapperCooldownSeconds = Clamp(ZapperCooldownSeconds, 0.01f, 20f);
-            ZapperImpactForce = Clamp(ZapperImpactForce, 0f, 1000f);
-            ZapperBeamLifetimeSeconds = Clamp(ZapperBeamLifetimeSeconds, 0.01f, 2f);
-
-            SprinterHealthMult = Clamp(SprinterHealthMult, 0.05f, 50f);
-            SprinterSpeed = Clamp(SprinterSpeed, 0.25f, 25f);
-            SprinterScale = Clamp(SprinterScale, 0.2f, 6f);
-            SprinterScore = Clamp(SprinterScore, 0, 1000000);
-            BruteHealthMult = Clamp(BruteHealthMult, 0.05f, 100f);
-            BruteSpeed = Clamp(BruteSpeed, 0.25f, 25f);
-            BruteScale = Clamp(BruteScale, 0.2f, 6f);
-            BruteScore = Clamp(BruteScore, 0, 1000000);
-            BruteAttackMult = Clamp(BruteAttackMult, 0.1f, 50f);
-            BruteEasyHeadFraction = Clamp(BruteEasyHeadFraction, 0.1f, 1f);
-            BruteMaxAlive = Clamp(BruteMaxAlive, 0, 80);
-            RuntHealthMult = Clamp(RuntHealthMult, 0.02f, 50f);
-            RuntSpeed = Clamp(RuntSpeed, 0.25f, 25f);
-            RuntScale = Clamp(RuntScale, 0.15f, 6f);
-            RuntScore = Clamp(RuntScore, 0, 1000000);
-            RuntPackMin = Clamp(RuntPackMin, 1, 40);
-            RuntPackMax = Clamp(RuntPackMax, RuntPackMin, 40);
-
-            HeadshotDamageMultiplier = Clamp(HeadshotDamageMultiplier, 1f, 100f);
-            HeadshotHeightFraction = Clamp(HeadshotHeightFraction, 0.1f, 1f);
-            HeadshotFlatBonusScore = Clamp(HeadshotFlatBonusScore, 0, 1000000);
-            ChargeShotSeconds = Clamp(ChargeShotSeconds, 0.05f, 10f);
-            ChargeShotDamage = Clamp(ChargeShotDamage, 0.1f, 10000f);
-            ChargeShotCooldownSeconds = Clamp(ChargeShotCooldownSeconds, 0.05f, 20f);
-            BigHitRagdollFraction = Clamp(BigHitRagdollFraction, 0.05f, 10f);
-
-            ComboWindowSeconds = Clamp(ComboWindowSeconds, 0.5f, 30f);
-            ComboKillsPerTier = Clamp(ComboKillsPerTier, 1, 100);
-            ComboMaxMultiplier = Clamp(ComboMaxMultiplier, 1, 100);
-
-            CrosshairBaseGapPixels = Clamp(CrosshairBaseGapPixels, 0f, 60f);
-            CrosshairBloomGapPixels = Clamp(CrosshairBloomGapPixels, 0f, 120f);
-            HitMarkerSeconds = Clamp(HitMarkerSeconds, 0.02f, 2f);
-            FloatingNumberRiseSeconds = Clamp(FloatingNumberRiseSeconds, 0.1f, 5f);
-            FloatingNumberMaxConcurrent = Clamp(FloatingNumberMaxConcurrent, 1, 128);
-            DamageFlashSeconds = Clamp(DamageFlashSeconds, 0.05f, 3f);
-            DamageFlashMaxAlpha = Clamp(DamageFlashMaxAlpha, 0f, 1f);
-            LowIntegrityVignetteThreshold = Clamp(LowIntegrityVignetteThreshold, 0f, 1f);
-            CriticalIntegrityThreshold = Clamp(CriticalIntegrityThreshold, 0f, LowIntegrityVignetteThreshold);
-            HudScale = Clamp(HudScale, 0.75f, 1.35f);
-            HudMotionIntensity = Clamp(HudMotionIntensity, 0f, 2f);
-
-            BeamWidthStart = Clamp(BeamWidthStart, 0.005f, 2f);
-            BeamWidthEnd = Clamp(BeamWidthEnd, 0.001f, 2f);
-            BeamJitterAmplitude = Clamp(BeamJitterAmplitude, 0f, 2f);
-
-            if (string.IsNullOrWhiteSpace(OverrideKey))
-            {
-                OverrideKey = "E";
-            }
-
-            if (string.IsNullOrWhiteSpace(BroadcastKey))
-            {
-                BroadcastKey = "Q";
-            }
-
-            OverrideCharges = Clamp(OverrideCharges, 1, 20);
-            OverrideChargeRegenSeconds = Clamp(OverrideChargeRegenSeconds, 0.5f, 120f);
-            BroadcastChargeCost = Clamp(BroadcastChargeCost, 1, OverrideCharges);
-            BroadcastCooldownSeconds = Clamp(BroadcastCooldownSeconds, 1f, 240f);
-            BroadcastRadius = Clamp(BroadcastRadius, 2f, 120f);
-            MaxConvertedAllies = Clamp(MaxConvertedAllies, 0, 40);
-            ConvertDurationSeconds = Clamp(ConvertDurationSeconds, 1f, 120f);
-            FreezeSeconds = Clamp(FreezeSeconds, 0.2f, 60f);
-            StandDownSeconds = Clamp(StandDownSeconds, 0.2f, 60f);
-            FleeSeconds = Clamp(FleeSeconds, 0.2f, 60f);
-            EnrageSeconds = Clamp(EnrageSeconds, 0.5f, 120f);
-            EnrageSpeedMult = Clamp(EnrageSpeedMult, 1f, 5f);
-            EnrageDamageMult = Clamp(EnrageDamageMult, 1f, 10f);
-            AllyDamage = Clamp(AllyDamage, 0.1f, 10000f);
-            AllyAttackCooldownSeconds = Clamp(AllyAttackCooldownSeconds, 0.05f, 20f);
-            AllyRetargetSeconds = Clamp(AllyRetargetSeconds, 0.1f, 5f);
-            LiveBrainWindowSeconds = Clamp(LiveBrainWindowSeconds, 0.2f, 10f);
-            BrainTemperature = Clamp(BrainTemperature, 0f, 2f);
-            BarkMaxChars = Clamp(BarkMaxChars, 10, 240);
-            SpeechBubbleSeconds = Clamp(SpeechBubbleSeconds, 0.5f, 10f);
-            OverrideDifficulty = Clamp(OverrideDifficulty, 0.25f, 4f);
-            SuggestibilityMin = Clamp(SuggestibilityMin, 0f, 1f);
-            SuggestibilityMax = Clamp(SuggestibilityMax, SuggestibilityMin, 1f);
-            LoyaltyMin = Clamp(LoyaltyMin, 0f, 1f);
-            LoyaltyMax = Clamp(LoyaltyMax, LoyaltyMin, 1f);
-            CorruptionBase = Clamp(CorruptionBase, 0f, 1f);
-            CorruptionPerWave = Clamp(CorruptionPerWave, 0f, 0.5f);
-            BiasAmplitude = Clamp(BiasAmplitude, 0f, 1f);
-            OverrideResistGrunt = Clamp(OverrideResistGrunt, 0f, 1f);
-            OverrideResistSprinter = Clamp(OverrideResistSprinter, 0f, 1f);
-            OverrideResistBrute = Clamp(OverrideResistBrute, 0f, 1f);
-            OverrideResistRunt = Clamp(OverrideResistRunt, 0f, 1f);
-
-            if (string.IsNullOrWhiteSpace(JackInKey))
-            {
-                JackInKey = "E";
-            }
-
-            if (string.IsNullOrWhiteSpace(VoiceKey))
-            {
-                VoiceKey = "V";
-            }
-
-            if (string.IsNullOrWhiteSpace(ToggleInputModeKey))
-            {
-                ToggleInputModeKey = "Tab";
-            }
-
-            ConversationWindowSeconds = Clamp(ConversationWindowSeconds, 4f, 120f);
-            ConversationTurnRefillSeconds = Clamp(ConversationTurnRefillSeconds, 0f, ConversationWindowSeconds);
-            ConversationMaxTurns = Clamp(ConversationMaxTurns, 1, 8);
-            PressureRampPerSecond = Clamp(PressureRampPerSecond, 0f, 1f);
-            PressureSpawnBoost = Clamp(PressureSpawnBoost, 0f, 0.95f);
-            ConvSeedBias = Clamp(ConvSeedBias, 0f, 1f);
-            ConvertThreshold = Clamp(ConvertThreshold, 0.1f, 0.97f);
-            ConvertResistanceWeight = Clamp(ConvertResistanceWeight, 0f, 1f);
-            ConvertNudge = Clamp(ConvertNudge, 0f, 1f);
-            StandDownNudge = Clamp(StandDownNudge, 0f, 1f);
-            FleeNudge = Clamp(FleeNudge, 0f, 1f);
-            RefuseNudge = Clamp(RefuseNudge, -1f, 0f);
-            EnrageDispositionFloor = Clamp(EnrageDispositionFloor, 0f, 0.5f);
-            LoyaltySeedMin = Clamp(LoyaltySeedMin, 0f, 1f);
-            LoyaltySeedMax = Clamp(LoyaltySeedMax, LoyaltySeedMin, 1f);
-            LoyaltyDecayPerSecond = Clamp(LoyaltyDecayPerSecond, 0f, 0.5f);
-            LoyaltyCorruptionWeight = Clamp(LoyaltyCorruptionWeight, 0f, 4f);
-            LoyaltyPerAssist = Clamp(LoyaltyPerAssist, 0f, 1f);
-            LoyaltyShotPenalty = Clamp(LoyaltyShotPenalty, 0f, 1f);
-            LoyaltyWaverThreshold = Clamp(LoyaltyWaverThreshold, 0f, 0.9f);
-
-            if (string.IsNullOrWhiteSpace(ShopKey))
-            {
-                ShopKey = "B";
-            }
-
-            ShopCreditsPerScore = Clamp(ShopCreditsPerScore, 0f, 10f);
-            ShopRepairPrice = Clamp(ShopRepairPrice, 0, 1000000);
-            ShopRepairAmount = Clamp(ShopRepairAmount, 1f, 10000f);
-            ShopPlatingPrice = Clamp(ShopPlatingPrice, 0, 1000000);
-            ShopPlatingBonus = Clamp(ShopPlatingBonus, 1f, 1000f);
-            ShopZapperGainPrice = Clamp(ShopZapperGainPrice, 0, 1000000);
-            ShopZapperGainMult = Clamp(ShopZapperGainMult, 1f, 5f);
-            ShopRapidCoilsPrice = Clamp(ShopRapidCoilsPrice, 0, 1000000);
-            ShopRapidCoilsMult = Clamp(ShopRapidCoilsMult, 0.5f, 1f);
-            ShopUplinkCellPrice = Clamp(ShopUplinkCellPrice, 0, 1000000);
-            ShopUplinkSurgePrice = Clamp(ShopUplinkSurgePrice, 0, 1000000);
-            ShopComboStabilizerPrice = Clamp(ShopComboStabilizerPrice, 0, 1000000);
-            ShopComboWindowBonusSeconds = Clamp(ShopComboWindowBonusSeconds, 0f, 10f);
-        }
-
-        private static int Clamp(int value, int min, int max)
-        {
-            if (value < min)
-            {
-                return min;
-            }
-
-            return value > max ? max : value;
-        }
-
-        private static float Clamp(float value, float min, float max)
-        {
-            if (value < min)
-            {
-                return min;
-            }
-
-            return value > max ? max : value;
-        }
     }
 }

@@ -62,6 +62,19 @@ namespace TopiaForge.Chronos
             return false;
         }
 
+        public bool Contains(int id)
+        {
+            for (var index = 0; index < leases.Count; index++)
+            {
+                if (leases[index].Id == id)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         // Release every lease owned by a mod (called on that mod's teardown). Returns how many were released.
         public int ReleaseOwner(string owner)
         {

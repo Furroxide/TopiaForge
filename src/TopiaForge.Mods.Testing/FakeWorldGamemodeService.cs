@@ -95,6 +95,7 @@ namespace TopiaForge.Mods.Testing
             worlds.Add(world.Id, new WorldEntry(world, content));
             return lifetime.TrackResult<IWorldRegistration>(
                 registration,
+                registration.AttachLifetimeLease,
                 "The fake mod stopped before the world could be registered.");
         }
 
@@ -280,6 +281,7 @@ namespace TopiaForge.Mods.Testing
             values.Add(id, definition);
             return lifetime.TrackResult<IWorldRegistration>(
                 registration,
+                registration.AttachLifetimeLease,
                 "The fake mod stopped before the world content could be registered.");
         }
 
@@ -318,6 +320,7 @@ namespace TopiaForge.Mods.Testing
         private sealed class Registration : IWorldRegistration
         {
             private Action<Registration>? release;
+            private IDisposable? lifetimeLease;
 
             public Registration(string id, WorldRegistrationKind kind, Action<Registration> release)
             {
@@ -330,11 +333,23 @@ namespace TopiaForge.Mods.Testing
             public WorldRegistrationKind Kind { get; }
             public bool IsActive => release != null;
 
+            public void AttachLifetimeLease(IDisposable lease)
+            {
+                lifetimeLease = lease ?? throw new ArgumentNullException(nameof(lease));
+            }
+
             public void Dispose()
             {
                 var callback = release;
                 release = null;
-                callback?.Invoke(this);
+                try
+                {
+                    callback?.Invoke(this);
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
+                }
             }
         }
 

@@ -1,9 +1,8 @@
 namespace TopiaForge.Zombies
 {
-    // Per-run state bought from the between-rounds shop. Consumers (ZapperController, OverrideController,
-    // ZombiesController) read these live wherever they read the matching config value — the shared,
-    // disk-persisted ZombiesConfig is never mutated, so nothing bought can leak across restarts, scene
-    // resets, or into SaveConfig. Reset alongside the run counters.
+    // Per-run state bought from the between-rounds shop. ZombiesController reads these live alongside the matching
+    // config values; the shared, disk-persisted ZombiesConfig is never mutated, so purchases cannot leak across
+    // restarts, scene resets, or config saves. Reset alongside the run counters.
     internal sealed class ZombiesRunUpgrades
     {
         public float ZapperDamageMult = 1f;

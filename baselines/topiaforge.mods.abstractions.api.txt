@@ -318,6 +318,9 @@ type public interface TopiaForge.Mods.IRuntimeInfo
   property TopiaForge.Mods.SemanticVersion LoaderVersion { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.SemanticVersion SdkVersion { get [abstract,virtual,newslot]; }
 
+type public interface TopiaForge.Mods.ISceneLoadEventSource
+  method [abstract,virtual,newslot] System.IDisposable SubscribeSceneLoaded(System.Action<TopiaForge.Mods.SceneLoadEvent> handler)
+
 type public interface TopiaForge.Mods.ISceneService
   method [abstract,virtual,newslot] System.Boolean TryGetActive(out TopiaForge.Mods.SceneSnapshot? scene)
   method [abstract,virtual,newslot] System.Boolean TryGetCheckpoint(out TopiaForge.Mods.CheckpointSnapshot? checkpoint)
@@ -457,6 +460,9 @@ type public enum TopiaForge.Mods.ModErrorCode : System.Int32
   field const TopiaForge.Mods.ModErrorCode Unavailable = 3 (Unavailable)
   field const TopiaForge.Mods.ModErrorCode Unknown = 10 (Unknown)
 
+type public static class TopiaForge.Mods.ModEventExtensions : System.Object
+  method extension [static] System.IDisposable SubscribeSceneLoaded(TopiaForge.Mods.IModEvents events, System.Action<TopiaForge.Mods.SceneLoadEvent> handler)
+
 type public sealed class TopiaForge.Mods.ModIdentity : System.Object
   constructor .ctor(System.String id, System.String name, TopiaForge.Mods.SemanticVersion version)
   property System.String Id { get; }
@@ -542,6 +548,13 @@ type public readonly struct TopiaForge.Mods.RgbaColor : System.ValueType, System
   property TopiaForge.Mods.RgbaColor Clamped { get; }
   property static TopiaForge.Mods.RgbaColor Clear { get [static]; }
   property static TopiaForge.Mods.RgbaColor White { get [static]; }
+
+type public sealed class TopiaForge.Mods.SceneLoadEvent : System.Object
+  constructor .ctor(System.String sceneName, TopiaForge.Mods.SceneLoadMode mode, System.Boolean isActive)
+  property System.Boolean IsActive { get; }
+  property System.Boolean IsAuthoritativeReplacement { get; }
+  property System.String SceneName { get; }
+  property TopiaForge.Mods.SceneLoadMode Mode { get; }
 
 type public enum TopiaForge.Mods.SceneLoadMode : System.Int32
   field System.Int32 value__

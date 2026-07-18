@@ -230,15 +230,18 @@ type public sealed class TopiaForge.Mods.Testing.FakeModContext : System.Object,
   property TopiaForge.Mods.Testing.InMemoryModFiles Files { get; }
   property TopiaForge.Mods.Testing.InMemoryModStorageService Storage { get; }
 
-type public sealed class TopiaForge.Mods.Testing.FakeModEvents : System.Object, TopiaForge.Mods.IModEvents
+type public sealed class TopiaForge.Mods.Testing.FakeModEvents : System.Object, TopiaForge.Mods.IModEvents, TopiaForge.Mods.ISceneLoadEventSource
   constructor .ctor(TopiaForge.Mods.Testing.FakeModLifetime lifetime, TopiaForge.Mods.Testing.CapturedModLogger logger)
   method System.Void RaiseFixedUpdate(TopiaForge.Mods.GameTimeSample sample)
   method System.Void RaiseLateUpdate(TopiaForge.Mods.GameTimeSample sample)
+  method System.Void RaiseSceneActivated(TopiaForge.Mods.SceneLoadEvent scene)
   method System.Void RaiseSceneLoaded(System.String sceneName)
+  method System.Void RaiseSceneLoaded(TopiaForge.Mods.SceneLoadEvent scene)
   method System.Void RaiseUpdate(System.Single deltaTime)
   method [virtual,final,newslot] System.IDisposable SubscribeFixedUpdate(System.Action<TopiaForge.Mods.GameTimeSample> handler)
   method [virtual,final,newslot] System.IDisposable SubscribeLateUpdate(System.Action<TopiaForge.Mods.GameTimeSample> handler)
   method [virtual,final,newslot] System.IDisposable SubscribeSceneLoaded(System.Action<System.String> handler)
+  method [virtual,final,newslot] System.IDisposable SubscribeSceneLoaded(System.Action<TopiaForge.Mods.SceneLoadEvent> handler)
   method [virtual,final,newslot] System.IDisposable SubscribeUpdate(System.Action<System.Single> handler)
   property System.Int32 ActiveSubscriptionCount { get; }
 
@@ -326,6 +329,7 @@ type public sealed class TopiaForge.Mods.Testing.FakeRobotAgent : System.Object,
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<System.Boolean> SetScale(System.Single scale)
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<System.Boolean> SetTint(TopiaForge.Mods.RobotColor color)
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Stop()
+  property System.Boolean AutoCompleteMovement { get; set; }
   property System.Boolean HasReachedTarget { get [virtual,final,newslot]; }
   property System.Boolean IsAlive { get [virtual,final,newslot]; }
   property System.Boolean IsMoving { get [virtual,final,newslot]; }
@@ -344,16 +348,19 @@ type public sealed class TopiaForge.Mods.Testing.FakeRobotAgent : System.Object,
   property TopiaForge.Mods.Vec3 HeadPosition { get [virtual,final,newslot]; }
   property TopiaForge.Mods.Vec3 Position { get [virtual,final,newslot]; }
 
-type public sealed class TopiaForge.Mods.Testing.FakeRobotAgentService : System.Object, TopiaForge.Mods.IRobotAgentService
+type public sealed class TopiaForge.Mods.Testing.FakeRobotAgentService : System.Object, TopiaForge.Mods.IRobotAgentService, TopiaForge.Mods.IRobotPlayerEntitySource
   constructor .ctor(TopiaForge.Mods.Testing.FakeModLifetime lifetime)
+  method [virtual,final,newslot] System.Boolean TryGetPlayerEntity(out TopiaForge.Mods.IEntity? entity)
   method [virtual,final,newslot] System.Boolean TryGetRobot(TopiaForge.Mods.IEntity entity, out TopiaForge.Mods.IRobotAgent? agent)
   method [virtual,final,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.ReachableSpawnResult>> FindReachableSpawnAsync(TopiaForge.Mods.ReachableSpawnRequest request, System.Threading.CancellationToken cancellationToken = null)
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IRobotAgent> Spawn(TopiaForge.Mods.RobotAgentSpawnRequest request)
+  property System.Boolean AutoCompleteAgentMovement { get; set; }
   property System.Boolean IsAvailable { get [virtual,final,newslot]; set; }
   property System.Boolean IsNavigationAvailable { get [virtual,final,newslot]; set; }
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.IRobotAgent> ActiveAgents { get [virtual,final,newslot]; }
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.RobotTypeDescriptor> RobotTypes { get [virtual,final,newslot]; set; }
   property System.Nullable<TopiaForge.Mods.ModErrorCode> NextSpawnFailure { get; set; }
+  property TopiaForge.Mods.IEntity? PlayerEntity { get; set; }
   property TopiaForge.Mods.Vec3 NextReachablePosition { get; set; }
 
 type public sealed class TopiaForge.Mods.Testing.FakeRobotBrainQueryService : System.Object, TopiaForge.Mods.IRobotBrainQueryService
@@ -417,6 +424,7 @@ type public sealed class TopiaForge.Mods.Testing.FakeRuntimeInfo : System.Object
 
 type public sealed class TopiaForge.Mods.Testing.FakeSceneService : System.Object, TopiaForge.Mods.ISceneService
   constructor .ctor(TopiaForge.Mods.Testing.FakeModEvents events, TopiaForge.Mods.Testing.FakeModLifetime lifetime, System.String initialScene = "TestCityStartMenu", System.Action<System.String>? legacyNotification = null)
+  method System.Boolean Activate(System.String sceneName)
   method System.Boolean CompleteNextLoad()
   method System.Boolean FailNextLoad(TopiaForge.Mods.ModErrorCode errorCode, System.String message)
   method System.Void Load(System.String sceneName, TopiaForge.Mods.SceneLoadMode mode = 0 (Single))
@@ -443,6 +451,7 @@ type public sealed class TopiaForge.Mods.Testing.FakeSpawnedEntity : System.Obje
 type public sealed class TopiaForge.Mods.Testing.FakeTimeControlService : System.Object, TopiaForge.Mods.ITimeControlService
   constructor .ctor(TopiaForge.Mods.Testing.FakeModLifetime lifetime)
   method System.Void Advance(System.Single controlDeltaTime, System.Single playerInputMagnitude = 0, System.Boolean playerActing = false)
+  method System.Void ForceReset()
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Step(System.Single seconds)
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<System.Boolean> StepFixed(System.Int32 ticks)
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.ITimeLease> ExemptPlayer(System.String usage)
@@ -496,6 +505,7 @@ type public sealed class TopiaForge.Mods.Testing.FakeUiModal : System.Object, Sy
 
 type public sealed class TopiaForge.Mods.Testing.FakeUiService : System.Object, TopiaForge.Mods.IUiService
   constructor .ctor(TopiaForge.Mods.Testing.FakeModLifetime lifetime)
+  method System.Void FailNextContentUpdate(System.String surfaceId, TopiaForge.Mods.ModErrorCode errorCode = 9 (External), System.String message = "The fake UI content update was rejected.")
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<System.Boolean> ShowToast(System.String message, TopiaForge.Mods.UiTone tone = 0 (Neutral))
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUiModal> ShowModal(TopiaForge.Mods.UiModalRequest request, System.Action<System.Boolean> completed)
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUiSurface> CreateSurface(TopiaForge.Mods.UiSurfaceRequest request)

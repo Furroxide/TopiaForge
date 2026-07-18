@@ -67,7 +67,7 @@ namespace TopiaForge.Mods.Testing
             actions.Add(definition.Name, action);
             try
             {
-                lifetime.Track(action);
+                action.AttachLifetimeLease(lifetime.Track(action));
                 return OperationResult<IInputAction>.Success(action);
             }
             catch (ObjectDisposedException)
@@ -130,6 +130,7 @@ namespace TopiaForge.Mods.Testing
         private float rawValue;
         private bool pressed;
         private bool released;
+        private IDisposable? lifetimeLease;
 
         internal FakeInputAction(InputActionDefinition definition, FakeInputService owner, Action onDispose)
         {
@@ -156,6 +157,11 @@ namespace TopiaForge.Mods.Testing
 
         /// <inheritdoc/>
         public bool WasReleased => !owner.IsSuppressed(definition) && released;
+
+        internal void AttachLifetimeLease(IDisposable lease)
+        {
+            lifetimeLease = lease ?? throw new ArgumentNullException(nameof(lease));
+        }
 
         /// <inheritdoc/>
         public OperationResult<bool> Rebind(IEnumerable<InputBinding> newBindings)
@@ -219,6 +225,7 @@ namespace TopiaForge.Mods.Testing
             var callback = onDispose;
             onDispose = null;
             callback?.Invoke();
+            System.Threading.Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
         }
 
         private static List<InputBinding> CopyBindings(IEnumerable<InputBinding> source)

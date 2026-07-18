@@ -59,10 +59,41 @@ namespace TopiaForge.ModManager
             var result = backend.AcquireControl(reason);
             if (result.TryGetValue(out var lease))
             {
-                lifetime.Track(lease);
+                try
+                {
+                    return OperationResult<IPlayerControlLease>.Success(
+                        new OwnerPlayerControlLease(lease, lifetime.Track(lease)));
+                }
+                catch (ObjectDisposedException)
+                {
+                    lease.Dispose();
+                    return OperationResult<IPlayerControlLease>.Failure(
+                        ModErrorCode.Cancelled,
+                        "The mod stopped before player control could be acquired.");
+                }
             }
 
             return result;
+        }
+
+        private sealed class OwnerPlayerControlLease : IPlayerControlLease
+        {
+            private readonly IPlayerControlLease inner;
+            private IDisposable? lifetimeLease;
+
+            public OwnerPlayerControlLease(IPlayerControlLease inner, IDisposable lifetimeLease)
+            {
+                this.inner = inner;
+                this.lifetimeLease = lifetimeLease;
+            }
+
+            public bool IsActive => lifetimeLease != null && inner.IsActive;
+            public string Reason => inner.Reason;
+
+            public void Dispose()
+            {
+                Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
+            }
         }
 
     }

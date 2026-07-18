@@ -26,6 +26,11 @@ effective world scale is derived from all active leases instead of using last-wr
 Releasing a lease restores the state implied by remaining leases; mod lifetime cleanup handles
 partial loads and unload automatically.
 
+Robotopia's own pause menu remains authoritative. Chronos reads its pause-panel state without a
+`GameCode` compile dependency and retains observed-zero ownership detection as a fallback. Lease
+changes still update `WorldScale`, `Mode`, and player-exemption state while the native pause is open,
+but Chronos defers all `timeScale` writes—including release, reset, and step—until that pause lifts.
+
 Use Chronos service clocks for behavior that should obey world scale or continue while Robotopia's
 world is paused. UI, input, and deadlines generally use control time. Simulation actors and world
 timers use world time.

@@ -26,9 +26,9 @@ namespace TopiaForge.RobotKit
             logger = Context.Logger;
 
             service = new RobotAgentService(logger);
+            Context.Lifetime.Track(service);
             brainService = new RobotBrainQueryService(logger);
-            conversationService = new RobotConversationService(brainService, logger);
-            dialogueInputService = new PlayerDialogueInputService(logger);
+            Context.Lifetime.Track(brainService);
             // The objective service resolves Reprogram courier recipients back to agent handles via the agent
             // service (live-object reference -> IRobotAgent), staying Unity-free itself.
             objectiveService = new RobotObjectiveService(
@@ -37,11 +37,10 @@ namespace TopiaForge.RobotKit
                 entity => service?.FindAgentByEntity(entity),
                 null,
                 Context.Identity.Id);
-
-            Context.Lifetime.Track(service);
-            Context.Lifetime.Track(brainService);
             Context.Lifetime.Track(objectiveService);
+            dialogueInputService = new PlayerDialogueInputService(logger);
             Context.Lifetime.Track(dialogueInputService);
+            conversationService = new RobotConversationService(brainService, logger);
             Context.Lifetime.Track(conversationService);
             RegisterExtension<IRobotAgentService>(service);
             RegisterExtension<IRobotBrainQueryService>(brainService);
@@ -114,8 +113,13 @@ namespace TopiaForge.RobotKit
             }
         }
 
-        private void OnSceneLoaded(string sceneName)
+        private void OnSceneLoaded(SceneLoadEvent scene)
         {
+            if (!scene.IsAuthoritativeReplacement)
+            {
+                return;
+            }
+
             // Consumers release handles before providers clear their underlying agents/queries.
             RunLifecycle(() => conversationService?.OnSceneChanged(), "conversation scene cleanup");
             RunLifecycle(() => dialogueInputService?.OnSceneChanged(), "dialogue scene cleanup");
@@ -144,18 +148,6 @@ namespace TopiaForge.RobotKit
             catch (Exception exception)
             {
                 logger?.Error(exception, "RobotKit failed during " + operation + ".");
-            }
-        }
-
-        private void DisposeSafely(IDisposable? component, string name)
-        {
-            try
-            {
-                component?.Dispose();
-            }
-            catch (Exception exception)
-            {
-                logger?.Error(exception, "RobotKit failed to dispose its " + name + ".");
             }
         }
 

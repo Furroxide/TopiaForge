@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace TopiaForge.Mods.Testing
 {
     /// <summary>Deterministic event source whose subscriptions are owned by a fake mod lifetime.</summary>
-    public sealed class FakeModEvents : IModEvents
+    public sealed class FakeModEvents : IModEvents, ISceneLoadEventSource
     {
         private readonly FakeModLifetime lifetime;
         private readonly CapturedModLogger logger;
@@ -12,6 +12,7 @@ namespace TopiaForge.Mods.Testing
         private readonly List<Action<GameTimeSample>> fixedUpdates = new List<Action<GameTimeSample>>();
         private readonly List<Action<GameTimeSample>> lateUpdates = new List<Action<GameTimeSample>>();
         private readonly List<Action<string>> sceneLoads = new List<Action<string>>();
+        private readonly List<Action<SceneLoadEvent>> detailedSceneLoads = new List<Action<SceneLoadEvent>>();
 
         /// <summary>Creates a deterministic event source.</summary>
         public FakeModEvents(FakeModLifetime lifetime, CapturedModLogger logger)
@@ -22,7 +23,7 @@ namespace TopiaForge.Mods.Testing
 
         /// <summary>Gets the number of currently active SDK subscriptions.</summary>
         public int ActiveSubscriptionCount =>
-            updates.Count + fixedUpdates.Count + lateUpdates.Count + sceneLoads.Count;
+            updates.Count + fixedUpdates.Count + lateUpdates.Count + sceneLoads.Count + detailedSceneLoads.Count;
 
         internal CapturedModLogger Logger => logger;
 
@@ -38,6 +39,10 @@ namespace TopiaForge.Mods.Testing
         /// <inheritdoc/>
         public IDisposable SubscribeSceneLoaded(Action<string> handler) => Subscribe(sceneLoads, handler);
 
+        /// <inheritdoc/>
+        public IDisposable SubscribeSceneLoaded(Action<SceneLoadEvent> handler) =>
+            Subscribe(detailedSceneLoads, handler);
+
         /// <summary>Raises one ordinary rendered-frame update.</summary>
         /// <param name="deltaTime">Scaled frame duration in seconds.</param>
         public void RaiseUpdate(float deltaTime) => Raise(updates, deltaTime, "update");
@@ -50,7 +55,24 @@ namespace TopiaForge.Mods.Testing
 
         /// <summary>Raises a successful scene-load notification.</summary>
         public void RaiseSceneLoaded(string sceneName) =>
-            Raise(sceneLoads, sceneName ?? string.Empty, "scene loaded");
+            RaiseSceneLoaded(new SceneLoadEvent(sceneName, SceneLoadMode.Single, true));
+
+        /// <summary>Raises a successful scene-load notification with transition metadata.</summary>
+        public void RaiseSceneLoaded(SceneLoadEvent scene)
+        {
+            if (scene == null) throw new ArgumentNullException(nameof(scene));
+            Raise(sceneLoads, scene.SceneName, "scene loaded");
+            Raise(detailedSceneLoads, scene, "detailed scene loaded");
+        }
+
+        /// <summary>
+        /// Raises an activation-only notification for detailed subscribers without replaying the legacy loaded event.
+        /// </summary>
+        public void RaiseSceneActivated(SceneLoadEvent scene)
+        {
+            if (scene == null) throw new ArgumentNullException(nameof(scene));
+            Raise(detailedSceneLoads, scene, "detailed scene activated");
+        }
 
         private IDisposable Subscribe<T>(List<Action<T>> handlers, Action<T> handler)
         {

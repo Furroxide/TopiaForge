@@ -34,7 +34,15 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(TestingKitOnly)' == 'true'">
+    <!-- Focused sources use core and specialist SDK contracts directly; keep those dependencies explicit
+         instead of relying on the testing package's intentionally reference-only transitive graph. -->
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Chronos\TopiaForge.Mods.Chronos.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Prompts\TopiaForge.Mods.Prompts.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.RobotKit\TopiaForge.Mods.RobotKit.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Testing\TopiaForge.Mods.Testing.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Ugc\TopiaForge.Mods.Ugc.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Worlds\TopiaForge.Mods.Worlds.csproj" />
   </ItemGroup>
 
   <!-- Compile the UGC live-sync mod's Unity-free logic directly into the test assembly so the service state
@@ -61,8 +69,30 @@
     <Compile Include="..\..\mods\TopiaForge.RobotKit\RoboApiProtocol.cs" />
     <Compile Include="..\..\mods\TopiaForge.RobotKit\RoboApiClient.cs" />
     <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesConfig.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesConfig.Defaults.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesConfig.Validation.cs" />
     <Compile Include="..\..\mods\TopiaForge.Zombies\OverrideDecision.cs" />
     <Compile Include="..\..\mods\TopiaForge.Zombies\ConversationDirector.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesMod.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Zombies\ZombieArchetype.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Zombies\ZombieEnemy.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesController.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesController.Loop.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesController.Waves.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesController.Enemies.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesController.Session.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesController.Health.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesController.Combat.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesController.Uplink.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesController.ShopHud.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesConversationController.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesConversationController.Ui.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesGameOverPresenter.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesHudPresenter.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesRunUpgrades.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesRuntimeMath.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesShopCatalog.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesShopController.cs" />
   </ItemGroup>
 
   <!-- Unity-free first-party config contracts: defaults, partial deserialization, normalization, and preset
@@ -93,11 +123,15 @@
     <Compile Include="..\..\mods\TopiaForge.Sandbox\SandboxConfig.cs" />
   </ItemGroup>
 
-  <!-- Chronos time-control: the lease derivation, fixedDeltaTime math and turn-order are Unity-free, so they
-       unit-test the leak-proof derivation + initiative ordering on net8.0 (the SuperhotTimeDriver lives in
-       Abstractions and is referenced directly). -->
+  <!-- Chronos time-control: lease/logical-state derivation, native-pause ownership, fixedDeltaTime math, and
+       turn-order are Unity-free, so they unit-test on net8.0 (SuperhotTimeDriver lives in Abstractions). -->
   <ItemGroup>
+    <Compile Include="..\..\mods\TopiaForge.Chronos\LeaseLifecycle.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Chronos\PlayerSuspendCoordinator.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Chronos\TimeLease.cs" />
     <Compile Include="..\..\mods\TopiaForge.Chronos\TimeMath.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Chronos\TimeScaleOwnership.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Chronos\TimeScalePlan.cs" />
     <Compile Include="..\..\mods\TopiaForge.Chronos\TurnOrder.cs" />
   </ItemGroup>
 
@@ -106,9 +140,11 @@
     <Compile Include="..\..\mods\TopiaForge.Prompts\PromptOverrideRegistry.cs" />
   </ItemGroup>
 
-  <!-- Worlds auto-load routing is pure SDK policy; compile just that helper so the launcher-to-runtime selection
-       contract can be regression-tested without loading UnityEngine or GameCode. -->
+  <!-- Worlds routing, fallback safety, owner-event lifetime plumbing, and transition tracking are pure SDK policy;
+       compile them directly so these contracts can be regression-tested without loading UnityEngine or GameCode. -->
   <ItemGroup>
+    <Compile Include="..\..\mods\TopiaForge.Worlds\OpenSandboxFallbackPolicy.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Worlds\OwnerEventSubscription.cs" />
     <Compile Include="..\..\mods\TopiaForge.Worlds\SceneTransitionTracker.cs" />
     <Compile Include="..\..\mods\TopiaForge.Worlds\MainThreadDispatchQueue.cs" />
     <Compile Include="..\..\mods\TopiaForge.Worlds\WorldAutoLoadRouter.cs" />
@@ -127,6 +163,10 @@
     <Compile Include="..\..\src\TopiaForge.ModManager\UnityMainThreadGuard.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\UnityTimingServices.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\ModContext.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\ModContext.Configuration.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\ModContext.Storage.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\ModContext.Files.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\ModContext.Events.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\OwnerCoreServices.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\InstalledGameVersionReader.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\ModAssemblyResolutionCatalog.cs" />
@@ -172,7 +212,7 @@
   <ItemGroup Condition="'$(TestingKitOnly)' == 'true'">
     <Compile Remove="@(Compile)" />
     <EmbeddedResource Remove="@(EmbeddedResource)" />
-    <Compile Include="TestingKitTests.cs" />
+    <Compile Include="TestingKitTests*.cs" />
     <Compile Include="TestingKitFocusedProgram.cs" />
   </ItemGroup>
 </Project>

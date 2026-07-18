@@ -11,7 +11,7 @@
       "matchMode": "SimpleNameWalk",
       "criticality": "Critical",
       "feature": "Chronos: locate player controller",
-      "sourceRef": "mods/TopiaForge.Chronos/PlayerTimeExemption.cs:204"
+      "sourceRef": "mods/TopiaForge.Chronos/PlayerTimeExemption.cs:160"
     },
     {
       "id": "chronos.firstpersoncontroller-type",
@@ -21,7 +21,7 @@
       "matchMode": "SimpleNameWalk",
       "criticality": "Critical",
       "feature": "Chronos: locate FPS controller",
-      "sourceRef": "mods/TopiaForge.Chronos/PlayerTimeExemption.cs:205"
+      "sourceRef": "mods/TopiaForge.Chronos/PlayerTimeExemption.cs:161"
     },
     {
       "id": "chronos.findplayer",
@@ -32,9 +32,32 @@
       "matchMode": "SimpleNameWalk",
       "criticality": "Critical",
       "feature": "Chronos: find player instance",
-      "sourceRef": "mods/TopiaForge.Chronos/PlayerTimeExemption.cs:212",
+      "sourceRef": "mods/TopiaForge.Chronos/PlayerTimeExemption.cs:168",
       "parameters": [],
       "returnType": "PlayerController"
+    },
+    {
+      "id": "chronos.player-instance-field",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "PlayerController",
+      "member": "_instance",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Optional",
+      "feature": "Chronos: resolve the live player for native-pause detection",
+      "sourceRef": "mods/TopiaForge.Chronos/NativePauseSignal.cs:115",
+      "returnType": "PlayerController"
+    },
+    {
+      "id": "chronos.pause-ui-field",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "PlayerController",
+      "member": "pauseUI",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Degraded",
+      "feature": "Chronos: preserve Robotopia's native pause ownership",
+      "sourceRef": "mods/TopiaForge.Chronos/NativePauseSignal.cs:122"
     },
     {
       "id": "chronos.fpscontroller-prop",
@@ -45,7 +68,7 @@
       "matchMode": "SimpleNameWalk",
       "criticality": "Critical",
       "feature": "Chronos: get player FPS controller",
-      "sourceRef": "mods/TopiaForge.Chronos/PlayerTimeExemption.cs:213",
+      "sourceRef": "mods/TopiaForge.Chronos/PlayerTimeExemption.cs:169",
       "returnType": "FirstPersonController"
     },
     {
@@ -57,7 +80,7 @@
       "matchMode": "SimpleNameWalk",
       "criticality": "Critical",
       "feature": "Chronos: scale player move speed (ground)",
-      "sourceRef": "mods/TopiaForge.Chronos/PlayerTimeExemption.cs:214",
+      "sourceRef": "mods/TopiaForge.Chronos/PlayerTimeExemption.cs:170",
       "returnType": "System.Single"
     },
     {
@@ -69,7 +92,7 @@
       "matchMode": "SimpleNameWalk",
       "criticality": "Degraded",
       "feature": "Chronos: scale player move speed (air)",
-      "sourceRef": "mods/TopiaForge.Chronos/PlayerTimeExemption.cs:215",
+      "sourceRef": "mods/TopiaForge.Chronos/PlayerTimeExemption.cs:171",
       "returnType": "System.Single"
     }
   ]

@@ -90,6 +90,23 @@ namespace TopiaForge.ValidTestMod
         }
     }
 
+    public sealed class RuntimeDetailedSceneMod : TopiaForgeMod
+    {
+        protected override void OnLoad()
+        {
+            Context.Events.SubscribeSceneLoaded(sceneName => RuntimeTrace.Write("scene-legacy:" + sceneName));
+            Context.Events.SubscribeSceneLoaded((SceneLoadEvent scene) => RuntimeTrace.Write(
+                "scene-detail:" + scene.SceneName + ":" + scene.Mode + ":" +
+                (scene.IsActive ? "active" : "background") + ":" +
+                (scene.IsAuthoritativeReplacement ? "authoritative" : "additive")));
+        }
+
+        protected override void OnUnload()
+        {
+            RuntimeTrace.Write("unload");
+        }
+    }
+
     public sealed class RuntimeDependentMod : TopiaForgeMod
     {
         protected override void OnLoad()

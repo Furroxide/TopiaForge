@@ -27,6 +27,8 @@ namespace TopiaForge.Worlds
             Context.Config.Save(ConfigContract, config);
 
             service = new WorldsService(Context.Logger, Context.Files);
+            // Track native scene hooks immediately so any later discovery/UI/config failure still releases them.
+            Context.Lifetime.Track(service);
             service.EndSessionOnMenuScene = config.EndSessionOnMenuScene;
             service.DiscoverBuiltIns();
             // Pin the entry to the Open Sandbox world: world routing is keyed on the world id (a blank id
@@ -42,11 +44,10 @@ namespace TopiaForge.Worlds
             service.WriteCatalog();
 
             ui = TopiaForgeUi.For(Context);
-            pauseBridge = new PauseMenuBridge(service, Context.Logger, ui, config.InterceptPauseMenu);
-
-            Context.Lifetime.Track(service);
             Context.Lifetime.Track(ui);
+            pauseBridge = new PauseMenuBridge(service, Context.Logger, ui, config.InterceptPauseMenu);
             Context.Lifetime.Track(pauseBridge);
+
             RegisterExtension<IWorldGamemodeService>(service);
             RegisterExtension<IWorldPauseMenuService>(pauseBridge);
 

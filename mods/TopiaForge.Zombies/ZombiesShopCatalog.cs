@@ -19,7 +19,7 @@ namespace TopiaForge.Zombies
 
         public static IReadOnlyList<ShopItem> Build(ZombiesConfig config)
         {
-            return new[]
+            var items = new List<ShopItem>
             {
                 new ShopItem(
                     RepairId,
@@ -49,19 +49,6 @@ namespace TopiaForge.Zombies
                     "WEAPON",
                     maxPurchases: 3),
                 new ShopItem(
-                    UplinkCellId,
-                    "UPLINK CELL",
-                    "An extra uplink battery: +1 max charge for JACK-IN and broadcasts.",
-                    config.ShopUplinkCellPrice,
-                    "UPLINK",
-                    maxPurchases: 2),
-                new ShopItem(
-                    UplinkSurgeId,
-                    "UPLINK SURGE",
-                    "Instantly refill every uplink charge.",
-                    config.ShopUplinkSurgePrice,
-                    "UPLINK"),
-                new ShopItem(
                     ComboStabilizerId,
                     "COMBO STABILIZER",
                     "Kill-chain capacitor: +" + config.ShopComboWindowBonusSeconds.ToString("0.##") + "s combo window per level.",
@@ -69,6 +56,25 @@ namespace TopiaForge.Zombies
                     "SYSTEMS",
                     maxPurchases: 2),
             };
+
+            if (config.OverrideEnabled)
+            {
+                items.Insert(items.Count - 1, new ShopItem(
+                    UplinkCellId,
+                    "UPLINK CELL",
+                    "An extra uplink battery: +1 max charge for JACK-IN and broadcasts.",
+                    config.ShopUplinkCellPrice,
+                    "UPLINK",
+                    maxPurchases: 2));
+                items.Insert(items.Count - 1, new ShopItem(
+                    UplinkSurgeId,
+                    "UPLINK SURGE",
+                    "Instantly refill every uplink charge.",
+                    config.ShopUplinkSurgePrice,
+                    "UPLINK"));
+            }
+
+            return items.AsReadOnly();
         }
     }
 }

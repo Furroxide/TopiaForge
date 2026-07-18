@@ -132,7 +132,7 @@ namespace TopiaForge.ModManager.Tests
                 foreach (var member in type.GetMembers(
                              BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
                 {
-                    Assert(!ForbiddenMemberNames.Contains(member.Name),
+                    Assert(!ForbiddenMemberNames.Contains(member.Name) || IsExplicitTestingFaultControl(type, member),
                         type.FullName + "." + member.Name + " exposes a global destructive operation");
 
                     switch (member)
@@ -184,6 +184,14 @@ namespace TopiaForge.ModManager.Tests
             return method.Name == nameof(object.Equals)
                 && parameters.Length == 1
                 && parameters[0].ParameterType == typeof(object);
+        }
+
+        private static bool IsExplicitTestingFaultControl(Type type, MemberInfo member)
+        {
+            // Testing fakes intentionally expose narrowly scoped fault/reset seams so mods can prove stale-handle
+            // recovery. Keep the production contract ban intact and allow only this named fake operation.
+            return type == typeof(FakeTimeControlService)
+                && string.Equals(member.Name, nameof(FakeTimeControlService.ForceReset), StringComparison.Ordinal);
         }
 
         private static bool IsImmutableDataContract(Type type)

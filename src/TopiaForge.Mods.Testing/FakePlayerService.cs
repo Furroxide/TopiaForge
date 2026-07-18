@@ -129,9 +129,18 @@ namespace TopiaForge.Mods.Testing
 
             var lease = new FakePlayerControlLease(reason, value => leases.Remove(value));
             leases.Add(lease);
-            return lifetime.TrackResult<IPlayerControlLease>(
-                lease,
-                "The fake mod stopped before player control could be acquired.");
+            try
+            {
+                lease.AttachLifetimeLease(lifetime.Track(lease));
+                return OperationResult<IPlayerControlLease>.Success(lease);
+            }
+            catch (ObjectDisposedException)
+            {
+                lease.Dispose();
+                return OperationResult<IPlayerControlLease>.Failure(
+                    ModErrorCode.Cancelled,
+                    "The fake mod stopped before player control could be acquired.");
+            }
         }
 
     }
@@ -140,11 +149,17 @@ namespace TopiaForge.Mods.Testing
     public sealed class FakePlayerControlLease : IPlayerControlLease
     {
         private Action<FakePlayerControlLease>? release;
+        private IDisposable? lifetimeLease;
 
         internal FakePlayerControlLease(string reason, Action<FakePlayerControlLease> release)
         {
             Reason = reason;
             this.release = release;
+        }
+
+        internal void AttachLifetimeLease(IDisposable lease)
+        {
+            lifetimeLease = lease ?? throw new ArgumentNullException(nameof(lease));
         }
 
         /// <inheritdoc/>
@@ -158,7 +173,14 @@ namespace TopiaForge.Mods.Testing
         {
             var callback = release;
             release = null;
-            callback?.Invoke(this);
+            try
+            {
+                callback?.Invoke(this);
+            }
+            finally
+            {
+                System.Threading.Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
+            }
         }
     }
 }

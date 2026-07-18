@@ -206,22 +206,6 @@ namespace TopiaForge.Zombies
             return Clamp(tuning.ConvertThreshold + (baseResistance * tuning.ResistanceWeight), 0f, 0.97f);
         }
 
-        public static float RefillDeadline(float now, float deadline, float windowSeconds, float refillSeconds)
-        {
-            if (windowSeconds <= 0f || refillSeconds <= 0f)
-            {
-                return deadline;
-            }
-
-            var remaining = deadline - now;
-            if (remaining < 0f)
-            {
-                remaining = 0f;
-            }
-
-            return now + Clamp(remaining + refillSeconds, 0f, windowSeconds);
-        }
-
         private static string CorruptionWord(float corruption)
         {
             if (corruption < 0.33f)

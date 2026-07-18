@@ -9,10 +9,14 @@ namespace TopiaForge.Chronos
     // pure LeaseLedger; the effective scale is DERIVED every frame (any freeze ⇒ 0, else driver-base × slow-product),
     // never last-writer-wins. fixedDeltaTime is co-scaled off a baseline captured ONCE so the timestep can't drift
     // across gamemode loads. Force-reset on scene change / owner teardown / dispose / a thrown frame, so a held scale
-    // can never leak. Coexists with a native pause (FreezeGame): if it sees an external timeScale==0 it didn't set, it
-    // yields rather than fights. Drives Unity time; the derivation/ordering live in Unity-free files (TimeMath/
-    // LeaseLedger/TurnOrder) so they unit-test.
-    internal sealed class TimeControlService : ITimeControlService, IOwnerBoundExtensionFactory, IDisposable
+    // can never leak. Coexists with native pause through a read-only pause-UI signal plus observed-zero ownership
+    // fallback, so a pause layered over a Chronos freeze is never lifted. Drives Unity time; derivation/ordering live
+    // in Unity-free files (TimeMath/LeaseLedger/TimeScalePlan/TurnOrder) so they unit-test.
+    internal sealed partial class TimeControlService :
+        ITimeControlService,
+        ITimeLeaseHost,
+        IOwnerBoundExtensionFactory,
+        IDisposable
     {
         private const float FixedFloor = 0.1f; // co-scale floor for fixedDeltaTime (keeps the physics step affordable)
 
@@ -20,6 +24,8 @@ namespace TopiaForge.Chronos
         private readonly IModLogger logger;
         private readonly LeaseLedger ledger = new LeaseLedger();
         private readonly PlayerTimeExemption player;
+        private readonly PlayerSuspendCoordinator playerSuspend;
+        private readonly NativePauseSignal nativePause;
 
         private float baseFixedDelta = 0.02f;
         private bool baseFixedCaptured;
@@ -34,11 +40,16 @@ namespace TopiaForge.Chronos
 
         private TurnScheduler? turnScheduler;
 
-        public TimeControlService(string ownerModId, IModLogger logger)
+        public TimeControlService(string ownerModId, IModLogger logger, IPlayerService playerService)
         {
             this.ownerModId = ownerModId ?? "io.github.furroxide.topiaforge.chronos";
-            this.logger = logger;
+            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             player = new PlayerTimeExemption(logger);
+            playerSuspend = new PlayerSuspendCoordinator(playerService, logger);
+            nativePause = new NativePauseSignal(logger);
+            // Install the process-lifecycle guard while the mod is live. Initializing lazily from Dispose can be
+            // too late when the manager unloads mods from its own shutdown callback.
+            DeferredTimeScaleRestore.InitializeLifecycle();
             CaptureBaseFixed();
         }
 
@@ -51,173 +62,6 @@ namespace TopiaForge.Chronos
         public float ControlTime => Time.unscaledTime;
         public bool IsFrozen => WorldScale <= 0f;
         public TimeMode Mode { get; private set; } = TimeMode.Realtime;
-
-        // --- leases ---------------------------------------------------------------------------------------------
-
-        public OperationResult<ITimeLease> Freeze(string usage, bool suspendPlayer = false)
-        {
-            return disposed
-                ? OperationResult<ITimeLease>.Failure(ModErrorCode.Unavailable, "Chronos is unavailable.")
-                : OperationResult<ITimeLease>.Success(Freeze(ownerModId, usage, suspendPlayer));
-        }
-
-        internal ITimeLease Freeze(string consumerId, string usage, bool suspendPlayer = false)
-        {
-            if (disposed)
-            {
-                return DeadLease.Instance;
-            }
-
-            var id = ledger.Add(LeaseKind.Freeze, consumerId, usage ?? "freeze");
-            if (suspendPlayer)
-            {
-                if (suspendRefCount++ == 0)
-                {
-                    player.Suspend();
-                }
-            }
-
-            ApplyDiscrete();
-            return new TimeLease(this, id, suspendPlayer);
-        }
-
-        public OperationResult<ITimeLease> Slow(string usage, float scale)
-        {
-            if (disposed)
-            {
-                return OperationResult<ITimeLease>.Failure(ModErrorCode.Unavailable, "Chronos is unavailable.");
-            }
-
-            if (float.IsNaN(scale) || float.IsInfinity(scale) || scale < 0f || scale > 1f)
-            {
-                return OperationResult<ITimeLease>.Failure(
-                    ModErrorCode.InvalidArgument,
-                    "A slow scale must be finite and between zero and one.");
-            }
-
-            return OperationResult<ITimeLease>.Success(Slow(ownerModId, usage, scale));
-        }
-
-        internal ITimeLease Slow(string consumerId, string usage, float scale)
-        {
-            if (disposed)
-            {
-                return DeadLease.Instance;
-            }
-
-            var id = ledger.Add(LeaseKind.Slow, consumerId, usage ?? "slow", TimeMath.Clamp01(scale));
-            ApplyDiscrete();
-            return new TimeLease(this, id, false);
-        }
-
-        public OperationResult<ITimeLease> ExemptPlayer(string usage)
-        {
-            return disposed
-                ? OperationResult<ITimeLease>.Failure(ModErrorCode.Unavailable, "Chronos is unavailable.")
-                : OperationResult<ITimeLease>.Success(ExemptPlayer(ownerModId, usage));
-        }
-
-        internal ITimeLease ExemptPlayer(string consumerId, string usage)
-        {
-            if (disposed)
-            {
-                return DeadLease.Instance;
-            }
-
-            var id = ledger.Add(LeaseKind.ExemptPlayer, consumerId, usage ?? "exempt-player");
-            return new TimeLease(this, id, false);
-        }
-
-        public OperationResult<ITimeLease> SetDriver(string usage, ITimeDriver newDriver)
-        {
-            if (newDriver == null)
-            {
-                throw new ArgumentNullException(nameof(newDriver));
-            }
-
-            return disposed
-                ? OperationResult<ITimeLease>.Failure(ModErrorCode.Unavailable, "Chronos is unavailable.")
-                : OperationResult<ITimeLease>.Success(SetDriver(ownerModId, usage, newDriver));
-        }
-
-        internal ITimeLease SetDriver(string consumerId, string usage, ITimeDriver newDriver)
-        {
-            if (disposed || newDriver == null)
-            {
-                return DeadLease.Instance;
-            }
-
-            // One driver at a time: drop the previous driver lease so the latest wins.
-            if (driverLeaseId != 0)
-            {
-                ledger.Remove(driverLeaseId);
-            }
-
-            driver = newDriver;
-            driverLeaseId = ledger.Add(LeaseKind.Driver, consumerId, usage ?? "driver");
-            ApplyDiscrete();
-            return new TimeLease(this, driverLeaseId, false);
-        }
-
-        public OperationResult<bool> Step(float seconds)
-        {
-            if (disposed)
-            {
-                return OperationResult<bool>.Failure(ModErrorCode.Unavailable, "Chronos is unavailable.");
-            }
-
-            if (seconds <= 0f || float.IsNaN(seconds) || float.IsInfinity(seconds))
-            {
-                return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "Step duration must be finite and positive.");
-            }
-
-            var applied = IsFrozen;
-            StepInternal(Mathf.Clamp(seconds, 0f, 0.5f), 0);
-            return OperationResult<bool>.Success(applied);
-        }
-
-        public OperationResult<bool> StepFixed(int ticks)
-        {
-            if (disposed)
-            {
-                return OperationResult<bool>.Failure(ModErrorCode.Unavailable, "Chronos is unavailable.");
-            }
-
-            if (ticks <= 0)
-            {
-                return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "Fixed-step count must be positive.");
-            }
-
-            var applied = IsFrozen;
-            StepInternal(0f, Mathf.Clamp(ticks, 0, 20));
-            return OperationResult<bool>.Success(applied);
-        }
-
-        public OperationResult<ITurnScheduler> BeginTurnBased(string usage, TurnSchedulerOptions options)
-        {
-            if (options == null)
-            {
-                throw new ArgumentNullException(nameof(options));
-            }
-
-            return disposed
-                ? OperationResult<ITurnScheduler>.Failure(ModErrorCode.Unavailable, "Chronos is unavailable.")
-                : OperationResult<ITurnScheduler>.Success(BeginTurnBased(ownerModId, usage, options));
-        }
-
-        internal ITurnScheduler BeginTurnBased(string consumerId, string usage, TurnSchedulerOptions options)
-        {
-            if (disposed)
-            {
-                return new TurnScheduler(null, null, consumerId, new TurnSchedulerOptions());
-            }
-
-            turnScheduler?.Dispose();
-            var freeze = Freeze(consumerId, usage ?? "turn-based"); // hard-freeze the world; the scheduler lifts time per actor
-            turnScheduler = new TurnScheduler(this, freeze, consumerId, options ?? new TurnSchedulerOptions());
-            Mode = TimeMode.TurnBased;
-            return turnScheduler;
-        }
 
         object IOwnerBoundExtensionFactory.CreateOwnerFacade(
             Type contractType,
@@ -246,12 +90,12 @@ namespace TopiaForge.Chronos
             }
 
             player.RestoreExemption();
-            player.ReleaseSuspend();
+            playerSuspend.Release();
             exemptApplied = false;
-            RestoreBaseline();
+            var explicitNativePause = hasWritten && nativePause.IsPaused();
+            RestoreBaseline(explicitNativePause);
             WorldScale = 1f;
             Mode = TimeMode.Realtime;
-            hasWritten = false;
         }
 
         // --- per-frame tick (driven by ChronosMod) --------------------------------------------------------------
@@ -265,30 +109,32 @@ namespace TopiaForge.Chronos
 
             try
             {
-                // Coexist with a native pause (FreezeGame/pause menu): if something else forced timeScale to 0 and we
-                // didn't, stand down — never fight it. Resume when it lifts.
-                if (hasWritten && ownedScale != 0f && Time.timeScale == 0f)
+                if (suspendRefCount > 0)
                 {
-                    turnScheduler?.Tick(unscaledDeltaTime); // the scheduler runs on unscaled time and is fine to advance
-                    return;
+                    playerSuspend.Tick(unscaledDeltaTime);
                 }
+
+                // Keep deriving logical state while Robotopia owns the native clock. This is important when a mod
+                // acquires/releases a lease behind the pause menu: WorldScale/Mode/exemption stay truthful, while
+                // the plan suppresses only the engine write until native pause releases.
+                var explicitNativePause = false;
+                var nativePaused = (ledger.HasActiveLeases || hasWritten)
+                    && IsNativePaused(out explicitNativePause);
 
                 if (!ledger.HasActiveLeases)
                 {
                     if (hasWritten)
                     {
-                        RestoreBaseline();
-                        hasWritten = false;
+                        RestoreBaseline(explicitNativePause);
                     }
 
-                    WorldScale = 1f;
-                    Mode = TimeMode.Realtime;
-                    if (exemptApplied)
-                    {
-                        player.RestoreExemption();
-                        exemptApplied = false;
-                    }
+                    ApplyLogical(TimeScalePlan.Derive(
+                        ledger,
+                        driverScale: 1f,
+                        turnBased: turnScheduler != null,
+                        nativePaused: nativePaused));
 
+                    turnScheduler?.Tick(unscaledDeltaTime);
                     return;
                 }
 
@@ -299,7 +145,7 @@ namespace TopiaForge.Chronos
                     driverScale = TimeMath.Clamp01(driver.ComputeScale(signal));
                 }
 
-                ApplyComputed(driverScale);
+                ApplyComputed(driverScale, nativePaused);
                 turnScheduler?.Tick(unscaledDeltaTime);
             }
             catch (Exception ex)
@@ -313,6 +159,7 @@ namespace TopiaForge.Chronos
         {
             // A scene change releases everything; a consumer re-acquires what it needs in the new scene.
             ForceReset();
+            nativePause.ResetScene();
         }
 
         public void Dispose()
@@ -323,45 +170,38 @@ namespace TopiaForge.Chronos
             }
 
             ForceReset();
-            disposed = true;
-        }
-
-        // --- internals ------------------------------------------------------------------------------------------
-
-        // Called by a TimeLease on release.
-        internal void ReleaseLease(int id, bool wasSuspend)
-        {
-            if (disposed)
+            if (TimeScaleOwnership.RestoreFixedOnAbandon(hasWritten, baseFixedCaptured))
             {
-                return;
+                // ForceReset deliberately leaves timeScale at zero while Robotopia's pause remains authoritative.
+                // Chronos will no longer receive a Tick after disposal, so relinquish the independent fixed-step
+                // setting now. The deferred handoff below restores timeScale only after native pause closes.
+                Time.fixedDeltaTime = baseFixedDelta;
             }
 
-            ledger.Remove(id);
-            if (id == driverLeaseId)
+            if (hasWritten)
             {
-                driverLeaseId = 0;
-                driver = null;
-            }
-
-            if (wasSuspend && suspendRefCount > 0 && --suspendRefCount == 0)
-            {
-                player.ReleaseSuspend();
-            }
-
-            ApplyDiscrete();
-        }
-
-        // Called by the TurnScheduler when it is disposed: clear our reference (its freeze lease is released by it).
-        internal void OnTurnSchedulerEnded(TurnScheduler scheduler)
-        {
-            if (ReferenceEquals(turnScheduler, scheduler))
-            {
-                turnScheduler = null;
-                if (Mode == TimeMode.TurnBased)
+                var activePauseRoot = nativePause.CaptureActiveRoot();
+                nativePause.Dispose();
+                try
                 {
-                    Mode = TimeMode.Realtime;
+                    if (DeferredTimeScaleRestore.Begin(activePauseRoot, ownedScale))
+                    {
+                        logger.Debug("Chronos deferred its final time-scale restore until native pause releases.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.Error(ex, "Chronos could not install its native-pause restore handoff.");
                 }
             }
+            else
+            {
+                nativePause.Dispose();
+            }
+
+            ownedScale = 1f;
+            hasWritten = false;
+            disposed = true;
         }
 
         // Re-derive and apply the scale after a discrete lease change (no driver sampling — the driver ramps in Tick).
@@ -372,43 +212,53 @@ namespace TopiaForge.Chronos
                 return;
             }
 
+            var explicitNativePause = false;
+            var nativePaused = (ledger.HasActiveLeases || hasWritten)
+                && IsNativePaused(out explicitNativePause);
             if (!ledger.HasActiveLeases)
             {
                 if (hasWritten)
                 {
-                    RestoreBaseline();
-                    hasWritten = false;
+                    RestoreBaseline(explicitNativePause);
                 }
 
-                WorldScale = 1f;
-                Mode = TimeMode.Realtime;
-                if (exemptApplied)
-                {
-                    player.RestoreExemption();
-                    exemptApplied = false;
-                }
+                ApplyLogical(TimeScalePlan.Derive(
+                    ledger,
+                    driverScale: 1f,
+                    turnBased: turnScheduler != null,
+                    nativePaused: nativePaused));
 
                 return;
             }
 
             // Keep the current driver-derived scale for the discrete recompute; the next Tick refreshes the ramp.
             var driverScale = driver != null ? Mathf.Clamp01(WorldScale <= 0f ? 1f : WorldScale) : 1f;
-            ApplyComputed(driverScale);
+            ApplyComputed(driverScale, nativePaused);
         }
 
-        private void ApplyComputed(float driverScale)
+        private void ApplyComputed(float driverScale, bool nativePaused)
         {
-            var scale = ledger.EffectiveScale(driverScale);
-            WorldScale = scale;
-            Mode = turnScheduler != null
-                ? TimeMode.TurnBased
-                : (ledger.AnyFreeze ? TimeMode.Paused : (scale < 1f ? TimeMode.Slowed : TimeMode.Realtime));
+            var plan = TimeScalePlan.Derive(
+                ledger,
+                driverScale,
+                turnBased: turnScheduler != null,
+                nativePaused: nativePaused);
+            ApplyLogical(plan);
 
-            ApplyScale(scale);
-
-            if (ledger.AnyExemptPlayer && scale < 1f)
+            if (plan.WriteNativeScale)
             {
-                player.ApplyExemption(scale);
+                ApplyScale(plan.WorldScale);
+            }
+        }
+
+        private void ApplyLogical(TimeScalePlan plan)
+        {
+            WorldScale = plan.WorldScale;
+            Mode = plan.Mode;
+
+            if (plan.ExemptPlayer)
+            {
+                player.ApplyExemption(plan.WorldScale);
                 exemptApplied = true;
             }
             else if (exemptApplied)
@@ -420,6 +270,9 @@ namespace TopiaForge.Chronos
 
         private void ApplyScale(float scale)
         {
+            // A reloaded Chronos instance is now authoritative; prevent an older unload handoff from writing a
+            // baseline over this new lease after the native pause closes.
+            DeferredTimeScaleRestore.CancelForActiveOwner();
             Time.timeScale = scale;
             if (baseFixedCaptured)
             {
@@ -430,28 +283,65 @@ namespace TopiaForge.Chronos
             hasWritten = true;
         }
 
-        private void RestoreBaseline()
+        private void RestoreBaseline(bool explicitNativePause)
         {
-            Time.timeScale = 1f;
-            if (baseFixedCaptured)
+            if (!hasWritten)
             {
-                Time.fixedDeltaTime = baseFixedDelta;
+                return;
             }
 
-            ownedScale = 1f;
+            var plan = TimeScaleOwnership.PlanRestore(
+                explicitNativePause,
+                hasWritten,
+                ownedScale,
+                Time.timeScale);
+            if (plan.RetainOwnership)
+            {
+                // Keep the last written scale/fixed-step ownership until the native pause actually releases.
+                return;
+            }
+
+            if (plan.WriteBaseline)
+            {
+                Time.timeScale = 1f;
+                if (baseFixedCaptured)
+                {
+                    Time.fixedDeltaTime = baseFixedDelta;
+                }
+
+                ownedScale = 1f;
+                hasWritten = false;
+            }
+        }
+
+        private bool IsNativePaused(out bool explicitNativePause)
+        {
+            explicitNativePause = nativePause.IsPaused();
+            return TimeScaleOwnership.IsNativePaused(
+                explicitNativePause,
+                hasWritten,
+                ownedScale,
+                Time.timeScale);
         }
 
         // Briefly lift the freeze to advance the frozen sim by a bounded slice (RTwP "advance a beat" / turn step).
-        private void StepInternal(float seconds, int fixedTicks)
+        private bool StepInternal(float seconds, int fixedTicks)
         {
-            if (disposed || !IsFrozen)
+            if (disposed)
             {
-                return;
+                return false;
+            }
+
+            var nativePaused = IsNativePaused(out _);
+            if (!TimeScaleOwnership.CanStep(IsFrozen, nativePaused))
+            {
+                return false;
             }
 
             // Restore real time for exactly one frame's worth so FixedUpdate-driven motion advances, then the next
             // Tick re-applies the frozen scale. (A precise N-fixed-step advance would need a coroutine; this bounded
             // single-frame lift is the safe primitive — callers Step() once per beat.)
+            DeferredTimeScaleRestore.CancelForActiveOwner();
             Time.timeScale = 1f;
             if (baseFixedCaptured)
             {
@@ -459,6 +349,7 @@ namespace TopiaForge.Chronos
             }
 
             ownedScale = 1f;
+            return true;
         }
 
         private TimeSignal SampleSignal(float currentScale, float dt)
@@ -496,207 +387,6 @@ namespace TopiaForge.Chronos
             {
                 baseFixedCaptured = false;
             }
-        }
-
-        private sealed class OwnerFacade : ITimeControlService
-        {
-            private readonly TimeControlService service;
-            private readonly string consumerId;
-            private readonly IModLifetime lifetime;
-
-            public OwnerFacade(TimeControlService service, string consumerId, IModLifetime lifetime)
-            {
-                this.service = service;
-                this.consumerId = consumerId;
-                this.lifetime = lifetime;
-            }
-
-            public bool IsAvailable => service.IsAvailable && !lifetime.IsStopping;
-            public float WorldScale => service.WorldScale;
-            public float WorldDeltaTime => service.WorldDeltaTime;
-            public float WorldTime => service.WorldTime;
-            public float ControlDeltaTime => service.ControlDeltaTime;
-            public float ControlTime => service.ControlTime;
-            public bool IsFrozen => service.IsFrozen;
-            public TimeMode Mode => service.Mode;
-
-            public OperationResult<ITimeLease> Freeze(string usage, bool suspendPlayer = false) =>
-                Track(service.Freeze(consumerId, usage, suspendPlayer));
-
-            public OperationResult<ITimeLease> Slow(string usage, float scale)
-            {
-                if (float.IsNaN(scale) || float.IsInfinity(scale) || scale < 0f || scale > 1f)
-                {
-                    return OperationResult<ITimeLease>.Failure(
-                        ModErrorCode.InvalidArgument,
-                        "A slow scale must be finite and between zero and one.");
-                }
-
-                return Track(service.Slow(consumerId, usage, scale));
-            }
-
-            public OperationResult<ITimeLease> ExemptPlayer(string usage) =>
-                Track(service.ExemptPlayer(consumerId, usage));
-
-            public OperationResult<ITimeLease> SetDriver(string usage, ITimeDriver driver)
-            {
-                if (driver == null)
-                {
-                    throw new ArgumentNullException(nameof(driver));
-                }
-
-                return Track(service.SetDriver(consumerId, usage, driver));
-            }
-
-            public OperationResult<bool> Step(float seconds)
-            {
-                if (lifetime.IsStopping)
-                {
-                    return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The mod lifetime is stopping.");
-                }
-
-                return service.Step(seconds);
-            }
-
-            public OperationResult<bool> StepFixed(int ticks)
-            {
-                if (lifetime.IsStopping)
-                {
-                    return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The mod lifetime is stopping.");
-                }
-
-                return service.StepFixed(ticks);
-            }
-
-            public OperationResult<ITurnScheduler> BeginTurnBased(string usage, TurnSchedulerOptions options)
-            {
-                if (lifetime.IsStopping)
-                {
-                    return OperationResult<ITurnScheduler>.Failure(ModErrorCode.InvalidState, "The mod lifetime is stopping.");
-                }
-
-                var scheduler = service.BeginTurnBased(consumerId, usage, options);
-                try
-                {
-                    return OperationResult<ITurnScheduler>.Success(
-                        new OwnerTurnScheduler(scheduler, lifetime.Track(scheduler)));
-                }
-                catch (ObjectDisposedException)
-                {
-                    scheduler.Dispose();
-                    return OperationResult<ITurnScheduler>.Failure(ModErrorCode.InvalidState, "The mod lifetime is stopping.");
-                }
-            }
-
-            private OperationResult<ITimeLease> Track(ITimeLease lease)
-            {
-                if (lifetime.IsStopping)
-                {
-                    lease.Dispose();
-                    return OperationResult<ITimeLease>.Failure(ModErrorCode.InvalidState, "The mod lifetime is stopping.");
-                }
-
-                try
-                {
-                    return OperationResult<ITimeLease>.Success(
-                        new OwnerTimeLease(lease, lifetime.Track(lease)));
-                }
-                catch (ObjectDisposedException)
-                {
-                    lease.Dispose();
-                    return OperationResult<ITimeLease>.Failure(ModErrorCode.InvalidState, "The mod lifetime is stopping.");
-                }
-            }
-
-            private sealed class OwnerTimeLease : ITimeLease
-            {
-                private readonly ITimeLease lease;
-                private IDisposable? lifetimeLease;
-
-                public OwnerTimeLease(ITimeLease lease, IDisposable lifetimeLease)
-                {
-                    this.lease = lease;
-                    this.lifetimeLease = lifetimeLease;
-                }
-
-                public bool IsActive => lifetimeLease != null && lease.IsActive;
-
-                public void Release()
-                {
-                    System.Threading.Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
-                }
-
-                public void Dispose() => Release();
-            }
-
-            private sealed class OwnerTurnScheduler : ITurnScheduler
-            {
-                private readonly ITurnScheduler scheduler;
-                private IDisposable? lifetimeLease;
-
-                public OwnerTurnScheduler(ITurnScheduler scheduler, IDisposable lifetimeLease)
-                {
-                    this.scheduler = scheduler;
-                    this.lifetimeLease = lifetimeLease;
-                }
-
-                public TurnState State => scheduler.State;
-                public TurnActorId? CurrentActor => scheduler.CurrentActor;
-                public int ActorCount => scheduler.ActorCount;
-                public OperationResult<bool> Register(TurnActorId actor, float speed) =>
-                    scheduler.Register(actor, speed);
-                public OperationResult<bool> Unregister(TurnActorId actor) => scheduler.Unregister(actor);
-                public OperationResult<bool> BeginAction() => scheduler.BeginAction();
-                public OperationResult<bool> EndAction() => scheduler.EndAction();
-                public void Tick(float controlDeltaTime) => scheduler.Tick(controlDeltaTime);
-
-                public void Dispose()
-                {
-                    System.Threading.Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
-                }
-            }
-        }
-    }
-
-    // A ref-counted lease handle. Releasing routes back into the service; idempotent.
-    internal sealed class TimeLease : ITimeLease
-    {
-        private TimeControlService? service;
-        private readonly int id;
-        private readonly bool suspend;
-
-        public TimeLease(TimeControlService service, int id, bool suspend)
-        {
-            this.service = service;
-            this.id = id;
-            this.suspend = suspend;
-        }
-
-        public bool IsActive => service != null;
-
-        public void Release()
-        {
-            var s = service;
-            service = null;
-            s?.ReleaseLease(id, suspend);
-        }
-
-        public void Dispose() => Release();
-    }
-
-    // Returned when the service is unavailable/disposed so callers never get null and never throw.
-    internal sealed class DeadLease : ITimeLease
-    {
-        public static readonly DeadLease Instance = new DeadLease();
-
-        public bool IsActive => false;
-
-        public void Release()
-        {
-        }
-
-        public void Dispose()
-        {
         }
     }
 }
