@@ -53,7 +53,7 @@ jobs:
           set -euo pipefail
           git lfs fsck
           git lfs ls-files --name-only \
-            | grep '^apps/topiaforge_launcher_flutter/' \
+            --include='apps/topiaforge_launcher_flutter/**' \
             | while IFS= read -r asset; do
                 if git lfs pointer --check --file="$asset" >/dev/null 2>&1; then
                   echo "::error file=$asset::Git LFS asset was not hydrated."

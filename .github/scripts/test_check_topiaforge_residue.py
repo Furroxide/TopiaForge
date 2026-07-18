@@ -123,6 +123,100 @@ class GeneratedPayloadAuditTests(unittest.TestCase):
 
         self.assertEqual(0, result.returncode, result.stderr)
 
+    def test_target_game_tool_paths_are_allowed_under_package_root(self) -> None:
+        package_root = "TopiaForge-linux-x64/tools"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            archive = Path(temporary_directory) / "TopiaForge-test.zip"
+            archive.write_bytes(
+                zip_bytes(
+                    {
+                        f"{package_root}/restore-robotopia-managed-refs.ps1": b"",
+                        f"{package_root}/test-restore-robotopia-managed-refs.ps1": b"",
+                    }
+                )
+            )
+
+            result = self.run_audit(archive)
+
+        self.assertEqual(0, result.returncode, result.stderr)
+
+    def test_target_game_tool_allowlist_does_not_hide_retired_prefix(self) -> None:
+        retired_prefix = "Legacy" + "Robotopia"
+        member = f"{retired_prefix}/tools/restore-robotopia-managed-refs.ps1"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            archive = Path(temporary_directory) / "TopiaForge-test.zip"
+            archive.write_bytes(zip_bytes({member: b""}))
+
+            result = self.run_audit(archive)
+
+        self.assertEqual(1, result.returncode)
+        self.assertIn(
+            "retired " + "Robotopia" + " ecosystem name in path",
+            result.stderr,
+        )
+
+    def test_target_game_tool_allowlist_rejects_unrelated_prefix(self) -> None:
+        member = "docs/tools/restore-robotopia-managed-refs.ps1"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            archive = Path(temporary_directory) / "TopiaForge-test.zip"
+            archive.write_bytes(zip_bytes({member: b""}))
+
+            result = self.run_audit(archive)
+
+        self.assertEqual(1, result.returncode)
+        self.assertIn(
+            "retired " + "Robotopia" + " ecosystem name in path",
+            result.stderr,
+        )
+
+    def test_exact_game_build_allowlist_is_not_a_package_suffix(self) -> None:
+        member = "TopiaForge-linux-x64/.github/robotopia-game-build.json"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            archive = Path(temporary_directory) / "TopiaForge-test.zip"
+            archive.write_bytes(zip_bytes({member: b"{}"}))
+
+            result = self.run_audit(archive)
+
+        self.assertEqual(1, result.returncode)
+        self.assertIn(
+            "retired " + "Robotopia" + " ecosystem name in path",
+            result.stderr,
+        )
+
+    def test_native_executable_qw_byte_collision_is_not_an_identifier(self) -> None:
+        native_collisions = (b"Q" + b"wYw", b"Q" + b"wYw6")
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            archive = Path(temporary_directory) / "TopiaForge-test.zip"
+            archive.write_bytes(
+                zip_bytes(
+                    {
+                        "TopiaForge-linux-x64/TopiaForge.GameCompat.Extractor": (
+                            b"\0" + native_collisions[0] + b"\0"
+                        ),
+                        "TopiaForge-macos-universal/TopiaForge.GameCompat.Extractor": (
+                            b"\0" + native_collisions[1] + b"\0"
+                        ),
+                    }
+                )
+            )
+
+            result = self.run_audit(archive)
+
+        self.assertEqual(0, result.returncode, result.stderr)
+
+    def test_real_qw_identifier_in_binary_still_fails(self) -> None:
+        retired_identifier = b"Q" + b"wGap"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            archive = Path(temporary_directory) / "TopiaForge-test.zip"
+            archive.write_bytes(
+                zip_bytes({"lib/Legacy.dll": b"\0" + retired_identifier + b"\0"})
+            )
+
+            result = self.run_audit(archive)
+
+        self.assertEqual(1, result.returncode)
+        self.assertIn("retired " + "Q" + "w-prefixed identifier", result.stderr)
+
     def test_missing_include_is_an_actionable_tool_error(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             missing = Path(temporary_directory) / "missing.zip"
