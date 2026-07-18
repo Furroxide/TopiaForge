@@ -155,6 +155,34 @@ class GeneratedPayloadAuditTests(unittest.TestCase):
             result.stderr,
         )
 
+    def test_target_game_tool_allowlist_rejects_unrelated_prefix(self) -> None:
+        member = "docs/tools/restore-robotopia-managed-refs.ps1"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            archive = Path(temporary_directory) / "TopiaForge-test.zip"
+            archive.write_bytes(zip_bytes({member: b""}))
+
+            result = self.run_audit(archive)
+
+        self.assertEqual(1, result.returncode)
+        self.assertIn(
+            "retired " + "Robotopia" + " ecosystem name in path",
+            result.stderr,
+        )
+
+    def test_exact_game_build_allowlist_is_not_a_package_suffix(self) -> None:
+        member = "TopiaForge-linux-x64/.github/robotopia-game-build.json"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            archive = Path(temporary_directory) / "TopiaForge-test.zip"
+            archive.write_bytes(zip_bytes({member: b"{}"}))
+
+            result = self.run_audit(archive)
+
+        self.assertEqual(1, result.returncode)
+        self.assertIn(
+            "retired " + "Robotopia" + " ecosystem name in path",
+            result.stderr,
+        )
+
     def test_native_executable_qw_byte_collision_is_not_an_identifier(self) -> None:
         native_collisions = (b"Q" + b"wYw", b"Q" + b"wYw6")
         with tempfile.TemporaryDirectory() as temporary_directory:

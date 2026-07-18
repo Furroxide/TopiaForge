@@ -166,8 +166,8 @@ Future<void> _validateExtractedTree(
       issues.add('BepInEx extracted entry size drifted: $relative.');
     }
     // Windows filesystems do not expose the source archive's POSIX mode bits.
-    // The byte length and SHA-256 remain mandatory on every platform; exact
-    // mode validation runs on the Linux/macOS release legs.
+    // Byte length is mandatory on every platform. SHA-256 validation follows
+    // verifyHashes, while exact mode validation runs on Linux/macOS only.
     if (verifyModes && mode != metadata['mode']) {
       issues.add('BepInEx extracted entry mode drifted: $relative.');
     }

@@ -17,11 +17,20 @@ ROOT = Path(__file__).resolve().parents[2]
 SELF_PATH = ".github/scripts/check_topiaforge_residue.py"
 
 # These paths describe the game build/reference input, not the modding ecosystem.
-ROBOTOPIA_PATH_ALLOWLIST = {
+ROBOTOPIA_EXACT_PATH_ALLOWLIST = {
     ".github/robotopia-game-build.json",
     "tools/restore-robotopia-managed-refs.ps1",
     "tools/test-restore-robotopia-managed-refs.ps1",
 }
+
+ROBOTOPIA_PACKAGE_TOOL_PATH_ALLOWLIST = {
+    "tools/restore-robotopia-managed-refs.ps1",
+    "tools/test-restore-robotopia-managed-refs.ps1",
+}
+
+TOPIAFORGE_PACKAGE_ROOT = re.compile(
+    r"TopiaForge-(?:windows-x64|linux-x64|macos-universal)"
+)
 
 FORBIDDEN_PATH = re.compile(
     r"quantum(?:works|-works)|qwui|robotopia(?:modmanager|launcher)|"
@@ -210,17 +219,15 @@ def archive_suffix(path: str) -> str:
 
 def check_path(display: str, policy_path: str, failures: list[str]) -> None:
     normalized = policy_path.replace("\\", "/")
-    allowed_game_path = False
-    for allowed in ROBOTOPIA_PATH_ALLOWLIST:
-        suffix = f"/{allowed}"
-        if normalized == allowed:
-            allowed_game_path = True
-            break
-        if normalized.endswith(suffix):
-            package_prefix = normalized[: -len(suffix)]
-            if "robotopia" not in package_prefix.lower():
-                allowed_game_path = True
-                break
+    allowed_game_path = normalized in ROBOTOPIA_EXACT_PATH_ALLOWLIST
+    segments = normalized.split("/", maxsplit=1)
+    if (
+        not allowed_game_path
+        and len(segments) == 2
+        and TOPIAFORGE_PACKAGE_ROOT.fullmatch(segments[0])
+        and segments[1] in ROBOTOPIA_PACKAGE_TOOL_PATH_ALLOWLIST
+    ):
+        allowed_game_path = True
     if "robotopia" in normalized.lower() and not allowed_game_path:
         failures.append(f"{display}: retired Robotopia ecosystem name in path")
     if FORBIDDEN_PATH.search(normalized):
