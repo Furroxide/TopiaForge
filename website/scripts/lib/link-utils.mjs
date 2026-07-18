@@ -1,3 +1,4 @@
+import { lstatSync } from 'node:fs';
 import { relative, sep } from 'node:path';
 
 export function isExternalOrEmbedded(target) {
@@ -11,6 +12,17 @@ export function isWithinRoot(root, candidate) {
   return rootRelative !== '..'
     && !rootRelative.startsWith(`..${sep}`)
     && !rootRelative.startsWith(`..${sep === '/' ? '\\' : '/'}`);
+}
+
+export function isRegularFile(path) {
+  try {
+    return lstatSync(path).isFile();
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      return false;
+    }
+    throw error;
+  }
 }
 
 export function escapeRegExp(value) {

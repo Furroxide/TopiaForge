@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import {
   escapeRegExp,
   isExternalOrEmbedded,
+  isRegularFile,
   isWithinRoot,
 } from './lib/link-utils.mjs';
 
@@ -101,15 +102,23 @@ function collectHtml(root) {
 
 function resolveDestination(candidate) {
   if (existsSync(candidate)) {
-    return lstatSync(candidate).isDirectory() ? resolve(candidate, 'index.html') : candidate;
+    const status = lstatSync(candidate);
+    if (status.isFile()) {
+      return candidate;
+    }
+    if (!status.isDirectory()) {
+      return null;
+    }
+    const index = resolve(candidate, 'index.html');
+    return isRegularFile(index) ? index : null;
   }
 
-  if (extname(candidate) === '' && existsSync(`${candidate}.html`)) {
+  if (extname(candidate) === '' && isRegularFile(`${candidate}.html`)) {
     return `${candidate}.html`;
   }
 
   const index = resolve(candidate, 'index.html');
-  return existsSync(index) ? index : null;
+  return isRegularFile(index) ? index : null;
 }
 
 function display(path) {

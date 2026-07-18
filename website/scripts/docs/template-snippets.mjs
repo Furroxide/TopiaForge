@@ -12,6 +12,8 @@ import {
   sep,
 } from 'node:path';
 
+import { isRegularFile } from '../lib/link-utils.mjs';
+
 export class TemplateSnippetRenderer {
   #failures;
   #repositoryRoot;
@@ -47,8 +49,10 @@ export class TemplateSnippetRenderer {
       return '';
     }
 
-    if (!existsSync(absoluteSnippet)) {
-      this.#failures.push(`${pagePath}: snippet source does not exist: ${snippetPath}`);
+    if (!isRegularFile(absoluteSnippet)) {
+      this.#failures.push(
+        `${pagePath}: snippet source is not a regular file: ${snippetPath}`,
+      );
       return '';
     }
 

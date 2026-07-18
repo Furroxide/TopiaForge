@@ -1,11 +1,15 @@
 import {
   existsSync,
+  lstatSync,
   readFileSync,
-  statSync,
 } from 'node:fs';
 import { dirname, extname, relative, resolve, sep } from 'node:path';
 
-import { isExternalOrEmbedded, isWithinRoot } from './link-utils.mjs';
+import {
+  isExternalOrEmbedded,
+  isRegularFile,
+  isWithinRoot,
+} from './link-utils.mjs';
 
 export function checkMarkdownLinks({ repositoryRoot, sourcePaths }) {
   const failures = [];
@@ -17,7 +21,11 @@ export function checkMarkdownLinks({ repositoryRoot, sourcePaths }) {
       failures.push(`${sourcePath}: source escapes the repository`);
       continue;
     }
-    if (!existsSync(source) || !statSync(source).isFile()) {
+    if (!existsSync(source)) {
+      continue;
+    }
+    if (!isRegularFile(source)) {
+      failures.push(`${sourcePath}: source is not a regular file`);
       continue;
     }
 
@@ -57,10 +65,17 @@ export function checkMarkdownLinks({ repositoryRoot, sourcePaths }) {
         failures.push(`${display(repositoryRoot, source)}:${line}: missing target: ${target}`);
         continue;
       }
+      const destinationStatus = lstatSync(destination);
+      if (!destinationStatus.isFile() && !destinationStatus.isDirectory()) {
+        failures.push(
+          `${display(repositoryRoot, source)}:${line}: target is not a regular file: ${target}`,
+        );
+        continue;
+      }
 
       if (
         !decodedFragment
-        || !statSync(destination).isFile()
+        || !destinationStatus.isFile()
         || extname(destination).toLowerCase() !== '.md'
       ) {
         continue;

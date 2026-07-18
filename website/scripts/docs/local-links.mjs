@@ -1,7 +1,6 @@
-import { existsSync } from 'node:fs';
 import { dirname, relative, resolve, sep } from 'node:path';
 
-import { isWithinRoot } from '../lib/link-utils.mjs';
+import { isRegularFile, isWithinRoot } from '../lib/link-utils.mjs';
 
 const markdownLinkPattern = /(!?\[[^\]]*\]\()([^)\s]+)(\))/gu;
 
@@ -47,8 +46,10 @@ export class LocalDocumentationLinkRewriter {
 
       const linkedSource = relative(this.#repositoryRoot, linkedAbsolute).split(sep).join('/');
       if (!pathPart.toLowerCase().endsWith('.md')) {
-        if (!existsSync(linkedAbsolute)) {
-          this.#failures.push(`${pagePath}: local repository link does not exist: ${target}`);
+        if (!isRegularFile(linkedAbsolute)) {
+          this.#failures.push(
+            `${pagePath}: local repository link is not a regular file: ${target}`,
+          );
           return whole;
         }
 

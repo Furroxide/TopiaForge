@@ -107,6 +107,30 @@ test('source-link audit reports bad encoding, missing files, anchors, and escape
   assert.match(failures[3], /escapes the repository/);
 });
 
+test('source-link audit allows directories but rejects symlink sources and targets', (t) => {
+  const repositoryRoot = createRepository(t);
+  const directory = path.join(repositoryRoot, 'directory');
+  const target = path.join(repositoryRoot, 'target.md');
+  const source = path.join(repositoryRoot, 'source.md');
+  fs.mkdirSync(directory);
+  fs.writeFileSync(target, '# Target\n');
+  fs.symlinkSync(target, path.join(repositoryRoot, 'linked-target.md'));
+  fs.writeFileSync(
+    source,
+    '[directory](directory) [symlink](linked-target.md#target)',
+  );
+  fs.symlinkSync(source, path.join(repositoryRoot, 'linked-source.md'));
+
+  const failures = checkMarkdownLinks({
+    repositoryRoot,
+    sourcePaths: ['source.md', 'linked-source.md'],
+  });
+
+  assert.equal(failures.length, 2);
+  assert.match(failures[0], /target is not a regular file: linked-target\.md#target/);
+  assert.match(failures[1], /source is not a regular file/);
+});
+
 function createRepository(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'topiaforge-markdown-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
