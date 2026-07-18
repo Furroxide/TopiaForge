@@ -270,14 +270,16 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
       if (repositoryPath == null) {
         return match.group(0)!;
       }
+      if (package == 'TopiaForge.Mods.Analyzers') {
+        // The analyzer reads manifest V4 dependencies. Keep it in the V1
+        // source template, but defer enabling it in generated projects until
+        // the package-devex batch also upgrades the launcher manifest model.
+        return '';
+      }
       final include = _canonicalRelativeReference(
         p.join(_repositoryRoot.path, p.joinAll(p.posix.split(repositoryPath))),
         from: File(projectPath).parent.path,
       );
-      if (package == 'TopiaForge.Mods.Analyzers') {
-        return '    <ProjectReference Include="$include" '
-            'OutputItemType="Analyzer" ReferenceOutputAssembly="false" />';
-      }
       return '    <ProjectReference Include="$include" Private="false" />';
     });
     return bridged.replaceFirst(
