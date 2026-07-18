@@ -264,7 +264,7 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
       r'^[ \t]*<PackageReference Include="([^"]+)" Version="1\.0\.0"(?: PrivateAssets="all")? />[ \t]*$',
       multiLine: true,
     );
-    return project.replaceAllMapped(pattern, (match) {
+    final bridged = project.replaceAllMapped(pattern, (match) {
       final package = match.group(1)!;
       final repositoryPath = sdkProjects[package];
       if (repositoryPath == null) {
@@ -280,6 +280,13 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
       }
       return '    <ProjectReference Include="$include" Private="false" />';
     });
+    return bridged.replaceFirst(
+      RegExp(
+        r'\n[ \t]*<Target Name="EnsureTopiaForgeSdk".*?</Target>[ \t]*\n',
+        dotAll: true,
+      ),
+      '\n',
+    );
   }
 
   Future<ModManifest> _readModManifest(String projectPath) async {
