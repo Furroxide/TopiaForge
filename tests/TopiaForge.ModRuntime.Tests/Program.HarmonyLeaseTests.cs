@@ -150,6 +150,24 @@ namespace TopiaForge.ModRuntime.Tests
 
             Assert(rejectedEmptyNormalizedPurpose,
                 "Harmony lease purposes that normalize to an empty id segment must be rejected");
+
+            var rejectedEmptyNormalizedOwner = false;
+            try
+            {
+                using var invalidLifetime = new OwnerModLifetime();
+                OwnerHarmonyLease.CreateForTesting(
+                    "!!!",
+                    "Primary Patches",
+                    invalidLifetime,
+                    new RecordingHarmonyPatchBackend());
+            }
+            catch (ArgumentException)
+            {
+                rejectedEmptyNormalizedOwner = true;
+            }
+
+            Assert(rejectedEmptyNormalizedOwner,
+                "Harmony lease owners that normalize to an empty id segment must be rejected");
         }
 
         private static int HarmonyLeaseTarget() => 1;

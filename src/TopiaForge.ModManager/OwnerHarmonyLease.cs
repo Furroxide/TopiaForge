@@ -145,6 +145,13 @@ namespace TopiaForge.ModManager
                 throw new ArgumentException("An owner mod id is required.", nameof(ownerModId));
             }
 
+            if (Normalize(ownerModId).Length == 0)
+            {
+                throw new ArgumentException(
+                    "An owner mod id must contain a letter, number, dot, underscore, or hyphen.",
+                    nameof(ownerModId));
+            }
+
             if (string.IsNullOrWhiteSpace(purpose))
             {
                 throw new ArgumentException("A Harmony patch purpose is required.", nameof(purpose));

@@ -190,12 +190,12 @@ namespace TopiaForge.Mods
                 return lifecycle.SubscribeSceneLifecycle(handler);
             }
 
-            return events.SubscribeSceneLoaded(sceneName => handler(new SceneLifecycleEvent(
+            return events.SubscribeSceneLoaded((SceneLoadEvent scene) => handler(new SceneLifecycleEvent(
                 0,
-                sceneName,
+                scene.SceneName,
                 SceneLifecyclePhase.Loaded,
-                SceneLoadMode.Single,
-                isActive: true)));
+                scene.Mode,
+                scene.IsActive)));
         }
     }
 
