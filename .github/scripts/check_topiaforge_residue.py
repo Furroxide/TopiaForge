@@ -23,13 +23,13 @@ ROBOTOPIA_EXACT_PATH_ALLOWLIST = {
     "tools/test-restore-robotopia-managed-refs.ps1",
 }
 
-ROBOTOPIA_PACKAGE_TOOL_PATH_ALLOWLIST = {
-    "tools/restore-robotopia-managed-refs.ps1",
-    "tools/test-restore-robotopia-managed-refs.ps1",
-}
-
-TOPIAFORGE_PACKAGE_ROOT = re.compile(
-    r"TopiaForge-(?:windows-x64|linux-x64|macos-universal)"
+TOPIAFORGE_PACKAGE_TOOL_PATH = re.compile(
+    r"(?:"
+    r"TopiaForge-(?:windows-x64|linux-x64)/tools/"
+    r"|(?:TopiaForge-macos-universal/)?TopiaForge\.app/Contents/Resources/"
+    r"TopiaForge/tools/"
+    r")"
+    r"(?:restore-robotopia-managed-refs|test-restore-robotopia-managed-refs)\.ps1"
 )
 
 FORBIDDEN_PATH = re.compile(
@@ -220,13 +220,8 @@ def archive_suffix(path: str) -> str:
 def check_path(display: str, policy_path: str, failures: list[str]) -> None:
     normalized = policy_path.replace("\\", "/")
     allowed_game_path = normalized in ROBOTOPIA_EXACT_PATH_ALLOWLIST
-    segments = normalized.split("/", maxsplit=1)
-    if (
-        not allowed_game_path
-        and len(segments) == 2
-        and TOPIAFORGE_PACKAGE_ROOT.fullmatch(segments[0])
-        and segments[1] in ROBOTOPIA_PACKAGE_TOOL_PATH_ALLOWLIST
-    ):
+    package_path = normalized.removeprefix("release-artifacts/")
+    if not allowed_game_path and TOPIAFORGE_PACKAGE_TOOL_PATH.fullmatch(package_path):
         allowed_game_path = True
     if "robotopia" in normalized.lower() and not allowed_game_path:
         failures.append(f"{display}: retired Robotopia ecosystem name in path")

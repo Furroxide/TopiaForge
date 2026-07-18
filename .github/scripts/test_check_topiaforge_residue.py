@@ -140,6 +140,35 @@ class GeneratedPayloadAuditTests(unittest.TestCase):
 
         self.assertEqual(0, result.returncode, result.stderr)
 
+    def test_target_game_tool_paths_are_allowed_in_extracted_package(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            package = Path(temporary_directory) / "TopiaForge-linux-x64"
+            tools = package / "tools"
+            tools.mkdir(parents=True)
+            (tools / "restore-robotopia-managed-refs.ps1").write_bytes(b"")
+            (tools / "test-restore-robotopia-managed-refs.ps1").write_bytes(b"")
+
+            result = self.run_audit(package)
+
+        self.assertEqual(0, result.returncode, result.stderr)
+
+    def test_target_game_tool_paths_are_allowed_in_macos_app_archive(self) -> None:
+        package_root = "TopiaForge.app/Contents/Resources/TopiaForge/tools"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            archive = Path(temporary_directory) / "TopiaForge-macos-universal.zip"
+            archive.write_bytes(
+                zip_bytes(
+                    {
+                        f"{package_root}/restore-robotopia-managed-refs.ps1": b"",
+                        f"{package_root}/test-restore-robotopia-managed-refs.ps1": b"",
+                    }
+                )
+            )
+
+            result = self.run_audit(archive)
+
+        self.assertEqual(0, result.returncode, result.stderr)
+
     def test_target_game_tool_allowlist_does_not_hide_retired_prefix(self) -> None:
         retired_prefix = "Legacy" + "Robotopia"
         member = f"{retired_prefix}/tools/restore-robotopia-managed-refs.ps1"
@@ -157,6 +186,23 @@ class GeneratedPayloadAuditTests(unittest.TestCase):
 
     def test_target_game_tool_allowlist_rejects_unrelated_prefix(self) -> None:
         member = "docs/tools/restore-robotopia-managed-refs.ps1"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            archive = Path(temporary_directory) / "TopiaForge-test.zip"
+            archive.write_bytes(zip_bytes({member: b""}))
+
+            result = self.run_audit(archive)
+
+        self.assertEqual(1, result.returncode)
+        self.assertIn(
+            "retired " + "Robotopia" + " ecosystem name in path",
+            result.stderr,
+        )
+
+    def test_target_game_tool_allowlist_rejects_nested_package_prefix(self) -> None:
+        member = (
+            "payload/TopiaForge-linux-x64/tools/"
+            "restore-robotopia-managed-refs.ps1"
+        )
         with tempfile.TemporaryDirectory() as temporary_directory:
             archive = Path(temporary_directory) / "TopiaForge-test.zip"
             archive.write_bytes(zip_bytes({member: b""}))
