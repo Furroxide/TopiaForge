@@ -19,6 +19,10 @@ class SettingsScreen extends StatelessWidget {
             child: Column(
               children: [
                 _GameInstallSettings(state: state),
+                if (_shouldShowGameInstallSelector(state)) ...[
+                  const SizedBox(height: 14),
+                  _GameInstallCandidateSelector(state: state),
+                ],
                 const SizedBox(height: 14),
                 _PackageSourcesSettings(state: state),
                 const SizedBox(height: 14),

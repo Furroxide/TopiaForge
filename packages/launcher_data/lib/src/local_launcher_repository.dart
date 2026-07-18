@@ -13,6 +13,7 @@ import 'package:unorm_dart/unorm_dart.dart' as unicode;
 import 'bounded_process.dart';
 import 'data_root.dart';
 import 'dotnet_sdk.dart';
+import 'game_install_discovery.dart';
 import 'process_identity.dart';
 import 'package_contract.dart';
 import 'public_url.dart';
@@ -21,6 +22,7 @@ import 'ugc_sidecar_runtime.dart';
 import 'safe_zip_archive.dart';
 
 part 'local_launcher_repository/game_layout.dart';
+part 'local_launcher_repository/game_install_discovery_helpers.dart';
 part 'local_launcher_repository/game_architecture.dart';
 part 'local_launcher_repository/diagnostics_helpers.dart';
 part 'local_launcher_repository/game_runtime_helpers.dart';
@@ -47,12 +49,13 @@ part 'local_launcher_repository/storage_helpers.dart';
 part 'local_launcher_repository/ugc_live_sync_helpers.dart';
 part 'local_launcher_repository/ugc_publisher_helpers.dart';
 
-class LocalLauncherRepository implements LauncherRepository {
+class LocalLauncherRepository implements GameInstallDiscoveryRepository {
   LocalLauncherRepository({
     String? dataRoot,
     String? repositoryRoot,
     String? workingDirectory,
     String? knownGamePath,
+    GameInstallDiscoveryService? gameInstallDiscoveryService,
     DependencyPlanner dependencyPlanner = const DependencyPlanner(),
     PackageMetadataValidator? packageMetadataValidator,
     PackageInstallCommitHook? packageInstallCommitHook,
@@ -64,6 +67,9 @@ class LocalLauncherRepository implements LauncherRepository {
          repositoryRoot ?? _findRepositoryRoot(workingDirectory),
        ),
        _knownGamePath = knownGamePath,
+       _gameInstallDiscovery =
+           gameInstallDiscoveryService ??
+           _defaultGameInstallDiscovery(knownGamePath),
        _dependencyPlanner = dependencyPlanner,
        _packageMetadataValidator = packageMetadataValidator,
        _packageInstallCommitHook = packageInstallCommitHook,
@@ -73,6 +79,7 @@ class LocalLauncherRepository implements LauncherRepository {
   final Directory _dataRoot;
   final Directory _repositoryRoot;
   final String? _knownGamePath;
+  final GameInstallDiscoveryService _gameInstallDiscovery;
   final DependencyPlanner _dependencyPlanner;
   final PackageMetadataValidator? _packageMetadataValidator;
   final Map<String, Future<List<String>>> _installedMetadataCache = {};
@@ -109,11 +116,9 @@ class LocalLauncherRepository implements LauncherRepository {
     final settings = await _loadSettings();
     final selectedProfileId =
         (settings['selectedProfileId'] as String?) ?? profiles.first.id;
-    final configuredPath = settings['gamePath'] as String?;
-    final gameInstall =
-        configuredPath != null && configuredPath.trim().isNotEmpty
-        ? await _validateGameDirectory(configuredPath)
-        : await detectKnownInstall();
+    final discovery = await _resolveGameInstallDiscovery(settings);
+    final gameInstallCandidates = discovery.candidates;
+    final gameInstall = discovery.install;
     final installedMods = gameInstall == null
         ? <InstalledMod>[]
         : await _loadInstalledMods(gameInstall);
@@ -125,6 +130,7 @@ class LocalLauncherRepository implements LauncherRepository {
     final registryMods = registryOutcome.mods;
     return LauncherSnapshot(
       gameInstall: gameInstall,
+      gameInstallCandidates: gameInstallCandidates,
       profiles: profiles,
       selectedProfileId: selectedProfileId,
       installedMods: installedMods,
@@ -161,26 +167,15 @@ class LocalLauncherRepository implements LauncherRepository {
   }
 
   @override
-  Future<GameInstall?> detectKnownInstall() async {
-    final knownPath = _knownGamePath ?? _defaultKnownGamePath();
-    if (knownPath == null || GameLayout.resolve(knownPath) == null) {
-      return null;
-    }
-    return _validateGameDirectory(knownPath);
-  }
+  Future<List<GameInstallCandidate>> discoverGameInstalls() =>
+      _discoverGameInstalls();
 
   @override
-  Future<GameInstall> selectGameDirectory(String path) async {
-    final install = await _validateGameDirectory(path);
-    if (install.issues.any((issue) => issue.isBlocking)) {
-      throw StateError(install.issues.map((issue) => issue.message).join(' '));
-    }
-    await _updateSettings((settings) => settings['gamePath'] = install.path);
-    await _appendLauncherLogBestEffort(
-      'Selected game directory ${install.path}.',
-    );
-    return install;
-  }
+  Future<GameInstall?> detectKnownInstall() => _detectKnownInstall();
+
+  @override
+  Future<GameInstall> selectGameDirectory(String path) =>
+      _selectGameDirectory(path);
 
   @override
   Future<GameCompatStatus> checkGameCompat(GameInstall install) async {

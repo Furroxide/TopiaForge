@@ -14,18 +14,27 @@ extension _DiagnosticsHelpers on LocalLauncherRepository {
         'topiaforge-diagnostics-${now.toIso8601String().replaceAll(':', '-')}.zip',
       ),
     );
+    final gamePaths = await _diagnosticGamePaths(install);
 
     final archive = Archive();
     final included = <String>[];
     final entries = <DiagnosticEntryMetadata>[];
-    _addDiagnosticSummary(archive, included, entries, install, resolution, now);
+    _addDiagnosticSummary(
+      archive,
+      included,
+      entries,
+      install,
+      resolution,
+      now,
+      gamePaths,
+    );
     await _addDiagnosticFileIfExists(
       archive,
       included,
       entries,
       'launcher.log',
       _launcherLogFile,
-      install.path,
+      gamePaths,
     );
     await _addDiagnosticFileIfExists(
       archive,
@@ -33,7 +42,7 @@ extension _DiagnosticsHelpers on LocalLauncherRepository {
       entries,
       'manager-state.json',
       _managerStateFile(install),
-      install.path,
+      gamePaths,
     );
     await _addDiagnosticFileIfExists(
       archive,
@@ -41,7 +50,7 @@ extension _DiagnosticsHelpers on LocalLauncherRepository {
       entries,
       'manager.log',
       File(p.join(_managerLogs(install).path, 'manager.log')),
-      install.path,
+      gamePaths,
     );
     await _addDiagnosticFileIfExists(
       archive,
@@ -49,7 +58,7 @@ extension _DiagnosticsHelpers on LocalLauncherRepository {
       entries,
       'bepinex-log.txt',
       File(p.join(install.path, 'BepInEx', 'LogOutput.log')),
-      install.path,
+      gamePaths,
     );
     final manifest = _prettyJson({
       'schemaVersion': 2,
@@ -63,7 +72,7 @@ extension _DiagnosticsHelpers on LocalLauncherRepository {
         included,
         'diagnostic-manifest.json',
         manifest,
-        install.path,
+        gamePaths,
       ),
     );
 
@@ -90,6 +99,7 @@ extension _DiagnosticsHelpers on LocalLauncherRepository {
     GameInstall install,
     DependencyResolutionResult resolution,
     DateTime now,
+    List<String> gamePaths,
   ) {
     entries.add(
       _addDiagnosticText(
@@ -98,14 +108,14 @@ extension _DiagnosticsHelpers on LocalLauncherRepository {
         'summary.json',
         _prettyJson({
           'createdAtUtc': now.toIso8601String(),
-          'gamePath': _redact(install.path, install.path),
+          'gamePath': _redact(install.path, gamePaths),
           'bepInExStatus': install.bepInExStatus.name,
           'loaderStatus': install.loaderStatus.name,
           if (install.gameVersion != null) 'gameVersion': install.gameVersion,
           'gameVersionLabel': install.gameVersionLabel,
           'issues': install.issues.map((issue) => issue.toJson()).toList(),
         }),
-        install.path,
+        gamePaths,
       ),
     );
     entries.add(
@@ -118,7 +128,7 @@ extension _DiagnosticsHelpers on LocalLauncherRepository {
           'dependencyGraph': resolution.graph,
           'issues': resolution.issues.map((issue) => issue.toJson()).toList(),
         }),
-        install.path,
+        gamePaths,
       ),
     );
   }
@@ -129,7 +139,7 @@ extension _DiagnosticsHelpers on LocalLauncherRepository {
     List<DiagnosticEntryMetadata> entries,
     String name,
     File file,
-    String gamePath,
+    List<String> gamePaths,
   ) async {
     final type = FileSystemEntity.typeSync(file.path, followLinks: false);
     if (type == FileSystemEntityType.notFound) {
@@ -163,7 +173,7 @@ extension _DiagnosticsHelpers on LocalLauncherRepository {
         included,
         name,
         text,
-        gamePath,
+        gamePaths,
         sourceBytes: sourceBytes,
         truncationReasons: reasons,
         byteLimit: _maxDiagnosticSourceBytes,
@@ -177,14 +187,14 @@ extension _DiagnosticsHelpers on LocalLauncherRepository {
     List<String> included,
     String name,
     String text,
-    String gamePath, {
+    List<String> gamePaths, {
     int? sourceBytes,
     List<String> truncationReasons = const [],
     int? byteLimit,
     int? lineLimit,
   }) {
     final raw = utf8.encode(text);
-    final bytes = utf8.encode(_redact(text, gamePath));
+    final bytes = utf8.encode(_redact(text, gamePaths));
     archive.addFile(ArchiveFile.bytes(name, bytes));
     included.add(name);
     return DiagnosticEntryMetadata(
@@ -223,7 +233,17 @@ extension _DiagnosticsHelpers on LocalLauncherRepository {
       );
     }
 
-    return _redact(allLines.join('\n'), install.path);
+    return _redact(allLines.join('\n'), await _diagnosticGamePaths(install));
+  }
+
+  Future<List<String>> _diagnosticGamePaths(GameInstall install) async {
+    final settings = await _loadSettings();
+    final configured = settings['gamePath'];
+    return {
+      install.path,
+      if (configured is String) configured,
+      ?_knownGamePath,
+    }.map((path) => path.trim()).where((path) => path.isNotEmpty).toList();
   }
 }
 

@@ -20,13 +20,27 @@ spelled out.
 
 ## Robotopia not detected — `ROBOTOPIA_GAME_DIR`
 
-Detection order (first hit wins):
+The standalone desktop launcher lists every validated candidate and preserves
+the player's selected installation. Its discovery precedence is:
 
-1. **`ROBOTOPIA_GAME_DIR`** environment variable — overrides everything.
-2. **Windows default:** `%LOCALAPPDATA%\Tomato Cake\launcher\Robotopia`.
-3. **macOS default:** `~/Library/Application Support/Tomato Cake/launcher` (the folder containing
+1. The saved selection.
+2. **`ROBOTOPIA_GAME_DIR`** environment variable.
+3. **Windows default:** `%LOCALAPPDATA%\Tomato Cake\launcher\Robotopia`.
+4. **macOS default:** `~/Library/Application Support/Tomato Cake/launcher` (the folder containing
    `Robotopia.app`).
-4. **Linux:** no auto-detect — always set `ROBOTOPIA_GAME_DIR` or pass `--game-dir`.
+5. Steam libraries declared in `libraryfolders.vdf`, when an app manifest has
+   the exact name and install directory `Robotopia`. This also finds the
+   Windows game payload installed by Steam on Linux for Proton.
+
+The launcher does not guess a Steam app id, recursively scan Wine/Proton
+prefixes, or accept a folder name without validating the Robotopia payload. Use
+**Select Folder** for another store or a custom location.
+
+CLI commands use `--game-dir` as an exclusive explicit override. Without that
+option they use the same repository adapters and take the highest-precedence
+validated result: saved selection, `ROBOTOPIA_GAME_DIR`, Tomato Cake, then
+Steam. Commands that can mutate an install should still receive `--game-dir`
+when automation must target one exact installation.
 
 `--game-dir` on a command always wins over the environment variable. Point either at the Robotopia folder itself
 (the directory containing Robotopia, not a launcher shortcut). Verify with `topiaforge doctor` — it prints
@@ -63,8 +77,9 @@ Pitfalls:
 
 Robotopia runs its Windows build under Proton/Wine:
 
-- `ROBOTOPIA_GAME_DIR` / `--game-dir` must point at the **Windows-layout Robotopia folder inside the Proton
-  prefix** — there is no auto-detect on Linux.
+- The desktop launcher can find a Steam-managed install from Steam's declared
+  libraries. Otherwise, `ROBOTOPIA_GAME_DIR` / `--game-dir` must point at the
+  **Windows-layout Robotopia folder used by Proton/Wine**.
 - Run Robotopia with `WINEDLLOVERRIDES="winhttp=n,b"` so the BepInEx doorstop proxy loads.
 - In the launcher, select the Robotopia folder inside your prefix and run Repair to install the Windows BepInEx;
   setting `wineCommand` in the launcher settings lets the launcher start Robotopia directly.
