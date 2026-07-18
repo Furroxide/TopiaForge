@@ -29,6 +29,12 @@ export default defineConfig({
     starlight({
       title: 'TopiaForge',
       description: 'Build mods for Robotopia with the safe TopiaForge V1 SDK.',
+      favicon: '/favicon.png',
+      logo: {
+        src: './src/assets/topiaforge-wordmark.png',
+        alt: 'TopiaForge',
+        replacesTitle: true,
+      },
       customCss: ['./src/styles/custom.css'],
       social: [
         {
@@ -53,6 +59,7 @@ export default defineConfig({
             { label: 'In-game UI', slug: 'guides/ui' },
             { label: 'Specialist modules', slug: 'guides/modules' },
             { label: 'RobotKit', slug: 'guides/robotkit' },
+            { label: 'Zombies worked example', slug: 'guides/zombies' },
             { label: 'Custom worlds and modes', slug: 'guides/custom-worlds' },
             { label: 'Test a mod', slug: 'guides/testing' },
             { label: 'Development loop', slug: 'guides/cli-dev' },
@@ -73,6 +80,11 @@ export default defineConfig({
             {
               label: 'C# API reference',
               link: '/api/csharp/',
+              attrs: { target: '_self' },
+            },
+            {
+              label: 'Dart API reference',
+              link: '/api/dart/',
               attrs: { target: '_self' },
             },
           ],

@@ -73,7 +73,7 @@ class _HomeFirstRun extends StatelessWidget {
                           padding: const EdgeInsets.fromLTRB(36, 40, 36, 30),
                           child: Column(
                             children: [
-                              const TopiaForgeLogo(height: 44),
+                              const TopiaForgeLogo(height: 54),
                               const SizedBox(height: 22),
                               Text(
                                 'Welcome to TopiaForge modding',

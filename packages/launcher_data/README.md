@@ -31,5 +31,6 @@ atomic persistence, and no-follow checks at trust boundaries.
 Run `dart analyze` and `dart test` from this directory. Tests use temporary
 roots and injectable process starters; do not point them at a real game install.
 
-See [ContributorSetup.md](../../docs/ContributorSetup.md) and
-[Modding.md](../../docs/Modding.md) for complete workflows.
+See [contributor setup](https://github.com/furroxide/TopiaForge/blob/main/docs/ContributorSetup.md)
+and the [SDK overview](https://docs.topiaforge.dev/reference/sdk-overview/) for
+complete workflows.

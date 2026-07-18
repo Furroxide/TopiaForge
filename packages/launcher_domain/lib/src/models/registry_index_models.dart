@@ -21,7 +21,7 @@ class ModRegistryFormat {
   /// Pages. The launcher and developer tooling register this as a built-in
   /// package source.
   static const officialRegistryUrl =
-      'https://furroxide.github.io/TopiaForge/registry/index.json';
+      'https://docs.topiaforge.dev/registry/index.json';
 
   static const officialSourceId = 'io.github.furroxide.topiaforge.official';
   static const officialSourceName = 'TopiaForge Mod Registry';

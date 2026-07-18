@@ -1,6 +1,32 @@
 part of 'widget_test.dart';
 
 void registerAccessibilityWidgetTests() {
+  testWidgets('pixel wordmark fits the compact top bar at enlarged text', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(700, 600);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 1.4;
+    addTearDown(() {
+      tester.view.reset();
+      tester.platformDispatcher.clearTextScaleFactorTestValue();
+    });
+
+    await tester.pumpWidget(
+      TopiaForgeLauncherApp(
+        repository: _FakeLauncherRepository(snapshot: _readySnapshot()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final logos = tester.widgetList<TopiaForgeLogo>(
+      find.byType(TopiaForgeLogo),
+    );
+    expect(logos, isNotEmpty);
+    expect(logos.first.height, 36);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('shell supports high contrast and 200 percent text scaling', (
     tester,
   ) async {

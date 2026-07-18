@@ -41,8 +41,15 @@ extension _TopiaForgeUpdateCommands on _TopiaForgeCli {
           baseUrl:
               _nonBlank(_option(args, '--base-url')) ??
               _nonBlank(Platform.environment['LAUNCHER_UPDATE_BASE_URL']),
+          skipIfNoStableRelease: args.contains('--skip-if-no-stable-release'),
         ),
       );
+      if (!result.wasGenerated) {
+        stdout.writeln(
+          'No stable release exists; skipped manual-releases.json.',
+        );
+        return 0;
+      }
       stdout.writeln('Wrote ${result.itemCount} launcher update entries.');
       stdout.writeln('Manual releases: ${result.manualReleasesUrl}');
       return 0;
@@ -59,13 +66,18 @@ extension _TopiaForgeUpdateCommands on _TopiaForgeCli {
 
   void _printUpdatesIndexHelp() {
     stdout.writeln(
-      'Usage: topiaforge updates index --repository owner/name --output path [--base-url url]',
+      'Usage: topiaforge updates index --repository owner/name --output path '
+      '[--base-url url] [--skip-if-no-stable-release]',
     );
     stdout.writeln('');
     stdout.writeln('Builds the launcher update JSON index for GitHub Pages.');
     stdout.writeln('Reads GITHUB_TOKEN for GitHub API calls.');
     stdout.writeln(
       'Uses --base-url, LAUNCHER_UPDATE_BASE_URL, or the repository Pages URL.',
+    );
+    stdout.writeln(
+      '--skip-if-no-stable-release omits the catalog only when no stable '
+      'release exists.',
     );
   }
 

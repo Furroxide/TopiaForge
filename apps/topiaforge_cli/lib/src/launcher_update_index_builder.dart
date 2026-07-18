@@ -15,21 +15,25 @@ class LauncherUpdateIndexConfig {
     required this.repository,
     required this.outputDirectory,
     String? baseUrl,
+    this.skipIfNoStableRelease = false,
   }) : baseUrl = baseUrl ?? _defaultBaseUrl(repository);
 
   final String repository;
   final String outputDirectory;
   final String baseUrl;
+  final bool skipIfNoStableRelease;
 }
 
 class LauncherUpdateIndexResult {
   const LauncherUpdateIndexResult({
     required this.itemCount,
     required this.manualReleasesUrl,
+    required this.wasGenerated,
   });
 
   final int itemCount;
   final String manualReleasesUrl;
+  final bool wasGenerated;
 }
 
 class LauncherUpdateIndexBuilder {
@@ -49,24 +53,40 @@ class LauncherUpdateIndexBuilder {
     final baseUri = _normalizeBaseUri(config.baseUrl);
     final generatedAt = _clock().toUtc().toIso8601String();
     final releases = await _client.listReleases(config.repository);
-    final output = createAtomicStagingDirectory(config.outputDirectory);
+    final manualReleasesUrl = baseUri
+        .resolve('manual-releases.json')
+        .toString();
 
-    try {
-      final candidates = <_ManualReleaseCandidate>[];
-      for (final release in releases) {
-        if (release.draft || release.prerelease) continue;
-        final version = _releaseVersion(release);
-        if (version == null || version.version.contains('-')) continue;
-        if (_releaseChannel(release) != 'release') continue;
-        candidates.add(
-          _ManualReleaseCandidate(release: release, version: version),
-        );
-      }
-      if (candidates.isEmpty) {
+    final candidates = <_ManualReleaseCandidate>[];
+    for (final release in releases) {
+      if (release.draft || release.prerelease) continue;
+      if (_releaseChannel(release) != 'release') continue;
+      final version = _releaseVersion(release);
+      if (version == null || version.version.contains('-')) {
         throw StateError(
-          'No published stable release is available for manual-releases.json.',
+          'Published stable release ${release.tagName} does not have a valid '
+          'stable semantic version.',
         );
       }
+      candidates.add(
+        _ManualReleaseCandidate(release: release, version: version),
+      );
+    }
+    if (candidates.isEmpty) {
+      if (config.skipIfNoStableRelease) {
+        return LauncherUpdateIndexResult(
+          itemCount: 0,
+          manualReleasesUrl: manualReleasesUrl,
+          wasGenerated: false,
+        );
+      }
+      throw StateError(
+        'No published stable release is available for manual-releases.json.',
+      );
+    }
+
+    final output = createAtomicStagingDirectory(config.outputDirectory);
+    try {
       candidates.sort(
         (left, right) => _compareVersionSort(
           right.version.releaseLabel,
@@ -114,7 +134,8 @@ class LauncherUpdateIndexBuilder {
       publishAtomicDirectory(output, config.outputDirectory);
       return LauncherUpdateIndexResult(
         itemCount: platforms.length,
-        manualReleasesUrl: baseUri.resolve('manual-releases.json').toString(),
+        manualReleasesUrl: manualReleasesUrl,
+        wasGenerated: true,
       );
     } on Object {
       deleteAtomicStagingDirectory(output);

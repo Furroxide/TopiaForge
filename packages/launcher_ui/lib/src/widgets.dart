@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import 'launcher_theme.dart';
 
@@ -267,17 +266,20 @@ class TopiaForgeBackdrop extends StatelessWidget {
 }
 
 class TopiaForgeLogo extends StatelessWidget {
-  const TopiaForgeLogo({super.key, this.height = 34});
+  const TopiaForgeLogo({super.key, this.height = 36});
 
   final double height;
 
   @override
   Widget build(BuildContext context) {
-    return SvgPicture.asset(
+    return Image.asset(
       TopiaForgeBrandAssets.logo,
       package: TopiaForgeBrandAssets.package,
       height: height,
       fit: BoxFit.contain,
+      filterQuality: FilterQuality.none,
+      isAntiAlias: false,
+      semanticLabel: 'TopiaForge',
     );
   }
 }

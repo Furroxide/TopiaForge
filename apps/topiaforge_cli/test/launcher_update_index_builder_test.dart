@@ -31,7 +31,26 @@ void main() {
     expect(output.listSync(), isEmpty);
   });
 
-  test('emits the fail-closed manual release catalog v1', () async {
+  test('can skip generation before the first stable release', () async {
+    final builder = LauncherUpdateIndexBuilder(
+      client: _FakeGitHubReleaseClient(releases: const [], assets: const {}),
+      clock: _fixedClock,
+    );
+
+    final result = await builder.build(
+      _config(output, skipIfNoStableRelease: true),
+    );
+
+    expect(result.wasGenerated, isFalse);
+    expect(result.itemCount, 0);
+    expect(
+      result.manualReleasesUrl,
+      'https://owner.github.io/repo/manual-releases.json',
+    );
+    expect(output.listSync(), isEmpty);
+  });
+
+  test('emits the fail-closed manual release catalog v2', () async {
     final bytes = {
       'win': utf8.encode('windows archive'),
       'mac': utf8.encode('macos archive'),
@@ -59,6 +78,7 @@ void main() {
     final parsed = ManualReleaseCatalog.fromJson(catalog);
 
     expect(result.itemCount, 3);
+    expect(result.wasGenerated, isTrue);
     expect(
       result.manualReleasesUrl,
       'https://owner.github.io/repo/manual-releases.json',
@@ -135,7 +155,7 @@ void main() {
       );
 
       await expectLater(
-        () => builder.build(_config(output)),
+        () => builder.build(_config(output, skipIfNoStableRelease: true)),
         throwsA(
           isA<StateError>().having(
             (error) => error.message,
@@ -146,6 +166,28 @@ void main() {
       );
     },
   );
+
+  test('does not skip a malformed published stable release', () async {
+    final builder = LauncherUpdateIndexBuilder(
+      client: _FakeGitHubReleaseClient(
+        releases: [_release(tagName: 'stable')],
+        assets: const {},
+      ),
+      clock: _fixedClock,
+    );
+
+    await expectLater(
+      () => builder.build(_config(output, skipIfNoStableRelease: true)),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('valid stable semantic version'),
+        ),
+      ),
+    );
+    expect(output.listSync(), isEmpty);
+  });
 
   test('rejects duplicate production assets and insecure URLs', () async {
     final duplicate = LauncherUpdateIndexBuilder(
@@ -188,12 +230,15 @@ void main() {
   });
 }
 
-LauncherUpdateIndexConfig _config(Directory output) =>
-    LauncherUpdateIndexConfig(
-      repository: 'owner/repo',
-      outputDirectory: output.path,
-      baseUrl: 'https://owner.github.io/repo/',
-    );
+LauncherUpdateIndexConfig _config(
+  Directory output, {
+  bool skipIfNoStableRelease = false,
+}) => LauncherUpdateIndexConfig(
+  repository: 'owner/repo',
+  outputDirectory: output.path,
+  baseUrl: 'https://owner.github.io/repo/',
+  skipIfNoStableRelease: skipIfNoStableRelease,
+);
 
 DateTime _fixedClock() => DateTime.utc(2026, 1, 2, 3, 4, 5);
 
