@@ -26,6 +26,7 @@ test('complete Pages workflow has trusted CI, manual, and stable-release entrypo
   const checkout = build.steps.find((step) => step.name === 'Checkout exact triggering revision');
   assert.match(checkout.with.ref, /workflow_run\.head_sha/u);
   assert.match(checkout.uses, /^actions\/checkout@9c091bb/u);
+  assert.equal(checkout.with.lfs, true);
   const trustedSource = build.steps.find(
     (step) => step.name === 'Require a trusted Pages source',
   );
