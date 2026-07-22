@@ -1,6 +1,6 @@
 ---
 title: Specialist modules
-description: Add optional V1 robot, world, time, prompt, and UGC contracts safely.
+description: Add optional V1 robot, world, time, prompt, UGC, and multiplayer contracts safely.
 ---
 
 # Specialist modules
@@ -25,6 +25,7 @@ spoof that declaration.
 | Chronos | `topiaforge mod add chronos` | `ITimeControlService`, time leases, drivers, turn scheduler | `io.github.furroxide.topiaforge.chronos` |
 | Prompts | `topiaforge mod add prompts` | `IPromptOverrideRegistry`, override leases, conflict diagnostics | `io.github.furroxide.topiaforge.prompts` |
 | UGC | `topiaforge mod add ugc` | `IUgcLiveSyncService`, sync and asset-override leases | `io.github.furroxide.topiaforge.ugc.livesync` |
+| Multiplayer | `topiaforge mod add multiplayer` | Sessions, participants, replicated state/objects, commands, prediction, presentation events | `io.github.furroxide.topiaforge.multiplayer` |
 
 ## Resolve a provider
 
@@ -55,10 +56,10 @@ deterministic local fallback.
 
 ## Worlds
 
-Worlds owns definitions, menu entries, scene transitions, and one authoritative `WorldSession`.
+Worlds owns definitions, menu entries, scene transitions, and one current `WorldSession`.
 Register worlds and gamemodes with returned `IWorldRegistration` handles; do not build a parallel
 scene coordinator. The `gamemode` and `world` templates demonstrate lifetime-owned registration
-and save-aware teardown.
+and session-aware teardown.
 
 ## Chronos
 
@@ -77,6 +78,15 @@ diagnostics. Keep the returned handle only when you need early release.
 UGC can consume watched local snapshots or a live Automerge document, then update a world preview.
 Sessions and asset overrides are owner-bound leases. Treat received documents as untrusted,
 bounded content and surface sync errors without destroying the last good running scene.
+
+## Multiplayer
+
+Multiplayer is a stable API preview with a generated contract, standalone loopback provider, and deterministic
+multi-peer test rig. The add command keeps the mod on Manifest V5, pins all three multiplayer components to the same
+release, and adds multiplayer metadata; removing
+the module leaves a valid standalone V5 manifest. Shared state is
+server-canonical with optional owner prediction. See [Multiplayer API preview](Multiplayer.md) and
+[Manifest V5](ManifestV5.md). Live transport is not part of TopiaForge 1.0.
 
 Advanced native interop is deliberately not a specialist safe module. Read
 [Advanced interop](UnityInterop.md) before adding that separate package.

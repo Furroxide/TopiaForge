@@ -6,7 +6,7 @@
       "goal": "Utility mods",
       "apiTypes": [
         "TopiaForge.Mods.IModConfigService, TopiaForge.Mods.Abstractions",
-        "TopiaForge.Mods.IModStorageService, TopiaForge.Mods.Abstractions",
+        "TopiaForge.Mods.ILocalModStorageService, TopiaForge.Mods.Abstractions",
         "TopiaForge.Mods.ILocalizationService, TopiaForge.Mods.Abstractions",
         "TopiaForge.Mods.ICommandService, TopiaForge.Mods.Abstractions",
         "TopiaForge.Mods.IDiagnosticsService, TopiaForge.Mods.Abstractions"
@@ -17,7 +17,7 @@
       "guide": "docs/CoreServices.md",
       "fakeTypes": [
         "TopiaForge.Mods.Testing.InMemoryModConfigService, TopiaForge.Mods.Testing",
-        "TopiaForge.Mods.Testing.InMemoryModStorageService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.InMemoryLocalModStorageService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeLocalizationService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeCommandService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeDiagnosticsService, TopiaForge.Mods.Testing"
@@ -55,7 +55,7 @@
       "id": "gameplay",
       "goal": "Gameplay abilities",
       "apiTypes": [
-        "TopiaForge.Mods.IPlayerService, TopiaForge.Mods.Abstractions",
+        "TopiaForge.Mods.ILocalPlayerService, TopiaForge.Mods.Abstractions",
         "TopiaForge.Mods.IEntityService, TopiaForge.Mods.Abstractions",
         "TopiaForge.Mods.IPhysicsService, TopiaForge.Mods.Abstractions",
         "TopiaForge.Mods.IGameTime, TopiaForge.Mods.Abstractions",
@@ -67,7 +67,7 @@
       ],
       "guide": "docs/Modding.md",
       "fakeTypes": [
-        "TopiaForge.Mods.Testing.FakePlayerService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeLocalPlayerService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeEntityService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakePhysicsService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.DeterministicGameTime, TopiaForge.Mods.Testing",

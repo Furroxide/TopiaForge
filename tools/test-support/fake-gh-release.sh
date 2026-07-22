@@ -24,7 +24,9 @@ if [[ ${1:-} == api ]]; then
       ;;
     POST:repos/*/releases)
       payload=$(cat)
-      jq -e '.draft == true and (.target_commitish | not)' <<<"$payload" >/dev/null
+      jq -e \
+        '.draft == true and (.prerelease | type == "boolean") and (.target_commitish | not)' \
+        <<<"$payload" >/dev/null
       jq '. + {id: 1}' <<<"$payload" >"$release.tmp"
       mv "$release.tmp" "$release"
       cat "$release"

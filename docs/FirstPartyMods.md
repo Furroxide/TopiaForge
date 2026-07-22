@@ -2,17 +2,18 @@
 
 All first-party mods use the same manifest/package contracts available to community authors. Provider implementations
 may use native APIs internally, while safe consumers receive only owner-bound contracts. Every release candidate
-validates and packs all twelve source mods; the developer-only UiGallery is tested but excluded from the eleven-mod
+validates and packs all thirteen source mods; the developer-only UiGallery is tested but excluded from the twelve-mod
 normal player payload.
 
-Every manifest is schema version 4, constrains Robotopia to `0.0.2227`, constrains the loader and SDK to
-`>=1.0.0 <2.0.0`, and currently uses `NOASSERTION` until the project owner supplies an approved SPDX license and
+Every manifest is schema version 5, constrains Robotopia to `0.0.2227`, constrains the loader and SDK to
+`>=1.0.0-rc.1 <2.0.0`, and currently uses `NOASSERTION` until the project owner supplies an approved SPDX license and
 matching files. That sentinel deliberately blocks publication.
 
 | Package | Role and dependencies | Candidate acceptance flow |
 | --- | --- | --- |
 | `io.github.furroxide.topiaforge.chronos` | Framework service for owner-tagged time leases | Exercise freeze, scale, input-driven time, bounded step, nested owners, a throwing subscriber, scene transition, and repeated disposal; confirm `timeScale` and `fixedDeltaTime` return to baseline. |
 | `io.github.furroxide.topiaforge.gravitygun` | Physics grab/pull/throw gameplay | Acquire and release valid props/robots, reject invalid/destroyed targets, charge and throw, change scene while holding, unload/reload, and confirm beam/model/input cleanup. |
+| `io.github.furroxide.topiaforge.multiplayer` | Stable multiplayer contract preview and standalone loopback provider | Load in standalone, exercise generated registration and loopback commands/state/presentation, verify one logical execution on a listen-host-shaped rig, and confirm clean teardown. Live transport is not part of 1.0. |
 | `io.github.furroxide.topiaforge.no-feedback-url` | Isolated shutdown-feedback Harmony patch | Verify the page is allowed on the first launch and suppressed later; confirm unsupported bindings fail only this mod and patch teardown is idempotent. |
 | `io.github.furroxide.topiaforge.perffixes` | Behavior-preserving allocation/CPU patches | Apply each patch on build 2227, compare behavior, profile collision/camera steady state, unload/reload, and verify an unsupported signature fails closed without contaminating other mods. |
 | `io.github.furroxide.topiaforge.performance` | Reversible HDRP/quality presets | Apply Off/Balanced/Performance/Potato and individual overrides, transition scenes, encounter missing HDRP features, then disable/unload; confirm every changed Robotopia setting is restored. |
