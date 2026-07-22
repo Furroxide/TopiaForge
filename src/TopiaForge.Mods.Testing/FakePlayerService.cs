@@ -4,13 +4,13 @@ using System.Collections.Generic;
 namespace TopiaForge.Mods.Testing
 {
     /// <summary>Deterministic player snapshot and reversible-control service.</summary>
-    public sealed class FakePlayerService : IPlayerService
+    public sealed class FakeLocalPlayerService : ILocalPlayerService
     {
         private readonly FakeModLifetime lifetime;
         private readonly List<FakePlayerControlLease> leases = new List<FakePlayerControlLease>();
 
         /// <summary>Creates a fake player service.</summary>
-        public FakePlayerService(FakeModLifetime lifetime)
+        public FakeLocalPlayerService(FakeModLifetime lifetime)
         {
             this.lifetime = lifetime ?? throw new ArgumentNullException(nameof(lifetime));
         }

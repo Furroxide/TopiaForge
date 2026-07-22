@@ -35,7 +35,7 @@ namespace TopiaForge.ModManager.Tests
             Assert(reported
                 && harness.Controller.TestingPhase == ZombiesPhase.WaitingForWorld
                 && harness.Controller.TestingIntegrity == config.PlayerIntegrity
-                && harness.Context.Player.ActiveControlLeaseCount == 0,
+                && harness.Context.LocalPlayer.ActiveControlLeaseCount == 0,
                 "a failed game-over surface reports diagnostics and recovers instead of trapping a frozen run");
         }
 
@@ -66,7 +66,7 @@ namespace TopiaForge.ModManager.Tests
             var config = FastConfig();
             using var harness = new Harness(config, withChronos: true);
             harness.Chronos!.IsAvailable = false;
-            harness.Context.Player.AcquireControlErrorCode = ModErrorCode.Unavailable;
+            harness.Context.LocalPlayer.AcquireControlErrorCode = ModErrorCode.Unavailable;
             harness.Advance(0.01f);
             harness.Controller.TestingSetWavePhase();
             harness.Controller.TestingDamagePlayer(config.PlayerIntegrity);
@@ -79,13 +79,13 @@ namespace TopiaForge.ModManager.Tests
             Assert(CountDiagnostics(harness.Context, "ZOMBIES_GAME_OVER_CONTROL_FAILED") == 1,
                 "background control retries should report one actionable diagnostic instead of one per frame");
 
-            harness.Context.Player.AcquireControlErrorCode = ModErrorCode.None;
+            harness.Context.LocalPlayer.AcquireControlErrorCode = ModErrorCode.None;
             for (var frame = 0; frame < 6; frame++)
             {
                 harness.Advance(0.1f);
             }
 
-            Assert(harness.Context.Player.ActiveControlLeaseCount == 1,
+            Assert(harness.Context.LocalPlayer.ActiveControlLeaseCount == 1,
                 "the bounded retry loop should recover through the player-control fallback when it becomes available");
         }
 
@@ -119,7 +119,7 @@ namespace TopiaForge.ModManager.Tests
             using (var shopHarness = new Harness(shopConfig))
             {
                 shopHarness.Advance(0.01f);
-                shopHarness.Context.Player.AcquireControlErrorCode = ModErrorCode.Unavailable;
+                shopHarness.Context.LocalPlayer.AcquireControlErrorCode = ModErrorCode.Unavailable;
                 shopHarness.Context.Input.SetValue("field-requisitions", 1f);
                 shopHarness.Advance(0.01f);
                 shopHarness.Context.Input.SetValue("field-requisitions", 0f);
@@ -130,9 +130,9 @@ namespace TopiaForge.ModManager.Tests
 
                 Assert(CountDiagnostics(shopHarness.Context, "ZOMBIES_REQUISITIONS_PAUSE_FAILED") == 1,
                     "requisitions pause failures should produce one diagnostic across bounded background retries");
-                shopHarness.Context.Player.AcquireControlErrorCode = ModErrorCode.None;
+                shopHarness.Context.LocalPlayer.AcquireControlErrorCode = ModErrorCode.None;
                 shopHarness.Advance(0.6f);
-                Assert(shopHarness.Context.Player.ActiveControlLeaseCount == 1,
+                Assert(shopHarness.Context.LocalPlayer.ActiveControlLeaseCount == 1,
                     "requisitions should reacquire its fallback control lease after the retry backoff");
             }
 
@@ -151,7 +151,7 @@ namespace TopiaForge.ModManager.Tests
                 AimAtProxy(
                     conversationHarness,
                     (FakeRobotAgent)conversationHarness.Robots.Agents.ActiveAgents[0]);
-                conversationHarness.Context.Player.AcquireControlErrorCode = ModErrorCode.Unavailable;
+                conversationHarness.Context.LocalPlayer.AcquireControlErrorCode = ModErrorCode.Unavailable;
                 conversationHarness.Context.Input.SetValue("jack-in", 1f);
                 conversationHarness.Advance(0.01f);
                 conversationHarness.Context.Input.SetValue("jack-in", 0f);
@@ -162,9 +162,9 @@ namespace TopiaForge.ModManager.Tests
 
                 Assert(CountDiagnostics(conversationHarness.Context, "ZOMBIES_JACK_IN_PAUSE_FAILED") == 1,
                     "JACK IN pause failures should produce one diagnostic across bounded background retries");
-                conversationHarness.Context.Player.AcquireControlErrorCode = ModErrorCode.None;
+                conversationHarness.Context.LocalPlayer.AcquireControlErrorCode = ModErrorCode.None;
                 conversationHarness.Advance(0.6f);
-                Assert(conversationHarness.Context.Player.ActiveControlLeaseCount == 1,
+                Assert(conversationHarness.Context.LocalPlayer.ActiveControlLeaseCount == 1,
                     "JACK IN should reacquire its fallback control lease after the retry backoff");
             }
         }

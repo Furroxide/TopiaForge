@@ -191,7 +191,7 @@ namespace TopiaForge.Mods.Testing
         }
 
         /// <summary>
-        /// Activates the earliest loaded scene with this name and emits a detail-only authoritative transition.
+        /// Activates the earliest loaded scene with this name and emits a detail-only world-replacement transition.
         /// Re-activating the active instance succeeds without emitting a duplicate transition.
         /// </summary>
         public bool Activate(string sceneName)

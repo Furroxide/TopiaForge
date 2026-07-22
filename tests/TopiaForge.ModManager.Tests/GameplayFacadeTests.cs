@@ -61,7 +61,7 @@ namespace TopiaForge.ModManager.Tests
             var lifetime = new FakeLifetime();
             var events = new FakeEvents(lifetime);
             var input = new FakeInputService();
-            var player = new FakePlayerService
+            var player = new FakeLocalPlayerService
             {
                 Snapshot = new PlayerSnapshot(Vec3.Zero, new Ray(Vec3.Zero, new Vec3(0f, 0f, 1f)))
             };
@@ -104,7 +104,7 @@ namespace TopiaForge.ModManager.Tests
             var contractTypes = new[]
             {
                 typeof(IInputService), typeof(IInputAction), typeof(InputActionDefinition), typeof(InputBinding),
-                typeof(IPlayerService), typeof(PlayerSnapshot), typeof(IPlayerControlLease), typeof(IEntity),
+                typeof(ILocalPlayerService), typeof(PlayerSnapshot), typeof(IPlayerControlLease), typeof(IEntity),
                 typeof(IEntityMotion), typeof(IEntityService), typeof(IPhysicsService), typeof(PhysicsHit),
                 typeof(Ray), typeof(IGameTime), typeof(GameTimeSample), typeof(IModScheduler)
             };
@@ -367,7 +367,7 @@ namespace TopiaForge.ModManager.Tests
             }
         }
 
-        private sealed class FakePlayerService : IPlayerService
+        private sealed class FakeLocalPlayerService : ILocalPlayerService
         {
             public PlayerSnapshot? Snapshot { get; set; }
 

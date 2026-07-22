@@ -8,6 +8,8 @@
     <Project Path="src/TopiaForge.Mods.Abstractions/TopiaForge.Mods.Abstractions.csproj" />
     <Project Path="src/TopiaForge.Mods.Analyzers/TopiaForge.Mods.Analyzers.csproj" />
     <Project Path="src/TopiaForge.Mods.Chronos/TopiaForge.Mods.Chronos.csproj" />
+    <Project Path="src/TopiaForge.Mods.Multiplayer/TopiaForge.Mods.Multiplayer.csproj" />
+    <Project Path="src/TopiaForge.Mods.Multiplayer.Generators/TopiaForge.Mods.Multiplayer.Generators.csproj" />
     <Project Path="src/TopiaForge.Mods.Interop.Unity/TopiaForge.Mods.Interop.Unity.csproj" />
     <Project Path="src/TopiaForge.Mods.Prompts/TopiaForge.Mods.Prompts.csproj" />
     <Project Path="src/TopiaForge.Mods.RobotKit/TopiaForge.Mods.RobotKit.csproj" />
@@ -18,6 +20,7 @@
   </Folder>
   <Folder Name="/mods/">
     <Project Path="mods/TopiaForge.Chronos/TopiaForge.Chronos.csproj" />
+    <Project Path="mods/TopiaForge.Multiplayer/TopiaForge.Multiplayer.csproj" />
     <Project Path="mods/TopiaForge.GravityGun/TopiaForge.GravityGun.csproj" />
     <Project Path="mods/TopiaForge.NoFeedbackUrl/TopiaForge.NoFeedbackUrl.csproj" />
     <Project Path="mods/TopiaForge.Performance/TopiaForge.Performance.csproj" />
@@ -34,11 +37,17 @@
     <Project Path="tests/TopiaForge.ManagedRefs.Tests/TopiaForge.ManagedRefs.Tests.csproj" />
     <Project Path="tests/TopiaForge.SdkAcceptanceMod/TopiaForge.SdkAcceptanceMod.csproj" />
     <Project Path="tests/TopiaForge.Mods.Analyzers.Tests/TopiaForge.Mods.Analyzers.Tests.csproj" />
+    <Project Path="tests/TopiaForge.Mods.Multiplayer.Generators.Tests/TopiaForge.Mods.Multiplayer.Generators.Tests.csproj" />
+    <Project Path="tests/TopiaForge.Mods.Multiplayer.Tests/TopiaForge.Mods.Multiplayer.Tests.csproj" />
     <Project Path="tests/TopiaForge.ModManager.Tests/TopiaForge.ModManager.Tests.csproj" />
     <Project Path="tests/TopiaForge.ModPackageValidator.Tests/TopiaForge.ModPackageValidator.Tests.csproj" />
     <Project Path="tests/TopiaForge.ModRuntime.Tests/TopiaForge.ModRuntime.Tests.csproj" />
     <Project Path="tests/TopiaForge.ValidTestMod.Api/TopiaForge.ValidTestMod.Api.csproj" />
     <Project Path="tests/TopiaForge.ValidTestMod/TopiaForge.ValidTestMod.csproj" />
+  </Folder>
+  <Folder Name="/samples/multiplayer/">
+    <Project Path="samples/multiplayer/TopiaForge.Multiplayer.CounterSample/TopiaForge.Multiplayer.CounterSample.csproj" />
+    <Project Path="samples/multiplayer/TopiaForge.Multiplayer.DroneSample/TopiaForge.Multiplayer.DroneSample.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj" />

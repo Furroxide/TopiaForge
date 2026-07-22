@@ -1,0 +1,24 @@
+hint=Sample_GameContract.Multiplayer.g.cs
+sourceSha256=05464c245c26018c352d7dd97736c59f666e99fc3e34b404fe0cae78f87b854b
+public global::TopiaForge.Mods.MultiplayerContractDescriptor MultiplayerContractDescriptor { get; } =
+new global::TopiaForge.Mods.MultiplayerContractDescriptor("sample.contract", 1, "0fd3f5bfa617d6ea847658d520fc76a75b5ff6ca727823d3bacdb9a7ffd35572",
+new string[] { "sample.contract/score" },
+new string[] { "sample.contract/increment" },
+new string[] { "sample.contract/robot" },
+new string[] { "sample.contract/spark" });
+public global::TopiaForge.Mods.IMultiplayerCodec<T> GetCodec<T>() where T : class
+var state_score = this.score.Bind(session, "sample.contract/score", __TopiaForgeCodec_Sample_ScoreState_41379f22.Instance);
+var command_Increment_0 = session.RegisterCommand(new global::TopiaForge.Mods.MultiplayerCommandDefinition<global::Sample.IncrementRequest, global::Sample.IncrementResponse>(__topiaforgeCommandType_Increment, __TopiaForgeCodec_Sample_IncrementRequest_ae2d5dcd.Instance, __TopiaForgeCodec_Sample_IncrementResponse_acefcde1.Instance, this.Increment, (global::TopiaForge.Mods.PredictionMode)1, 20, 512));
+var objectType_Robot_0 = session.RegisterObjectType(new global::TopiaForge.Mods.ReplicatedObjectTypeDefinition<global::Sample.ObjectState, global::Sample.ObjectInput>(__topiaforgeObjectType_Robot, __TopiaForgeCodec_Sample_ObjectState_3dfb9684.Instance, __TopiaForgeCodec_Sample_ObjectInput_21c6a6b2.Instance, ApplyObjectInput, (global::TopiaForge.Mods.PredictionMode)1, 12, 256));
+var presentation_Spark_0 = session.RegisterPresentation(new global::TopiaForge.Mods.PresentationEventDefinition<global::Sample.SparkEvent>(__topiaforgeEventType_Spark, session.Snapshot.HasPresentation ? (global::System.Action<global::Sample.SparkEvent>)this.OnSpark : null));
+public global::System.Threading.Tasks.Task<global::TopiaForge.Mods.MultiplayerCommandConfirmation<global::Sample.IncrementResponse>> SubmitIncrementAsync(global::Sample.IncrementRequest request, global::System.Threading.CancellationToken cancellationToken = default)
+public global::TopiaForge.Mods.OperationResult<global::TopiaForge.Mods.IReplicatedObject<global::Sample.ObjectState, global::Sample.ObjectInput>> SpawnRobotObject(global::Sample.ObjectState initialState, global::TopiaForge.Mods.ParticipantId? ownerId = null)
+public global::System.IDisposable SubscribeRobotObjects(global::System.Action<global::TopiaForge.Mods.ReplicatedObjectChange<global::Sample.ObjectState, global::Sample.ObjectInput>> handler)
+public global::TopiaForge.Mods.OperationResult<bool> EmitOnSpark(global::TopiaForge.Mods.MultiplayerCommandContext context, global::Sample.SparkEvent value, global::TopiaForge.Mods.MultiplayerAudience audience = global::TopiaForge.Mods.MultiplayerAudience.Everyone)
+public global::TopiaForge.Mods.OperationResult<bool> PublishOnSpark(global::Sample.SparkEvent value, global::TopiaForge.Mods.MultiplayerAudience audience = global::TopiaForge.Mods.MultiplayerAudience.Everyone)
+public int MaximumEncodedBytes => 4;
+public int MaximumEncodedBytes => 4;
+public int MaximumEncodedBytes => 4;
+public int MaximumEncodedBytes => 4;
+public int MaximumEncodedBytes => 93;
+public int MaximumEncodedBytes => 132;

@@ -128,7 +128,7 @@ namespace TopiaForge.Zombies
             }
 
             if (!robots.IsAvailable
-                || !context.Player.TryGetSnapshot(out var player) || player == null
+                || !context.LocalPlayer.TryGetSnapshot(out var player) || player == null
                 || !RefreshPlayerEntity())
             {
                 return false;

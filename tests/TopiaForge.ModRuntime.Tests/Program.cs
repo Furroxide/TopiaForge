@@ -75,15 +75,15 @@ namespace TopiaForge.ModRuntime.Tests
             Environment.SetEnvironmentVariable("TOPIAFORGE_RUNTIME_TEST_TRACE", tracePath);
             var manifest = new ModManifest
             {
-                SchemaVersion = 4,
+                SchemaVersion = 5,
                 Id = "tests." + name,
                 Name = "Runtime " + name,
                 Version = "1.0.0",
                 EntryAssembly = FixtureAssembly,
                 EntryType = entryType,
                 SupportedGameVersionRange = "*",
-                SupportedLoaderVersionRange = ">=1.0.0 <2.0.0",
-                SupportedSdkVersionRange = ">=1.0.0 <2.0.0"
+                SupportedLoaderVersionRange = ">=1.0.0-rc.1 <2.0.0",
+                SupportedSdkVersionRange = ">=1.0.0-rc.1 <2.0.0"
             };
             JsonUtil.SaveFile(
                 Path.Combine(packagePath, PackageInstallReceipt.FileName),

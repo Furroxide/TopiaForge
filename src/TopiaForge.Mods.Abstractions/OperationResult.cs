@@ -37,7 +37,13 @@ namespace TopiaForge.Mods
         External = 9,
 
         /// <summary>The operation failed for an unclassified reason.</summary>
-        Unknown = 10
+        Unknown = 10,
+
+        /// <summary>The current process does not have authority to perform the requested shared-world mutation.</summary>
+        NotAuthoritative = 11,
+
+        /// <summary>The authenticated caller exceeded a bounded operation rate.</summary>
+        RateLimited = 12
     }
 
     /// <summary>

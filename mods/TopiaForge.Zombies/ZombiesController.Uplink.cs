@@ -13,7 +13,7 @@ namespace TopiaForge.Zombies
                 return;
             }
 
-            if (!context.Player.TryGetSnapshot(out var player) || player == null)
+            if (!context.LocalPlayer.TryGetSnapshot(out var player) || player == null)
             {
                 context.Ui.ShowToast("JACK IN unavailable: player tracking is offline.", UiTone.Warning);
                 return;
@@ -164,7 +164,7 @@ namespace TopiaForge.Zombies
                     showFeedback);
             }
 
-            if (!context.Player.TryGetSnapshot(out var player) || player == null)
+            if (!context.LocalPlayer.TryGetSnapshot(out var player) || player == null)
             {
                 return BroadcastFailure(
                     ModErrorCode.Unavailable,
@@ -267,7 +267,7 @@ namespace TopiaForge.Zombies
 
         private void MoveEnemyAway(ZombieEnemy enemy)
         {
-            if (!context.Player.TryGetSnapshot(out var player) || player == null)
+            if (!context.LocalPlayer.TryGetSnapshot(out var player) || player == null)
             {
                 return;
             }

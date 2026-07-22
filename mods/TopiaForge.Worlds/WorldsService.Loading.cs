@@ -167,6 +167,19 @@ namespace TopiaForge.Worlds
 
             IDisposable? launchClaim = null;
 
+            var dispatchesSceneTransition = hasCustomContent || useOpenSandbox || hasCheckpoint || useSceneReplacement;
+            if (dispatchesSceneTransition)
+            {
+                var claimResult = sceneTransitions.Acquire(
+                    targetScene,
+                    request.Priority == WorldLoadPriority.Automatic,
+                    "world load");
+                if (!claimResult.TryGetValue(out launchClaim))
+                {
+                    return WorldLoadResult.Fail(claimResult.ErrorMessage, claimResult.ErrorCode);
+                }
+            }
+
             lastLaunchTime = Time.realtimeSinceStartup;
             try
             {
@@ -328,7 +341,7 @@ namespace TopiaForge.Worlds
             // The dedicated play scene is valid even when its reflective launch bridge was the part that failed.
             yield return GameLevelBridge.SandboxSceneName;
 
-            // Registered first-party and mod-provided worlds form the authoritative runtime catalog.
+            // Registered first-party and mod-provided worlds form the complete active runtime catalog.
             foreach (var world in worlds)
             {
                 yield return world.SceneName;

@@ -14,13 +14,12 @@ namespace TopiaForge.ModManager
 {
     internal sealed partial class ModContext
     {
-        private sealed class ModStorageService : IModStorageService
+        private sealed class LocalModStorageService : ILocalModStorageService
         {
-            private const string StoryFlagPrefix = "story-flags/";
             private readonly string root;
             private readonly object sync = new object();
 
-            public ModStorageService(string dataPath)
+            public LocalModStorageService(string dataPath)
             {
                 root = Path.Combine(dataPath, "storage");
             }
@@ -85,42 +84,6 @@ namespace TopiaForge.ModManager
                         return OperationResult<bool>.Failure(ModErrorCode.Io, exception.Message);
                     }
                 }
-            }
-
-            public bool TryGetStoryFlag(string key, out bool value)
-            {
-                var result = Load<StoryFlagValue>(StoryFlagPrefix + ValidateStoryFlagKey(key));
-                if (result.TryGetValue(out var stored))
-                {
-                    value = stored.Value;
-                    return true;
-                }
-
-                value = false;
-                return false;
-            }
-
-            public OperationResult<bool> SetStoryFlag(string key, bool value) =>
-                Save(StoryFlagPrefix + ValidateStoryFlagKey(key), new StoryFlagValue { Value = value });
-
-            public OperationResult<bool> DeleteStoryFlag(string key) =>
-                Delete(StoryFlagPrefix + ValidateStoryFlagKey(key));
-
-            private static string ValidateStoryFlagKey(string key)
-            {
-                if (string.IsNullOrWhiteSpace(key))
-                {
-                    throw new ArgumentException("A story flag key is required.", nameof(key));
-                }
-
-                return key;
-            }
-
-            [DataContract]
-            private sealed class StoryFlagValue
-            {
-                [DataMember(Name = "value")]
-                public bool Value { get; set; }
             }
 
             private string Resolve(string key)

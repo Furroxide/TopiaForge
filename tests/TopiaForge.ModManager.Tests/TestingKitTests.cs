@@ -50,16 +50,9 @@ namespace TopiaForge.ModManager.Tests
             Assert(context.Config.Load(definition).Value!.Value == 3,
                 "config migration is controlled with an explicit stored schema");
 
-            Assert(context.Storage.Save("progress", saved).Succeeded &&
-                   context.Storage.Load<ProbeConfig>("progress").Value!.Value == 9,
+            Assert(context.LocalStorage.Save("progress", saved).Succeeded &&
+                   context.LocalStorage.Load<ProbeConfig>("progress").Value!.Value == 9,
                 "typed storage round-trips values without touching disk");
-            Assert(context.Storage.SetStoryFlag("chapter-one/terminal-opened", false).Succeeded &&
-                   context.Storage.TryGetStoryFlag("chapter-one/terminal-opened", out var storyFlag) &&
-                   !storyFlag,
-                "mod-owned story flags preserve an explicitly stored false value");
-            Assert(context.Storage.DeleteStoryFlag("chapter-one/terminal-opened").Succeeded &&
-                   !context.Storage.TryGetStoryFlag("chapter-one/terminal-opened", out _),
-                "mod-owned story flags can be removed without exposing save paths");
             Assert(context.Files.WriteDataTextAsync("nested/save.txt", "ready").Result.Succeeded &&
                    context.Files.ReadDataTextAsync("nested/save.txt").Result.Value == "ready",
                 "content-based data files round-trip without revealing paths");
@@ -121,19 +114,19 @@ namespace TopiaForge.ModManager.Tests
             var snapshot = new PlayerSnapshot(
                 new Vec3(1f, 2f, 3f),
                 new Ray(Vec3.Zero, new Vec3(0f, 0f, 1f)));
-            context.Player.Snapshot = snapshot;
-            Assert(context.Player.TryGetSnapshot(out var observed) && ReferenceEquals(observed, snapshot),
+            context.LocalPlayer.Snapshot = snapshot;
+            Assert(context.LocalPlayer.TryGetSnapshot(out var observed) && ReferenceEquals(observed, snapshot),
                 "player snapshots are set explicitly");
-            context.Player.Health = new PlayerHealthSnapshot(75f, 100f);
-            Assert(context.Player.Damage(new PlayerDamageRequest(30f, "test.hazard")).Value!.Current == 45f &&
-                   context.Player.Heal(10f, "test.reward").Value!.Current == 55f,
+            context.LocalPlayer.Health = new PlayerHealthSnapshot(75f, 100f);
+            Assert(context.LocalPlayer.Damage(new PlayerDamageRequest(30f, "test.hazard")).Value!.Current == 45f &&
+                   context.LocalPlayer.Heal(10f, "test.reward").Value!.Current == 55f,
                 "player health damage and healing are deterministic and bounded");
             var trackedBeforeControl = context.Lifetime.TrackedResourceCount;
-            var control = context.Player.AcquireControl("testing");
-            Assert(control.Succeeded && context.Player.ActiveControlLeaseCount == 1,
+            var control = context.LocalPlayer.AcquireControl("testing");
+            Assert(control.Succeeded && context.LocalPlayer.ActiveControlLeaseCount == 1,
                 "player-control leases are observable");
             control.Value!.Dispose();
-            Assert(context.Player.ActiveControlLeaseCount == 0
+            Assert(context.LocalPlayer.ActiveControlLeaseCount == 0
                 && context.Lifetime.TrackedResourceCount == trackedBeforeControl,
                 "disposing player control also unregisters its lifetime ownership entry immediately");
 

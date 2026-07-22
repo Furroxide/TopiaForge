@@ -115,7 +115,7 @@ namespace TopiaForge.RobotKit
 
         private void OnSceneLoaded(SceneLoadEvent scene)
         {
-            if (!scene.IsAuthoritativeReplacement)
+            if (!scene.IsWorldReplacement)
             {
                 return;
             }

@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace TopiaForge.ModManager
 {
-    internal sealed class OwnerPlayerService : IPlayerService
+    internal sealed class OwnerPlayerService : ILocalPlayerService
     {
         private readonly IModLifetime lifetime;
         private readonly UnityPlayerBackend backend;

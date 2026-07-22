@@ -146,43 +146,43 @@ namespace TopiaForge.ModRuntime.Tests
             runtime.Load(new[] { fixture.Package });
 
             Assert(runtime.DispatchInitialScene(71, "Menu", isValid: true),
-                "initial active-scene replay should be authoritative");
+                "initial active-scene replay should be a world replacement");
             Assert(runtime.DispatchSceneLoaded(
                     72,
                     "Lighting",
                     isValid: true,
                     SceneLoadMode.Additive,
                     isActive: false),
-                "an ordinary additive scene should still be delivered with non-authoritative metadata");
+                "an ordinary additive scene should still be delivered without world-replacement metadata");
             Assert(runtime.DispatchSceneActivated(72, "Lighting", isValid: true, SceneLoadMode.Additive),
-                "activating a previously background additive scene should publish an authoritative detail event");
+                "activating a previously background additive scene should publish a world-replacement detail event");
             Assert(runtime.DispatchSceneLoaded(
                     73,
                     "ActivatedArena",
                     isValid: true,
                     SceneLoadMode.Additive,
                     isActive: true),
-                "an activated additive scene should be delivered as authoritative");
+                "an activated additive scene should be delivered as a world replacement");
             Assert(runtime.DispatchSceneLoaded(
                     74,
                     "Replacement",
                     isValid: true,
                     SceneLoadMode.Single,
                     isActive: false),
-                "a single load should be authoritative even before active-scene state catches up");
+                "a single load should replace the world even before active-scene state catches up");
             runtime.UnloadAll();
 
             AssertTrace(
                 fixture.TracePath,
                 "scene-legacy:Menu",
-                "scene-detail:Menu:Single:active:authoritative",
+                "scene-detail:Menu:Single:active:world replacement",
                 "scene-legacy:Lighting",
                 "scene-detail:Lighting:Additive:background:additive",
-                "scene-detail:Lighting:Additive:active:authoritative",
+                "scene-detail:Lighting:Additive:active:world replacement",
                 "scene-legacy:ActivatedArena",
-                "scene-detail:ActivatedArena:Additive:active:authoritative",
+                "scene-detail:ActivatedArena:Additive:active:world replacement",
                 "scene-legacy:Replacement",
-                "scene-detail:Replacement:Single:background:authoritative",
+                "scene-detail:Replacement:Single:background:world replacement",
                 "unload");
         }
 

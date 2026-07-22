@@ -150,7 +150,7 @@ namespace TopiaForge.Mods
     public static class ModEventExtensions
     {
         /// <summary>
-        /// Subscribes to detailed scene transition notifications. Older event hosts fall back to an authoritative single
+        /// Subscribes to detailed scene transition notifications. Older event hosts fall back to a world-replacing single
         /// load, matching the only scene-load semantics their string-only contract could represent.
         /// </summary>
         /// <param name="events">The owner-scoped mod event source.</param>
@@ -310,8 +310,11 @@ namespace TopiaForge.Mods
             CancellationToken cancellationToken = default);
     }
 
-    /// <summary>Provides typed JSON key-value persistence scoped to the current mod.</summary>
-    public interface IModStorageService
+    /// <summary>
+    /// Provides installation-local typed JSON key-value persistence scoped to the current mod. Values are not
+    /// save-scoped, synchronized, or replicated between processes.
+    /// </summary>
+    public interface ILocalModStorageService
     {
         /// <summary>Gets whether a key currently exists.</summary>
         bool Contains(string key);
@@ -324,14 +327,5 @@ namespace TopiaForge.Mods
 
         /// <summary>Deletes a key when it exists.</summary>
         OperationResult<bool> Delete(string key);
-
-        /// <summary>Tries to read a mod-owned story flag from the current save scope.</summary>
-        bool TryGetStoryFlag(string key, out bool value);
-
-        /// <summary>Creates or updates a mod-owned story flag in the current save scope.</summary>
-        OperationResult<bool> SetStoryFlag(string key, bool value);
-
-        /// <summary>Deletes a mod-owned story flag when it exists.</summary>
-        OperationResult<bool> DeleteStoryFlag(string key);
     }
 }

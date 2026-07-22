@@ -1,0 +1,35 @@
+{
+  "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+  "schemaVersion": 5,
+  "name": "io.github.furroxide.topiaforge.multiplayer",
+  "displayName": "TopiaForge Multiplayer",
+  "version": "1.0.0-rc.1",
+  "author": {
+    "name": "TopiaForge"
+  },
+  "description": "Stable multiplayer API preview and standalone loopback provider. Live networking is not included yet.",
+  "entryAssembly": "TopiaForge.Multiplayer.dll",
+  "entryType": "TopiaForge.Multiplayer.MultiplayerMod",
+  "dependencies": {},
+  "supportedGameVersionRange": "0.0.2227",
+  "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "category": "Framework",
+  "tags": [
+    "multiplayer",
+    "framework",
+    "sdk",
+    "loopback"
+  ],
+  "license": "NOASSERTION",
+  "capabilities": [],
+  "multiplayer": {
+    "mode": "session",
+    "presence": "required",
+    "protocol": {
+      "version": "1.0.0",
+      "peerVersionRange": ">=1.0.0 <2.0.0"
+    },
+    "synchronizedFiles": []
+  }
+}

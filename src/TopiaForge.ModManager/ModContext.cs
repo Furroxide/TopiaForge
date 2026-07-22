@@ -8,11 +8,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.ModManager.Core;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 using TopiaForge.Mods.Interop.Unity;
 
 namespace TopiaForge.ModManager
 {
-    internal sealed partial class ModContext : IModContext, IUnityInteropContext
+    internal sealed partial class ModContext : IModContext, IUnityInteropContext, IInternalSceneTransitionContext
     {
         private readonly OwnerModLifetime ownerLifetime;
         private readonly ModEvents modEvents;
@@ -57,7 +58,7 @@ namespace TopiaForge.ModManager
             Directory.CreateDirectory(dataPath);
             Files = new ModFiles(packagePath, dataPath, Lifetime);
             Config = new ModConfigService(configPath, logger);
-            Storage = new ModStorageService(dataPath);
+            LocalStorage = new LocalModStorageService(dataPath);
 
             var gameplay = gameplayFactory?.Create(
                     Identity.Id,
@@ -69,7 +70,7 @@ namespace TopiaForge.ModManager
             Input = gameplay.Input;
             Time = gameplay.Time;
             Scheduler = gameplay.Scheduler;
-            Player = gameplay.Player;
+            LocalPlayer = gameplay.LocalPlayer;
             Scenes = gameplay.Scenes;
             Entities = gameplay.Entities;
             Physics = gameplay.Physics;
@@ -78,6 +79,7 @@ namespace TopiaForge.ModManager
             Assets = gameplay.Assets;
             Audio = gameplay.Audio;
             Ui = gameplay.Ui;
+            SceneTransitions = gameplay.SceneTransitions;
             unityInterop = manifest.Capabilities.Any(capability => string.Equals(
                 capability,
                 "unsafe-native",
@@ -120,11 +122,11 @@ namespace TopiaForge.ModManager
         public IModEvents Events { get; }
         public IModFiles Files { get; }
         public IModConfigService Config { get; }
-        public IModStorageService Storage { get; }
+        public ILocalModStorageService LocalStorage { get; }
         public IInputService Input { get; }
         public IGameTime Time { get; }
         public IModScheduler Scheduler { get; }
-        public IPlayerService Player { get; }
+        public ILocalPlayerService LocalPlayer { get; }
         public ISceneService Scenes { get; }
         public IEntityService Entities { get; }
         public IPhysicsService Physics { get; }
@@ -137,6 +139,7 @@ namespace TopiaForge.ModManager
         public ICommandService Commands { get; }
         public IDiagnosticsService Diagnostics { get; }
         public IExtensionService Extensions { get; }
+        public IInternalSceneTransitionService SceneTransitions { get; }
 
         IUnityInteropService IUnityInteropContext.UnityInterop => unityInterop
             ?? throw new InvalidOperationException(

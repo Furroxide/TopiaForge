@@ -41,7 +41,7 @@
     {
       "id": "authoring.config-storage-localization-commands",
       "probeMethod": "RunAuthoringChecks",
-      "description": "Validated config migration, scoped storage/story flags, localization, commands, and diagnostics survive a save-aware reload."
+      "description": "Validated config migration, installation-local typed storage, localization, commands, and diagnostics survive a reload."
     },
     {
       "id": "ui.accessibility-and-focus",
@@ -57,6 +57,11 @@
       "id": "robots.objectives-dialogue-voice",
       "probeMethod": "TryPassRobotAcceptance",
       "description": "Robot spawn/body/health/movement, targets, objectives, dialogue, brain query, voice input, and custom interaction run without consumer native APIs."
+    },
+    {
+      "id": "integration.multiplayer-loopback",
+      "probeMethod": "RunMultiplayerLoopbackChecks",
+      "description": "The declared multiplayer module resolves through the extension boundary, binds generated state/command/event codecs, and executes them canonically through a ready interactive client-plus-server standalone loopback session."
     },
     {
       "id": "integration.provider-scope",

@@ -137,7 +137,7 @@ namespace TopiaForge.ModManager.Tests
                 && harness.Controller.TestingUplinkCharges == initialCharges - 1,
                 "failed live composition should consume one charge and take the deterministic conversion fallback");
             Assert(harness.Robots.Conversations.ActiveConversationCount == 0
-                && harness.Context.Player.ActiveControlLeaseCount == 0
+                && harness.Context.LocalPlayer.ActiveControlLeaseCount == 0
                 && harness.Chronos!.ActiveLeaseCount == 0
                 && harness.Context.Ui.Surfaces.Count == 1,
                 "failed live composition must release its conversation, control, time, and window ownership");
@@ -173,7 +173,7 @@ namespace TopiaForge.ModManager.Tests
             harness.Context.Input.SetValue("jack-in", 0f);
             var channel = FindSurface(harness.Context, "zombies-jack-in");
             Assert(harness.Robots.Conversations.ActiveConversationCount == 1
-                && harness.Context.Player.ActiveControlLeaseCount == 1
+                && harness.Context.LocalPlayer.ActiveControlLeaseCount == 1
                 && harness.Controller.TestingIntegrity == integrityBeforeOpen
                 && !harness.Controller.TestingCharging,
                 "live JACK IN blocks the final horde tick and clears any charge whose release may be consumed by UI focus");
@@ -184,7 +184,7 @@ namespace TopiaForge.ModManager.Tests
 
             Assert(harness.Controller.TestingEnemies[0].IsAlly
                 && harness.Robots.Conversations.ActiveConversationCount == 0
-                && harness.Context.Player.ActiveControlLeaseCount == 0,
+                && harness.Context.LocalPlayer.ActiveControlLeaseCount == 0,
                 "a brain CONVERT decision still passes the engine disposition gate and releases every channel lease");
         }
 
@@ -223,7 +223,7 @@ namespace TopiaForge.ModManager.Tests
 
             Assert(harness.Controller.TestingEnemies[0].State == HijackState.Hostile
                 && harness.Robots.Conversations.ActiveConversationCount == 0
-                && harness.Context.Player.ActiveControlLeaseCount == 0
+                && harness.Context.LocalPlayer.ActiveControlLeaseCount == 0
                 && agent.IsMoving && agent.MovementTarget != null,
                 "window X or Escape dismissal refuses without deterministic fallback and resumes the stopped horde");
         }

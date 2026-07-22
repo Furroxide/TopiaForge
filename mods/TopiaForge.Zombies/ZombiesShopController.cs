@@ -165,7 +165,7 @@ namespace TopiaForge.Zombies
                 chronosError = result.ErrorMessage;
             }
 
-            var fallback = context.Player.AcquireControl("Zombies requisitions");
+            var fallback = context.LocalPlayer.AcquireControl("Zombies requisitions");
             if (fallback.TryGetValue(out var playerControl))
             {
                 control = playerControl;
