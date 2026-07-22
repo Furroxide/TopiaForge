@@ -1,7 +1,8 @@
 part of 'topiaforge.dart';
 
-/// `topiaforge mod ...` — manifest management after creation. Every schema-v4 field of `topiaforge.mod.json` can
-/// be shown and edited from the terminal; edits are validated on write (same rules as `check package`).
+/// `topiaforge mod ...` — manifest management after creation. Supported fields
+/// can be shown and edited from the terminal; edits are validated on write
+/// using the same version-dispatched rules as `check package`.
 extension _TopiaForgeModCommands on _TopiaForgeCli {
   static const _scalarFields = {
     'version': 'version',
@@ -44,6 +45,8 @@ extension _TopiaForgeModCommands on _TopiaForgeCli {
         return _modEditList(args.skip(1).toList(), add: true);
       case 'remove':
         return _modEditList(args.skip(1).toList(), add: false);
+      case 'sync':
+        return _modSync(args.skip(1).toList());
       default:
         stdout.writeln('Usage:');
         stdout.writeln('  topiaforge mod show [--project path]');
@@ -64,136 +67,13 @@ extension _TopiaForgeModCommands on _TopiaForgeCli {
           '  topiaforge mod add|remove gamemode <id:Name[:description]> [--project path]',
         );
         stdout.writeln(
-          '  topiaforge mod add|remove <chronos|prompts|robotkit|ugc|worlds|interop-unity> [--project path]',
+          '  topiaforge mod add|remove <chronos|prompts|robotkit|ugc|worlds|multiplayer|interop-unity> [--project path]',
+        );
+        stdout.writeln(
+          '  topiaforge mod sync multiplayer [--project path] [--configuration name]',
         );
         return sub == null ? 0 : 2;
     }
-  }
-
-  Future<int> _migrateManifest(List<String> args) async {
-    final positional = args.where((arg) => !arg.startsWith('--')).toList();
-    final projectPath =
-        _option(args, '--project') ??
-        positional.firstOrNull ??
-        Directory.current.path;
-    final file = File(p.join(projectPath, 'topiaforge.mod.json'));
-    if (!file.existsSync()) {
-      throw StateError('topiaforge.mod.json was not found in $projectPath.');
-    }
-
-    final map = readBoundedJsonObjectSync(
-      file,
-      maxBytes: CliFileLimits.manifest,
-    );
-    final schemaVersion = (map['schemaVersion'] as num?)?.toInt();
-    if (schemaVersion == 4) {
-      stdout.writeln('topiaforge.mod.json already uses schema V4.');
-      return 0;
-    }
-    if (schemaVersion != 3) {
-      throw StateError(
-        'Only schema V3 manifests can be migrated; found ${schemaVersion ?? 'no schemaVersion'}.',
-      );
-    }
-
-    final required = <String, Object?>{};
-    final optional = <String, Object?>{};
-
-    void readDependencyMap(Object? value, Map<String, Object?> destination) {
-      if (value is! Map) return;
-      for (final entry in value.entries) {
-        destination[entry.key.toString()] = _migrateV3DependencyRange(
-          entry.value?.toString() ?? '*',
-        );
-      }
-    }
-
-    void readDependencyList(
-      Object? value,
-      Map<String, Object?> defaultDestination,
-    ) {
-      if (value is! List) return;
-      for (final raw in value.whereType<Map>()) {
-        final item = raw.map((key, value) => MapEntry(key.toString(), value));
-        final id = item['id']?.toString() ?? '';
-        if (id.isEmpty) continue;
-        final range =
-            item['versionRange']?.toString() ??
-            item['version']?.toString() ??
-            '*';
-        final destination = item['optional'] == true
-            ? optional
-            : defaultDestination;
-        destination[id] = _migrateV3DependencyRange(range);
-      }
-    }
-
-    readDependencyMap(map['vpmDependencies'], required);
-    if (map['dependencies'] is Map) {
-      readDependencyMap(map['dependencies'], required);
-    } else {
-      readDependencyList(map['dependencies'], required);
-    }
-    if (map['optionalDependencies'] is Map) {
-      readDependencyMap(map['optionalDependencies'], optional);
-    } else {
-      readDependencyList(map['optionalDependencies'], optional);
-    }
-    for (final id in required.keys) {
-      optional.remove(id);
-    }
-
-    final legacyPermissions = _jsonStringList(map['permissions']);
-    map
-      ..remove('vpmDependencies')
-      ..remove('permissions')
-      ..['dependencies'] = required
-      ..['schemaVersion'] = 4
-      ..[r'$schema'] = ModManifest.canonicalSchemaUrl;
-    if (optional.isEmpty) {
-      map.remove('optionalDependencies');
-    } else {
-      map['optionalDependencies'] = optional;
-    }
-
-    final capabilities = <String>{
-      ..._jsonStringList(map['capabilities']),
-      ...legacyPermissions,
-    };
-    if (capabilities.isNotEmpty) {
-      map['capabilities'] = capabilities.toList()..sort();
-    }
-
-    final conflicts = _jsonMapList(map['conflicts']);
-    for (final conflict in conflicts) {
-      if (!conflict.containsKey('versionRange') &&
-          conflict['version'] != null) {
-        conflict['versionRange'] = conflict.remove('version');
-      }
-    }
-    if (conflicts.isNotEmpty) map['conflicts'] = conflicts;
-
-    for (final field in const [
-      'supportedGameVersionRange',
-      'supportedLoaderVersionRange',
-      'supportedSdkVersionRange',
-    ]) {
-      map.putIfAbsent(field, () => '*');
-    }
-
-    final migrated = ModManifest.fromJson(map);
-    final issues = migrated.validate();
-    if (issues.any((issue) => issue.isBlocking)) {
-      stderr.writeln('The V3 manifest could not be migrated automatically:');
-      _printIssues(issues);
-      return 1;
-    }
-    await developerRepository.updateModManifest(projectPath, migrated);
-    stdout.writeln('Migrated topiaforge.mod.json from schema V3 to V4.');
-    stdout.writeln(
-      'Review any compatibility range defaulted to * before publishing.',
-    );
-    return 0;
   }
 
   /// Increments the manifest version through the same validated-write path
@@ -438,7 +318,7 @@ extension _TopiaForgeModCommands on _TopiaForgeCli {
       return range.isEmpty ? '*' : range;
     } on FormatException {
       // V3's vpmDependencies name encouraged the VPM caret/tilde syntax.
-      // Canonical V4 ranges use the framework's explicit comparator form.
+      // Canonical V5 ranges use the framework's explicit comparator form.
       if (range.length < 2 || (range[0] != '^' && range[0] != '~')) {
         return range;
       }
@@ -483,11 +363,17 @@ extension _TopiaForgeModCommands on _TopiaForgeCli {
 final class _SdkModule {
   const _SdkModule({
     required this.packageId,
+    this.additionalPackageIds = const <String>[],
     this.runtimeDependency = '',
+    this.exactRuntimeDependency = false,
     this.capability = '',
+    this.managesMultiplayerManifest = false,
   });
 
   final String packageId;
+  final List<String> additionalPackageIds;
   final String runtimeDependency;
+  final bool exactRuntimeDependency;
   final String capability;
+  final bool managesMultiplayerManifest;
 }

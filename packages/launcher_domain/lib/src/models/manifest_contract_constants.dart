@@ -34,6 +34,7 @@ const _knownManifestJsonKeys = <String>{
   'builtWith',
   'worldGamemodes',
   'apiAssemblies',
+  'multiplayer',
 };
 
 const _unsupportedManifestFields = <String>{

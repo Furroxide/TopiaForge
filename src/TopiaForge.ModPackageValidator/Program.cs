@@ -41,6 +41,11 @@ internal static class Program
             var errors = ManifestValidator.Validate(manifest).ToList();
             if (errors.Count == 0)
             {
+                errors.AddRange(ManifestContentValidator.Validate(packageRoot, manifest));
+            }
+
+            if (errors.Count == 0)
+            {
                 errors.AddRange(ManagedModAssemblyValidator.Validate(packageRoot, manifest));
             }
 
