@@ -188,7 +188,7 @@ final class ReleaseSdkPayloadWriter {
         _SdkProject(
           name: name,
           projectFile: project,
-          isAnalyzer: name == 'TopiaForge.Mods.Analyzers',
+          isAnalyzer: topiaForgeAnalyzerPackageIds.contains(name),
           targetFramework: targetFramework,
         ),
       );
@@ -259,7 +259,7 @@ final class ReleaseSdkPayloadWriter {
       final include = match.group(1)!.replaceAll('\\', '/');
       final name = p.basenameWithoutExtension(include);
       if (name.startsWith('TopiaForge.Mods.') &&
-          name != 'TopiaForge.Mods.Analyzers') {
+          !topiaForgeAnalyzerPackageIds.contains(name)) {
         dependencies.add(name);
       }
     }

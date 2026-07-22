@@ -14,6 +14,7 @@ part 'topiaforge_cli_ugc_world_cases.dart';
 part 'topiaforge_cli_world_contract_cases.dart';
 part 'topiaforge_cli_registry_cases.dart';
 part 'topiaforge_cli_scaffold_cases.dart';
+part 'topiaforge_cli_multiplayer_cases.dart';
 
 void main() {
   late _CliTestHarness harness;
@@ -33,4 +34,5 @@ void main() {
   _worldContractCliTests(() => harness);
   _registryCliTests(() => harness);
   _scaffoldCliTests(() => harness);
+  _multiplayerCliTests(() => harness);
 }

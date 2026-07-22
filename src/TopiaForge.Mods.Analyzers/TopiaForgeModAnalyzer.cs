@@ -80,6 +80,7 @@ namespace TopiaForge.Mods.Analyzers
             new Dictionary<string, ModuleRequirement>(StringComparer.Ordinal)
             {
                 ["TopiaForge.Mods.Chronos"] = new ModuleRequirement("Chronos", "chronos", "io.github.furroxide.topiaforge.chronos"),
+                ["TopiaForge.Mods.Multiplayer"] = new ModuleRequirement("Multiplayer", "multiplayer", "io.github.furroxide.topiaforge.multiplayer"),
                 ["TopiaForge.Mods.Prompts"] = new ModuleRequirement("Prompts", "prompts", "io.github.furroxide.topiaforge.prompts"),
                 ["TopiaForge.Mods.RobotKit"] = new ModuleRequirement("RobotKit", "robotkit", "io.github.furroxide.topiaforge.robotkit"),
                 ["TopiaForge.Mods.Worlds"] = new ModuleRequirement("Worlds", "worlds", "io.github.furroxide.topiaforge.worlds"),
@@ -91,7 +92,7 @@ namespace TopiaForge.Mods.Analyzers
             {
                 ["ITopiaForgeMod"] = "Derive from TopiaForgeMod and override protected OnLoad/OnUnload",
                 ["IModServiceRegistry"] = "Publish or consume a typed provider through Context.Extensions",
-                ["ModPaths"] = "Use Context.Files, Config, or Storage; filesystem paths are intentionally hidden",
+                ["ModPaths"] = "Use Context.Files, Config, or LocalStorage; filesystem paths are intentionally hidden",
                 ["IModFileService"] = "Use the content-based Context.Files API",
                 ["LoadConfig"] = "Define ConfigDefinition<T> and call Context.Config.Load(definition)",
                 ["SaveConfig"] = "Call Context.Config.Save(definition, value)",

@@ -108,10 +108,13 @@ extension _HelpCommand on _TopiaForgeCli {
       '  topiaforge mod add|remove <module>     Couple a V1 module PackageReference with its runtime dependency.',
     );
     stdout.writeln(
+      '  topiaforge mod sync multiplayer        Refresh generated wire IDs and schema hashes in the checked-in lock.',
+    );
+    stdout.writeln(
       '  topiaforge mod bump [major|minor|patch]  Increment the manifest version.',
     );
     stdout.writeln(
-      '  topiaforge migrate-manifest            Convert a schema-V3 manifest to V4.',
+      '  topiaforge migrate-manifest            Convert a schema-V3 or retired V4 manifest to V5.',
     );
     stdout.writeln(
       '  topiaforge check project [path]        Validate a developer project.',

@@ -3,7 +3,13 @@ part of '../local_developer_repository.dart';
 /// Native Dart port of the retired tools/pack-mod.ps1 so packing works the
 /// same on every platform (and needs no PowerShell).
 extension LocalDeveloperPackOperations on LocalDeveloperRepository {
-  static const _contentDirs = ['ref', 'assets', 'AssetBundles', 'Resources'];
+  static const _contentDirs = [
+    'ref',
+    'assets',
+    'AssetBundles',
+    'Resources',
+    'Content',
+  ];
   static const _buildOutputContentDirs = ['third_party'];
   static const _excludedTreeDirs = ['bin', 'obj', 'dist', '.topiaforge'];
   static const _loaderOwnedSdkAssemblyNames = {
@@ -11,6 +17,7 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
     'topiaforge.mods.analyzers',
     'topiaforge.mods.chronos',
     'topiaforge.mods.interop.unity',
+    'topiaforge.mods.multiplayer',
     'topiaforge.mods.prompts',
     'topiaforge.mods.robotkit',
     'topiaforge.mods.testing',
@@ -75,8 +82,32 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
     }
 
     final archive = Archive();
+    final declaredSynchronizedFiles =
+        manifestContract.multiplayer?.synchronizedFiles ?? const <String>[];
+    final synchronizesContractLock =
+        manifestContract.multiplayer?.mode == ModMultiplayerMode.session;
+    final synchronizedFiles = <String>[...declaredSynchronizedFiles];
+    if (synchronizesContractLock) {
+      final declaredLockIndex = synchronizedFiles.indexWhere(
+        (path) =>
+            path.toLowerCase() == _multiplayerContractLockName.toLowerCase(),
+      );
+      if (declaredLockIndex >= 0) {
+        synchronizedFiles[declaredLockIndex] = _multiplayerContractLockName;
+      } else {
+        if (synchronizedFiles.length >= 256) {
+          throw StateError(
+            'Session mods may declare at most 255 synchronized files because '
+            '$_multiplayerContractLockName is synchronized automatically.',
+          );
+        }
+        synchronizedFiles.add(_multiplayerContractLockName);
+      }
+    }
+    final synchronizedFileSet = synchronizedFiles.toSet();
     final added = <String>{};
     final exactAdded = <String>{};
+    final packedFileHashes = <String, String>{};
     var expandedBytes = 0;
     void addBytes(String archivePath, List<int> bytes) {
       final name = _portableDeveloperArchivePath(
@@ -103,6 +134,9 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
         );
       }
       expandedBytes += length;
+      if (synchronizedFileSet.contains(name)) {
+        packedFileHashes[name] = sha256.convert(bytes).toString();
+      }
       archive.addFile(ArchiveFile.bytes(name, bytes));
     }
 
@@ -127,25 +161,47 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
             .where((file) => file.path.toLowerCase().endsWith('.csproj'))
             .toList()
           ..sort((a, b) => a.path.compareTo(b.path));
-    final csproj = csprojCandidates.firstOrNull;
-    if (csproj != null) {
-      await _buildAndStage(
-        root,
-        csproj,
-        manifest,
-        configuration,
-        addFile,
-        exactAdded.contains,
+    if (manifestContract.multiplayerIsPresent && csprojCandidates.isEmpty) {
+      throw StateError(
+        'Multiplayer packaging requires one root C# project so TopiaForge can '
+        'rebuild and verify generated contract descriptors. Source-less or '
+        'precompiled-only multiplayer packages are not supported.',
       );
-    } else {
+    }
+    if (csprojCandidates.length > 1) {
+      throw StateError(
+        'Could not choose the entry C# project: found '
+        '${csprojCandidates.length} projects in ${root.path}.',
+      );
+    }
+    final csproj = csprojCandidates.firstOrNull;
+    final generatedContracts = csproj != null
+        ? await _buildAndStage(
+            root,
+            csproj,
+            manifest,
+            configuration,
+            addFile,
+            exactAdded.contains,
+            emitContractMetadata: manifestContract.multiplayerIsPresent,
+          )
+        : const <_GeneratedMultiplayerContract>[];
+    if (csproj == null) {
       _stageProjectTree(root, addFile);
     }
 
-    final packedManifest = _manifestWithBuildMetadata(root, manifest);
-    addBytes(
-      'topiaforge.mod.json',
-      utf8.encode('${_prettyJson(packedManifest.toJson())}\n'),
+    _validateMultiplayerContractLock(
+      root,
+      manifestContract,
+      generatedContracts,
     );
+    if (manifestContract.multiplayerIsPresent &&
+        !exactAdded.contains(_multiplayerContractLockName)) {
+      addFile(
+        _multiplayerContractLockName,
+        File(p.join(root.path, _multiplayerContractLockName)),
+      );
+    }
 
     // Ship the mod's game-binding manifest (from the centralized repo-root
     // bindings/ dir) inside its package, so a game-compatibility check can
@@ -157,6 +213,37 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
     if (bindingFile.existsSync()) {
       addFile(p.join('bindings', '$modName.gamebindings.json'), bindingFile);
     }
+
+    final synchronizedHashes = <String, String>{};
+    for (final path in synchronizedFiles) {
+      final digest = packedFileHashes[path];
+      if (digest == null) {
+        throw StateError(
+          'multiplayer.synchronizedFiles entry was not included in the package: $path',
+        );
+      }
+      synchronizedHashes[path] = digest;
+    }
+    final packedManifest = _manifestWithBuildMetadata(
+      root,
+      manifest,
+      synchronizedHashes: synchronizedHashes,
+      synchronizedFiles: synchronizesContractLock ? synchronizedFiles : null,
+    );
+    final packedManifestIssues = packedManifest
+        .validate()
+        .where((issue) => issue.isBlocking)
+        .toList(growable: false);
+    if (packedManifestIssues.isNotEmpty) {
+      throw StateError(
+        'The packed manifest is invalid after deriving package metadata: '
+        '${packedManifestIssues.map((issue) => issue.message).join(' ')}',
+      );
+    }
+    addBytes(
+      'topiaforge.mod.json',
+      utf8.encode('${_prettyJson(packedManifest.toJson())}\n'),
+    );
 
     final output = Directory(
       outputDir.isEmpty ? p.join(root.path, 'dist') : outputDir,
@@ -185,41 +272,22 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
     return ZipEncoder().encode(ordered, modified: _reproducibleZipTimestamp);
   }
 
-  Future<void> _buildAndStage(
+  Future<List<_GeneratedMultiplayerContract>> _buildAndStage(
     Directory root,
     File csproj,
     Map<String, Object?> manifest,
     String configuration,
     void Function(String archivePath, File source) addFile,
-    bool Function(String archivePath) hasArchivePath,
-  ) async {
-    final buildRoot = File(p.join(root.path, 'global.json')).existsSync()
-        ? root
-        : _repositoryRoot;
-    final dotnet = await _dotnetSdkResolver(buildRoot);
-    final build = await runBoundedProcess(
-      dotnet.executable,
-      ['build', csproj.path, '-c', configuration],
-      // The scaffold pins its own SDK, so builds remain reproducible after the
-      // release archive or source checkout is moved or removed.
-      workingDirectory: buildRoot.path,
-      timeout: const Duration(minutes: 10),
-      maxStdoutBytes: 16 * 1024 * 1024,
-      maxStderrBytes: 16 * 1024 * 1024,
+    bool Function(String archivePath) hasArchivePath, {
+    required bool emitContractMetadata,
+  }) async {
+    final build = await _buildTopiaForgeMod(
+      root,
+      csproj,
+      configuration,
+      emitContractMetadata: emitContractMetadata,
     );
-    if (build.exitCode != 0) {
-      throw StateError('${build.stdout}\n${build.stderr}'.trim());
-    }
-
-    final bin = Directory(p.join(root.path, 'bin', configuration));
-    final tfmDirs = bin.existsSync()
-        ? (bin.listSync().whereType<Directory>().toList()
-            ..sort((a, b) => a.path.compareTo(b.path)))
-        : const <Directory>[];
-    final tfmDir = tfmDirs.firstOrNull;
-    if (tfmDir == null) {
-      throw StateError('Could not find build output under ${bin.path}');
-    }
+    final tfmDir = build.outputDirectory;
 
     final entryAssembly = manifest['entryAssembly'] as String;
     if (!File(p.join(tfmDir.path, entryAssembly)).existsSync()) {
@@ -303,6 +371,7 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
       }
       addFile(archivePath, source);
     }
+    return build.contracts;
   }
 
   /// Manifest-only mods have no build step: the whole project tree ships,
@@ -328,15 +397,17 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
 
   ModManifest _manifestWithBuildMetadata(
     Directory root,
-    Map<String, Object?> source,
-  ) {
+    Map<String, Object?> source, {
+    Map<String, String> synchronizedHashes = const {},
+    List<String>? synchronizedFiles,
+  }) {
     final lock = _readSdkLock(root.path);
     final toolVersion = lock?.toolVersion.isNotEmpty == true
         ? lock!.toolVersion
         : _repositoryToolVersion();
     final gameVersion =
         lock?.gameVersion ?? TopiaForgeRuntimeVersions.gameVersion;
-    return ModManifest.fromJson({
+    final packed = <String, Object?>{
       ...source,
       'builtWith': {
         'sdkVersion': lock?.sdkVersion ?? TopiaForgeRuntimeVersions.sdkVersion,
@@ -344,7 +415,32 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
         'gameVersion': gameVersion,
         if (toolVersion.isNotEmpty) 'toolVersion': toolVersion,
       },
-    });
+    };
+    if (synchronizedFiles != null) {
+      final sourceMultiplayer = source['multiplayer'];
+      if (sourceMultiplayer is! Map) {
+        throw StateError(
+          'A session package must contain multiplayer manifest metadata.',
+        );
+      }
+      packed['multiplayer'] = <String, Object?>{
+        for (final entry in sourceMultiplayer.entries)
+          entry.key.toString(): entry.value,
+        'synchronizedFiles': List<String>.unmodifiable(synchronizedFiles),
+      };
+    }
+    if (synchronizedHashes.isNotEmpty) {
+      final hashes = <String, Object?>{};
+      final sourceHashes = source['hashes'];
+      if (sourceHashes is Map) {
+        for (final entry in sourceHashes.entries) {
+          hashes[entry.key.toString()] = entry.value;
+        }
+      }
+      hashes.addAll(synchronizedHashes);
+      packed['hashes'] = hashes;
+    }
+    return ModManifest.fromJson(packed);
   }
 
   String _sanitizePackageToken(String value) =>

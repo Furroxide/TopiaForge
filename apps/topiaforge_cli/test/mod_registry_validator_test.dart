@@ -249,7 +249,7 @@ Map<String, Object?> _manifestJson({
   Map<String, String> dependencies = const {},
 }) {
   return {
-    'schemaVersion': 4,
+    'schemaVersion': 5,
     'name': id,
     'displayName': id,
     'version': version,

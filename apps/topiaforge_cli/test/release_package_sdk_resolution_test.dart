@@ -211,7 +211,7 @@ Directory _writeFixtureRepo(Directory temp) {
   _writeFile(repo, ['dist', 'vpm', 'index.json'], '{}');
   _writeFile(repo, ['dist', 'demo.topiaforgemod'], 'package');
   for (final package in topiaForgeSdkPackageIds) {
-    final analyzer = package == 'TopiaForge.Mods.Analyzers';
+    final analyzer = topiaForgeAnalyzerPackageIds.contains(package);
     final target = analyzer ? 'netstandard2.0' : 'netstandard2.1';
     _writeFile(
       repo,

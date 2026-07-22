@@ -426,7 +426,8 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
   ) {
     final manifest = <String, Object?>{
       ...versionJson,
-      'schemaVersion': versionJson['schemaVersion'] ?? 4,
+      'schemaVersion':
+          versionJson['schemaVersion'] ?? ModManifest.currentSchemaVersion,
       'name': versionJson['name'] ?? packageId,
       'displayName':
           versionJson['displayName'] ?? packageJson['displayName'] ?? packageId,

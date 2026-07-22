@@ -241,6 +241,18 @@ if ($Verify) {
         "run", "--project", "tests/TopiaForge.ModPackageValidator.Tests/TopiaForge.ModPackageValidator.Tests.csproj",
         "-c", "Release", "--no-build"
     )
+    Invoke-Checked $dotnet @(
+        "run", "--project", "tests/TopiaForge.Mods.Analyzers.Tests/TopiaForge.Mods.Analyzers.Tests.csproj",
+        "-c", "Release", "--no-build"
+    )
+    Invoke-Checked $dotnet @(
+        "run", "--project", "tests/TopiaForge.Mods.Multiplayer.Generators.Tests/TopiaForge.Mods.Multiplayer.Generators.Tests.csproj",
+        "-c", "Release", "--no-build"
+    )
+    Invoke-Checked $dotnet @(
+        "run", "--project", "tests/TopiaForge.Mods.Multiplayer.Tests/TopiaForge.Mods.Multiplayer.Tests.csproj",
+        "-c", "Release", "--no-build"
+    )
     foreach ($package in @(
         "packages/launcher_domain",
         "packages/launcher_data",

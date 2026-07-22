@@ -116,7 +116,7 @@ void _writePackage(
       ArchiveFile.string(
         'topiaforge.mod.json',
         jsonEncode({
-          'schemaVersion': 4,
+          'schemaVersion': 5,
           'name': id,
           'displayName': id,
           'version': version,

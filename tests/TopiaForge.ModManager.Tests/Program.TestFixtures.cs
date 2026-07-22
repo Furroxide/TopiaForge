@@ -26,7 +26,7 @@ namespace TopiaForge.ModManager.Tests
         {
             return new ModManifest
             {
-                SchemaVersion = 4,
+                SchemaVersion = 5,
                 Id = id,
                 Name = id,
                 Version = "1.0.0",
@@ -98,7 +98,7 @@ namespace TopiaForge.ModManager.Tests
             {
                 WriteEntry(zip, "topiaforge.mod.json", JsonUtil.Serialize(new ModManifest
                 {
-                    SchemaVersion = 4,
+                    SchemaVersion = 5,
                     Id = id,
                     Name = name,
                     Author = new ModAuthor { Name = "TopiaForge" },
@@ -106,8 +106,8 @@ namespace TopiaForge.ModManager.Tests
                     EntryAssembly = fixtureAssembly,
                     EntryType = fixtureType,
                     SupportedGameVersionRange = supportedGameVersionRange,
-                    SupportedLoaderVersionRange = ">=1.0.0 <2.0.0",
-                    SupportedSdkVersionRange = ">=1.0.0 <2.0.0",
+                    SupportedLoaderVersionRange = ">=1.0.0-rc.1 <2.0.0",
+                    SupportedSdkVersionRange = ">=1.0.0-rc.1 <2.0.0",
                     Dependencies = dependencies == null
                         ? new Dictionary<string, string>()
                         : new Dictionary<string, string>(dependencies, StringComparer.Ordinal)

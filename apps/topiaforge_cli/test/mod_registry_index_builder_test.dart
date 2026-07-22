@@ -122,6 +122,50 @@ void main() {
     );
   });
 
+  test(
+    'directory index retains packed contract lock admission metadata',
+    () async {
+      const lockPath = 'topiaforge.multiplayer.lock.json';
+      const lockBytes =
+          '{"schemaVersion":2,"protocolVersion":"1.0.0","contracts":[]}';
+      final lockHash = sha256.convert(utf8.encode(lockBytes)).toString();
+      final packages = Directory(p.join(temp.path, 'packages'))..createSync();
+      File(
+        p.join(packages.path, 'contract.mod-1.0.0.topiaforgemod'),
+      ).writeAsBytesSync(
+        _packageBytes(
+          id: 'contract.mod',
+          version: '1.0.0',
+          manifestOverrides: {
+            'multiplayer': {
+              'mode': 'session',
+              'presence': 'required',
+              'protocol': {'version': '1.0.0'},
+              'synchronizedFiles': [lockPath],
+            },
+            'hashes': {lockPath: lockHash},
+          },
+          extraEntries: const {lockPath: lockBytes},
+        ),
+      );
+      final output = Directory(p.join(temp.path, 'out'));
+
+      await ModRegistryIndexBuilder(clock: _fixedClock).build(
+        ModRegistryIndexConfig(
+          packagesDirectory: packages.path,
+          outputDirectory: output.path,
+        ),
+      );
+      final indexed = RegistryMod.fromJson(
+        ((_readIndex(output)['mods'] as List).single as Map)
+            .cast<String, Object?>(),
+      );
+
+      expect(indexed.manifest.multiplayer!.synchronizedFiles, [lockPath]);
+      expect(indexed.manifest.hashes[lockPath], lockHash);
+    },
+  );
+
   test('community entries merge, sort by id, and carry origin', () async {
     final packages = Directory(p.join(temp.path, 'packages'))..createSync();
     File(
@@ -249,6 +293,38 @@ void main() {
       contains('formatVersion must be 2.'),
     );
   });
+
+  test('registry entry retains packed contract lock admission metadata', () {
+    const lockPath = 'topiaforge.multiplayer.lock.json';
+    const lockBytes =
+        '{"schemaVersion":2,"protocolVersion":"1.0.0","contracts":[]}';
+    final lockHash = sha256.convert(utf8.encode(lockBytes)).toString();
+    final package = readModPackage(
+      _packageBytes(
+        id: 'contract.mod',
+        version: '1.0.0',
+        manifestOverrides: {
+          'multiplayer': {
+            'mode': 'session',
+            'presence': 'required',
+            'protocol': {'version': '1.0.0'},
+            'synchronizedFiles': [lockPath],
+          },
+          'hashes': {lockPath: lockHash},
+        },
+        extraEntries: const {lockPath: lockBytes},
+      ),
+    );
+
+    final result = buildRegistryEntry(
+      package: package,
+      downloadUrl: 'https://mods.example.com/contract.mod-1.0.0.topiaforgemod',
+    );
+    final manifest = result.entryFile!.versions.single.manifest!;
+
+    expect(manifest.multiplayer!.synchronizedFiles, [lockPath]);
+    expect(manifest.hashes[lockPath], lockHash);
+  });
 }
 
 DateTime _fixedClock() => DateTime.utc(2026, 1, 2, 3, 4, 5);
@@ -258,7 +334,7 @@ Map<String, Object?> _manifestJson({
   required String version,
 }) {
   return {
-    'schemaVersion': 4,
+    'schemaVersion': 5,
     'name': id,
     'displayName': id,
     'version': version,
@@ -273,16 +349,27 @@ Map<String, Object?> _manifestJson({
   };
 }
 
-List<int> _packageBytes({required String id, required String version}) {
+List<int> _packageBytes({
+  required String id,
+  required String version,
+  Map<String, Object?> manifestOverrides = const {},
+  Map<String, String> extraEntries = const {},
+}) {
   final archive = Archive()
     ..addFile(
       ArchiveFile.string(
         'topiaforge.mod.json',
-        jsonEncode(_manifestJson(id: id, version: version)),
+        jsonEncode({
+          ..._manifestJson(id: id, version: version),
+          ...manifestOverrides,
+        }),
       ),
     )
     ..addFile(ArchiveFile.string('LICENSE', 'MIT test fixture license'))
     ..addFile(ArchiveFile.string('Mod.dll', 'dll-bytes-$id-$version'));
+  for (final entry in extraEntries.entries) {
+    archive.addFile(ArchiveFile.string(entry.key, entry.value));
+  }
   return ZipEncoder().encode(archive);
 }
 

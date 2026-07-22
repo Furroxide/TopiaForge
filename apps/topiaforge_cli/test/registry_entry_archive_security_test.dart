@@ -52,7 +52,7 @@ void main() {
 
 List<int> _package({List<ArchiveFile> extraEntries = const []}) {
   final manifest = {
-    'schemaVersion': 4,
+    'schemaVersion': 5,
     'name': 'test.secure',
     'displayName': 'Secure test',
     'version': '1.0.0',

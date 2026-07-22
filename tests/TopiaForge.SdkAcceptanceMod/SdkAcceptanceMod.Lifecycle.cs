@@ -189,9 +189,9 @@ namespace TopiaForge.SdkAcceptance
 
         private void ProbePlayerControl(int cycle)
         {
-            var first = RequireValue(Context.Player.AcquireControl("SDK lifecycle " + cycle + " first"),
+            var first = RequireValue(Context.LocalPlayer.AcquireControl("SDK lifecycle " + cycle + " first"),
                 "acquire first player-control lease");
-            var second = RequireValue(Context.Player.AcquireControl("SDK lifecycle " + cycle + " second"),
+            var second = RequireValue(Context.LocalPlayer.AcquireControl("SDK lifecycle " + cycle + " second"),
                 "acquire nested player-control lease");
             try
             {

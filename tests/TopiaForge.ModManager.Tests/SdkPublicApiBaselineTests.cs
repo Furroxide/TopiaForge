@@ -52,6 +52,10 @@ namespace TopiaForge.ModManager.Tests
                 "TopiaForge.Mods.Chronos",
                 () => typeof(ITimeControlService).Assembly),
             new BaselineSpec(
+                "topiaforge.mods.multiplayer",
+                "TopiaForge.Mods.Multiplayer",
+                () => typeof(IMultiplayerSession).Assembly),
+            new BaselineSpec(
                 "topiaforge.mods.prompts",
                 "TopiaForge.Mods.Prompts",
                 () => typeof(IPromptOverrideRegistry).Assembly),
@@ -112,6 +116,29 @@ namespace TopiaForge.ModManager.Tests
         }
 
         public static IReadOnlyList<string> Slugs => Baselines.Select(baseline => baseline.Slug).ToArray();
+
+        public static void UpdateBaselines(string repositoryRoot)
+        {
+            if (string.IsNullOrWhiteSpace(repositoryRoot))
+            {
+                throw new ArgumentException("A repository root is required.", nameof(repositoryRoot));
+            }
+
+            var baselineDirectory = Path.Combine(Path.GetFullPath(repositoryRoot), "baselines");
+            if (!Directory.Exists(baselineDirectory))
+            {
+                throw new DirectoryNotFoundException(
+                    "The SDK baseline directory does not exist: " + baselineDirectory);
+            }
+
+            foreach (var baseline in Baselines)
+            {
+                var path = Path.Combine(baselineDirectory, baseline.Slug + ".api.txt");
+                File.WriteAllText(path, CreateBaseline(baseline), new UTF8Encoding(false));
+            }
+
+            Console.WriteLine("Updated SDK public API baselines (" + Baselines.Count + " assemblies).");
+        }
 
         private static string CreateBaseline(BaselineSpec baseline)
         {
@@ -569,7 +596,9 @@ namespace TopiaForge.ModManager.Tests
 
             builder.Append("To inspect the complete candidate surface, run: dotnet run --project ")
                 .Append("tests/TopiaForge.ModManager.Tests -c Release -- --print-sdk-api-baseline ")
-                .Append(baseline.Slug);
+                .Append(baseline.Slug)
+                .Append(". After review, refresh every baseline with: dotnet run --project ")
+                .Append("tests/TopiaForge.ModManager.Tests -c Release -- --update-sdk-api-baselines .");
             return builder.ToString();
         }
     }

@@ -15,6 +15,6 @@ along the player's center-screen aim. The default key is **G**; it is intentiona
 - `{{TYPE_NAME}}Controller.cs` — named-input, player aim, raycast, logging, and toast behavior.
 - `{{TYPE_NAME}}Config.cs` — validated action key and raycast range.
 - `tests/` — a real NUnit aim/raycast test with deterministic SDK fakes.
-- `topiaforge.mod.json` — V4 capabilities and compatibility ranges.
+- `topiaforge.mod.json` — V5 capabilities, compatibility ranges, and optional multiplayer metadata.
 
 New to modding? Follow `docs/YourFirstMod.md` in the TopiaForge repository; `docs/Modding.md` is the full reference.

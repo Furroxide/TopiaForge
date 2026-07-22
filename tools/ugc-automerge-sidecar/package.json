@@ -1,6 +1,6 @@
 {
   "name": "topiaforge-ugc-automerge-sidecar",
-  "version": "0.1.0",
+  "version": "0.1.0-rc.1",
   "private": true,
   "type": "module",
   "description": "Publishes a TopiaForge UGC export project to an Automerge document so Robotopia and the web editor can live-sync it. The authoring/writer side of the optional Automerge channel; the game already reads Automerge natively.",

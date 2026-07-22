@@ -9,7 +9,7 @@ namespace TopiaForge.GameCompat.Extractor
 {
     internal static class Program
     {
-        private const string ExtractorVersion = "1.1.0";
+        private const string ExtractorVersion = "1.1.0-rc.1";
         private const int MaxSurfaceSnapshotBytes = 16 * 1024 * 1024;
 
         private static int Main(string[] args)

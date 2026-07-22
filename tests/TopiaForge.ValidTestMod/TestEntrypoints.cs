@@ -98,7 +98,7 @@ namespace TopiaForge.ValidTestMod
             Context.Events.SubscribeSceneLoaded((SceneLoadEvent scene) => RuntimeTrace.Write(
                 "scene-detail:" + scene.SceneName + ":" + scene.Mode + ":" +
                 (scene.IsActive ? "active" : "background") + ":" +
-                (scene.IsAuthoritativeReplacement ? "authoritative" : "additive")));
+                (scene.IsWorldReplacement ? "world replacement" : "additive")));
         }
 
         protected override void OnUnload()

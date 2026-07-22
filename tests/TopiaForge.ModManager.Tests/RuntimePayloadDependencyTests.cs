@@ -82,7 +82,7 @@ namespace TopiaForge.ModManager.Tests
 
             AssertProfileResolves(metadata, available);
             AssertProfileResolves(immutable, available);
-            Console.WriteLine("RuntimePayloadDependencyTests passed (12-DLL payload; Unity profile closure verified).");
+            Console.WriteLine("RuntimePayloadDependencyTests passed (13-DLL payload; Unity profile closure verified).");
         }
 
         private static void AssertProfileResolves(

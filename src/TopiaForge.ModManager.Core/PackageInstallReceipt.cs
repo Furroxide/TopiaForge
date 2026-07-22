@@ -321,7 +321,9 @@ namespace TopiaForge.ModManager.Core
             return string.Equals(path, "topiaforge.mod.json", StringComparison.Ordinal) ||
                 string.Equals(path, manifest.EntryAssembly.Replace('\\', '/'), StringComparison.Ordinal) ||
                 (manifest.ApiAssemblies ?? new List<string>()).Any(api =>
-                    string.Equals(path, api.Replace('\\', '/'), StringComparison.Ordinal));
+                    string.Equals(path, api.Replace('\\', '/'), StringComparison.Ordinal)) ||
+                (manifest.Multiplayer?.SynchronizedFiles ?? new List<string>()).Any(synchronized =>
+                    string.Equals(path, synchronized, StringComparison.Ordinal));
         }
 
         private static string SanitizeSourceFile(string? sourceFile, ModManifest manifest)

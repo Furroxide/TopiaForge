@@ -58,6 +58,80 @@ void main() {
     },
   );
 
+  test(
+    'packed contract lock metadata survives trusted dependency install',
+    () async {
+      final fixture = await _InstallVerificationFixture.create();
+      addTearDown(fixture.dispose);
+      const lockPath = 'topiaforge.multiplayer.lock.json';
+      const lockBytes =
+          '{"schemaVersion":2,"protocolVersion":"1.0.0","contracts":[]}';
+      final lockHash = sha256.convert(utf8.encode(lockBytes)).toString();
+      final dependency = fixture.writePackage(
+        'contract.dep',
+        manifestOverrides: {
+          'multiplayer': {
+            'mode': 'session',
+            'presence': 'required',
+            'protocol': {'version': '1.0.0'},
+            'synchronizedFiles': [lockPath],
+          },
+          'hashes': {lockPath: lockHash},
+        },
+        extraEntries: const {lockPath: lockBytes},
+      );
+      final source = File(p.join(fixture.root.path, 'source.json'))
+        ..writeAsStringSync(
+          jsonEncode({
+            'packages': {
+              'contract.dep': {
+                'versions': {
+                  '1.0.0': {
+                    'manifest': {
+                      ..._manifest('contract.dep'),
+                      'multiplayer': {
+                        'mode': 'session',
+                        'presence': 'required',
+                        'protocol': {'version': '1.0.0'},
+                        'synchronizedFiles': [lockPath],
+                      },
+                      'hashes': {lockPath: lockHash},
+                    },
+                    'url': dependency.uri.toString(),
+                    'zipSHA256': _sha(dependency),
+                  },
+                },
+              },
+            },
+          }),
+        );
+      await fixture.repository.savePackageSources(
+        _isolatedSources(
+          PackageSource(
+            id: 'verification.contract',
+            name: 'Verification Contract',
+            url: source.uri.toString(),
+          ),
+        ),
+      );
+      final rootPackage = fixture.writePackage(
+        'consumer.mod',
+        dependencies: const {'contract.dep': '*'},
+      );
+
+      final installed = await fixture.repository.installPackage(
+        rootPackage.path,
+        fixture.install,
+      );
+
+      expect(
+        installed.map((mod) => mod.id),
+        containsAll(['contract.dep', 'consumer.mod']),
+      );
+      expect(fixture.installedDirectory('contract.dep').existsSync(), isTrue);
+    },
+  );
+
   test('post-commit log failure does not fail a durable install', () async {
     final fixture = await _InstallVerificationFixture.create();
     addTearDown(fixture.dispose);
@@ -186,17 +260,21 @@ class _InstallVerificationFixture {
     Directory? directory,
     Map<String, String> dependencies = const {},
     List<String> capabilities = const [],
+    Map<String, Object?> manifestOverrides = const {},
+    Map<String, String> extraEntries = const {},
   }) {
     final target = directory ?? root;
     target.createSync(recursive: true);
-    final manifest = _manifest(
-      id,
-      dependencies: dependencies,
-      capabilities: capabilities,
-    );
+    final manifest = {
+      ..._manifest(id, dependencies: dependencies, capabilities: capabilities),
+      ...manifestOverrides,
+    };
     final archive = Archive()
       ..addFile(ArchiveFile.string('topiaforge.mod.json', jsonEncode(manifest)))
       ..addFile(ArchiveFile.string('${_assembly(id)}.dll', 'managed fixture'));
+    for (final entry in extraEntries.entries) {
+      archive.addFile(ArchiveFile.string(entry.key, entry.value));
+    }
     return File(p.join(target.path, '$id.topiaforgemod'))
       ..writeAsBytesSync(ZipEncoder().encode(archive), flush: true);
   }
@@ -236,7 +314,7 @@ Map<String, Object?> _manifest(
   Map<String, String> dependencies = const {},
   List<String> capabilities = const [],
 }) => {
-  'schemaVersion': 4,
+  'schemaVersion': 5,
   'name': id,
   'displayName': id,
   'version': '1.0.0',

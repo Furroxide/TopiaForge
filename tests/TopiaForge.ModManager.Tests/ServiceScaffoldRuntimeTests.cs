@@ -83,7 +83,7 @@ namespace TopiaForge.ModManager.Tests
         {
             return new ModManifest
             {
-                SchemaVersion = 4,
+                SchemaVersion = 5,
                 Id = "tests.service-scaffold",
                 Name = "Service scaffold",
                 Author = new ModAuthor { Name = "TopiaForge" },
@@ -91,8 +91,8 @@ namespace TopiaForge.ModManager.Tests
                 EntryAssembly = EntryAssembly,
                 EntryType = "TopiaForge.ValidTestMod.ValidMod",
                 SupportedGameVersionRange = "0.0.2227",
-                SupportedLoaderVersionRange = ">=1.0.0 <2.0.0",
-                SupportedSdkVersionRange = ">=1.0.0 <2.0.0",
+                SupportedLoaderVersionRange = ">=1.0.0-rc.1 <2.0.0",
+                SupportedSdkVersionRange = ">=1.0.0-rc.1 <2.0.0",
                 ApiAssemblies = { ApiAssembly }
             };
         }

@@ -19,6 +19,10 @@ namespace TopiaForge.Mods.Analyzers.Tests
                 "ITimeControlService",
                 "io.github.furroxide.topiaforge.chronos"),
             new ModuleFixture(
+                "TopiaForge.Mods.Multiplayer",
+                "IMultiplayerSession",
+                "io.github.furroxide.topiaforge.multiplayer"),
+            new ModuleFixture(
                 "TopiaForge.Mods.Prompts",
                 "IPromptOverrideRegistry",
                 "io.github.furroxide.topiaforge.prompts"),
@@ -140,7 +144,7 @@ namespace TopiaForge.Mods.Analyzers.Tests
         {
             var module = SpecialistModules.Single(item => item.AssemblyName.EndsWith("RobotKit", StringComparison.Ordinal));
             const string spoofedManifest = "{"
-                + "\"schemaVersion\":4,"
+                + "\"schemaVersion\":5,"
                 + "\"name\":\"example.spoof\","
                 + "\"description\":\"unsafe-native io.github.furroxide.topiaforge.robotkit\","
                 + "\"capabilities\":[],"
@@ -215,7 +219,7 @@ namespace TopiaForge.Mods.Analyzers.Tests
             Assert(missing.Any(item => item.Id == "TF1006"),
                 "Interop.Unity should require the unsafe-native capability");
 
-            const string spoofed = "{\"schemaVersion\":4,\"name\":\"example.interop\","
+            const string spoofed = "{\"schemaVersion\":5,\"name\":\"example.interop\","
                 + "\"description\":\"unsafe-native\",\"capabilities\":[],\"dependencies\":{},"
                 + "\"x-capabilities\":[\"unsafe-native\"]}";
             var spoofedDiagnostics = Analyze(
@@ -349,7 +353,7 @@ namespace TopiaForge.Mods.Analyzers.Tests
             string dependencies = "",
             string optionalDependencies = "")
         {
-            return "{\"schemaVersion\":4,\"name\":\"example.mod\",\"capabilities\":["
+            return "{\"schemaVersion\":5,\"name\":\"example.mod\",\"capabilities\":["
                 + capabilities + "],\"dependencies\":{" + dependencies
                 + "},\"optionalDependencies\":{" + optionalDependencies + "}}";
         }
