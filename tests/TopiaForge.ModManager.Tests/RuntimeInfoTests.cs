@@ -16,10 +16,13 @@ namespace TopiaForge.ModManager.Tests
             Assert(runtime.TryGetUnavailableCapability("robotkit", out var missing)
                 && missing!.Contains("not installed", StringComparison.Ordinal),
                 "missing specialist modules should have a stable plain-language reason");
+            Assert(runtime.TryGetUnavailableCapability("multiplayer", out var missingMultiplayer)
+                && missingMultiplayer!.Contains("not installed", StringComparison.Ordinal),
+                "the multiplayer preview provider should participate in runtime availability metadata");
 
             var manifest = new ModManifest
             {
-                SchemaVersion = 4,
+                SchemaVersion = 5,
                 Id = "io.github.furroxide.topiaforge.robotkit",
                 Name = "RobotKit",
                 Version = "1.2.3-beta.1+acceptance",
@@ -50,7 +53,7 @@ namespace TopiaForge.ModManager.Tests
 
             var customProvider = new ModManifest
             {
-                SchemaVersion = 4,
+                SchemaVersion = 5,
                 Id = "example.weather-provider",
                 Name = "Weather Provider",
                 Version = "1.4.0+provider.7",

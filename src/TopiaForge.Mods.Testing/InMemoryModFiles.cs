@@ -263,15 +263,13 @@ namespace TopiaForge.Mods.Testing
     }
 
     /// <summary>Provides typed in-memory key/value persistence.</summary>
-    public sealed class InMemoryModStorageService : IModStorageService
+    public sealed class InMemoryLocalModStorageService : ILocalModStorageService
     {
         private readonly Dictionary<string, object> values =
             new Dictionary<string, object>(StringComparer.Ordinal);
-        private readonly Dictionary<string, bool> storyFlags =
-            new Dictionary<string, bool>(StringComparer.Ordinal);
 
         /// <summary>Gets the number of stored keys.</summary>
-        public int Count => values.Count + storyFlags.Count;
+        public int Count => values.Count;
 
         /// <inheritdoc/>
         public bool Contains(string key) => values.ContainsKey(ValidateKey(key));
@@ -304,26 +302,10 @@ namespace TopiaForge.Mods.Testing
         public OperationResult<bool> Delete(string key) =>
             OperationResult<bool>.Success(values.Remove(ValidateKey(key)));
 
-        /// <inheritdoc/>
-        public bool TryGetStoryFlag(string key, out bool value) =>
-            storyFlags.TryGetValue(ValidateKey(key), out value);
-
-        /// <inheritdoc/>
-        public OperationResult<bool> SetStoryFlag(string key, bool value)
-        {
-            storyFlags[ValidateKey(key)] = value;
-            return OperationResult<bool>.Success(true);
-        }
-
-        /// <inheritdoc/>
-        public OperationResult<bool> DeleteStoryFlag(string key) =>
-            OperationResult<bool>.Success(storyFlags.Remove(ValidateKey(key)));
-
         /// <summary>Removes every stored key.</summary>
         public void Clear()
         {
             values.Clear();
-            storyFlags.Clear();
         }
 
         private static string ValidateKey(string key)

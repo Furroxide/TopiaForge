@@ -40,7 +40,7 @@ namespace TopiaForge.Chronos
 
         private TurnScheduler? turnScheduler;
 
-        public TimeControlService(string ownerModId, IModLogger logger, IPlayerService playerService)
+        public TimeControlService(string ownerModId, IModLogger logger, ILocalPlayerService playerService)
         {
             this.ownerModId = ownerModId ?? "io.github.furroxide.topiaforge.chronos";
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));

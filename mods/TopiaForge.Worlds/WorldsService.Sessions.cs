@@ -78,6 +78,7 @@ namespace TopiaForge.Worlds
 
             EndSession(WorldSessionEndReason.ProviderUnloading);
             disposed = true;
+            ReleasePendingSceneClaim();
             levelBridge.Dispose();
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.activeSceneChanged -= OnActiveSceneChanged;
@@ -118,6 +119,11 @@ namespace TopiaForge.Worlds
                 return;
             }
 
+            if (!transitionTracker.IsQuarantined)
+            {
+                ReleasePendingSceneClaim();
+            }
+
             EndSession(WorldSessionEndReason.LoadFailed);
             logger.Warn("Worlds provisional scene load failed: " + failure);
         }
@@ -130,7 +136,10 @@ namespace TopiaForge.Worlds
 
             // Admission stays serialized until the expected target arrives. An unrelated/menu single scene does
             // not retire an abandoned/timed-out dispatch, so its target still cannot resolve a newer retry.
-            transitionTracker.ResolveSceneArrival(scene.name);
+            if (transitionTracker.ResolveSceneArrival(scene.name))
+            {
+                ReleasePendingSceneClaim();
+            }
 
             // Reaching a non-gameplay scene (menu/boot/loader) under a live session means the player left the
             // world — most commonly via the game's own pause-menu exit. End the session so no gamemode stays
@@ -339,6 +348,20 @@ namespace TopiaForge.Worlds
             CurrentSession = session;
             sessionSceneName = sceneName;
 
+            if (launchClaim != null)
+            {
+                if (transitionTracker.BlocksAdmission)
+                {
+                    ReleasePendingSceneClaim();
+                    pendingSceneClaim = launchClaim;
+                }
+                else
+                {
+                    // A synchronous fallback may complete its scene callback before StartSession runs.
+                    launchClaim.Dispose();
+                }
+            }
+
             // A consumer must not turn an already-dispatched world load into a reported failure (which
             // would also cause the caller to dispose the now session-owned scene claim), nor starve later
             // subscribers that also own session-scoped state.
@@ -350,6 +373,13 @@ namespace TopiaForge.Worlds
                 + " [" + gamemode.Id + "] via " + mode + " in scene '" + sceneName + "'.";
             logger.Info("World session started: " + message);
             return WorldLoadResult.Success(session, message);
+        }
+
+        private void ReleasePendingSceneClaim()
+        {
+            var claim = pendingSceneClaim;
+            pendingSceneClaim = null;
+            claim?.Dispose();
         }
 
         private void BuildArena()

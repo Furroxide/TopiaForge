@@ -122,7 +122,7 @@ namespace TopiaForge.Sandbox
                 return OperationResult<string>.Failure(ModErrorCode.Unavailable, "RobotKit cannot spawn in this scene.");
             }
 
-            if (!context.Player.TryGetSnapshot(out var player) || player == null)
+            if (!context.LocalPlayer.TryGetSnapshot(out var player) || player == null)
             {
                 return OperationResult<string>.Failure(ModErrorCode.Unavailable, "A gameplay player and camera are required.");
             }
@@ -328,7 +328,7 @@ namespace TopiaForge.Sandbox
                 return;
             }
 
-            if (context.Player.TryGetSnapshot(out var player) && player != null)
+            if (context.LocalPlayer.TryGetSnapshot(out var player) && player != null)
             {
                 entry.Agent.MoveTo(player.Position);
             }
@@ -336,7 +336,7 @@ namespace TopiaForge.Sandbox
 
         private RobotTargetSnapshot? ResolvePlayerTarget()
         {
-            return context.Player.TryGetSnapshot(out var player) && player != null
+            return context.LocalPlayer.TryGetSnapshot(out var player) && player != null
                 ? new RobotTargetSnapshot(player.Position)
                 : (RobotTargetSnapshot?)null;
         }

@@ -100,7 +100,7 @@ namespace TopiaForge.Zombies
 
         private void FireZapper(bool charged)
         {
-            if (!context.Player.TryGetSnapshot(out var player) || player == null)
+            if (!context.LocalPlayer.TryGetSnapshot(out var player) || player == null)
             {
                 return;
             }

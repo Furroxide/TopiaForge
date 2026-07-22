@@ -11,6 +11,7 @@ namespace TopiaForge.ModManager
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["TopiaForge.Mods.Chronos"] = "io.github.furroxide.topiaforge.chronos",
+                ["TopiaForge.Mods.Multiplayer"] = "io.github.furroxide.topiaforge.multiplayer",
                 ["TopiaForge.Mods.Prompts"] = "io.github.furroxide.topiaforge.prompts",
                 ["TopiaForge.Mods.RobotKit"] = "io.github.furroxide.topiaforge.robotkit",
                 ["TopiaForge.Mods.Ugc"] = "io.github.furroxide.topiaforge.ugc.livesync",

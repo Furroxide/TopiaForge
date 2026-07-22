@@ -7,7 +7,7 @@ namespace TopiaForge.Chronos
 {
     // Owns all reflection into the native player so Chronos needs no GameCode reference and no RobotKit dependency.
     // Exempts the player for Superhot by scaling move speed UP by 1/worldScale so it stays full-speed while the
-    // world crawls. Hard-freeze suspension goes through IPlayerService.AcquireControl so it composes safely with
+    // world crawls. Hard-freeze suspension goes through ILocalPlayerService.AcquireControl so it composes safely with
     // every other mod's control lease. Verified from the GameCode decompile: the player is
     // PlayerController.FindPlayer().FPSController (a FirstPersonController); move uses private groundSpeed/airSpeed
     // and is scaled by Time.* (so 1/scale compensates), while LOOK reads raw per-frame mouse delta × mouseSensitivity

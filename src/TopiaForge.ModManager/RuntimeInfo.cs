@@ -17,7 +17,8 @@ namespace TopiaForge.ModManager
                 ["io.github.furroxide.topiaforge.worlds"] = "worlds",
                 ["io.github.furroxide.topiaforge.chronos"] = "chronos",
                 ["io.github.furroxide.topiaforge.prompts"] = "prompts",
-                ["io.github.furroxide.topiaforge.ugc.livesync"] = "ugc"
+                ["io.github.furroxide.topiaforge.ugc.livesync"] = "ugc",
+                ["io.github.furroxide.topiaforge.multiplayer"] = "multiplayer"
             };
 
         private readonly Dictionary<string, SemanticVersion> providerVersions =

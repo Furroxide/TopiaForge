@@ -154,10 +154,10 @@ namespace TopiaForge.Mods
         public bool IsActive { get; }
 
         /// <summary>
-        /// Gets whether the notification represents an authoritative world replacement. Single loads always do;
+        /// Gets whether the notification represents a process-local world replacement. Single loads always do;
         /// an activated additive gameplay scene does, while temporary menu/boot/loader overlays do not.
         /// </summary>
-        public bool IsAuthoritativeReplacement => Mode == SceneLoadMode.Single
+        public bool IsWorldReplacement => Mode == SceneLoadMode.Single
             || (IsActive && !GameScenes.IsNonGameplayScene(SceneName));
     }
 

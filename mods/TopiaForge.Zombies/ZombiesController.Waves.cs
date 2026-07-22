@@ -74,7 +74,7 @@ namespace TopiaForge.Zombies
 
             spawnTimer = Math.Max(0f, spawnTimer - worldDelta);
             if (spawnTimer > 0f
-                || !context.Player.TryGetSnapshot(out var player) || player == null)
+                || !context.LocalPlayer.TryGetSnapshot(out var player) || player == null)
             {
                 return;
             }
@@ -158,7 +158,7 @@ namespace TopiaForge.Zombies
                 agent.Chase(playerEntity);
             }
             else if (usingPositionalPlayerFallback
-                && context.Player.TryGetSnapshot(out var player) && player != null)
+                && context.LocalPlayer.TryGetSnapshot(out var player) && player != null)
             {
                 agent.MoveTo(player.Position);
             }

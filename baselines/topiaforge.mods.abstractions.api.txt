@@ -202,6 +202,19 @@ type public interface TopiaForge.Mods.IItemService
   method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.HeldItemSnapshot>> GiveAsync(TopiaForge.Mods.ItemGrantRequest request, System.Threading.CancellationToken cancellationToken = null)
   method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.IEntity>> DropHeldAsync(TopiaForge.Mods.Vec3 velocity, System.Threading.CancellationToken cancellationToken = null)
 
+type public interface TopiaForge.Mods.ILocalModStorageService
+  method [abstract,virtual,newslot] System.Boolean Contains(System.String key)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Delete(System.String key)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Save<T>(System.String key, T value) where T : class
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<T> Load<T>(System.String key) where T : class
+
+type public interface TopiaForge.Mods.ILocalPlayerService
+  method [abstract,virtual,newslot] System.Boolean TryGetHealth(out TopiaForge.Mods.PlayerHealthSnapshot? health)
+  method [abstract,virtual,newslot] System.Boolean TryGetSnapshot(out TopiaForge.Mods.PlayerSnapshot? snapshot)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IPlayerControlLease> AcquireControl(System.String reason)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.PlayerHealthSnapshot> Damage(TopiaForge.Mods.PlayerDamageRequest request)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.PlayerHealthSnapshot> Heal(System.Single amount, System.String source)
+
 type public interface TopiaForge.Mods.ILocalizationRegistration : System.IDisposable
   property System.String Locale { get [abstract,virtual,newslot]; }
 
@@ -227,6 +240,8 @@ type public interface TopiaForge.Mods.IModContext
   property TopiaForge.Mods.IInputService Input { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.IInteractionService Interactions { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.IItemService Items { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.ILocalModStorageService LocalStorage { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.ILocalPlayerService LocalPlayer { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.ILocalizationService Localization { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.IModConfigService Config { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.IModEvents Events { get [abstract,virtual,newslot]; }
@@ -234,9 +249,7 @@ type public interface TopiaForge.Mods.IModContext
   property TopiaForge.Mods.IModLifetime Lifetime { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.IModLogger Logger { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.IModScheduler Scheduler { get [abstract,virtual,newslot]; }
-  property TopiaForge.Mods.IModStorageService Storage { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.IPhysicsService Physics { get [abstract,virtual,newslot]; }
-  property TopiaForge.Mods.IPlayerService Player { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.IRuntimeInfo Runtime { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.ISceneService Scenes { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.IUiService Ui { get [abstract,virtual,newslot]; }
@@ -278,15 +291,6 @@ type public interface TopiaForge.Mods.IModScheduler
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.IDisposable> Every(System.TimeSpan interval, System.Action action)
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.IDisposable> NextFrame(System.Action action)
 
-type public interface TopiaForge.Mods.IModStorageService
-  method [abstract,virtual,newslot] System.Boolean Contains(System.String key)
-  method [abstract,virtual,newslot] System.Boolean TryGetStoryFlag(System.String key, out System.Boolean value)
-  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Delete(System.String key)
-  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> DeleteStoryFlag(System.String key)
-  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Save<T>(System.String key, T value) where T : class
-  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> SetStoryFlag(System.String key, System.Boolean value)
-  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<T> Load<T>(System.String key) where T : class
-
 type public interface TopiaForge.Mods.IPhysicsService
   method [abstract,virtual,newslot] System.Boolean TryRaycast(TopiaForge.Mods.Ray ray, System.Single maximumDistance, out TopiaForge.Mods.PhysicsHit? hit)
   method [abstract,virtual,newslot] System.Boolean TrySphereCast(TopiaForge.Mods.Ray ray, System.Single radius, System.Single maximumDistance, out TopiaForge.Mods.PhysicsHit? hit)
@@ -295,13 +299,6 @@ type public interface TopiaForge.Mods.IPhysicsService
 type public interface TopiaForge.Mods.IPlayerControlLease : System.IDisposable
   property System.Boolean IsActive { get [abstract,virtual,newslot]; }
   property System.String Reason { get [abstract,virtual,newslot]; }
-
-type public interface TopiaForge.Mods.IPlayerService
-  method [abstract,virtual,newslot] System.Boolean TryGetHealth(out TopiaForge.Mods.PlayerHealthSnapshot? health)
-  method [abstract,virtual,newslot] System.Boolean TryGetSnapshot(out TopiaForge.Mods.PlayerSnapshot? snapshot)
-  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IPlayerControlLease> AcquireControl(System.String reason)
-  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.PlayerHealthSnapshot> Damage(TopiaForge.Mods.PlayerDamageRequest request)
-  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.PlayerHealthSnapshot> Heal(System.Single amount, System.String source)
 
 type public interface TopiaForge.Mods.IPrefabAsset : System.IDisposable
   property System.Boolean IsAlive { get [abstract,virtual,newslot]; }
@@ -458,7 +455,9 @@ type public enum TopiaForge.Mods.ModErrorCode : System.Int32
   field const TopiaForge.Mods.ModErrorCode InvalidState = 5 (InvalidState)
   field const TopiaForge.Mods.ModErrorCode Io = 8 (Io)
   field const TopiaForge.Mods.ModErrorCode None = 0 (None)
+  field const TopiaForge.Mods.ModErrorCode NotAuthoritative = 11 (NotAuthoritative)
   field const TopiaForge.Mods.ModErrorCode NotFound = 2 (NotFound)
+  field const TopiaForge.Mods.ModErrorCode RateLimited = 12 (RateLimited)
   field const TopiaForge.Mods.ModErrorCode TimedOut = 7 (TimedOut)
   field const TopiaForge.Mods.ModErrorCode Unavailable = 3 (Unavailable)
   field const TopiaForge.Mods.ModErrorCode Unknown = 10 (Unknown)
@@ -571,7 +570,7 @@ type public enum TopiaForge.Mods.SceneLifecyclePhase : System.Int32
 type public sealed class TopiaForge.Mods.SceneLoadEvent : System.Object
   constructor .ctor(System.String sceneName, TopiaForge.Mods.SceneLoadMode mode, System.Boolean isActive)
   property System.Boolean IsActive { get; }
-  property System.Boolean IsAuthoritativeReplacement { get; }
+  property System.Boolean IsWorldReplacement { get; }
   property System.String SceneName { get; }
   property TopiaForge.Mods.SceneLoadMode Mode { get; }
 

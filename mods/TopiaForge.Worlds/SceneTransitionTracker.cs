@@ -102,13 +102,13 @@ namespace TopiaForge.Worlds
         /// Records a single-scene arrival. Only the dispatch's expected target resolves or retires it; an
         /// unrelated/menu scene preserves quarantine because the uncancelled target may still arrive later.
         /// </summary>
-        public void ResolveSceneArrival(string sceneName)
+        public bool ResolveSceneArrival(string sceneName)
         {
             lock (gate)
             {
                 if ((!pending && !quarantined) || terminalFailurePending)
                 {
-                    return;
+                    return false;
                 }
 
                 if (!string.Equals(sceneName, expectedScene, StringComparison.OrdinalIgnoreCase))
@@ -119,10 +119,11 @@ namespace TopiaForge.Worlds
                     {
                         Quarantine();
                     }
-                    return;
+                    return false;
                 }
 
                 ClearToIdle();
+                return true;
             }
         }
 

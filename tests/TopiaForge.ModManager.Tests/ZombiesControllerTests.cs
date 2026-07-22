@@ -159,10 +159,10 @@ namespace TopiaForge.ModManager.Tests
                 Config = config;
                 Context = new FakeModContext();
                 Context.Scenes.Load(activeScene);
-                Context.Player.Snapshot = new PlayerSnapshot(
+                Context.LocalPlayer.Snapshot = new PlayerSnapshot(
                     Vec3.Zero,
                     new Ray(Vec3.Zero, new Vec3(0f, 0f, 1f)));
-                Context.Player.Health = new PlayerHealthSnapshot(config.PlayerIntegrity, config.PlayerIntegrity);
+                Context.LocalPlayer.Health = new PlayerHealthSnapshot(config.PlayerIntegrity, config.PlayerIntegrity);
                 Robots = new FakeRobotKit(Context.Lifetime);
                 Robots.Agents.AutoCompleteAgentMovement = false;
                 Robots.Agents.PlayerEntity = new FakeEntity("zombies-player", "Player", Vec3.Zero);

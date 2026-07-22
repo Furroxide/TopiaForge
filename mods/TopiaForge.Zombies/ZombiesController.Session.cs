@@ -189,7 +189,7 @@ namespace TopiaForge.Zombies
                 }
             }
 
-            var control = context.Player.AcquireControl("Zombies game over");
+            var control = context.LocalPlayer.AcquireControl("Zombies game over");
             if (control.TryGetValue(out var fallback))
             {
                 gameOverControl = fallback;

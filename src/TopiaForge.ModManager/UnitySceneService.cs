@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -15,12 +16,18 @@ namespace TopiaForge.ModManager
         private readonly IModLifetime lifetime;
         private readonly UnitySceneBackend backend;
         private readonly IModLogger logger;
+        private readonly IInternalSceneTransitionService sceneTransitions;
 
-        public OwnerSceneService(IModLifetime lifetime, UnitySceneBackend backend, IModLogger logger)
+        public OwnerSceneService(
+            IModLifetime lifetime,
+            UnitySceneBackend backend,
+            IModLogger logger,
+            IInternalSceneTransitionService sceneTransitions)
         {
             this.lifetime = lifetime;
             this.backend = backend;
             this.logger = logger;
+            this.sceneTransitions = sceneTransitions;
         }
 
         public bool TryGetActive(out SceneSnapshot? scene)
@@ -68,9 +75,21 @@ namespace TopiaForge.ModManager
                 throw new ArgumentNullException(nameof(request));
             }
 
-            var result = backend.BeginLoad(request, lifetime.StoppingToken, cancellationToken);
+            var claimResult = sceneTransitions.Acquire(
+                request.SceneName,
+                automatic: false,
+                "core scene load");
+            if (!claimResult.TryGetValue(out var claim))
+            {
+                return Task.FromResult(OperationResult<SceneSnapshot>.Failure(
+                    claimResult.ErrorCode,
+                    claimResult.ErrorMessage));
+            }
+
+            var result = backend.BeginLoad(request, lifetime.StoppingToken, cancellationToken, claim);
             if (!result.TryGetValue(out var operation))
             {
+                claim.Dispose();
                 return Task.FromResult(OperationResult<SceneSnapshot>.Failure(
                     result.ErrorCode,
                     result.ErrorMessage));
@@ -79,6 +98,37 @@ namespace TopiaForge.ModManager
             // Unity cannot cancel a dispatched AsyncOperation. The backend owns it until native completion while
             // the result state independently honors caller and owner cancellation.
             return operation.Task;
+        }
+    }
+
+    internal sealed class OwnerSceneTransitionService : IInternalSceneTransitionService
+    {
+        private readonly string ownerModId;
+        private readonly SceneCoordinator coordinator;
+
+        public OwnerSceneTransitionService(string ownerModId, SceneCoordinator coordinator)
+        {
+            this.ownerModId = string.IsNullOrWhiteSpace(ownerModId)
+                ? throw new ArgumentException("A scene-transition owner id is required.", nameof(ownerModId))
+                : ownerModId;
+            this.coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
+        }
+
+        public OperationResult<IDisposable> Acquire(string sceneName, bool automatic, string reason)
+        {
+            if (string.IsNullOrWhiteSpace(sceneName))
+            {
+                throw new ArgumentException("A target scene name is required.", nameof(sceneName));
+            }
+
+            var decision = coordinator.RequestTransition(new SceneTransitionRequest(
+                ownerModId,
+                sceneName,
+                automatic ? SceneTransitionPriority.Automatic : SceneTransitionPriority.UserInitiated,
+                reason ?? string.Empty));
+            return decision.Approved && decision.Claim != null
+                ? OperationResult<IDisposable>.Success(decision.Claim)
+                : OperationResult<IDisposable>.Failure(decision.ErrorCode, decision.Message);
         }
     }
 
@@ -192,7 +242,8 @@ namespace TopiaForge.ModManager
         public OperationResult<SceneLoadState> BeginLoad(
             SceneLoadRequest request,
             CancellationToken stoppingToken,
-            CancellationToken callerToken)
+            CancellationToken callerToken,
+            IDisposable transitionClaim)
         {
             UnityMainThreadGuard.AssertCurrent();
             lock (sync)
@@ -243,7 +294,8 @@ namespace TopiaForge.ModManager
                 var state = new SceneLoadState(
                     this,
                     request.SceneName,
-                    operation);
+                    operation,
+                    transitionClaim);
 
                 // Publish before arming. Unity invokes AsyncOperation.completed synchronously when an
                 // operation has already finished, so the callback must be able to observe this state.
@@ -325,6 +377,7 @@ namespace TopiaForge.ModManager
             private readonly UnitySceneBackend backend;
             private readonly string sceneName;
             private readonly AsyncOperation operation;
+            private IDisposable? transitionClaim;
             private readonly TaskCompletionSource<OperationResult<SceneSnapshot>> completion =
                 new TaskCompletionSource<OperationResult<SceneSnapshot>>();
             private CancellationTokenRegistration stoppingRegistration;
@@ -336,11 +389,13 @@ namespace TopiaForge.ModManager
             public SceneLoadState(
                 UnitySceneBackend backend,
                 string sceneName,
-                AsyncOperation operation)
+                AsyncOperation operation,
+                IDisposable transitionClaim)
             {
                 this.backend = backend;
                 this.sceneName = sceneName;
                 this.operation = operation;
+                this.transitionClaim = transitionClaim;
             }
 
             public Task<OperationResult<SceneSnapshot>> Task => completion.Task;
@@ -448,7 +503,14 @@ namespace TopiaForge.ModManager
                 }
                 finally
                 {
-                    backend.Complete(this, sceneName);
+                    try
+                    {
+                        backend.Complete(this, sceneName);
+                    }
+                    finally
+                    {
+                        ReleaseTransitionClaim();
+                    }
                 }
             }
 
@@ -467,6 +529,15 @@ namespace TopiaForge.ModManager
                 {
                     // Backend disposal and failed arming are terminal. Cleanup must not mask their result.
                 }
+                finally
+                {
+                    ReleaseTransitionClaim();
+                }
+            }
+
+            private void ReleaseTransitionClaim()
+            {
+                Interlocked.Exchange(ref transitionClaim, null)?.Dispose();
             }
 
             private void DisposeResultRegistrations()

@@ -32,7 +32,7 @@ namespace TopiaForge.ModManager
                 && (isActive || sdkMode == SceneLoadMode.Single))
             {
                 // Some Unity versions publish sceneLoaded just before activeSceneChanged. The load callback below
-                // already carries authoritative metadata (Single is authoritative even if activation state has not
+                // already carries world-replacement metadata (Single replaces the world even if activation has not
                 // caught up), so suppress only that immediately pending activation.
                 suppressNextActivation.Add(scene.handle);
                 if (isActive)
@@ -54,7 +54,7 @@ namespace TopiaForge.ModManager
                 ? loadedMode
                 : SceneLoadMode.Single;
             // Unity may invalidate a Scene before invoking sceneUnloaded. A handle recorded at load/initial replay
-            // is authoritative provenance; unknown callbacks still require Unity validity and a usable name.
+            // is sufficient provenance; unknown callbacks still require Unity validity and a usable name.
             runtime.DispatchSceneUnloaded(scene.handle, scene.name, knownScene || scene.IsValid(), mode);
             loadedSceneModes.Remove(scene.handle);
             suppressNextActivation.Remove(scene.handle);
@@ -69,7 +69,7 @@ namespace TopiaForge.ModManager
                 if (!lifecycleActivationPublishedAtLoad.Remove(current.handle)
                     && loadedSceneModes.TryGetValue(current.handle, out var suppressedMode))
                 {
-                    // The detailed SceneLoadEvent stream already treats a Single load as authoritative even when
+                    // The detailed SceneLoadEvent stream already treats a Single load as a world replacement even when
                     // Unity activates it one callback later. Publish only the exact activation to the new lifecycle
                     // stream so existing detailed subscribers do not gain a duplicate callback.
                     runtime.DispatchSceneLifecycleActivated(
@@ -85,7 +85,7 @@ namespace TopiaForge.ModManager
             if (!current.IsValid() || !loadedSceneModes.TryGetValue(current.handle, out var mode))
             {
                 // When activation precedes sceneLoaded, that later callback samples the scene as active and emits
-                // the authoritative notification exactly once.
+                // the world-replacement notification exactly once.
                 return;
             }
 
