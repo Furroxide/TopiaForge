@@ -45,6 +45,11 @@ jobs:
           lfs: true
           persist-credentials: false
 
+      - name: Set up .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: "10.0.301"
+
       - name: Probe Robotopia managed refs
         id: refs
         shell: pwsh
@@ -58,7 +63,12 @@ jobs:
         run: |
           $failOnMissing = [System.Convert]::ToBoolean($env:FAIL_ON_MISSING_REFS)
           try {
-            ./tools/restore-robotopia-managed-refs.ps1 -Probe -RequireLatest
+            dotnet run `
+              --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj `
+              -c Release -- --probe --require-latest
+            if ($LASTEXITCODE -ne 0) {
+              throw "Managed-reference probe failed with exit code $LASTEXITCODE."
+            }
             "available=true" >> $env:GITHUB_OUTPUT
           }
           catch {
@@ -96,14 +106,17 @@ jobs:
       - name: Install archive dependency
         run: |
           sudo apt-get update
-          sudo apt-get install -y p7zip-full
+          sudo apt-get install -y p7zip-full unzip
 
       - name: Resolve Robotopia refs cache key
         id: refs-cache
         shell: pwsh
         env:
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-        run: ./tools/restore-robotopia-managed-refs.ps1 -Source public -CacheKeyOnly
+        run: >-
+          dotnet run
+          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
+          -c Release -- --source public --cache-key-only
 
       - name: Cache Robotopia managed refs
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -117,8 +130,17 @@ jobs:
           ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
         run: >-
-          ./tools/restore-robotopia-managed-refs.ps1
-          -Source public -RequireLatest
+          dotnet run
+          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
+          -c Release -- --source public --require-latest
+
+      - name: Validate 11 SDK packages and all 7 C# harnesses
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore TopiaForge.slnx
+          dotnet build TopiaForge.slnx -c Release --no-restore
+          bash tools/verify-csharp-release-surface.sh
 
       - name: Build two independent ecosystem payloads
         shell: bash
@@ -127,9 +149,24 @@ jobs:
           set -euo pipefail
           test "$(dotnet --version)" = 10.0.301
           dart pub get --enforce-lockfile
+          dotnet build \
+            "$GITHUB_WORKSPACE/src/TopiaForge.ModPackageValidator/TopiaForge.ModPackageValidator.csproj" \
+            -c Release --nologo
           for output in "$RUNNER_TEMP/ecosystem-a" "$RUNNER_TEMP/ecosystem-b"; do
             dart run bin/topiaforge.dart pack --all --output "$output" --configuration Release
             dart run bin/topiaforge.dart unity pack-packages --output "$output/vpm"
+            shopt -s nullglob
+            packages=("$output"/*.topiaforgemod)
+            vpm_packages=("$output/vpm"/*.zip)
+            multiplayer_packages=(
+              "$output"/io.github.furroxide.topiaforge.multiplayer-*.topiaforgemod
+            )
+            test "${#packages[@]}" -eq 12
+            test "${#vpm_packages[@]}" -eq 3
+            test "${#multiplayer_packages[@]}" -eq 1
+            for package in "${packages[@]}"; do
+              dart run bin/topiaforge.dart check package "$package"
+            done
           done
 
       - name: Prove byte-for-byte deterministic ecosystem output
@@ -277,7 +314,10 @@ jobs:
           ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
           ROBOTOPIA_REFS_URL: ${{ secrets.ROBOTOPIA_REFS_URL }}
           ROBOTOPIA_REFS_SHA256: ${{ secrets.ROBOTOPIA_REFS_SHA256 }}
-        run: ./tools/restore-robotopia-managed-refs.ps1 -CacheKeyOnly
+        run: >-
+          dotnet run
+          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
+          -c Release -- --cache-key-only
 
       - name: Cache Robotopia managed refs
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -294,7 +334,10 @@ jobs:
           ROBOTOPIA_REFS_URL: ${{ secrets.ROBOTOPIA_REFS_URL }}
           ROBOTOPIA_REFS_SHA256: ${{ secrets.ROBOTOPIA_REFS_SHA256 }}
           ROBOTOPIA_REFS_TOKEN: ${{ secrets.ROBOTOPIA_REFS_TOKEN }}
-        run: ./tools/restore-robotopia-managed-refs.ps1 -RequireLatest
+        run: >-
+          dotnet run
+          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
+          -c Release -- --require-latest
 
       # Proves the Dart-native scaffold + pack pipeline works on every OS before it feeds the release payload.
       # Scaffolds inside the checkout (not RUNNER_TEMP) so the generated ProjectReference to
@@ -433,6 +476,126 @@ jobs:
           dart run bin/topiaforge.dart "${args[@]}"
         env:
           MACOS_NOTARY_TEAM_ID: ${{ matrix.platform == 'macos' && secrets.MACOS_NOTARY_TEAM_ID || '' }}
+
+      # Exercise the same extracted-archive lifecycle as the unsigned dry run.
+      # The generated projects must stay buildable after the signed archive and
+      # its embedded CLI, SDK feed, templates, and tools have been removed.
+      - name: Exercise all packaged mod templates
+        shell: bash
+        env:
+          TOPIAFORGE_DATA_ROOT: ${{ runner.temp }}/release-template-data
+          NUGET_PACKAGES: ${{ runner.temp }}/release-template-nuget
+          DOTNET_CLI_HOME: ${{ runner.temp }}/release-template-dotnet-home
+        run: |
+          set -euo pipefail
+          workspace="${GITHUB_WORKSPACE//\\//}"
+          archive="$workspace/release-artifacts/${{ matrix.asset }}"
+          temp="${RUNNER_TEMP//\\//}"
+          extracted="$temp/release-template-extracted"
+          projects="$temp/release-template-projects"
+          packages="$temp/release-template-packages"
+          fake_game="$temp/release-template-game"
+          installed_packages="$fake_game/BepInEx/TopiaForge/packages"
+          rm -rf "$extracted" "$projects" "$packages" "$fake_game"
+          mkdir -p "$extracted" "$projects" "$packages" \
+            "$fake_game/Robotopia_Data/Managed"
+          printf 'game fixture\n' >"$fake_game/Robotopia.exe"
+          printf 'managed fixture\n' >"$fake_game/Robotopia_Data/Managed/UnityEngine.dll"
+          printf '{"id":"2227"}\n' >"$fake_game/installed-build.json"
+          game_for_cli="$fake_game"
+          if [ "${{ matrix.platform }}" = "windows" ]; then
+            game_for_cli="$(cygpath -w "$fake_game")"
+          fi
+          export ROBOTOPIA_GAME_DIR="$game_for_cli"
+          if command -v 7z >/dev/null 2>&1; then
+            seven_zip=7z
+          elif command -v 7zz >/dev/null 2>&1; then
+            seven_zip=7zz
+          else
+            seven_zip="/c/Program Files/7-Zip/7z.exe"
+          fi
+          "$seven_zip" x -y "$archive" "-o$extracted" >/dev/null
+
+          payload="$extracted"
+          cli="$extracted/topiaforge"
+          if [ "${{ matrix.platform }}" = "windows" ]; then
+            cli="$extracted/topiaforge.exe"
+          elif [ "${{ matrix.platform }}" = "macos" ]; then
+            payload="$extracted/TopiaForge.app/Contents/Resources/TopiaForge"
+          fi
+          if [ "${{ matrix.platform }}" != "windows" ]; then
+            chmod +x "$cli"
+          fi
+          if [ "${{ matrix.platform }}" = "macos" ]; then
+            chmod +x "$payload/topiaforge" \
+              "$payload/topiaforge-arm64" "$payload/topiaforge-x64"
+          fi
+
+          templates=(minimal gameplay gamemode service ui asset world)
+          for template in "${templates[@]}"; do
+            "$cli" new mod "release.$template" --template "$template" \
+              --name "Release $template" --author "TopiaForge CI" \
+              --license MIT --dir "$projects"
+            "$cli" restore --project "$projects/release.$template"
+            "$cli" check scaffold "$projects/release.$template" \
+              --forbid "$extracted" --forbid "$workspace"
+          done
+
+          # World and gamemode scaffolds declare these runtime providers. Seed
+          # them from the canonical payload so installs remain fully offline.
+          for dependency_id in \
+            io.github.furroxide.topiaforge.robotkit \
+            io.github.furroxide.topiaforge.worlds; do
+            dependency_package=''
+            dependency_count=0
+            while IFS= read -r candidate; do
+              dependency_package="$candidate"
+              dependency_count=$((dependency_count + 1))
+            done < <(
+              find "$temp/prebuilt-dist" -type f \
+                -name "$dependency_id-*.topiaforgemod" | sort
+            )
+            test "$dependency_count" -eq 1
+            "$cli" install "$dependency_package"
+          done
+
+          for template in "${templates[@]}"; do
+            project="$projects/release.$template"
+            entry=$(find "$project" -maxdepth 1 -name '*.csproj' -print -quit)
+            test -n "$entry"
+            dotnet build "$entry" -c Release --no-restore --nologo
+            test_count=0
+            while IFS= read -r test_project; do
+              test_count=$((test_count + 1))
+              dotnet test "$test_project" -c Release --no-restore --nologo
+            done < <(find "$project" -name '*.Tests.csproj' \
+              -not -path '*/bin/*' -not -path '*/obj/*' | sort)
+            test "$test_count" -gt 0
+            package=$("$cli" pack --project "$project" \
+              --output "$packages/$template" | tail -1)
+            "$cli" check package "$package"
+            "$cli" install "$package"
+            "$cli" check scaffold "$project" \
+              --forbid "$extracted" --forbid "$workspace" \
+              --package "$package" \
+              --installed-packages "$installed_packages"
+          done
+
+          # Force a real rebuild of every entry, contract, and test project
+          # after the archive's CLI, templates, SDK feed, and tools are gone.
+          rm -rf "$extracted"
+          test ! -e "$extracted"
+          for template in "${templates[@]}"; do
+            project="$projects/release.$template"
+            project_count=0
+            while IFS= read -r project_file; do
+              project_count=$((project_count + 1))
+              dotnet build "$project_file" -c Release --no-restore \
+                --nologo -t:Rebuild
+            done < <(find "$project" -name '*.csproj' \
+              -not -path '*/bin/*' -not -path '*/obj/*' | sort)
+            test "$project_count" -gt 1
+          done
 
       - name: Reject retired names in release package
         shell: bash

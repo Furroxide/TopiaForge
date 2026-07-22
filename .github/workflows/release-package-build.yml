@@ -105,7 +105,7 @@ jobs:
       - name: Install archive dependency
         run: |
           sudo apt-get update
-          sudo apt-get install -y p7zip-full
+          sudo apt-get install -y p7zip-full unzip
 
       - name: Resolve Robotopia refs cache key
         id: refs-cache
@@ -133,6 +133,14 @@ jobs:
           --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
           -c Release -- --source public --require-latest
 
+      - name: Validate 11 SDK packages and all 7 C# harnesses
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore TopiaForge.slnx
+          dotnet build TopiaForge.slnx -c Release --no-restore
+          bash tools/verify-csharp-release-surface.sh
+
       - name: Build two independent ecosystem payloads
         shell: bash
         working-directory: apps/topiaforge_cli
@@ -148,7 +156,13 @@ jobs:
             dart run bin/topiaforge.dart unity pack-packages --output "$output/vpm"
             shopt -s nullglob
             packages=("$output"/*.topiaforgemod)
-            test "${#packages[@]}" -gt 0
+            vpm_packages=("$output/vpm"/*.zip)
+            multiplayer_packages=(
+              "$output"/io.github.furroxide.topiaforge.multiplayer-*.topiaforgemod
+            )
+            test "${#packages[@]}" -eq 12
+            test "${#vpm_packages[@]}" -eq 3
+            test "${#multiplayer_packages[@]}" -eq 1
             for package in "${packages[@]}"; do
               dart run bin/topiaforge.dart check package "$package"
             done
