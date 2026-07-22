@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
-  "title": "TopiaForge Mod Manifest V4",
-  "description": "Canonical manifest contract for trusted, in-process TopiaForge mods. Capabilities are disclosure metadata, not a security sandbox.",
+  "title": "TopiaForge Mod Manifest",
+  "description": "TopiaForge Manifest V5 for trusted, in-process mods. Multiplayer metadata is optional; absence means standalone-only. Capabilities are disclosure metadata, not a security sandbox.",
   "type": "object",
   "maxProperties": 64,
   "required": [
@@ -19,7 +19,7 @@
   ],
   "properties": {
     "$schema": { "type": "string", "maxLength": 512 },
-    "schemaVersion": { "const": 4 },
+    "schemaVersion": { "const": 5 },
     "name": { "$ref": "#/definitions/modId" },
     "displayName": { "type": "string", "minLength": 1, "maxLength": 128 },
     "version": { "$ref": "#/definitions/semver" },
@@ -124,7 +124,8 @@
       "maxItems": 64,
       "uniqueItems": true,
       "items": { "$ref": "#/definitions/dllPath" }
-    }
+    },
+    "multiplayer": { "$ref": "#/definitions/multiplayer" }
   },
   "patternProperties": {
     "^x-[A-Za-z0-9_.-]{1,64}$": true
@@ -206,6 +207,55 @@
         "loaderVersion": { "$ref": "#/definitions/semver" },
         "gameVersion": { "$ref": "#/definitions/semver" },
         "toolVersion": { "$ref": "#/definitions/semver" }
+      }
+    },
+    "multiplayer": {
+      "type": "object",
+      "required": ["mode"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "enum": ["client-local", "server-only", "session"] },
+        "presence": { "enum": ["required", "optional"] },
+        "protocol": { "$ref": "#/definitions/multiplayerProtocol" },
+        "synchronizedFiles": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/portablePath" }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["mode"],
+            "properties": { "mode": { "const": "session" } }
+          },
+          "then": { "required": ["presence", "protocol"] }
+        },
+        {
+          "if": {
+            "required": ["mode"],
+            "properties": { "mode": { "enum": ["client-local", "server-only"] } }
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                { "required": ["presence"] },
+                { "required": ["protocol"] },
+                { "required": ["synchronizedFiles"] }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "multiplayerProtocol": {
+      "type": "object",
+      "required": ["version"],
+      "additionalProperties": false,
+      "properties": {
+        "version": { "$ref": "#/definitions/semver" },
+        "peerVersionRange": { "$ref": "#/definitions/versionRange" }
       }
     }
   }

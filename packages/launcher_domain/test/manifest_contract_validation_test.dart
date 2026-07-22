@@ -7,7 +7,7 @@ void main() {
       'preserves namespaced extension fields through canonical serialization',
       () {
         final manifest = ModManifest.fromJson({
-          'schemaVersion': 4,
+          'schemaVersion': 5,
           'name': 'sample.forward-compatible',
           'displayName': 'Forward Compatible',
           'version': '1.2.3',
@@ -281,7 +281,7 @@ Map<String, Object?> _manifestJson({
   String entryAssembly = 'Validation.dll',
   String version = '1.0.0',
 }) => {
-  'schemaVersion': 4,
+  'schemaVersion': 5,
   'name': 'validation.mod',
   'displayName': 'Validation Mod',
   'version': version,

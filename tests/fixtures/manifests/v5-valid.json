@@ -1,0 +1,22 @@
+{
+  "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+  "schemaVersion": 5,
+  "name": "fixtures.v5-valid",
+  "displayName": "V5 Fixture",
+  "version": "1.2.3",
+  "author": { "name": "TopiaForge Tests" },
+  "entryAssembly": "Fixture.dll",
+  "entryType": "Fixtures.V5Mod",
+  "dependencies": { "fixtures.required": ">=1.0.0 <2.0.0" },
+  "optionalDependencies": { "fixtures.optional": "*" },
+  "loadBefore": ["fixtures.later"],
+  "supportedGameVersionRange": "0.0.2227",
+  "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "capabilities": ["input"],
+  "platforms": ["windows"],
+  "architectures": ["x64"],
+  "contentTargets": ["gameplay"],
+  "builtWith": { "toolVersion": "1.0.0" },
+  "x-test-metadata": { "enabled": true }
+}

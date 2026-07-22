@@ -28,6 +28,7 @@ part 'topiaforge_dev_commands.dart';
 part 'topiaforge_environment_commands.dart';
 part 'topiaforge_help.dart';
 part 'topiaforge_mod_commands.dart';
+part 'topiaforge_manifest_migration_commands.dart';
 part 'topiaforge_mod_module_commands.dart';
 part 'topiaforge_new_commands.dart';
 part 'topiaforge_package_validation.dart';
