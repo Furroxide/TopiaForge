@@ -92,23 +92,9 @@ jobs:
       - name: Build solution
         run: dotnet build TopiaForge.slnx -c Release --no-restore
 
-      - name: Run test harness
-        run: >-
-          dotnet run
-          --project tests/TopiaForge.ModManager.Tests/TopiaForge.ModManager.Tests.csproj
-          -c Release
-
-      - name: Run synthetic mod runtime integration tests
-        run: >-
-          dotnet run
-          --project tests/TopiaForge.ModRuntime.Tests/TopiaForge.ModRuntime.Tests.csproj
-          -c Release
-
-      - name: Run release scaffold validator tests
-        run: >-
-          dotnet run
-          --project tests/TopiaForge.ModPackageValidator.Tests/TopiaForge.ModPackageValidator.Tests.csproj
-          -c Release
+      - name: Audit 11 SDK packages and run all 7 C# harnesses
+        shell: bash
+        run: bash tools/verify-csharp-release-surface.sh
 
       - name: Audit game-binding coverage
         run: >-
@@ -225,7 +211,7 @@ jobs:
       - name: Analyze and test shared UI
         working-directory: packages/launcher_ui
         run: |
-          flutter pub get
+          flutter pub get --enforce-lockfile
           dart format --output=none --set-exit-if-changed lib test
           flutter analyze
           flutter test
@@ -492,6 +478,7 @@ jobs:
           cmp ../tests/live-game-acceptance.json dist/source/tests/live-game-acceptance.json
           test -f dist/api/csharp/index.html
           test -f dist/api/csharp/api/TopiaForge.Mods.IModContext.html
+          test -f dist/api/csharp/api/TopiaForge.Mods.IMultiplayerSession.html
           test -f dist/api/csharp/api/TopiaForge.Mods.Interop.Unity.IUnityInteropService.html
           test -f dist/api/dart/index.html
           test -f dist/api/dart/launcher_domain/launcher_domain/index.html

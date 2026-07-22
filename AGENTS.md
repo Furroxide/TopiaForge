@@ -19,10 +19,15 @@ Run these before handoff when touching the relevant areas:
 dotnet build TopiaForge.slnx -c Release
 dotnet run --project tests\TopiaForge.ModManager.Tests\TopiaForge.ModManager.Tests.csproj -c Release
 dotnet run --project tests\TopiaForge.ModRuntime.Tests\TopiaForge.ModRuntime.Tests.csproj -c Release
+dotnet run --project tests\TopiaForge.Mods.Analyzers.Tests\TopiaForge.Mods.Analyzers.Tests.csproj -c Release
+dotnet run --project tests\TopiaForge.Mods.Multiplayer.Generators.Tests\TopiaForge.Mods.Multiplayer.Generators.Tests.csproj -c Release
+dotnet run --project tests\TopiaForge.Mods.Multiplayer.Tests\TopiaForge.Mods.Multiplayer.Tests.csproj -c Release
 dart test packages\launcher_domain
 dart test packages\launcher_data
+dart test apps\topiaforge_cli
 dart analyze packages\launcher_domain
 dart analyze packages\launcher_data
+dart analyze apps\topiaforge_cli
 flutter test packages\launcher_ui
 flutter analyze packages\launcher_ui
 flutter analyze apps\topiaforge_launcher_flutter

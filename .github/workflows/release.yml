@@ -28,6 +28,7 @@ jobs:
     outputs:
       version: ${{ steps.metadata.outputs.version }}
       tag: ${{ steps.metadata.outputs.tag }}
+      prerelease: ${{ steps.metadata.outputs.prerelease }}
       target_sha: ${{ steps.metadata.outputs.target_sha }}
       notes_file: ${{ steps.metadata.outputs.notes_file }}
       release_head_sha: ${{ steps.evidence.outputs.release_head_sha }}
@@ -73,6 +74,7 @@ jobs:
             '[.releases[] | select(.version == $version)] |
              select(length == 1) | .[0]' release/catalog.json)
           tag=$(jq -er '.tag' <<<"$entry")
+          prerelease=$(jq -er '.prerelease | select(type == "boolean")' <<<"$entry")
           notes_file=$(jq -er '.notesFile' <<<"$entry")
           target_sha=$(git rev-parse HEAD)
           test "$tag" = "$GITHUB_REF_NAME"
@@ -80,6 +82,7 @@ jobs:
           {
             echo "version=$version"
             echo "tag=$tag"
+            echo "prerelease=$prerelease"
             echo "target_sha=$target_sha"
             echo "notes_file=$notes_file"
           } >>"$GITHUB_OUTPUT"
@@ -189,6 +192,7 @@ jobs:
           "TopiaForge ${{ needs.verify-candidate.outputs.version }}"
           "${{ needs.verify-candidate.outputs.notes_file }}"
           release-assets
+          "${{ needs.verify-candidate.outputs.prerelease }}"
 
       - name: Explain the manual publication boundary
         run: |
