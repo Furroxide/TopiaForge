@@ -35,6 +35,12 @@ the full reference. Build branded in-game UI for Robotopia (windows, HUDs, modal
 [docs/UiKit.md](docs/UiKit.md) and the F8 gallery mod. The complete first-party catalog and candidate gameplay
 acceptance flows are in [docs/FirstPartyMods.md](docs/FirstPartyMods.md).
 
+TopiaForge 1.0 remains standalone-only, while the stable multiplayer API preview lets authors opt a V5 mod into
+generated server-canonical contracts, loopback play, and deterministic multi-peer tests before live
+transport ships. V5 is also the normal standalone manifest when `multiplayer` is omitted; pre-release V4 was retired.
+See
+[docs/Multiplayer.md](docs/Multiplayer.md) and [docs/ManifestV5.md](docs/ManifestV5.md).
+
 ## Standalone launcher
 
 The next-generation desktop launcher is in:
@@ -134,6 +140,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [SUPPORT.md]
 ```powershell
 dotnet build TopiaForge.slnx -c Release
 dotnet run --project tests\TopiaForge.ModManager.Tests\TopiaForge.ModManager.Tests.csproj -c Release
+dotnet run --project tests\TopiaForge.ModRuntime.Tests\TopiaForge.ModRuntime.Tests.csproj -c Release
+dotnet run --project tests\TopiaForge.Mods.Analyzers.Tests\TopiaForge.Mods.Analyzers.Tests.csproj -c Release
+dotnet run --project tests\TopiaForge.Mods.Multiplayer.Generators.Tests\TopiaForge.Mods.Multiplayer.Generators.Tests.csproj -c Release
+dotnet run --project tests\TopiaForge.Mods.Multiplayer.Tests\TopiaForge.Mods.Multiplayer.Tests.csproj -c Release
 Push-Location packages\launcher_domain; dart test; dart analyze; Pop-Location
 Push-Location packages\launcher_data; dart test; dart analyze; Pop-Location
 Push-Location apps\topiaforge_cli; dart test; dart analyze; Pop-Location

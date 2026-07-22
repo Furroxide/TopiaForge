@@ -6,7 +6,7 @@
     "dotnetRuntime": "10.0.9",
     "dart": "3.12.2",
     "flutter": "3.44.6",
-    "nodeMinimum": "20.0.0",
+    "nodeMinimum": "24.16.0",
     "unity": "6000.0.23f1"
   },
   "gameBuild": {
@@ -23,7 +23,7 @@
     "third_party/BepInEx/provenance.json"
   ],
   "versioning": {
-    "productVersion": "1.0.0",
+    "productVersion": "1.0.0-rc.1",
     "componentVersionsAreIndependent": true,
     "rollback": "none-initial-release"
   },

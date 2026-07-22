@@ -167,7 +167,7 @@ export function validateRegistry(value) {
       throw new Error(`registry mod ${index} has no manifest id.`);
     }
     if (
-      mod.manifest.schemaVersion !== 4
+      mod.manifest.schemaVersion !== 5
       || typeof mod.manifest.version !== 'string'
       || mod.manifest.version.trim() === ''
     ) {

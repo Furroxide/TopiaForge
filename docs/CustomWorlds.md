@@ -7,7 +7,7 @@ description: Register bundle-backed Robotopia worlds and modes through the safe 
 
 The Worlds module is TopiaForge's safe authoring boundary for custom Robotopia worlds and gamemodes.
 It owns mod-defined worlds, gamemodes, menu entries, scene transitions, pause actions, shops, and
-one authoritative `WorldSession`. Consumer mods never coordinate scenes or global teardown directly.
+one current `WorldSession`. Consumer mods never coordinate scenes or global teardown directly.
 
 ## Start from a compiled scaffold
 
@@ -34,12 +34,14 @@ content and registrations are released automatically after session teardown, unl
 
 ## Pause and save behavior
 
-World pause actions are registered through the Worlds provider and remain owner-bound. Story state
-belongs in `Context.Storage` under mod-owned keys. End the current session with an explicit
+World pause actions are registered through the Worlds provider and remain owner-bound.
+`Context.LocalStorage` is suitable only for installation-local settings and progress that does not
+need to follow a save or synchronize between peers. Shared/save-scoped story state requires a
+future authoritative world-state service. End the current session with an explicit
 `WorldSessionEndReason`; do not infer teardown from arbitrary scene polling.
 
 Live acceptance for custom Robotopia worlds is Windows/Proton-only for V1. Other Robotopia code mods
 remain portable when their manifest constraints and content are portable.
 
-See [Specialist modules](Modules.md#worlds), [Manifest V4](ManifestV4.md#runtime-and-content-constraints),
+See [Specialist modules](Modules.md#worlds), [Manifest V5](ManifestV5.md#package-contract),
 and [Test a mod](TestingMods.md).

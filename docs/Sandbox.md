@@ -11,7 +11,7 @@ Unity or Robotopia assembly, reflection, or patching dependency.
 
 ## Dependencies
 
-The manifest declares schema V4 dependencies on the Worlds and RobotKit runtime providers, and the
+The manifest declares schema V5 dependencies on the Worlds and RobotKit runtime providers, and the
 project references the exact `TopiaForge.Mods.Worlds` and `TopiaForge.Mods.RobotKit` contract
 packages. Providers are resolved with `Context.RequireExtension<T>()`.
 
@@ -30,8 +30,9 @@ assets, entities, or scheduled work remain.
 
 - Worlds: Robotopia custom content root, menu entry, current session, pause/exit behavior, and teardown.
 - RobotKit: type discovery, reachable spawn, objectives, interaction, dialogue, and optional voice.
-- Core services: named input, Robotopia player and camera aim state, physics/entity queries, package assets, audio, config,
-  save-scoped storage, localization, commands, diagnostics, and scheduling.
+- Core services: named input, process-local Robotopia player and camera aim state, physics/entity
+  queries, package assets, audio, config, installation-local storage, localization, commands,
+  diagnostics, and scheduling.
 - Robotopia UI: HUD/window/modal/toast behavior through `Context.Ui`, including scale, high
   contrast, and reduced motion.
 

@@ -17,7 +17,7 @@ settings, retained game-over actions, and clean restart/exit behavior.
 
 ## Player loop
 
-1. Worlds starts a Zombies session in the configured arena and waits until the authoritative scene,
+1. Worlds starts a Zombies session in the configured arena and waits until the active gameplay scene,
    player, and RobotKit services are ready.
 2. A short preparation timer leads into a wave budget. Reachable spawn searches place infected robots
    outside the player's minimum safety radius while an alive cap keeps pressure bounded.
@@ -93,7 +93,7 @@ health, uplink, presentation, and test behavior live.
 
 Zombies also exercises failure paths that small samples rarely reach:
 
-- Worlds publishes immutable session replacements when the authoritative gameplay scene changes, so
+- Worlds publishes immutable session replacements when the active gameplay scene changes, so
   session consumers rebind instead of holding stale scene identity.
 - RobotKit anchors canonical SDK identity to native robot roots. Queries, physics hits, and player
   targeting therefore agree even when a native robot has many child colliders.

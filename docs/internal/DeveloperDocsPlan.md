@@ -172,7 +172,7 @@ Section type in brackets (loose Diátaxis check). **Legend:** 🟢 exists today 
 
 ### Phase 0 — Stop the bleed (in-repo Markdown) · setup ~0.5 day · authoring ~0.5–1 day
 - Expand `docs\Modding.md` into a real end-to-end Quickstart (template → build → `topiaforge pack` → install → F10).
-- `docs/ManifestV4.md` now documents the canonical schema-V4 field set: ID-to-range `dependencies` and `optionalDependencies`, `loadBefore`/`loadAfter`, compatibility and host constraints, capabilities, bounded `x-*` metadata, build provenance, and the safe mod-id rule.
+- `docs/ManifestV5.md` documents the canonical schema-V5 field set: ID-to-range `dependencies` and `optionalDependencies`, `loadBefore`/`loadAfter`, compatibility and host constraints, capabilities, bounded `x-*` metadata, build provenance, optional multiplayer metadata, and the safe mod-id rule.
 - Add `CONTRIBUTING.md` with the one-line content-routing rule + PR checklist.
 - **Done when:** a new modder can ship a `.topiaforgemod` using only in-repo Markdown.
 
@@ -251,7 +251,7 @@ The generated C# API tier is **worthless until comments exist** — this is the 
 
 1. **Decide the two forks** (§8): commit to versioning now (→ Docusaurus) or defer (→ Starlight, recommended); and whether to minimize toolchains (DocFX-whole-site / Writerside) or keep best-of-breed (recommended).
 2. **C# prerequisite kickoff (completed for V1):** every safe contract project generates XML documentation and treats CS1591 as an error; DocFX publishes the approved public API baselines.
-3. **Phase 0 Markdown (completed):** `docs/Modding.md` is the quickstart, `docs/ManifestV4.md` covers the strict V4 contract and package-id regex, and `CONTRIBUTING.md` defines content routing.
+3. **Phase 0 Markdown (completed):** `docs/Modding.md` is the quickstart, `docs/ManifestV5.md` covers the strict V5 contract and package-id regex, and `CONTRIBUTING.md` defines content routing.
 4. **CI seed:** add a GitHub Actions job with `markdownlint-cli2` + `lychee` link-check **and a manifest-key parse test** (§7) on PRs.
 5. **Scaffold the portal** (chosen generator) under `website/` and wire a deploy-to-Pages workflow with a placeholder home page to lock in hosting/URL early.
 

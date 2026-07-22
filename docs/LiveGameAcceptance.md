@@ -76,6 +76,12 @@ multiple-provider registration order, deterministic first selection, and idempot
 This case does not claim to inject a corrupt package; corrupt optional-provider isolation remains a
 synthetic runtime integration test.
 
+The `integration.multiplayer-loopback` marker verifies the real in-game preview provider through the same declared
+extension dependency used by ordinary mods. The acceptance mod binds a generated contract, registers snapshot-backed
+state, submits a bounded typed command, verifies its canonical response/state, and observes its accepted presentation
+event. It also requires a ready interactive standalone session with both logical client and server sides and a
+connected local participant. It does not claim that live transport or dedicated Robotopia hosting is available.
+
 ## TFACCEPT100
 
 The checkout is incomplete. Restore `tests/live-game-acceptance.json`.

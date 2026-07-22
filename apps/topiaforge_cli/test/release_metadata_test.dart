@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
+import 'package:json_schema/json_schema.dart';
 import 'package:path/path.dart' as p;
 import 'package:topiaforge/src/release_metadata.dart';
 import 'package:topiaforge/src/release_policy.dart';
@@ -17,12 +18,88 @@ void main() {
   setUp(() {
     temp = Directory.systemTemp.createTempSync('topiaforge-metadata-test-');
     root = _repositoryRoot();
-    release = TopiaForgeReleaseCatalog.load(root).release('1.0.0');
+    release = TopiaForgeReleaseCatalog.load(root).release('1.0.0-rc.1');
     _writeCandidateAssets(temp, release);
   });
 
   tearDown(() {
     if (temp.existsSync()) temp.deleteSync(recursive: true);
+  });
+
+  test('release catalog schema and parser retain prerelease state', () {
+    final catalogFile = File(p.join(root, 'release', 'catalog.json'));
+    final schemaFile = File(
+      p.join(root, 'schemas', 'topiaforge.release-catalog.schema.json'),
+    );
+    final catalogJson =
+        jsonDecode(catalogFile.readAsStringSync()) as Map<String, Object?>;
+    final schemaJson =
+        jsonDecode(schemaFile.readAsStringSync()) as Map<String, Object?>;
+    final schema = JsonSchema.create(schemaJson);
+    final result = schema.validate(catalogJson);
+
+    expect(result.isValid, isTrue, reason: result.errors.join('\n'));
+    expect(catalogJson['schemaVersion'], 3);
+    expect(release.version, '1.0.0-rc.1');
+    expect(release.tag, 'v1.0.0-rc.1');
+    expect(release.prerelease, isTrue);
+
+    final entryWithoutFlag = Map<String, Object?>.from(
+      (catalogJson['releases'] as List).single as Map,
+    )..remove('prerelease');
+    final invalidCatalog = <String, Object?>{
+      ...catalogJson,
+      'releases': [entryWithoutFlag],
+    };
+    expect(schema.validate(invalidCatalog).isValid, isFalse);
+    expect(
+      () => TopiaForgeReleaseCatalogEntry.fromJson(entryWithoutFlag),
+      throwsStateError,
+    );
+
+    final legacyCatalog = <String, Object?>{...catalogJson, 'schemaVersion': 2};
+    expect(schema.validate(legacyCatalog).isValid, isFalse);
+    final legacyRoot = Directory(p.join(temp.path, 'legacy-catalog-root'));
+    final legacyFile = File(p.join(legacyRoot.path, 'release', 'catalog.json'))
+      ..createSync(recursive: true)
+      ..writeAsStringSync(jsonEncode(legacyCatalog));
+    expect(legacyFile.existsSync(), isTrue);
+    expect(
+      () => TopiaForgeReleaseCatalog.load(legacyRoot.path),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.toString(),
+          'message',
+          contains('schemaVersion 3'),
+        ),
+      ),
+    );
+  });
+
+  test('release policy rejects a mismatched prerelease flag', () async {
+    final mismatched = TopiaForgeReleaseCatalogEntry(
+      version: release.version,
+      tag: release.tag,
+      prerelease: false,
+      status: release.status,
+      notesFile: release.notesFile,
+      components: release.components,
+      vpmPackages: release.vpmPackages,
+      mods: release.mods,
+      excludedDeveloperMods: release.excludedDeveloperMods,
+      artifacts: release.artifacts,
+    );
+    final issues = await const ReleasePolicyValidator().validate(
+      policy: TopiaForgeReleasePolicy.load(root),
+      release: mismatched,
+      allowUnresolvedPolicy: true,
+      verifyArchiveHashes: false,
+    );
+
+    expect(
+      issues,
+      contains('Catalog prerelease false does not match version 1.0.0-rc.1.'),
+    );
   });
 
   test(
@@ -137,6 +214,51 @@ void main() {
       );
     },
   );
+
+  test('V1 safe contract assembly identity survives patch releases', () async {
+    final next = TopiaForgeReleaseCatalogEntry(
+      version: release.version,
+      tag: release.tag,
+      prerelease: release.prerelease,
+      status: release.status,
+      notesFile: release.notesFile,
+      components: {...release.components, 'sdk': '1.0.1', 'unityUi': '1.0.1'},
+      vpmPackages: release.vpmPackages,
+      mods: release.mods,
+      excludedDeveloperMods: release.excludedDeveloperMods,
+      artifacts: release.artifacts,
+    );
+    final issues = await const ReleasePolicyValidator().validate(
+      policy: TopiaForgeReleasePolicy.load(root),
+      release: next,
+      allowUnresolvedPolicy: true,
+      verifyArchiveHashes: false,
+    );
+
+    const abstractions =
+        'src/TopiaForge.Mods.Abstractions/TopiaForge.Mods.Abstractions.csproj';
+    const interop =
+        'src/TopiaForge.Mods.Interop.Unity/TopiaForge.Mods.Interop.Unity.csproj';
+    const unityUi =
+        'src/TopiaForge.Mods.UnityUi/TopiaForge.Mods.UnityUi.csproj';
+    bool hasAssemblyIssue(String project) => issues.any(
+      (issue) =>
+          issue.startsWith('$project AssemblyVersion ') &&
+          issue.contains('does not match'),
+    );
+
+    expect(
+      issues,
+      contains('$abstractions Version 1.0.0-rc.1 does not match 1.0.1.'),
+    );
+    expect(hasAssemblyIssue(abstractions), isFalse);
+    expect(hasAssemblyIssue(unityUi), isFalse);
+    expect(
+      hasAssemblyIssue(interop),
+      isTrue,
+      reason: 'the explicitly unstable interop package is not V1-frozen',
+    );
+  });
 }
 
 void _writeCandidateAssets(

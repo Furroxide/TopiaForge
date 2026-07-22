@@ -23,13 +23,13 @@ package root, or global cleanup target.
 | `Logger` | Attributed debug, information, warning, and exception-chain messages. |
 | `Lifetime` | Shutdown cancellation and reverse-order cleanup. |
 | `Events` | Frame, fixed-frame, late-frame, and scene-load subscriptions. |
-| `Files` | Bounded package-file reads and persistent data-file reads/writes without raw paths. |
-| `Config` | Typed defaults, validation, migrations, reset, and atomic save. |
-| `Storage` | Typed save-scoped values and mod-owned story flags. |
+| `Files` | Bounded package-file reads and installation-local persistent data-file reads/writes without raw paths. |
+| `Config` | Process-local typed defaults, validation, migrations, reset, and atomic save. |
+| `LocalStorage` | Installation-local typed values that are not save-scoped or replicated. |
 | `Input` | Named rebindable keyboard, mouse, and gamepad actions plus conflict reporting. |
 | `Time` | Current frame, fixed-frame, and late-frame samples. |
 | `Scheduler` | Main-thread next-frame, delayed, repeating, and cancellable work. |
-| `Player` | Camera aim, position, health, damage/heal, and control leases. |
+| `LocalPlayer` | Process-local camera aim, position, health, damage/heal, and control leases. |
 | `Scenes` | Active/loaded scenes, checkpoint observation, and typed scene loading. |
 | `Entities` | Opaque entity transforms, bounded queries, destruction, and motion leases. |
 | `Physics` | Raycasts, sphere casts, and bounded overlap queries. |
@@ -42,6 +42,13 @@ package root, or global cleanup target.
 | `Commands` | Namespaced commands and invocation. |
 | `Diagnostics` | Bounded structured reports mirrored to the attributed log. |
 | `Extensions` | Typed providers exposed by declared dependencies. |
+
+Locality is part of the V1 contract. `Files`, `Config`, `LocalStorage`, `Input`, `Time`,
+`LocalPlayer`, `Interactions`, `Items`, `Audio`, and `Ui` describe this game process only; they do
+not silently synchronize between peers. `IEntity.Id` and scene instance ids are process-local
+correlation keys, not network identities. A future authoritative world-state service will be a
+separate specialist contract rather than a reinterpretation of local storage. Hosts without an
+interactive player or presentation surface return the usual typed `Unavailable` results.
 
 ## Start from a compiled template
 
@@ -105,7 +112,7 @@ activation of an additively loaded gameplay scene:
 ```csharp
 Context.Events.SubscribeSceneLoaded((SceneLoadEvent scene) =>
 {
-    if (!scene.IsAuthoritativeReplacement)
+    if (!scene.IsWorldReplacement)
     {
         return;
     }
@@ -115,7 +122,7 @@ Context.Events.SubscribeSceneLoaded((SceneLoadEvent scene) =>
 ```
 
 `Mode` reports `Single` or `Additive`, `IsActive` reports whether that scene is currently active,
-and `IsAuthoritativeReplacement` accepts every single replacement; for additive transitions it
+and `IsWorldReplacement` accepts every single replacement; for additive transitions it
 accepts an activated gameplay scene while filtering loader/menu overlays. Detailed subscribers can
 therefore observe an additive scene once when it loads and again if it later becomes active. The extension
 falls back to `Single` plus active metadata on older hosts, and both overloads return

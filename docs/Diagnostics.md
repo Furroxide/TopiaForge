@@ -42,7 +42,8 @@ The project references a specialist contract assembly without its manifest/runti
 `topiaforge mod add <module>`, then `topiaforge restore`. This adds both the exact contract package
 and its root `dependencies` entry; an intentional nonblocking integration may instead use the
 root `optionalDependencies` map. Text in descriptions or `x-*` metadata does not count. Commit
-`packages.lock.json` and `topiaforge.sdk.lock.json` after restore.
+`packages.lock.json` and `topiaforge.sdk.lock.json` after restore. Multiplayer projects must also run
+`topiaforge mod sync multiplayer` and commit `topiaforge.multiplayer.lock.json`.
 
 ### TF1005
 
@@ -168,7 +169,7 @@ bundled-framework finding. Validation reads metadata only and never loads mod co
 ### TFPKG170
 
 **Downloaded package metadata differs from the manifest approved during planning.** Refresh the
-package source and retry. Source maintainers must publish immutable bytes whose canonical V4
+package source and retry. Source maintainers must publish immutable bytes whose canonical V5
 manifest exactly matches the indexed manifest; TopiaForge does not stage mismatched packages.
 
 ### TFINBOX100–TFINBOX130

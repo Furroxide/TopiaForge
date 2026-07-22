@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:launcher_data/launcher_data.dart';
 import 'package:path/path.dart' as p;
 
 import 'spdx_expression.dart';
@@ -113,8 +114,8 @@ class TopiaForgeReleaseCatalog {
   static TopiaForgeReleaseCatalog load(String repositoryRoot) {
     final file = File(p.join(repositoryRoot, 'release', 'catalog.json'));
     final json = _readObject(file);
-    if (json['schemaVersion'] != 2 || json['releases'] is! List) {
-      throw StateError('${file.path} must contain a schemaVersion 2 catalog.');
+    if (json['schemaVersion'] != 3 || json['releases'] is! List) {
+      throw StateError('${file.path} must contain a schemaVersion 3 catalog.');
     }
     final releases = <TopiaForgeReleaseCatalogEntry>[];
     final versions = <String>{};
@@ -145,6 +146,7 @@ class TopiaForgeReleaseCatalogEntry {
   const TopiaForgeReleaseCatalogEntry({
     required this.version,
     required this.tag,
+    required this.prerelease,
     required this.status,
     required this.notesFile,
     required this.components,
@@ -155,9 +157,14 @@ class TopiaForgeReleaseCatalogEntry {
   });
 
   factory TopiaForgeReleaseCatalogEntry.fromJson(Map<String, Object?> json) {
+    final prerelease = json['prerelease'];
+    if (prerelease is! bool) {
+      throw StateError('release catalog entry prerelease must be a boolean.');
+    }
     return TopiaForgeReleaseCatalogEntry(
       version: json['version'] as String? ?? '',
       tag: json['tag'] as String? ?? '',
+      prerelease: prerelease,
       status: json['status'] as String? ?? '',
       notesFile: json['notesFile'] as String? ?? '',
       components: _stringMap(json['components'], 'components'),
@@ -173,6 +180,7 @@ class TopiaForgeReleaseCatalogEntry {
 
   final String version;
   final String tag;
+  final bool prerelease;
   final String status;
   final String notesFile;
   final Map<String, String> components;
@@ -214,6 +222,21 @@ class ReleasePolicyValidator {
     List<String> issues,
     bool allowUnresolvedPolicy,
   ) {
+    final versionMatch = RegExp(
+      r'^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$',
+    ).firstMatch(release.version);
+    if (versionMatch == null) {
+      issues.add(
+        'Catalog version ${release.version} is not a supported semantic version.',
+      );
+    }
+    final versionIsPrerelease =
+        versionMatch != null && release.version.contains('-');
+    if (release.prerelease != versionIsPrerelease) {
+      issues.add(
+        'Catalog prerelease ${release.prerelease} does not match version ${release.version}.',
+      );
+    }
     if (release.tag != 'v${release.version}') {
       issues.add('Catalog tag ${release.tag} must equal v${release.version}.');
     }
@@ -251,7 +274,7 @@ class ReleasePolicyValidator {
       'dotnetRuntime': '10.0.9',
       'dart': '3.12.2',
       'flutter': '3.44.6',
-      'nodeMinimum': '20.0.0',
+      'nodeMinimum': '24.16.0',
       'unity': '6000.0.23f1',
     };
     if (!_sameMap(expected, policy.toolchains)) {
@@ -379,8 +402,6 @@ class ReleasePolicyValidator {
           release.components['loader'],
       'src/TopiaForge.ModManager.Core/TopiaForge.ModManager.Core.csproj':
           release.components['loaderCore'],
-      'src/TopiaForge.Mods.Abstractions/TopiaForge.Mods.Abstractions.csproj':
-          release.components['sdk'],
       'src/TopiaForge.Mods.UnityUi/TopiaForge.Mods.UnityUi.csproj':
           release.components['unityUi'],
       'src/TopiaForge.GameCompat.Extractor/TopiaForge.GameCompat.Extractor.csproj':
@@ -389,7 +410,26 @@ class ReleasePolicyValidator {
           release.components['gameCompatSurface'],
     };
     for (final entry in assemblies.entries) {
-      _expectCsprojVersion(root, entry.key, entry.value, issues);
+      _expectCsprojVersion(
+        root,
+        entry.key,
+        entry.value,
+        issues,
+        expectedAssemblyVersion:
+            entry.key ==
+                'src/TopiaForge.Mods.UnityUi/TopiaForge.Mods.UnityUi.csproj'
+            ? _stableMajorAssemblyVersion(entry.value)
+            : null,
+      );
+    }
+    for (final packageId in topiaForgeSdkPackageIds) {
+      _expectSdkCsprojVersion(
+        root,
+        'src/$packageId/$packageId.csproj',
+        packageId,
+        release.components['sdk'],
+        issues,
+      );
     }
     final versionSource = readBoundedTextFileSync(
       File(
@@ -406,34 +446,6 @@ class ReleasePolicyValidator {
       )) {
         issues.add('${entry.key} does not match the release catalog.');
       }
-    }
-  }
-
-  void _validateMods(
-    TopiaForgeReleaseCatalogEntry release,
-    String root,
-    List<String> issues,
-  ) {
-    final found = <String, String>{};
-    final modsRoot = Directory(p.join(root, 'mods'));
-    for (final directory in listBoundedDirectorySync(
-      modsRoot,
-    ).whereType<Directory>()) {
-      final file = File(p.join(directory.path, 'topiaforge.mod.json'));
-      if (!file.existsSync()) continue;
-      final json = _readObject(file);
-      final id = json['name'] as String? ?? '';
-      final version = json['version'] as String? ?? '';
-      if (found.containsKey(id.toLowerCase())) {
-        issues.add('Duplicate first-party mod id $id.');
-      }
-      found[id.toLowerCase()] = version;
-    }
-    final expected = {...release.mods, ...release.excludedDeveloperMods};
-    if (!_sameMap(expected, found)) {
-      issues.add(
-        'First-party mod ids/versions do not match release/catalog.json.',
-      );
     }
   }
 

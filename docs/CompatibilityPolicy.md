@@ -6,7 +6,8 @@ description: V1 source, binary, manifest, runtime, and package compatibility gua
 # Compatibility policy
 
 TopiaForge runtime, SDK, CLI, launcher, schemas, and first-party packages use Semantic Versioning 2.
-The safe V1 contract begins at `1.0.0`.
+The safe V1 contract identity begins at `1.0.0`; the first public packages carry the
+`1.0.0-rc.1` release-candidate suffix.
 
 ## Safe SDK packages
 
@@ -27,9 +28,16 @@ The explicitly unstable interop package is outside these guarantees.
 
 ## Manifest and serialized state
 
-Schema V4 is the only V1 package manifest. Unknown fields fail validation except bounded namespaced
-`x-*` metadata. Changing an existing field's meaning requires a new schema and migration command;
-the runtime does not guess or normalize unsupported legacy input.
+Schema V5 is the sole TopiaForge 1.0 package manifest. Its `multiplayer` object is optional; absence means
+standalone-only. Manifest V4 was retired before the first public release and is rejected with an actionable V5
+migration path. Readers dispatch by schema version and never reinterpret an older schema. Unknown fields fail
+validation except bounded namespaced `x-*` metadata. Changing an existing field's meaning requires a new schema and
+migration command. Future loaders may accept newer schemas alongside V5, but must keep a dedicated V5 reader and
+its original semantics for the entire V1 compatibility line.
+
+The `TopiaForge.Mods.Multiplayer` 1.0 public preview receives the same V1 source and binary compatibility guarantee as
+other safe specialist contracts. It does not promise live networking in TopiaForge 1.0. Protocol versions are
+independent from package versions, and standalone V5 mods are not assumed multiplayer-correct.
 
 Manager, profile, receipt, journal, and last-run state are versioned, bounded, and written atomically.
 Readers either migrate a known older state or fail with a recovery path. Package-supplied backup

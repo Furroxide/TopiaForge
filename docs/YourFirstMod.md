@@ -85,5 +85,5 @@ Edit the default greeting in `ExampleFirstModConfig.cs`, add a test assertion, a
 - Use [Core services](CoreServices.md) to add input, player, physics, entities, assets, audio, or UI.
 - Add robots, worlds, time control, prompt overrides, or UGC through [Specialist modules](Modules.md).
 - Read [Test a mod](TestingMods.md) before adding behavior with several resource handles.
-- Use [Manifest V4](ManifestV4.md) for dependencies, constraints, capabilities, and exported contracts.
+- Use [Manifest V5](ManifestV5.md) for dependencies, constraints, capabilities, optional multiplayer metadata, and exported contracts.
 - See [Diagnostics](Diagnostics.md) when a stable `TF` code appears.

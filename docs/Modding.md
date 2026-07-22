@@ -58,7 +58,7 @@ topiaforge new mod example.my-mod --template gameplay --name "My Mod" --author "
 Every scaffold includes:
 
 - an exact V1 `PackageReference` and analyzer;
-- manifest schema V4 with current compatibility defaults;
+- manifest schema V5 with current compatibility defaults;
 - project-local `global.json` and NuGet lock state;
 - source-control rules for generated restore output; and
 - an NUnit project using `TopiaForge.Mods.Testing`.
@@ -66,11 +66,11 @@ Every scaffold includes:
 ## Core and specialist APIs
 
 `IModContext` exposes discoverable, non-null properties for identity/runtime metadata, logging,
-lifetime, events, files, config, storage, input, time, scheduling, player, scenes, entities,
+lifetime, events, files, config, installation-local storage, input, time, scheduling, the local player, scenes, entities,
 physics, interactions, items, assets, audio, UI, localization, commands, diagnostics, and
 extensions. See [Core services](CoreServices.md) for the complete service map and usage rules.
 
-RobotKit, Worlds, Chronos, Prompts, and UGC are separate Unity-free module contracts. Add a module
+RobotKit, Worlds, Chronos, Prompts, UGC, and the multiplayer preview are separate Unity-free module contracts. Add a module
 with `topiaforge mod add <module>` so its compile-time package and runtime manifest dependency stay
 in sync. See [Specialist modules](Modules.md).
 
@@ -87,10 +87,11 @@ Mods should disable only the affected feature and show a useful message.
 
 ## Manifest, restore, and packaging
 
-`topiaforge.mod.json` schema V4 is canonical. Required dependencies and optional dependencies are
+`topiaforge.mod.json` schema V5 is canonical. Omit `multiplayer` for a standalone-only mod; add it through the multiplayer module command when needed. Required dependencies and optional dependencies are
 ID-to-range maps. Compatibility ranges, platform/architecture/content constraints, capabilities,
 load-order hints, exported API assemblies, and namespaced `x-*` metadata are validated before code
-executes. Read [Manifest V4](ManifestV4.md) for every field.
+executes. Read [Manifest V5](ManifestV5.md) for every field and
+[Multiplayer API preview](Multiplayer.md) before opting in.
 
 ```sh
 topiaforge restore
@@ -125,7 +126,8 @@ staged when required and take effect after a Robotopia restart.
 
 ## Next steps
 
-- [Manifest V4](ManifestV4.md)
+- [Manifest V5](ManifestV5.md)
+- [Multiplayer API preview](Multiplayer.md)
 - [Core services](CoreServices.md)
 - [Specialist modules](Modules.md)
 - [Test a mod](TestingMods.md)
