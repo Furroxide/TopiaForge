@@ -430,6 +430,17 @@ public static class ReleaseScaffoldValidator
             return failures;
         }
 
+        var installedContentErrors = ManifestContentValidator.Validate(packageRoot, installedManifest);
+        if (installedContentErrors.Count > 0)
+        {
+            failures.AddRange(installedContentErrors.Select(error => installedManifestPath + ": " + error));
+            return failures;
+        }
+
+        if (sourceManifest.SchemaVersion != installedManifest.SchemaVersion)
+        {
+            failures.Add(installedManifestPath + ": schemaVersion differs from scaffold");
+        }
         CompareManifestField("name", sourceManifest.Id, installedManifest.Id, installedManifestPath, failures);
         CompareManifestField("version", sourceManifest.Version, installedManifest.Version, installedManifestPath, failures);
         CompareManifestField("entryAssembly", sourceManifest.EntryAssembly, installedManifest.EntryAssembly, installedManifestPath, failures);
@@ -439,6 +450,8 @@ public static class ReleaseScaffoldValidator
         {
             failures.Add(installedManifestPath + ": apiAssemblies differs from scaffold");
         }
+
+        CompareMultiplayerMetadata(sourceManifest, installedManifest, installedManifestPath, failures);
 
         var criticalPaths = new[] { "topiaforge.mod.json", installedManifest.EntryAssembly }
             .Concat(installedManifest.ApiAssemblies ?? new List<string>())
@@ -467,6 +480,57 @@ public static class ReleaseScaffoldValidator
 
         VerifyState(installedPackagesRoot, sourceManifest, failures);
         return failures;
+    }
+
+    private static void CompareMultiplayerMetadata(
+        ModManifest source,
+        ModManifest installed,
+        string installedManifestPath,
+        ICollection<string> failures)
+    {
+        var sourceMultiplayer = source.Multiplayer;
+        var installedMultiplayer = installed.Multiplayer;
+        if ((sourceMultiplayer == null) != (installedMultiplayer == null))
+        {
+            failures.Add(installedManifestPath + ": multiplayer metadata differs from scaffold");
+            return;
+        }
+
+        if (sourceMultiplayer == null || installedMultiplayer == null)
+        {
+            return;
+        }
+
+        CompareManifestField(
+            "multiplayer.mode",
+            sourceMultiplayer.Mode,
+            installedMultiplayer.Mode,
+            installedManifestPath,
+            failures);
+        CompareManifestField(
+            "multiplayer.presence",
+            sourceMultiplayer.Presence,
+            installedMultiplayer.Presence,
+            installedManifestPath,
+            failures);
+        CompareManifestField(
+            "multiplayer.protocol.version",
+            sourceMultiplayer.Protocol?.Version ?? string.Empty,
+            installedMultiplayer.Protocol?.Version ?? string.Empty,
+            installedManifestPath,
+            failures);
+        CompareManifestField(
+            "multiplayer.protocol.peerVersionRange",
+            sourceMultiplayer.Protocol?.PeerVersionRange ?? string.Empty,
+            installedMultiplayer.Protocol?.PeerVersionRange ?? string.Empty,
+            installedManifestPath,
+            failures);
+        if (!(sourceMultiplayer.SynchronizedFiles ?? new List<string>()).SequenceEqual(
+                installedMultiplayer.SynchronizedFiles ?? new List<string>(),
+                StringComparer.Ordinal))
+        {
+            failures.Add(installedManifestPath + ": multiplayer.synchronizedFiles differs from scaffold");
+        }
     }
 
     private static void VerifyReceiptSource(

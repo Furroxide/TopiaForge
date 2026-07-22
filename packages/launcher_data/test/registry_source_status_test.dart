@@ -266,7 +266,7 @@ void main() {
           'mods': [
             {
               'manifest': {
-                'schemaVersion': 4,
+                'schemaVersion': 5,
                 'name': 'unsafe.mod',
                 'displayName': 'Unsafe',
                 'version': '1.0.0',
@@ -370,7 +370,7 @@ void _writePackage(
       ArchiveFile.string(
         'topiaforge.mod.json',
         jsonEncode({
-          'schemaVersion': 4,
+          'schemaVersion': 5,
           'name': id,
           'displayName': id,
           'version': version,

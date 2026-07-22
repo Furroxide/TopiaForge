@@ -23,6 +23,7 @@ part 'local_developer_repository/template_copy.dart';
 part 'local_developer_repository/archive_safety.dart';
 part 'local_developer_repository/data_root_repository.dart';
 part 'local_developer_repository/pack_helpers.dart';
+part 'local_developer_repository/multiplayer_contract_lock.dart';
 part 'local_developer_repository/mod_scaffolding.dart';
 part 'local_developer_repository/license_scaffolding.dart';
 part 'local_developer_repository/environment_helpers.dart';

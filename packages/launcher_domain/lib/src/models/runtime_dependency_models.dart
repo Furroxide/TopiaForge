@@ -1,8 +1,8 @@
 part of '../models.dart';
 
 class TopiaForgeRuntimeVersions {
-  static const loaderVersion = '1.0.0';
-  static const sdkVersion = '1.0.0';
+  static const loaderVersion = '1.0.0-rc.1';
+  static const sdkVersion = '1.0.0-rc.1';
   static const gameVersion = '0.0.2227';
 }
 

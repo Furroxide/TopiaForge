@@ -97,7 +97,7 @@ void _registryCliTests(_CliTestHarness Function() currentHarness) {
     final good = _writeTestPackage(
       currentHarness().temp,
       manifest: {
-        'schemaVersion': 4,
+        'schemaVersion': 5,
         'name': 'cli.checkable',
         'displayName': 'Checkable',
         'version': '1.0.0',
@@ -144,7 +144,7 @@ void _registryCliTests(_CliTestHarness Function() currentHarness) {
       currentHarness().temp,
       fileName: 'bad-pe.topiaforgemod',
       manifest: {
-        'schemaVersion': 4,
+        'schemaVersion': 5,
         'name': 'cli.bad-pe',
         'displayName': 'Bad PE',
         'version': '1.0.0',
@@ -165,12 +165,12 @@ void _registryCliTests(_CliTestHarness Function() currentHarness) {
     expect(rejectedPe.stderr.toString(), contains('TFPKG160'));
     expect(rejectedPe.stderr.toString(), contains('not a valid PE image'));
 
-    // An old schema manifest fails with structured issues, not a crash dump.
+    // A retired schema fails at dispatch with actionable migration guidance.
     final oldContract = _writeTestPackage(
       currentHarness().temp,
       fileName: 'old-contract.topiaforgemod',
       manifest: {
-        'schemaVersion': 2,
+        'schemaVersion': 4,
         'name': 'cli.old_contract',
         'displayName': 'Old Contract',
         'version': '1.0.0',
@@ -185,10 +185,8 @@ void _registryCliTests(_CliTestHarness Function() currentHarness) {
       oldContract.path,
     ]);
     expect(failed.exitCode, 1);
-    expect(
-      failed.stdout.toString(),
-      contains('error: schemaVersion must be 4.'),
-    );
+    expect(failed.stderr.toString(), contains('retired before TopiaForge 1.0'));
+    expect(failed.stderr.toString(), contains('topiaforge migrate-manifest'));
     expect(failed.stderr.toString(), isNot(contains('Bad state:')));
   });
 
@@ -198,7 +196,7 @@ void _registryCliTests(_CliTestHarness Function() currentHarness) {
       final package = _writeTestPackage(
         currentHarness().temp,
         manifest: {
-          'schemaVersion': 4,
+          'schemaVersion': 5,
           'name': 'cli.publishable',
           'displayName': 'Publishable',
           'version': '1.0.0',
@@ -262,7 +260,7 @@ void _registryCliTests(_CliTestHarness Function() currentHarness) {
         currentHarness().temp,
         fileName: 'warned.topiaforgemod',
         manifest: {
-          'schemaVersion': 4,
+          'schemaVersion': 5,
           'name': 'cli.warned',
           'displayName': 'Warned',
           'version': '1.0.0',

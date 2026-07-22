@@ -464,7 +464,7 @@ class _InboxFixture {
   }) {
     final assemblyName = '${id.replaceAll('.', '_')}.dll';
     final manifest = <String, Object?>{
-      'schemaVersion': 4,
+      'schemaVersion': 5,
       'name': id,
       'displayName': id,
       'version': version,

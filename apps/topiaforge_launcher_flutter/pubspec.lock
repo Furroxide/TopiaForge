@@ -238,21 +238,21 @@ packages:
       path: "../../packages/launcher_data"
       relative: true
     source: path
-    version: "1.0.0"
+    version: "1.0.0-rc.1"
   launcher_domain:
     dependency: "direct main"
     description:
       path: "../../packages/launcher_domain"
       relative: true
     source: path
-    version: "1.0.0"
+    version: "1.0.0-rc.1"
   launcher_ui:
     dependency: "direct main"
     description:
       path: "../../packages/launcher_ui"
       relative: true
     source: path
-    version: "1.0.0"
+    version: "1.0.0-rc.1"
   leak_tracker:
     dependency: transitive
     description:

@@ -77,6 +77,11 @@ namespace TopiaForge.ModManager.Core
 
                         if (errors.Count == 0)
                         {
+                            errors.AddRange(ManifestContentValidator.Validate(versionDirectory, manifest));
+                        }
+
+                        if (errors.Count == 0)
+                        {
                             errors.AddRange(PackageInstallReceipt.Verify(versionDirectory, manifest));
                         }
 

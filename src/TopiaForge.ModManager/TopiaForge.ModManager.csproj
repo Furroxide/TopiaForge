@@ -3,16 +3,17 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>TopiaForge.ModManager</AssemblyName>
     <RootNamespace>TopiaForge.ModManager</RootNamespace>
-    <Version>1.0.0</Version>
+    <Version>1.0.0-rc.1</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>
-    <InformationalVersion>1.0.0</InformationalVersion>
+    <InformationalVersion>1.0.0-rc.1</InformationalVersion>
     <TopiaForgeSafeProject>false</TopiaForgeSafeProject>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
     <ProjectReference Include="..\TopiaForge.Mods.Chronos\TopiaForge.Mods.Chronos.csproj" />
+    <ProjectReference Include="..\TopiaForge.Mods.Multiplayer\TopiaForge.Mods.Multiplayer.csproj" />
     <ProjectReference Include="..\TopiaForge.Mods.Interop.Unity\TopiaForge.Mods.Interop.Unity.csproj" />
     <ProjectReference Include="..\TopiaForge.Mods.Prompts\TopiaForge.Mods.Prompts.csproj" />
     <ProjectReference Include="..\TopiaForge.Mods.RobotKit\TopiaForge.Mods.RobotKit.csproj" />

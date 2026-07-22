@@ -349,7 +349,7 @@ ModManifest _manifest(
   List<String> capabilities = const [],
 }) {
   return ModManifest(
-    schemaVersion: 4,
+    schemaVersion: 5,
     id: id,
     name: id,
     version: version,

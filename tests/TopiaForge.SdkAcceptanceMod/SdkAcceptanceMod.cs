@@ -64,6 +64,7 @@ namespace TopiaForge.SdkAcceptance
             RegisterEvents();
             RunUiChecks();
             RegisterProviderChecks();
+            RunMultiplayerLoopbackChecks();
             var scheduled = Context.Scheduler.NextFrame(() => _ = RunAsyncChecks());
             if (!scheduled.Succeeded)
             {
@@ -99,16 +100,13 @@ namespace TopiaForge.SdkAcceptance
                 return;
             }
 
-            var state = Context.Storage.Load<AcceptanceState>("acceptance-state");
+            var state = Context.LocalStorage.Load<AcceptanceState>("acceptance-state");
             var current = state.TryGetValue(out var stored) ? stored : new AcceptanceState();
             current.LoadCount++;
-            if (!Context.Storage.Save("acceptance-state", current).Succeeded
-                || !Context.Storage.SetStoryFlag("acceptance-live", true).Succeeded
-                || !Context.Storage.TryGetStoryFlag("acceptance-live", out var storyFlag)
-                || !storyFlag
-                || !Context.Storage.DeleteStoryFlag("acceptance-live").Succeeded)
+            if (!Context.LocalStorage.Save("acceptance-state", current).Succeeded
+                || !Context.LocalStorage.Contains("acceptance-state"))
             {
-                Fail("authoring.config-storage-localization-commands", "scoped storage or story flags failed");
+                Fail("authoring.config-storage-localization-commands", "installation-local typed storage failed");
                 return;
             }
 
@@ -444,7 +442,7 @@ namespace TopiaForge.SdkAcceptance
                     return;
                 }
 
-                var position = Context.Player.TryGetSnapshot(out var player) && player != null
+                var position = Context.LocalPlayer.TryGetSnapshot(out var player) && player != null
                     ? player.Position + new Vec3(0f, -1000f, 0f)
                     : new Vec3(0f, -1000f, 0f);
                 var spawned = Context.Assets.Spawn(new AssetSpawnRequest(
@@ -573,7 +571,7 @@ namespace TopiaForge.SdkAcceptance
                 var target = objectives.RegisterTarget(
                     "PLAYER",
                     RobotTargetKind.Player,
-                    () => Context.Player.TryGetSnapshot(out var current) && current != null
+                    () => Context.LocalPlayer.TryGetSnapshot(out var current) && current != null
                         ? new RobotTargetSnapshot(current.Position)
                         : (RobotTargetSnapshot?)null);
                 var objective = objectives.SetObjective(robot, RobotObjective.GoTo("PLAYER"));
@@ -726,7 +724,7 @@ namespace TopiaForge.SdkAcceptance
 
         private void ObservePlayerAndWorld()
         {
-            if (Context.Player.TryGetSnapshot(out var player) && player != null)
+            if (Context.LocalPlayer.TryGetSnapshot(out var player) && player != null)
             {
                 if (!lifecycleProbeRunning
                     && completed.Contains("ui.accessibility-and-focus")
@@ -742,13 +740,13 @@ namespace TopiaForge.SdkAcceptance
 
                 if (!completed.Contains("player.health-and-control"))
                 {
-                    var lease = Context.Player.AcquireControl("SDK live acceptance");
+                    var lease = Context.LocalPlayer.AcquireControl("SDK live acceptance");
                     lease.Value?.Dispose();
                     var healthOk = true;
-                    if (Context.Player.TryGetHealth(out _))
+                    if (Context.LocalPlayer.TryGetHealth(out _))
                     {
-                        var damage = Context.Player.Damage(new PlayerDamageRequest(0.01f, "topiaforge-acceptance"));
-                        var heal = Context.Player.Heal(0.01f, "topiaforge-acceptance");
+                        var damage = Context.LocalPlayer.Damage(new PlayerDamageRequest(0.01f, "topiaforge-acceptance"));
+                        var heal = Context.LocalPlayer.Heal(0.01f, "topiaforge-acceptance");
                         healthOk = damage.Succeeded && heal.Succeeded;
                     }
 

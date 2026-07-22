@@ -169,7 +169,7 @@ LauncherSnapshot _updateSnapshot({
 
 ModManifest _manifest(String id, {required String version}) {
   return ModManifest(
-    schemaVersion: 4,
+    schemaVersion: 5,
     id: id,
     name: 'Timer Mod',
     version: version,
@@ -205,7 +205,7 @@ LauncherSnapshot _discoverySnapshot({bool developerMode = false}) {
 RegistryMod _registryMod(String id, String name, String category) {
   return RegistryMod(
     manifest: ModManifest(
-      schemaVersion: 4,
+      schemaVersion: 5,
       id: id,
       name: name,
       version: '1.0.0',

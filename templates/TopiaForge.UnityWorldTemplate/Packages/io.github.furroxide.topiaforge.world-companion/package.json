@@ -1,6 +1,6 @@
 {
   "name": "io.github.furroxide.topiaforge.world-companion",
-  "version": "0.1.0",
+  "version": "0.1.0-rc.1",
   "displayName": "TopiaForge World Companion",
   "description": "Author custom Robotopia worlds in the Unity Editor: validate the world prefab (SpawnPoint marker, no custom scripts, colliders) and build it into the paired mod's AssetBundle via TopiaForge > Build World Bundle or the headless topiaforge world build command.",
   "license": "NOASSERTION",

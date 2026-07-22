@@ -142,7 +142,7 @@ void main() {
         expect(manifestFile.existsSync(), isTrue, reason: template.id);
         final manifestJson =
             jsonDecode(manifestFile.readAsStringSync()) as Map<String, Object?>;
-        expect(manifestJson['schemaVersion'], 4, reason: template.id);
+        expect(manifestJson['schemaVersion'], 5, reason: template.id);
         final manifest = ModManifest.fromJson(manifestJson);
         expect(
           manifest.validate().where((issue) => issue.isBlocking),
@@ -182,7 +182,7 @@ void main() {
           mainProjectText,
           allOf(
             contains(
-              '<PackageReference Include="TopiaForge.Mods.Abstractions" Version="1.0.0" />',
+              '<PackageReference Include="TopiaForge.Mods.Abstractions" Version="1.0.0-rc.1" />',
             ),
             contains('<Compile Remove="tests\\**\\*.cs" />'),
           ),
@@ -213,7 +213,7 @@ void main() {
             contains('<TopiaForgeSafeProject>false</TopiaForgeSafeProject>'),
             contains('<PackageReference Include="NUnit" Version="4.3.2" />'),
             contains(
-              '<PackageReference Include="TopiaForge.Mods.Testing" Version="1.0.0" />',
+              '<PackageReference Include="TopiaForge.Mods.Testing" Version="1.0.0-rc.1" />',
             ),
           ),
           reason: template.id,
@@ -374,7 +374,7 @@ void main() {
     expect(
       projectFile,
       contains(
-        '<PackageReference Include="TopiaForge.Mods.Abstractions" Version="1.0.0" />',
+        '<PackageReference Include="TopiaForge.Mods.Abstractions" Version="1.0.0-rc.1" />',
       ),
     );
     expect(projectFile, contains('<RestorePackagesWithLockFile>true'));

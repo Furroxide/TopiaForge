@@ -24,6 +24,7 @@ namespace TopiaForge.ModManager.Core
             "TopiaForge.Mods.Abstractions.dll",
             "TopiaForge.Mods.Analyzers.dll",
             "TopiaForge.Mods.Chronos.dll",
+            "TopiaForge.Mods.Multiplayer.dll",
             "TopiaForge.Mods.Interop.Unity.dll",
             "TopiaForge.Mods.Prompts.dll",
             "TopiaForge.Mods.RobotKit.dll",

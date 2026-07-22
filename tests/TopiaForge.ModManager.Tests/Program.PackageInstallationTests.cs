@@ -78,7 +78,7 @@ namespace TopiaForge.ModManager.Tests
             var state = new ManagerState();
             var appliedManifest = new ModManifest
             {
-                SchemaVersion = 4,
+                SchemaVersion = 5,
                 Id = "applied.mod",
                 Name = "Applied",
                 Version = "1.0.0",
@@ -87,7 +87,7 @@ namespace TopiaForge.ModManager.Tests
             };
             var pendingManifest = new ModManifest
             {
-                SchemaVersion = 4,
+                SchemaVersion = 5,
                 Id = "pending.mod",
                 Name = "Pending",
                 Version = "1.0.0",
@@ -131,7 +131,7 @@ namespace TopiaForge.ModManager.Tests
                 zip.CreateEntry("../escape.txt");
                 WriteEntry(zip, "topiaforge.mod.json", JsonUtil.Serialize(new ModManifest
                 {
-                    SchemaVersion = 4,
+                    SchemaVersion = 5,
                     Id = "bad.mod",
                     Name = "Bad",
                     Version = "1.0.0",
@@ -392,7 +392,8 @@ namespace TopiaForge.ModManager.Tests
             }
 
             var result = new PackageInstaller().Install(package, paths, new ManagerState(), restartRequired: false);
-            Assert(!result.Ok && result.Errors.Any(e => e.Contains("schemaVersion must be 4")), "schema v1 should be rejected");
+            Assert(!result.Ok && result.Errors.Any(e => e.Contains("schemaVersion 5 is required")),
+                "schema v1 should be rejected without being reinterpreted");
         }
 
         private static void TestInstallPreservesOtherVersions(string root)
@@ -417,7 +418,7 @@ namespace TopiaForge.ModManager.Tests
         {
             var paths = NewPaths(root, "retired-manifest-aliases");
             var package = Path.Combine(root, "retired-manifest-aliases.topiaforgemod");
-            const string manifest = "{\"schemaVersion\":4,\"name\":\"alias.mod\"," +
+            const string manifest = "{\"schemaVersion\":5,\"name\":\"alias.mod\"," +
                 "\"displayName\":\"Alias\",\"version\":\"1.0.0\"," +
                 "\"author\":{\"name\":\"TopiaForge\"},\"entryAssembly\":\"Alias.dll\"," +
                 "\"entryType\":\"Alias.Entry\",\"gameVersion\":\"2227\"," +

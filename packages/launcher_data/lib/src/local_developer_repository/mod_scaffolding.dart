@@ -9,10 +9,10 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
     'io.github.furroxide.topiaforge.chronos': 'TopiaForge.Mods.Chronos',
     'io.github.furroxide.topiaforge.prompts': 'TopiaForge.Mods.Prompts',
     'io.github.furroxide.topiaforge.robotkit': 'TopiaForge.Mods.RobotKit',
+    'io.github.furroxide.topiaforge.multiplayer': 'TopiaForge.Mods.Multiplayer',
     'io.github.furroxide.topiaforge.ugc.livesync': 'TopiaForge.Mods.Ugc',
     'io.github.furroxide.topiaforge.worlds': 'TopiaForge.Mods.Worlds',
   };
-
   Directory get _modTemplatesRoot =>
       Directory(p.join(_repositoryRoot.path, 'templates', 'mod'));
 
@@ -111,7 +111,7 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
     // the author; templates must never claim ownership on their behalf.
     var manifestMap = <String, Object?>{
       r'$schema': ModManifest.canonicalSchemaUrl,
-      'schemaVersion': 4,
+      'schemaVersion': ModManifest.currentSchemaVersion,
       'name': id,
       'displayName': name,
       'version': '0.1.0',
@@ -217,7 +217,7 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
 
   String _compatibleMinorRange(String version) {
     final parsed = SemanticVersion.parse(version);
-    return '>=${parsed.major}.${parsed.minor}.${parsed.patch} '
+    return '>=$parsed '
         '<${parsed.major}.${parsed.minor + 1}.0';
   }
 
@@ -472,7 +472,7 @@ String _withExactSdkPackageReferences(
         '<PackageReference Version="$version" ',
       );
     }
-    if (package == 'TopiaForge.Mods.Analyzers' &&
+    if (topiaForgeAnalyzerPackageIds.contains(package) &&
         !item.contains('PrivateAssets=')) {
       item = item.replaceFirst(
         '<PackageReference ',
@@ -484,7 +484,7 @@ String _withExactSdkPackageReferences(
   if (missing.isNotEmpty) {
     final items = missing
         .map((package) {
-          final private = package == 'TopiaForge.Mods.Analyzers'
+          final private = topiaForgeAnalyzerPackageIds.contains(package)
               ? ' PrivateAssets="all"'
               : '';
           return '    <PackageReference Include="$package" Version="$version"$private />';

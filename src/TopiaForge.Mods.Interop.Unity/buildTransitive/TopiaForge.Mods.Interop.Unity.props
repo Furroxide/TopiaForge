@@ -1,4 +1,7 @@
 <Project>
+  <PropertyGroup>
+    <TopiaForgeSafeProject Condition="'$(TopiaForgeSafeProject)' == ''">true</TopiaForgeSafeProject>
+  </PropertyGroup>
   <ItemGroup Condition="'$(RobotopiaManagedDir)' != ''">
     <Reference Include="UnityEngine" HintPath="$(RobotopiaManagedDir)/UnityEngine.dll" Private="false" />
     <Reference Include="UnityEngine.CoreModule" HintPath="$(RobotopiaManagedDir)/UnityEngine.CoreModule.dll" Private="false" />

@@ -272,7 +272,7 @@ void _coreCliTests(_CliTestHarness Function() currentHarness) {
     expect(
       project.readAsStringSync(),
       contains(
-        '<PackageReference Include="TopiaForge.Mods.RobotKit" Version="1.0.0" />',
+        '<PackageReference Include="TopiaForge.Mods.RobotKit" Version="1.0.0-rc.1" />',
       ),
     );
 
@@ -298,7 +298,7 @@ void _coreCliTests(_CliTestHarness Function() currentHarness) {
     expect(withInterop['capabilities'], contains('unsafe-native'));
     expect(
       project.readAsStringSync(),
-      contains('Include="TopiaForge.Mods.Interop.Unity" Version="1.0.0"'),
+      contains('Include="TopiaForge.Mods.Interop.Unity" Version="1.0.0-rc.1"'),
     );
 
     final removeModule = await currentHarness().runCli([
@@ -344,7 +344,7 @@ void _coreCliTests(_CliTestHarness Function() currentHarness) {
       r'<TopiaForgeSdkFeed>([^<]+)</TopiaForgeSdkFeed>',
     ).firstMatch(devProps)!.group(1)!;
     final interopPackage = File(
-      p.join(feedPath, 'TopiaForge.Mods.Interop.Unity.1.0.0.nupkg'),
+      p.join(feedPath, 'TopiaForge.Mods.Interop.Unity.1.0.0-rc.1.nupkg'),
     );
     final interopArchive = ZipDecoder().decodeBytes(
       interopPackage.readAsBytesSync(),
@@ -354,7 +354,9 @@ void _coreCliTests(_CliTestHarness Function() currentHarness) {
       (file) =>
           file.name == 'buildTransitive/TopiaForge.Mods.Interop.Unity.props',
     );
-    expect(utf8.decode(interopProps.content as List<int>), contains('TF1101'));
+    final interopPropsText = utf8.decode(interopProps.content as List<int>);
+    expect(interopPropsText, contains('TopiaForgeSafeProject'));
+    expect(interopPropsText, contains('TF1101'));
 
     // An invalid edit is refused instead of written.
     final badResult = await currentHarness().runCli([
@@ -377,7 +379,7 @@ void _coreCliTests(_CliTestHarness Function() currentHarness) {
   });
 
   test(
-    'migrate-manifest converts V3 dependency forms to canonical V4',
+    'migrate-manifest converts V3 dependency forms to canonical V5',
     () async {
       final created = await currentHarness().runCli([
         'new',
@@ -426,7 +428,7 @@ void _coreCliTests(_CliTestHarness Function() currentHarness) {
 
       final migrated =
           jsonDecode(manifestFile.readAsStringSync()) as Map<String, Object?>;
-      expect(migrated['schemaVersion'], 4);
+      expect(migrated['schemaVersion'], 5);
       expect(migrated, isNot(contains('vpmDependencies')));
       expect(migrated, isNot(contains('permissions')));
       expect(migrated['dependencies'], {
@@ -445,6 +447,42 @@ void _coreCliTests(_CliTestHarness Function() currentHarness) {
         'id': 'old.mod',
         'versionRange': '<1.0.0',
       });
+    },
+  );
+
+  test(
+    'migrate-manifest upgrades retired V4 without adding multiplayer',
+    () async {
+      final created = await currentHarness().runCli([
+        'new',
+        'mod',
+        't.migrate-v4',
+        '--dir',
+        currentHarness().temp.path,
+      ]);
+      expect(
+        created.exitCode,
+        0,
+        reason: '${created.stdout}\n${created.stderr}',
+      );
+      final projectDir = p.join(currentHarness().temp.path, 't.migrate-v4');
+      final manifestFile = File(p.join(projectDir, 'topiaforge.mod.json'));
+      final manifest =
+          jsonDecode(manifestFile.readAsStringSync()) as Map<String, Object?>;
+      manifest['schemaVersion'] = 4;
+      manifestFile.writeAsStringSync(jsonEncode(manifest));
+
+      final result = await currentHarness().runCli([
+        'migrate-manifest',
+        '--project',
+        projectDir,
+      ]);
+      expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
+      final migrated =
+          jsonDecode(manifestFile.readAsStringSync()) as Map<String, Object?>;
+      expect(migrated['schemaVersion'], 5);
+      expect(migrated, isNot(contains('multiplayer')));
+      expect(result.stdout, contains('retired schema V4 to V5'));
     },
   );
 }

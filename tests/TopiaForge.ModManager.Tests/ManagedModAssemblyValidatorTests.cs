@@ -187,6 +187,7 @@ namespace TopiaForge.ModManager.Tests
                          "TopiaForge.Mods.Abstractions.dll",
                          "TopiaForge.Mods.Analyzers.dll",
                          "TopiaForge.Mods.Chronos.dll",
+                         "TopiaForge.Mods.Multiplayer.dll",
                          "TopiaForge.Mods.Interop.Unity.dll",
                          "TopiaForge.Mods.Prompts.dll",
                          "TopiaForge.Mods.RobotKit.dll",
@@ -238,7 +239,7 @@ namespace TopiaForge.ModManager.Tests
         {
             return new ModManifest
             {
-                SchemaVersion = 4,
+                SchemaVersion = 5,
                 Id = "tests.valid-mod",
                 Name = "Valid test mod",
                 Author = new ModAuthor { Name = "TopiaForge" },
@@ -246,8 +247,8 @@ namespace TopiaForge.ModManager.Tests
                 EntryAssembly = assembly,
                 EntryType = type,
                 SupportedGameVersionRange = "*",
-                SupportedLoaderVersionRange = ">=1.0.0 <2.0.0",
-                SupportedSdkVersionRange = ">=1.0.0 <2.0.0"
+                SupportedLoaderVersionRange = ">=1.0.0-rc.1 <2.0.0",
+                SupportedSdkVersionRange = ">=1.0.0-rc.1 <2.0.0"
             };
         }
 

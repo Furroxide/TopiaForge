@@ -11,8 +11,8 @@ namespace TopiaForge.ModManager.Tests
     internal static class FirstPartyManifestTests
     {
         private const string GameRange = "0.0.2227";
-        private const string LoaderRange = ">=1.0.0 <2.0.0";
-        private const string SdkRange = ">=1.0.0 <2.0.0";
+        private const string LoaderRange = ">=1.0.0-rc.1 <2.0.0";
+        private const string SdkRange = ">=1.0.0-rc.1 <2.0.0";
 
         internal static void Run()
         {
@@ -23,14 +23,14 @@ namespace TopiaForge.ModManager.Tests
                     SearchOption.AllDirectories)
                 .OrderBy(path => path, StringComparer.Ordinal)
                 .ToList();
-            Assert(manifestPaths.Count == 12, "exactly 12 first-party manifests should be release-audited");
+            Assert(manifestPaths.Count == 13, "exactly 13 first-party manifests should be release-audited");
 
             var manifests = new Dictionary<string, ModManifest>(StringComparer.OrdinalIgnoreCase);
             foreach (var path in manifestPaths)
             {
                 var manifest = ModManifestJson.LoadFile(path);
                 manifests.Add(manifest.Id, manifest);
-                Assert(manifest.SchemaVersion == 4,
+                Assert(manifest.SchemaVersion == ModManifest.CurrentSchemaVersion,
                     manifest.Id + " must use the TopiaForge manifest schema discriminator");
                 Assert(manifest.Id.StartsWith("io.github.furroxide.topiaforge.", StringComparison.Ordinal),
                     manifest.Id + " must live under the first-party TopiaForge identifier namespace");
@@ -59,7 +59,9 @@ namespace TopiaForge.ModManager.Tests
                 var fileVersion = project.Descendants("FileVersion").Select(element => element.Value).SingleOrDefault();
                 var informational = project.Descendants("InformationalVersion").Select(element => element.Value).SingleOrDefault();
                 Assert(version == manifest.Version, manifest.Id + " project Version must match its manifest");
-                Assert(fileVersion == manifest.Version + ".0", manifest.Id + " FileVersion must match its manifest");
+                var numericVersion = manifest.Version.Split('-', '+')[0] + ".0";
+                Assert(fileVersion == numericVersion,
+                    manifest.Id + " FileVersion must preserve the numeric release-line version");
                 Assert(informational == manifest.Version, manifest.Id + " InformationalVersion must match its manifest");
                 ValidateProjectAndLifecycleContract(path, manifest, project);
             }

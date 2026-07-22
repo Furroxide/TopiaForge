@@ -176,6 +176,12 @@ namespace TopiaForge.ModManager.Core
                     return PackagePreflightResult.Fail(stagingPath, manifest, errors);
                 }
 
+                var contentErrors = ManifestContentValidator.Validate(stagingPath, manifest);
+                if (contentErrors.Count > 0)
+                {
+                    return PackagePreflightResult.Fail(stagingPath, manifest, contentErrors);
+                }
+
                 var entryAssemblyPath = Path.Combine(stagingPath, manifest.EntryAssembly);
                 if (!File.Exists(entryAssemblyPath))
                 {

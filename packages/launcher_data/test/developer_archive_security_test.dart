@@ -328,7 +328,7 @@ File _writeModPackage(File file, {List<ArchiveFile> extraEntries = const []}) {
 }
 
 const _modManifest = <String, Object?>{
-  'schemaVersion': 4,
+  'schemaVersion': 5,
   'name': 'safe.mod',
   'displayName': 'Safe Mod',
   'version': '1.0.0',
