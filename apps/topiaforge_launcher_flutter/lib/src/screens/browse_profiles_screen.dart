@@ -237,6 +237,8 @@ class _ProfileDetail extends StatelessWidget {
                       ? 'Uses manager state'
                       : selected.enabledMods.length.toString(),
                 ),
+                const SizedBox(height: 8),
+                ProfileModSelection(state: state, profile: selected),
                 _keyValue(
                   'Selected versions',
                   selected.selectedVersions.length.toString(),

@@ -100,7 +100,10 @@ namespace TopiaForge.ModManager.Core
                     try
                     {
                         var existing = state.Find(manifest.Id);
-                        state.Upsert(manifest, enabled: existing?.Enabled ?? true, restartRequired: restartRequired);
+                        state.Upsert(
+                            manifest,
+                            enabled: existing?.Enabled ?? ModActivationPolicy.IsEnabledByDefault(manifest),
+                            restartRequired: restartRequired);
                     }
                     catch (Exception stateError)
                     {

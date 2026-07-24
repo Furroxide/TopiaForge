@@ -10,6 +10,7 @@ import 'package:test/test.dart';
 
 part 'launcher_data_test_helpers.dart';
 part 'launcher_data_diagnostics_test_part.dart';
+part 'devtool_installation_test_part.dart';
 part 'launcher_data_ugc_test_part.dart';
 part 'profile_launch_test_part.dart';
 part 'runtime_repair_security_test_part.dart';
@@ -67,6 +68,11 @@ void main() {
   );
   _registerRuntimeLoaderPayloadTests(
     repository: () => repository,
+    gameRoot: () => gameRoot,
+  );
+  _registerDevToolInstallationTests(
+    repository: () => repository,
+    root: () => root,
     gameRoot: () => gameRoot,
   );
 

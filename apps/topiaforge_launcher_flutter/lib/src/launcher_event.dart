@@ -65,6 +65,19 @@ class SafeModeToggled extends LauncherEvent {
   final bool enabled;
 }
 
+class ProfileManagerStateInheritanceChanged extends LauncherEvent {
+  const ProfileManagerStateInheritanceChanged(this.enabled);
+
+  final bool enabled;
+}
+
+class ProfileModSelectionChanged extends LauncherEvent {
+  const ProfileModSelectionChanged(this.modId, this.enabled);
+
+  final String modId;
+  final bool enabled;
+}
+
 class KnownInstallDetected extends LauncherEvent {
   const KnownInstallDetected();
 }

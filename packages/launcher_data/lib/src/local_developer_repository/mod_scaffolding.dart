@@ -1,12 +1,12 @@
 part of '../local_developer_repository.dart';
 
-/// Directory-template mod scaffolding + manifest management. Templates live at `templates/mod/<id>/` in the repo,
-/// each with a `template.json` (metadata + partial-manifest defaults) and tokenized source files. The manifest is
-/// always generated programmatically (base → template defaults → CLI overrides → `ModManifest` round-trip) so a
-/// fresh scaffold is guaranteed to pass `check package`.
+/// Directory-template mod scaffolding from `templates/mod/<id>/`, with manifests generated programmatically from
+/// template defaults and CLI overrides so every fresh scaffold passes `check package`.
 extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
   static const _sdkModulePackagesByRuntimeDependency = <String, String>{
     'io.github.furroxide.topiaforge.chronos': 'TopiaForge.Mods.Chronos',
+    'io.github.furroxide.topiaforge.creatorcontent':
+        'TopiaForge.Mods.CreatorContent',
     'io.github.furroxide.topiaforge.prompts': 'TopiaForge.Mods.Prompts',
     'io.github.furroxide.topiaforge.robotkit': 'TopiaForge.Mods.RobotKit',
     'io.github.furroxide.topiaforge.multiplayer': 'TopiaForge.Mods.Multiplayer',

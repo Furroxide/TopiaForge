@@ -72,7 +72,14 @@ namespace TopiaForge.ModManager.Tests
             return paths;
         }
 
-        private static void CreatePackage(string path, string id, string name, string version, string assembly, string type)
+        private static void CreatePackage(
+            string path,
+            string id,
+            string name,
+            string version,
+            string assembly,
+            string type,
+            string category = "")
         {
             CreatePackageCandidate(
                 path,
@@ -80,7 +87,8 @@ namespace TopiaForge.ModManager.Tests
                 name,
                 version,
                 supportedGameVersionRange: "*",
-                corruptEntryAssembly: false);
+                corruptEntryAssembly: false,
+                category: category);
         }
 
         private static void CreatePackageCandidate(
@@ -90,7 +98,8 @@ namespace TopiaForge.ModManager.Tests
             string version,
             string supportedGameVersionRange,
             bool corruptEntryAssembly,
-            IReadOnlyDictionary<string, string>? dependencies = null)
+            IReadOnlyDictionary<string, string>? dependencies = null,
+            string category = "")
         {
             const string fixtureAssembly = "TopiaForge.ValidTestMod.dll";
             const string fixtureType = "TopiaForge.ValidTestMod.ValidMod";
@@ -108,6 +117,7 @@ namespace TopiaForge.ModManager.Tests
                     SupportedGameVersionRange = supportedGameVersionRange,
                     SupportedLoaderVersionRange = ">=1.0.0-rc.1 <2.0.0",
                     SupportedSdkVersionRange = ">=1.0.0-rc.1 <2.0.0",
+                    Category = category,
                     Dependencies = dependencies == null
                         ? new Dictionary<string, string>()
                         : new Dictionary<string, string>(dependencies, StringComparer.Ordinal)

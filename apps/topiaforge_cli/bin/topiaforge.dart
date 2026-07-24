@@ -303,15 +303,10 @@ class _TopiaForgeCli {
         maxBytes: CliFileLimits.manifest,
       );
       final name = (manifest['name'] as String?) ?? p.basename(dir);
-      if (!includeDevMods && manifest['category'] == 'DevTool') {
-        stdout.writeln(
-          'Skipping dev-only mod $name (pass --include-dev-mods to pack it).',
-        );
-        continue;
-      }
-
       // Drop any previously packed versions of this id so no superseded
-      // build can be installed by mistake.
+      // build can be installed by mistake. Do this before the DevTool filter
+      // so ordinary `pack --all` output cannot retain a stale developer-only
+      // package from an earlier `--include-dev-mods` run.
       final safeId = name.replaceAll(RegExp('[^A-Za-z0-9_.-]'), '_');
       for (final stale in listBoundedDirectorySync(output).whereType<File>()) {
         final staleName = p.basename(stale.path);
@@ -319,6 +314,12 @@ class _TopiaForgeCli {
             staleName.endsWith('.topiaforgemod')) {
           stale.deleteSync();
         }
+      }
+      if (!includeDevMods && manifest['category'] == 'DevTool') {
+        stdout.writeln(
+          'Skipping dev-only mod $name (pass --include-dev-mods to pack it).',
+        );
+        continue;
       }
 
       final package = await developerRepository.packModDirectory(

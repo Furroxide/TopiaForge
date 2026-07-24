@@ -133,7 +133,7 @@ jobs:
           --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
           -c Release -- --source public --require-latest
 
-      - name: Validate 11 SDK packages and all 7 C# harnesses
+      - name: Validate 12 SDK packages and all 7 C# harnesses
         shell: bash
         run: |
           set -euo pipefail
@@ -153,6 +153,9 @@ jobs:
             -c Release --nologo
           for output in "$RUNNER_TEMP/ecosystem-a" "$RUNNER_TEMP/ecosystem-b"; do
             dart run bin/topiaforge.dart pack --all --output "$output" --configuration Release
+            dart run bin/topiaforge.dart pack \
+              --project "$GITHUB_WORKSPACE/mods/TopiaForge.CreatorTools" \
+              --output "$output" --configuration Release
             dart run bin/topiaforge.dart unity pack-packages --output "$output/vpm"
             shopt -s nullglob
             packages=("$output"/*.topiaforgemod)
@@ -160,9 +163,17 @@ jobs:
             multiplayer_packages=(
               "$output"/io.github.furroxide.topiaforge.multiplayer-*.topiaforgemod
             )
-            test "${#packages[@]}" -eq 12
+            creator_tools_packages=(
+              "$output"/io.github.furroxide.topiaforge.creatortools-*.topiaforgemod
+            )
+            ui_gallery_packages=(
+              "$output"/io.github.furroxide.topiaforge.uigallery-*.topiaforgemod
+            )
+            test "${#packages[@]}" -eq 15
             test "${#vpm_packages[@]}" -eq 3
             test "${#multiplayer_packages[@]}" -eq 1
+            test "${#creator_tools_packages[@]}" -eq 1
+            test "${#ui_gallery_packages[@]}" -eq 0
             for package in "${packages[@]}"; do
               dart run bin/topiaforge.dart check package "$package"
             done

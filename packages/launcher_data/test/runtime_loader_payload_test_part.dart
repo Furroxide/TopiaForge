@@ -6,6 +6,7 @@ void _registerRuntimeLoaderPayloadTests({
 }) {
   const moduleAndInteropDlls = <String>[
     'TopiaForge.Mods.Chronos.dll',
+    'TopiaForge.Mods.CreatorContent.dll',
     'TopiaForge.Mods.Interop.Unity.dll',
     'TopiaForge.Mods.Multiplayer.dll',
     'TopiaForge.Mods.Prompts.dll',
@@ -34,8 +35,8 @@ void _registerRuntimeLoaderPayloadTests({
     final report = await repository().installOrRepairRuntime(install);
 
     expect(report.ok, isTrue);
-    expect(topiaForgeRuntimeLoaderAssemblies, hasLength(13));
-    expect(topiaForgeRuntimeLoaderDlls, hasLength(13));
+    expect(topiaForgeRuntimeLoaderAssemblies, hasLength(14));
+    expect(topiaForgeRuntimeLoaderDlls, hasLength(14));
     expect(topiaForgeRuntimeLoaderDlls, containsAll(moduleAndInteropDlls));
     final packages = {
       for (final assembly in topiaForgeRuntimeLoaderAssemblies.where(
