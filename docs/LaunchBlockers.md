@@ -31,9 +31,9 @@ check is silently skipped.
 | Gate family | Result | Retained evidence |
 | --- | --- | --- |
 | Whole-repository component and contract inventory | PASS | All source, app, package, mod, template, tool, schema, test, documentation, and workflow surfaces are mapped in `ArchitectureInventory.md`. |
-| C# Release solution | PASS | 43 projects; zero build warnings or errors on SDK `10.0.301` / runtime `10.0.9`. |
-| C# regression harness | PASS | Manager, runtime, analyzer, multiplayer generator, multiplayer provider/rig, package-validator, managed-reference, and live-probe contract suites passed, including hidden initializer side effects, reordered confirmations, and delayed object snapshots. |
-| C# boundaries and public SDK surface | PASS | Unity-free Core, Unity/BepInEx runtime isolation, strict audit, eight generated API baselines, bounded production-read scans, and all 11 SDK package audits passed. |
+| C# Release solution | NEEDS RERUN | The retained 43-project evidence predates Opposite Day and the Creator additions. Rebuild the current 47-project solution on SDK `10.0.301` / runtime `10.0.9` from the frozen candidate. |
+| C# regression harness | NEEDS RERUN | Focused Opposite Day, module-contract, manifest, Prompts API-baseline, and GameCompat checks pass, but the complete current harness and the concurrently changed RobotKit API baseline must be rerun after Creator Content/RobotKit integration is complete. |
+| C# boundaries and public SDK surface | NEEDS RERUN | Unity-free Core, Unity/BepInEx runtime isolation, strict audit, generated API baselines, bounded production-read scans, and all 12 SDK package audits must pass with Creator Content included. |
 | Dart formatting and analyzers | PASS | 340 non-generated Dart files checked; domain, data, UI, app, and CLI analyzers report no issues and every file is at most 500 lines. |
 | Dart domain/data tests | PASS | 199 domain and 282 data tests passed, including Manifest V5 dispatch, multiplayer admission, full runtime-constraint propagation, deterministic package-inbox planning, runtime repair, multiplayer synchronized-file receipt parity, and receipt provenance/repair behavior. |
 | Flutter UI/app tests | PASS | 3 shared-UI and 61 launcher tests passed, including BLoC lifecycle, package-inbox outcomes, scaling, contrast, focus, install/repair confirmation, safe mode, recovery, and Xcode payload/logging configuration. |
@@ -41,18 +41,18 @@ check is silently skipped.
 | C#/Dart contract parity | PASS | Manifest V5, V4 retirement, SemVer 2.0, build mapping, multiplayer admission, canonical fields, unknown fields, dependencies, pins, conflicts, load order, and state fixtures agree. |
 | Sidecar install/runtime/security | PASS | Lockfile `npm ci`, syntax checks, 23 tests, production dependency tree, and audit passed with zero vulnerabilities. |
 | Archive, UGC, diagnostic, repair, and process hardening | PASS | Adversarial traversal/link/collision/size/race/rollback/redaction/timeout regressions passed. |
-| First-party mods | NEEDS RERUN | The 13 source mods align and two independent 12-mod player payloads were byte-identical; all 24 resulting archives passed manifest and managed-assembly validation. Repeat against the frozen candidate; UiGallery remains excluded from the normal payload. |
+| First-party mods | NEEDS RERUN | Repeat deterministic packing and managed-assembly validation for all 16 source mods, the 14-package normal non-DevTool output, and the 15-package release payload with Creator Tools added explicitly; UiGallery remains excluded. |
 | C# author templates | PASS | All seven template families scaffolded from a release-like payload, restored, relocated, built, tested, packed, validated, installed with full receipt checks, and rebuilt after extraction removal; each real platform-archive job repeats that lifecycle. Defaults remain deliberately non-publishable. |
-| VPM and canonical ecosystem payload | NEEDS RERUN | Two independent three-VPM plus 12-mod ecosystem trees were byte-identical and residue-clean. Rebuild and compare them again from the frozen candidate. |
+| VPM and canonical ecosystem payload | NEEDS RERUN | The retained ecosystem evidence predates Creator Content and Creator Tools. Rebuild and compare two independent three-VPM plus 15-mod release trees from the frozen candidate. |
 | Exact-Unity TopiaForgeUi build | PASS | Unity `6000.0.23f1`; two builds matched SHA-256 `3cc6624f2a3a5fabc83c4fde49b32f859869e1d1e202afdaf91a888089f9fedb`. |
 | Exact-Unity representative world build | PASS | Two current-tree builds matched SHA-256 `afa3e9195e8e03199b414f8a5c9002e9f89831041a63c7e1c9b8eef173d9057d`; manifests, editor provenance, and companion/VPM inputs matched. |
 | Exact-Unity lifecycle smoke | NEEDS RERUN | A current-tree Unity `6000.0.23f1` run executed the managed validator and all 16 lifecycle cycles successfully with zero retained-resource delta. The protected workflow invokes and uploads the same evidence, but it must still be regenerated from the frozen candidate. |
-| Robotopia compatibility | PASS | Build `2227`; 188 bindings, 167 statically verifiable, 21 explicitly dynamic/Robotopia-only, zero indeterminate findings; safe GravityGun, Sandbox, and Zombies have no native binding declarations. |
+| Robotopia compatibility | PASS | Build `2227`; 219 bindings, 198 verifiable offline, 21 explicitly uncheckable offline, zero errors, warnings, or indeterminate findings; safe GravityGun, OppositeDay, Sandbox, and Zombies have no native binding declarations. |
 | Public build freshness | PASS | A fresh 2026-07-21 public probe confirms both platform records still identify build `2227`; CI/release fail if the public latest manifest changes. |
 | BepInEx/UnityDoorstop provenance | PASS | Pinned BepInEx `5.4.23.5` archives and extracted trees, UnityDoorstop commit/source, hashes, modes, and notices validate. |
-| Local macOS package structure | NEEDS RERUN | The retained universal-package record predates the V1 CLI, SDK, runtime, and canonical 12-mod payload. Rebuild and validate the frozen V1 archive on macOS. |
+| Local macOS package structure | NEEDS RERUN | The retained universal-package record predates the V1 CLI, SDK, runtime, and canonical 15-mod release payload. Rebuild and validate the frozen V1 archive on macOS. |
 | Local macOS launch and Xcode development | NEEDS RERUN | A scrubbed debug build passed with Flutter `3.44.6`, Dart `3.12.2`, and CocoaPods `1.16.2`, with no tracked native-project drift. Launch and repeat the build from the frozen candidate before release. |
-| Local macOS runtime repair | NEEDS RERUN | The recorded repair targeted the retired pre-V1 loader and package set. Repeat with loader `1.0.0-rc.1` and the canonical 12-mod player payload; package-inbox ingestion remains part of authorized Robotopia acceptance. |
+| Local macOS runtime repair | NEEDS RERUN | The recorded repair targeted the retired pre-V1 loader and package set. Repeat with loader `1.0.0-rc.1` and the canonical 15-mod release payload; package-inbox ingestion remains part of authorized Robotopia acceptance. |
 | Release-policy/BOM/SBOM/checksum machinery | PASS | Policy validation in technical dry-run mode and metadata build/verify regression suites passed; strict mode correctly stops on the blocked catalog status and unresolved owner/legal license decision. |
 | Repository and CI hygiene | PASS | actionlint `1.7.7`, PSScriptAnalyzer `1.25.0`, PowerShell/bash syntax, repository-owned shellcheck, 157 JSON/YAML files, 113 Markdown files, 1,706 built HTML links, LFS, action pins, conflict markers, LF policy, and the Dart line cap passed. |
 | Credential exposure containment | BLOCKED | The affected workspace DerivedData and launcher build logs were removed, and a scrubbed exact-toolchain sentinel build passed; 13 newly produced Xcode activity logs contained no credential-shaped variable names. Credential owners must still rotate the previously exposed values and confirm revocation. See `P0-CRED-01`. |
@@ -69,13 +69,13 @@ check is silently skipped.
 | Frozen candidate hosted matrix and reviewed release record | BLOCKED | This audit intentionally leaves uncommitted changes and creates no tag/release; see `P0-CAND-01`. |
 | Independent player/author clean-machine acceptance | BLOCKED | Requires external participants and supported native hosts; see `P1-E2E-01`. |
 
-Matrix totals: **19 PASS, 2 FAIL, 6 NEEDS RERUN, 11 BLOCKED, 0 SKIP**.
+Matrix totals: **17 PASS, 2 FAIL, 8 NEEDS RERUN, 11 BLOCKED, 0 SKIP**.
 
 The five informational exceptions are explained, not waived: `dotnet format` reports expected workspace-loader
 diagnostics for the intentional Unity compile/reference split while finding no formatting changes; Flutter reports newer
 packages outside current compatible constraints; Node lists optional non-host native packages; package inspection
-warns that the intentionally unresolved project license blocks publication; and 21 GameCompat bindings are inherently
-dynamic and therefore belong to the Robotopia acceptance gate.
+warns that the intentionally unresolved project license blocks publication; and 21 GameCompat bindings are explicitly
+uncheckable offline and therefore belong to the Robotopia acceptance gate.
 
 ## P0 blockers
 
@@ -169,7 +169,7 @@ dynamic and therefore belong to the Robotopia acceptance gate.
 
   Exit criteria: on build `2227`, test startup/shutdown, repeated scenes, safe mode, reloads, enable/disable,
   dependency order, package inbox, collision isolation, partial failures, restart-required state, save compatibility,
-  all 13 source-mod flows, TopiaForgeUi-only UI, dirty updates, and resource teardown. Verify all 21 dynamic GameCompat bindings and
+  all 16 source-mod flows, TopiaForgeUi-only UI, dirty updates, and resource teardown. Verify every declared GameCompat binding and
   record profiler evidence of no steady-state allocation regressions or task/callback leaks.
 
 - [ ] **P0-HOST-01 — Configure and prove the protected hosted release path.**

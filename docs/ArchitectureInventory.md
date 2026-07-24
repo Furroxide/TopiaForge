@@ -10,7 +10,7 @@ not merely build projects. Update it whenever a public contract, generator, or r
 | `TopiaForge.ModManager.Core` | Manifest, version, dependency, path, state, package, and profile-domain logic | Unity-free `netstandard2.1`; consumed by the BepInEx runtime and C# tests |
 | `TopiaForge.ModManager` | BepInEx plugin, startup/shutdown, runtime install state, mod loading/isolation, scenes, logs, package inbox, manager overlay | May reference Unity/BepInEx; ships as the Robotopia-side loader |
 | `TopiaForge.Mods.Abstractions` | V1 safe authoring contracts and manager-owned core services | Unity-free `netstandard2.1`; AssemblyVersion remains `1.0.0.0` throughout V1 |
-| `TopiaForge.Mods.Chronos`, `.Multiplayer`, `.Prompts`, `.RobotKit`, `.Ugc`, `.Worlds` | Optional specialist contract modules | Unity-free reference packages coupled to runtime dependencies by `topiaforge mod add`; Multiplayer is a stable API preview with loopback only |
+| `TopiaForge.Mods.Chronos`, `.CreatorContent`, `.Multiplayer`, `.Prompts`, `.RobotKit`, `.Ugc`, `.Worlds` | Optional specialist contract modules | Unity-free reference packages coupled to runtime dependencies by `topiaforge mod add`; Multiplayer is a stable API preview with loopback only |
 | `TopiaForge.Mods.Multiplayer.Generators` | Multiplayer codecs, registration, protocol descriptors, and prediction-safety diagnostics | Compile-time analyzer package; no transport or native engine surface |
 | `TopiaForge.Mods.Testing` / `.Analyzers` | Runner-neutral fakes/lifecycle harness and safe-project diagnostics | Packaged with every SDK release; generated tests use NUnit |
 | `TopiaForge.Mods.Interop.Unity` | Explicitly unstable native escape hatch | Requires `unsafe-native`; excluded from V1 compatibility guarantees and normal templates |
@@ -19,7 +19,7 @@ not merely build projects. Update it whenever a public contract, generator, or r
 | `TopiaForge.GameCompat.Extractor` | Metadata-only installed-Robotopia inspection | Self-contained developer/release executable; never loads Robotopia code for execution |
 | `TopiaForge.ModManager.Tests` | Cross-component C# harness | Exercises Core, SDK, GameCompat, runtime source conventions, and pure mod seams |
 
-The canonical Robotopia-side loader payload contains thirteen managed assemblies: eleven
+The canonical Robotopia-side loader payload contains fourteen managed assemblies: twelve
 `TopiaForge.*` implementations/contracts plus pinned `System.Reflection.Metadata`
 and `System.Collections.Immutable` 10.0.9. Robotopia build 2227 supplies the
 required `System.Memory`, `System.Buffers`, and
@@ -28,11 +28,12 @@ tests verify their exact identities and hashes instead of shadowing them in the
 plugin directory. Launcher repair and CLI release packaging consume the same
 inventory from `launcher_data`.
 
-The primary solution builds thirteen first-party mods: Chronos, GravityGun, Multiplayer, NoFeedbackUrl, PerfFixes,
-Performance, Prompts, RobotKit, Sandbox, UgcLiveSync, UiGallery, Worlds, and Zombies. Assets are now a manager-owned core service,
+The primary solution builds sixteen first-party mods: Chronos, CreatorContent, CreatorTools, GravityGun, Multiplayer,
+NoFeedbackUrl, OppositeDay, PerfFixes, Performance, Prompts, RobotKit, Sandbox, UgcLiveSync, UiGallery, Worlds, and
+Zombies. Assets are now a manager-owned core service,
 not a globally mutable framework mod. Runtime dependencies are expressed only through `topiaforge.mod.json`;
 project references to safe contracts are compile-time-only. UiGallery is a validated developer catalog and is excluded
-from the twelve-mod normal player payload.
+from the fourteen-package normal non-DevTool payload and the fifteen-package release payload.
 
 ## Launcher and developer tooling
 
@@ -74,8 +75,8 @@ identity are supplied.
 
 - `baselines/gamecode.surface.baseline.json` is the reviewed build-2227 compatibility surface. The extractor may
   propose an update, but release validation rejects an unexplained or different-build baseline.
-- `bindings/*.gamebindings.json` are the seven first-party provider/advanced-mod runtime binding declarations
-  consumed by the compatibility audit. Safe consumer mods such as GravityGun, Sandbox, and Zombies have no binding
+- `bindings/*.gamebindings.json` are the nine first-party provider/advanced-mod runtime binding declarations
+  consumed by the compatibility audit. Safe consumer mods such as GravityGun, OppositeDay, Sandbox, and Zombies have no binding
   manifest because they use SDK contracts only. Binding declarations are contract inputs, not generated success
   evidence; dynamic/value bindings still require Robotopia runtime QA.
 - `registry/` intentionally contains no official community entries for v1. Its README and the format-1 CLI commands

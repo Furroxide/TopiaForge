@@ -41,12 +41,27 @@ Run the checks relevant to your change, including every command required by `AGE
 ```powershell
 dotnet build TopiaForge.slnx -c Release
 dotnet run --project tests/TopiaForge.ModManager.Tests/TopiaForge.ModManager.Tests.csproj -c Release
+dotnet run --project tests/TopiaForge.ModRuntime.Tests/TopiaForge.ModRuntime.Tests.csproj -c Release
+dotnet run --project tests/TopiaForge.Mods.Analyzers.Tests/TopiaForge.Mods.Analyzers.Tests.csproj -c Release
+dotnet run --project tests/TopiaForge.Mods.Multiplayer.Generators.Tests/TopiaForge.Mods.Multiplayer.Generators.Tests.csproj -c Release
+dotnet run --project tests/TopiaForge.Mods.Multiplayer.Tests/TopiaForge.Mods.Multiplayer.Tests.csproj -c Release
 
 Push-Location packages/launcher_domain; dart format --output=none --set-exit-if-changed lib test; dart analyze; dart test; Pop-Location
 Push-Location packages/launcher_data; dart format --output=none --set-exit-if-changed lib test; dart analyze; dart test; Pop-Location
 Push-Location apps/topiaforge_cli; dart format --output=none --set-exit-if-changed bin lib test; dart analyze; dart test; Pop-Location
 Push-Location packages/launcher_ui; dart format --output=none --set-exit-if-changed lib test; flutter analyze; flutter test; Pop-Location
-Push-Location apps/topiaforge_launcher_flutter; dart format --output=none --set-exit-if-changed lib test; flutter analyze; flutter test; Pop-Location
+Push-Location apps/topiaforge_launcher_flutter
+dart format --output=none --set-exit-if-changed lib test
+flutter analyze
+flutter test
+if ($IsWindows) {
+    flutter build windows --debug
+} elseif ($IsMacOS) {
+    flutter build macos --debug
+} elseif ($IsLinux) {
+    flutter build linux --debug
+}
+Pop-Location
 
 dotnet tool restore
 Push-Location website; npm ci --ignore-scripts --no-audit --no-fund; npm run check; Pop-Location

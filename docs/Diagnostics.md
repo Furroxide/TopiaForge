@@ -67,10 +67,10 @@ text in descriptions or `x-*` metadata does not count.
 
 **Loader-owned renderer referenced by a safe project.**
 
-`TopiaForge.Mods.UnityUi` is an internal Robotopia-runtime renderer, not an authoring package. Remove
-the reference and express HUDs, windows, modals, toasts, and accessibility preferences through
-`Context.Ui`. Declaring `unsafe-native` does not authorize coupling a mod to the loader-owned
-renderer.
+`TopiaForge.Mods.UnityUi` is an internal Robotopia-runtime renderer, not an authoring package.
+Remove the reference and express HUDs, windows, fullscreen tools, modals, toasts, and accessibility
+preferences through `Context.Ui`. Declaring `unsafe-native` does not authorize coupling a mod to
+the loader-owned renderer.
 
 ### TF1101
 

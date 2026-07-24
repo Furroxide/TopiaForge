@@ -44,6 +44,45 @@ acceptance mod, seeds a schema-1 config fixture, launches Robotopia, validates `
 writes `acceptance-result.json`. A pass requires the exact package to be valid and loaded, an empty
 root startup error, and every requested marker.
 
+## Creator workbench build-2227 matrix
+
+The `creatorAcceptance` inventory in `tests/live-game-acceptance.json` is a required interactive
+matrix for Sandbox and CreatorTools. It is deliberately separate from automatic `TF-ACCEPT`
+markers: an offline test or a generic SDK probe cannot honestly prove native catalog contents,
+personality restoration, save isolation, or F5 focus behavior. Record the candidate package hashes,
+platform, exact Robotopia build, before/after save and checkpoint hashes, and a pass/fail result for
+each creator case alongside the ordinary acceptance result.
+
+On an authorized build-2227 host, complete all of these checks:
+
+1. In Sandbox, press F5 and confirm Sandbox wins routing. In ordinary stable standalone gameplay,
+   confirm CreatorTools owns F5. Menus, scene transitions, Worlds sessions, connected remote
+   multiplayer, and headless processes must reject the global host.
+2. Spawn curated items, UGC props, and every available RobotKit robot type. Exercise search, filters,
+   selection, transform, duplicate, temporary remove, undo, and explicit End Session cleanup.
+3. Move a pre-existing robot and preview autonomous personality and brain changes. End the session
+   and verify location, personality, and brain mode restore exactly.
+4. Register test-mod character and validated vehicle factories, spawn them, then unload their source.
+   Verify instances and entries disappear safely. If build 2227 exposes no validated native vehicle
+   adapter, verify that source is visibly empty or degraded.
+5. Hide the workbench with F5 and its close affordance. Player controls must return while the session,
+   spawns, edits, graph state, and isolation lease remain; the warning HUD must remain visible. Reopen
+   and verify it is the same session.
+6. Before global mutation, capture save and checkpoint hashes. Acknowledge isolation once, mutate the
+   scene, then End Session and confirm both hashes are unchanged. Also revoke or make isolation
+   unavailable and confirm mutation fails closed and any active session restores immediately.
+7. Run a bounded branching event project, then Stop it. Graph-owned content, edits, conversation, and
+   audio must roll back while an unrelated manual session spawn remains.
+8. While a global session is active, replace the scene, start a Worlds transition/session, admit a
+   remote participant, and unload a source/mod in separate runs. Each route must restore owned and
+   borrowed state and release controls.
+9. Repeat open, spawn, edit, hide, reopen, graph run/stop, and End Session ten times. No object, lease,
+   input, UI, interaction, conversation, audio, callback, or persistence-state count may grow between
+   cycles.
+
+Do not mark this matrix complete from the Unity-free lifecycle suite alone. That suite protects the
+same ownership and rollback policies, but the native build-2227 evidence remains mandatory.
+
 The Windows and Linux/Proton workflow also builds an extracted candidate developer payload, uses
 only its packaged CLI to create a fresh minimal mod outside the extraction, and passes that project
 to the harness. The harness runs `topiaforge dev --launch --no-tail`; success additionally requires
@@ -64,7 +103,7 @@ The `lifecycle.ten-cycles` marker is emitted only after ten live acquire/release
 the automatable resource families named in `tests/live-game-acceptance.json`. The probe covers
 explicit lifetime cleanup, events, scheduler work and cancellation, input, nested player-control
 leases, asset/prefab/entity and interaction handles, audio, UI, localization, commands, extensions,
-Chronos, Prompts, RobotKit targets, UGC overrides, and Worlds registrations. It reuses stable ids,
+Chronos, Prompts, RobotKit targets, Creator Content sessions, UGC overrides, and Worlds registrations. It reuses stable ids,
 checks inactive handles, verifies callbacks stop after release, and performs a final reacquisition.
 Hardware-, dialogue-, robot-, pause-, and session-specific handles remain in their dedicated live
 cases rather than being misreported as automatic ten-cycle coverage.

@@ -7,6 +7,8 @@ export const pages = [
   page('docs/CoreServices.md', 'guides/core-services.md'),
   page('docs/UiKit.md', 'guides/ui.md'),
   page('docs/Modules.md', 'guides/modules.md'),
+  page('docs/CreatorTools.md', 'guides/creator-tools.md'),
+  page('docs/Sandbox.md', 'guides/sandbox.md'),
   page('docs/Multiplayer.md', 'guides/multiplayer.md'),
   page('docs/MultiplayerHostingFeasibility.md', 'reference/multiplayer-hosting-feasibility.md'),
   page('docs/RobotKit.md', 'guides/robotkit.md'),

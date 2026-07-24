@@ -8,6 +8,7 @@
           "files": [
             "src/TopiaForge.Mods.Abstractions/TopiaForge.Mods.Abstractions.csproj",
             "src/TopiaForge.Mods.Chronos/TopiaForge.Mods.Chronos.csproj",
+            "src/TopiaForge.Mods.CreatorContent/TopiaForge.Mods.CreatorContent.csproj",
             "src/TopiaForge.Mods.Multiplayer/TopiaForge.Mods.Multiplayer.csproj",
             "src/TopiaForge.Mods.Prompts/TopiaForge.Mods.Prompts.csproj",
             "src/TopiaForge.Mods.RobotKit/TopiaForge.Mods.RobotKit.csproj",

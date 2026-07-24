@@ -31,9 +31,11 @@ Start with the walkthrough: [docs/YourFirstMod.md](docs/YourFirstMod.md). The re
 [docs/Modding.md → Install the CLI](docs/Modding.md#install-the-cli)). Validate your machine first
 (`topiaforge setup` to auto-fix what it safely can, or `topiaforge doctor` to audit read-only). Only the .NET SDK
 is required to build mods; Node/Unity are optional (UGC live-sync). See [docs/Modding.md](docs/Modding.md) for
-the full reference. Build branded in-game UI for Robotopia (windows, HUDs, modals, toasts) with the TopiaForge UI kit — see
-[docs/UiKit.md](docs/UiKit.md) and the F8 gallery mod. The complete first-party catalog and candidate gameplay
-acceptance flows are in [docs/FirstPartyMods.md](docs/FirstPartyMods.md).
+the full reference. Build branded in-game UI for Robotopia (windows, fullscreen tools, graph
+editors, HUDs, modals, and toasts) with the TopiaForge UI kit — see
+[docs/UiKit.md](docs/UiKit.md) and the F8 gallery mod. Add safe creator catalogs and reversible
+sessions with [Creator Content](docs/CreatorTools.md). The complete first-party catalog and
+candidate gameplay acceptance flows are in [docs/FirstPartyMods.md](docs/FirstPartyMods.md).
 
 TopiaForge 1.0 remains standalone-only, while the stable multiplayer API preview lets authors opt a V5 mod into
 generated server-canonical contracts, loopback play, and deterministic multi-peer tests before live
@@ -113,7 +115,10 @@ cd yourname.firstmod
 topiaforge pack
 ```
 
-`topiaforge pack --all` packs every first-party mod under `mods/`, and `topiaforge unity pack-packages` regenerates the VPM listing in `dist/vpm/`.
+`topiaforge pack --all` packs the non-DevTool first-party mods under `mods/`; add
+`--include-dev-mods` to include Creator Tools and UiGallery. Release packaging adds Creator Tools
+explicitly while keeping UiGallery out of the player payload. `topiaforge unity pack-packages`
+regenerates the VPM listing in `dist/vpm/`.
 
 Packages can be installed from the Robotopia manager's package tab by full path, or by placing them into:
 

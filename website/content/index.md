@@ -3,7 +3,8 @@ title: TopiaForge V1 mod SDK
 description: Build mods for Robotopia without taking a dependency on Unity or Robotopia internals.
 template: splash
 hero:
-  tagline: A clean, typed Robotopia SDK for utility mods, gameplay abilities, worlds, robots, story content, and UI.
+  tagline: A clean, typed Robotopia SDK for utility mods, gameplay abilities, creator content,
+    worlds, robots, story content, and UI.
   actions:
     - text: Build your first mod
       link: /getting-started/first-mod/
@@ -21,7 +22,8 @@ Resources are tied to the mod lifetime, so subscriptions, registrations, handles
 are released automatically after unload or a failed load.
 
 Start with the `minimal` template if this is your first C# project. Add specialist modules only when
-you need robots, worlds and modes, time control, prompt overrides, or UGC live sync.
+you need creator catalogs and reversible sessions, robots, worlds and modes, time control, prompt overrides,
+UGC live sync, or the multiplayer preview.
 
 ## What you do not need
 
