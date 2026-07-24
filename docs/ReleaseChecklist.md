@@ -33,7 +33,7 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
 ## 3. Source, contracts, and tests
 
 - [ ] `dotnet build TopiaForge.slnx -c Release` passes with zero warnings/errors.
-- [ ] All 11 public SDK projects `dotnet pack` with warnings as errors; every NuGet archive is valid and its
+- [ ] All 12 public SDK projects `dotnet pack` with warnings as errors; every NuGet archive is valid and its
       dependencies, readme, analyzer/generator assets, and `buildTransitive` props/targets match the package contract.
 - [ ] `dotnet run --project tests/TopiaForge.ModManager.Tests/TopiaForge.ModManager.Tests.csproj -c Release` passes.
 - [ ] `TopiaForge.ModRuntime.Tests`, `TopiaForge.ModPackageValidator.Tests`, and `TopiaForge.ManagedRefs.Tests`
@@ -92,20 +92,22 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
 
 ## 6. Mods, templates, registry, and ecosystem payload
 
-- [ ] All 13 first-party source manifests, projects, and current-version changelogs align; all 12 player-payload
-      packages validate; every payload mod is packed twice byte-identically and the resulting archive is inspected
+- [ ] All 16 first-party source manifests, projects, and current-version changelogs align; all 15 release-payload
+      packages validate; normal `pack --all` emits 14 non-DevTool packages and release automation adds only Creator
+      Tools; every payload mod is packed twice byte-identically and the resulting archive is inspected
       for manifest, assembly, license paths, links, names, and collisions.
 - [ ] The packaged metadata validator rejects bad PE/type/constructor/SDK/TFM fixtures without loading mod code, and
       every first-party archive is independently scanned for loader-owned SDK DLL/PDB files.
-- [ ] The canonical 13-assembly loader payload contains the exact pinned Metadata/Immutable bytes and notices; the
+- [ ] The canonical 14-assembly loader payload contains the exact pinned Metadata/Immutable bytes and notices; the
       build-2227 Unity/Mono profile supplies the verified Memory/Buffers/Unsafe dependency closure, and every DLL in
       the Windows Robotopia-executed BepInEx overlay hashes identically to its canonical payload copy.
 - [ ] All seven C# templates scaffold, validate, build/package twice, and retain safe non-publishable defaults.
 - [ ] Explicit `--author`/`--license` scaffolding is tested; MIT/Apache text is generated only after selection and
       other expressions require safe repeatable `--license-file` inputs.
 - [ ] Three VPM packages/listings build twice and pass direct manifest, license, notice, target, and hash inspection.
-- [ ] One canonical deterministic `ecosystem-dist` contains exactly 12 player mods plus three VPM packages; UiGallery
-      remains validated but absent from normal payloads; every platform consumes identical nested bytes.
+- [ ] One canonical deterministic `ecosystem-dist` contains exactly 15 released mods plus three VPM packages;
+      UiGallery remains validated but absent, Creator Tools is explicitly packed, and every platform consumes
+      identical nested bytes.
 - [ ] Strict registry schema/semantic/dependency/license/package/all-version validation passes.
 - [ ] Merge-base/index comparison proves append-only history: no deletion, rename, reorder, mutation, downgrade, or
       conflicting duplicate; only unique strictly newer versions are prepended.
@@ -120,7 +122,7 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
       to baseline.
 - [ ] UiGallery covers loading, empty, information, warning, error, success, disabled, focus, long/scroll content,
       destructive modal, toast, scale, contrast, and reduced-motion states.
-- [ ] Authorized Robotopia/profiler QA validates all 13 source-mod flows, 21 dynamic bindings, lifecycle isolation, save behavior,
+- [ ] Authorized Robotopia/profiler QA validates all 16 source-mod flows, every declared GameCompat binding, lifecycle isolation, save behavior,
       TopiaForgeUi usage, accessibility propagation, and zero steady-state allocation regressions.
 - [ ] The full `game-sdk-acceptance.yml` matrix passes from the frozen SHA on both Windows and Linux/Proton with
       all canonical markers, main-thread assertions, ten resource cycles, exact package hashes, and uploaded evidence.

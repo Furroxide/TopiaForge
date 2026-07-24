@@ -12,9 +12,9 @@ below and release engineering verifies the resulting candidate artifacts.
 | --- | --- | --- |
 | Repository root | No root `LICENSE` | No project-wide outbound grant is declared. |
 | Release policy | `OWNER_DECISION_REQUIRED`, `licenseFile: null`, `decisionStatus: blocked` | Strict release validation must fail. |
-| Thirteen first-party mod manifests | `NOASSERTION` | The `.topiaforgemod` packages are not publishable. |
+| Sixteen first-party mod manifests | `NOASSERTION` | The `.topiaforgemod` packages are not publishable. |
 | VPM resolver, world companion, and UGC companion | `NOASSERTION` plus a no-grant notice | The three VPM packages are not publishable. |
-| Eleven SDK NuGet projects | The shared pack target defaults to `MIT`; four projects repeat `MIT` explicitly | This conflicts with the unresolved project-wide decision and must not be treated as approval. |
+| Twelve packable SDK NuGet projects | The shared pack target defaults to `MIT`; four projects repeat `MIT` explicitly | This conflicts with the unresolved project-wide decision and must not be treated as approval. |
 | Launcher UI package | A no-grant placeholder file | The placeholder is not a redistributable project license. |
 | Contributor policy | No inbound contribution terms selected | Substantive external contributions remain blocked pending owner review. |
 

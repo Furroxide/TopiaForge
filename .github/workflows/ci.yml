@@ -478,6 +478,8 @@ jobs:
           cmp ../tests/live-game-acceptance.json dist/source/tests/live-game-acceptance.json
           test -f dist/api/csharp/index.html
           test -f dist/api/csharp/api/TopiaForge.Mods.IModContext.html
+          test -f dist/api/csharp/api/TopiaForge.Mods.ICreatorContentService.html
+          test -f dist/api/csharp/api/TopiaForge.Mods.UiGraphCanvas.html
           test -f dist/api/csharp/api/TopiaForge.Mods.IMultiplayerSession.html
           test -f dist/api/csharp/api/TopiaForge.Mods.Interop.Unity.IUnityInteropService.html
           test -f dist/api/dart/index.html

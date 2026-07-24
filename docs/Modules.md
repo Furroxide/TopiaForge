@@ -1,6 +1,6 @@
 ---
 title: Specialist modules
-description: Add optional V1 robot, world, time, prompt, UGC, and multiplayer contracts safely.
+description: Add optional V1 creator, robot, world, time, prompt, UGC, and multiplayer contracts safely.
 ---
 
 # Specialist modules
@@ -23,6 +23,7 @@ spoof that declaration.
 | RobotKit | `topiaforge mod add robotkit` | `IRobotAgentService`, objectives, targets, dialogue, voice, brain queries | `io.github.furroxide.topiaforge.robotkit` |
 | Worlds | `topiaforge mod add worlds` | `IWorldGamemodeService`, world content, pause actions, shops, sessions | `io.github.furroxide.topiaforge.worlds` |
 | Chronos | `topiaforge mod add chronos` | `ITimeControlService`, time leases, drivers, turn scheduler | `io.github.furroxide.topiaforge.chronos` |
+| Creator Content | `topiaforge mod add creatorcontent` | Catalog registrations, creator sessions, project library, mutation safety, F5 host routing | `io.github.furroxide.topiaforge.creatorcontent` |
 | Prompts | `topiaforge mod add prompts` | `IPromptOverrideRegistry`, override leases, conflict diagnostics | `io.github.furroxide.topiaforge.prompts` |
 | UGC | `topiaforge mod add ugc` | `IUgcLiveSyncService`, sync and asset-override leases | `io.github.furroxide.topiaforge.ugc.livesync` |
 | Multiplayer | `topiaforge mod add multiplayer` | Sessions, participants, replicated state/objects, commands, prediction, presentation events | `io.github.furroxide.topiaforge.multiplayer` |
@@ -67,11 +68,26 @@ Chronos coordinates freeze, slow motion, player exemption, driver-based scaling,
 and turn scheduling. Every effect is a lease, so several mods compose without last-writer-wins
 state and prior state is restored as leases are released.
 
+## Creator Content
+
+Creator Content authenticates namespaced catalog registrations, owns bounded reversible creator sessions, stores
+local visual event projects, and routes one shared configurable F5 action to the highest-priority eligible host.
+Factories run through the registering mod's own safe asset/entity services. Explicit reversible native adapters use
+the separate owner-bound `ICreatorSceneAdapterRegistry`; the provider wraps their targets, bounds discovery, validates
+safe duplicate recipes, and enforces exclusive temporary edits. Arbitrary native scans, cross-package loading, and
+custom graph callbacks are rejected. See [Creator Tools](CreatorTools.md).
+
 ## Prompts
 
 Prompts registers replacements by stable prompt id. Priority and normalized provider identity
 select a deterministic winner, and `GetConflicts()` exposes competing registrations for
 diagnostics. Keep the returned handle only when you need early release.
+
+`WellKnownPromptIds.GlobalRobotDirective` is the shared, optional directive slot for robot inference. The Prompts
+provider appends its effective value to native Robotopia planning, while RobotKit appends the same live value to
+structured brain and conversation requests. The directive augments the prompt; it never replaces personality,
+grounded facts, action schemas, or structured-output requirements. Registrations remain owner-bound and changes take
+effect dynamically, so unloading the consumer restores normal planning without restarting either provider.
 
 ## UGC
 

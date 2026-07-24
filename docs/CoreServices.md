@@ -37,7 +37,7 @@ package root, or global cleanup target.
 | `Items` | Held-item observation, give, and drop operations. |
 | `Assets` | Package bundle and prefab handles, then lifetime-owned spawn operations. |
 | `Audio` | Framework audio cues and playback handles. |
-| `Ui` | HUDs, windows, modals, toasts, and accessibility preferences rendered by TopiaForgeUi. |
+| `Ui` | HUDs, windows, fullscreen tools, modals, toasts, and accessibility preferences rendered by TopiaForgeUi. |
 | `Localization` | Locale catalogs and fallback lookup. |
 | `Commands` | Namespaced commands and invocation. |
 | `Diagnostics` | Bounded structured reports mirrored to the attributed log. |
@@ -176,14 +176,17 @@ names such as `F`, `Space`, or `F8`.
 
 Gameplay actions are suppressed while text entry or another framework UI surface owns focus.
 Use the configurable action in the `ui` template rather than reserving a function key globally.
+F5 routes the shared Creator workbench, F8 opens UiGallery in development installs, and F10 opens
+the manager; ordinary mods must not claim those defaults.
 
 ## UI accessibility
 
 `Context.Ui.Accessibility` reports the effective UI scale, high-contrast state, reduced-motion
 state, and motion intensity. Apply player-configurable values with
 `Context.Ui.ApplyAccessibility(new UiAccessibilityPreferences(...))` and handle the returned
-`OperationResult`. TopiaForgeUi propagates the effective values to every safe HUD, window, modal,
-and toast; consumer mods do not maintain a separate theme or animation system.
+`OperationResult`. TopiaForgeUi propagates the effective values to every safe HUD, window,
+fullscreen tool, modal, and toast; consumer mods do not maintain a separate theme or animation
+system.
 
 ## Typed math and opaque entities
 
@@ -191,5 +194,6 @@ Safe contracts use `Vec2`, `Vec3`, `Quat`, `Ray`, `Bounds`, and SDK color values
 asset interfaces are opaque handles with ordinary state and lifetime operations. These types keep
 mods portable across supported runtimes and make tests deterministic.
 
-See [specialist modules](Modules.md) for robots, worlds, time control, prompts, and UGC, or open
-the generated C# reference from the developer site for every member and default value.
+See [specialist modules](Modules.md) for creator content, robots, worlds, time control, prompts,
+UGC, and multiplayer, or open the generated C# reference from the developer site for every member
+and default value.

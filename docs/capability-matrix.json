@@ -86,17 +86,27 @@
         "TopiaForge.Mods.IInteractionService, TopiaForge.Mods.Abstractions",
         "TopiaForge.Mods.IItemService, TopiaForge.Mods.Abstractions",
         "TopiaForge.Mods.IAssetService, TopiaForge.Mods.Abstractions",
-        "TopiaForge.Mods.IAudioService, TopiaForge.Mods.Abstractions"
+        "TopiaForge.Mods.IAudioService, TopiaForge.Mods.Abstractions",
+        "TopiaForge.Mods.ICreatorContentService, TopiaForge.Mods.CreatorContent",
+        "TopiaForge.Mods.ICreatorSceneAdapterRegistry, TopiaForge.Mods.CreatorContent",
+        "TopiaForge.Mods.ICreatorProjectLibrary, TopiaForge.Mods.CreatorContent",
+        "TopiaForge.Mods.ICreatorToolHostService, TopiaForge.Mods.CreatorContent",
+        "TopiaForge.Mods.ICreatorMutationSafetyService, TopiaForge.Mods.CreatorContent"
       ],
       "sampleProjects": [
+        "mods/TopiaForge.CreatorTools/TopiaForge.CreatorTools.csproj",
+        "mods/TopiaForge.Sandbox/TopiaForge.Sandbox.csproj",
         "tests/TopiaForge.SdkAcceptanceMod/TopiaForge.SdkAcceptanceMod.csproj"
       ],
-      "guide": "docs/CoreServices.md",
+      "guide": "docs/CreatorTools.md",
       "fakeTypes": [
         "TopiaForge.Mods.Testing.FakeInteractionService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeItemService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeAssetService, TopiaForge.Mods.Testing",
-        "TopiaForge.Mods.Testing.FakeAudioService, TopiaForge.Mods.Testing"
+        "TopiaForge.Mods.Testing.FakeAudioService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeCreatorContentService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeCreatorProjectLibrary, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeCreatorMutationSafetyService, TopiaForge.Mods.Testing"
       ],
       "acceptanceCases": [
         "world.physics-entities-items-interactions",
@@ -139,7 +149,8 @@
         "TopiaForge.Mods.IRobotObjectiveService, TopiaForge.Mods.RobotKit",
         "TopiaForge.Mods.IRobotConversationService, TopiaForge.Mods.RobotKit",
         "TopiaForge.Mods.IPlayerDialogueInputService, TopiaForge.Mods.RobotKit",
-        "TopiaForge.Mods.IRobotBrainQueryService, TopiaForge.Mods.RobotKit"
+        "TopiaForge.Mods.IRobotBrainQueryService, TopiaForge.Mods.RobotKit",
+        "TopiaForge.Mods.IRobotSceneEditorService, TopiaForge.Mods.RobotKit"
       ],
       "sampleProjects": [
         "mods/TopiaForge.Sandbox/TopiaForge.Sandbox.csproj",
