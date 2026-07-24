@@ -19,6 +19,7 @@ namespace TopiaForge.ModManager.Tests
             TestSpecialistModuleFakes();
             TestCompleteCoreServiceContext();
             TestDeclarativeUiComposition();
+            TestGraphUiComposition();
             TestLifecycleAndLeaks();
             TestPartialLoadFailureCleanup();
             TestEveryOwnedResourceAcrossTenReloads();
