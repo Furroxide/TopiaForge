@@ -11,7 +11,7 @@ namespace TopiaForge.Sandbox
         }
 
         [DataMember(Name = "spawnMenuKey")]
-        public string SpawnMenuKey { get; set; } = "Q";
+        public string SpawnMenuKey { get; set; } = "F5";
 
         [DataMember(Name = "undoKey")]
         public string UndoKey { get; set; } = "Z";
@@ -86,7 +86,7 @@ namespace TopiaForge.Sandbox
         {
             if (string.IsNullOrWhiteSpace(SpawnMenuKey))
             {
-                SpawnMenuKey = "Q";
+                SpawnMenuKey = "F5";
             }
 
             if (string.IsNullOrWhiteSpace(UndoKey))
@@ -137,7 +137,7 @@ namespace TopiaForge.Sandbox
 
         private void SeedDefaults()
         {
-            SpawnMenuKey = "Q";
+            SpawnMenuKey = "F5";
             UndoKey = "Z";
             FreezeKey = "F";
             SpawnDistanceMax = 40f;

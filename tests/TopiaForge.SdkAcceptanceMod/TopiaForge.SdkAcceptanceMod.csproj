@@ -14,6 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Chronos\TopiaForge.Mods.Chronos.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.CreatorContent\TopiaForge.Mods.CreatorContent.csproj" Private="false" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Multiplayer\TopiaForge.Mods.Multiplayer.csproj" Private="false" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Multiplayer.Generators\TopiaForge.Mods.Multiplayer.Generators.csproj"
                       OutputItemType="Analyzer"

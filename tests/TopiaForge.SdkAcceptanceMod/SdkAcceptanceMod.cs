@@ -28,6 +28,7 @@ namespace TopiaForge.SdkAcceptance
         private IRobotAgent? acceptanceRobot;
         private IVoiceCapture? voiceCapture;
         private ITimeControlService? timeControl;
+        private ICreatorContentService? creatorContent;
         private IPromptOverrideRegistry? promptOverrides;
         private IUgcLiveSyncService? ugcLiveSync;
         private IWorldGamemodeService? worlds;

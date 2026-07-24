@@ -10,6 +10,7 @@ namespace TopiaForge.SdkAcceptance
             try
             {
                 var timeProviders = Context.Extensions.GetAll<ITimeControlService>();
+                var creatorContentProviders = Context.Extensions.GetAll<ICreatorContentService>();
                 var promptProviders = Context.Extensions.GetAll<IPromptOverrideRegistry>();
                 var robotAgentProviders = Context.Extensions.GetAll<IRobotAgentService>();
                 var robotObjectiveProviders = Context.Extensions.GetAll<IRobotObjectiveService>();
@@ -19,6 +20,7 @@ namespace TopiaForge.SdkAcceptance
                 var worldProviders = Context.Extensions.GetAll<IWorldGamemodeService>();
                 var ugcProviders = Context.Extensions.GetAll<IUgcLiveSyncService>();
                 if (timeProviders.Count != 1
+                    || creatorContentProviders.Count != 1
                     || promptProviders.Count != 1
                     || robotAgentProviders.Count != 1
                     || robotObjectiveProviders.Count != 1
@@ -35,6 +37,7 @@ namespace TopiaForge.SdkAcceptance
                 }
 
                 timeControl = timeProviders[0];
+                creatorContent = creatorContentProviders[0];
                 promptOverrides = promptProviders[0];
                 robotAgents = robotAgentProviders[0];
                 robotObjectives = robotObjectiveProviders[0];
@@ -46,6 +49,7 @@ namespace TopiaForge.SdkAcceptance
 
                 var versions = Context.Runtime.ProviderVersions;
                 if (!versions.ContainsKey("io.github.furroxide.topiaforge.chronos")
+                    || !versions.ContainsKey("io.github.furroxide.topiaforge.creatorcontent")
                     || !versions.ContainsKey("io.github.furroxide.topiaforge.prompts")
                     || !versions.ContainsKey("io.github.furroxide.topiaforge.robotkit")
                     || !versions.ContainsKey("io.github.furroxide.topiaforge.ugc.livesync")
@@ -170,7 +174,7 @@ namespace TopiaForge.SdkAcceptance
 
                 Pass(
                     "integration.provider-scope",
-                    "required-singletons=8;optional-present=ugc;optional-absent="
+                    "required-singletons=9;optional-present=ugc;optional-absent="
                     + MissingOptionalProviderId
                     + ";singleton-conflict=Conflict;multiple-order=first,second;early-release=clean");
                 return true;

@@ -20,6 +20,7 @@ namespace TopiaForge.ModManager.Tests
             typeof(IRobotAgentService).Assembly,
             typeof(IWorldGamemodeService).Assembly,
             typeof(ITimeControlService).Assembly,
+            typeof(ICreatorContentService).Assembly,
             typeof(IMultiplayerSession).Assembly,
             typeof(IPromptOverrideRegistry).Assembly,
             typeof(IUgcLiveSyncService).Assembly,
@@ -30,6 +31,7 @@ namespace TopiaForge.ModManager.Tests
         {
             "src/TopiaForge.Mods.Abstractions/TopiaForge.Mods.Abstractions.csproj",
             "src/TopiaForge.Mods.Chronos/TopiaForge.Mods.Chronos.csproj",
+            "src/TopiaForge.Mods.CreatorContent/TopiaForge.Mods.CreatorContent.csproj",
             "src/TopiaForge.Mods.Multiplayer/TopiaForge.Mods.Multiplayer.csproj",
             "src/TopiaForge.Mods.Prompts/TopiaForge.Mods.Prompts.csproj",
             "src/TopiaForge.Mods.RobotKit/TopiaForge.Mods.RobotKit.csproj",
@@ -195,6 +197,7 @@ namespace TopiaForge.ModManager.Tests
             AssertContainsAll(body, caseId, new[]
             {
                 "Context.Extensions.GetAll<ITimeControlService>()",
+                "Context.Extensions.GetAll<ICreatorContentService>()",
                 "Context.Extensions.GetAll<IUgcLiveSyncService>()",
                 "Context.Extensions.GetAll<IMissingOptionalProvider>()",
                 "ModErrorCode.Conflict",
@@ -258,6 +261,7 @@ namespace TopiaForge.ModManager.Tests
                     "chronos-leases",
                     "prompt-overrides",
                     "robot-targets",
+                    "creator-sessions",
                     "ugc-asset-overrides",
                     "world-registrations"
                 }), caseId + " resourceFamilies must exactly describe the automatable live cycle coverage");
@@ -281,6 +285,7 @@ namespace TopiaForge.ModManager.Tests
                 "RegisterCycleExtension(resources, cycle)",
                 "RegisterCyclePrompt(resources, cycle)",
                 "RegisterCycleRobotTarget(resources, player, cycle)",
+                "RegisterCycleCreatorSession(resources, cycle)",
                 "RegisterCycleWorlds(resources, out world, out gamemode, out menu)",
                 "LoadCycleAssetsAsync(resources, player, cycle)",
                 "WaitForCycleCallbacksAsync(counters, cycle)",

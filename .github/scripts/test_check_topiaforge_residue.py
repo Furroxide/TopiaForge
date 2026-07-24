@@ -129,6 +129,53 @@ class GeneratedPayloadAuditTests(unittest.TestCase):
 
         self.assertEqual(0, result.returncode, result.stderr)
 
+    def test_verified_target_game_source_ids_are_allowed(self) -> None:
+        source_ids = (
+            "robotopia.characters",
+            "robotopia.items",
+            "robotopia.ugc-props",
+            "robotopia.vehicles",
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            source = Path(temporary_directory) / "SourceIds.cs"
+            source.write_text(
+                "\n".join(
+                    f'const string SourceId = "{source_id}";'
+                    for source_id in source_ids
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_audit(source)
+
+        self.assertEqual(0, result.returncode, result.stderr)
+
+    def test_target_game_source_id_allowlist_rejects_unreviewed_id(self) -> None:
+        source_id = "robo" + "topia.unreviewed"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            source = Path(temporary_directory) / "SourceIds.cs"
+            source.write_text(
+                f'const string SourceId = "{source_id}";', encoding="utf-8"
+            )
+
+            result = self.run_audit(source)
+
+        self.assertEqual(1, result.returncode)
+        self.assertIn("lowercase/unallowlisted Robotopia token", result.stderr)
+
+    def test_target_game_source_id_allowlist_rejects_approved_id_suffix(self) -> None:
+        source_id = "robo" + "topia.items.extra"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            source = Path(temporary_directory) / "SourceIds.cs"
+            source.write_text(
+                f'const string SourceId = "{source_id}";', encoding="utf-8"
+            )
+
+            result = self.run_audit(source)
+
+        self.assertEqual(1, result.returncode)
+        self.assertIn("lowercase/unallowlisted Robotopia token", result.stderr)
+
     def test_target_game_tool_paths_are_allowed_under_package_root(self) -> None:
         package_root = "TopiaForge-linux-x64/tools"
         with tempfile.TemporaryDirectory() as temporary_directory:

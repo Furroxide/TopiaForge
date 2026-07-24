@@ -1,0 +1,31 @@
+{
+  "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+  "schemaVersion": 5,
+  "name": "io.github.furroxide.topiaforge.creatorcontent",
+  "displayName": "TopiaForge Creator Content",
+  "version": "1.0.0-rc.1",
+  "author": {
+    "name": "TopiaForge"
+  },
+  "description": "Framework service for safe creator content registrations, reversible sessions, local event projects, and one shared F5 workbench router.",
+  "entryAssembly": "TopiaForge.CreatorContent.dll",
+  "entryType": "TopiaForge.CreatorContent.CreatorContentMod",
+  "dependencies": {},
+  "supportedGameVersionRange": "0.0.2227",
+  "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "category": "Framework",
+  "tags": [
+    "creator-tools",
+    "content",
+    "event-projects",
+    "framework",
+    "sdk"
+  ],
+  "license": "NOASSERTION",
+  "capabilities": [
+    "filesystem",
+    "input",
+    "unsafe-native"
+  ]
+}

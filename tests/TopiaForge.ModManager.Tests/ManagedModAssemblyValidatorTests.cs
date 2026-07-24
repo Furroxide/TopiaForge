@@ -187,6 +187,7 @@ namespace TopiaForge.ModManager.Tests
                          "TopiaForge.Mods.Abstractions.dll",
                          "TopiaForge.Mods.Analyzers.dll",
                          "TopiaForge.Mods.Chronos.dll",
+                         "TopiaForge.Mods.CreatorContent.dll",
                          "TopiaForge.Mods.Multiplayer.dll",
                          "TopiaForge.Mods.Interop.Unity.dll",
                          "TopiaForge.Mods.Prompts.dll",

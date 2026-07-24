@@ -110,7 +110,16 @@ TEXT_ONLY_BYTE_RULES = (
 LOWERCASE_ROBOTOPIA_ALLOWLIST = (
     re.compile(r"robotopia\.gg", re.IGNORECASE),
     re.compile(r"@robotopia(?:-parts)?/", re.IGNORECASE),
-    re.compile(r"robotopia-(?:bundled-refs|game-build|managed-refs|public-refs)", re.IGNORECASE),
+    re.compile(
+        r"robotopia-(?:bundled-refs|game-build|managed-refs|public-refs)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?<![A-Za-z0-9_.-])"
+        r"robotopia\.(?:characters|items|ugc-props|vehicles)"
+        r"(?![A-Za-z0-9_.-])",
+        re.IGNORECASE,
+    ),
     re.compile(r"-robotopiaManagedDir\b"),
 )
 

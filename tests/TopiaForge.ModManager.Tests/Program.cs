@@ -72,6 +72,24 @@ namespace TopiaForge.ModManager.Tests
                 return 0;
             }
 
+            if (args.Length == 1 && string.Equals(args[0], "--creator-workbench", StringComparison.Ordinal))
+            {
+                CreatorWorkbenchLifecycleTests.Run();
+                return 0;
+            }
+
+            if (args.Length == 1 && string.Equals(args[0], "--creator-event-graph", StringComparison.Ordinal))
+            {
+                CreatorEventGraphRunnerTests.Run();
+                return 0;
+            }
+
+            if (args.Length == 1 && string.Equals(args[0], "--robot-personality-bindings", StringComparison.Ordinal))
+            {
+                RobotPersonalityBindingSurfaceTests.Run();
+                return 0;
+            }
+
             if (args.Length == 1 && string.Equals(args[0], "--scene-coordinator", StringComparison.Ordinal))
             {
                 SceneCoordinatorTests.Run();
@@ -116,12 +134,18 @@ namespace TopiaForge.ModManager.Tests
                 ModuleContractSurfaceTests.Run();
                 TestingKitTests.Run();
                 PromptRegistryTests.Run();
+                RobotDirectiveTests.Run();
                 OverrideTests.Run();
                 ConversationTests.Run();
+                RobotPersonalityBindingSurfaceTests.Run();
                 ObjectiveRunnerTests.Run();
                 SandboxProgramDirectorTests.Run();
                 ModServiceRegistryTests.Run();
                 ChronosTests.Run();
+                CreatorContentTests.Run();
+                CreatorSceneAdapterTests.Run();
+                CreatorEventGraphRunnerTests.Run();
+                CreatorWorkbenchLifecycleTests.Run();
                 WorldsSafetyTests.Run();
                 return 0;
             }
@@ -235,9 +259,11 @@ namespace TopiaForge.ModManager.Tests
                 TestingKitTests.Run();
                 SdkPublicApiBaselineTests.Run();
                 PromptRegistryTests.Run();
+                RobotDirectiveTests.Run();
                 OverrideTests.Run();
                 ConversationTests.Run();
                 ConversationDirectorTests.Run();
+                RobotPersonalityBindingSurfaceTests.Run();
                 ObjectiveRunnerTests.Run();
                 RobotTargetFactsTests.Run();
                 SandboxProgramDirectorTests.Run();
@@ -251,6 +277,10 @@ namespace TopiaForge.ModManager.Tests
                 MainThreadGuardTests.Run();
                 SafeEventTests.Run();
                 ChronosTests.Run();
+                CreatorContentTests.Run();
+                CreatorSceneAdapterTests.Run();
+                CreatorEventGraphRunnerTests.Run();
+                CreatorWorkbenchLifecycleTests.Run();
                 ShopTests.Run();
                 GameCompatTests.Run();
                 GameVersionLabelReaderTests.Run();

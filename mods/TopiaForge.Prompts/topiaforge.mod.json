@@ -7,7 +7,7 @@
   "author": {
     "name": "TopiaForge"
   },
-  "description": "Framework SDK service for prompt override registration, deterministic effective override resolution, owner cleanup, disposable registrations, and conflict diagnostics.",
+  "description": "Framework SDK service for prompt override registration, deterministic resolution, owner cleanup, conflict diagnostics, and guarded global robot-directive composition.",
   "entryAssembly": "TopiaForge.Prompts.dll",
   "entryType": "TopiaForge.Prompts.PromptsMod",
   "dependencies": {},
@@ -18,12 +18,15 @@
   "tags": [
     "prompts",
     "overrides",
+    "robot-directives",
     "conflicts",
     "framework",
     "sdk"
   ],
   "license": "NOASSERTION",
   "capabilities": [
-    "prompt-overrides"
+    "prompt-overrides",
+    "unsafe-native",
+    "harmony-patch"
   ]
 }

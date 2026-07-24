@@ -12,6 +12,7 @@
   "entryType": "TopiaForge.SdkAcceptance.SdkAcceptanceMod",
   "dependencies": {
     "io.github.furroxide.topiaforge.chronos": ">=1.0.0-rc.1 <2.0.0",
+    "io.github.furroxide.topiaforge.creatorcontent": ">=1.0.0-rc.1 <2.0.0",
     "io.github.furroxide.topiaforge.multiplayer": "1.0.0-rc.1",
     "io.github.furroxide.topiaforge.prompts": ">=1.0.0-rc.1 <2.0.0",
     "io.github.furroxide.topiaforge.robotkit": ">=1.0.0-rc.1 <2.0.0",
