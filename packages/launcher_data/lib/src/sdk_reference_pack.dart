@@ -15,6 +15,7 @@ const topiaForgeSdkPackageIds = <String>{
   'TopiaForge.Mods.Abstractions',
   'TopiaForge.Mods.Analyzers',
   'TopiaForge.Mods.Chronos',
+  'TopiaForge.Mods.CreatorContent',
   'TopiaForge.Mods.Interop.Unity',
   'TopiaForge.Mods.Multiplayer',
   'TopiaForge.Mods.Multiplayer.Generators',
@@ -35,6 +36,7 @@ const topiaForgeAnalyzerPackageIds = <String>{
 const topiaForgeTestingRuntimeSupportPackageIds = <String>{
   'TopiaForge.Mods.Abstractions',
   'TopiaForge.Mods.Chronos',
+  'TopiaForge.Mods.CreatorContent',
   'TopiaForge.Mods.Multiplayer',
   'TopiaForge.Mods.Prompts',
   'TopiaForge.Mods.RobotKit',

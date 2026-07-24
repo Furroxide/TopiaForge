@@ -154,7 +154,7 @@ extension _HelpCommand on _TopiaForgeCli {
       '  topiaforge pack [--output dir]         Build and package the current mod project.',
     );
     stdout.writeln(
-      '  topiaforge pack --all                  Pack every first-party mod under mods/.',
+      '  topiaforge pack --all                  Pack non-DevTool first-party mods (--include-dev-mods to include all).',
     );
     stdout.writeln(
       '  topiaforge install [package] [--game-dir p] Install a .topiaforgemod into Robotopia.',

@@ -182,6 +182,7 @@ namespace TopiaForge.ModManager.Tests
                 TestInstallSuccess(root);
                 TestLegacyPackageExtensionRejected(root);
                 TestUpdatePreservesDisabledState(root);
+                TestDevToolInstallsDisabledAndUpdatePreservesState(root);
                 TestAppliedRestartRequirementsClear();
                 RuntimePersistenceSecurityTests.Run(root);
                 StartupJournalTests.Run(root);
@@ -222,6 +223,7 @@ namespace TopiaForge.ModManager.Tests
                 TestInboxFailureLeavesFile(root);
                 TestScanIgnoresSupersededBrokenVersions(root);
                 TestScanStillReportsFullyBrokenPackage(root);
+                TestScanRecoversDevToolAsDisabled(root);
                 TestScanSelectsDependencyCompatibleProviderVersion(root);
                 TestScanBacktracksConsumerVersionForCompleteAssignment(root);
                 InstalledVersionCoexistenceTests.Run(root);

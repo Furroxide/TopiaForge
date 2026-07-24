@@ -57,6 +57,42 @@ namespace TopiaForge.ModManager.Tests
             Assert(state.Find("alpha.mod")?.RestartRequired == true, "update should mark restart required");
         }
 
+        private static void TestDevToolInstallsDisabledAndUpdatePreservesState(string root)
+        {
+            var paths = NewPaths(root, "devtool-default");
+            var state = new ManagerState();
+            var firstPackage = Path.Combine(root, "creator-tools-1.0.0.topiaforgemod");
+            var secondPackage = Path.Combine(root, "creator-tools-1.1.0.topiaforgemod");
+            var installer = new PackageInstaller();
+            CreatePackage(
+                firstPackage,
+                "creator.tools",
+                "Creator Tools",
+                "1.0.0",
+                "CreatorTools.dll",
+                "CreatorTools.Entry",
+                category: "DevTool");
+            CreatePackage(
+                secondPackage,
+                "creator.tools",
+                "Creator Tools",
+                "1.1.0",
+                "CreatorTools.dll",
+                "CreatorTools.Entry",
+                category: "DevTool");
+
+            Assert(installer.Install(firstPackage, paths, state, restartRequired: false).Ok,
+                "DevTool package should install");
+            Assert(state.Find("creator.tools")?.Enabled == false,
+                "new DevTool packages must be disabled by default");
+
+            state.Find("creator.tools")!.Enabled = true;
+            Assert(installer.Install(secondPackage, paths, state, restartRequired: true).Ok,
+                "DevTool update should install");
+            Assert(state.Find("creator.tools")?.Enabled == true,
+                "DevTool updates must preserve an explicit enabled state");
+        }
+
         private static void TestLegacyPackageExtensionRejected(string root)
         {
             var paths = NewPaths(root, "legacy-extension");

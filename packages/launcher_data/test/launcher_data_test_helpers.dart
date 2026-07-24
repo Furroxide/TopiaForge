@@ -95,6 +95,7 @@ File _createPackage(
   String? gameVersionRange,
   String? loaderVersionRange,
   String? sdkVersionRange,
+  String category = '',
 }) {
   final package = File(p.join(root.path, '$id-$version.topiaforgemod'));
   final archive = Archive()
@@ -111,6 +112,7 @@ File _createPackage(
             gameVersionRange: gameVersionRange,
             loaderVersionRange: loaderVersionRange,
             sdkVersionRange: sdkVersionRange,
+            category: category,
           ),
         ),
       ),
@@ -132,6 +134,7 @@ Map<String, Object?> _manifestJson(
   String? gameVersionRange,
   String? loaderVersionRange,
   String? sdkVersionRange,
+  String category = '',
 }) => {
   'schemaVersion': 5,
   'name': id,
@@ -143,6 +146,7 @@ Map<String, Object?> _manifestJson(
   'supportedGameVersionRange': gameVersionRange ?? '*',
   'supportedLoaderVersionRange': loaderVersionRange ?? '*',
   'supportedSdkVersionRange': sdkVersionRange ?? '*',
+  if (category.isNotEmpty) 'category': category,
   if (dependencies.isNotEmpty)
     'dependencies': {
       for (final item in dependencies)

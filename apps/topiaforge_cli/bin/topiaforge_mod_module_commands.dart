@@ -5,6 +5,10 @@ const _sdkModules = <String, _SdkModule>{
     packageId: 'TopiaForge.Mods.Chronos',
     runtimeDependency: 'io.github.furroxide.topiaforge.chronos',
   ),
+  'creatorcontent': _SdkModule(
+    packageId: 'TopiaForge.Mods.CreatorContent',
+    runtimeDependency: 'io.github.furroxide.topiaforge.creatorcontent',
+  ),
   'prompts': _SdkModule(
     packageId: 'TopiaForge.Mods.Prompts',
     runtimeDependency: 'io.github.furroxide.topiaforge.prompts',

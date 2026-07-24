@@ -131,6 +131,45 @@ void _registerProfileLaunchTests({
     );
 
     test(
+      'ignores unavailable version pins for disabled profile mods',
+      () async {
+        var processStarted = false;
+        final prepared = await _prepareProfileLaunchRepository(
+          dataRoot: dataRoot(),
+          repositoryRoot: repositoryRoot(),
+          gameRoot: gameRoot(),
+          starter: (request) async {
+            processStarted = true;
+            final path = request
+                .environment[ProfileLaunchConfiguration.environmentVariable]!;
+            File(path).deleteSync();
+            return 17;
+          },
+        );
+        final repository = prepared.$1;
+        final install = prepared.$2;
+        await repository.installPackage(
+          _createPackage(root(), id: 'alpha.mod', version: '1.0.0').path,
+          install,
+        );
+
+        final result = await repository.launch(
+          install,
+          const LauncherProfile(
+            id: 'disabled-pin',
+            name: 'Disabled Pin',
+            enabledMods: {'alpha.mod'},
+            selectedVersions: {'alpha.mod': '1.0.0', 'disabled.mod': '9.0.0'},
+          ),
+        );
+
+        expect(result.started, isTrue);
+        expect(result.processId, 17);
+        expect(processStarted, isTrue);
+      },
+    );
+
+    test(
       'safe mode is process-scoped and leaves enabled mods intact',
       () async {
         late Map<String, Object?> launchJson;

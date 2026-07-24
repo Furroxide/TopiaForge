@@ -298,6 +298,7 @@ void _expectSdkCsprojVersion(
 const _v1StableContractPackageIds = <String>{
   'TopiaForge.Mods.Abstractions',
   'TopiaForge.Mods.Chronos',
+  'TopiaForge.Mods.CreatorContent',
   'TopiaForge.Mods.Multiplayer',
   'TopiaForge.Mods.Prompts',
   'TopiaForge.Mods.RobotKit',

@@ -76,18 +76,18 @@ extension _ProfileLaunchHelpers on LocalLauncherRepository {
       stateById: stateById,
     );
     final missing = <String>[];
-    for (final entry in configuration.selectedVersions.entries) {
-      final versions = catalog[entry.key.toLowerCase()];
-      if (versions == null ||
-          !versions.any((version) => version.version == entry.value)) {
-        missing.add('${entry.key} ${entry.value}');
-      }
-    }
 
     final effectiveIds = <String>{};
     if (configuration.inheritManagerModState) {
       for (final entry in stateById.entries) {
-        if (entry.value['enabled'] as bool? ?? true) {
+        final versions = catalog[entry.key];
+        final manifest = versions == null || versions.isEmpty
+            ? null
+            : versions.first.manifest;
+        final enabledByDefault = manifest == null
+            ? true
+            : _isEnabledByDefault(manifest);
+        if (entry.value['enabled'] as bool? ?? enabledByDefault) {
           effectiveIds.add(entry.key);
         }
       }
