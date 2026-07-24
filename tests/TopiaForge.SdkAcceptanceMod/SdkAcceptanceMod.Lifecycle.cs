@@ -51,6 +51,7 @@ namespace TopiaForge.SdkAcceptance
                     IWorldRegistration? world = null;
                     IWorldRegistration? gamemode = null;
                     IWorldRegistration? menu = null;
+                    ICreatorSession? creatorSession = null;
                     LifecycleAssetHandles? assets = null;
                     var disposed = false;
                     try
@@ -64,6 +65,7 @@ namespace TopiaForge.SdkAcceptance
                         extension = RegisterCycleExtension(resources, cycle);
                         prompt = RegisterCyclePrompt(resources, cycle);
                         target = RegisterCycleRobotTarget(resources, player, cycle);
+                        creatorSession = RegisterCycleCreatorSession(resources, cycle);
                         RegisterCycleWorlds(resources, out world, out gamemode, out menu);
                         assets = await LoadCycleAssetsAsync(resources, player, cycle);
                         await WaitForCycleCallbacksAsync(counters, cycle);
@@ -79,6 +81,7 @@ namespace TopiaForge.SdkAcceptance
                             extension,
                             prompt,
                             target,
+                            creatorSession,
                             world,
                             gamemode,
                             menu,
@@ -99,7 +102,7 @@ namespace TopiaForge.SdkAcceptance
                 Pass(
                     "lifecycle.ten-cycles",
                     "cycles=" + completedCycles
-                    + ";families=lifetime,events,scheduler,input,player-control,assets,entities,interactions,audio,ui,localization,commands,extensions,chronos,prompts,robot-targets,ugc-overrides,world-registrations"
+                    + ";families=lifetime,events,scheduler,input,player-control,assets,entities,interactions,audio,ui,localization,commands,extensions,chronos,prompts,robot-targets,creator-sessions,ugc-overrides,world-registrations"
                     + ";release=reverse-idempotent-reacquired");
             }
             catch (Exception exception)
@@ -370,6 +373,22 @@ namespace TopiaForge.SdkAcceptance
             return registration;
         }
 
+        private ICreatorSession RegisterCycleCreatorSession(
+            Stack<IDisposable> resources,
+            int cycle)
+        {
+            var service = creatorContent
+                ?? throw new InvalidOperationException("Creator Content provider is unavailable.");
+            var session = RequireValue(
+                service.BeginSession(new CreatorSessionOptions(
+                    "SDK acceptance lifecycle " + cycle,
+                    maximumInstances: 1)),
+                "begin lifecycle creator session");
+            resources.Push(session);
+            Require(session.IsAlive, "lifecycle creator session did not become active");
+            return session;
+        }
+
         private void RegisterCycleWorlds(
             Stack<IDisposable> resources,
             out IWorldRegistration world,
@@ -491,6 +510,7 @@ namespace TopiaForge.SdkAcceptance
             IExtensionRegistration extension,
             IPromptOverrideHandle prompt,
             IRobotTargetRegistration target,
+            ICreatorSession creatorSession,
             IWorldRegistration world,
             IWorldRegistration gamemode,
             IWorldRegistration menu,
@@ -509,6 +529,8 @@ namespace TopiaForge.SdkAcceptance
             Require(!target.IsActive
                     && !(robotObjectives?.TryResolveTarget(LifecycleRobotTarget, out _) ?? false),
                 "lifecycle robot target remained registered after cycle " + cycle);
+            Require(!creatorSession.IsAlive,
+                "lifecycle creator session remained active after cycle " + cycle);
             Require(!world.IsActive && !gamemode.IsActive && !menu.IsActive,
                 "lifecycle world registration remained active after cycle " + cycle);
             Require(!assets.Bundle.IsAlive
@@ -565,6 +587,7 @@ namespace TopiaForge.SdkAcceptance
                     resources,
                     new PlayerSnapshot(Vec3.Zero, new Ray(Vec3.Zero, new Vec3(0f, 0f, 1f))),
                     RequiredLifecycleCycles);
+                RegisterCycleCreatorSession(resources, RequiredLifecycleCycles);
                 RegisterCycleWorlds(resources, out _, out _, out _);
             }
             finally

@@ -11,6 +11,12 @@
   "entryAssembly": "TopiaForge.RobotKit.dll",
   "entryType": "TopiaForge.RobotKit.RobotKitMod",
   "dependencies": {},
+  "optionalDependencies": {
+    "io.github.furroxide.topiaforge.prompts": ">=1.0.0-rc.1 <2.0.0"
+  },
+  "loadAfter": [
+    "io.github.furroxide.topiaforge.prompts"
+  ],
   "supportedGameVersionRange": "0.0.2227",
   "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
   "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",

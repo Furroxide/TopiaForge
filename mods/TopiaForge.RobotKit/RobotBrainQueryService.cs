@@ -18,15 +18,21 @@ namespace TopiaForge.RobotKit
 
         private readonly RoboApiClient client;
         private readonly IModLogger logger;
+        private readonly Func<IPromptOverrideRegistry?>? promptRegistryResolver;
         private readonly CancellationTokenSource serviceCts = new CancellationTokenSource();
         private CancellationTokenSource sceneCts = new CancellationTokenSource();
         private int activeQueries;
+        private int loggedDirectiveOverflow;
+        private int loggedDirectiveResolutionFailure;
         private bool disposed;
         private bool loggedAvailability;
 
-        public RobotBrainQueryService(IModLogger logger)
+        public RobotBrainQueryService(
+            IModLogger logger,
+            Func<IPromptOverrideRegistry?>? promptRegistryResolver = null)
         {
             this.logger = logger;
+            this.promptRegistryResolver = promptRegistryResolver;
             var tokenPath = Path.Combine(Application.persistentDataPath, "robo_token.json");
             client = new RoboApiClient(tokenPath, Guid.NewGuid().ToString("N"), logger);
         }
@@ -79,7 +85,8 @@ namespace TopiaForge.RobotKit
                     serviceCts.Token,
                     sceneCts.Token))
                 {
-                    return await client.Check3Async(request, HardTimeoutSeconds, linked.Token);
+                    var effectiveRequest = ApplyGlobalRobotDirective(request);
+                    return await client.Check3Async(effectiveRequest, HardTimeoutSeconds, linked.Token);
                 }
             }
             finally
@@ -137,6 +144,31 @@ namespace TopiaForge.RobotKit
 
             loggedAvailability = true;
             logger.Info("RobotKit: structured brain queries are available.");
+        }
+
+        private BrainQueryRequest ApplyGlobalRobotDirective(BrainQueryRequest request)
+        {
+            var effectiveRequest = BrainQueryDirectiveComposer.ApplyFromRegistry(
+                request,
+                promptRegistryResolver,
+                out var exceededPromptLimit,
+                out var resolutionFailure);
+            if (resolutionFailure != null
+                && Interlocked.Exchange(ref loggedDirectiveResolutionFailure, 1) == 0)
+            {
+                logger.Warn("RobotKit could not resolve the optional global robot directive: "
+                    + resolutionFailure.Message);
+            }
+
+            if (exceededPromptLimit && Interlocked.Exchange(ref loggedDirectiveOverflow, 1) == 0)
+            {
+                logger.Warn("RobotKit skipped the global robot directive because the combined "
+                    + "/agent/check3 prompt would exceed "
+                    + BrainQueryDirectiveComposer.MaxPromptChars
+                    + " characters.");
+            }
+
+            return effectiveRequest;
         }
 
         private sealed class OwnerFacade : IRobotBrainQueryService

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 2,
+  "modId": "io.github.furroxide.topiaforge.prompts",
+  "modName": "TopiaForge Prompts",
+  "bindings": [
+    {
+      "id": "prompts.ctor.roboapi-agent-planrequest",
+      "kind": "Constructor",
+      "assembly": "GameCode",
+      "declaringType": "RoboAPI.Agent+PlanRequest",
+      "member": ".ctor",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Append owner-scoped directives to native autonomous robot planning requests",
+      "sourceRef": "mods/TopiaForge.Prompts/NativeRobotPromptBridge.cs:124",
+      "parameters": [
+        {
+          "type": "ModelAsset",
+          "constrained": true
+        },
+        {
+          "type": "AgentEnvironment",
+          "constrained": true
+        },
+        {
+          "type": "System.Collections.Generic.IReadOnlyList<System.String>",
+          "constrained": true
+        },
+        {
+          "type": "System.Collections.Generic.IReadOnlyList<System.String>",
+          "constrained": true
+        },
+        {
+          "type": "System.Single",
+          "constrained": true
+        },
+        {
+          "type": "System.String",
+          "constrained": true
+        }
+      ]
+    },
+    {
+      "id": "prompts.field.roboapi-agent-planrequest.biotemplates",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "RoboAPI.Agent+PlanRequest",
+      "member": "bioTemplates",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Append owner-scoped directives without replacing the native system prompt",
+      "sourceRef": "mods/TopiaForge.Prompts/NativeRobotPromptBridge.cs:170",
+      "returnType": "System.Collections.Generic.IReadOnlyList<System.String>"
+    },
+    {
+      "id": "prompts.type.roboapi-agent-planrequest",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "RoboAPI.Agent+PlanRequest",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Native autonomous robot planning request bridge",
+      "sourceRef": "mods/TopiaForge.Prompts/NativeRobotPromptBridge.cs:124"
+    }
+  ]
+}

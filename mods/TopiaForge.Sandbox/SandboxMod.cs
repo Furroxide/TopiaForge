@@ -11,19 +11,32 @@ namespace TopiaForge.Sandbox
 
         private static readonly ConfigDefinition<SandboxConfig> ConfigContract =
             new ConfigDefinition<SandboxConfig>(
-                1,
+                2,
                 () => new SandboxConfig(),
                 value =>
                 {
                     value.Normalize();
                     return OperationResult<bool>.Success(true);
+                },
+                (storedVersion, value) =>
+                {
+                    if (storedVersion < 2
+                        && string.Equals(value.SpawnMenuKey, "Q", StringComparison.OrdinalIgnoreCase))
+                    {
+                        value.SpawnMenuKey = "F5";
+                    }
+                    value.Normalize();
+                    return OperationResult<SandboxConfig>.Success(value);
                 });
 
         private SandboxConfig config = new SandboxConfig();
         private IWorldGamemodeService? worlds;
         private IRobotAgentService? robots;
+        private ICreatorContentService? creatorContent;
+        private ICreatorToolHostService? creatorRouter;
         private SandboxController? controller;
         private IDisposable? controllerLifetime;
+        private IDisposable? creatorHostLifetime;
         private IDisposable? pauseActionLifetime;
 
         /// <inheritdoc />
@@ -47,6 +60,17 @@ namespace TopiaForge.Sandbox
                 return;
             }
             robots = robotService;
+
+            if (!Context.Extensions.TryGet<ICreatorContentService>(out var contentService)
+                || contentService == null
+                || !Context.Extensions.TryGet<ICreatorToolHostService>(out var routerService)
+                || routerService == null)
+            {
+                Context.Logger.Warn("Creator Content is unavailable; the shared F5 Sandbox workbench cannot start.");
+                return;
+            }
+            creatorContent = contentService;
+            creatorRouter = routerService;
 
             worldsService.SessionChanged += OnSessionChanged;
             worldsService.SessionEnded += OnSessionEnded;
@@ -110,6 +134,11 @@ namespace TopiaForge.Sandbox
                 invocation => controller == null
                     ? OperationResult<string>.Failure(ModErrorCode.InvalidState, "Start the Sandbox gamemode first.")
                     : OperationResult<string>.Success(controller.DescribeStatus()));
+            RegisterCommand(
+                new CommandDefinition("sandbox-end", "Run End Session & Restore for the Sandbox creator session."),
+                invocation => controller == null
+                    ? OperationResult<string>.Failure(ModErrorCode.InvalidState, "Start the Sandbox gamemode first.")
+                    : ToCommand(controller.EndSession(), "Sandbox End Session & Restore completed."));
         }
 
         private void RegisterCommand(
@@ -131,14 +160,36 @@ namespace TopiaForge.Sandbox
                 return;
             }
 
-            if (robots == null)
+            if (robots == null || creatorContent == null || creatorRouter == null)
             {
                 return;
             }
 
             StopController();
-            controller = new SandboxController(Context, config, robots);
+            controller = new SandboxController(
+                Context,
+                config,
+                robots,
+                creatorContent,
+                creatorRouter,
+                session.WorldId);
             controllerLifetime = Context.Lifetime.Track(controller);
+            var registered = creatorRouter.RegisterHost(new CreatorToolHostRegistrationRequest(
+                "sandbox",
+                "Creator Sandbox",
+                priority: 200,
+                controller,
+                toggleBinding: string.Equals(config.SpawnMenuKey, "F5", StringComparison.OrdinalIgnoreCase)
+                    ? string.Empty
+                    : config.SpawnMenuKey));
+            if (registered.TryGetValue(out var hostRegistration))
+            {
+                creatorHostLifetime = hostRegistration;
+            }
+            else
+            {
+                Context.Logger.Warn("Sandbox F5 host registration failed: " + registered.ErrorMessage);
+            }
 
             if (Context.Extensions.TryGet<IWorldPauseMenuService>(out var pauseMenu)
                 && pauseMenu != null)
@@ -170,9 +221,16 @@ namespace TopiaForge.Sandbox
         {
             pauseActionLifetime?.Dispose();
             pauseActionLifetime = null;
+            creatorHostLifetime?.Dispose();
+            creatorHostLifetime = null;
             controllerLifetime?.Dispose();
             controllerLifetime = null;
             controller = null;
         }
+
+        private static OperationResult<string> ToCommand(OperationResult<bool> result, string success) =>
+            result.Succeeded
+                ? OperationResult<string>.Success(success)
+                : OperationResult<string>.Failure(result.ErrorCode, result.ErrorMessage);
     }
 }

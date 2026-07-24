@@ -190,6 +190,157 @@ namespace TopiaForge.RobotKit
             }
         }
 
+        // Reads only the fields written by ApplyBrainMode. This lets temporary editor leases restore a brain
+        // without overwriting a later change made by the game or another system.
+        public static RobotBrainMode DetectBrainMode(GameObject root)
+        {
+            try
+            {
+                foreach (var component in root.GetComponentsInChildren<Component>(true))
+                {
+                    if (component is Behaviour behaviour
+                        && IsNamed(component, "BehaviorTree")
+                        && !behaviour.enabled)
+                    {
+                        return RobotBrainMode.Dormant;
+                    }
+
+                    if (IsNamed(component, "LLMAgent")
+                        && GetFieldValue(component, "llmDisabled") is bool disabled
+                        && disabled)
+                    {
+                        return RobotBrainMode.Dormant;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                RobotKitDiagnostics.ReportOnce("native brain mode read", ex);
+            }
+
+            return RobotBrainMode.Autonomous;
+        }
+
+        public static void RestoreBrainState(GameObject root, BrainStateSnapshot? original, IModLogger logger)
+        {
+            if (original == null)
+            {
+                WakeBrain(root, null, logger);
+                return;
+            }
+
+            try
+            {
+                foreach (var component in root.GetComponentsInChildren<Component>(true))
+                {
+                    if (component is Behaviour behaviour && IsNamed(component, "BehaviorTree"))
+                    {
+                        foreach (var (tree, wasEnabled) in original.BehaviorTrees)
+                        {
+                            if (ReferenceEquals(tree, behaviour))
+                            {
+                                behaviour.enabled = wasEnabled;
+                                break;
+                            }
+                        }
+                    }
+                    else if (IsNamed(component, "LLMAgent"))
+                    {
+                        var type = component.GetType();
+                        if (original.InitialState != null)
+                        {
+                            SetFieldIfPresent(type, component, "initialState", original.InitialState);
+                        }
+                        if (original.State != null)
+                        {
+                            SetFieldIfPresent(type, component, "state", original.State);
+                        }
+                        if (original.LlmDisabled != null)
+                        {
+                            SetFieldIfPresent(type, component, "llmDisabled", original.LlmDisabled);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.Debug("RobotKit could not restore the native brain snapshot: " + ex.Message);
+            }
+        }
+
+        // Restores only fields which still contain the editor's last applied values. A false result means at
+        // least one property changed outside the lease and was deliberately left alone.
+        public static bool RestoreBrainStateConflictSafe(
+            GameObject root,
+            BrainStateSnapshot original,
+            BrainStateSnapshot expected,
+            IModLogger logger)
+        {
+            var restoredAll = true;
+            try
+            {
+                foreach (var (tree, wasEnabled) in original.BehaviorTrees)
+                {
+                    var foundExpected = false;
+                    var expectedEnabled = false;
+                    foreach (var (expectedTree, enabled) in expected.BehaviorTrees)
+                    {
+                        if (!ReferenceEquals(tree, expectedTree))
+                        {
+                            continue;
+                        }
+
+                        foundExpected = true;
+                        expectedEnabled = enabled;
+                        break;
+                    }
+
+                    if (tree != null && foundExpected && tree.enabled == expectedEnabled)
+                    {
+                        tree.enabled = wasEnabled;
+                    }
+                    else
+                    {
+                        restoredAll = false;
+                    }
+                }
+
+                var agent = FindComponent(root, "LLMAgent");
+                if (agent == null)
+                {
+                    return false;
+                }
+
+                restoredAll &= RestoreFieldIfExpected(agent, "initialState", original.InitialState, expected.InitialState);
+                restoredAll &= RestoreFieldIfExpected(agent, "state", original.State, expected.State);
+                restoredAll &= RestoreFieldIfExpected(agent, "llmDisabled", original.LlmDisabled, expected.LlmDisabled);
+            }
+            catch (Exception ex)
+            {
+                logger.Debug("RobotKit could not restore the native brain snapshot: " + ex.Message);
+                return false;
+            }
+
+            return restoredAll;
+        }
+
+        private static bool RestoreFieldIfExpected(Component component, string fieldName, object? original, object? expected)
+        {
+            var field = component.GetType().GetField(fieldName, InstanceFlags);
+            if (field == null)
+            {
+                return original == null && expected == null;
+            }
+
+            if (!Equals(field.GetValue(component), expected))
+            {
+                return false;
+            }
+
+            field.SetValue(component, original);
+            return true;
+        }
+
         private static void WakeBrain(GameObject root, BrainStateSnapshot? original, IModLogger logger)
         {
             try

@@ -11,6 +11,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Interop.Unity\TopiaForge.Mods.Interop.Unity.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Prompts\TopiaForge.Mods.Prompts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="GameCode" HintPath="$(RobotopiaManagedDir)\GameCode.dll" Private="false" />
   </ItemGroup>
 </Project>
