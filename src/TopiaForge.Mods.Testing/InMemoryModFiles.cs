@@ -119,6 +119,12 @@ namespace TopiaForge.Mods.Testing
         /// <summary>Gets or sets the maximum content size accepted by reads and writes.</summary>
         public int MaximumFileBytes { get; set; } = 16 * 1024 * 1024;
 
+        /// <summary>Gets or sets one normalized path whose next write should fail.</summary>
+        public string FailNextWritePath { get; set; } = string.Empty;
+
+        /// <summary>Gets or sets the stable error returned by the next matching write.</summary>
+        public ModErrorCode FailNextWriteErrorCode { get; set; }
+
         /// <inheritdoc/>
         public bool PackageFileExists(string relativePath) => fileSystem.PackageExists(relativePath);
 
@@ -164,6 +170,16 @@ namespace TopiaForge.Mods.Testing
             if (IsCancelled(cancellationToken))
             {
                 return Cancelled<bool>();
+            }
+
+            var normalizedPath = InMemoryModFileSystem.Normalize(relativePath);
+            if (FailNextWriteErrorCode != ModErrorCode.None
+                && string.Equals(normalizedPath, FailNextWritePath, StringComparison.Ordinal))
+            {
+                var error = FailNextWriteErrorCode;
+                FailNextWriteErrorCode = ModErrorCode.None;
+                FailNextWritePath = string.Empty;
+                return Task.FromResult(OperationResult<bool>.Failure(error, "The in-memory write failed by test configuration."));
             }
 
             if (content.Length > MaximumFileBytes)

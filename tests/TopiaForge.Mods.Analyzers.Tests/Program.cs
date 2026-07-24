@@ -19,6 +19,10 @@ namespace TopiaForge.Mods.Analyzers.Tests
                 "ITimeControlService",
                 "io.github.furroxide.topiaforge.chronos"),
             new ModuleFixture(
+                "TopiaForge.Mods.CreatorContent",
+                "ICreatorContentService",
+                "io.github.furroxide.topiaforge.creatorcontent"),
+            new ModuleFixture(
                 "TopiaForge.Mods.Multiplayer",
                 "IMultiplayerSession",
                 "io.github.furroxide.topiaforge.multiplayer"),

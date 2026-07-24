@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("TopiaForge.Mods.Testing")]
 [assembly: InternalsVisibleTo("TopiaForge.Multiplayer")]
 [assembly: InternalsVisibleTo("TopiaForge.Chronos")]
+[assembly: InternalsVisibleTo("TopiaForge.CreatorContent")]
 [assembly: InternalsVisibleTo("TopiaForge.Prompts")]
 [assembly: InternalsVisibleTo("TopiaForge.RobotKit")]
 [assembly: InternalsVisibleTo("TopiaForge.UgcLiveSync")]

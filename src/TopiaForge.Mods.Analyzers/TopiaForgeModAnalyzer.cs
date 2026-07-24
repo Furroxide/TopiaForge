@@ -80,6 +80,7 @@ namespace TopiaForge.Mods.Analyzers
             new Dictionary<string, ModuleRequirement>(StringComparer.Ordinal)
             {
                 ["TopiaForge.Mods.Chronos"] = new ModuleRequirement("Chronos", "chronos", "io.github.furroxide.topiaforge.chronos"),
+                ["TopiaForge.Mods.CreatorContent"] = new ModuleRequirement("Creator Content", "creatorcontent", "io.github.furroxide.topiaforge.creatorcontent"),
                 ["TopiaForge.Mods.Multiplayer"] = new ModuleRequirement("Multiplayer", "multiplayer", "io.github.furroxide.topiaforge.multiplayer"),
                 ["TopiaForge.Mods.Prompts"] = new ModuleRequirement("Prompts", "prompts", "io.github.furroxide.topiaforge.prompts"),
                 ["TopiaForge.Mods.RobotKit"] = new ModuleRequirement("RobotKit", "robotkit", "io.github.furroxide.topiaforge.robotkit"),

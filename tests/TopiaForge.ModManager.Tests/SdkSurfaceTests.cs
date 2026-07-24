@@ -15,6 +15,7 @@ namespace TopiaForge.ModManager.Tests
             TestRobotColor();
             TestRobotAgentSpawnRequestDefaults();
             TestRobotTypeAndBrainSwitchContracts();
+            TestRobotEditingContracts();
             TestRobotInteractionContracts();
             TestReachableSpawnRequestDefaults();
             TestRobotAgentEnums();

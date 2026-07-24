@@ -8,6 +8,7 @@
     <Project Path="src/TopiaForge.Mods.Abstractions/TopiaForge.Mods.Abstractions.csproj" />
     <Project Path="src/TopiaForge.Mods.Analyzers/TopiaForge.Mods.Analyzers.csproj" />
     <Project Path="src/TopiaForge.Mods.Chronos/TopiaForge.Mods.Chronos.csproj" />
+    <Project Path="src/TopiaForge.Mods.CreatorContent/TopiaForge.Mods.CreatorContent.csproj" />
     <Project Path="src/TopiaForge.Mods.Multiplayer/TopiaForge.Mods.Multiplayer.csproj" />
     <Project Path="src/TopiaForge.Mods.Multiplayer.Generators/TopiaForge.Mods.Multiplayer.Generators.csproj" />
     <Project Path="src/TopiaForge.Mods.Interop.Unity/TopiaForge.Mods.Interop.Unity.csproj" />

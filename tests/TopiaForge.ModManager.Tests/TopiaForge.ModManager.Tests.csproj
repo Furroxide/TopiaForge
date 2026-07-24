@@ -12,6 +12,7 @@
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Interop.Unity\TopiaForge.Mods.Interop.Unity.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Chronos\TopiaForge.Mods.Chronos.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.CreatorContent\TopiaForge.Mods.CreatorContent.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Multiplayer\TopiaForge.Mods.Multiplayer.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Prompts\TopiaForge.Mods.Prompts.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.RobotKit\TopiaForge.Mods.RobotKit.csproj" />
@@ -37,8 +38,10 @@
   <ItemGroup Condition="'$(TestingKitOnly)' == 'true'">
     <!-- Focused sources use core and specialist SDK contracts directly; keep those dependencies explicit
          instead of relying on the testing package's intentionally reference-only transitive graph. -->
+    <ProjectReference Include="..\..\src\TopiaForge.ModManager.Core\TopiaForge.ModManager.Core.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Chronos\TopiaForge.Mods.Chronos.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.CreatorContent\TopiaForge.Mods.CreatorContent.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Multiplayer\TopiaForge.Mods.Multiplayer.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Prompts\TopiaForge.Mods.Prompts.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.RobotKit\TopiaForge.Mods.RobotKit.csproj" />
@@ -203,6 +206,8 @@
                       LogicalName="TopiaForge.ModManager.Tests.topiaforge.mods.worlds.api.txt" />
     <EmbeddedResource Include="..\..\baselines\topiaforge.mods.chronos.api.txt"
                       LogicalName="TopiaForge.ModManager.Tests.topiaforge.mods.chronos.api.txt" />
+    <EmbeddedResource Include="..\..\baselines\topiaforge.mods.creatorcontent.api.txt"
+                      LogicalName="TopiaForge.ModManager.Tests.topiaforge.mods.creatorcontent.api.txt" />
     <EmbeddedResource Include="..\..\baselines\topiaforge.mods.multiplayer.api.txt"
                       LogicalName="TopiaForge.ModManager.Tests.topiaforge.mods.multiplayer.api.txt" />
     <EmbeddedResource Include="..\..\baselines\topiaforge.mods.prompts.api.txt"

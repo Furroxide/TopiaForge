@@ -143,6 +143,57 @@ namespace TopiaForge.Mods
         public float Height { get; }
     }
 
+    /// <summary>Orientation used by a responsive split-pane composition.</summary>
+    public enum UiSplitOrientation
+    {
+        /// <summary>Places the primary pane to the left of the secondary pane.</summary>
+        Horizontal = 0,
+
+        /// <summary>Places the primary pane above the secondary pane.</summary>
+        Vertical = 1
+    }
+
+    /// <summary>Places two composition subtrees in a bounded proportional split.</summary>
+    public sealed class UiSplitPane : UiNode
+    {
+        /// <summary>Creates a split pane.</summary>
+        public UiSplitPane(
+            UiNode primary,
+            UiNode secondary,
+            UiSplitOrientation orientation = UiSplitOrientation.Horizontal,
+            float primaryFraction = 0.5f)
+            : base(null)
+        {
+            Primary = primary ?? throw new ArgumentNullException(nameof(primary));
+            Secondary = secondary ?? throw new ArgumentNullException(nameof(secondary));
+            if (!Enum.IsDefined(typeof(UiSplitOrientation), orientation))
+            {
+                throw new ArgumentOutOfRangeException(nameof(orientation));
+            }
+
+            if (float.IsNaN(primaryFraction) || float.IsInfinity(primaryFraction) ||
+                primaryFraction < 0.1f || primaryFraction > 0.9f)
+            {
+                throw new ArgumentOutOfRangeException(nameof(primaryFraction));
+            }
+
+            Orientation = orientation;
+            PrimaryFraction = primaryFraction;
+        }
+
+        /// <summary>Gets the primary composition subtree.</summary>
+        public UiNode Primary { get; }
+
+        /// <summary>Gets the secondary composition subtree.</summary>
+        public UiNode Secondary { get; }
+
+        /// <summary>Gets how the panes are arranged.</summary>
+        public UiSplitOrientation Orientation { get; }
+
+        /// <summary>Gets the primary pane's proportional share in the inclusive 0.1-to-0.9 range.</summary>
+        public float PrimaryFraction { get; }
+    }
+
     /// <summary>An immutable button description with an isolated activation callback.</summary>
     public sealed class UiButton : UiNode
     {
@@ -469,7 +520,7 @@ namespace TopiaForge.Mods
         {
             if (node == null) return false;
             if (node is UiButton || node is UiToggle || node is UiSlider || node is UiTextInput ||
-                node is UiDropdown || node is UiVirtualList)
+                node is UiDropdown || node is UiVirtualList || node is UiGraphCanvas)
             {
                 return true;
             }
@@ -484,6 +535,10 @@ namespace TopiaForge.Mods
             else if (node is UiScroll scroll)
             {
                 return ContainsInteractive(scroll.Content);
+            }
+            else if (node is UiSplitPane split)
+            {
+                return ContainsInteractive(split.Primary) || ContainsInteractive(split.Secondary);
             }
 
             return false;
@@ -505,6 +560,11 @@ namespace TopiaForge.Mods
             else if (node is UiScroll scroll)
             {
                 Visit(scroll.Content, depth + 1, ids, ref count);
+            }
+            else if (node is UiSplitPane split)
+            {
+                Visit(split.Primary, depth + 1, ids, ref count);
+                Visit(split.Secondary, depth + 1, ids, ref count);
             }
         }
     }

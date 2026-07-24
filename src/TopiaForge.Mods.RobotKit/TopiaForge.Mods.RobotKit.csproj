@@ -23,6 +23,7 @@
     <Compile Include="..\TopiaForge.Mods.Abstractions\RobotControl.cs" Link="RobotControl.cs" />
     <Compile Include="..\TopiaForge.Mods.Abstractions\RobotEnums.cs" Link="RobotEnums.cs" />
     <Compile Include="..\TopiaForge.Mods.Abstractions\RobotInteractions.cs" Link="RobotInteractions.cs" />
+    <Compile Include="..\TopiaForge.Mods.Abstractions\RobotEditing.cs" Link="RobotEditing.cs" />
     <Compile Include="..\TopiaForge.Mods.Abstractions\RobotObjectives.cs" Link="RobotObjectives.cs" />
     <Compile Include="..\TopiaForge.Mods.Abstractions\RobotSpawning.cs" Link="RobotSpawning.cs" />
     <Compile Include="..\TopiaForge.Mods.Abstractions\RobotTargetFacts.cs" Link="RobotTargetFacts.cs" />

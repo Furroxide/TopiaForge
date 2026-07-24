@@ -4,6 +4,17 @@ using System.Collections.ObjectModel;
 
 namespace TopiaForge.Mods
 {
+    /// <summary>Stable ids for prompt slots consumed by first-party runtime bridges and cooperating providers.</summary>
+    public static class WellKnownPromptIds
+    {
+        /// <summary>
+        /// Gets the optional directive that augments robot personality prompts. The native autonomous planning
+        /// bridge and cooperating providers such as RobotKit may consume this slot; they append the directive without
+        /// replacing their existing personality, authoritative facts, action schema, or output contract.
+        /// </summary>
+        public const string GlobalRobotDirective = "topiaforge.robot.global-directive";
+    }
+
     /// <summary>Registers owner-bound prompt replacements and reports deterministic conflicts.</summary>
     public interface IPromptOverrideRegistry
     {

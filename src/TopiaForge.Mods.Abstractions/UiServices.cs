@@ -13,7 +13,10 @@ namespace TopiaForge.Mods
         Hud = 0,
 
         /// <summary>An interactive paper-scheme desktop window.</summary>
-        Window = 1
+        Window = 1,
+
+        /// <summary>An immersive paper-scheme tool that fills the safe screen area.</summary>
+        FullscreenTool = 2
     }
 
     /// <summary>Identifies a semantic UI tone.</summary>
@@ -124,6 +127,19 @@ namespace TopiaForge.Mods
 
         /// <summary>Atomically replaces the immutable interactive composition below the body text.</summary>
         OperationResult<bool> SetContent(UiNode content);
+    }
+
+    /// <summary>
+    /// Optional capability implemented by UI surfaces that report when a visible surface is dismissed.
+    /// Consumers should feature-detect this interface so alternate surface implementations remain compatible.
+    /// </summary>
+    public interface IUiSurfaceDismissalSource
+    {
+        /// <summary>
+        /// Raised once whenever a visible surface becomes hidden, whether through user dismissal or
+        /// <see cref="IUiSurface.Hide"/>. It is not raised by disposal.
+        /// </summary>
+        event Action? Dismissed;
     }
 
     /// <summary>Describes a confirmation modal.</summary>
