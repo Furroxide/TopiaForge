@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace TopiaForge.Mods.Testing
 {
     /// <summary>Inspectable fake UI surface.</summary>
-    public sealed class FakeUiSurface : IUiSurface
+    public sealed class FakeUiSurface : IUiSurface, IUiSurfaceDismissalSource
     {
         private Action<FakeUiSurface>? release;
         private IDisposable? lifetimeLease;
@@ -13,6 +13,8 @@ namespace TopiaForge.Mods.Testing
         private readonly Dictionary<string, string> textValues = new Dictionary<string, string>(StringComparer.Ordinal);
         private readonly Dictionary<string, string> dropdownValues = new Dictionary<string, string>(StringComparer.Ordinal);
         private readonly Dictionary<string, string?> listSelections = new Dictionary<string, string?>(StringComparer.Ordinal);
+        private readonly Dictionary<string, string?> graphSelections = new Dictionary<string, string?>(StringComparer.Ordinal);
+        private readonly Dictionary<string, UiGraphViewport> graphViewports = new Dictionary<string, UiGraphViewport>(StringComparer.Ordinal);
         private readonly List<string> callbackErrors = new List<string>();
         private ModErrorCode nextContentErrorCode;
         private string nextContentErrorMessage = string.Empty;
@@ -57,6 +59,9 @@ namespace TopiaForge.Mods.Testing
         public IReadOnlyList<string> CallbackErrors => callbackErrors.AsReadOnly();
 
         /// <inheritdoc/>
+        public event Action? Dismissed;
+
+        /// <inheritdoc/>
         public void Show()
         {
             EnsureActive();
@@ -67,7 +72,9 @@ namespace TopiaForge.Mods.Testing
         public void Hide()
         {
             EnsureActive();
+            if (!IsVisible) return;
             IsVisible = false;
+            InvokeDismissed();
         }
 
         /// <inheritdoc/>
@@ -110,6 +117,8 @@ namespace TopiaForge.Mods.Testing
             textValues.Clear();
             dropdownValues.Clear();
             listSelections.Clear();
+            graphSelections.Clear();
+            graphViewports.Clear();
             CaptureState(content);
             return OperationResult<bool>.Success(true);
         }
@@ -202,6 +211,117 @@ namespace TopiaForge.Mods.Testing
             return Invoke(list.Selected, itemId, "virtual list '" + id + "'");
         }
 
+        /// <summary>Selects or clears selection on one enabled graph canvas.</summary>
+        public OperationResult<bool> SelectGraphNode(string id, string? nodeId)
+        {
+            if (!TryFindNode(id, out var node) || !(node is UiGraphCanvas graph)) return NotFound(id, "graph canvas");
+            if (!graph.Enabled) return Disabled(id);
+            if (nodeId != null && FindGraphNode(graph, nodeId) == null)
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.NotFound, "The fake graph node was not found.");
+            }
+
+            graphSelections[id] = nodeId;
+            return Invoke(graph.SelectionChanged, nodeId, "graph canvas '" + id + "' selection");
+        }
+
+        /// <summary>Moves one enabled graph node and invokes the optional edit callback.</summary>
+        public OperationResult<bool> MoveGraphNode(string id, string nodeId, Vec2 position)
+        {
+            if (!TryFindNode(id, out var node) || !(node is UiGraphCanvas graph)) return NotFound(id, "graph canvas");
+            if (!graph.Enabled) return Disabled(id);
+            var graphNode = FindGraphNode(graph, nodeId);
+            if (graphNode == null) return OperationResult<bool>.Failure(ModErrorCode.NotFound, "The fake graph node was not found.");
+            if (!graphNode.Enabled) return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The fake graph node is disabled.");
+            if (graph.NodeMoved == null)
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The graph does not accept node moves.");
+            }
+
+            UiGraphNodeMove move;
+            try { move = new UiGraphNodeMove(nodeId, position); }
+            catch (ArgumentException exception)
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, exception.Message);
+            }
+
+            return Invoke(graph.NodeMoved, move, "graph canvas '" + id + "' node move");
+        }
+
+        /// <summary>Requests one compatible connection on an enabled graph canvas.</summary>
+        public OperationResult<bool> ConnectGraphPorts(
+            string id,
+            string sourceNodeId,
+            string sourcePortId,
+            string targetNodeId,
+            string targetPortId)
+        {
+            if (!TryFindNode(id, out var node) || !(node is UiGraphCanvas graph)) return NotFound(id, "graph canvas");
+            if (!graph.Enabled) return Disabled(id);
+            if (graph.ConnectionRequested == null)
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The graph does not accept new connections.");
+            }
+
+            var source = FindGraphNode(graph, sourceNodeId);
+            var target = FindGraphNode(graph, targetNodeId);
+            var sourcePort = source == null ? null : FindGraphPort(source, sourcePortId);
+            var targetPort = target == null ? null : FindGraphPort(target, targetPortId);
+            if (source == null || target == null || sourcePort == null || targetPort == null)
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.NotFound, "A fake graph connection endpoint was not found.");
+            }
+
+            if (!source.Enabled || !target.Enabled ||
+                sourcePort.Direction != UiGraphPortDirection.Output ||
+                targetPort.Direction != UiGraphPortDirection.Input ||
+                !string.Equals(sourcePort.DataType, targetPort.DataType, StringComparison.Ordinal))
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "The fake graph ports are not compatible.");
+            }
+
+            var request = new UiGraphConnectionRequest(sourceNodeId, sourcePortId, targetNodeId, targetPortId);
+            return Invoke(graph.ConnectionRequested, request, "graph canvas '" + id + "' connection");
+        }
+
+        /// <summary>Requests removal of an existing edge on an enabled graph canvas.</summary>
+        public OperationResult<bool> RemoveGraphConnection(string id, string edgeId)
+        {
+            if (!TryFindNode(id, out var node) || !(node is UiGraphCanvas graph)) return NotFound(id, "graph canvas");
+            if (!graph.Enabled) return Disabled(id);
+            if (graph.ConnectionRemoved == null)
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The graph does not accept connection removal.");
+            }
+
+            var found = false;
+            foreach (var edge in graph.Edges)
+            {
+                if (string.Equals(edge.Id, edgeId, StringComparison.Ordinal))
+                {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) return OperationResult<bool>.Failure(ModErrorCode.NotFound, "The fake graph edge was not found.");
+            return Invoke(graph.ConnectionRemoved, edgeId, "graph canvas '" + id + "' connection removal");
+        }
+
+        /// <summary>Changes the bounded viewport on an enabled graph canvas.</summary>
+        public OperationResult<bool> ChangeGraphViewport(string id, UiGraphViewport viewport)
+        {
+            if (!TryFindNode(id, out var node) || !(node is UiGraphCanvas graph)) return NotFound(id, "graph canvas");
+            if (!graph.Enabled) return Disabled(id);
+            if (graph.ViewportChanged == null)
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The graph does not accept viewport changes.");
+            }
+
+            graphViewports[id] = viewport;
+            return Invoke(graph.ViewportChanged, viewport, "graph canvas '" + id + "' viewport");
+        }
+
         /// <summary>Tries to read the fake's current toggle value.</summary>
         public bool TryGetToggleValue(string id, out bool value) => toggleValues.TryGetValue(id, out value);
 
@@ -217,10 +337,17 @@ namespace TopiaForge.Mods.Testing
         /// <summary>Tries to read the fake's current virtual-list selection.</summary>
         public bool TryGetSelectedListItem(string id, out string? itemId) => listSelections.TryGetValue(id, out itemId);
 
+        /// <summary>Tries to read the fake's current graph selection.</summary>
+        public bool TryGetSelectedGraphNode(string id, out string? nodeId) => graphSelections.TryGetValue(id, out nodeId);
+
+        /// <summary>Tries to read the fake's current graph viewport.</summary>
+        public bool TryGetGraphViewport(string id, out UiGraphViewport viewport) => graphViewports.TryGetValue(id, out viewport);
+
         /// <inheritdoc/>
         public void Dispose()
         {
             IsVisible = false;
+            Dismissed = null;
             var callback = release;
             release = null;
             callback?.Invoke(this);
@@ -235,6 +362,11 @@ namespace TopiaForge.Mods.Testing
             else if (node is UiTextInput input) textValues[input.Id!] = input.Value;
             else if (node is UiDropdown dropdown) dropdownValues[dropdown.Id!] = dropdown.SelectedValue;
             else if (node is UiVirtualList list) listSelections[list.Id!] = list.SelectedItemId;
+            else if (node is UiGraphCanvas graph)
+            {
+                graphSelections[graph.Id!] = graph.SelectedNodeId;
+                graphViewports[graph.Id!] = graph.Viewport;
+            }
 
             if (node is UiLayoutNode layout)
             {
@@ -243,6 +375,11 @@ namespace TopiaForge.Mods.Testing
             else if (node is UiScroll scroll)
             {
                 CaptureState(scroll.Content);
+            }
+            else if (node is UiSplitPane split)
+            {
+                CaptureState(split.Primary);
+                CaptureState(split.Secondary);
             }
         }
 
@@ -264,6 +401,11 @@ namespace TopiaForge.Mods.Testing
                 }
             }
             else if (current is UiScroll scroll && TryFind(scroll.Content, id, out node))
+            {
+                return true;
+            }
+            else if (current is UiSplitPane split &&
+                     (TryFind(split.Primary, id, out node) || TryFind(split.Secondary, id, out node)))
             {
                 return true;
             }
@@ -312,6 +454,33 @@ namespace TopiaForge.Mods.Testing
 
         private static OperationResult<bool> Disabled(string id) =>
             OperationResult<bool>.Failure(ModErrorCode.InvalidState, "UI control '" + id + "' is disabled.");
+
+        private static UiGraphNode? FindGraphNode(UiGraphCanvas graph, string id)
+        {
+            foreach (var node in graph.Nodes)
+            {
+                if (string.Equals(node.Id, id, StringComparison.Ordinal)) return node;
+            }
+
+            return null;
+        }
+
+        private static UiGraphPort? FindGraphPort(UiGraphNode node, string id)
+        {
+            foreach (var port in node.Ports)
+            {
+                if (string.Equals(port.Id, id, StringComparison.Ordinal)) return port;
+            }
+
+            return null;
+        }
+
+        private void InvokeDismissed()
+        {
+            var handlers = Dismissed;
+            if (handlers == null) return;
+            Invoke(handlers, "surface '" + Id + "' dismissal");
+        }
 
         private void EnsureActive()
         {

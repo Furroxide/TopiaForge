@@ -350,6 +350,9 @@ type public interface TopiaForge.Mods.IUiSurface : System.IDisposable
   property System.Boolean IsVisible { get [abstract,virtual,newslot]; }
   property System.String Id { get [abstract,virtual,newslot]; }
 
+type public interface TopiaForge.Mods.IUiSurfaceDismissalSource
+  event System.Action? Dismissed { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
+
 type public sealed class TopiaForge.Mods.InputActionDefinition : System.Object
   constructor .ctor(System.String name, System.String displayName, System.Collections.Generic.IEnumerable<TopiaForge.Mods.InputBinding> defaultBindings, System.Boolean suppressWhileUiFocused = true)
   property System.Boolean SuppressWhileUiFocused { get; }
@@ -664,6 +667,81 @@ type public sealed class TopiaForge.Mods.UiDropdown : TopiaForge.Mods.UiNode
   property System.String Label { get; }
   property System.String SelectedValue { get; }
 
+type public sealed class TopiaForge.Mods.UiGraphCanvas : TopiaForge.Mods.UiNode
+  constructor .ctor(System.String id, System.Collections.Generic.IEnumerable<TopiaForge.Mods.UiGraphNode> nodes, System.Collections.Generic.IEnumerable<TopiaForge.Mods.UiGraphEdge> edges, System.Action<System.String?> selectionChanged, System.String? selectedNodeId = null, System.Nullable<TopiaForge.Mods.UiGraphViewport> viewport = null, System.Single height = 480, System.Boolean enabled = true, System.Action<TopiaForge.Mods.UiGraphNodeMove>? nodeMoved = null, System.Action<TopiaForge.Mods.UiGraphConnectionRequest>? connectionRequested = null, System.Action<System.String>? connectionRemoved = null, System.Action<TopiaForge.Mods.UiGraphViewport>? viewportChanged = null)
+  field const System.Int32 MaximumEdges = 1024
+  field const System.Int32 MaximumNodes = 512
+  field const System.Int32 MaximumPortsPerNode = 32
+  property System.Action<System.String>? ConnectionRemoved { get; }
+  property System.Action<System.String?> SelectionChanged { get; }
+  property System.Action<TopiaForge.Mods.UiGraphConnectionRequest>? ConnectionRequested { get; }
+  property System.Action<TopiaForge.Mods.UiGraphNodeMove>? NodeMoved { get; }
+  property System.Action<TopiaForge.Mods.UiGraphViewport>? ViewportChanged { get; }
+  property System.Boolean Enabled { get; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.UiGraphEdge> Edges { get; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.UiGraphNode> Nodes { get; }
+  property System.Single Height { get; }
+  property System.String? SelectedNodeId { get; }
+  property TopiaForge.Mods.UiGraphViewport Viewport { get; }
+
+type public readonly struct TopiaForge.Mods.UiGraphConnectionRequest : System.ValueType
+  constructor .ctor(System.String sourceNodeId, System.String sourcePortId, System.String targetNodeId, System.String targetPortId)
+  property System.String SourceNodeId { get; }
+  property System.String SourcePortId { get; }
+  property System.String TargetNodeId { get; }
+  property System.String TargetPortId { get; }
+
+type public sealed class TopiaForge.Mods.UiGraphEdge : System.Object
+  constructor .ctor(System.String id, System.String sourceNodeId, System.String sourcePortId, System.String targetNodeId, System.String targetPortId, TopiaForge.Mods.UiTone tone = 0 (Neutral))
+  property System.String Id { get; }
+  property System.String SourceNodeId { get; }
+  property System.String SourcePortId { get; }
+  property System.String TargetNodeId { get; }
+  property System.String TargetPortId { get; }
+  property TopiaForge.Mods.UiTone Tone { get; }
+
+type public sealed class TopiaForge.Mods.UiGraphNode : System.Object
+  constructor .ctor(System.String id, System.String type, System.String title, TopiaForge.Mods.Vec2 position, System.Collections.Generic.IEnumerable<TopiaForge.Mods.UiGraphPort> ports, System.String subtitle = "", TopiaForge.Mods.UiTone tone = 0 (Neutral), System.Boolean enabled = true)
+  property System.Boolean Enabled { get; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.UiGraphPort> Ports { get; }
+  property System.String Id { get; }
+  property System.String Subtitle { get; }
+  property System.String Title { get; }
+  property System.String Type { get; }
+  property TopiaForge.Mods.UiTone Tone { get; }
+  property TopiaForge.Mods.Vec2 Position { get; }
+
+type public readonly struct TopiaForge.Mods.UiGraphNodeMove : System.ValueType
+  constructor .ctor(System.String nodeId, TopiaForge.Mods.Vec2 position)
+  property System.String NodeId { get; }
+  property TopiaForge.Mods.Vec2 Position { get; }
+
+type public sealed class TopiaForge.Mods.UiGraphPort : System.Object
+  constructor .ctor(System.String id, System.String label, TopiaForge.Mods.UiGraphPortDirection direction, System.String dataType = "flow", System.Boolean required = false)
+  property System.Boolean Required { get; }
+  property System.String DataType { get; }
+  property System.String Id { get; }
+  property System.String Label { get; }
+  property TopiaForge.Mods.UiGraphPortDirection Direction { get; }
+
+type public enum TopiaForge.Mods.UiGraphPortDirection : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.UiGraphPortDirection Input = 0 (Input)
+  field const TopiaForge.Mods.UiGraphPortDirection Output = 1 (Output)
+
+type public readonly struct TopiaForge.Mods.UiGraphViewport : System.ValueType, System.IEquatable<TopiaForge.Mods.UiGraphViewport>
+  constructor .ctor(TopiaForge.Mods.Vec2 offset, System.Single zoom = 1)
+  field const System.Single MaximumZoom = 2
+  field const System.Single MinimumZoom = 0.25
+  method [static] System.Boolean op_Equality(TopiaForge.Mods.UiGraphViewport left, TopiaForge.Mods.UiGraphViewport right)
+  method [static] System.Boolean op_Inequality(TopiaForge.Mods.UiGraphViewport left, TopiaForge.Mods.UiGraphViewport right)
+  method [virtual,final,newslot] System.Boolean Equals(TopiaForge.Mods.UiGraphViewport other)
+  method [virtual] System.Boolean Equals(System.Object? obj)
+  method [virtual] System.Int32 GetHashCode()
+  property System.Single Zoom { get; }
+  property TopiaForge.Mods.Vec2 Offset { get; }
+  property static TopiaForge.Mods.UiGraphViewport Default { get [static]; }
+
 type public abstract class TopiaForge.Mods.UiLayoutNode : TopiaForge.Mods.UiNode
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.UiNode> Children { get; }
 
@@ -703,8 +781,21 @@ type public sealed class TopiaForge.Mods.UiSlider : TopiaForge.Mods.UiNode
   property System.Single Value { get; }
   property System.String Label { get; }
 
+type public enum TopiaForge.Mods.UiSplitOrientation : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.UiSplitOrientation Horizontal = 0 (Horizontal)
+  field const TopiaForge.Mods.UiSplitOrientation Vertical = 1 (Vertical)
+
+type public sealed class TopiaForge.Mods.UiSplitPane : TopiaForge.Mods.UiNode
+  constructor .ctor(TopiaForge.Mods.UiNode primary, TopiaForge.Mods.UiNode secondary, TopiaForge.Mods.UiSplitOrientation orientation = 0 (Horizontal), System.Single primaryFraction = 0.5)
+  property System.Single PrimaryFraction { get; }
+  property TopiaForge.Mods.UiNode Primary { get; }
+  property TopiaForge.Mods.UiNode Secondary { get; }
+  property TopiaForge.Mods.UiSplitOrientation Orientation { get; }
+
 type public enum TopiaForge.Mods.UiSurfaceKind : System.Int32
   field System.Int32 value__
+  field const TopiaForge.Mods.UiSurfaceKind FullscreenTool = 2 (FullscreenTool)
   field const TopiaForge.Mods.UiSurfaceKind Hud = 0 (Hud)
   field const TopiaForge.Mods.UiSurfaceKind Window = 1 (Window)
 

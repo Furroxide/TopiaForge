@@ -28,6 +28,7 @@
     <Compile Remove="RobotControl.cs" />
     <Compile Remove="RobotEnums.cs" />
     <Compile Remove="RobotInteractions.cs" />
+    <Compile Remove="RobotEditing.cs" />
     <Compile Remove="RobotObjectives.cs" />
     <Compile Remove="RobotSpawning.cs" />
     <Compile Remove="RobotTargetFacts.cs" />

@@ -52,6 +52,10 @@ namespace TopiaForge.ModManager.Tests
                 "TopiaForge.Mods.Chronos",
                 () => typeof(ITimeControlService).Assembly),
             new BaselineSpec(
+                "topiaforge.mods.creatorcontent",
+                "TopiaForge.Mods.CreatorContent",
+                () => typeof(ICreatorContentService).Assembly),
+            new BaselineSpec(
                 "topiaforge.mods.multiplayer",
                 "TopiaForge.Mods.Multiplayer",
                 () => typeof(IMultiplayerSession).Assembly),

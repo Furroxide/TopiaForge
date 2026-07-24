@@ -5,7 +5,9 @@ using System.Threading.Tasks;
 
 namespace TopiaForge.Mods.Testing
 {
-    /// <summary>Complete deterministic fake suite for every public RobotKit service.</summary>
+    /// <summary>
+    /// Deterministic fake suite for RobotKit agents, objectives, brain queries, conversations, and dialogue input.
+    /// </summary>
     public sealed class FakeRobotKit
     {
         /// <summary>Creates RobotKit fakes owned by one mod lifetime.</summary>
