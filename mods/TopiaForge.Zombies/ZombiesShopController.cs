@@ -8,21 +8,15 @@ namespace TopiaForge.Zombies
     /// <summary>Between-wave requisitions built entirely from safe declarative UI and shop contracts.</summary>
     internal sealed class ZombiesShopController : IDisposable
     {
-        private const float PauseRetrySeconds = 0.5f;
-
         private readonly IModContext context;
         private readonly ZombiesConfig config;
-        private readonly ITimeControlService? time;
         private readonly IReadOnlyList<ShopItem> catalog;
         private readonly Dictionary<string, int> purchases = new Dictionary<string, int>(StringComparer.Ordinal);
         private readonly Func<ShopItem, bool> canPurchase;
         private readonly Action<ShopItem> applyPurchase;
+        private readonly GameplayPause pause;
         private IUiSurface? surface;
-        private ITimeLease? freeze;
-        private IPlayerControlLease? control;
         private string selectedId;
-        private float pauseRetryTimer;
-        private bool pauseFailureReported;
         private bool disposed;
 
         public ZombiesShopController(
@@ -34,9 +28,13 @@ namespace TopiaForge.Zombies
         {
             this.context = context ?? throw new ArgumentNullException(nameof(context));
             this.config = config ?? throw new ArgumentNullException(nameof(config));
-            this.time = time;
             this.canPurchase = canPurchase ?? throw new ArgumentNullException(nameof(canPurchase));
             this.applyPurchase = applyPurchase ?? throw new ArgumentNullException(nameof(applyPurchase));
+            pause = new GameplayPause(
+                context,
+                "zombies-requisitions",
+                time.AsPauseSource(),
+                "ZOMBIES_REQUISITIONS_PAUSE_FAILED");
             catalog = ZombiesShopCatalog.Build(config);
             selectedId = catalog.Count > 0 ? catalog[0].Id : string.Empty;
         }
@@ -86,7 +84,7 @@ namespace TopiaForge.Zombies
                 return OperationResult<string>.Failure(content.ErrorCode, content.ErrorMessage);
             }
 
-            AcquirePause();
+            pause.Request();
             window.Show();
             context.Ui.ShowToast("Requisitions open. Wave countdown paused.", UiTone.Warning);
             return OperationResult<string>.Success("Requisitions opened.");
@@ -94,16 +92,18 @@ namespace TopiaForge.Zombies
 
         public void Tick(float controlDelta)
         {
-            if (surface != null && !surface.IsVisible)
+            if (disposed || surface == null)
+            {
+                return;
+            }
+
+            if (!surface.IsVisible)
             {
                 Close();
                 return;
             }
 
-            if (surface != null)
-            {
-                EnsurePause(controlDelta);
-            }
+            pause.Tick(controlDelta);
         }
 
         public void AwardScore(int awardedScore)
@@ -130,12 +130,7 @@ namespace TopiaForge.Zombies
             var window = surface;
             surface = null;
             window?.Dispose();
-            freeze?.Dispose();
-            freeze = null;
-            control?.Dispose();
-            control = null;
-            pauseRetryTimer = 0f;
-            pauseFailureReported = false;
+            pause.Release();
         }
 
         public void Dispose()
@@ -147,72 +142,7 @@ namespace TopiaForge.Zombies
 
             disposed = true;
             Close();
-        }
-
-        private void AcquirePause()
-        {
-            var chronosError = string.Empty;
-            if (time?.IsAvailable == true)
-            {
-                var result = time.Freeze("zombies-requisitions", suspendPlayer: true);
-                if (result.TryGetValue(out var lease))
-                {
-                    freeze = lease;
-                    PauseAcquired();
-                    return;
-                }
-
-                chronosError = result.ErrorMessage;
-            }
-
-            var fallback = context.LocalPlayer.AcquireControl("Zombies requisitions");
-            if (fallback.TryGetValue(out var playerControl))
-            {
-                control = playerControl;
-                PauseAcquired();
-            }
-            else
-            {
-                pauseRetryTimer = PauseRetrySeconds;
-                if (!pauseFailureReported)
-                {
-                    pauseFailureReported = true;
-                    context.Diagnostics.Report(new DiagnosticEntry(
-                        "ZOMBIES_REQUISITIONS_PAUSE_FAILED",
-                        "Requisitions could not pause gameplay; pause acquisition will retry in the background.",
-                        DiagnosticSeverity.Warning,
-                        string.IsNullOrWhiteSpace(chronosError)
-                            ? fallback.ErrorMessage
-                            : "Chronos: " + chronosError + " Player fallback: " + fallback.ErrorMessage));
-                }
-            }
-        }
-
-        private void EnsurePause(float controlDelta)
-        {
-            if (freeze?.IsActive == true || control?.IsActive == true)
-            {
-                PauseAcquired();
-                return;
-            }
-
-            pauseRetryTimer = Math.Max(0f, pauseRetryTimer - Math.Max(0f, controlDelta));
-            if (pauseRetryTimer > 0f)
-            {
-                return;
-            }
-
-            freeze?.Dispose();
-            freeze = null;
-            control?.Dispose();
-            control = null;
-            AcquirePause();
-        }
-
-        private void PauseAcquired()
-        {
-            pauseRetryTimer = 0f;
-            pauseFailureReported = false;
+            pause.Dispose();
         }
 
         private OperationResult<bool> RebuildContent()

@@ -175,10 +175,18 @@ namespace TopiaForge.Zombies
         // re-centred so a neutral robot starts low-but-not-hopeless. Archetype RESISTANCE is deliberately NOT folded
         // in here — it is counted once, by raising ConvertThreshold — so the meter reads honestly (a resistant robot
         // starts lower from its mind but the CONVERT line isn't also pushed out of reach).
-        public static float SeedDisposition(in RobotMind mind, in ConversationTuning tuning)
+        public static float SeedDisposition(in RobotMind mind, float baseResistance, in ConversationTuning tuning)
         {
             var compliance = OverrideDecision.Compliance(OverrideCommand.JoinMe, mind, 0f);
-            return Clamp01(tuning.SeedBias + compliance);
+            var seeded = Clamp01(tuning.SeedBias + compliance);
+
+            // A conversation must be *won*, not started already won. Compliance shares its terms with the threshold
+            // check, so for a suggestible robot the raw seed can land at or above the CONVERT line before the player
+            // has said anything — and the very first CONVERT the model emits would land unearned, which is exactly
+            // the authority this gate exists to deny it. Cap the seed so at least one earned nudge is always needed.
+            // This is a structural bound rather than retuned constants, so it survives future balance edits.
+            var ceiling = ConvertThreshold(baseResistance, tuning) - Math.Max(0f, tuning.ConvertNudge);
+            return Clamp01(Math.Min(seeded, ceiling));
         }
 
         // Move the disposition by the robot's chosen reaction this turn (the LLM's read of how it feels), clamped 0..1.

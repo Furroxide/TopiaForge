@@ -13,6 +13,7 @@ namespace TopiaForge.ModManager.Tests
         {
             TestDecisionParsing();
             TestSeedFavoursSuggestible();
+            TestSeedNeverStartsAboveTheConvertLine();
             TestNudgeMovesAndClamps();
             TestConvertThresholdScalesWithResistance();
             TestRequestFramingHostileVsAlly();
@@ -36,10 +37,67 @@ namespace TopiaForge.ModManager.Tests
             var open = new RobotMind(0.9f, 0.05f, 0.2f, 0f);
             // Loyal, low suggestibility → near zero.
             var stubborn = new RobotMind(0.1f, 0.9f, 0.2f, 0f);
-            var openSeed = ConversationDirector.SeedDisposition(open, tuning);
-            var stubbornSeed = ConversationDirector.SeedDisposition(stubborn, tuning);
+            var openSeed = ConversationDirector.SeedDisposition(open, 0f, tuning);
+            var stubbornSeed = ConversationDirector.SeedDisposition(stubborn, 0f, tuning);
             Assert(openSeed > stubbornSeed, "a suggestible, disloyal robot should seed more persuadable");
             Assert(openSeed >= 0f && openSeed <= 1f && stubbornSeed >= 0f && stubbornSeed <= 1f, "seed stays in 0..1");
+            Assert(openSeed < ConversationDirector.ConvertThreshold(0f, tuning),
+                "even the most persuadable robot must start below its own CONVERT line");
+        }
+
+        private static void TestSeedNeverStartsAboveTheConvertLine()
+        {
+            // The engine, not the language model, owns whether a CONVERT lands. That guarantee is only real if the
+            // disposition meter starts below the line for every robot the game can actually produce — otherwise the
+            // first CONVERT the model emits converts a robot the player never persuaded.
+            var config = new ZombiesConfig();
+            config.Normalize();
+            var roster = new ZombieRoster(config);
+            var tuning = new ConversationTuning(
+                config.ConvSeedBias,
+                config.ConvertThreshold,
+                config.ConvertResistanceWeight,
+                config.ConvertNudge,
+                config.StandDownNudge,
+                config.FleeNudge,
+                config.RefuseNudge,
+                config.EnrageDispositionFloor);
+
+            var kinds = new[] { ZombieKind.Grunt, ZombieKind.Sprinter, ZombieKind.Brute, ZombieKind.Runt };
+            var checkedCombinations = 0;
+            foreach (var kind in kinds)
+            {
+                var archetype = roster.Get(kind);
+                var threshold = ConversationDirector.ConvertThreshold(archetype.BaseResistance, tuning);
+                for (var wave = 1; wave <= 20; wave++)
+                {
+                    // Sweep the corners of every configured mind range rather than sampling, so this cannot pass by
+                    // luck of the seed.
+                    foreach (var suggestibility in new[] { config.SuggestibilityMin, config.SuggestibilityMax })
+                    {
+                        foreach (var loyalty in new[] { config.LoyaltyMin, config.LoyaltyMax })
+                        {
+                            foreach (var bias in new[] { -config.BiasAmplitude, config.BiasAmplitude })
+                            {
+                                var corruption = config.CorruptionBase + (config.CorruptionPerWave * wave);
+                                var mind = new RobotMind(suggestibility, loyalty, corruption, bias);
+                                var seed = ConversationDirector.SeedDisposition(
+                                    mind,
+                                    archetype.BaseResistance,
+                                    tuning);
+                                Assert(seed >= 0f && seed <= 1f, "seed stays in 0..1 for " + kind);
+                                Assert(seed < threshold,
+                                    "a " + kind + " on wave " + wave
+                                    + " must start below its CONVERT line, but seeded " + seed
+                                    + " against a threshold of " + threshold);
+                                checkedCombinations++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            Assert(checkedCombinations == 4 * 20 * 8, "the sweep must cover every archetype/wave/mind corner");
         }
 
         private static void TestNudgeMovesAndClamps()

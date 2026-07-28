@@ -130,31 +130,11 @@ namespace TopiaForge.Zombies
             return context.LocalPlayer.TryGetHealth(out health) && health != null;
         }
 
-        private void CancelSpawnSearch()
-        {
-            if (spawnCancellation != null)
-            {
-                try { spawnCancellation.Cancel(); }
-                catch (ObjectDisposedException) { }
-                spawnCancellation.Dispose();
-                spawnCancellation = null;
-            }
+        // PendingOperation keeps a cancelled operation draining so a late result is still released on the main
+        // thread, and frees the armed slot immediately so a restart never waits on work we already discarded.
+        private void CancelSpawnSearch() => spawnSearch.Cancel();
 
-            spawnSearch = null;
-        }
-
-        private void CancelReturnToMenu()
-        {
-            if (returnCancellation != null)
-            {
-                try { returnCancellation.Cancel(); }
-                catch (ObjectDisposedException) { }
-                returnCancellation.Dispose();
-                returnCancellation = null;
-            }
-
-            returnTask = null;
-        }
+        private void CancelReturnToMenu() => returnOperation.Cancel();
 
         private void ClearEnemies()
         {
@@ -240,18 +220,6 @@ namespace TopiaForge.Zombies
             }
 
             return float.IsNaN(value) || float.IsInfinity(value) || value < 0f ? 0f : value;
-        }
-
-        private static OperationResult<T> CompletedResult<T>(Task<OperationResult<T>> task) where T : notnull
-        {
-            try
-            {
-                return task.GetAwaiter().GetResult();
-            }
-            catch (Exception exception)
-            {
-                return OperationResult<T>.Failure(ModErrorCode.External, exception.Message);
-            }
         }
 
         private int EffectiveAliveCap => Math.Min(

@@ -27,12 +27,9 @@ namespace TopiaForge.Zombies
 
         private ZombiesConfig config = new ZombiesConfig();
         private IWorldGamemodeService? worlds;
-        private IRobotAgentService? robots;
-        private IWorldRegistration? gamemodeRegistration;
-        private IWorldRegistration? menuRegistration;
-        private ZombiesController? controller;
-        private IDisposable? controllerLifetime;
-        private IDisposable? pauseActionLifetime;
+        private GamemodeHost<ZombiesController>? host;
+
+        private ZombiesController? controller => host?.Controller;
 
         /// <inheritdoc />
         protected override void OnLoad()
@@ -41,72 +38,61 @@ namespace TopiaForge.Zombies
             ApplyAccessibility();
             RegisterCommands();
 
-            if (!Context.Extensions.TryGet<IWorldGamemodeService>(out var worldsService)
-                || worldsService == null)
+            if (!Context.TryGetExtension<IWorldGamemodeService>(out var worldsService))
             {
                 Context.Logger.Warn("The Worlds module is unavailable; Zombies cannot register its gamemode.");
                 return;
             }
             worlds = worldsService;
 
-            if (!Context.Extensions.TryGet<IRobotAgentService>(out var robotService)
-                || robotService == null)
+            if (!Context.TryGetExtension<IRobotAgentService>(out var robotService))
             {
                 Context.Logger.Warn("RobotKit is unavailable; Zombies cannot create infected robot entities.");
                 return;
             }
-            robots = robotService;
 
-            if (!TryRetainRegistration(
-                    worldsService.RegisterGamemode(new GamemodeDefinition(
-                        GamemodeId,
-                        "Zombies",
-                        "Survive escalating waves of infected robots with the SDK zapper.")),
-                    "gamemode",
-                    out gamemodeRegistration))
+            // GamemodeHost owns registration rollback, the session subscription and its lifetime-deferred
+            // unsubscribe, replay of an already-running session, one-controller-per-session, and teardown.
+            var hosted = GamemodeHost<ZombiesController>.Create(
+                Context,
+                worldsService,
+                GamemodeId,
+                session => new ZombiesController(
+                    Context,
+                    config,
+                    robotService,
+                    session,
+                    cancellationToken => ReturnToMenuAsync(session, cancellationToken)),
+                new GamemodeDefinition(
+                    GamemodeId,
+                    "Zombies",
+                    "Survive escalating waves of infected robots with the SDK zapper."),
+                new GamemodeMenuEntry(
+                    MenuEntryId,
+                    "Zombies",
+                    "Safe-SDK robot wave survival.",
+                    GamemodeId,
+                    config.TargetWorldId));
+            if (!hosted.TryGetValue(out var gamemodeHost))
             {
+                Context.Diagnostics.Report(new DiagnosticEntry(
+                    "ZOMBIES_REGISTRATION_FAILED",
+                    "Zombies could not register its gamemode.",
+                    DiagnosticSeverity.Error,
+                    hosted.ErrorMessage));
                 return;
             }
 
-            if (!TryRetainRegistration(
-                    worldsService.RegisterMenuEntry(new GamemodeMenuEntry(
-                        MenuEntryId,
-                        "Zombies",
-                        "Safe-SDK robot wave survival.",
-                        GamemodeId,
-                        config.TargetWorldId)),
-                    "menu entry",
-                    out menuRegistration))
-            {
-                gamemodeRegistration?.Dispose();
-                gamemodeRegistration = null;
-                return;
-            }
-
-            worldsService.SessionChanged += OnSessionChanged;
-            worldsService.SessionEnded += OnSessionEnded;
-            Context.Lifetime.Defer(() =>
-            {
-                worldsService.SessionChanged -= OnSessionChanged;
-                worldsService.SessionEnded -= OnSessionEnded;
-            });
-
-            if (worldsService.CurrentSession != null)
-            {
-                OnSessionChanged(worldsService.CurrentSession);
-            }
+            host = gamemodeHost;
+            host.AddPauseAction(new WorldPauseAction(
+                "zombies-restart",
+                "RESTART RUN",
+                () => host?.Controller?.Restart(),
+                closePauseMenu: true,
+                order: 0,
+                destructive: true));
 
             Context.Logger.Info("Zombies V1 registered with safe Worlds, RobotKit, Chronos, input, physics, and UI APIs.");
-        }
-
-        /// <inheritdoc />
-        protected override void OnUnload()
-        {
-            StopController();
-            menuRegistration?.Dispose();
-            menuRegistration = null;
-            gamemodeRegistration?.Dispose();
-            gamemodeRegistration = null;
         }
 
         private void LoadConfig()
@@ -176,98 +162,6 @@ namespace TopiaForge.Zombies
             }
         }
 
-        private bool TryRetainRegistration(
-            OperationResult<IWorldRegistration> result,
-            string description,
-            out IWorldRegistration? registration)
-        {
-            if (result.TryGetValue(out registration) && registration != null)
-            {
-                return true;
-            }
-
-            registration = null;
-            Context.Diagnostics.Report(new DiagnosticEntry(
-                "ZOMBIES_REGISTRATION_FAILED",
-                "The Zombies " + description + " could not be registered.",
-                DiagnosticSeverity.Error,
-                result.ErrorMessage));
-            return false;
-        }
-
-        private void OnSessionChanged(WorldSession session)
-        {
-            if (!string.Equals(session.GamemodeId, GamemodeId, StringComparison.OrdinalIgnoreCase))
-            {
-                StopController();
-                return;
-            }
-
-            if (robots == null)
-            {
-                return;
-            }
-
-            StopController();
-            try
-            {
-                controller = new ZombiesController(
-                    Context,
-                    config,
-                    robots,
-                    session,
-                    cancellationToken => ReturnToMenuAsync(session, cancellationToken));
-                controllerLifetime = Context.Lifetime.Track(controller);
-            }
-            catch (Exception exception)
-            {
-                var failedController = controller;
-                controller = null;
-                try
-                {
-                    failedController?.Dispose();
-                }
-                catch (Exception cleanupException)
-                {
-                    Context.Logger.Warn("Zombies failed-session cleanup encountered an error: "
-                        + cleanupException.Message);
-                }
-
-                Context.Diagnostics.Report(new DiagnosticEntry(
-                    "ZOMBIES_SESSION_START_FAILED",
-                    "Zombies could not start a visible, controllable session.",
-                    DiagnosticSeverity.Error,
-                    exception.Message));
-                worlds?.EndSession(WorldSessionEndReason.LoadFailed);
-                return;
-            }
-
-            if (Context.Extensions.TryGet<IWorldPauseMenuService>(out var pauseMenu)
-                && pauseMenu != null)
-            {
-                var result = pauseMenu.RegisterAction(new WorldPauseAction(
-                    "zombies-restart",
-                    "RESTART RUN",
-                    () => controller?.Restart(),
-                    closePauseMenu: true,
-                    order: 0,
-                    destructive: true));
-                if (result.TryGetValue(out var registration))
-                {
-                    pauseActionLifetime = registration;
-                }
-                else
-                {
-                    Context.Logger.Debug("Zombies pause action unavailable: " + result.ErrorMessage);
-                }
-            }
-        }
-
-        private void OnSessionEnded(WorldSessionEnd ended)
-        {
-            StopController();
-        }
-
         private async Task<OperationResult<SceneSnapshot>> ReturnToMenuAsync(
             WorldSession originatingSession,
             System.Threading.CancellationToken cancellationToken)
@@ -281,15 +175,6 @@ namespace TopiaForge.Zombies
             }
 
             return result;
-        }
-
-        private void StopController()
-        {
-            pauseActionLifetime?.Dispose();
-            pauseActionLifetime = null;
-            controllerLifetime?.Dispose();
-            controllerLifetime = null;
-            controller = null;
         }
     }
 }

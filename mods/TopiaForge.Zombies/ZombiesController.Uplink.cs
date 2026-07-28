@@ -235,7 +235,7 @@ namespace TopiaForge.Zombies
                 case HijackOutcome.Convert:
                     if (CountAllies() < config.MaxConvertedAllies)
                     {
-                        enemy.Convert(config, ConversationDirector.SeedDisposition(enemy.Mind, ConversationTuningValues()));
+                        enemy.Convert(config, ConversationDirector.SeedDisposition(enemy.Mind, enemy.Archetype.BaseResistance, ConversationTuningValues()));
                         context.Ui.ShowToast(enemy.Archetype.DisplayName + " joined your side.", UiTone.Success);
                     }
                     else
