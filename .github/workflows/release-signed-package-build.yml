@@ -448,6 +448,7 @@ jobs:
           workspace="${GITHUB_WORKSPACE//\\//}"
           temp="${RUNNER_TEMP//\\//}"
           dart pub get --enforce-lockfile
+          version=$(jq -er '.versioning.productVersion' "$workspace/release/release-policy.json")
           args=(
             release build-package
             --platform "${{ matrix.platform }}"
@@ -458,10 +459,39 @@ jobs:
           )
           if [ "${{ matrix.platform }}" = "macos" ]; then
             args+=(--prebuilt-cli "$temp/topiaforge-macos-cli")
-            args+=(--require-macos-signing)
+            if [ -n "$MACOS_CERTIFICATE_P12" ] &&
+               [ -n "$MACOS_CERTIFICATE_PASSWORD" ] &&
+               [ -n "$MACOS_DEVELOPER_ID_APPLICATION" ] &&
+               [ -n "$MACOS_NOTARY_APPLE_ID" ] &&
+               [ -n "$MACOS_NOTARY_PASSWORD" ] &&
+               [ -n "$MACOS_NOTARY_TEAM_ID" ]; then
+              args+=(--require-macos-signing)
+              printf 'trusted\n' >"$RUNNER_TEMP/topiaforge-signing-status"
+            else
+              jq -e --arg version "$version" '
+                .publication.codeSigningException.version == $version and
+                .publication.codeSigningException.allowAdHocMacOS == true and
+                $version == "1.0.0-rc.1"
+              ' "$workspace/release/release-policy.json" >/dev/null
+              printf 'ad-hoc\n' >"$RUNNER_TEMP/topiaforge-signing-status"
+            fi
           fi
           if [ "${{ matrix.platform }}" = "windows" ]; then
-            args+=(--require-windows-signing)
+            if [ -n "$WINDOWS_CERTIFICATE_PFX" ] &&
+               [ -n "$WINDOWS_CERTIFICATE_PASSWORD" ]; then
+              args+=(--require-windows-signing)
+              printf 'trusted\n' >"$RUNNER_TEMP/topiaforge-signing-status"
+            else
+              jq -e --arg version "$version" '
+                .publication.codeSigningException.version == $version and
+                .publication.codeSigningException.allowUnsignedWindows == true and
+                $version == "1.0.0-rc.1"
+              ' "$workspace/release/release-policy.json" >/dev/null
+              printf 'unsigned\n' >"$RUNNER_TEMP/topiaforge-signing-status"
+            fi
+          fi
+          if [ "${{ matrix.platform }}" = "linux" ]; then
+            printf 'not-applicable\n' >"$RUNNER_TEMP/topiaforge-signing-status"
           fi
           dart run bin/topiaforge.dart "${args[@]}"
 
@@ -479,14 +509,40 @@ jobs:
           )
           if [ "${{ matrix.platform }}" = "macos" ]; then
             args+=(--require-mac-universal)
-            args+=(--require-macos-trust --expected-mac-team-id "$MACOS_NOTARY_TEAM_ID")
+            if [ "$(cat "$RUNNER_TEMP/topiaforge-signing-status")" = trusted ]; then
+              args+=(--require-macos-trust --expected-mac-team-id "$MACOS_NOTARY_TEAM_ID")
+            fi
           fi
           if [ "${{ matrix.platform }}" = "windows" ]; then
-            args+=(--require-windows-signature)
+            if [ "$(cat "$RUNNER_TEMP/topiaforge-signing-status")" = trusted ]; then
+              args+=(--require-windows-signature)
+            fi
           fi
           dart run bin/topiaforge.dart "${args[@]}"
         env:
           MACOS_NOTARY_TEAM_ID: ${{ matrix.platform == 'macos' && secrets.MACOS_NOTARY_TEAM_ID || '' }}
+
+      - name: Exercise signed packaged update and forced rollback
+        shell: bash
+        working-directory: packages/launcher_data
+        run: |
+          set -euo pipefail
+          workspace="${GITHUB_WORKSPACE//\\//}"
+          temp="${RUNNER_TEMP//\\//}"
+          suffix=''
+          if [ "$RUNNER_OS" = Windows ]; then
+            suffix='.exe'
+          fi
+          dart pub get --enforce-lockfile
+          dart compile exe tool/update_health_fixture.dart \
+            -o "$temp/topiaforge-update-health-fixture$suffix"
+          dart compile exe tool/update_no_health_fixture.dart \
+            -o "$temp/topiaforge-update-no-health-fixture$suffix"
+          dart run tool/launcher_update_e2e.dart \
+            --platform "${{ matrix.platform }}" \
+            --archive "$workspace/release-artifacts/${{ matrix.asset }}" \
+            --health-fixture "$temp/topiaforge-update-health-fixture$suffix" \
+            --no-health-fixture "$temp/topiaforge-update-no-health-fixture$suffix"
 
       # Exercise the same extracted-archive lifecycle as the unsigned dry run.
       # The generated projects must stay buildable after the signed archive and
@@ -623,6 +679,30 @@ jobs:
         with:
           name: ${{ matrix.asset }}
           path: release-artifacts/${{ matrix.asset }}
+          if-no-files-found: error
+          retention-days: ${{ inputs.artifact_retention_days }}
+
+      - name: Upload platform trust evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          status=$(cat "$RUNNER_TEMP/topiaforge-signing-status")
+          exception=false
+          if [ "$status" = unsigned ] || [ "$status" = ad-hoc ]; then
+            exception=true
+          fi
+          jq -n \
+            --arg platform "${{ matrix.platform }}" \
+            --arg status "$status" \
+            --argjson exception "$exception" \
+            '{platform: $platform, status: $status, exceptionApplied: $exception}' \
+            >"release-artifacts/platform-trust-${{ matrix.platform }}.json"
+
+      - name: Retain platform trust evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: platform-trust-${{ matrix.platform }}
+          path: release-artifacts/platform-trust-${{ matrix.platform }}.json
           if-no-files-found: error
           retention-days: ${{ inputs.artifact_retention_days }}
 

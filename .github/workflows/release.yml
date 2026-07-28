@@ -163,10 +163,41 @@ jobs:
           name: mod-packages
           path: release-assets
 
-      - name: Generate and verify BOM, SBOM, and checksums
+      - name: Download platform trust evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: platform-trust
+          pattern: platform-trust-*
+          merge-multiple: true
+
+      - name: Generate signed update metadata and release evidence
         working-directory: apps/topiaforge_cli
+        env:
+          TOPIAFORGE_UPDATE_ED25519_PRIVATE_KEY_B64: ${{ secrets.TOPIAFORGE_UPDATE_ED25519_PRIVATE_KEY_B64 }}
         run: |
           set -euo pipefail
+          jq -s '
+            map({
+              key: (
+                if .platform == "windows" then "windows-x64"
+                elif .platform == "linux" then "linux-x64"
+                elif .platform == "macos" then "macos-universal"
+                else error("unsupported platform")
+                end
+              ),
+              value: {
+                status: .status,
+                exceptionApplied: .exceptionApplied
+              }
+            }) | from_entries
+          ' ../../platform-trust/platform-trust-*.json \
+            >../../release-assets/.platform-trust-evidence.json
+          dart run topiaforge release build-update-metadata \
+            --version "${{ needs.verify-candidate.outputs.version }}" \
+            --assets ../../release-assets
+          dart run topiaforge release verify-update-metadata \
+            --version "${{ needs.verify-candidate.outputs.version }}" \
+            --assets ../../release-assets
           dart run topiaforge release build-metadata \
             --version "${{ needs.verify-candidate.outputs.version }}" \
             --target-sha "${{ needs.verify-candidate.outputs.target_sha }}" \
@@ -175,6 +206,7 @@ jobs:
             --version "${{ needs.verify-candidate.outputs.version }}" \
             --target-sha "${{ needs.verify-candidate.outputs.target_sha }}" \
             --assets ../../release-assets
+          rm ../../release-assets/.platform-trust-evidence.json
 
       - name: Attest all release assets
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3

@@ -33,6 +33,7 @@ packages/**/[Bb]uild/
 # Generated distributables and local package caches
 /dist/
 /out/
+/release-artifacts/
 /.topiaforge/packages/
 /.topiaforge/cache/
 topiaforge.dev.props

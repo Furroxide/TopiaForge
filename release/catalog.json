@@ -6,7 +6,7 @@
       "version": "1.0.0-rc.1",
       "tag": "v1.0.0-rc.1",
       "prerelease": true,
-      "status": "blocked",
+      "status": "ready",
       "notesFile": "release/notes/v1.0.0-rc.1.md",
       "components": {
         "launcher": "1.0.0-rc.1",

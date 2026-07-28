@@ -85,7 +85,11 @@ jobs:
         run: |
           set -euo pipefail
           flutter pub get --enforce-lockfile
-          flutter build "$LAUNCHER_PLATFORM" --release
+          product_version=$(jq -er \
+            '.versioning.productVersion' \
+            ../../release/release-policy.json)
+          flutter build "$LAUNCHER_PLATFORM" --release \
+            --dart-define="TOPIAFORGE_PRODUCT_VERSION=$product_version"
 
       - name: Verify unsigned macOS launcher policy
         if: matrix.platform == 'macos'

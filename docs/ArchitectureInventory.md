@@ -57,7 +57,8 @@ from the fourteen-package normal non-DevTool payload and the fifteen-package rel
 | Registry entry/index | Format 2, append-only published history, HTTPS + SHA-256 | CLI builds/validates; launcher data consumes as untrusted input |
 | UGC config/status/command/session | Explicit schema versions, bounded JSON, atomic writers, unknown fields tolerated where documented | Launcher/CLI/sidecar/`TopiaForge.UgcLiveSync` |
 | World and TopiaForgeUi bundle manifests | Exact Unity `6000.0.23f1`, target, inputs, and SHA-256 provenance | Unity batch builders produce; CLI/package/runtime validate |
-| Release policy/BOM/catalog | Product/component versions and expected artifacts are checked against source metadata; catalog is manual-only | CLI/workflows produce; release gate and human reviewers consume |
+| Release policy/BOM/catalog | Product/component versions, signing trust, and expected artifacts are checked against source metadata; stable Pages metadata remains manual-only | CLI/workflows produce; release gate and human reviewers consume |
+| Launcher update metadata V1 | Ed25519-signed exact UTF-8 payload with immutable GitHub asset URLs, hashes, sizes, entry inventory, and complete install layouts | Release workflow produces; launcher verifies before parsing and reconciles with GitHub |
 
 ## Templates and authoring surfaces
 
@@ -97,7 +98,8 @@ identity are supplied.
 - A release candidate consists of one canonical deterministic ecosystem payload plus Windows x64, Linux x64, and
   macOS universal platform archives. Nested mod/VPM hashes must be identical between platforms.
 - Candidate metadata includes `release-bom.json`, `SHA256SUMS`, SPDX SBOMs, project/third-party notices, BepInEx
-  provenance, the manual release catalog, and checked-in release notes.
+  provenance, signed launcher-update metadata and sidecar, the manual stable
+  release catalog, and checked-in release notes.
 
 ## CI and privilege boundaries
 

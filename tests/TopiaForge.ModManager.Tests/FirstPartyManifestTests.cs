@@ -43,8 +43,10 @@ namespace TopiaForge.ModManager.Tests
                     manifest.Id + " must declare the compatible V1 loader line");
                 Assert(manifest.SupportedSdkVersionRange == SdkRange,
                     manifest.Id + " must declare the compatible V1 SDK line");
-                Assert(manifest.License == "NOASSERTION",
-                    manifest.Id + " must use the fail-closed SPDX sentinel until owner licensing is resolved");
+                Assert(manifest.License == "MIT",
+                    manifest.Id + " must use the approved project license");
+                Assert(manifest.LicenseFiles.SequenceEqual(new[] { "LICENSE" }),
+                    manifest.Id + " must include the approved project license in its package");
                 Assert(!manifest.Capabilities.Contains("ai", StringComparer.OrdinalIgnoreCase),
                     manifest.Id + " must use descriptive capabilities instead of the ambiguous ai alias");
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:launcher_ui/launcher_ui.dart';
@@ -15,25 +16,37 @@ class TopiaForgeLauncherApp extends StatelessWidget {
     super.key,
     required this.repository,
     this.developerRepository,
+    this.updateRepository,
   });
 
   final LauncherRepository repository;
   final DeveloperRepository? developerRepository;
+  final LauncherUpdateRepository? updateRepository;
 
   @override
   Widget build(BuildContext context) {
     return RepositoryProvider.value(
       value: repository,
       child: BlocProvider(
-        create: (_) =>
-            LauncherBloc(repository, developerRepository: developerRepository)
-              ..add(const LauncherStarted()),
-        child: MaterialApp(
-          title: 'TopiaForge',
-          debugShowCheckedModeBanner: false,
-          theme: buildTopiaForgeTheme(),
-          highContrastTheme: buildTopiaForgeHighContrastTheme(),
-          home: const LauncherShell(),
+        create: (_) => LauncherBloc(
+          repository,
+          developerRepository: developerRepository,
+          updateRepository: updateRepository,
+        )..add(const LauncherStarted()),
+        child: BlocListener<LauncherBloc, LauncherState>(
+          listenWhen: (previous, current) =>
+              previous.launcherUpdateStatus.phase !=
+                  LauncherUpdatePhase.applying &&
+              current.launcherUpdateStatus.phase ==
+                  LauncherUpdatePhase.applying,
+          listener: (_, _) => SystemNavigator.pop(),
+          child: MaterialApp(
+            title: 'TopiaForge',
+            debugShowCheckedModeBanner: false,
+            theme: buildTopiaForgeTheme(),
+            highContrastTheme: buildTopiaForgeHighContrastTheme(),
+            home: const LauncherShell(),
+          ),
         ),
       ),
     );

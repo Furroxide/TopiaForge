@@ -23,7 +23,10 @@
     "quality",
     "tweaks"
   ],
-  "license": "NOASSERTION",
+  "license": "MIT",
+  "licenseFiles": [
+    "LICENSE"
+  ],
   "capabilities": [
     "unsafe-native",
     "render-settings",

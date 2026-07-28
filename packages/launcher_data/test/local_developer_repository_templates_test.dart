@@ -256,10 +256,11 @@ void main() {
     expect(manifest.capabilities, contains('world-service'));
     expect(
       manifest.dependencies.map((dependency) => dependency.id),
-      containsAll([
-        'io.github.furroxide.topiaforge.worlds',
-        'io.github.furroxide.topiaforge.robotkit',
-      ]),
+      contains('io.github.furroxide.topiaforge.worlds'),
+    );
+    expect(
+      manifest.dependencies.map((dependency) => dependency.id),
+      isNot(contains('io.github.furroxide.topiaforge.robotkit')),
     );
     expect(
       manifest.loadAfter,

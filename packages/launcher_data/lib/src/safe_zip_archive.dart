@@ -1,9 +1,12 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
 import 'package:unorm_dart/unorm_dart.dart' as unicode;
+
+part 'safe_zip_validation.dart';
 
 /// Resource and portability limits applied before ZIP content is consumed.
 class SafeArchivePolicy {
@@ -32,15 +35,24 @@ class SafeArchivePolicy {
 
 /// A validated ZIP whose entries can only be read through bounded methods.
 class SafeZipArchive {
-  SafeZipArchive._(Archive archive, this.policy, this.label)
-    : entries = List.unmodifiable(
-        archive.files.map((entry) => SafeZipEntry._(entry, label)),
+  SafeZipArchive._(
+    Archive archive,
+    this.policy,
+    this.label,
+    this.allowContainedLinks,
+    Set<String> linkNames,
+  ) : entries = List.unmodifiable(
+        archive.files.map(
+          (entry) =>
+              SafeZipEntry._(entry, label, linkNames.contains(entry.name)),
+        ),
       );
 
   factory SafeZipArchive.decode(
     List<int> bytes, {
     SafeArchivePolicy policy = SafeArchivePolicy.topiaForgePackage,
     String label = 'Archive',
+    bool allowContainedLinks = false,
   }) {
     if (bytes.length > policy.maxArchiveBytes) {
       throw StateError(
@@ -49,10 +61,22 @@ class SafeZipArchive {
     }
     try {
       final directory = ZipDirectory()..read(InputMemoryStream(bytes));
-      _preflight(directory, bytes.length, policy, label);
+      final linkNames = _preflight(
+        directory,
+        bytes.length,
+        policy,
+        label,
+        allowContainedLinks,
+      );
       final decoded = ZipDecoder().decodeBytes(bytes);
-      _validateEntries(decoded, policy, label);
-      return SafeZipArchive._(decoded, policy, label);
+      _validateEntries(decoded, policy, label, allowContainedLinks, linkNames);
+      return SafeZipArchive._(
+        decoded,
+        policy,
+        label,
+        allowContainedLinks,
+        linkNames,
+      );
     } on StateError {
       rethrow;
     } on Object catch (error) {
@@ -62,6 +86,7 @@ class SafeZipArchive {
 
   final SafeArchivePolicy policy;
   final String label;
+  final bool allowContainedLinks;
   final List<SafeZipEntry> entries;
 
   SafeZipEntry? entryNamed(String name, {bool caseSensitive = true}) {
@@ -81,7 +106,7 @@ class SafeZipArchive {
   }
 
   /// Extracts into a new/empty directory without following archive links.
-  void extractTo(Directory target) {
+  void extractTo(Directory target, {bool preserveExecutableMode = false}) {
     final targetType = FileSystemEntity.typeSync(
       target.path,
       followLinks: false,
@@ -95,7 +120,7 @@ class SafeZipArchive {
     }
     target.createSync(recursive: true);
     try {
-      for (final entry in entries) {
+      for (final entry in entries.where((entry) => !entry.isSymbolicLink)) {
         final outputPath = p.joinAll([
           target.path,
           ...p.posix.split(entry.name),
@@ -119,6 +144,31 @@ class SafeZipArchive {
         final output = File(outputPath);
         output.parent.createSync(recursive: true);
         entry._writeTo(output, maxBytes: policy.maxEntryBytes);
+        if (preserveExecutableMode &&
+            !Platform.isWindows &&
+            entry.isExecutable) {
+          final chmod = Process.runSync('/bin/chmod', ['755', output.path]);
+          if (chmod.exitCode != 0) {
+            throw StateError(
+              '$label could not apply sanitized executable permissions: '
+              '${entry.name}',
+            );
+          }
+        }
+      }
+      for (final entry in entries.where((entry) => entry.isSymbolicLink)) {
+        final outputPath = p.joinAll([
+          target.path,
+          ...p.posix.split(entry.name),
+        ]);
+        _requireSafeParents(target, File(outputPath).parent, label);
+        if (FileSystemEntity.typeSync(outputPath, followLinks: false) !=
+            FileSystemEntityType.notFound) {
+          throw StateError('$label path collides on disk: ${entry.name}');
+        }
+        Link(outputPath)
+          ..parent.createSync(recursive: true)
+          ..createSync(entry.symbolicLinkTarget);
       }
     } on Object {
       if (target.existsSync()) {
@@ -131,14 +181,27 @@ class SafeZipArchive {
 
 /// An entry whose normalized name and declared size have already been checked.
 class SafeZipEntry {
-  SafeZipEntry._(this._entry, String label)
+  SafeZipEntry._(this._entry, this.label, this._isSymbolicLink)
     : name = portableArchivePath(_entry.name, label: label);
 
   final ArchiveFile _entry;
+  final String label;
+  final bool _isSymbolicLink;
   final String name;
 
   bool get isFile => _entry.isFile;
+  bool get isSymbolicLink => _isSymbolicLink;
   int get size => _entry.size;
+  bool get isExecutable => (_entry.mode & 0x49) != 0;
+  String get symbolicLinkTarget {
+    final target =
+        _entry.symbolicLink ??
+        utf8.decode(_entry.readBytes() ?? const [], allowMalformed: false);
+    if (!isSymbolicLink || target.isEmpty) {
+      throw StateError('$label entry is not a symbolic link: $name');
+    }
+    return target;
+  }
 
   List<int> readBytes({required int maxBytes, String label = 'Archive entry'}) {
     if (!isFile || size < 0 || size > maxBytes) {
@@ -236,186 +299,6 @@ String portableArchiveCollisionKey(String rawPath, {String label = 'Archive'}) {
       .replaceAll('\u0587', '\u0565\u0582');
   return unicode.nfkc(folded);
 }
-
-void _preflight(
-  ZipDirectory directory,
-  int archiveBytes,
-  SafeArchivePolicy policy,
-  String label,
-) {
-  if (directory.filePosition < 0 ||
-      directory.numberOfThisDisk != 0 ||
-      directory.diskWithTheStartOfTheCentralDirectory != 0 ||
-      directory.totalCentralDirectoryEntriesOnThisDisk !=
-          directory.totalCentralDirectoryEntries ||
-      directory.fileHeaders.length != directory.totalCentralDirectoryEntries) {
-    throw StateError('$label has an invalid or unsupported ZIP directory.');
-  }
-  if (directory.fileHeaders.length > policy.maxEntries) {
-    throw StateError('$label contains more than ${policy.maxEntries} entries.');
-  }
-  var expanded = 0;
-  for (final header in directory.fileHeaders) {
-    final local = header.file;
-    if (local == null || local.filename != header.filename) {
-      throw StateError('$label has mismatched local and central ZIP headers.');
-    }
-    if (header.diskNumberStart != 0) {
-      throw StateError('Multi-disk $label archives are not supported.');
-    }
-    if ((header.generalPurposeBitFlag & 1) != 0 || (local.flags & 1) != 0) {
-      throw StateError('Encrypted $label entries are not supported.');
-    }
-    if (header.compressionMethod != 0 && header.compressionMethod != 8) {
-      throw StateError(
-        '$label uses unsupported ZIP compression method '
-        '${header.compressionMethod}.',
-      );
-    }
-    if (header.compressedSize < 0 || header.compressedSize > archiveBytes) {
-      throw StateError('$label entry has an invalid compressed size.');
-    }
-    final size = header.uncompressedSize;
-    if (size < 0 || size > policy.maxEntryBytes) {
-      throw StateError(
-        '$label entry exceeds the '
-        '${_byteSizeLabel(policy.maxEntryBytes)} expanded-file limit: '
-        '${header.filename}.',
-      );
-    }
-    if (expanded > policy.maxExpandedBytes - size) {
-      throw StateError(
-        '$label exceeds the '
-        '${_byteSizeLabel(policy.maxExpandedBytes)} expanded-size limit.',
-      );
-    }
-    expanded += size;
-    _requireRegularZipType(
-      header.externalFileAttributes >> 16,
-      header.filename,
-      label,
-    );
-  }
-}
-
-void _validateEntries(Archive archive, SafeArchivePolicy policy, String label) {
-  if (archive.files.length > policy.maxEntries) {
-    throw StateError('$label contains too many entries.');
-  }
-  final paths = <String, bool>{};
-  var expanded = 0;
-  for (final entry in archive.files) {
-    if (entry.isSymbolicLink) {
-      throw StateError('$label contains a symbolic link: ${entry.name}');
-    }
-    _requireRegularZipType(entry.mode, entry.name, label);
-    final normalized = portableArchivePath(entry.name, label: label);
-    if (normalized.length > policy.maxPathCharacters) {
-      throw StateError('$label path is too long: ${entry.name}');
-    }
-    if (entry.size < 0 || entry.size > policy.maxEntryBytes) {
-      throw StateError('$label entry is too large: ${entry.name}');
-    }
-    if (expanded > policy.maxExpandedBytes - entry.size) {
-      throw StateError('$label expanded-size limit was exceeded.');
-    }
-    expanded += entry.size;
-    final key = portableArchiveCollisionKey(normalized, label: label);
-    if (paths.containsKey(key)) {
-      throw StateError('$label contains duplicate path: $normalized');
-    }
-    var parent = p.posix.dirname(key);
-    while (parent != '.') {
-      if (paths[parent] == true) {
-        throw StateError('$label path collides with a file: $normalized');
-      }
-      parent = p.posix.dirname(parent);
-    }
-    if (entry.isFile && paths.keys.any((path) => path.startsWith('$key/'))) {
-      throw StateError('$label path collides with a directory: $normalized');
-    }
-    paths[key] = entry.isFile;
-  }
-}
-
-void _requireRegularZipType(int mode, String name, String label) {
-  final type = mode & 0xf000;
-  if (type == 0xa000) {
-    throw StateError('$label contains a symbolic link: $name');
-  }
-  if (type != 0 && type != 0x4000 && type != 0x8000) {
-    throw StateError('$label contains an unsupported file type: $name');
-  }
-  if ((mode & 0xe00) != 0) {
-    throw StateError('$label contains setuid/setgid/sticky permissions: $name');
-  }
-}
-
-bool _unsafeSegment(String segment) {
-  if (segment.isEmpty ||
-      segment == '.' ||
-      segment == '..' ||
-      segment.contains(':') ||
-      segment.endsWith(' ') ||
-      segment.endsWith('.') ||
-      segment.codeUnits.any((unit) => unit < 0x20 || unit == 0x7f) ||
-      segment.contains(
-        RegExp(r'[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff\ufe00-\ufe0f]'),
-      )) {
-    return true;
-  }
-  return _windowsDeviceNames.contains(segment.split('.').first.toLowerCase());
-}
-
-void _requireSafeParents(Directory root, Directory parent, String label) {
-  var current = parent;
-  while (p.isWithin(root.path, current.path) && current.path != root.path) {
-    final type = FileSystemEntity.typeSync(current.path, followLinks: false);
-    if (type == FileSystemEntityType.link) {
-      throw StateError('$label extraction path contains a symbolic link.');
-    }
-    if (type != FileSystemEntityType.notFound &&
-        type != FileSystemEntityType.directory) {
-      throw StateError('$label extraction path contains a non-directory.');
-    }
-    current = current.parent;
-  }
-}
-
-String _byteSizeLabel(int bytes) {
-  if (bytes % (1024 * 1024 * 1024) == 0) {
-    return '${bytes ~/ (1024 * 1024 * 1024)} GB';
-  }
-  if (bytes % (1024 * 1024) == 0) {
-    return '${bytes ~/ (1024 * 1024)} MB';
-  }
-  return '$bytes-byte';
-}
-
-const _windowsDeviceNames = {
-  'con',
-  'prn',
-  'aux',
-  'nul',
-  'com1',
-  'com2',
-  'com3',
-  'com4',
-  'com5',
-  'com6',
-  'com7',
-  'com8',
-  'com9',
-  'lpt1',
-  'lpt2',
-  'lpt3',
-  'lpt4',
-  'lpt5',
-  'lpt6',
-  'lpt7',
-  'lpt8',
-  'lpt9',
-};
 
 class _BoundedSafeArchiveOutput extends OutputStream {
   _BoundedSafeArchiveOutput(

@@ -39,7 +39,10 @@
     "requisitions",
     "chronos"
   ],
-  "license": "NOASSERTION",
+  "license": "MIT",
+  "licenseFiles": [
+    "LICENSE"
+  ],
   "capabilities": [
     "world-service",
     "robot-spawning",

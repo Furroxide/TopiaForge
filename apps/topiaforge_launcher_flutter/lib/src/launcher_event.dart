@@ -211,6 +211,26 @@ class LauncherUpdateSettingsChanged extends LauncherEvent {
   final LauncherUpdateChannel? channel;
 }
 
+class LauncherUpdateCheckRequested extends LauncherEvent {
+  const LauncherUpdateCheckRequested({this.force = true});
+
+  final bool force;
+}
+
+class LauncherUpdateDownloadRequested extends LauncherEvent {
+  const LauncherUpdateDownloadRequested();
+}
+
+class LauncherUpdateInstallConfirmed extends LauncherEvent {
+  const LauncherUpdateInstallConfirmed();
+}
+
+class LauncherUpdateStatusChanged extends LauncherEvent {
+  const LauncherUpdateStatusChanged(this.status);
+
+  final LauncherUpdateStatus status;
+}
+
 class GameFolderOpened extends LauncherEvent {
   const GameFolderOpened();
 }

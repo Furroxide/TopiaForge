@@ -57,6 +57,22 @@ extension LauncherEventDispatch on LauncherBloc {
         event,
         emit,
       ),
+      LauncherUpdateCheckRequested() => _onLauncherUpdateCheckRequested(
+        event,
+        emit,
+      ),
+      LauncherUpdateDownloadRequested() => _onLauncherUpdateDownloadRequested(
+        event,
+        emit,
+      ),
+      LauncherUpdateInstallConfirmed() => _onLauncherUpdateInstallConfirmed(
+        event,
+        emit,
+      ),
+      LauncherUpdateStatusChanged() => _onLauncherUpdateStatusChanged(
+        event,
+        emit,
+      ),
       GameFolderOpened() => _onGameFolderOpened(event, emit),
       DataFolderOpened() => _onDataFolderOpened(event, emit),
       DeveloperModeToggled() => _onDeveloperModeToggled(event, emit),

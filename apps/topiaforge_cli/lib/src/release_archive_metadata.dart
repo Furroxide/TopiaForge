@@ -1,7 +1,7 @@
 class ReleaseZipMetadataPolicy {
   const ReleaseZipMetadataPolicy();
 
-  void validateForExtraction(List<int> bytes) {
+  ReleaseZipInspection inspect(List<int> bytes) {
     if (bytes.length > maxCompressedBytes) {
       throw StateError(
         'Release zip exceeds the compressed size limit '
@@ -69,7 +69,13 @@ class ReleaseZipMetadataPolicy {
         }
       }
     });
+    return ReleaseZipInspection(
+      entryCount: directory.totalEntries,
+      expandedSize: totalUncompressed,
+    );
   }
+
+  void validateForExtraction(List<int> bytes) => inspect(bytes);
 
   List<int> markEntriesAsUnix(List<int> bytes) {
     final patched = List<int>.of(bytes);
@@ -184,6 +190,16 @@ class ReleaseZipMetadataPolicy {
   static const maxCompressionRatio = 200;
   static const maxSymlinkTargetBytes = 4096;
   static const _ratioCheckFloorBytes = 4 * 1024 * 1024;
+}
+
+class ReleaseZipInspection {
+  const ReleaseZipInspection({
+    required this.entryCount,
+    required this.expandedSize,
+  });
+
+  final int entryCount;
+  final int expandedSize;
 }
 
 class _ZipDirectory {

@@ -68,6 +68,14 @@ class ReleasePackagePayloadWriter {
       p.join(destinationRoot, 'README.md'),
     );
     fileOps.copyFileIfExists(
+      p.join(repositoryRoot, 'LICENSE'),
+      p.join(destinationRoot, 'LICENSE'),
+    );
+    fileOps.copyFileIfExists(
+      p.join(repositoryRoot, 'DCO'),
+      p.join(destinationRoot, 'DCO'),
+    );
+    fileOps.copyFileIfExists(
       p.join(repositoryRoot, 'THIRD_PARTY_NOTICES.md'),
       p.join(destinationRoot, 'THIRD_PARTY_NOTICES.md'),
     );

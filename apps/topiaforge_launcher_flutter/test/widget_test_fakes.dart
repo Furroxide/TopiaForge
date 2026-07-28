@@ -17,7 +17,7 @@ class _FakeLauncherRepository extends _PublisherFakeLauncherRepository {
              packageSources: const [],
              worldCatalog: WorldCatalog.fallback(),
              recentLog: '',
-             launcherUpdates: const LauncherUpdateSettings(enabled: false),
+             launcherUpdates: const LauncherUpdateSettings(),
              developerMode: developerMode,
            );
   LauncherSnapshot _snapshot;

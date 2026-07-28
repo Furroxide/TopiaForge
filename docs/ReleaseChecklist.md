@@ -11,10 +11,16 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
 - [x] The stale `release/0.1.1` line is retired and is neither reused nor deleted during RC preparation.
 - [x] Robotopia support is build `2309` only (`0.0.2309`); public-latest drift is release-fatal.
 - [x] Unity is exactly `6000.0.23f1`; no fallback editor is accepted.
-- [x] Launcher upgrades are manual; custom worlds are Windows/Proton-only; official community submissions are closed.
+- [x] Launcher updates use signed GitHub prerelease metadata, explicit
+      confirmation, whole-package replacement, health-gated rollback, and a
+      verified manual fallback; custom worlds remain Windows/Proton-only.
 - [x] Remote AI, player-token, microphone, and STT features default off and declare descriptive capabilities.
-- [ ] Owner/legal approves every decision in [`ReleaseLicenseInventory.md`](ReleaseLicenseInventory.md); replace
-      `OWNER_DECISION_REQUIRED`, `NOASSERTION`, no-grant placeholders, and conflicting SDK package declarations.
+- [x] TopiaForge-owned release surfaces use MIT with
+      `Copyright (c) 2026 furroxide`; third-party terms remain unchanged and
+      the redistribution inventory in
+      [`ReleaseLicenseInventory.md`](ReleaseLicenseInventory.md) is reconciled.
+- [x] DCO 1.1 is checked in and post-cutover commits require valid
+      `Signed-off-by` trailers; pre-`v1.0.0-rc.1` history is grandfathered.
 - [ ] Owner/legal approves Robotopia/brand/art/font/compatibility/injection rights and all third-party dispositions.
 - [ ] Privacy/backend/security owners approve remote data flows, retention, consent, cost, abuse, and incident policy.
 - [ ] Security/product owners approve first-party package trust, origin, revocation, and installed-user recovery.
@@ -69,6 +75,10 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
 
 - [ ] Archive tests cover traversal, links/special files, Unicode/case folding, Windows device/ADS names, malformed
       ZIP/ZIP64, decompression bounds, deterministic output, atomic replacement, interruption, and rollback.
+- [ ] Signed-update tests cover exact-byte Ed25519 verification, wrong keys,
+      tampering, GitHub reconciliation, downgrade/replay/channel policy,
+      bounded HTTP, all adversarial archive cases, and interruption before and
+      after every journal transition on all three install layouts.
 - [ ] Runtime repair rejects links/special files, preserves modes, stages atomically, and restores on failure.
 - [ ] UGC inspection uses strict bounded UTF-8/JSON/gzip, typed issues, stable regular files, deterministic selection,
       structural validation, race detection, and surfaced errors.
@@ -134,26 +144,34 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
 - [ ] Build Windows x64, Linux x64, and macOS universal independently with `fail-fast: false` from the frozen SHA.
 - [ ] Directly inspect final extracted archives for missing/extra/duplicate/linked entries, case collisions, modes,
       executability, hashes, notices, runtime assets, nested payload equality, secrets, and update metadata.
-- [ ] Windows executables have approved Authenticode SHA-256 signatures and HTTPS RFC 3161 timestamps and pass
-      `signtool verify /pa /all /tw` after final extraction.
+- [ ] Windows executables have approved Authenticode SHA-256 signatures and
+      HTTPS RFC 3161 timestamps and pass `signtool verify /pa /all /tw`, or the
+      BOM records `unsigned` under the exact `1.0.0-rc.1` exception with a
+      prominent SmartScreen warning. No other version may use the exception.
 - [ ] macOS launcher, GameCompat, and frameworks are universal; Dart AOT ships separate runnable arm64/x64 executables
       behind the dispatcher (never `lipo` Dart AOT executables).
-- [ ] The explicitly non-distributable macOS technical dry run passes direct launch and embedded-CLI smoke tests. Its
-      ad-hoc signature omits hardened runtime because ad-hoc code has no common Team ID; publication mode rejects it.
-- [ ] Every macOS Mach-O is Developer ID/expected-Team signed; the app is notarized, stapled, quarantined, and passes
-      deep/strict codesign, `stapler validate`, and Gatekeeper after final extraction on arm64 and Intel.
+- [ ] Every macOS Mach-O is Developer ID/expected-Team signed; the app is
+      notarized, stapled, quarantined, and passes deep/strict codesign,
+      `stapler validate`, and Gatekeeper, or the BOM records `ad-hoc` under the
+      exact `1.0.0-rc.1` exception with a prominent Gatekeeper warning. No
+      other version may use the exception.
 - [ ] Linux executable modes, native launcher/CLI, and discovery/path/process/repair/custom-world assumptions for
       Robotopia's Windows build under Proton pass on a clean host.
 - [ ] Clean-machine install, repair, profiles, dependency preview, normal/safe-mode launch, failure recovery,
-      diagnostics, manual update, and uninstall pass for each supported platform.
+      diagnostics, confirmed in-app update, forced rollback, manual fallback,
+      and uninstall pass for each supported platform.
 - [ ] Native visual/accessibility QA covers all screens and state families at 800x600, 100–200% text scale, high
       contrast, reduced motion, keyboard-only/focus, screen reader, long paths, and no-overflow behavior.
 
 ## 9. Release metadata and protected publication
 
 - [ ] Generate deterministic `release-bom.json`, SPDX 2.3 SBOM, and `SHA256SUMS` for the candidate SHA and exact assets.
+- [ ] Generate `topiaforge-update-v1.json` and its Ed25519 sidecar from the
+      exact uploaded archive bytes; independently verify signature, key ID,
+      immutable URLs, hashes, sizes, entry counts, expanded sizes, and layouts.
 - [ ] BOM/SBOM include versions, toolchains, build/Unity/BepInEx provenance, licenses/notices, nested hashes, sizes, and
-      expected assets; independent verification passes.
+      actual platform signing status, exception use, and expected assets;
+      independent verification passes.
 - [ ] `manual-releases.json` format 2 is `manualOnly: true` and contains only absolute credential-free HTTPS release
       and artifact URLs, SHA-256, size, and platform.
 - [ ] Required contexts protect the candidate: `Required / CI validation`, `Required / Release packages`,

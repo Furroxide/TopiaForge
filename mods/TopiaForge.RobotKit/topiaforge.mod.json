@@ -36,7 +36,10 @@
     "stt",
     "objectives"
   ],
-  "license": "NOASSERTION",
+  "license": "MIT",
+  "licenseFiles": [
+    "LICENSE"
+  ],
   "capabilities": [
     "robot-spawning",
     "navigation",

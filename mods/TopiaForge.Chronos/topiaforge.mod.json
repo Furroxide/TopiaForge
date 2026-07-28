@@ -26,7 +26,10 @@
     "sdk",
     "chronos"
   ],
-  "license": "NOASSERTION",
+  "license": "MIT",
+  "licenseFiles": [
+    "LICENSE"
+  ],
   "capabilities": [
     "time",
     "input",
