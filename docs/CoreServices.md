@@ -36,7 +36,7 @@ package root, or global cleanup target.
 | `Interactions` | Interactable registration and current focus. |
 | `Items` | Held-item observation, give, and drop operations. |
 | `Assets` | Package bundle and prefab handles, then lifetime-owned spawn operations. |
-| `Audio` | Framework audio cues and playback handles. |
+| `Audio` | Framework notification cues and playback handles. Synthesized tones, not your own audio — see below. |
 | `Ui` | HUDs, windows, fullscreen tools, modals, toasts, and accessibility preferences rendered by TopiaForgeUi. |
 | `Localization` | Locale catalogs and fallback lookup. |
 | `Commands` | Namespaced commands and invocation. |
@@ -213,6 +213,44 @@ state, and motion intensity. Apply player-configurable values with
 `OperationResult`. TopiaForgeUi propagates the effective values to every safe HUD, window,
 fullscreen tool, modal, and toast; consumer mods do not maintain a separate theme or animation
 system.
+
+## Audio, interactions, and items
+
+`Context.Audio` plays **synthesized notification tones**, not sampled audio. The tone is picked from intent
+words in the cue id — `danger`, `failure`, `warning`, `success`, `confirm` — and any other id produces a
+stable derived tone rather than an error:
+
+```csharp
+Context.Audio.Play(new AudioPlayRequest("mymod.success", 0.8f));   // a confirmation beep
+```
+
+This matters because an unrecognised id still returns success. A mod that ships `gunshot.ogg` and calls
+`Play("mymod.gunshot")` gets `Succeeded == true` and hears a beep. To use your own audio, put an
+`AudioSource` on a prefab in your package's asset bundle and spawn it through `Context.Assets`:
+
+```csharp
+// Drive both loads from PendingOperation<T> and poll them from your update; never wait on the task.
+var spawned = Context.Assets.Spawn(new AssetSpawnRequest(
+    emitterPrefab,
+    new TransformState(muzzlePosition, Quat.Identity, Vec3.One)));
+```
+
+`Context.Interactions` registers an interactable on an entity you already own and reports what the player
+is currently focused on, so a mod can add its own prompt without touching the game's interaction system:
+
+```csharp
+var terminal = Context.Interactions.Register(
+    terminalEntity,
+    new InteractableDefinition("Use requisitions terminal", maximumDistance: 3f),
+    _ => shop.Open());
+if (terminal.TryGetValue(out var registration))
+{
+    // Lifetime-owned; dispose the registration to remove the prompt early.
+}
+```
+
+`Context.Items` observes the held item and performs give and drop operations. Both are process-local: they
+describe this game process and do not synchronize between peers.
 
 ## Typed math and opaque entities
 
