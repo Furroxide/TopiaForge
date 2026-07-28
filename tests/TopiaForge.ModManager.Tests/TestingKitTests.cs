@@ -17,10 +17,13 @@ namespace TopiaForge.ModManager.Tests
             TestExpectedCancellationResults();
             TestBundleWorldContentOwnership();
             TestSpecialistModuleFakes();
+            TestWorldPauseMenuFake();
+            TestGameplayPause();
             TestCompleteCoreServiceContext();
             TestDeclarativeUiComposition();
             TestGraphUiComposition();
             TestLifecycleAndLeaks();
+            TestDisposeNeverHidesTheRealFailure();
             TestPartialLoadFailureCleanup();
             TestEveryOwnedResourceAcrossTenReloads();
             TestEveryOwnedResourceAfterPartialLoadFailure();

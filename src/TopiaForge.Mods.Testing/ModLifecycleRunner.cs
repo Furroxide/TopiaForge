@@ -7,6 +7,7 @@ namespace TopiaForge.Mods.Testing
     public sealed class ModLifecycleRunner : IDisposable
     {
         private readonly TopiaForgeMod mod;
+        private readonly List<Exception> cleanupFailures = new List<Exception>();
         private bool loaded;
         private bool finished;
 
@@ -25,6 +26,17 @@ namespace TopiaForge.Mods.Testing
 
         /// <summary>Gets whether unload or failed-load cleanup completed.</summary>
         public bool IsFinished => finished;
+
+        /// <summary>
+        /// Gets the failures swallowed by <see cref="Dispose"/>, in the order they occurred.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="Dispose"/> never throws, because a <c>using</c> block disposes while an assertion failure is
+        /// already unwinding the stack and a throwing <c>Dispose</c> would replace that failure with this one —
+        /// hiding the defect the test just found. Assert on this list when a test needs to prove cleanup succeeded,
+        /// or call <see cref="Unload"/> explicitly, which still throws.
+        /// </remarks>
+        public IReadOnlyList<Exception> CleanupFailures => cleanupFailures;
 
         /// <summary>Creates a runner using the public parameterless constructor of a mod type.</summary>
         public static ModLifecycleRunner Create<TMod>(FakeModContext? context = null)
@@ -95,6 +107,10 @@ namespace TopiaForge.Mods.Testing
         }
 
         /// <inheritdoc/>
+        /// <remarks>
+        /// Never throws. Anything that fails during cleanup is recorded in <see cref="CleanupFailures"/> so a
+        /// failing assertion inside the <c>using</c> block survives to the test report.
+        /// </remarks>
         public void Dispose()
         {
             if (finished)
@@ -104,11 +120,21 @@ namespace TopiaForge.Mods.Testing
 
             if (loaded)
             {
-                Unload();
+                TryCleanup(cleanupFailures);
+                loaded = false;
+                finished = true;
                 return;
             }
 
-            Context.Dispose();
+            try
+            {
+                Context.Dispose();
+            }
+            catch (Exception exception)
+            {
+                cleanupFailures.Add(exception);
+            }
+
             finished = true;
         }
 

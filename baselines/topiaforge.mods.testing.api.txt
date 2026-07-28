@@ -360,7 +360,7 @@ type public sealed class TopiaForge.Mods.Testing.FakePhysicsService : System.Obj
   property TopiaForge.Mods.PhysicsHit? SphereCastHit { get; set; }
   property TopiaForge.Mods.Ray LastRay { get; }
 
-type public sealed class TopiaForge.Mods.Testing.FakePlayerControlLease : System.Object, System.IDisposable, TopiaForge.Mods.IPlayerControlLease
+type public sealed class TopiaForge.Mods.Testing.FakePlayerControlLease : System.Object, System.IDisposable, TopiaForge.Mods.IGameplayLease, TopiaForge.Mods.IPlayerControlLease
   method [virtual,final,newslot] System.Void Dispose()
   property System.Boolean IsActive { get [virtual,final,newslot]; }
   property System.String Reason { get [virtual,final,newslot]; }
@@ -643,6 +643,17 @@ type public sealed class TopiaForge.Mods.Testing.FakeWorldGamemodeService : Syst
   property System.Int32 ActiveRegistrationCount { get; }
   property TopiaForge.Mods.WorldSession? CurrentSession { get [virtual,final,newslot]; }
 
+type public sealed class TopiaForge.Mods.Testing.FakeWorldPauseMenuService : System.Object, TopiaForge.Mods.IWorldPauseMenuService
+  constructor .ctor(TopiaForge.Mods.Testing.FakeModLifetime lifetime)
+  method System.Boolean Invoke(System.String id)
+  method TopiaForge.Mods.WorldPauseExitDecision InvokeExit(TopiaForge.Mods.WorldSession session)
+  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<System.IDisposable> InterceptExit(System.Func<TopiaForge.Mods.WorldPauseExitContext, TopiaForge.Mods.WorldPauseExitDecision> interceptor)
+  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<System.IDisposable> RegisterAction(TopiaForge.Mods.WorldPauseAction action)
+  property System.Boolean HasExitInterceptor { get; }
+  property System.Boolean IsAvailable { get [virtual,final,newslot]; set; }
+  property System.Boolean SupportsExitInterception { get; set; }
+  property System.Int32 ActiveActionCount { get; }
+
 type public sealed class TopiaForge.Mods.Testing.InMemoryLocalModStorageService : System.Object, TopiaForge.Mods.ILocalModStorageService
   constructor .ctor()
   method System.Void Clear()
@@ -698,6 +709,7 @@ type public sealed class TopiaForge.Mods.Testing.ModLifecycleRunner : System.Obj
   method [virtual,final,newslot] System.Void Dispose()
   property System.Boolean IsFinished { get; }
   property System.Boolean IsLoaded { get; }
+  property System.Collections.Generic.IReadOnlyList<System.Exception> CleanupFailures { get; }
   property TopiaForge.Mods.Testing.FakeModContext Context { get; }
 
 type public sealed class TopiaForge.Mods.Testing.ModTestAssertionException : System.Exception, System.Runtime.Serialization.ISerializable

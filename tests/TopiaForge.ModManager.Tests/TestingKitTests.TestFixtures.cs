@@ -94,6 +94,18 @@ namespace TopiaForge.ModManager.Tests
             }
         }
 
+        private sealed class ThrowingUnloadMod : TopiaForgeMod
+        {
+            protected override void OnLoad()
+            {
+            }
+
+            protected override void OnUnload()
+            {
+                throw new InvalidOperationException("expected unload failure");
+            }
+        }
+
         private sealed class ResourceHeavyMod : TopiaForgeMod
         {
             private readonly IEntity entity;
