@@ -6,12 +6,11 @@
     "category": "Gameplay",
     "description": "A world gamemode for Robotopia.",
     "tags": ["gameplay", "gamemode"],
-    "capabilities": ["world-service", "robot-spawning", "hud"],
+    "capabilities": ["world-service", "hud"],
     "dependencies": {
-      "io.github.furroxide.topiaforge.worlds": ">=1.0.0-rc.1 <2.0.0",
-      "io.github.furroxide.topiaforge.robotkit": ">=1.0.0-rc.1 <2.0.0"
+      "io.github.furroxide.topiaforge.worlds": ">=1.0.0-rc.1 <2.0.0"
     },
-    "loadAfter": ["io.github.furroxide.topiaforge.worlds", "io.github.furroxide.topiaforge.robotkit"],
+    "loadAfter": ["io.github.furroxide.topiaforge.worlds"],
     "worldGamemodes": [
       {
         "id": "{{MOD_ID}}.mode",

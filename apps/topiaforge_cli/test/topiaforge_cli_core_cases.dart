@@ -170,14 +170,26 @@ void _coreCliTests(_CliTestHarness Function() currentHarness) {
       expect(manifest['displayName'], 'Demo Mode');
       expect(manifest['tags'], ['alpha', 'beta']);
       expect((manifest['author'] as Map)['name'], 'Charl');
+      // The template default (worlds) merges with the --dependency override (chronos).
       expect(
         (manifest['dependencies'] as Map).keys,
         containsAll([
           'io.github.furroxide.topiaforge.worlds',
-          'io.github.furroxide.topiaforge.robotkit',
           'io.github.furroxide.topiaforge.chronos',
         ]),
       );
+      // The gamemode scaffold does not use RobotKit, so it must not declare it. Authors add it deliberately
+      // with `topiaforge mod add robotkit`, which keeps the package reference and manifest dependency in sync.
+      expect(
+        (manifest['dependencies'] as Map).keys,
+        isNot(contains('io.github.furroxide.topiaforge.robotkit')),
+      );
+      // Likewise, declared capabilities must match what the scaffold actually reaches for.
+      expect(
+        manifest['capabilities'],
+        containsAll(['world-service', 'hud']),
+      );
+      expect(manifest['capabilities'], isNot(contains('robot-spawning')));
       expect(manifest['worldGamemodes'], isNotEmpty);
 
       final checked = await currentHarness().runCli([

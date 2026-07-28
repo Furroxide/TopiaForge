@@ -13,7 +13,6 @@
   <ItemGroup>
     <PackageReference Include="TopiaForge.Mods.Abstractions" Version="{{SDK_VERSION}}" />
     <PackageReference Include="TopiaForge.Mods.Analyzers" Version="{{SDK_VERSION}}" PrivateAssets="all" />
-    <PackageReference Include="TopiaForge.Mods.RobotKit" Version="{{SDK_VERSION}}" />
     <PackageReference Include="TopiaForge.Mods.Worlds" Version="{{SDK_VERSION}}" />
   </ItemGroup>
   <ItemGroup>
