@@ -196,6 +196,10 @@ namespace TopiaForge.Zombies
 
             if (affected == 0)
             {
+                // The transmitter fired and found nothing, so the charge is not spent — but the cooldown still
+                // applies. Without it this path costs nothing at all, and the player can hold the key as a free
+                // proximity scanner until a robot wanders into range.
+                broadcastCooldown = config.BroadcastCooldownSeconds;
                 return BroadcastFailure(
                     ModErrorCode.NotFound,
                     "No hostile infected robots answered within broadcast range.",

@@ -33,6 +33,8 @@ namespace TopiaForge.ModManager.Tests
             HudSkipsSteadyStateBodyWrites();
             DisabledShopSkipsCreditsAndRequisitionFeedback();
             UplinkFailuresExplainWithoutSpendingCharge();
+            UplinkEconomyRunsOnTheWorldClock();
+            AllyCrossfireIsNotReportedAsPlayerFire();
             FullyStabilizedAllyCheckIsFreeAtZeroCharge();
             LiveJackInCompositionFailureCleansUpAndFallsBack();
             LiveJackInUsesRobotKitConversationAndReleasesControl();
@@ -51,6 +53,9 @@ namespace TopiaForge.ModManager.Tests
         {
             var config = new ZombiesConfig
             {
+                // Shipped runs seed from entropy; the suite pins a seed so wave and archetype sequences stay
+                // byte-deterministic across runs.
+                Seed = 1949,
                 StartingCountdownSeconds = 0f,
                 InterWaveDelaySeconds = 30f,
                 BaseZombiesPerWave = 1,

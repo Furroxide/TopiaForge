@@ -16,7 +16,7 @@ namespace TopiaForge.Zombies
             // ZombiesConfig is ISelfNormalizingConfig; the config service bounds every stored and migrated
             // document, so this contract only has to describe the schema reshape.
             new ConfigDefinition<ZombiesConfig>(
-                2,
+                3,
                 () => new ZombiesConfig(),
                 validate: null,
                 migrate: (storedSchemaVersion, value) =>

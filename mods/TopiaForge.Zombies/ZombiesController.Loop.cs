@@ -104,6 +104,7 @@ namespace TopiaForge.Zombies
             {
                 if (worldDelta > 0f)
                 {
+                    AdvanceWorldTimers(worldDelta);
                     AdvanceSpawning(worldDelta);
                     AdvanceEnemies(worldDelta);
                 }

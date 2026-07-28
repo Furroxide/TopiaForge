@@ -18,7 +18,7 @@ namespace TopiaForge.Zombies
             hordeMotionSuspendedForConversation = false;
             ClearEnemies();
             shop.Reset();
-            random = new Random(RandomSeed);
+            random = CreateRandom();
             playerEntity = null;
             usingPositionalPlayerFallback = false;
             startingNativeHealth = null;
@@ -52,6 +52,13 @@ namespace TopiaForge.Zombies
                 context.Ui.ShowToast("Zombies run restarted.", UiTone.Success);
             }
         }
+
+        /// <summary>
+        /// Builds the run's RNG. A configured non-zero seed replays a fixed wave and archetype sequence; the
+        /// default of 0 seeds from entropy, so the mod does not ship every player the same run forever.
+        /// </summary>
+        private Random CreateRandom() =>
+            config.Seed != 0 ? new Random(config.Seed) : new Random();
 
         private void RestartFromUi()
         {

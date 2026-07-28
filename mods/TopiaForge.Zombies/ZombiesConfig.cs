@@ -453,5 +453,10 @@ namespace TopiaForge.Zombies
 
         [DataMember(Name = "shopComboWindowBonusSeconds")]
         public float ShopComboWindowBonusSeconds { get; set; }
+
+        // Wave/archetype RNG seed. 0 (the default) seeds each run from entropy so no two runs are identical.
+        // Set any non-zero value to replay a fixed sequence — useful for practice, sharing a run, or filing a bug.
+        [DataMember(Name = "seed")]
+        public int Seed { get; set; }
     }
 }

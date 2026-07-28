@@ -10,7 +10,6 @@ namespace TopiaForge.Zombies
     /// <summary>Safe-SDK wave-survival session using opaque, owner-scoped framework services.</summary>
     internal sealed partial class ZombiesController : IDisposable
     {
-        private const int RandomSeed = 1949;
         private const int MaximumConsecutiveSpawnFailures = 10;
 
         /// <summary>
@@ -46,7 +45,7 @@ namespace TopiaForge.Zombies
         private readonly PendingOperation<SceneSnapshot> returnOperation =
             new PendingOperation<SceneSnapshot>();
 
-        private Random random = new Random(RandomSeed);
+        private Random random;
         private IEntity? playerEntity;
         private ITimeLease? superhotDriver;
         private ITimeLease? playerExemption;
@@ -94,6 +93,7 @@ namespace TopiaForge.Zombies
             this.session = session ?? throw new ArgumentNullException(nameof(session));
             this.returnToMenu = returnToMenu ?? throw new ArgumentNullException(nameof(returnToMenu));
             roster = new ZombieRoster(config);
+            random = CreateRandom();
 
             if (context.TryGetExtension<ITimeControlService>(out var timeService))
             {
