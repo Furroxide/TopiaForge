@@ -27,17 +27,18 @@ namespace TopiaForge.CreatorTools
                 return;
             }
 
-            if (!Context.Extensions.TryGet<ICreatorContentService>(out var content) || content == null
-                || !Context.Extensions.TryGet<ICreatorToolHostService>(out router) || router == null
-                || !Context.Extensions.TryGet<IRobotAgentService>(out var robots) || robots == null)
+            if (!Context.TryGetExtension<ICreatorContentService>(out var content)
+                || !Context.TryGetExtension<ICreatorToolHostService>(out var hostRouter)
+                || !Context.TryGetExtension<IRobotAgentService>(out var robots))
             {
                 Context.Logger.Warn("Global Creator Tools dependencies are unavailable.");
                 return;
             }
 
-            host = new GlobalCreatorToolsHost(Context, config, content, router, robots);
+            router = hostRouter;
+            host = new GlobalCreatorToolsHost(Context, config, content, hostRouter, robots);
             Context.Lifetime.Track(host);
-            var registered = router.RegisterHost(new CreatorToolHostRegistrationRequest(
+            var registered = hostRouter.RegisterHost(new CreatorToolHostRegistrationRequest(
                 "global",
                 "Global Creator Tools",
                 priority: 50,

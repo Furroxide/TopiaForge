@@ -26,7 +26,7 @@ namespace TopiaForge.Mods
                     "Declare the provider as a manifest dependency and add its contract package.");
             }
 
-            return provider!;
+            return provider;
         }
 
         /// <summary>Tries to resolve an optional dependency-scoped extension provider.</summary>

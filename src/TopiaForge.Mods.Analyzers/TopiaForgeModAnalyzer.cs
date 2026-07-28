@@ -109,7 +109,8 @@ namespace TopiaForge.Mods.Analyzers
                 ["SaveConfig"] = "Call Context.Config.Save(definition, value)",
                 ["RequireService"] = "Use Context.RequireExtension<T>() for a declared dependency",
                 ["TryGetService"] = "Use Context.TryGetExtension<T>(out provider)",
-                ["GetService"] = "Use Context.Extensions.TryGet<T>(out provider)"
+                ["GetService"] = "Use Context.RequireExtension<T>() for a declared dependency, "
+                    + "or Context.TryGetExtension<T>(out provider) for an optional one"
             }.ToImmutableDictionary(StringComparer.Ordinal);
 
         /// <inheritdoc/>
