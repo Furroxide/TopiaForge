@@ -99,7 +99,18 @@ namespace TopiaForge.Mods
             Position = position;
         }
 
-        /// <summary>Gets the framework or provider cue id.</summary>
+        /// <summary>Gets the framework cue id.</summary>
+        /// <remarks>
+        /// V1 framework cues are short synthesized notification tones, not sampled audio. The tone is chosen from
+        /// intent words in the id — <c>danger</c>, <c>failure</c>, <c>warning</c>, <c>success</c>, <c>confirm</c> —
+        /// and any other id yields a stable derived tone. They are for feedback beeps, not for a soundtrack.
+        /// <para>
+        /// To ship your own audio, put an <c>AudioSource</c> on a prefab inside your package's asset bundle and
+        /// spawn it through <see cref="IAssetService"/>. There is no way to hand a sampled clip to this service, and
+        /// an unrecognised cue id succeeds rather than failing, so a mod that expects its own sound here will hear
+        /// a beep and get no error.
+        /// </para>
+        /// </remarks>
         public string CueId { get; }
 
         /// <summary>Gets the normalized playback volume.</summary>

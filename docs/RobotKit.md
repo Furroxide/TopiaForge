@@ -6,8 +6,8 @@ description: Build Robotopia robot, objective, dialogue, voice, and story featur
 # RobotKit
 
 RobotKit is the optional V1 module for working with Robotopia's robots through typed entities,
-movement, health, targets, objectives, interaction, dialogue, voice input, and structured brain
-queries. Robotopia and Unity native objects never cross its contract boundary.
+movement, damage and death, targets, objectives, interaction, dialogue, voice input, and structured
+brain queries. Robotopia and Unity native objects never cross its contract boundary.
 
 ## Add RobotKit
 
@@ -27,7 +27,7 @@ integration.
 | --- | --- |
 | `IRobotAgentService` | Discover robot types, find reachable positions, spawn robots, and map entity handles back to agents. |
 | `IRobotPlayerEntitySource` | Optional live-player entity identity for native chase/target tracking, exposed compatibly through `TryGetPlayerEntity`. |
-| `IRobotAgent` | Opaque entity identity, body/health state, movement intent, gait, target, damage, and interaction options. |
+| `IRobotAgent` | Opaque entity identity, movement intent, gait, target, damage and death, and interaction options. |
 | `IRobotObjectiveService` | Register named targets and run lifetime-owned go-to, follow, patrol, wander, flee, and reprogram objectives. |
 | `IRobotConversationService` | Run bounded multi-turn dialogue with closed-set decisions. |
 | `IPlayerDialogueInputService` | Typed text helpers and optional push-to-talk capture/transcription. |
@@ -44,6 +44,17 @@ persona to their explicit `RobotConversationRequest`.
 Every operation either uses a cheap `Try...` query, returns `OperationResult<T>`, or returns
 `Task<OperationResult<T>>` with lifetime cancellation. Check provider availability and
 `Context.Runtime.UnavailableCapabilities` before exposing a feature in Robotopia's UI.
+
+## Custom enemy health
+
+RobotKit does **not** expose a robot's hit points. `IRobotAgent` offers `ApplyDamage` and `Kill`, which
+drive the native hurt reaction and ragdoll — they are feedback, not a health model you can read back.
+
+A gamemode that needs enemies with their own durability tracks hit points mod-side and calls into RobotKit
+only for presentation and defeat: subtract from your own value, call `ApplyDamage` so the robot visibly
+reacts, and call `Kill` when your value reaches zero. `HeadPosition` gives you a hit zone to test against
+for headshots. [`ZombieEnemy.cs`](../mods/TopiaForge.Zombies/ZombieEnemy.cs) is the worked example —
+per-archetype health, damage source attribution, timed states, and defeat all live in the mod.
 
 ## Track the live player
 

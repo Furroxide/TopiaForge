@@ -47,7 +47,7 @@ from the compiled scaffold and is released automatically with its lifetime:
 ## RobotKit
 
 RobotKit exposes robots as typed `IRobotAgent` entities. A mod can spawn a standard robot, observe
-health and movement, assign objectives and targets, run dialogue, request voice input, and perform
+movement, assign objectives and targets, run dialogue, request voice input, and perform
 structured brain queries. Provider availability and operation results let a mod degrade cleanly
 when a particular Robotopia binding is unavailable.
 

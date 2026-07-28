@@ -52,10 +52,10 @@ remain authoritative.
 
 | Source | Responsibility | Pattern to reuse |
 | --- | --- | --- |
-| [`ZombiesMod.cs`](../mods/TopiaForge.Zombies/ZombiesMod.cs) | Config migration, service discovery, gamemode/menu registration, and one controller per Worlds session | Keep the entry point thin and make session ownership explicit. |
+| [`ZombiesMod.cs`](../mods/TopiaForge.Zombies/ZombiesMod.cs) | Config migration, service discovery, and gamemode registration through `GamemodeHost<T>` | Keep the entry point thin; let the SDK own session wiring rather than hand-writing it. |
 | [`ZombiesController.cs`](../mods/TopiaForge.Zombies/ZombiesController.cs) | Session dependencies, construction, command surface, and idempotent teardown | Keep the coordinator's public surface small and make every acquired resource visible at construction or disposal. |
 | [`ZombiesController.Loop.cs`](../mods/TopiaForge.Zombies/ZombiesController.Loop.cs) | Phase dispatch and scaled/unscaled clock selection | Keep the frame callback as orchestration; move feature rules into named methods and models. |
-| [`ZombiesController.Waves.cs`](../mods/TopiaForge.Zombies/ZombiesController.Waves.cs) and [`ZombiesController.Enemies.cs`](../mods/TopiaForge.Zombies/ZombiesController.Enemies.cs) | Wave budgets, bounded spawning, pursuit, attacks, and roster cleanup | Bound work per frame and keep asynchronous spawn ownership cancellable. |
+| [`ZombiesController.Waves.cs`](../mods/TopiaForge.Zombies/ZombiesController.Waves.cs) and [`ZombiesController.Enemies.cs`](../mods/TopiaForge.Zombies/ZombiesController.Enemies.cs) | Wave budgets, bounded spawning, pursuit, attacks, and roster cleanup | Bound work per frame and drive every asynchronous SDK call with `PendingOperation<T>`. |
 | [`ZombiesController.Session.cs`](../mods/TopiaForge.Zombies/ZombiesController.Session.cs) and [`ZombiesController.Health.cs`](../mods/TopiaForge.Zombies/ZombiesController.Health.cs) | Scene/player readiness, restart/return transitions, and exact native-health restoration | Capture host state before mutation and restore the captured value on every exit path. |
 | [`ZombiesController.Combat.cs`](../mods/TopiaForge.Zombies/ZombiesController.Combat.cs) | Input, ray targeting, damage, reactions, combo score, and credit awards | Resolve opaque SDK entity handles back to stable RobotKit agents. |
 | [`ZombiesController.Uplink.cs`](../mods/TopiaForge.Zombies/ZombiesController.Uplink.cs) | Deterministic influence, live-conversation resolution, ally caps, and fleeing | Treat remote output as untrusted input to an engine-owned state machine. |
@@ -99,12 +99,22 @@ Zombies also exercises failure paths that small samples rarely reach:
   targeting therefore agree even when a native robot has many child colliders.
 - Chronos uses owner-scoped leases. Nested shop, conversation, game-over, and Superhot effects compose,
   restore the original clock exactly, and share player-control suspension safely.
+- Every modal surface — shop, JACK IN, game over — holds gameplay through the SDK's `GameplayPause`
+  rather than its own acquire-fallback-retry code. It prefers a Chronos world freeze, degrades to a
+  player-control lease when Chronos is unavailable, reports a total failure once instead of every frame,
+  and reacquires a hold the host takes away mid-session.
+- Every asynchronous SDK call — reachable-spawn search, scene return, conversation turn, voice capture —
+  runs through `PendingOperation<T>`. Nothing waits on a task, cancellation drains so a late result is
+  still released on the main thread, and the return-to-menu path carries a deadline so a scene load that
+  never settles cannot strand the run behind a frozen world.
 - The frame loop does no spawning, pursuit, or attacks when world delta is zero. Unscaled control time
   still drives menus, conversation timeouts, scene-return polling, and HUD state.
 - Native player health is captured before Zombies first mutates it and restored to the exact pre-run
   value on restart, exit, load failure, or unload.
 - Framework audio caches synthesized cue clips and reuses fully reset playback hosts, so rapid zapper
-  fire does not allocate a new clip and GameObject for every shot.
+  fire does not allocate a new clip and GameObject for every shot. Those cues are notification tones, not
+  sampled audio — mod-authored sound ships as a prefab with an `AudioSource`. See
+  [Core services](CoreServices.md#audio-interactions-and-items).
 - UI surfaces, modals, input actions, spawned agents, audio playback, control handles, cancellation
   sources, and update subscriptions all have early-release paths as well as lifetime fallback cleanup.
 
@@ -113,10 +123,16 @@ same guarantees available to other mods.
 
 ## Configuration and compatibility
 
-`ZombiesConfig` schema 2 preserves schema-1 saves, migrates the former `overrideKey` binding to
+`ZombiesConfig` schema 3 preserves earlier saves, migrates the former `overrideKey` binding to
 `jackInKey`, removes retired no-op presentation settings, rejects non-finite tuning, trims identifiers,
 normalizes key names, and clamps every gameplay value to a documented safe range. Missing JSON members
 retain real defaults, including when `DataContractJsonSerializer` bypasses the constructor.
+
+Schema 3 adds `seed`. It defaults to `0`, meaning seed the run's wave and archetype RNG from entropy, so
+no two runs are identical; set any non-zero value to replay a fixed sequence for practice or a bug report.
+Saves written before schema 3 deserialize to `0`, which is already the wanted meaning, so the migration
+has nothing to reshape — worth copying as a pattern: prefer a new member whose zero value is the correct
+default over one that needs migration code.
 
 The manifest declares Worlds, RobotKit, and Chronos as required versioned dependencies. Network,
 remote-AI, player-token, microphone, and speech-to-text capabilities are disclosed because players may
