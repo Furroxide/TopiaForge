@@ -24,6 +24,13 @@ type public sealed class TopiaForge.Mods.GamemodeDefinition : System.Object
   property System.String Id { get; }
   property System.String Name { get; }
 
+type public sealed class TopiaForge.Mods.GamemodeHost<TController> : System.Object, System.IDisposable where TController : class, System.IDisposable
+  method System.Void AddPauseAction(TopiaForge.Mods.WorldPauseAction action)
+  method [static] TopiaForge.Mods.OperationResult<TopiaForge.Mods.GamemodeHost<TController>> Create(TopiaForge.Mods.IModContext context, TopiaForge.Mods.IWorldGamemodeService worlds, System.String gamemodeId, System.Func<TopiaForge.Mods.WorldSession, TController> createController, TopiaForge.Mods.GamemodeDefinition? gamemode = null, TopiaForge.Mods.GamemodeMenuEntry? menuEntry = null)
+  method [virtual,final,newslot] System.Void Dispose()
+  property System.Boolean IsSessionActive { get; }
+  property TController? Controller { get; }
+
 type public sealed class TopiaForge.Mods.GamemodeMenuEntry : System.Object
   constructor .ctor(System.String id, System.String title, System.String description, System.String gamemodeId, System.String worldId = "")
   property System.String Description { get; }
