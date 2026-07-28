@@ -153,6 +153,7 @@ namespace TopiaForge.Zombies
             ShopUplinkSurgePrice = 500;
             ShopComboStabilizerPrice = 600;
             ShopComboWindowBonusSeconds = 0.75f;
+            Seed = 0;
         }
 
         internal void MigrateFrom(int storedSchemaVersion)
@@ -163,6 +164,9 @@ namespace TopiaForge.Zombies
             }
 
             LegacyOverrideKey = null;
+
+            // Schema 3 introduced the seed. Existing saves predate it and deserialize to 0, which is exactly the
+            // wanted meaning — seed from entropy — so there is nothing to reshape.
         }
 
         private static ZombiesConfig CreateDocumentedDefaults()
