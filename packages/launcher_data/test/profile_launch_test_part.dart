@@ -12,7 +12,7 @@ void _registerProfileLaunchTests({
       () async {
         File(
           p.join(gameRoot().path, 'installed-build.json'),
-        ).writeAsStringSync('{"id":2227}');
+        ).writeAsStringSync('{"id":2309}');
         var processStarted = false;
         final prepared = await _prepareProfileLaunchRepository(
           dataRoot: dataRoot(),
@@ -30,7 +30,7 @@ void _registerProfileLaunchTests({
             root(),
             id: 'versioned.mod',
             version: '1.0.0',
-            gameVersionRange: '0.0.2227',
+            gameVersionRange: '0.0.2309',
           ).path,
           install,
         );
@@ -53,7 +53,7 @@ void _registerProfileLaunchTests({
         );
 
         expect(result.started, isFalse);
-        expect(result.message, contains('not 0.0.2228'));
+        expect(result.message, contains('installed: build 2228'));
         expect(processStarted, isFalse);
       },
     );

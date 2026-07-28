@@ -6,6 +6,7 @@ import 'package:topiaforge/src/release_game_build_policy.dart';
 import 'package:test/test.dart';
 
 void main() {
+  const currentBuildId = 2309;
   final root = _repositoryRoot();
   final metadata = _json(
     File(p.join(root, '.github', 'robotopia-game-build.json')),
@@ -18,7 +19,7 @@ void main() {
     expect(
       validateRobotopiaGameBuildMetadata(
         metadata: metadata,
-        policyBuildId: 2227,
+        policyBuildId: currentBuildId,
         requireLatestAtRelease: true,
         baseline: baseline,
       ),
@@ -50,7 +51,7 @@ void main() {
       expect(
         validateRobotopiaGameBuildMetadata(
           metadata: changedGame,
-          policyBuildId: 2227,
+          policyBuildId: currentBuildId,
           requireLatestAtRelease: true,
           baseline: changedBaseline,
         ),
@@ -63,11 +64,32 @@ void main() {
     expect(
       validateRobotopiaGameBuildMetadata(
         metadata: metadata,
-        policyBuildId: 2227,
+        policyBuildId: currentBuildId,
         requireLatestAtRelease: false,
         baseline: baseline,
       ),
       isNotEmpty,
+    );
+  });
+
+  test('validates a future build without changing validator code', () {
+    final changedGame = _clone(metadata);
+    final changedBaseline = _clone(baseline);
+    changedGame['buildId'] = 2310;
+    final archives = changedGame['archives'] as Map;
+    (archives['windows'] as Map)['path'] = 'Robotopia-v02310-Win64.7z';
+    (archives['mac'] as Map)['path'] = 'Robotopia-v02310-Mac.7z';
+    changedBaseline['gameVersionLabel'] = 'build 2310';
+    changedBaseline['gameVersion'] = '0.0.2310';
+
+    expect(
+      validateRobotopiaGameBuildMetadata(
+        metadata: changedGame,
+        policyBuildId: 2310,
+        requireLatestAtRelease: true,
+        baseline: changedBaseline,
+      ),
+      isEmpty,
     );
   });
 }

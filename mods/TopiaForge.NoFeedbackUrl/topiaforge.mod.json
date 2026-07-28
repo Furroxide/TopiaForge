@@ -11,7 +11,7 @@
   "entryAssembly": "TopiaForge.NoFeedbackUrl.dll",
   "entryType": "TopiaForge.NoFeedbackUrl.NoFeedbackUrlMod",
   "dependencies": {},
-  "supportedGameVersionRange": "0.0.2227",
+  "supportedGameVersionRange": "0.0.2309",
   "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
   "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
   "category": "Utility",

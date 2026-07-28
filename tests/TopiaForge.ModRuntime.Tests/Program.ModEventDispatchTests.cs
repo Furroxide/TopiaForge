@@ -270,7 +270,7 @@ namespace TopiaForge.ModRuntime.Tests
                 packagePath,
                 logger,
                 new ModServiceRegistry(),
-                new RuntimeInfo("0.0.2227"));
+                new RuntimeInfo("0.0.2309"));
         }
 
         private sealed class AlwaysThrowingSubscriber

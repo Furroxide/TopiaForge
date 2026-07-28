@@ -121,7 +121,7 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
       'entryType': '${tokens['ASSEMBLY_NAME']}.${tokens['TYPE_NAME']}Mod',
       'dependencies': <String, Object?>{},
       'optionalDependencies': <String, Object?>{},
-      'supportedGameVersionRange': '0.0.2227',
+      'supportedGameVersionRange': '0.0.2309',
       'supportedLoaderVersionRange': _compatibleMinorRange(
         TopiaForgeRuntimeVersions.loaderVersion,
       ),

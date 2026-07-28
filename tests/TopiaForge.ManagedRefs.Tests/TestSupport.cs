@@ -32,17 +32,17 @@ internal sealed class TemporaryWorkspace : IDisposable
             path,
             $$"""
             {
-              "buildId": 2227,
+              "buildId": 2309,
               "baseUrl": "https://public.example.invalid",
               "manifestUrl": "https://public.example.invalid/latest.json",
               "sourcePlatform": "windows",
               "archives": {
                 "windows": {
-                  "path": "Robotopia-v02227-Win64.7z",
+                  "path": "Robotopia-v02309-Win64.7z",
                   "sha256": "{{windowsSha}}"
                 },
                 "mac": {
-                  "path": "Robotopia-v02227-Mac.7z",
+                  "path": "Robotopia-v02309-Mac.7z",
                   "sha256": "{{macSha}}"
                 }
               }

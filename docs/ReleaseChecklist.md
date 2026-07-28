@@ -9,7 +9,7 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
 - [x] Product version is `1.0.0-rc.1`; components/mods version independently; initial release has no rollback target.
 - [x] RC discovery is GitHub Releases only; stable Pages/manual and official registry feeds exclude prereleases.
 - [x] The stale `release/0.1.1` line is retired and is neither reused nor deleted during RC preparation.
-- [x] Robotopia support is build `2227` only (`0.0.2227`); public-latest drift is release-fatal.
+- [x] Robotopia support is build `2309` only (`0.0.2309`); public-latest drift is release-fatal.
 - [x] Unity is exactly `6000.0.23f1`; no fallback editor is accepted.
 - [x] Launcher upgrades are manual; custom worlds are Windows/Proton-only; official community submissions are closed.
 - [x] Remote AI, player-token, microphone, and STT features default off and declare descriptive capabilities.
@@ -27,7 +27,7 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
 - [ ] Create a protected, annotated `v1.0.0-rc.1` tag on that SHA through the approved administrator process.
 - [ ] Confirm `global.json` resolves exactly .NET SDK `10.0.301` with roll-forward disabled and runtime `10.0.9`.
 - [ ] Confirm Dart `3.12.2`, Flutter `3.44.6`, Node `24.16.0`, and Unity `6000.0.23f1` on every applicable runner.
-- [ ] Probe the public latest-build manifest and verify both pinned build-2227 archive paths and SHA-256 values.
+- [ ] Probe the public latest-build manifest and verify both pinned build-2309 archive paths and SHA-256 values.
 - [ ] Confirm all LFS objects, immutable BepInEx inputs, UnityDoorstop source, and managed references are present.
 
 ## 3. Source, contracts, and tests
@@ -99,7 +99,7 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
 - [ ] The packaged metadata validator rejects bad PE/type/constructor/SDK/TFM fixtures without loading mod code, and
       every first-party archive is independently scanned for loader-owned SDK DLL/PDB files.
 - [ ] The canonical 14-assembly loader payload contains the exact pinned Metadata/Immutable bytes and notices; the
-      build-2227 Unity/Mono profile supplies the verified Memory/Buffers/Unsafe dependency closure, and every DLL in
+      build-2309 Unity/Mono profile supplies the verified Memory/Buffers/Unsafe dependency closure, and every DLL in
       the Windows Robotopia-executed BepInEx overlay hashes identically to its canonical payload copy.
 - [ ] All seven C# templates scaffold, validate, build/package twice, and retain safe non-publishable defaults.
 - [ ] Explicit `--author`/`--license` scaffolding is tested; MIT/Apache text is generated only after selection and

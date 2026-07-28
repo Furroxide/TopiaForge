@@ -134,7 +134,7 @@ namespace TopiaForge.ModManager.Tests
                 "fallback.compatibility",
                 "Compatibility fallback",
                 "1.0.0",
-                supportedGameVersionRange: "0.0.2227",
+                supportedGameVersionRange: "0.0.2309",
                 corruptEntryAssembly: false);
             CreatePackageCandidate(
                 higherFile,
@@ -144,7 +144,7 @@ namespace TopiaForge.ModManager.Tests
                 supportedGameVersionRange: ">=0.0.3000",
                 corruptEntryAssembly: false);
             var validationContext = new ManifestValidationContext(
-                gameVersion: "0.0.2227",
+                gameVersion: "0.0.2309",
                 requireKnownGameVersion: true);
 
             var results = new PackageInstaller().InstallInbox(

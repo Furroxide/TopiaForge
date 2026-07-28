@@ -302,7 +302,7 @@ void main() {
     final report = const MultiplayerAdmissionPlanner().evaluate(
       server: MultiplayerAdmissionProfile(
         peerId: 'server',
-        gameBuild: '0.0.2227',
+        gameBuild: '0.0.2309',
         topiaForgeProtocolVersion: 'not-semver',
         topiaForgePeerVersionRange: 'bad range',
         mods: [
@@ -415,7 +415,7 @@ MultiplayerAdmissionProfile _profile(
   List<MultiplayerAdmissionMod> mods,
 ) => MultiplayerAdmissionProfile(
   peerId: id,
-  gameBuild: '0.0.2227',
+  gameBuild: '0.0.2309',
   topiaForgeProtocolVersion: '1.0.0',
   topiaForgePeerVersionRange: '>=1.0.0 <2.0.0',
   mods: mods,
@@ -427,7 +427,7 @@ MultiplayerAdmissionProfile _profileWithProtocol(
   String? range,
 }) => MultiplayerAdmissionProfile(
   peerId: id,
-  gameBuild: '0.0.2227',
+  gameBuild: '0.0.2309',
   topiaForgeProtocolVersion: protocol,
   topiaForgePeerVersionRange: range,
   mods: const [],

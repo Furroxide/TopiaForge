@@ -203,7 +203,7 @@ namespace TopiaForge.ModManager.Tests
             var report = MultiplayerAdmissionPlanner.Evaluate(
                 new MultiplayerAdmissionProfile(
                     "server",
-                    "0.0.2227",
+                    "0.0.2309",
                     "not-semver",
                     "bad range",
                     new[]
@@ -257,10 +257,10 @@ namespace TopiaForge.ModManager.Tests
         }
 
         private static MultiplayerAdmissionProfile Profile(string id, params MultiplayerAdmissionMod[] mods) =>
-            new MultiplayerAdmissionProfile(id, "0.0.2227", "1.0.0", ">=1.0.0 <2.0.0", mods);
+            new MultiplayerAdmissionProfile(id, "0.0.2309", "1.0.0", ">=1.0.0 <2.0.0", mods);
 
         private static MultiplayerAdmissionProfile ProfileWithProtocol(string id, string protocol, string range) =>
-            new MultiplayerAdmissionProfile(id, "0.0.2227", protocol, range, Array.Empty<MultiplayerAdmissionMod>());
+            new MultiplayerAdmissionProfile(id, "0.0.2309", protocol, range, Array.Empty<MultiplayerAdmissionMod>());
 
         private static MultiplayerAdmissionMod Session(
             string id,

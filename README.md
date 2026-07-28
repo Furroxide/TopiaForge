@@ -16,7 +16,7 @@ For the initial release, launcher upgrades are manual: download the next signed 
 GitHub Releases page. Automatic self-update is intentionally excluded until the client can verify owner-signed
 metadata and enforce bounded extraction independently of the update index.
 
-The initial compatibility target is Robotopia build **2227**. The built-in registry initially carries verified
+The current compatibility target is Robotopia build **2309**. The built-in registry initially carries verified
 first-party release artifacts only; community authors can use the documented self-hosted registry format while
 official submission governance is being established.
 

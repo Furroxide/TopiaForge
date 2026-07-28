@@ -17,7 +17,7 @@ namespace TopiaForge.Mods.Testing
         {
             LoaderVersion = SemanticVersion.Parse("1.0.0-rc.1");
             SdkVersion = SemanticVersion.Parse("1.0.0-rc.1");
-            gameVersion = SemanticVersion.Parse("0.0.2227");
+            gameVersion = SemanticVersion.Parse("0.0.2309");
             Platform = "test";
             Architecture = "x64";
             RuntimeIdentifier = "test-x64";

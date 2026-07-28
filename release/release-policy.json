@@ -10,7 +10,7 @@
     "unity": "6000.0.23f1"
   },
   "gameBuild": {
-    "id": 2227,
+    "id": 2309,
     "metadataFile": ".github/robotopia-game-build.json",
     "requireLatestAtRelease": true
   },

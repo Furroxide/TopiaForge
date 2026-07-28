@@ -110,7 +110,7 @@ Both signed NuGet packages declare MIT and record dotnet/dotnet commit
 `901ca941248413c79832d2fdbd709da0c4386353`. Release packaging verifies the
 exact netstandard2.0 DLL and notice hashes, then emits their license, notices,
 and machine-readable provenance under `third_party/dotnet/runtime-loader`.
-Robotopia build 2227 supplies the referenced `System.Memory`, `System.Buffers`,
+Robotopia build 2309 supplies the referenced `System.Memory`, `System.Buffers`,
 and `System.Runtime.CompilerServices.Unsafe` assemblies; those player-profile
 identities and hashes are validated but their proprietary game copies are not
 redistributed.

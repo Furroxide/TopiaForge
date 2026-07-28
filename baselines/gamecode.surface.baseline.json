@@ -1,9 +1,9 @@
 {
-  "capturedUtc": "2026-07-23T01:28:44.9304480Z",
+  "capturedUtc": "2026-07-28T19:17:18.4229594Z",
   "extractorVersion": "1.1.0-rc.1",
-  "gameCodeMvid": "1599ff18-a1fe-4c77-800b-a389f790d246",
-  "gameVersion": "0.0.2227",
-  "gameVersionLabel": "build 2227",
+  "gameCodeMvid": "b8ed3429-6de2-4b89-b303-1d20b5981528",
+  "gameVersion": "0.0.2309",
+  "gameVersionLabel": "build 2309",
   "referenceSet": [
     "02 City Streets 0.0.0.0",
     "AcidChamber 0.0.0.0",
@@ -13,6 +13,10 @@
     "BehaviorDesignerRuntime 0.0.0.0",
     "BlackBox.Runtime 0.0.0.0",
     "CaseConverter 2.0.1.0",
+    "ClockworkLabs.Motion 0.0.0.0",
+    "ClockworkLabs.Rish 0.0.0.0",
+    "ClockworkLabs.Roots 0.0.0.0",
+    "ClockworkLabs.Sappy 0.0.0.0",
     "Collector 0.0.0.0",
     "ConstructionYard 0.0.0.0",
     "CubePuzzle 0.0.0.0",
@@ -43,6 +47,7 @@
     "Newtonsoft.Json 13.0.0.0",
     "OilInTheBasement 0.0.0.0",
     "PostHog 0.0.0.0",
+    "RoboUI 0.0.0.0",
     "SampleScene 0.0.0.0",
     "SchvetFart 0.0.0.0",
     "Sentry 4.13.0.0",
@@ -114,6 +119,7 @@
     "Unity.InputSystem 1.11.2.0",
     "Unity.InputSystem.ForUI 0.0.0.0",
     "Unity.Mathematics 0.0.0.0",
+    "Unity.MemoryProfiler 0.0.0.0",
     "Unity.Multiplayer.Center.Common 0.0.0.0",
     "Unity.Polybrush 0.0.0.0",
     "Unity.ProBuilder 0.0.0.0",
@@ -121,6 +127,7 @@
     "Unity.ProBuilder.KdTree 0.0.0.0",
     "Unity.ProBuilder.Poly2Tri 0.0.0.0",
     "Unity.ProBuilder.Stl 0.0.0.0",
+    "Unity.Profiling.Core 0.0.0.0",
     "Unity.Recorder 0.0.0.0",
     "Unity.Recorder.Base 0.0.0.0",
     "Unity.RenderPipelines.Core.Runtime 0.0.0.0",
@@ -240,7 +247,7 @@
     "GameCode|SentryRuntimeConfiguration": 1,
     "GameCode|SettingsScreen": 1
   },
-  "surfaceContentHash": "ba1f862e8f1b64fc19372121967628e2f3ce7db32cf8984fb7425189d7b091d5",
+  "surfaceContentHash": "ded8678112496a9331e2a6a72ae79c76c4b055f23105381df23f847e866fbbc3",
   "types": {
     "GameCode|ActionTarget": {
       "assembly": "GameCode",
@@ -2157,6 +2164,12 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "cancelAction",
+          "type": "UnityEngine.InputSystem.InputActionReference"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "checkpointAssets",
           "type": "CheckpointAsset[]"
         },
@@ -2241,6 +2254,12 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "navigateAction",
+          "type": "UnityEngine.InputSystem.InputActionReference"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "oldDropAction",
           "type": "ActionAsset"
         },
@@ -2267,6 +2286,12 @@
           "isStatic": false,
           "name": "sideQuestMarkerPrefab",
           "type": "UnityEngine.GameObject"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "submitAction",
+          "type": "UnityEngine.InputSystem.InputActionReference"
         },
         {
           "isPublic": false,
@@ -2303,6 +2328,12 @@
         }
       ],
       "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "CancelAction",
+          "type": "UnityEngine.InputSystem.InputAction"
+        },
         {
           "canRead": true,
           "canWrite": false,
@@ -2396,6 +2427,12 @@
         {
           "canRead": true,
           "canWrite": false,
+          "name": "NavigateAction",
+          "type": "UnityEngine.InputSystem.InputAction"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
           "name": "OldDropAction",
           "type": "ActionAsset"
         },
@@ -2422,6 +2459,12 @@
           "canWrite": false,
           "name": "SideQuestMarkerPrefab",
           "type": "UnityEngine.GameObject"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "SubmitAction",
+          "type": "UnityEngine.InputSystem.InputAction"
         },
         {
           "canRead": true,
@@ -4416,6 +4459,12 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "spawnedFromPool",
+          "type": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "sprintingSpeed",
           "type": "System.Single"
         },
@@ -4524,7 +4573,7 @@
         {
           "isPublic": false,
           "isStatic": false,
-          "name": "<WaitTransformSync>g__CloseEnough|149_0",
+          "name": "<WaitTransformSync>g__CloseEnough|150_0",
           "parameters": [],
           "returnType": "System.Boolean"
         },
@@ -4816,6 +4865,13 @@
             "UnityEngine.ContactPoint",
             "System.Single"
           ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "SnapRagdollToAnimatedPose",
+          "parameters": [],
           "returnType": "System.Void"
         },
         {
@@ -9748,6 +9804,12 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "materialMap",
+          "type": "UgcMaterialMap"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "robotPartMap",
           "type": "UgcRobotPartMap"
         },
@@ -9756,6 +9818,12 @@
           "isStatic": false,
           "name": "runtimeOverrides",
           "type": "System.Collections.Generic.Dictionary<System.String, UgcRuntimeAssetConfig+RuntimeOverride>"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "voiceMap",
+          "type": "UgcVoiceMap"
         }
       ],
       "fullName": "UgcRuntimeAssetConfig",
@@ -9832,8 +9900,20 @@
         {
           "canRead": true,
           "canWrite": false,
+          "name": "MaterialMap",
+          "type": "UgcMaterialMap"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
           "name": "RobotPartMap",
           "type": "UgcRobotPartMap"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "VoiceMap",
+          "type": "UgcVoiceMap"
         }
       ],
       "simpleName": "UgcRuntimeAssetConfig",

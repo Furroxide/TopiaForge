@@ -72,9 +72,13 @@ active-scene-only startup behavior and one-callback-per-load behavior afterward.
 
 ## Robotopia and platform compatibility
 
-Robotopia uses numeric build identifiers. TopiaForge maps build 2227 to SemVer `0.0.2227` for range
+Robotopia uses numeric build identifiers. TopiaForge maps build 2309 to SemVer `0.0.2309` for range
 evaluation while retaining the human-readable build label. A mod may claim only ranges exercised by
 its acceptance tests. When the installed Robotopia build is unknown, a constrained mod fails closed.
+TopiaForge reads the launcher's `installed-build.json` marker from the game root first. In Tomato Cake's
+Windows/Proton layout it also checks beside the launcher-owned `Robotopia` directory, matching the real
+installation shape. An existing malformed higher-priority marker never falls through to a lower-priority
+one; users are directed to finish or repair the game installation instead.
 
 Platform and architecture claims are made per release artifact and require their native CI jobs.
 Custom-world live acceptance is Windows/Proton-only for V1. Bundle content must declare an

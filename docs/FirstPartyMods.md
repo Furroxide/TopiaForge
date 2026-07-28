@@ -6,7 +6,7 @@ validates all sixteen source mods. Normal `pack --all` output contains fourteen 
 automation then adds the optional Creator Tools package explicitly. The developer-only UiGallery is tested but is
 the sole source mod excluded from the resulting fifteen-package release payload.
 
-Every manifest is schema version 5, constrains Robotopia to `0.0.2227`, constrains the loader and SDK to
+Every manifest is schema version 5, constrains Robotopia to `0.0.2309`, constrains the loader and SDK to
 `>=1.0.0-rc.1 <2.0.0`, and currently uses `NOASSERTION` until the project owner supplies an approved SPDX license and
 matching files. That sentinel deliberately blocks publication.
 
@@ -19,7 +19,7 @@ matching files. That sentinel deliberately blocks publication.
 | `io.github.furroxide.topiaforge.multiplayer` | Stable multiplayer contract preview and standalone loopback provider | Load in standalone, exercise generated registration and loopback commands/state/presentation, verify one logical execution on a listen-host-shaped rig, and confirm clean teardown. Live transport is not part of 1.0. |
 | `io.github.furroxide.topiaforge.no-feedback-url` | Isolated shutdown-feedback Harmony patch | Verify the page is allowed on the first launch and suppressed later; confirm unsupported bindings fail only this mod and patch teardown is idempotent. |
 | `io.github.furroxide.topiaforge.opposite-day` | Hidden global robot-intent inversion through Prompts | Enable the package and verify native and RobotKit-backed robot decisions choose the closest executable opposite, including negated instructions; confirm robots never disclose the directive, unsupported native bindings degrade cleanly, and unload restores ordinary behavior. |
-| `io.github.furroxide.topiaforge.perffixes` | Behavior-preserving allocation/CPU patches | Apply each patch on build 2227, compare behavior, profile collision/camera steady state, unload/reload, and verify an unsupported signature fails closed without contaminating other mods. |
+| `io.github.furroxide.topiaforge.perffixes` | Behavior-preserving allocation/CPU patches | Apply each patch on build 2309, compare behavior, profile collision/camera steady state, unload/reload, and verify an unsupported signature fails closed without contaminating other mods. |
 | `io.github.furroxide.topiaforge.performance` | Reversible HDRP/quality presets | Apply Off/Balanced/Performance/Potato and individual overrides, transition scenes, encounter missing HDRP features, then disable/unload; confirm every changed Robotopia setting is restored. |
 | `io.github.furroxide.topiaforge.prompts` | Framework prompt-override registry and native robot-directive bridge | Register competing priorities, inspect deterministic winner/conflict diagnostics, verify the global robot directive composes without replacing native schemas or personality facts, dispose in varying order, throw from a consumer, unload an owner, and confirm no stale override remains. |
 | `io.github.furroxide.topiaforge.robotkit` | Native robot, navigation, objective, remote-brain/conversation, and voice services | Spawn/move/chase/damage/despawn native robots; cancel reachability/objective work across scenes; run signed-out/offline paths; only after explicit approval enable bounded brain/STT tests; cancel requests/capture and unload during work. See [RobotKit.md](RobotKit.md) and [PrivacyAndCapabilities.md](PrivacyAndCapabilities.md). |

@@ -10,7 +10,7 @@ namespace TopiaForge.ModManager.Tests
 {
     internal static class FirstPartyManifestTests
     {
-        private const string GameRange = "0.0.2227";
+        private const string GameRange = "0.0.2309";
         private const string LoaderRange = ">=1.0.0-rc.1 <2.0.0";
         private const string SdkRange = ">=1.0.0-rc.1 <2.0.0";
 
@@ -38,7 +38,7 @@ namespace TopiaForge.ModManager.Tests
                     && manifest.EntryType.StartsWith("TopiaForge.", StringComparison.Ordinal),
                     manifest.Id + " must expose only TopiaForge assembly and type identities");
                 Assert(manifest.SupportedGameVersionRange == GameRange,
-                    manifest.Id + " must pin the audited Robotopia build 2227");
+                    manifest.Id + " must pin the audited Robotopia build 2309");
                 Assert(manifest.SupportedLoaderVersionRange == LoaderRange,
                     manifest.Id + " must declare the compatible V1 loader line");
                 Assert(manifest.SupportedSdkVersionRange == SdkRange,
@@ -50,7 +50,7 @@ namespace TopiaForge.ModManager.Tests
 
                 var errors = ManifestValidator.Validate(
                     manifest,
-                    new ManifestValidationContext("0.0.2227", requireKnownGameVersion: true));
+                    new ManifestValidationContext("0.0.2309", requireKnownGameVersion: true));
                 Assert(errors.Count == 0, manifest.Id + " failed strict compatibility validation: " + string.Join("; ", errors));
 
                 var projectPath = Directory.GetFiles(Path.GetDirectoryName(path)!, "*.csproj").Single();

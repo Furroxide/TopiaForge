@@ -457,7 +457,7 @@ namespace TopiaForge.ModManager.Tests
             const string manifest = "{\"schemaVersion\":5,\"name\":\"alias.mod\"," +
                 "\"displayName\":\"Alias\",\"version\":\"1.0.0\"," +
                 "\"author\":{\"name\":\"TopiaForge\"},\"entryAssembly\":\"Alias.dll\"," +
-                "\"entryType\":\"Alias.Entry\",\"gameVersion\":\"2227\"," +
+                "\"entryType\":\"Alias.Entry\",\"gameVersion\":\"2309\"," +
                 "\"supportedGameVersionRange\":\"*\",\"supportedLoaderVersionRange\":\"*\"," +
                 "\"supportedSdkVersionRange\":\"*\",\"vpmDependencies\":{},\"permissions\":[]}";
             using (var zip = ZipFile.Open(package, ZipArchiveMode.Create))

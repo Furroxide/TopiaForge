@@ -21,7 +21,7 @@ not merely build projects. Update it whenever a public contract, generator, or r
 
 The canonical Robotopia-side loader payload contains fourteen managed assemblies: twelve
 `TopiaForge.*` implementations/contracts plus pinned `System.Reflection.Metadata`
-and `System.Collections.Immutable` 10.0.9. Robotopia build 2227 supplies the
+and `System.Collections.Immutable` 10.0.9. Robotopia build 2309 supplies the
 required `System.Memory`, `System.Buffers`, and
 `System.Runtime.CompilerServices.Unsafe` Unity/Mono profile assemblies; release
 tests verify their exact identities and hashes instead of shadowing them in the
@@ -52,7 +52,7 @@ from the fourteen-package normal non-DevTool payload and the fifteen-package rel
 | --- | --- | --- |
 | `.topiaforgemod` ZIP + `topiaforge.mod.json` | Manifest V5 is the sole 1.0 schema; omitted multiplayer metadata means standalone-only, while an explicit block opts into bounded protocol/content metadata; retired V4 is rejected with migration guidance | CLI/scaffolds/first-party builds produce; launcher and runtime dispatch/validate/consume |
 | SemVer and version ranges | SemVer 2.0 precedence; exact, wildcard, and comparator-set ranges | C# Core and Dart domain must pass shared parity fixtures |
-| Robotopia build version | Numeric build `N` maps to `0.0.N`; initial release is exactly `0.0.2227` | Extractor/runtime detect; launcher plans; manifests constrain |
+| Robotopia build version | Numeric build `N` maps to `0.0.N`; initial release is exactly `0.0.2309` | Extractor/runtime detect; launcher plans; manifests constrain |
 | Manager/profile/session state | Versioned, normalized, bounded, atomic, and strict; installed versions coexist, exact profile pins fail closed, and unpinned profiles select the highest compatible SemVer | Launcher data writes; runtime reads process-scoped session state |
 | Registry entry/index | Format 2, append-only published history, HTTPS + SHA-256 | CLI builds/validates; launcher data consumes as untrusted input |
 | UGC config/status/command/session | Explicit schema versions, bounded JSON, atomic writers, unknown fields tolerated where documented | Launcher/CLI/sidecar/`TopiaForge.UgcLiveSync` |
@@ -73,7 +73,7 @@ identity are supplied.
 
 ## Compatibility, registry, and repository support data
 
-- `baselines/gamecode.surface.baseline.json` is the reviewed build-2227 compatibility surface. The extractor may
+- `baselines/gamecode.surface.baseline.json` is the reviewed build-2309 compatibility surface. The extractor may
   propose an update, but release validation rejects an unexplained or different-build baseline.
 - `bindings/*.gamebindings.json` are the nine first-party provider/advanced-mod runtime binding declarations
   consumed by the compatibility audit. Safe consumer mods such as GravityGun, OppositeDay, Sandbox, and Zombies have no binding

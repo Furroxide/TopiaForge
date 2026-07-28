@@ -82,7 +82,7 @@ void main() {
         fileName: 'compatible.topiaforgemod',
         id: 'inbox.compatibility',
         version: '1.0.0',
-        gameRange: '0.0.2227',
+        gameRange: '0.0.2309',
         marker: 'compatible',
       );
       final higher = fixture.writePackage(
@@ -107,7 +107,7 @@ void main() {
         fixture.installedMarker('inbox.compatibility', '1.0.0'),
         'compatible',
       );
-      expect(outcome.issues.single.message, contains('supports game'));
+      expect(outcome.issues.single.message, contains('supports Robotopia'));
     },
   );
 
@@ -424,7 +424,7 @@ class _InboxFixture {
     File(p.join(game.path, 'Robotopia.exe')).writeAsStringSync('');
     File(
       p.join(game.path, 'installed-build.json'),
-    ).writeAsStringSync('{"id":2227}');
+    ).writeAsStringSync('{"id":2309}');
     final managed = Directory(p.join(game.path, 'Robotopia_Data', 'Managed'))
       ..createSync(recursive: true);
     File(p.join(managed.path, 'UnityEngine.dll')).writeAsStringSync('');

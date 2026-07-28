@@ -22,14 +22,14 @@ namespace TopiaForge.ModManager.Tests
 
         private static void TestGameBuildNormalization()
         {
-            Assert(GameBuildVersion.TryFromBuildId("2227", out var version) && version == "0.0.2227",
+            Assert(GameBuildVersion.TryFromBuildId("2309", out var version) && version == "0.0.2309",
                 "numeric game build should map to 0.0.N");
-            Assert(GameBuildVersion.TryFromBuildLabel("build 2227", out version) && version == "0.0.2227",
+            Assert(GameBuildVersion.TryFromBuildLabel("build 2309", out version) && version == "0.0.2309",
                 "human build label should map to 0.0.N");
             Assert(GameBuildVersion.TryNormalize("1.2.3-rc.1", out version) && version == "1.2.3-rc.1",
                 "canonical product SemVer should remain unchanged");
 
-            foreach (var invalid in new[] { null, "", "0", "02227", "+2227", "-1", "2227 ", "2147483648" })
+            foreach (var invalid in new[] { null, "", "0", "02309", "+2309", "-1", "2309 ", "2147483648" })
             {
                 Assert(!GameBuildVersion.TryFromBuildId(invalid, out _),
                     "invalid build id should be rejected: " + (invalid ?? "<null>"));
@@ -39,7 +39,7 @@ namespace TopiaForge.ModManager.Tests
         private static void TestCompatibilityContext()
         {
             var manifest = ValidManifest("compat.context");
-            manifest.SupportedGameVersionRange = "0.0.2227";
+            manifest.SupportedGameVersionRange = "0.0.2309";
             manifest.SupportedLoaderVersionRange = ">=1.0.0-rc.1 <2.0.0";
             manifest.SupportedSdkVersionRange = ">=1.0.0-rc.1 <2.0.0";
 
@@ -47,11 +47,11 @@ namespace TopiaForge.ModManager.Tests
                 "context-free compatibility wrapper should syntax-check without requiring a game install");
             Assert(ManifestValidator.Validate(
                     manifest,
-                    new ManifestValidationContext("0.0.2227", requireKnownGameVersion: true)).Count == 0,
+                    new ManifestValidationContext("0.0.2309", requireKnownGameVersion: true)).Count == 0,
                 "matching production compatibility context should pass");
             Assert(ManifestValidator.Validate(
                     manifest,
-                    new ManifestValidationContext("build 2227", requireKnownGameVersion: true)).Count == 0,
+                    new ManifestValidationContext("build 2309", requireKnownGameVersion: true)).Count == 0,
                 "runtime build labels should normalize before range evaluation");
 
             var unknown = ManifestValidator.Validate(
@@ -68,7 +68,7 @@ namespace TopiaForge.ModManager.Tests
 
             var wrongLoader = ManifestValidator.Validate(
                 manifest,
-                new ManifestValidationContext("0.0.2227", loaderVersion: "2.0.0", requireKnownGameVersion: true));
+                new ManifestValidationContext("0.0.2309", loaderVersion: "2.0.0", requireKnownGameVersion: true));
             Assert(wrongLoader.Any(error => error.Contains("does not include loader 2.0.0", StringComparison.Ordinal)),
                 "validation should use the supplied loader version rather than a global constant");
         }
@@ -239,7 +239,7 @@ namespace TopiaForge.ModManager.Tests
             var package = Path.Combine(testRoot, "constrained.topiaforgemod");
             Directory.CreateDirectory(testRoot);
             var manifest = ValidManifest("compat.threaded");
-            manifest.SupportedGameVersionRange = "0.0.2227";
+            manifest.SupportedGameVersionRange = "0.0.2309";
             using (var archive = ZipFile.Open(package, ZipArchiveMode.Create))
             {
                 WriteEntry(archive, "topiaforge.mod.json", JsonUtil.Serialize(manifest));
@@ -260,7 +260,7 @@ namespace TopiaForge.ModManager.Tests
                 paths,
                 state,
                 false,
-                new ManifestValidationContext("0.0.2227", requireKnownGameVersion: true));
+                new ManifestValidationContext("0.0.2309", requireKnownGameVersion: true));
             Assert(accepted.Ok, "package installation should accept the supported game build");
             var scanned = new ModRegistry().Scan(paths, state, strictUnknown).Single();
             Assert(!scanned.IsValid && scanned.Errors.Any(error => error.Contains("unknown", StringComparison.OrdinalIgnoreCase)),
@@ -269,20 +269,25 @@ namespace TopiaForge.ModManager.Tests
 
         private static void TestInstalledBuildReader(string root)
         {
-            var windows = Path.Combine(root, "version-reader", "windows");
+            var windowsLauncher = Path.Combine(root, "version-reader", "windows");
+            var windows = Path.Combine(windowsLauncher, "Robotopia");
             Directory.CreateDirectory(windows);
-            File.WriteAllText(Path.Combine(windows, "installed-build.json"), "{\"id\":2227}");
-            Assert(InstalledGameVersionReader.TryRead(windows, out var version, out _) && version == "0.0.2227",
-                "runtime should read the launcher marker from a Windows/Proton game root");
+            File.WriteAllText(Path.Combine(windowsLauncher, "installed-build.json"), "{\"id\":2309}");
+            Assert(InstalledGameVersionReader.TryRead(windows, out var version, out _) && version == "0.0.2309",
+                "runtime should read the launcher marker beside a Windows/Proton game root");
+
+            File.WriteAllText(Path.Combine(windows, "installed-build.json"), "{\"id\":2228}");
+            Assert(InstalledGameVersionReader.TryRead(windows, out version, out _) && version == "0.0.2228",
+                "runtime should prefer a marker inside the Windows/Proton game root");
 
             var launcher = Path.Combine(root, "version-reader", "mac");
             var macRoot = Path.Combine(launcher, "Robotopia.app", "Contents", "MacOS");
             Directory.CreateDirectory(macRoot);
-            File.WriteAllText(Path.Combine(launcher, "installed-build.json"), "{\"id\":\"2227\"}");
-            Assert(InstalledGameVersionReader.TryRead(macRoot, out version, out _) && version == "0.0.2227",
+            File.WriteAllText(Path.Combine(launcher, "installed-build.json"), "{\"id\":\"2309\"}");
+            Assert(InstalledGameVersionReader.TryRead(macRoot, out version, out _) && version == "0.0.2309",
                 "runtime should find the launcher marker beside a macOS app bundle");
 
-            File.WriteAllText(Path.Combine(launcher, "installed-build.json"), "{\"id\":\"02227\"}");
+            File.WriteAllText(Path.Combine(launcher, "installed-build.json"), "{\"id\":\"02309\"}");
             Assert(!InstalledGameVersionReader.TryRead(macRoot, out _, out var error) && error.Contains("rejected"),
                 "runtime should fail closed on a noncanonical build id");
         }
@@ -307,7 +312,7 @@ namespace TopiaForge.ModManager.Tests
             params string[] contentTargets)
         {
             return new ManifestValidationContext(
-                gameVersion: "0.0.2227",
+                gameVersion: "0.0.2309",
                 loaderVersion: TopiaForgeVersions.LoaderVersion,
                 sdkVersion: TopiaForgeVersions.SdkVersion,
                 requireKnownGameVersion: true,

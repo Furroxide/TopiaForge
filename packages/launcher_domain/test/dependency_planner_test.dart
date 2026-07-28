@@ -24,7 +24,7 @@ void main() {
       expect(strict.hasBlockingIssues, isTrue);
       expect(
         strict.issues.map((issue) => issue.message).join(' '),
-        contains('installed-build.json could not be verified'),
+        contains('could not verify the installed build'),
       );
       expect(authoring.hasBlockingIssues, isFalse);
     });
@@ -32,26 +32,26 @@ void main() {
     test('evaluates canonical game builds for root and transitive mods', () {
       final dependency = _manifest(
         'dependency.mod',
-        gameVersionRange: VersionRange.parse('0.0.2227'),
+        gameVersionRange: VersionRange.parse('0.0.2309'),
       );
       final root = _manifest(
         'main.mod',
         dependencies: const [ModDependency(id: 'dependency.mod')],
-        gameVersionRange: VersionRange.parse('>=0.0.2200 <0.0.2300'),
+        gameVersionRange: VersionRange.parse('>=0.0.2200 <0.0.2400'),
       );
 
       final compatible = const DependencyPlanner().previewInstall(
         root,
         const [],
         availableMods: [_registry(dependency)],
-        gameVersion: '0.0.2227',
+        gameVersion: '0.0.2309',
         requireKnownGameVersion: true,
       );
       final incompatible = const DependencyPlanner().previewInstall(
         root,
         const [],
         availableMods: [_registry(dependency)],
-        gameVersion: '0.0.2300',
+        gameVersion: '0.0.2400',
         requireKnownGameVersion: true,
       );
 
