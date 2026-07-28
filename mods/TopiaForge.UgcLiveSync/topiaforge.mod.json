@@ -22,7 +22,10 @@
     "creator",
     "unity"
   ],
-  "license": "NOASSERTION",
+  "license": "MIT",
+  "licenseFiles": [
+    "LICENSE"
+  ],
   "capabilities": [
     "scene-management",
     "ugc-livesync",

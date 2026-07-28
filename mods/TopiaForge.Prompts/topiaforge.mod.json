@@ -23,7 +23,10 @@
     "framework",
     "sdk"
   ],
-  "license": "NOASSERTION",
+  "license": "MIT",
+  "licenseFiles": [
+    "LICENSE"
+  ],
   "capabilities": [
     "prompt-overrides",
     "unsafe-native",

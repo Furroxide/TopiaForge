@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:launcher_data/src/secure_http.dart';
+import 'package:launcher_data/launcher_data.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -66,4 +69,46 @@ void main() {
       throwsArgumentError,
     );
   });
+
+  test('update transport rejects mutable or non-GitHub endpoints', () async {
+    final transport = SecureLauncherUpdateTransport();
+    addTearDown(transport.close);
+    for (final uri in [
+      Uri.parse(
+        'https://github.com/furroxide/TopiaForge/releases/download/'
+        'v1.0.0/file.zip?token=secret',
+      ),
+      Uri.parse('https://release-assets.githubusercontent.com/file?token=x'),
+      Uri.parse(
+        'https://api.github.com/repos/furroxide/TopiaForge/releases?per_page=100',
+      ),
+      Uri.parse('https://example.com/update.zip'),
+    ]) {
+      await expectLater(
+        transport.fetch(uri, maxBytes: 1024, label: 'Update'),
+        throwsStateError,
+      );
+    }
+  });
+
+  test(
+    'update downloads reject invalid bounds before creating partials',
+    () async {
+      final transport = SecureLauncherUpdateTransport();
+      addTearDown(transport.close);
+      await expectLater(
+        transport.download(
+          Uri.parse(
+            'https://github.com/furroxide/TopiaForge/releases/download/'
+            'v1.0.0/file.zip',
+          ),
+          partialFile: File('unused.partial'),
+          expectedSize: 0,
+          expectedSha256: 'invalid',
+        ),
+        throwsStateError,
+      );
+      expect(File('unused.partial').existsSync(), isFalse);
+    },
+  );
 }

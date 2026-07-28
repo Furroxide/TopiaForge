@@ -53,8 +53,10 @@ matrix jobs are never configured directly as required checks.
 | `main` | The five common checks plus `Required / Release packages` from the exact release-branch head. |
 
 Each aggregate job uses `if: always()` and fails unless all jobs it represents succeed. Dependency review rejects a
-new dependency with a moderate-or-higher known vulnerability in runtime, development, or unknown scope. License
-blocking remains off until project-wide inbound and outbound licensing is resolved.
+new dependency with a moderate-or-higher known vulnerability in runtime,
+development, or unknown scope. License and notice validation is
+release-blocking. DCO enforcement is grandfathered through the immutable
+`v1.0.0-rc.1` cutover and applies to every commit introduced afterward.
 
 CodeQL is an independent ruleset gate at high-or-critical severity. Default setup covers Actions, C/C++, C#,
 JavaScript/TypeScript, and Swift with the default query suite on a weekly schedule. Dart remains covered by analyzer
@@ -107,6 +109,9 @@ The stable PR-policy check enforces these routing rules:
   from that head's `release/release-policy.json`.
 - Direct `main` or `release/*` backflow to `dev` is rejected; `sync/main-v<semver>` is required and must contain the
   current `main` tip as an ancestor.
+- Once `v1.0.0-rc.1` exists, every introduced commit must contain a valid
+  `Signed-off-by` trailer matching an author or committer identity. Existing
+  history reachable from the cutover tag is grandfathered.
 
 Only explicitly trusted collaborators may submit formal Approve or Request Changes reviews. Community review remains
 welcome through comments and suggestions; formal reviews become enforcement evidence only when collaboration trust
@@ -141,8 +146,9 @@ those hosts are reset or reimaged between trusted runs.
 4. Dispatch production release preparation from the protected tag.
 5. Before an environment approval unlocks credentials, verify the associated release PR and release-head check, both
    exact-main-SHA gate runs, tag object/type/signature/target, release policy, catalog, and artifact inventory.
-6. Build signed assets, generate project SBOM/BOM/checksums, create GitHub artifact attestations, and create or resume
-   only the matching draft release.
+6. Build platform assets, generate and verify exact-byte Ed25519 update
+   metadata, project SBOM/BOM/checksums, and GitHub artifact attestations, then
+   create or resume only the matching draft release.
 7. Inspect and publish manually. Immutable releases then lock the tag and assets; verify with `gh release verify` and
    asset verification.
 
@@ -165,9 +171,11 @@ The desired live settings are:
 - Private vulnerability reporting, secret scanning, and push protection are enabled. GitHub does not offer
   non-provider secret patterns or validity checks to this public personal repository; enable both after a transfer to
   an eligible organization plan.
-- Immutable releases are enabled before publication. The repository push limit is five refs per push, preventing
-  accidental mirror pushes. Wiki is disabled; Issues remain enabled; DCO/web signoff remains disabled until inbound
-  licensing is resolved.
+- Immutable releases are enabled before publication. The repository push limit
+  is five refs per push, preventing accidental mirror pushes. Wiki is disabled;
+  Issues remain enabled. GitHub web commit sign-off is enabled immediately
+  after the `v1.0.0-rc.1` cutover so future browser-created commits satisfy the
+  DCO policy.
 
 The five-ref push limit and owner-account security posture require manual verification because GitHub does not expose
 all of them through the repository audit API. The sole owner must maintain a passkey or hardware security key, TOTP

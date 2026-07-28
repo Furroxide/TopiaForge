@@ -30,6 +30,7 @@ const _commands = [
   'updates',
   'registry',
   'release',
+  'launcher',
 ];
 
 /// Shared remediation message for commands that need a detected game install.
@@ -256,6 +257,12 @@ extension _HelpCommand on _TopiaForgeCli {
     );
     stdout.writeln(
       '  topiaforge release build-metadata ...  Build deterministic BOM, SBOM, and checksums.',
+    );
+    stdout.writeln(
+      '  topiaforge release build-update-metadata ... Sign immutable launcher update metadata.',
+    );
+    stdout.writeln(
+      '  topiaforge release verify-update-metadata ... Verify update signature and archive inventory.',
     );
     stdout.writeln('');
     stdout.writeln(

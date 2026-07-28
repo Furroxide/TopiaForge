@@ -287,7 +287,7 @@ void main() {
   });
 
   group('LauncherUpdateSettings', () {
-    test('keeps canonical launcher updates manual-only', () {
+    test('round trips signed launcher update preferences', () {
       const settings = LauncherUpdateSettings(
         enabled: true,
         checkAutomatically: false,
@@ -297,10 +297,18 @@ void main() {
 
       final restored = LauncherUpdateSettings.fromJson(settings.toJson());
 
-      expect(restored.enabled, isFalse);
+      expect(restored.enabled, isTrue);
       expect(restored.checkAutomatically, isFalse);
       expect(restored.channel, LauncherUpdateChannel.beta);
       expect(restored.archiveUrl, settings.archiveUrl);
+    });
+
+    test('prerelease defaults opt into beta checks with a cooldown', () {
+      final settings = LauncherUpdateSettings.fromJson(const {});
+
+      expect(settings.enabled, isTrue);
+      expect(settings.checkAutomatically, isTrue);
+      expect(settings.channel, LauncherUpdateChannel.beta);
     });
 
     test('launcher update settings reject plaintext and credential URLs', () {

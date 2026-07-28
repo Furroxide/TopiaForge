@@ -21,7 +21,10 @@
     "sdk",
     "loopback"
   ],
-  "license": "NOASSERTION",
+  "license": "MIT",
+  "licenseFiles": [
+    "LICENSE"
+  ],
   "capabilities": [],
   "multiplayer": {
     "mode": "session",

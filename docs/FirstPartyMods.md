@@ -7,8 +7,9 @@ automation then adds the optional Creator Tools package explicitly. The develope
 the sole source mod excluded from the resulting fifteen-package release payload.
 
 Every manifest is schema version 5, constrains Robotopia to `0.0.2309`, constrains the loader and SDK to
-`>=1.0.0-rc.1 <2.0.0`, and currently uses `NOASSERTION` until the project owner supplies an approved SPDX license and
-matching files. That sentinel deliberately blocks publication.
+`>=1.0.0-rc.1 <2.0.0`, and declares MIT with a package-relative `LICENSE`.
+Release packaging injects the reviewed shared mod license and verifies it in
+every deterministic archive.
 
 | Package | Role and dependencies | Candidate acceptance flow |
 | --- | --- | --- |

@@ -452,6 +452,28 @@ jobs:
           fi
           dart run bin/topiaforge.dart "${args[@]}"
 
+      - name: Exercise signed packaged update and forced rollback
+        shell: bash
+        working-directory: packages/launcher_data
+        run: |
+          set -euo pipefail
+          workspace="${GITHUB_WORKSPACE//\\//}"
+          temp="${RUNNER_TEMP//\\//}"
+          suffix=''
+          if [ "$RUNNER_OS" = Windows ]; then
+            suffix='.exe'
+          fi
+          dart pub get --enforce-lockfile
+          dart compile exe tool/update_health_fixture.dart \
+            -o "$temp/topiaforge-update-health-fixture$suffix"
+          dart compile exe tool/update_no_health_fixture.dart \
+            -o "$temp/topiaforge-update-no-health-fixture$suffix"
+          dart run tool/launcher_update_e2e.dart \
+            --platform "${{ matrix.platform }}" \
+            --archive "$workspace/release-artifacts/${{ matrix.asset }}" \
+            --health-fixture "$temp/topiaforge-update-health-fixture$suffix" \
+            --no-health-fixture "$temp/topiaforge-update-no-health-fixture$suffix"
+
       # This is the clean-machine modder acceptance path: use the executable,
       # templates, and local NuGet feed from the archive itself. Projects live
       # outside the extraction and continue after the entire extraction is removed.

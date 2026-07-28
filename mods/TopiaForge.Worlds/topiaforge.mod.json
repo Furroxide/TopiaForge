@@ -21,7 +21,10 @@
     "sdk",
     "sandbox"
   ],
-  "license": "NOASSERTION",
+  "license": "MIT",
+  "licenseFiles": [
+    "LICENSE"
+  ],
   "capabilities": [
     "scene-management",
     "world-service",

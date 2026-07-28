@@ -23,6 +23,8 @@ part 'widget_accessibility_test_cases.dart';
 part 'widget_profile_launch_test_cases.dart';
 part 'widget_test_snapshots.dart';
 part 'widget_ugc_test_cases.dart';
+part 'widget_update_test_cases.dart';
+part 'widget_update_test_fakes.dart';
 
 void main() {
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
@@ -32,6 +34,7 @@ void main() {
   registerInstallConfirmationWidgetTests();
   registerModRepairTests();
   registerAccessibilityWidgetTests();
+  registerLauncherUpdateWidgetTests();
 
   // Home's GlowButton pulses on a repeating AnimationController, which would
   // deadlock pumpAndSettle. Running the suite with reduced motion keeps every
@@ -68,25 +71,6 @@ void main() {
       ),
       findsNothing,
     );
-  });
-
-  testWidgets('settings expose only the safe manual launcher update path', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      TopiaForgeLauncherApp(repository: _FakeLauncherRepository()),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Settings'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Manual only'), findsOneWidget);
-    expect(
-      find.textContaining('Automatic self-update is disabled'),
-      findsOneWidget,
-    );
-    expect(find.text('Enable launcher updates'), findsNothing);
   });
 
   // Home stacks the hero, profiles, and discover zones vertically; the

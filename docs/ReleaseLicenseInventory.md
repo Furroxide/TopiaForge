@@ -1,47 +1,56 @@
 # TopiaForge release license inventory
 
-Status: **publication blocked** for `1.0.0-rc.1`.
+Status: **owned-surface and redistribution audit complete** for
+`1.0.0-rc.1`.
 
-This inventory records the repository's current declarations; it does not select, grant, or reinterpret a license.
-The release catalog must remain `blocked` until the project owner and qualified legal reviewer approve the decisions
-below and release engineering verifies the resulting candidate artifacts.
+TopiaForge-owned code and content are licensed under MIT with
+`Copyright (c) 2026 furroxide`. Contributions made after the
+`v1.0.0-rc.1` cutover use Developer Certificate of Origin 1.1 sign-off.
+Existing history is grandfathered. Third-party materials retain their original
+licenses and are not relicensed by the project MIT grant.
 
-## Current owned-package declarations
+## Owned release surfaces
 
-| Surface | Current declaration | Release consequence |
-| --- | --- | --- |
-| Repository root | No root `LICENSE` | No project-wide outbound grant is declared. |
-| Release policy | `OWNER_DECISION_REQUIRED`, `licenseFile: null`, `decisionStatus: blocked` | Strict release validation must fail. |
-| Sixteen first-party mod manifests | `NOASSERTION` | The `.topiaforgemod` packages are not publishable. |
-| VPM resolver, world companion, and UGC companion | `NOASSERTION` plus a no-grant notice | The three VPM packages are not publishable. |
-| Twelve packable SDK NuGet projects | The shared pack target defaults to `MIT`; four projects repeat `MIT` explicitly | This conflicts with the unresolved project-wide decision and must not be treated as approval. |
-| Launcher UI package | A no-grant placeholder file | The placeholder is not a redistributable project license. |
-| Contributor policy | No inbound contribution terms selected | Substantive external contributions remain blocked pending owner review. |
+| Surface | Declaration and placement |
+| --- | --- |
+| Repository and platform archives | Root `LICENSE`; release packaging copies `LICENSE` and `DCO` beside the product payload. |
+| Sixteen first-party mods | SPDX `MIT` and package-relative `LICENSE`; the packer injects the reviewed shared mod license into every first-party archive. |
+| Twelve SDK NuGet packages | `PackageLicenseExpression` is MIT through the shared pack policy or an equivalent project declaration. |
+| VPM resolver, world companion, and UGC companion | SPDX `MIT` in each `package.json` with the complete MIT text in the package directory. |
+| Flutter launcher UI package | Complete MIT text in `packages/launcher_ui/LICENSE`. |
+| CLI, launcher domain/data, sidecar, website, templates, samples, and repository tooling | Covered by the root MIT license unless a more specific adjacent third-party notice applies. |
 
-Dependency license data in generated lockfiles describes third-party dependencies, not TopiaForge-owned code. The
-third-party inventory and required redistributed notices remain in `THIRD_PARTY_NOTICES.md` and adjacent license files.
+Author-generated mod and Unity-package scaffolds deliberately start with
+`NOASSERTION` and a no-grant notice. Those files describe the new author's
+project, not a TopiaForge-owned release surface; the author must explicitly
+choose terms before publication. Test-only SPDX fixtures and SPDX SBOM
+`NOASSERTION` values for unknown third-party conclusions likewise are not
+project-license placeholders.
 
-## Decisions required from owner/legal
+## Third-party redistribution audit
 
-- Identify the copyright holder or holders and approve the outbound SPDX expression for each independently
-  distributed TopiaForge surface.
-- Approve inbound contribution terms and any contributor attestation or agreement required before accepting
-  substantive external contributions.
-- Approve Robotopia name, compatibility, injection, brand, artwork, font, template, and sample use for the public RC.
-- Approve the exact third-party BOM and notice placement, including the UnityDoorstop LGPL corresponding-source
-  delivery method and every bundled BepInEx/Harmony/MonoMod/Cecil/.NET/Flutter/Dart/Node/SPDX asset.
-- Approve privacy, backend authorization, package trust, revocation, takedown, and installed-user recovery policy.
+The release payload retains the exact upstream licenses and notices recorded in
+`THIRD_PARTY_NOTICES.md` and the machine-readable provenance under
+`third_party/`. Release validation verifies:
 
-## Propagation and evidence after approval
+- pinned BepInEx, Harmony, MonoMod, Cecil, and UnityDoorstop inputs, license
+  files, notices, source references, versions, and hashes;
+- .NET runtime, MetadataLoadContext, Metadata, and Immutable license/notice
+  bundles from the exact restored packages;
+- Flutter/Dart generated notices and the standalone CLI license bundle;
+- Node and Dart dependency lockfile inventories;
+- SPDX License List Data provenance; and
+- redistributed font and artwork notices.
 
-- Add the canonical root license and record its SPDX expression and path in `release/release-policy.json`.
-- Replace every owned `NOASSERTION`, no-grant placeholder, shared NuGet default, and explicit NuGet expression with
-  the approved per-package mapping; do not infer that every surface uses the same expression.
-- Update author templates so generated projects remain non-publishable until an author explicitly selects terms.
-- Rebuild all SDK, mod, VPM, launcher, sidecar, BOM, and SPDX SBOM outputs from the frozen candidate SHA.
-- Inspect every final archive for the approved root/package licenses, third-party notices, corresponding-source
-  references, SPDX relationships, and byte-identical nested ecosystem payload.
-- Attach the owner/legal approval record and final artifact inspection to `P0-LIC-01`, `P0-IP-01`, and `P0-OSS-01`.
+The audit does not change any third-party license. Archive inspection, BOM,
+SBOM, notice, provenance, and deterministic-package tests remain mandatory on
+the exact release SHA. The release catalog is `ready` only while those strict
+checks pass.
 
-Until every item above is complete, the repository must not set the catalog to `ready`, create the protected version
-tag, upload public release assets, or publish the GitHub prerelease.
+## Contribution policy
+
+The canonical DCO 1.1 text is checked in as `DCO`; `CONTRIBUTING.md` explains
+the required `Signed-off-by` trailer. The PR policy begins enforcing trailers
+for commits introduced after the immutable `v1.0.0-rc.1` cutover tag. The
+repository web-commit sign-off setting is enabled at that cutover so GitHub
+authored commits can carry the same certification.

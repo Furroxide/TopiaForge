@@ -35,7 +35,10 @@
     "event-graphs",
     "developer"
   ],
-  "license": "NOASSERTION",
+  "license": "MIT",
+  "licenseFiles": [
+    "LICENSE"
+  ],
   "capabilities": [
     "input",
     "hud",

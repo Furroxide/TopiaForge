@@ -434,7 +434,7 @@ void main() {
 
     final snapshot = await repository.loadSnapshot();
 
-    expect(snapshot.launcherUpdates.enabled, isFalse);
+    expect(snapshot.launcherUpdates.enabled, isTrue);
     expect(snapshot.launcherUpdates.checkAutomatically, isFalse);
     expect(snapshot.launcherUpdates.channel, LauncherUpdateChannel.nightly);
   });

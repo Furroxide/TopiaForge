@@ -20,6 +20,7 @@ import 'package:topiaforge/src/release_sdk_payload.dart';
 import 'package:topiaforge/src/registry_entry_builder.dart';
 import 'package:topiaforge/src/release_metadata.dart';
 import 'package:topiaforge/src/release_policy.dart';
+import 'package:topiaforge/src/release_update_metadata.dart';
 import 'package:topiaforge/src/ugc_live_sync_transitions.dart';
 
 part 'topiaforge_check_commands.dart';
@@ -27,6 +28,7 @@ part 'topiaforge_acceptance_commands.dart';
 part 'topiaforge_dev_commands.dart';
 part 'topiaforge_environment_commands.dart';
 part 'topiaforge_help.dart';
+part 'topiaforge_launcher_commands.dart';
 part 'topiaforge_mod_commands.dart';
 part 'topiaforge_manifest_migration_commands.dart';
 part 'topiaforge_mod_module_commands.dart';
@@ -109,6 +111,7 @@ class _TopiaForgeCli {
       'updates' => _updates(rest),
       'registry' => _registry(rest),
       'release' => _release(rest),
+      'launcher' => _launcher(rest),
       _ => _unknown(command),
     };
   }

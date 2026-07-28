@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 
 import 'launcher_event.dart';
+import 'launcher_build.dart';
 import 'launcher_section.dart';
 import 'launcher_state.dart';
 
@@ -17,11 +18,16 @@ part 'launcher_developer_ugc_actions.dart';
 part 'launcher_developer_project_actions.dart';
 part 'launcher_developer_actions.dart';
 part 'launcher_runtime_constraints.dart';
+part 'launcher_update_actions.dart';
 
 class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
-  LauncherBloc(this._repository, {DeveloperRepository? developerRepository})
-    : _developerRepository = developerRepository,
-      super(LauncherState.initial()) {
+  LauncherBloc(
+    this._repository, {
+    DeveloperRepository? developerRepository,
+    LauncherUpdateRepository? updateRepository,
+  }) : _developerRepository = developerRepository,
+       _updateRepository = updateRepository,
+       super(LauncherState.initial()) {
     on<LauncherEvent>(_dispatchEvent, transformer: sequential());
     _ugcPublisherSub = _repository.ugcPublisherEvents.listen((event) {
       if (isClosed) {
@@ -34,13 +40,18 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
           add(DeveloperUgcPublisherExited(sessionId, exitCode));
       }
     });
+    _updateStatusSub = _updateRepository?.statuses.listen((status) {
+      if (!isClosed) add(LauncherUpdateStatusChanged(status));
+    });
   }
 
   final LauncherRepository _repository;
   final DeveloperRepository? _developerRepository;
+  final LauncherUpdateRepository? _updateRepository;
   final DependencyPlanner _dependencyPlanner = const DependencyPlanner();
 
   StreamSubscription<UgcPublisherEvent>? _ugcPublisherSub;
+  StreamSubscription<LauncherUpdateStatus>? _updateStatusSub;
 
   // True while a "Go Live" is waiting for the publisher to report its live document URL before launching the game
   // (so the game auto-connects to the real document, not an empty one).
@@ -74,17 +85,29 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     // disposal then owns sidecar shutdown instead of racing a handler with a
     // duplicate stop request.
     final publisherClose = publisherSubscription?.cancel();
+    final updateClose = _updateStatusSub?.cancel();
+    _updateStatusSub = null;
     final blocClose = super.close();
     return Future.wait<void>([
       ?publisherClose,
+      ?updateClose,
       blocClose,
-    ]).whenComplete(_repository.dispose);
+    ]).whenComplete(() async {
+      await _updateRepository?.dispose();
+      await _repository.dispose();
+    });
   }
 
   Future<void> _onLoad(LauncherEvent event, Emitter<LauncherState> emit) async {
     await _guard(emit, 'Refreshed launcher state.', () async {
       final snapshot = await _repository.loadSnapshot();
       emit(_snapshotState(snapshot, 'Ready.'));
+      if (event is LauncherStarted &&
+          snapshot.launcherUpdates.enabled &&
+          snapshot.launcherUpdates.checkAutomatically &&
+          _updateRepository != null) {
+        add(const LauncherUpdateCheckRequested(force: false));
+      }
     });
   }
 
@@ -138,10 +161,7 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     Emitter<LauncherState> emit,
   ) async {
     final settings = state.launcherUpdates.copyWith(
-      // Preserve the serialized contract without allowing a stale setting or
-      // synthetic event to reactivate an updater that cannot yet verify
-      // owner-signed metadata and fully bound extraction.
-      enabled: false,
+      enabled: event.enabled,
       checkAutomatically: event.checkAutomatically,
       channel: event.channel,
     );
@@ -149,7 +169,9 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     emit(
       state.copyWith(
         launcherUpdates: settings,
-        statusMessage: 'Launcher updates require a manual package download.',
+        statusMessage: settings.enabled
+            ? 'Signed launcher updates are enabled.'
+            : 'Launcher update checks are disabled.',
       ),
     );
   }
@@ -474,23 +496,4 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
       );
     }
   }
-}
-
-String _packageInboxMessage(PackageInboxInstallOutcome outcome) {
-  final summary = switch (outcome.status) {
-    PackageInboxInstallStatus.success when outcome.candidateCount == 0 =>
-      'Package inbox is empty.',
-    PackageInboxInstallStatus.success =>
-      'Installed ${outcome.installedCount} package(s) and consumed '
-          '${outcome.consumedCount} inbox file(s).',
-    PackageInboxInstallStatus.partial =>
-      'Package inbox partially processed: ${outcome.installedCount} '
-          'installed, ${outcome.retainedCount} retained.',
-    PackageInboxInstallStatus.failure =>
-      'Package inbox failed: no packages installed; '
-          '${outcome.retainedCount} retained.',
-  };
-  return outcome.issues.isEmpty
-      ? summary
-      : '$summary ${outcome.issues.first.message}';
 }

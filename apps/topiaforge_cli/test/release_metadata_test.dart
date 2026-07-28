@@ -103,7 +103,7 @@ void main() {
   });
 
   test(
-    'technical metadata is schema-valid, complete, and non-distributable',
+    'release metadata is schema-valid, complete, and distributable',
     () async {
       final builder = const TopiaForgeReleaseMetadataBuilder();
       await builder.build(
@@ -117,8 +117,12 @@ void main() {
       final bom = _json(File(p.join(temp.path, 'release-bom.json')));
       final sbom = _json(File(p.join(temp.path, 'release-sbom.spdx.json')));
 
-      expect(bom['distributable'], isFalse);
-      expect((bom['blockingReasons'] as List), isNotEmpty);
+      expect(bom['distributable'], isTrue);
+      expect((bom['blockingReasons'] as List), isEmpty);
+      expect(((bom['codeSigning'] as Map)['platforms'] as Map)['windows-x64'], {
+        'status': 'unsigned',
+        'exceptionApplied': true,
+      });
       expect(
         (bom['expectedArtifactSet'] as List).toSet(),
         release.artifacts.toSet(),
@@ -284,6 +288,25 @@ void _writeCandidateAssets(
     File(p.join(output.path, 'TopiaForge-macos-universal.zip')),
     release,
     prefix: 'TopiaForge.app/Contents/Resources/TopiaForge/',
+  );
+  File(
+    p.join(output.path, 'topiaforge-update-v1.json'),
+  ).writeAsStringSync('{"fixture":true}\n');
+  File(
+    p.join(output.path, 'topiaforge-update-v1.json.sig'),
+  ).writeAsStringSync('{"fixture":true}\n');
+  _writeJson(
+    File(
+      p.join(
+        output.path,
+        TopiaForgeReleaseMetadataBuilder.trustEvidenceFileName,
+      ),
+    ),
+    {
+      'windows-x64': {'status': 'unsigned', 'exceptionApplied': true},
+      'linux-x64': {'status': 'not-applicable', 'exceptionApplied': false},
+      'macos-universal': {'status': 'ad-hoc', 'exceptionApplied': true},
+    },
   );
 }
 

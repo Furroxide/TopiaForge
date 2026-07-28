@@ -154,6 +154,16 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
       addBytes(name, bytes);
     }
 
+    final sharedFirstPartyLicense = File(p.join(root.parent.path, 'LICENSE'));
+    final ownsFirstPartyNamespace = manifestContract.id.startsWith(
+      'io.github.furroxide.topiaforge.',
+    );
+    if (ownsFirstPartyNamespace &&
+        !File(p.join(root.path, 'LICENSE')).existsSync() &&
+        sharedFirstPartyLicense.existsSync()) {
+      addFile('LICENSE', sharedFirstPartyLicense);
+    }
+
     final csprojCandidates =
         root
             .listSync()

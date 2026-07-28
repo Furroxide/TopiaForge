@@ -30,7 +30,10 @@
   "contentTargets": ["code"],
   "category": "Developer",
   "tags": ["acceptance", "safe-sdk", "non-distributable"],
-  "license": "NOASSERTION",
+  "license": "MIT",
+  "licenseFiles": [
+    "LICENSE"
+  ],
   "capabilities": [
     "asset-bundles",
     "filesystem",

@@ -19,6 +19,7 @@ class LauncherState {
     required this.launcherLog,
     required this.resolution,
     required this.launcherUpdates,
+    this.launcherUpdateStatus = const LauncherUpdateStatus(),
     this.gameInstall,
     this.gameInstallCandidates = const [],
     this.selectedModId,
@@ -84,6 +85,7 @@ class LauncherState {
   final String launcherLog;
   final DependencyResolutionResult resolution;
   final LauncherUpdateSettings launcherUpdates;
+  final LauncherUpdateStatus launcherUpdateStatus;
   final String? selectedModId;
   final String modSearch;
   final String? errorMessage;
@@ -213,6 +215,7 @@ class LauncherState {
     String? launcherLog,
     DependencyResolutionResult? resolution,
     LauncherUpdateSettings? launcherUpdates,
+    LauncherUpdateStatus? launcherUpdateStatus,
     String? selectedModId,
     bool clearSelectedMod = false,
     String? modSearch,
@@ -264,6 +267,7 @@ class LauncherState {
       launcherLog: launcherLog ?? this.launcherLog,
       resolution: resolution ?? this.resolution,
       launcherUpdates: launcherUpdates ?? this.launcherUpdates,
+      launcherUpdateStatus: launcherUpdateStatus ?? this.launcherUpdateStatus,
       selectedModId: clearSelectedMod
           ? null
           : selectedModId ?? this.selectedModId,

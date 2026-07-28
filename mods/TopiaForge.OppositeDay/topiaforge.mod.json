@@ -23,7 +23,10 @@
     "prompt-overrides",
     "gameplay"
   ],
-  "license": "NOASSERTION",
+  "license": "MIT",
+  "licenseFiles": [
+    "LICENSE"
+  ],
   "capabilities": [
     "prompt-overrides",
     "remote-ai"

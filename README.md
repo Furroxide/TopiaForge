@@ -12,9 +12,12 @@ Linux packages expose the launcher in `launcher/` and a root `topiaforge` CLI ex
 or macOS runtime payload, and lets you browse, install, enable/disable, and launch mods. The **Developer** tab is hidden by
 default -- turn it on under **Settings -> Developer mode** only if you build mods.
 
-For the initial release, launcher upgrades are manual: download the next signed platform package from the official
-GitHub Releases page. Automatic self-update is intentionally excluded until the client can verify owner-signed
-metadata and enforce bounded extraction independently of the update index.
+Prerelease launchers check the signed beta channel by default after a persisted
+cooldown. Updates are verified against embedded Ed25519 trust, downloaded and
+extracted within signed bounds, and replace the complete package only after
+explicit confirmation; a startup health handshake enables automatic rollback.
+Unsupported layouts use the verified manual GitHub Releases download. See
+[launcher updates](docs/LauncherUpdates.md).
 
 The current compatibility target is Robotopia build **2309**. The built-in registry initially carries verified
 first-party release artifacts only; community authors can use the documented self-hosted registry format while

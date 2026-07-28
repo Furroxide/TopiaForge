@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.launcher-update-v1.schema.json",
+  "title": "TopiaForge signed launcher update payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "formatVersion", "product", "version", "tag", "channel", "minimumUpdaterVersion", "releaseUrl", "platforms"],
+  "properties": {
+    "$schema": { "const": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.launcher-update-v1.schema.json" },
+    "formatVersion": { "const": 1 },
+    "product": { "const": "TopiaForge" },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
+    "tag": { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
+    "channel": { "enum": ["release", "beta"] },
+    "minimumUpdaterVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
+    "releaseUrl": { "type": "string", "pattern": "^https://github\\.com/furroxide/TopiaForge/releases/tag/" },
+    "platforms": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["windows-x64", "linux-x64", "macos-universal"],
+      "properties": {
+        "windows-x64": { "$ref": "#/$defs/artifact" },
+        "linux-x64": { "$ref": "#/$defs/artifact" },
+        "macos-universal": { "$ref": "#/$defs/artifact" }
+      }
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assetName", "url", "sha256", "size", "entryCount", "expandedSize", "installLayout"],
+      "properties": {
+        "assetName": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "pattern": "^https://github\\.com/furroxide/TopiaForge/releases/download/" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "size": { "type": "integer", "minimum": 1, "maximum": 536870912 },
+        "entryCount": { "type": "integer", "minimum": 1, "maximum": 20000 },
+        "expandedSize": { "type": "integer", "minimum": 1, "maximum": 2147483648 },
+        "installLayout": { "enum": ["portable-root", "app-bundle"] }
+      }
+    }
+  }
+}

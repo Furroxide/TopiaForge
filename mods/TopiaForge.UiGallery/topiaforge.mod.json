@@ -26,7 +26,10 @@
     "gallery",
     "sdk"
   ],
-  "license": "NOASSERTION",
+  "license": "MIT",
+  "licenseFiles": [
+    "LICENSE"
+  ],
   "capabilities": [
     "hud",
     "input"

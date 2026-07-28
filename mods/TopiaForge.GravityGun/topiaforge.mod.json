@@ -20,7 +20,10 @@
     "physics",
     "sdk-only"
   ],
-  "license": "NOASSERTION",
+  "license": "MIT",
+  "licenseFiles": [
+    "LICENSE"
+  ],
   "capabilities": [
     "input",
     "physics",

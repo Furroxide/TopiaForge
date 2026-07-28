@@ -185,10 +185,7 @@ void _coreCliTests(_CliTestHarness Function() currentHarness) {
         isNot(contains('io.github.furroxide.topiaforge.robotkit')),
       );
       // Likewise, declared capabilities must match what the scaffold actually reaches for.
-      expect(
-        manifest['capabilities'],
-        containsAll(['world-service', 'hud']),
-      );
+      expect(manifest['capabilities'], containsAll(['world-service', 'hud']));
       expect(manifest['capabilities'], isNot(contains('robot-spawning')));
       expect(manifest['worldGamemodes'], isNotEmpty);
 
