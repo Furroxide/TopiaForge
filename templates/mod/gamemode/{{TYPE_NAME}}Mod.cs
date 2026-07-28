@@ -1,87 +1,87 @@
-using System;
 using TopiaForge.Mods;
 
 namespace {{ASSEMBLY_NAME}}
 {
-    /// <summary>Registers a lifetime-owned gamemode and runs its active-session update loop.</summary>
+    /// <summary>Registers a lifetime-owned gamemode and runs one controller per active session.</summary>
     public sealed class {{TYPE_NAME}}Mod : TopiaForgeMod
     {
         public const string GamemodeId = "{{MOD_ID}}.mode";
 
-        private WorldSession? session;
+        private GamemodeHost<{{TYPE_NAME}}Session>? host;
 
         protected override void OnLoad()
         {
-            var worlds = Context.RequireExtension<IWorldGamemodeService>();
-            EnsureRegistered(worlds.RegisterGamemode(new GamemodeDefinition(
+            // GamemodeHost owns registration rollback, the session subscription and its lifetime-deferred
+            // unsubscribe, replay of a session that is already running, one-controller-per-session, and teardown.
+            var hosted = GamemodeHost<{{TYPE_NAME}}Session>.Create(
+                Context,
+                Context.RequireExtension<IWorldGamemodeService>(),
                 GamemodeId,
-                "{{DISPLAY_NAME}}",
-                "Custom gamemode scaffolded from the gamemode template.")));
-            EnsureRegistered(worlds.RegisterMenuEntry(new GamemodeMenuEntry(
-                "{{MOD_ID}}.menu",
-                "{{DISPLAY_NAME}}",
-                "Custom gamemode scaffolded from the gamemode template.",
-                GamemodeId,
-                WellKnownWorldIds.OpenSandboxWorld)));
-
-            worlds.SessionChanged += OnSessionChanged;
-            worlds.SessionEnded += OnSessionEnded;
-            Context.Lifetime.Defer(() =>
+                session => new {{TYPE_NAME}}Session(Context, session),
+                new GamemodeDefinition(
+                    GamemodeId,
+                    "{{DISPLAY_NAME}}",
+                    "Custom gamemode scaffolded from the gamemode template."),
+                new GamemodeMenuEntry(
+                    "{{MOD_ID}}.menu",
+                    "{{DISPLAY_NAME}}",
+                    "Custom gamemode scaffolded from the gamemode template.",
+                    GamemodeId,
+                    WellKnownWorldIds.OpenSandboxWorld));
+            if (!hosted.TryGetValue(out var gamemodeHost))
             {
-                worlds.SessionChanged -= OnSessionChanged;
-                worlds.SessionEnded -= OnSessionEnded;
-            });
-            Context.Events.SubscribeUpdate(OnUpdate);
+                Context.Logger.Warn("{{DISPLAY_NAME}} could not register: " + hosted.ErrorMessage);
+                return;
+            }
+
+            host = gamemodeHost;
+
+            // Actions are re-registered for every session, so this is declared once here rather than per session.
+            host.AddPauseAction(new WorldPauseAction(
+                "{{MOD_ID}}.restart",
+                "RESTART ROUND",
+                () => host?.Controller?.Restart(),
+                destructive: true));
+
             Context.Logger.Info("{{DISPLAY_NAME}} gamemode registered.");
         }
+    }
 
-        protected override void OnUnload()
+    /// <summary>Runs one round. Created when a session starts, disposed when it ends.</summary>
+    internal sealed class {{TYPE_NAME}}Session : System.IDisposable
+    {
+        private readonly IModContext context;
+        private readonly WorldSession session;
+        private readonly System.IDisposable updateSubscription;
+
+        public {{TYPE_NAME}}Session(IModContext context, WorldSession session)
         {
-            session = null;
+            this.context = context;
+            this.session = session;
+
+            // Subscribing here means the loop only runs during a session, and stops when this object is disposed.
+            updateSubscription = context.Events.SubscribeUpdate(OnUpdate);
+            context.Logger.Info("{{DISPLAY_NAME}} session started in world " + session.WorldId + ".");
         }
 
-        private void OnSessionChanged(WorldSession newSession)
+        public OperationResult<string> Restart()
         {
-            if (!string.Equals(newSession.GamemodeId, GamemodeId, StringComparison.Ordinal))
-            {
-                session = null;
-                return;
-            }
-
-            session = newSession;
-            Context.Logger.Info("{{DISPLAY_NAME}} session started in world " + newSession.WorldId + ".");
-
-            // RobotKit is already declared by this scaffold. Resolve it when your round needs to spawn or
-            // command robots: Context.RequireExtension<IRobotAgentService>().
+            // Reset round state here.
+            context.Ui.ShowToast("Round restarted.", UiTone.Warning);
+            return OperationResult<string>.Success("Round restarted.");
         }
 
-        private void OnSessionEnded(WorldSessionEnd end)
+        public void Dispose()
         {
-            if (session == null || !string.Equals(end.Session.GamemodeId, GamemodeId, StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            session = null;
-            Context.Logger.Info("{{DISPLAY_NAME}} session ended (" + end.Reason + ").");
+            updateSubscription.Dispose();
+            context.Logger.Info("{{DISPLAY_NAME}} session ended.");
         }
 
         private void OnUpdate(float deltaTime)
         {
-            if (session == null)
-            {
-                return;
-            }
-
-            // Per-frame gamemode logic (wave timers, win conditions, HUD updates) goes here.
-        }
-
-        private static void EnsureRegistered(OperationResult<IWorldRegistration> result)
-        {
-            if (!result.Succeeded)
-            {
-                throw new InvalidOperationException("Gamemode registration failed: " + result.ErrorMessage);
-            }
+            // Per-round logic (wave timers, win conditions, HUD updates) goes here.
+            // To spawn or command robots, run `topiaforge mod add robotkit` — it adds the package reference and
+            // the manifest dependency together — then resolve Context.RequireExtension<IRobotAgentService>().
         }
     }
 }
