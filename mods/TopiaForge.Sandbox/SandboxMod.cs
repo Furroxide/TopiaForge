@@ -27,14 +27,10 @@ namespace TopiaForge.Sandbox
                 });
 
         private SandboxConfig config = new SandboxConfig();
-        private IWorldGamemodeService? worlds;
-        private IRobotAgentService? robots;
-        private ICreatorContentService? creatorContent;
-        private ICreatorToolHostService? creatorRouter;
-        private SandboxController? controller;
-        private IDisposable? controllerLifetime;
+        private GamemodeHost<SandboxController>? host;
         private IDisposable? creatorHostLifetime;
-        private IDisposable? pauseActionLifetime;
+
+        private SandboxController? controller => host?.Controller;
 
         /// <inheritdoc />
         protected override void OnLoad()
@@ -42,45 +38,46 @@ namespace TopiaForge.Sandbox
             LoadConfig();
             RegisterCommands();
 
-            if (!Context.Extensions.TryGet<IWorldGamemodeService>(out var worldsService)
-                || worldsService == null)
+            if (!Context.TryGetExtension<IWorldGamemodeService>(out var worldsService))
             {
                 Context.Logger.Warn("The Worlds module is unavailable; Sandbox commands will stay inactive.");
                 return;
             }
-            worlds = worldsService;
 
-            if (!Context.Extensions.TryGet<IRobotAgentService>(out var robotService)
-                || robotService == null)
+            if (!Context.TryGetExtension<IRobotAgentService>(out var robotService))
             {
                 Context.Logger.Warn("RobotKit is unavailable; Sandbox cannot create safe robot entities.");
                 return;
             }
-            robots = robotService;
 
-            if (!Context.Extensions.TryGet<ICreatorContentService>(out var contentService)
-                || contentService == null
-                || !Context.Extensions.TryGet<ICreatorToolHostService>(out var routerService)
-                || routerService == null)
+            if (!Context.TryGetExtension<ICreatorContentService>(out var contentService)
+                || !Context.TryGetExtension<ICreatorToolHostService>(out var routerService))
             {
                 Context.Logger.Warn("Creator Content is unavailable; the shared F5 Sandbox workbench cannot start.");
                 return;
             }
-            creatorContent = contentService;
-            creatorRouter = routerService;
 
-            worldsService.SessionChanged += OnSessionChanged;
-            worldsService.SessionEnded += OnSessionEnded;
-            Context.Lifetime.Defer(() =>
+            // Sandbox attaches to the Worlds provider's built-in sandbox gamemode, so it publishes no definition
+            // or menu entry of its own — only the per-session controller.
+            var hosted = GamemodeHost<SandboxController>.Create(
+                Context,
+                worldsService,
+                GamemodeId,
+                session => CreateController(session, robotService, contentService, routerService));
+            if (!hosted.TryGetValue(out var gamemodeHost))
             {
-                worldsService.SessionChanged -= OnSessionChanged;
-                worldsService.SessionEnded -= OnSessionEnded;
-            });
-
-            if (worldsService.CurrentSession != null)
-            {
-                OnSessionChanged(worldsService.CurrentSession);
+                Context.Logger.Warn("Sandbox could not host the sandbox gamemode: " + hosted.ErrorMessage);
+                return;
             }
+
+            host = gamemodeHost;
+            host.AddPauseAction(new WorldPauseAction(
+                "sandbox-cleanup",
+                "CLEAN UP SANDBOX",
+                () => host?.Controller?.CleanUpEverything(),
+                closePauseMenu: true,
+                order: 0,
+                destructive: true));
 
             Context.Logger.Info("Sandbox V1 loaded with safe input, UI, physics, Worlds, and RobotKit services.");
         }
@@ -88,7 +85,44 @@ namespace TopiaForge.Sandbox
         /// <inheritdoc />
         protected override void OnUnload()
         {
-            StopController();
+            creatorHostLifetime?.Dispose();
+            creatorHostLifetime = null;
+        }
+
+        private SandboxController CreateController(
+            WorldSession session,
+            IRobotAgentService robotService,
+            ICreatorContentService contentService,
+            ICreatorToolHostService routerService)
+        {
+            var created = new SandboxController(
+                Context,
+                config,
+                robotService,
+                contentService,
+                routerService,
+                session.WorldId);
+
+            creatorHostLifetime?.Dispose();
+            creatorHostLifetime = null;
+            var registered = routerService.RegisterHost(new CreatorToolHostRegistrationRequest(
+                "sandbox",
+                "Creator Sandbox",
+                priority: 200,
+                created,
+                toggleBinding: string.Equals(config.SpawnMenuKey, "F5", StringComparison.OrdinalIgnoreCase)
+                    ? string.Empty
+                    : config.SpawnMenuKey));
+            if (registered.TryGetValue(out var hostRegistration))
+            {
+                creatorHostLifetime = hostRegistration;
+            }
+            else
+            {
+                Context.Logger.Warn("Sandbox F5 host registration failed: " + registered.ErrorMessage);
+            }
+
+            return created;
         }
 
         private void LoadConfig()
@@ -147,82 +181,6 @@ namespace TopiaForge.Sandbox
             {
                 Context.Logger.Warn("Could not register /" + definition.Name + ": " + result.ErrorMessage);
             }
-        }
-
-        private void OnSessionChanged(WorldSession session)
-        {
-            if (!string.Equals(session.GamemodeId, GamemodeId, StringComparison.OrdinalIgnoreCase))
-            {
-                StopController();
-                return;
-            }
-
-            if (robots == null || creatorContent == null || creatorRouter == null)
-            {
-                return;
-            }
-
-            StopController();
-            controller = new SandboxController(
-                Context,
-                config,
-                robots,
-                creatorContent,
-                creatorRouter,
-                session.WorldId);
-            controllerLifetime = Context.Lifetime.Track(controller);
-            var registered = creatorRouter.RegisterHost(new CreatorToolHostRegistrationRequest(
-                "sandbox",
-                "Creator Sandbox",
-                priority: 200,
-                controller,
-                toggleBinding: string.Equals(config.SpawnMenuKey, "F5", StringComparison.OrdinalIgnoreCase)
-                    ? string.Empty
-                    : config.SpawnMenuKey));
-            if (registered.TryGetValue(out var hostRegistration))
-            {
-                creatorHostLifetime = hostRegistration;
-            }
-            else
-            {
-                Context.Logger.Warn("Sandbox F5 host registration failed: " + registered.ErrorMessage);
-            }
-
-            if (Context.Extensions.TryGet<IWorldPauseMenuService>(out var pauseMenu)
-                && pauseMenu != null)
-            {
-                var result = pauseMenu.RegisterAction(new WorldPauseAction(
-                    "sandbox-cleanup",
-                    "CLEAN UP SANDBOX",
-                    () => controller?.CleanUpEverything(),
-                    closePauseMenu: true,
-                    order: 0,
-                    destructive: true));
-                if (result.TryGetValue(out var registration))
-                {
-                    pauseActionLifetime = registration;
-                }
-                else
-                {
-                    Context.Logger.Debug("Sandbox pause action unavailable: " + result.ErrorMessage);
-                }
-            }
-        }
-
-        private void OnSessionEnded(WorldSessionEnd ended)
-        {
-            StopController();
-        }
-
-        private void StopController()
-        {
-            pauseActionLifetime?.Dispose();
-            pauseActionLifetime = null;
-            creatorHostLifetime?.Dispose();
-            creatorHostLifetime = null;
-            controllerLifetime?.Dispose();
-            controllerLifetime = null;
-            controller = null;
         }
 
         private static OperationResult<string> ToCommand(OperationResult<bool> result, string success) =>
