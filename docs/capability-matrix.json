@@ -133,6 +133,7 @@
         "TopiaForge.Mods.Testing.FakeModEvents, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeSceneService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeWorldGamemodeService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeWorldPauseMenuService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeUgcLiveSyncService, TopiaForge.Mods.Testing"
       ],
       "acceptanceCases": [

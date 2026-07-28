@@ -82,7 +82,7 @@ namespace TopiaForge.ModManager.Tests
             var worlds = new FakeWorldGamemodeService(context.Lifetime);
             var robots = new FakeRobotKit(context.Lifetime);
             robots.Agents.AutoCompleteAgentMovement = false;
-            var pauseMenu = new TestWorldPauseMenuService(context.Lifetime);
+            var pauseMenu = new FakeWorldPauseMenuService(context.Lifetime);
             Assert(worlds.RegisterWorld(new WorldDefinition(
                     WellKnownWorldIds.OpenSandboxWorld,
                     "Open Sandbox",
