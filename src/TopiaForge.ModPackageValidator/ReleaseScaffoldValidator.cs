@@ -609,12 +609,17 @@ public static class ReleaseScaffoldValidator
         }
 
         var item = matching[0];
+        var enabledByDefault = !string.Equals(
+            manifest.Category,
+            "DevTool",
+            StringComparison.OrdinalIgnoreCase);
         if (GetNonEmptyString(item, "version") != manifest.Version ||
-            !IsBoolean(item, "enabled", true) ||
+            !IsBoolean(item, "enabled", enabledByDefault) ||
             !IsBoolean(item, "restartRequired", true) ||
             !IsBoolean(item, "uninstallPending", false))
         {
-            failures.Add(statePath + ": installed state is not active at " + manifest.Version);
+            failures.Add(
+                statePath + ": installed state does not match the default activation policy at " + manifest.Version);
         }
     }
 
