@@ -211,7 +211,7 @@ jobs:
       - name: Analyze and test shared UI
         working-directory: packages/launcher_ui
         run: |
-          flutter pub get --enforce-lockfile
+          flutter pub get
           dart format --output=none --set-exit-if-changed lib test
           flutter analyze
           flutter test
