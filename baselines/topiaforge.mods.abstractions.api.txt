@@ -110,6 +110,23 @@ type public readonly struct TopiaForge.Mods.GameTimeSample : System.ValueType, S
   property System.Single UnscaledDeltaTime { get; }
   property TopiaForge.Mods.GameLoopPhase Phase { get; }
 
+type public sealed class TopiaForge.Mods.GameplayPause : System.Object, System.IDisposable
+  constructor .ctor(TopiaForge.Mods.IModContext context, System.String usage, System.Func<System.String, TopiaForge.Mods.OperationResult<TopiaForge.Mods.IGameplayLease>>? preferred = null, System.String diagnosticCode = "", System.Single retrySeconds = 0.5)
+  field const System.Single DefaultRetrySeconds = 0.5
+  method System.Void Release()
+  method System.Void Request()
+  method System.Void Tick(System.Single unscaledDeltaTime)
+  method [virtual,final,newslot] System.Void Dispose()
+  property System.Boolean IsActive { get; }
+  property System.Boolean IsRetrying { get; }
+  property TopiaForge.Mods.GameplayPauseKind Kind { get; }
+
+type public enum TopiaForge.Mods.GameplayPauseKind : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.GameplayPauseKind None = 0 (None)
+  field const TopiaForge.Mods.GameplayPauseKind PlayerControl = 2 (PlayerControl)
+  field const TopiaForge.Mods.GameplayPauseKind Preferred = 1 (Preferred)
+
 type public sealed class TopiaForge.Mods.HeldItemSnapshot : System.Object
   constructor .ctor(System.String itemId, TopiaForge.Mods.IEntity entity)
   property System.String ItemId { get; }
@@ -173,6 +190,9 @@ type public interface TopiaForge.Mods.IGameTime
   property TopiaForge.Mods.GameTimeSample Fixed { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.GameTimeSample Frame { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.GameTimeSample Late { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IGameplayLease : System.IDisposable
+  property System.Boolean IsActive { get [abstract,virtual,newslot]; }
 
 type public interface TopiaForge.Mods.IInputAction : System.IDisposable
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Rebind(System.Collections.Generic.IEnumerable<TopiaForge.Mods.InputBinding> bindings)
@@ -296,8 +316,7 @@ type public interface TopiaForge.Mods.IPhysicsService
   method [abstract,virtual,newslot] System.Boolean TrySphereCast(TopiaForge.Mods.Ray ray, System.Single radius, System.Single maximumDistance, out TopiaForge.Mods.PhysicsHit? hit)
   method [abstract,virtual,newslot] System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.IEntity> Overlap(TopiaForge.Mods.Bounds bounds, System.Int32 maximumResults = 64)
 
-type public interface TopiaForge.Mods.IPlayerControlLease : System.IDisposable
-  property System.Boolean IsActive { get [abstract,virtual,newslot]; }
+type public interface TopiaForge.Mods.IPlayerControlLease : System.IDisposable, TopiaForge.Mods.IGameplayLease
   property System.String Reason { get [abstract,virtual,newslot]; }
 
 type public interface TopiaForge.Mods.IPrefabAsset : System.IDisposable
