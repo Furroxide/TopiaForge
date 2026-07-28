@@ -8,8 +8,6 @@ namespace TopiaForge.Zombies
     /// <summary>Optional, explicitly enabled RobotKit brain conversation with deterministic game-state gates.</summary>
     internal sealed partial class ZombiesConversationController : IDisposable
     {
-        private const float PauseRetrySeconds = 0.5f;
-
         private readonly IModContext context;
         private readonly ZombiesConfig config;
         private readonly ITimeControlService? time;
@@ -17,23 +15,22 @@ namespace TopiaForge.Zombies
         private readonly IPlayerDialogueInputService? dialogueInput;
         private readonly Action<ZombieEnemy, ConversationDecision, float> resolved;
         private readonly IInputAction? voiceAction;
+        private readonly GameplayPause pause;
         private IUiSurface? surface;
         private IRobotConversation? conversation;
         private ZombieEnemy? target;
-        private ITimeLease? freeze;
-        private IPlayerControlLease? control;
         private IVoiceCapture? voiceCapture;
         private CancellationTokenSource? cancellation;
-        private Task<OperationResult<RobotConversationTurnResult>>? turnTask;
-        private Task<OperationResult<VoiceTranscriptResult>>? voiceTask;
+        private readonly PendingOperation<RobotConversationTurnResult> turnOperation =
+            new PendingOperation<RobotConversationTurnResult>();
+        private readonly PendingOperation<VoiceTranscriptResult> voiceOperation =
+            new PendingOperation<VoiceTranscriptResult>();
         private string draft = string.Empty;
         private string transcript = string.Empty;
         private float disposition;
         private float remainingSeconds;
-        private float pauseRetryTimer;
         private int lastDisplayedSecond = -1;
         private bool voiceMode;
-        private bool pauseFailureReported;
         private bool suppressResolution;
         private bool disposed;
 
@@ -47,6 +44,11 @@ namespace TopiaForge.Zombies
             this.config = config ?? throw new ArgumentNullException(nameof(config));
             this.time = time;
             this.resolved = resolved ?? throw new ArgumentNullException(nameof(resolved));
+            pause = new GameplayPause(
+                context,
+                "zombies-jack-in",
+                time.AsPauseSource(),
+                "ZOMBIES_JACK_IN_PAUSE_FAILED");
             context.Extensions.TryGet<IRobotConversationService>(out service);
             context.Extensions.TryGet<IPlayerDialogueInputService>(out dialogueInput);
             if (config.OverrideEnabled
@@ -67,7 +69,7 @@ namespace TopiaForge.Zombies
         public bool IsOpen => surface != null;
 
         /// <summary>True only when Chronos owns an actual world freeze, not merely the player-control fallback.</summary>
-        public bool IsWorldFrozen => freeze?.IsActive == true;
+        public bool IsWorldFrozen => pause.Kind == GameplayPauseKind.Preferred;
 
         public bool IsAvailable => !disposed
             && config.ConversationEnabled
@@ -121,7 +123,7 @@ namespace TopiaForge.Zombies
             conversation = handle;
             surface = window;
             cancellation = CancellationTokenSource.CreateLinkedTokenSource(context.Lifetime.StoppingToken);
-            disposition = ConversationDirector.SeedDisposition(enemy.Mind, Tuning());
+            disposition = ConversationDirector.SeedDisposition(enemy.Mind, enemy.Archetype.BaseResistance, Tuning());
             remainingSeconds = config.ConversationWindowSeconds;
             transcript = "DIRECT CHANNEL ESTABLISHED. The horde is frozen, but pressure is building.";
             draft = string.Empty;
@@ -135,7 +137,7 @@ namespace TopiaForge.Zombies
                 return OperationResult<bool>.Failure(built.ErrorCode, built.ErrorMessage);
             }
 
-            AcquirePause();
+            pause.Request();
             window.Show();
             return OperationResult<bool>.Success(true);
         }
@@ -155,7 +157,7 @@ namespace TopiaForge.Zombies
                 return;
             }
 
-            EnsurePause(controlDelta);
+            pause.Tick(controlDelta);
             remainingSeconds = Math.Max(0f, remainingSeconds - Math.Max(0f, controlDelta));
             ProcessVoiceInput();
             ProcessVoiceTask();
@@ -199,12 +201,13 @@ namespace TopiaForge.Zombies
 
             disposed = true;
             Close();
+            pause.Dispose();
             voiceAction?.Dispose();
         }
 
         private void Submit()
         {
-            if (conversation == null || turnTask != null || voiceTask != null
+            if (conversation == null || turnOperation.IsInFlight || voiceOperation.IsInFlight
                 || string.IsNullOrWhiteSpace(draft))
             {
                 return;
@@ -215,7 +218,10 @@ namespace TopiaForge.Zombies
             transcript += "\n\nYOU > " + line;
             try
             {
-                turnTask = conversation.SubmitAsync(line, cancellation?.Token ?? default);
+                turnOperation.Begin(
+                    token => conversation.SubmitAsync(line, token),
+                    context.Lifetime.StoppingToken,
+                    (float)context.Time.Frame.ElapsedTime);
                 Rebuild();
             }
             catch (Exception exception)
@@ -227,15 +233,18 @@ namespace TopiaForge.Zombies
 
         private void ProcessTurnTask()
         {
-            if (turnTask == null || !turnTask.IsCompleted)
+            // The conversation window is the deadline; a turn that outlives it resolves through the same
+            // deterministic fallback as a broken link rather than leaving the window stuck on "thinking".
+            var state = turnOperation.Poll(
+                (float)context.Time.Frame.ElapsedTime,
+                Math.Max(0.1f, remainingSeconds),
+                out var result);
+            if (state == PendingOperationState.Waiting || state == PendingOperationState.Idle)
             {
                 return;
             }
 
-            var task = turnTask;
-            turnTask = null;
-            var result = Complete(task);
-            if (!result.TryGetValue(out var turn) || turn == null)
+            if (state != PendingOperationState.Completed || !result.TryGetValue(out var turn) || turn == null)
             {
                 context.Ui.ShowToast("Live brain link lost; deterministic uplink took over.", UiTone.Warning);
                 Finish(ConversationDecision.Unknown);
@@ -275,7 +284,7 @@ namespace TopiaForge.Zombies
 
         private void ProcessVoiceInput()
         {
-            if (!voiceMode || dialogueInput?.IsVoiceAvailable != true || turnTask != null || voiceTask != null)
+            if (!voiceMode || dialogueInput?.IsVoiceAvailable != true || turnOperation.IsInFlight || voiceOperation.IsInFlight)
             {
                 return;
             }
@@ -301,7 +310,10 @@ namespace TopiaForge.Zombies
                 var capture = voiceCapture;
                 try
                 {
-                    voiceTask = capture.StopAsync(cancellation?.Token ?? default);
+                    voiceOperation.Begin(
+                        token => capture.StopAsync(token),
+                        context.Lifetime.StoppingToken,
+                        (float)context.Time.Frame.ElapsedTime);
                 }
                 catch (Exception exception)
                 {
@@ -316,14 +328,15 @@ namespace TopiaForge.Zombies
 
         private void ProcessVoiceTask()
         {
-            if (voiceTask == null || !voiceTask.IsCompleted)
+            var state = voiceOperation.Poll(
+                (float)context.Time.Frame.ElapsedTime,
+                Math.Max(0.1f, remainingSeconds),
+                out var result);
+            if (state == PendingOperationState.Waiting || state == PendingOperationState.Idle)
             {
                 return;
             }
 
-            var task = voiceTask;
-            voiceTask = null;
-            var result = Complete(task);
             voiceCapture?.Dispose();
             voiceCapture = null;
             if (result.TryGetValue(out var transcriptResult)
@@ -359,19 +372,14 @@ namespace TopiaForge.Zombies
             cancellation = null;
             voiceCapture?.Dispose();
             voiceCapture = null;
-            voiceTask = null;
-            turnTask = null;
+            voiceOperation.Cancel();
+            turnOperation.Cancel();
             conversation?.Dispose();
             conversation = null;
             var window = surface;
             surface = null;
             window?.Dispose();
-            freeze?.Dispose();
-            freeze = null;
-            control?.Dispose();
-            control = null;
-            pauseRetryTimer = 0f;
-            pauseFailureReported = false;
+            pause.Release();
             target = null;
             lastDisplayedSecond = -1;
         }
@@ -385,17 +393,5 @@ namespace TopiaForge.Zombies
             config.FleeNudge,
             config.RefuseNudge,
             config.EnrageDispositionFloor);
-
-        private static OperationResult<T> Complete<T>(Task<OperationResult<T>> task) where T : notnull
-        {
-            try
-            {
-                return task.GetAwaiter().GetResult();
-            }
-            catch (Exception exception)
-            {
-                return OperationResult<T>.Failure(ModErrorCode.External, exception.Message);
-            }
-        }
     }
 }

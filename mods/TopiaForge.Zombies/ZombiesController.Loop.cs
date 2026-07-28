@@ -109,7 +109,7 @@ namespace TopiaForge.Zombies
                 }
 
                 if (phase == ZombiesPhase.Wave
-                    && pendingSpawns <= 0 && spawnSearch == null && CountActiveNonAllies() == 0)
+                    && pendingSpawns <= 0 && !spawnSearch.IsInFlight && CountActiveNonAllies() == 0)
                 {
                     BeginInterWave();
                 }

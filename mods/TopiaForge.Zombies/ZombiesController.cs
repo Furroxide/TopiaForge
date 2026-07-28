@@ -12,8 +12,15 @@ namespace TopiaForge.Zombies
     {
         private const int RandomSeed = 1949;
         private const int MaximumConsecutiveSpawnFailures = 10;
+
+        /// <summary>
+        /// How long the main-menu scene load may run before the run is handed back to the player. A stalled load
+        /// would otherwise leave the world frozen behind a window with no controls, and Restart refuses this phase.
+        /// Not configurable: a player cannot meaningfully tune a soft-lock deadline.
+        /// </summary>
+        private const float ReturnToMenuTimeoutSeconds = 30f;
+
         private const float StrandedTimeoutSeconds = 12f;
-        private const float GameOverControlRetrySeconds = 0.5f;
 
         private readonly IModContext context;
         private readonly ZombiesConfig config;
@@ -32,17 +39,17 @@ namespace TopiaForge.Zombies
         private readonly IInputAction? overrideAction;
         private readonly IInputAction? broadcastAction;
         private readonly IInputAction? shopAction;
+        private readonly GameplayPause gameOverPause;
+
+        private readonly PendingOperation<ReachableSpawnResult> spawnSearch =
+            new PendingOperation<ReachableSpawnResult>();
+        private readonly PendingOperation<SceneSnapshot> returnOperation =
+            new PendingOperation<SceneSnapshot>();
 
         private Random random = new Random(RandomSeed);
-        private CancellationTokenSource? spawnCancellation;
-        private CancellationTokenSource? returnCancellation;
-        private Task<OperationResult<ReachableSpawnResult>>? spawnSearch;
-        private Task<OperationResult<SceneSnapshot>>? returnTask;
         private IEntity? playerEntity;
         private ITimeLease? superhotDriver;
         private ITimeLease? playerExemption;
-        private ITimeLease? gameOverFreeze;
-        private IPlayerControlLease? gameOverControl;
         private PlayerHealthSnapshot? startingNativeHealth;
         private IEntity? startingNativeHealthEntity;
         private ZombiesPhase phase = ZombiesPhase.WaitingForWorld;
@@ -57,7 +64,6 @@ namespace TopiaForge.Zombies
         private float uplinkRegenTimer;
         private float comboTimer;
         private float chargeSeconds;
-        private float gameOverControlRetryTimer;
         private int wave;
         private int pendingSpawns;
         private int packRemaining;
@@ -72,7 +78,6 @@ namespace TopiaForge.Zombies
         private bool usingPositionalPlayerFallback;
         private bool nativeHealthWarningLogged;
         private bool spawnFailureWarningLogged;
-        private bool gameOverControlFailureReported;
         private bool hordeMotionSuspendedForConversation;
         private bool disposed;
 
@@ -90,11 +95,16 @@ namespace TopiaForge.Zombies
             this.returnToMenu = returnToMenu ?? throw new ArgumentNullException(nameof(returnToMenu));
             roster = new ZombieRoster(config);
 
-            if (context.Extensions.TryGet<ITimeControlService>(out var timeService)
-                && timeService != null)
+            if (context.TryGetExtension<ITimeControlService>(out var timeService))
             {
                 time = timeService;
             }
+
+            gameOverPause = new GameplayPause(
+                context,
+                "zombies-game-over",
+                time.AsPauseSource(),
+                "ZOMBIES_GAME_OVER_CONTROL_FAILED");
 
             ZombiesHudPresenter? createdHud = null;
             ZombiesGameOverPresenter? createdGameOver = null;
@@ -213,8 +223,10 @@ namespace TopiaForge.Zombies
 
             disposed = true;
             updateSubscription.Dispose();
-            CancelSpawnSearch();
-            CancelReturnToMenu();
+            // Forget rather than Cancel: the update loop is gone, so nothing would ever drain these. The mod
+            // lifetime is stopping, so the runtime owns whatever the SDK still hands back.
+            spawnSearch.Forget();
+            returnOperation.Forget();
             shop.Dispose();
             conversation.Dispose();
             hordeMotionSuspendedForConversation = false;
@@ -223,7 +235,7 @@ namespace TopiaForge.Zombies
             overrideAction?.Dispose();
             broadcastAction?.Dispose();
             shopAction?.Dispose();
-            ReleaseGameOverControl();
+            gameOverPause.Dispose();
             superhotDriver?.Dispose();
             superhotDriver = null;
             playerExemption?.Dispose();
