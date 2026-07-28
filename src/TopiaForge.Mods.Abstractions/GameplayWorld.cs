@@ -274,11 +274,8 @@ namespace TopiaForge.Mods
     }
 
     /// <summary>A reversible lease over normal player movement and look controls.</summary>
-    public interface IPlayerControlLease : IDisposable
+    public interface IPlayerControlLease : IGameplayLease
     {
-        /// <summary>Gets whether this lease has not yet been released.</summary>
-        bool IsActive { get; }
-
         /// <summary>Gets the diagnostic reason supplied when the lease was acquired.</summary>
         string Reason { get; }
     }

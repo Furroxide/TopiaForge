@@ -105,11 +105,8 @@ namespace TopiaForge.Mods
     }
 
     /// <summary>A ref-counted time effect. Dispose (or <see cref="Release"/>) to remove it and restore the prior state. Idempotent.</summary>
-    public interface ITimeLease : IDisposable
+    public interface ITimeLease : IGameplayLease
     {
-        /// <summary><c>true</c> until released.</summary>
-        bool IsActive { get; }
-
         /// <summary>Removes this effect. Same as <see cref="IDisposable.Dispose"/>; safe to call more than once.</summary>
         void Release();
     }
@@ -281,6 +278,47 @@ namespace TopiaForge.Mods
             {
                 throw new ArgumentOutOfRangeException(parameter);
             }
+        }
+    }
+
+    /// <summary>Adapts time control into the core <see cref="GameplayPause"/> primitive.</summary>
+    public static class TimeControlPauseExtensions
+    {
+        /// <summary>
+        /// Returns a pause source that hard-freezes the world, for use as the preferred hold of a
+        /// <see cref="GameplayPause"/>.
+        /// </summary>
+        /// <param name="service">
+        /// The time-control service, or <c>null</c> when Chronos is not a dependency. A null or unavailable service
+        /// yields a typed failure, so the pause degrades to suspending player control instead.
+        /// </param>
+        /// <param name="suspendPlayer">
+        /// Also take the shared player-control lease, so movement and look suspension composes with other mods.
+        /// </param>
+        /// <returns>A source usable as the preferred hold of a <see cref="GameplayPause"/>.</returns>
+        /// <example>
+        /// <code>
+        /// var pause = new GameplayPause(Context, "mymod-shop", time.AsPauseSource(), "MYMOD_SHOP_PAUSE_FAILED");
+        /// </code>
+        /// </example>
+        public static Func<string, OperationResult<IGameplayLease>> AsPauseSource(
+            this ITimeControlService? service,
+            bool suspendPlayer = true)
+        {
+            return usage =>
+            {
+                if (service == null || !service.IsAvailable)
+                {
+                    return OperationResult<IGameplayLease>.Failure(
+                        ModErrorCode.Unavailable,
+                        "Time control is unavailable.");
+                }
+
+                var frozen = service.Freeze(usage, suspendPlayer);
+                return frozen.TryGetValue(out var lease)
+                    ? OperationResult<IGameplayLease>.Success(lease)
+                    : OperationResult<IGameplayLease>.Failure(frozen.ErrorCode, frozen.ErrorMessage);
+            };
         }
     }
 }
