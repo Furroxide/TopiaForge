@@ -44,7 +44,7 @@ final class TopiaForgeRuntimeAssembly {
 
 /// A system assembly supplied by Robotopia's pinned Unity/Mono player profile.
 final class TopiaForgeRuntimeProfileAssembly {
-  /// Creates an exact build-2227 player-profile requirement.
+  /// Creates an exact build-2309 player-profile requirement.
   const TopiaForgeRuntimeProfileAssembly({
     required this.fileName,
     required this.assemblyVersion,
@@ -54,10 +54,10 @@ final class TopiaForgeRuntimeProfileAssembly {
   /// File name in Robotopia's Managed directory.
   final String fileName;
 
-  /// Managed assembly identity shipped by build 2227.
+  /// Managed assembly identity shipped by build 2309.
   final String assemblyVersion;
 
-  /// SHA-256 shared by the pinned Windows and macOS build-2227 archives.
+  /// SHA-256 shared by the pinned Windows and macOS build-2309 archives.
   final String sha256;
 }
 
@@ -107,7 +107,7 @@ final topiaForgeRuntimeLoaderDlls = List<String>.unmodifiable(
   topiaForgeRuntimeLoaderAssemblies.map((assembly) => assembly.fileName),
 );
 
-/// Transitive metadata-reader dependencies supplied by Robotopia build 2227.
+/// Transitive metadata-reader dependencies supplied by Robotopia build 2309.
 const topiaForgeRuntimeProfileAssemblies = <TopiaForgeRuntimeProfileAssembly>[
   TopiaForgeRuntimeProfileAssembly(
     fileName: 'System.Buffers.dll',

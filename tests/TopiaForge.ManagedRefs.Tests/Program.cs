@@ -102,7 +102,7 @@ internal static class Program
         using var workspace = new TemporaryWorkspace();
         var path = workspace.WriteConfiguration(WindowsSha, MacSha);
         var configuration = PublicBuildConfiguration.Load(path);
-        Assert(configuration.BuildId == 2227, "Build ID was not loaded.");
+        Assert(configuration.BuildId == 2309, "Build ID was not loaded.");
         Assert(configuration.Archives.Count == 2, "Archive count was not enforced.");
 
         var json = File.ReadAllText(path).Replace(
@@ -378,7 +378,7 @@ internal static class Program
             new MarkerExtractor(),
             output: output);
         await restore.RunAsync().ConfigureAwait(false);
-        var expected = $"robotopia-managed-refs-Linux-public-2227-mac-{MacSha}";
+        var expected = $"robotopia-managed-refs-Linux-public-2309-mac-{MacSha}";
         Assert(output.ToString().Trim() == expected, "Cache key stdout changed.");
         Assert(File.ReadAllText(githubOutput).Trim() == $"key={expected}", "GITHUB_OUTPUT cache key changed.");
 
@@ -657,10 +657,10 @@ internal static class Program
     }
 
     private static string CreateManifestJson(
-        int buildId = 2227,
+        int buildId = 2309,
         bool includeMac = true,
         string windowsSha = WindowsSha,
-        string macPath = "Robotopia-v02227-Mac.7z")
+        string macPath = "Robotopia-v02309-Mac.7z")
     {
         var macEntry = includeMac
             ? $$"""
@@ -675,7 +675,7 @@ internal static class Program
         {
           "id": {{buildId}},
           "windows": {
-            "path": "Robotopia-v02227-Win64.7z",
+            "path": "Robotopia-v02309-Win64.7z",
             "sha256": "{{windowsSha}}"
           }{{macEntry}}
         }

@@ -10,7 +10,7 @@
   "dependencies": { "fixtures.required": ">=1.0.0 <2.0.0" },
   "optionalDependencies": { "fixtures.optional": "*" },
   "loadBefore": ["fixtures.later"],
-  "supportedGameVersionRange": "0.0.2227",
+  "supportedGameVersionRange": "0.0.2309",
   "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
   "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
   "capabilities": ["input"],

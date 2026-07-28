@@ -227,7 +227,7 @@ class _InstallVerificationFixture {
     File(p.join(game.path, 'Robotopia.exe')).writeAsStringSync('');
     File(
       p.join(game.path, 'installed-build.json'),
-    ).writeAsStringSync('{"id":2227}');
+    ).writeAsStringSync('{"id":2309}');
     final managed = Directory(p.join(game.path, 'Robotopia_Data', 'Managed'))
       ..createSync(recursive: true);
     File(p.join(managed.path, 'UnityEngine.dll')).writeAsStringSync('');

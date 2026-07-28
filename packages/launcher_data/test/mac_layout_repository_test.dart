@@ -21,7 +21,7 @@ void main() {
     _createMacGame(launcherDir);
     File(
       p.join(launcherDir.path, 'installed-build.json'),
-    ).writeAsStringSync('{"id":"2227"}');
+    ).writeAsStringSync('{"id":"2309"}');
     _createRuntimeSources(repoRoot);
     repository = LocalLauncherRepository(
       dataRoot: p.join(root.path, 'data'),
@@ -54,8 +54,8 @@ void main() {
     // The bundle fixture includes the managed assemblies, so no warning.
     expect(install.issues.where((issue) => issue.isBlocking), isEmpty);
     expect(install.bepInExStatus, ComponentState.missing);
-    expect(install.gameVersion, '0.0.2227');
-    expect(install.gameVersionLabel, 'build 2227');
+    expect(install.gameVersion, '0.0.2309');
+    expect(install.gameVersionLabel, 'build 2309');
   });
 
   test('prefers a bundle marker over the launcher-directory marker', () async {

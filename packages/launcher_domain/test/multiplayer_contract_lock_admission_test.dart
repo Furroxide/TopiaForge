@@ -7,7 +7,7 @@ void main() {
     final report = const MultiplayerAdmissionPlanner().evaluate(
       server: MultiplayerAdmissionProfile(
         peerId: 'server',
-        gameBuild: '0.0.2227',
+        gameBuild: '0.0.2309',
         topiaForgeProtocolVersion: '1.0.0',
         topiaForgePeerVersionRange: '>=1.0.0 <2.0.0',
         mods: [
@@ -30,7 +30,7 @@ void main() {
       ),
       client: MultiplayerAdmissionProfile(
         peerId: 'client',
-        gameBuild: '0.0.2227',
+        gameBuild: '0.0.2309',
         topiaForgeProtocolVersion: '1.0.0',
         topiaForgePeerVersionRange: '>=1.0.0 <2.0.0',
         mods: [],

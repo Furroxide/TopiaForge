@@ -90,7 +90,7 @@ namespace TopiaForge.ModManager.Tests
                 Version = "1.0.0",
                 EntryAssembly = EntryAssembly,
                 EntryType = "TopiaForge.ValidTestMod.ValidMod",
-                SupportedGameVersionRange = "0.0.2227",
+                SupportedGameVersionRange = "0.0.2309",
                 SupportedLoaderVersionRange = ">=1.0.0-rc.1 <2.0.0",
                 SupportedSdkVersionRange = ">=1.0.0-rc.1 <2.0.0",
                 ApiAssemblies = { ApiAssembly }

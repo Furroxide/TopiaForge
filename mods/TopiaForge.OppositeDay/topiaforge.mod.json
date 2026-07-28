@@ -13,7 +13,7 @@
   "dependencies": {
     "io.github.furroxide.topiaforge.prompts": ">=1.0.0-rc.1 <2.0.0"
   },
-  "supportedGameVersionRange": "0.0.2227",
+  "supportedGameVersionRange": "0.0.2309",
   "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
   "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
   "category": "Gameplay",

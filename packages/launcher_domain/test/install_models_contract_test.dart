@@ -6,11 +6,11 @@ void main() {
     test('round-trips a canonical optional version', () {
       final status = GameCompatStatus.fromJson({
         'status': 'ok',
-        'gameVersion': '0.0.2227',
+        'gameVersion': '0.0.2309',
       });
 
-      expect(status.gameVersion, '0.0.2227');
-      expect(status.toJson()['gameVersion'], '0.0.2227');
+      expect(status.gameVersion, '0.0.2309');
+      expect(status.toJson()['gameVersion'], '0.0.2309');
     });
 
     test('normalizes missing, empty, and invalid values to null', () {

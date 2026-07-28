@@ -7,14 +7,14 @@ void main() {
       final constrained = _installed(
         _manifest(
           'constrained.mod',
-          gameVersionRange: VersionRange.parse('0.0.2227'),
+          gameVersionRange: VersionRange.parse('0.0.2309'),
         ),
       );
       const planner = DependencyPlanner();
 
       final compatible = planner.resolveInstalled(
         [constrained],
-        gameVersion: '0.0.2227',
+        gameVersion: '0.0.2309',
         requireKnownGameVersion: true,
       );
       final incompatible = planner.resolveInstalled(
@@ -31,7 +31,7 @@ void main() {
       expect(unknown.orderedMods, isEmpty);
       expect(
         unknown.issues.map((issue) => issue.message).join(' '),
-        contains('known Robotopia game build'),
+        contains('could not verify the installed build'),
       );
     });
 

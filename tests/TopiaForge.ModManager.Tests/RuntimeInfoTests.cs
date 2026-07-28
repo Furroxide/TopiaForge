@@ -9,7 +9,7 @@ namespace TopiaForge.ModManager.Tests
     {
         public static void Run()
         {
-            var runtime = new RuntimeInfo("0.0.2227");
+            var runtime = new RuntimeInfo("0.0.2309");
             runtime.ConfigureProviders(Array.Empty<ModPackage>());
             Assert(runtime.ProviderVersions.ContainsKey("topiaforge.core"),
                 "runtime metadata should always expose the manager-owned core provider version");
@@ -75,7 +75,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static void TestLoadedButUnavailableProvider(ModPackage package, ModManifest manifest)
         {
-            var runtime = new RuntimeInfo("0.0.2227");
+            var runtime = new RuntimeInfo("0.0.2309");
             var registry = new ModServiceRegistry();
             var lifetime = new FakeModLifetime();
             var agents = new FakeRobotAgentService(lifetime)

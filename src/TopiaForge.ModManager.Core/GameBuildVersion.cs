@@ -5,7 +5,7 @@ namespace TopiaForge.ModManager.Core
 {
     /// <summary>
     /// Converts Robotopia's monotonically increasing launcher build id into the SemVer value used by
-    /// manifest compatibility ranges. Build 2227 is represented as 0.0.2227. This type is deliberately
+    /// manifest compatibility ranges. Build 2309 is represented as 0.0.2309. This type is deliberately
     /// filesystem- and Unity-free so every runtime and launcher implementation can share the same rule.
     /// </summary>
     public static class GameBuildVersion

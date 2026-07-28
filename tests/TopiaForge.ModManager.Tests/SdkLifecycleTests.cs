@@ -150,13 +150,13 @@ namespace TopiaForge.ModManager.Tests
                 Path.Combine(root, "package"),
                 logger,
                 new ModServiceRegistry(),
-                new RuntimeInfo("0.0.2227"));
+                new RuntimeInfo("0.0.2309"));
 
             Assert(context.Identity.Id == "example.lifecycle" &&
                    context.Identity.Version.ToString() == "1.2.3-beta.1+test",
                 "context identity should preserve complete manifest identity");
             Assert(context.Runtime.TryGetGameVersion(out var gameVersion) &&
-                   gameVersion.ToString() == "0.0.2227" &&
+                   gameVersion.ToString() == "0.0.2309" &&
                    context.Runtime.RuntimeIdentifier.Contains("-", StringComparison.Ordinal),
                 "context should expose real runtime metadata");
             Assert(!context.LocalPlayer.TryGetSnapshot(out _)

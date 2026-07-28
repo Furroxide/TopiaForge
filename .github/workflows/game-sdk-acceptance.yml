@@ -34,11 +34,11 @@ env:
 
 jobs:
   windows:
-    name: Windows build-2227 acceptance
+    name: Windows build-2309 acceptance
     if: >-
       github.ref == 'refs/heads/main' &&
       (inputs.platform == 'windows' || inputs.platform == 'both')
-    runs-on: [self-hosted, Windows, X64, topiaforge-game-build-2227]
+    runs-on: [self-hosted, Windows, X64, topiaforge-game-build-2309]
     timeout-minutes: 45
     environment:
       name: game-acceptance
@@ -142,11 +142,11 @@ jobs:
           retention-days: 30
 
   linux-proton:
-    name: Linux/Proton build-2227 acceptance
+    name: Linux/Proton build-2309 acceptance
     if: >-
       github.ref == 'refs/heads/main' &&
       (inputs.platform == 'linux-proton' || inputs.platform == 'both')
-    runs-on: [self-hosted, Linux, X64, topiaforge-game-build-2227, proton]
+    runs-on: [self-hosted, Linux, X64, topiaforge-game-build-2309, proton]
     timeout-minutes: 45
     environment:
       name: game-acceptance

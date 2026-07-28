@@ -167,7 +167,7 @@ namespace TopiaForge.ModRuntime.Tests
                     Paths,
                     Logger,
                     new ManifestValidationContext(
-                        "0.0.2227",
+                        "0.0.2309",
                         "1.0.0",
                         "1.0.0",
                         platform: "windows",

@@ -3,10 +3,10 @@
   "requiredLifecycleCycles": 10,
   "markerPrefix": "TF-ACCEPT",
   "creatorAcceptance": {
-    "gameBuild": "2227",
+    "gameBuild": "2309",
     "evidenceMode": "manual-required",
     "minimumLifecycleCycles": 10,
-    "description": "Creator workbench checks require an authorized interactive build-2227 run. They are recorded separately from automatic TF-ACCEPT markers so synthetic or source-only tests cannot claim native game coverage.",
+    "description": "Creator workbench checks require an authorized interactive build-2309 run. They are recorded separately from automatic TF-ACCEPT markers so synthetic or source-only tests cannot claim native game coverage.",
     "cases": [
       {
         "id": "creator.f5-routing-and-session",
@@ -14,7 +14,7 @@
       },
       {
         "id": "creator.catalog-items-ugc-and-robots",
-        "description": "The catalog spawns curated build-2227 items, UGC props, and every RobotKit robot type; search, kind filters, duplicate, transform, remove, undo, and End Session cleanup remain usable."
+        "description": "The catalog spawns curated build-2309 items, UGC props, and every RobotKit robot type; search, kind filters, duplicate, transform, remove, undo, and End Session cleanup remain usable."
       },
       {
         "id": "creator.personality-and-location-restore",

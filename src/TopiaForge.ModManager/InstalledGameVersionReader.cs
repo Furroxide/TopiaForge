@@ -109,7 +109,11 @@ namespace TopiaForge.ModManager
             var root = new DirectoryInfo(Path.GetFullPath(gameRoot));
             var roots = new List<string> { root.FullName };
 
-            if (root.Name.EndsWith(".app", StringComparison.OrdinalIgnoreCase) && root.Parent != null)
+            if (root.Name.Equals("Robotopia", StringComparison.OrdinalIgnoreCase) && root.Parent != null)
+            {
+                roots.Add(root.Parent.FullName);
+            }
+            else if (root.Name.EndsWith(".app", StringComparison.OrdinalIgnoreCase) && root.Parent != null)
             {
                 roots.Add(root.Parent.FullName);
             }
