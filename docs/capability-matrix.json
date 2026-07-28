@@ -38,6 +38,7 @@
       ],
       "sampleProjects": [
         "mods/TopiaForge.Sandbox/TopiaForge.Sandbox.csproj",
+        "mods/TopiaForge.Zombies/TopiaForge.Zombies.csproj",
         "tests/TopiaForge.SdkAcceptanceMod/TopiaForge.SdkAcceptanceMod.csproj"
       ],
       "guide": "docs/UiKit.md",
@@ -63,9 +64,10 @@
       ],
       "sampleProjects": [
         "mods/TopiaForge.GravityGun/TopiaForge.GravityGun.csproj",
+        "mods/TopiaForge.Zombies/TopiaForge.Zombies.csproj",
         "tests/TopiaForge.SdkAcceptanceMod/TopiaForge.SdkAcceptanceMod.csproj"
       ],
-      "guide": "docs/Modding.md",
+      "guide": "docs/CoreServices.md",
       "fakeTypes": [
         "TopiaForge.Mods.Testing.FakeLocalPlayerService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeEntityService, TopiaForge.Mods.Testing",
@@ -126,6 +128,7 @@
         "TopiaForge.Mods.IUgcLiveSyncService, TopiaForge.Mods.Ugc"
       ],
       "sampleProjects": [
+        "mods/TopiaForge.Zombies/TopiaForge.Zombies.csproj",
         "tests/TopiaForge.SdkAcceptanceMod/TopiaForge.SdkAcceptanceMod.csproj"
       ],
       "guide": "docs/CustomWorlds.md",
