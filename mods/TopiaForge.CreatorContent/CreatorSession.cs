@@ -125,17 +125,20 @@ namespace TopiaForge.CreatorContent
                 CaptureSceneResourcesLocked(out activeEdits, out activeTargets);
             }
 
+            // Cleanup is LIFO and every entry is isolated: a scene adapter that throws while restoring native
+            // state must not strand the edits, targets, and spawned instances behind it, or the session would
+            // leave the player's world permanently modified — the opposite of a reversible session.
             for (var index = activeEdits.Length - 1; index >= 0; index--)
             {
-                activeEdits[index].InvalidateFromSession();
+                SafeInvalidate(() => activeEdits[index].InvalidateFromSession(), "temporary scene edit");
             }
             for (var index = activeTargets.Length - 1; index >= 0; index--)
             {
-                activeTargets[index].InvalidateFromSession();
+                SafeInvalidate(() => activeTargets[index].InvalidateFromSession(), "scene target");
             }
             for (var index = active.Length - 1; index >= 0; index--)
             {
-                active[index].InvalidateFromSession();
+                SafeInvalidate(() => active[index].InvalidateFromSession(), "spawned instance");
             }
             service.Remove(this);
         }
@@ -151,6 +154,18 @@ namespace TopiaForge.CreatorContent
             catch (Exception exception)
             {
                 logger.Error(exception, message);
+            }
+        }
+
+        private void SafeInvalidate(Action invalidate, string what)
+        {
+            try
+            {
+                invalidate();
+            }
+            catch (Exception exception)
+            {
+                logger.Error(exception, "A creator " + what + " threw during session cleanup.");
             }
         }
     }

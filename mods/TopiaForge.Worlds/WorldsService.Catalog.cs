@@ -75,20 +75,62 @@ namespace TopiaForge.Worlds
             }
         }
 
+        /// <summary>
+        /// Starts a best-effort write of the diagnostic world catalog. The catalog is an inspection aid, not a
+        /// runtime input, so a read-only data directory, a full disk, or a locked file must never fail the
+        /// provider that Zombies, Sandbox, UiGallery, and Creator Tools all hard-depend on. The write is also
+        /// never waited on: <see cref="UpdateTransition"/> drains its result on Unity's main thread.
+        /// </summary>
         public void WriteCatalog()
         {
             ThrowIfDisposed();
-            var json = CatalogJson();
-            var bytes = new UTF8Encoding(false, true).GetBytes(json);
-            if (bytes.Length > MaxCatalogBytes)
+            if (catalogWrite != null)
             {
-                throw new InvalidDataException("World catalog exceeds " + MaxCatalogBytes + " bytes.");
+                return;
             }
 
-            var result = files.WriteDataTextAsync("catalog.json", json).GetAwaiter().GetResult();
-            if (!result.Succeeded)
+            try
             {
-                throw new IOException("Could not write world catalog: " + result.ErrorMessage);
+                var json = CatalogJson();
+                var bytes = new UTF8Encoding(false, true).GetByteCount(json);
+                if (bytes > MaxCatalogBytes)
+                {
+                    logger.Warn("World catalog exceeds " + MaxCatalogBytes
+                        + " bytes and was not written; world routing is unaffected.");
+                    return;
+                }
+
+                catalogWrite = files.WriteDataTextAsync("catalog.json", json, lifetimeToken);
+            }
+            catch (Exception ex)
+            {
+                logger.Warn("Could not start the world catalog write: " + ex.Message);
+            }
+        }
+
+        private void UpdateCatalogWrite()
+        {
+            var pending = catalogWrite;
+            if (pending == null || !pending.IsCompleted)
+            {
+                return;
+            }
+
+            catalogWrite = null;
+            OperationResult<bool> result;
+            try
+            {
+                result = pending.GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                logger.Warn("Could not write the world catalog: " + ex.Message);
+                return;
+            }
+
+            if (!result.Succeeded && result.ErrorCode != ModErrorCode.Cancelled)
+            {
+                logger.Warn("Could not write the world catalog: " + result.ErrorMessage);
             }
         }
 

@@ -1,9 +1,10 @@
 using System.Runtime.Serialization;
+using TopiaForge.Mods;
 
 namespace TopiaForge.CreatorTools
 {
     [DataContract]
-    public sealed class CreatorToolsConfig
+    public sealed class CreatorToolsConfig : ISelfNormalizingConfig
     {
         [DataMember(Name = "enabled")]
         public bool Enabled { get; set; } = true;

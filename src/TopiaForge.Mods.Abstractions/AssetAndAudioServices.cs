@@ -50,15 +50,24 @@ namespace TopiaForge.Mods
         TransformState InitialTransform { get; }
     }
 
-    /// <summary>Loads package assets and spawns opaque, lifetime-owned entities.</summary>
+    /// <summary>
+    /// Loads package assets and spawns opaque, lifetime-owned entities.
+    /// </summary>
+    /// <remarks>
+    /// Every asset load here is driven by the game's own asynchronous loader, so the returned tasks complete
+    /// on the main thread. Never block on one: waiting from the main thread stops the frame loop that would
+    /// have completed it, and the game hangs with no recovery. Keep the task, poll
+    /// <see cref="Task.IsCompleted"/> from your per-frame update, and read the result there. The analyzer
+    /// reports a blocking wait as TF1008.
+    /// </remarks>
     public interface IAssetService
     {
-        /// <summary>Loads an asset bundle from a safe package-relative path.</summary>
+        /// <summary>Loads an asset bundle from a safe package-relative path. Poll the task; never wait on it.</summary>
         Task<OperationResult<IAssetBundle>> LoadBundleAsync(
             string relativePath,
             CancellationToken cancellationToken = default);
 
-        /// <summary>Loads a prefab from a bundle created by this context.</summary>
+        /// <summary>Loads a prefab from a bundle created by this context. Poll the task; never wait on it.</summary>
         Task<OperationResult<IPrefabAsset>> LoadPrefabAsync(
             IAssetBundle bundle,
             string assetName,

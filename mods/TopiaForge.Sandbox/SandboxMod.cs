@@ -13,19 +13,16 @@ namespace TopiaForge.Sandbox
             new ConfigDefinition<SandboxConfig>(
                 2,
                 () => new SandboxConfig(),
-                value =>
+                validate: null,
+                migrate: (storedVersion, value) =>
                 {
-                    value.Normalize();
-                    return OperationResult<bool>.Success(true);
-                },
-                (storedVersion, value) =>
-                {
+                    // SandboxConfig is ISelfNormalizingConfig, so the config service bounds the migrated value
+                    // on its own. This migration only reshapes what schema 1 meant.
                     if (storedVersion < 2
                         && string.Equals(value.SpawnMenuKey, "Q", StringComparison.OrdinalIgnoreCase))
                     {
                         value.SpawnMenuKey = "F5";
                     }
-                    value.Normalize();
                     return OperationResult<SandboxConfig>.Success(value);
                 });
 

@@ -4,7 +4,7 @@ using TopiaForge.Mods;
 namespace TopiaForge.Zombies
 {
     [DataContract]
-    public sealed partial class ZombiesConfig
+    public sealed partial class ZombiesConfig : ISelfNormalizingConfig
     {
         // Keep the serialized contract readable here. Defaults and input validation live in responsibility-named
         // partials so mod authors can find the setting surface without wading through persistence mechanics.

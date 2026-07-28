@@ -62,6 +62,14 @@ namespace TopiaForge.Mods.Analyzers.Tests
                 RequiresUnsafeNativeForInteropAssembly();
                 RejectsLoaderOwnedUnityUiReference();
                 AllowsUnityUiForInternalProviderProject();
+                ReportsBlockingWaitOnTask();
+                ReportsBlockingResultProperty();
+                ReportsBlockingWaitMethod();
+                AllowsGuardedTaskDrain();
+                AllowsConditionalAccessPoll();
+                AllowsDrainSplitAcrossPartialFiles();
+                ReportsBlockingWaitInNonSafeProject();
+                AllowsAuthorsOwnMemberNamedLikeARetiredApi();
                 Console.WriteLine("All TopiaForge analyzer tests passed.");
                 return 0;
             }
@@ -282,6 +290,114 @@ namespace TopiaForge.Mods.Analyzers.Tests
                 new[] { unityUi });
             Assert(diagnostics.IsEmpty,
                 "an explicitly internal provider project should not receive safe-mod diagnostics");
+        }
+
+        // TF1008. SDK asset and scene tasks complete from Unity main-thread callbacks, so waiting on one from
+        // the game loop stops the pump that would have completed it and hangs the process permanently.
+        private static void ReportsBlockingWaitOnTask()
+        {
+            var diagnostics = Analyze(
+                "using System.Threading.Tasks; public sealed class Mod { "
+                + "Task<int> Work() => Task.FromResult(1); "
+                + "public int Run() => Work().GetAwaiter().GetResult(); }",
+                Manifest());
+            Assert(diagnostics.Any(item => item.Id == "TF1008"),
+                "GetAwaiter().GetResult() on a task should report TF1008");
+        }
+
+        private static void ReportsBlockingResultProperty()
+        {
+            var diagnostics = Analyze(
+                "using System.Threading.Tasks; public sealed class Mod { "
+                + "Task<int> Work() => Task.FromResult(1); "
+                + "public int Run() => Work().Result; }",
+                Manifest());
+            Assert(diagnostics.Any(item => item.Id == "TF1008"), "Task<T>.Result should report TF1008");
+        }
+
+        private static void ReportsBlockingWaitMethod()
+        {
+            var diagnostics = Analyze(
+                "using System.Threading.Tasks; public sealed class Mod { "
+                + "Task Work() => Task.CompletedTask; "
+                + "public void Run() { Work().Wait(); } }",
+                Manifest());
+            Assert(diagnostics.Any(item => item.Id == "TF1008"), "Task.Wait() should report TF1008");
+        }
+
+        // The supported pattern: keep the task, poll it from the per-frame update, and read the finished
+        // result without ever waiting. This must stay legal or every correct drain would be flagged.
+        private static void AllowsGuardedTaskDrain()
+        {
+            var diagnostics = Analyze(
+                "using System.Threading.Tasks; public sealed class Mod { "
+                + "Task<int> pending = Task.FromResult(1); "
+                + "public int Drain() { "
+                + "if (!pending.IsCompleted) { return 0; } "
+                + "return pending.GetAwaiter().GetResult(); } }",
+                Manifest());
+            Assert(diagnostics.All(item => item.Id != "TF1008"),
+                "an IsCompleted-guarded drain is the supported pattern and must not report TF1008");
+        }
+
+        // `task?.IsCompleted` is a member *binding*, not a member access. Missing that spelling rejected the
+        // shared creator workbench, which polls exactly this way.
+        private static void AllowsConditionalAccessPoll()
+        {
+            var diagnostics = Analyze(
+                "using System.Threading.Tasks; public sealed class Mod { "
+                + "Task<int> pending; "
+                + "public int Drain() { "
+                + "if (pending?.IsCompleted != true) { return 0; } "
+                + "return pending.GetAwaiter().GetResult(); } }",
+                Manifest());
+            Assert(diagnostics.All(item => item.Id != "TF1008"),
+                "a null-conditional IsCompleted poll must not report TF1008");
+        }
+
+        // A drain is routinely split into a guard and a small helper that reads the finished result, and for a
+        // partial class those halves live in different files. A partial class is one type, so the poll scope
+        // must follow the type symbol rather than a single method or file.
+        private static void AllowsDrainSplitAcrossPartialFiles()
+        {
+            var diagnostics = Analyze(
+                "using System.Threading.Tasks; public sealed partial class Mod { "
+                + "Task<int> pending; "
+                + "public int Drain() { if (!pending.IsCompleted) { return 0; } return Complete(pending); } } "
+                + "public sealed partial class Mod { "
+                + "static int Complete(Task<int> task) => task.GetAwaiter().GetResult(); }",
+                Manifest());
+            Assert(diagnostics.All(item => item.Id != "TF1008"),
+                "a drain helper beside its guard in a partial class must not report TF1008");
+        }
+
+        // TF1005 matched on identifier text alone, so a mod declaring its own LoadConfig/SaveConfig/GetService
+        // method was rejected. Pre-V1 source is still caught: the retired member no longer exists, so the name
+        // does not bind at all.
+        private static void AllowsAuthorsOwnMemberNamedLikeARetiredApi()
+        {
+            var diagnostics = Analyze(
+                "public sealed class Mod { void LoadConfig() { } public void Run() { LoadConfig(); } }",
+                Manifest());
+            Assert(diagnostics.All(item => item.Id != "TF1005"),
+                "a mod's own method named like a retired API must not report TF1005");
+        }
+
+        // A mod that opts out of the safe profile still runs inside the game loop, so main-thread safety is
+        // not gated on TopiaForgeSafeProject. The first-party Worlds provider is exactly this shape, and this
+        // is the configuration in which its custom-world load hung the game.
+        private static void ReportsBlockingWaitInNonSafeProject()
+        {
+            var diagnostics = Analyze(
+                "using System.Threading.Tasks; public sealed class Provider { "
+                + "Task<int> Work() => Task.FromResult(1); "
+                + "public int Run() => Work().GetAwaiter().GetResult(); }",
+                Manifest(),
+                new DictionaryOptionsProvider(
+                    targetFramework: "netstandard2.1",
+                    safeProject: false));
+            Assert(diagnostics.Any(item => item.Id == "TF1008"),
+                "TF1008 must apply to non-safe mod projects, which still run inside the game loop");
         }
 
         private static ImmutableArray<Diagnostic> Analyze(

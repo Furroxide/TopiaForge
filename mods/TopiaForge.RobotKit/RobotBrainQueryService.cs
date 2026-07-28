@@ -133,6 +133,9 @@ namespace TopiaForge.RobotKit
             sceneCts.Cancel();
             sceneCts.Dispose();
             serviceCts.Dispose();
+            // Mono never unloads the assembly, so a cached player token would otherwise stay resident for the
+            // rest of the process after the mod is unloaded. Drop it with everything else this service owns.
+            client.InvalidateToken();
         }
 
         private void LogAvailabilityOnce()

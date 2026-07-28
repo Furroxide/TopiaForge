@@ -13,6 +13,8 @@ namespace TopiaForge.Performance
     /// </summary>
     public sealed class PerformanceMod : TopiaForgeMod
     {
+        // PerformanceConfig is ISelfNormalizingConfig: the config service bounds a stored document before it
+        // reaches any applier. Presets are resolved separately in OnLoad and re-normalized there.
         private static readonly ConfigDefinition<PerformanceConfig> Config =
             new ConfigDefinition<PerformanceConfig>(1, () => new PerformanceConfig());
 
@@ -31,7 +33,7 @@ namespace TopiaForge.Performance
                 return;
             }
 
-            config.Normalize();                 // sanitize the mode string + clamp raw user values first
+            // The config contract's validator already sanitized the mode string and clamped raw user values.
             PerformancePreset.Apply(config);    // resolve the preset onto per-lever fields (unless override_manual)
             config.Normalize();                 // clamp anything the preset set
             // Intentionally NOT re-persisting: SaveConfig here would write the preset-resolved object back

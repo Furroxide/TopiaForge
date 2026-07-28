@@ -58,6 +58,32 @@ template source that CI scaffolds, compiles, tests, packs, and validates:
 
 <!-- topiaforge-snippet path="templates/mod/gameplay/{{TYPE_NAME}}Controller.cs" -->
 
+## Configuration that repairs itself
+
+A stored config document is written by hand, by the launcher, by the CLI, or by an interrupted save,
+so it can hold anything the type system allows: `NaN`, negatives, inverted minimum/maximum pairs,
+unknown enum strings. Implement `ISelfNormalizingConfig` on the config type and put every bound in
+`Normalize()`:
+
+```csharp
+[DataContract]
+public sealed class MyConfig : ISelfNormalizingConfig
+{
+    [DataMember(Name = "maxRange")] public float MaxRange { get; set; } = 20f;
+
+    public void Normalize()
+    {
+        if (float.IsNaN(MaxRange) || MaxRange < 1f || MaxRange > 100f) { MaxRange = 20f; }
+    }
+}
+```
+
+`ConfigDefinition<T>` then calls `Normalize()` on every path the config service validates — defaults,
+load, migration, and save — so a bounded document is part of the contract rather than something each
+mod has to remember. `Normalize()` must be idempotent and must not throw: it runs precisely on values
+already known to be untrustworthy. Pass a `validate` delegate only for rules normalization cannot
+express, such as rejecting a document outright.
+
 ## Results and expected failures
 
 SDK operations use `OperationResult<T>` when an unavailable binding, invalid state, conflict, or

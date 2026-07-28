@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Threading;
+using System.Threading.Tasks;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 using UnityEngine;
@@ -54,15 +56,27 @@ namespace TopiaForge.Worlds
         private PendingCustomWorld? pendingCustomWorld;
         private IWorldContent? activeWorldContent;
         private IDisposable? pendingSceneClaim;
+        // In-flight ICustomWorldContent.CreateAsync for the world currently being placed. SDK asset tasks only
+        // complete on Unity's main thread, so this is started on the scene-loaded callback and drained from
+        // UpdateTransition; it is never waited on.
+        private readonly PendingOperation<IWorldContent> contentLoad = new PendingOperation<IWorldContent>();
+        private PendingCustomWorld? placingCustomWorld;
+        private Vector3 placingSpawnPosition;
+        // Best-effort diagnostic catalog write. A catalog failure must never take down the provider that
+        // Zombies, Sandbox, UiGallery, and Creator Tools all depend on, so the result is drained and logged.
+        private Task<OperationResult<bool>>? catalogWrite;
+        private readonly CancellationToken lifetimeToken;
 
         internal WorldsService(
             IModLogger logger,
             IModFiles files,
-            IInternalSceneTransitionService sceneTransitions)
+            IInternalSceneTransitionService sceneTransitions,
+            CancellationToken lifetimeToken = default)
         {
             this.logger = logger;
             this.files = files;
             this.sceneTransitions = sceneTransitions ?? throw new ArgumentNullException(nameof(sceneTransitions));
+            this.lifetimeToken = lifetimeToken;
             levelBridge = new GameLevelBridge(logger);
             worldsView = new ReadOnlyCollection<WorldDefinition>(worlds);
             gamemodesView = new ReadOnlyCollection<GamemodeDefinition>(gamemodes);
