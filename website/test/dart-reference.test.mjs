@@ -5,6 +5,7 @@ import {
   createDartdocPlan,
   dartdocHasDiagnostics,
   renderDartReferenceLanding,
+  resolveDartCommand,
 } from '../scripts/build-dart-reference.mjs';
 
 test('dartdoc plan includes only the three shared launcher packages', () => {
@@ -15,7 +16,7 @@ test('dartdoc plan includes only the three shared launcher packages', () => {
   );
   assert.deepEqual(
     plan.map((entry) => entry.dependencyCommand),
-    ['dart', 'dart', 'flutter'],
+    ['dart', 'dart', 'dart'],
   );
   assert.deepEqual(
     plan.map((entry) => entry.dependencyArgs),
@@ -30,6 +31,29 @@ test('dartdoc plan includes only the three shared launcher packages', () => {
     assert.ok(entry.dartdocArgs.includes('--validate-links'));
     assert.equal(entry.dartdocArgs.at(-1), '.');
   }
+});
+
+test('Dart command prefers an override and then the project FVM SDK', () => {
+  assert.equal(
+    resolveDartCommand('/repo', { TOPIAFORGE_DART_BIN: '/custom/dart' }),
+    '/custom/dart',
+  );
+  let detectedProjectDart;
+  const projectDart = resolveDartCommand(
+    '/repo',
+    {},
+    'win32',
+    (candidate) => {
+      detectedProjectDart = candidate;
+      return true;
+    },
+  );
+  assert.equal(projectDart, detectedProjectDart);
+  assert.match(
+    projectDart,
+    /[\\/]\.fvm[\\/]flutter_sdk[\\/]bin[\\/]cache[\\/]dart-sdk[\\/]bin[\\/]dart\.exe$/u,
+  );
+  assert.equal(resolveDartCommand('/repo', {}, 'linux', () => false), 'dart');
 });
 
 test('dartdoc diagnostics fail warnings but accept a clean summary', () => {
