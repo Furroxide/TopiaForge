@@ -23,7 +23,10 @@ void main() {
     final extractor = File(p.join(root.path, 'TopiaForge.GameCompat.Extractor'))
       ..writeAsStringSync('extractor');
 
-    expect(locator.findPackaged(resolvedExecutable: cli.path), extractor.path);
+    expect(
+      locator.findPackaged(resolvedExecutable: cli.path, isWindows: false),
+      extractor.path,
+    );
   });
 
   test('supports the Windows packaged executable names', () {

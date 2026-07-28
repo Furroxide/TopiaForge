@@ -317,11 +317,12 @@ void _registerReleasePackagingTests() {
           return ProcessResult(1, 0, '', '');
         }
         final path = call.arguments.last;
-        final architectures = path.endsWith('/$macCliArm64FileName')
+        final name = p.basename(path);
+        final architectures = name == macCliArm64FileName
             ? 'arm64'
-            : path.endsWith('/$macCliX64FileName')
+            : name == macCliX64FileName
             ? 'x86_64'
-            : path.endsWith('/Nested')
+            : name == 'Nested'
             ? 'arm64'
             : 'x86_64 arm64';
         return ProcessResult(1, 0, architectures, '');
