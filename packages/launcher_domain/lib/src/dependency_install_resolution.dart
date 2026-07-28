@@ -335,7 +335,7 @@ List<LauncherIssue> _runtimeCompatibilityIssues(
   List<String> contentTargets = const [],
 }) {
   final issues = <LauncherIssue>[];
-  final supportedGameBuilds = _robotopiaRangeDisplay(manifest.gameVersionRange);
+  final supportedGameBuilds = _gameVersionRangeDisplay(manifest.gameVersionRange);
   if (!manifest.gameVersionRange.isAny) {
     if ((gameVersion == null || gameVersion.isEmpty) &&
         requireKnownGameVersion) {
@@ -432,7 +432,7 @@ List<LauncherIssue> _runtimeCompatibilityIssues(
   return issues;
 }
 
-String _robotopiaRangeDisplay(VersionRange range) =>
+String _gameVersionRangeDisplay(VersionRange range) =>
     RobotopiaGameVersion.tryBuildLabel(range.toString()) ?? range.toString();
 
 int _compareDependencyVersions(String left, String right) {
