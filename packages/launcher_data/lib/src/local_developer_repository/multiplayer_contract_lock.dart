@@ -156,6 +156,12 @@ extension LocalDeveloperMultiplayerContractLock on LocalDeveloperRepository {
         dotnet.executable,
         arguments,
         workingDirectory: buildRoot.path,
+        runInShell:
+            Platform.isWindows &&
+            const {
+              '.bat',
+              '.cmd',
+            }.contains(p.extension(dotnet.executable).toLowerCase()),
         timeout: const Duration(minutes: 10),
         maxStdoutBytes: 16 * 1024 * 1024,
         maxStderrBytes: 16 * 1024 * 1024,

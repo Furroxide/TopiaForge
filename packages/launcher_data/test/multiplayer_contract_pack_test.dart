@@ -102,8 +102,51 @@ void main() {
     final output = File(
       p.join(projectDir.path, 'bin', 'Release', 'net10.0', 'Sample.dll'),
     );
-    final fakeDotnet = File(p.join(root.path, 'multiplayer-dotnet'))
-      ..writeAsStringSync('''#!/bin/sh
+    final fakeDotnet = File(
+      p.join(
+        root.path,
+        Platform.isWindows ? 'multiplayer-dotnet.cmd' : 'multiplayer-dotnet',
+      ),
+    );
+    if (Platform.isWindows) {
+      const generatedOutputPrefix = '-p:CompilerGeneratedFilesOutputPath=';
+      final fakePowerShell = File(p.join(root.path, 'multiplayer-dotnet.ps1'))
+        ..writeAsStringSync('''
+param([Parameter(Mandatory = \$true)][string]\$Generated)
+[IO.Directory]::CreateDirectory(${_powerShellQuote(output.parent.path)}) | Out-Null
+[IO.Directory]::CreateDirectory(\$Generated) | Out-Null
+[IO.File]::WriteAllText(${_powerShellQuote(output.path)}, 'dll')
+${emitContract ? "[IO.File]::WriteAllText((Join-Path \$Generated 'Contract.Multiplayer.g.cs'), ${_powerShellQuote('${generatedContractMarker(wireFormatRevision: wireFormatRevision)}\n')})" : ''}
+''');
+      fakeDotnet.writeAsStringSync(
+        '@echo off\r\n'
+        'setlocal EnableDelayedExpansion\r\n'
+        'set "generated="\r\n'
+        'set "captureGenerated="\r\n'
+        ':parse\r\n'
+        'if "%~1"=="" goto parsed\r\n'
+        'set "argument=%~1"\r\n'
+        'if defined captureGenerated (\r\n'
+        '  set "generated=!argument!"\r\n'
+        '  goto parsed\r\n'
+        ')\r\n'
+        'if /I "!argument!"=="-p:CompilerGeneratedFilesOutputPath" '
+        'set "captureGenerated=1"\r\n'
+        'if /I "!argument:~0,${generatedOutputPrefix.length}!"=='
+        '"$generatedOutputPrefix" '
+        'set "generated=!argument:~${generatedOutputPrefix.length}!"\r\n'
+        'shift\r\n'
+        'goto parse\r\n'
+        ':parsed\r\n'
+        'if not defined generated (\r\n'
+        '  >&2 echo fake dotnet did not receive the generated-output argument: %*\r\n'
+        '  exit /b 2\r\n'
+        ')\r\n'
+        'powershell.exe -NoProfile -ExecutionPolicy Bypass -File '
+        '"${fakePowerShell.path}" -Generated "!generated!"\r\n',
+      );
+    } else {
+      fakeDotnet.writeAsStringSync('''#!/bin/sh
 set -eu
 generated=''
 for argument in "\$@"; do
@@ -116,8 +159,9 @@ mkdir -p ${_shellQuote(output.parent.path)} "\$generated"
 printf dll > ${_shellQuote(output.path)}
 ${emitContract ? 'printf \'%s\\n\' ${_shellQuote(generatedContractMarker(wireFormatRevision: wireFormatRevision))} > "\$generated/Contract.Multiplayer.g.cs"' : ':'}
 ''');
-    final chmod = await Process.run('chmod', ['700', fakeDotnet.path]);
-    expect(chmod.exitCode, 0);
+      final chmod = await Process.run('chmod', ['700', fakeDotnet.path]);
+      expect(chmod.exitCode, 0);
+    }
     repository = LocalDeveloperRepository(
       dataRoot: p.join(root.path, 'data'),
       repositoryRoot: repoRoot.path,
@@ -452,3 +496,5 @@ ${emitContract ? 'printf \'%s\\n\' ${_shellQuote(generatedContractMarker(wireFor
 }
 
 String _shellQuote(String value) => "'${value.replaceAll("'", "'\\''")}'";
+
+String _powerShellQuote(String value) => "'${value.replaceAll("'", "''")}'";

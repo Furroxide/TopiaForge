@@ -43,6 +43,96 @@ function Require-Command {
     return $command.Source
 }
 
+function Assert-WindowsLongPathSupport {
+    if (!$IsWindows) {
+        return
+    }
+    $registryPath = "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem"
+    $enabled = Get-ItemPropertyValue -LiteralPath $registryPath -Name "LongPathsEnabled" -ErrorAction SilentlyContinue
+    if ($enabled -ne 1) {
+        throw "Windows long-path support is required for the locked NuGet and Flutter dependency trees. From an elevated PowerShell terminal, run: New-ItemProperty -LiteralPath '$registryPath' -Name LongPathsEnabled -PropertyType DWord -Value 1 -Force. Then open a new terminal and rerun bootstrap."
+    }
+}
+
+function Assert-WindowsSymlinkSupport {
+    if (!$IsWindows) {
+        return
+    }
+    $probeRoot = Join-Path ([System.IO.Path]::GetTempPath()) "topiaforge-symlink-probe-$PID-$([guid]::NewGuid().ToString('N'))"
+    try {
+        $null = New-Item -ItemType Directory -Path $probeRoot
+        $target = Join-Path $probeRoot "target.txt"
+        $link = Join-Path $probeRoot "link.txt"
+        [System.IO.File]::WriteAllText($target, "probe")
+        $null = New-Item -ItemType SymbolicLink -Path $link -Target $target -ErrorAction Stop
+    }
+    catch {
+        $registryPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock"
+        throw "Windows symlink creation is required by FVM and the security test fixtures. Enable Developer Mode in Windows Settings, or from an elevated PowerShell terminal run: New-ItemProperty -LiteralPath '$registryPath' -Name AllowDevelopmentWithoutDevLicense -PropertyType DWord -Value 1 -Force. Then open a new terminal and rerun bootstrap."
+    }
+    finally {
+        if (Test-Path -LiteralPath $probeRoot) {
+            Remove-Item -LiteralPath $probeRoot -Recurse -Force
+        }
+    }
+}
+
+function Normalize-WindowsFlutterDartSources {
+    param(
+        [Parameter(Mandatory = $true)][string]$FlutterSdkRoot,
+        [Parameter(Mandatory = $true)][string]$GitCommand
+    )
+    if (!$IsWindows) {
+        return
+    }
+
+    $packagesRoot = Join-Path $FlutterSdkRoot "packages"
+    $gitMetadata = Join-Path $FlutterSdkRoot ".git"
+    $isGitCheckout = Test-Path -LiteralPath $gitMetadata
+    if ($isGitCheckout) {
+        & $GitCommand -C $FlutterSdkRoot diff --quiet --ignore-submodules
+        if ($LASTEXITCODE -ne 0) {
+            throw "The FVM-managed Flutter SDK contains local changes. Preserve or remove them before running bootstrap verification."
+        }
+        & $GitCommand -C $FlutterSdkRoot diff --cached --quiet --ignore-submodules
+        if ($LASTEXITCODE -ne 0) {
+            throw "The FVM-managed Flutter SDK contains staged changes. Preserve or remove them before running bootstrap verification."
+        }
+        Invoke-Checked $GitCommand @("-C", $FlutterSdkRoot, "config", "core.autocrlf", "false")
+    }
+
+    # Dartdoc 9.0.4 calculates @docImport offsets against LF text. Git for
+    # Windows can check out the pinned Flutter sources as CRLF, causing dartdoc
+    # to crash before it reaches this repository's documentation.
+    $normalized = 0
+    $utf8 = [System.Text.UTF8Encoding]::new($false, $true)
+    foreach ($file in Get-ChildItem -LiteralPath $packagesRoot -Recurse -File -Filter "*.dart") {
+        $bytes = [System.IO.File]::ReadAllBytes($file.FullName)
+        $text = $utf8.GetString($bytes)
+        if (!$text.Contains("`r`n")) {
+            continue
+        }
+        $output = $utf8.GetBytes($text.Replace("`r`n", "`n"))
+        [System.IO.File]::WriteAllBytes($file.FullName, $output)
+        $normalized++
+    }
+
+    if ($isGitCheckout) {
+        & $GitCommand -C $FlutterSdkRoot diff --quiet --ignore-submodules
+        if ($LASTEXITCODE -ne 0) {
+            throw "Flutter SDK line-ending normalization changed content unexpectedly."
+        }
+        Invoke-Checked $GitCommand @("-C", $FlutterSdkRoot, "add", "-u", "--", "packages")
+        & $GitCommand -C $FlutterSdkRoot diff --cached --quiet --ignore-submodules
+        if ($LASTEXITCODE -ne 0) {
+            throw "Flutter SDK line-ending normalization changed the managed SDK index unexpectedly."
+        }
+    }
+    if ($normalized -gt 0) {
+        Write-Host "  Normalized $normalized Flutter Dart source file(s) to LF for Windows dartdoc."
+    }
+}
+
 function Resolve-SevenZip {
     $candidates = @("7z", "7zz", "7za")
     if (![string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
@@ -104,6 +194,8 @@ function Verify-FlutterPackage {
 }
 
 Set-Location $RepoRoot
+Assert-WindowsLongPathSupport
+Assert-WindowsSymlinkSupport
 
 $dotnet = Require-Command "dotnet" "Install the exact .NET SDK 10.0.301 pinned by global.json."
 $git = Require-Command "git" "Install Git for your platform."
@@ -163,6 +255,9 @@ else {
 }
 
 Invoke-Checked $git @("config", "core.hooksPath", ".githooks")
+if ($IsWindows) {
+    Invoke-Checked $git @("config", "core.longpaths", "true")
+}
 if (!$IsWindows) {
     Get-ChildItem -LiteralPath (Join-Path $RepoRoot ".githooks") -File |
         ForEach-Object { & chmod +x $_.FullName }
@@ -172,8 +267,21 @@ Invoke-Checked $git @("lfs", "fsck")
 
 Invoke-Checked $fvm @("install", $PinnedFlutter, "--skip-pub-get")
 Invoke-Checked $fvm @("use", $PinnedFlutter, "--force", "--skip-pub-get")
+$flutterSdkRoot = (Resolve-Path -LiteralPath (Join-Path $RepoRoot ".fvm/flutter_sdk")).Path
+if ($Verify) {
+    Normalize-WindowsFlutterDartSources -FlutterSdkRoot $flutterSdkRoot -GitCommand $git
+}
 $script:DartCommand = Resolve-TopiaForgeSdkCommand -Tool dart -RepositoryRoot $RepoRoot
 $script:FlutterCommand = Resolve-TopiaForgeSdkCommand -Tool flutter -RepositoryRoot $RepoRoot
+$flutterSdkBin = Split-Path -Parent $script:DartCommand
+$env:Path = "$flutterSdkBin$([System.IO.Path]::PathSeparator)$env:Path"
+$env:FLUTTER_ROOT = $flutterSdkRoot
+$env:TOPIAFORGE_DART_BIN = if ($IsWindows) {
+    Join-Path $flutterSdkRoot "bin/cache/dart-sdk/bin/dart.exe"
+}
+else {
+    Join-Path $flutterSdkRoot "bin/cache/dart-sdk/bin/dart"
+}
 Write-Host "  Dart SDK command: $script:DartCommand"
 Write-Host "  Flutter SDK command: $script:FlutterCommand"
 
