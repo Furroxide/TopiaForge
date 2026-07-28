@@ -1,11 +1,13 @@
 # Initial release blocker register
 
-Last audited: 2026-07-22. Product candidate: `1.0.0-rc.1`. Recommendation: **NO-SHIP**.
+Last audited: 2026-07-28. Product candidate: `1.0.0-rc.1`. Recommendation: **NO-SHIP**.
 
-The repository-wide remediation found no remaining known local critical- or high-severity engineering defect. The
-release is nevertheless blocked by decisions, credentials, protected-host configuration, and native Robotopia-runtime
-acceptance that cannot be supplied by source changes. The strict publication gates intentionally continue to reject
-the candidate until those items are closed.
+A first-party mod audit on 2026-07-27 found and fixed one critical and two high-severity engineering defects that
+the prior remediation had missed (see [First-party mod audit](#first-party-mod-audit-2026-07-27) below). No further
+local critical- or high-severity engineering defect is known as of that audit. The release remains blocked by
+decisions, credentials, protected-host configuration, and native Robotopia-runtime acceptance that cannot be supplied
+by source changes. The strict publication gates intentionally continue to reject the candidate until those items are
+closed.
 
 This register records a pre-freeze working-tree preflight on the date above. It does not attest a future commit or a
 release candidate SHA. Close an item only with evidence from the frozen candidate SHA; do not treat an unavailable
@@ -47,8 +49,8 @@ check is silently skipped.
 | Exact-Unity TopiaForgeUi build | PASS | Unity `6000.0.23f1`; two builds matched SHA-256 `3cc6624f2a3a5fabc83c4fde49b32f859869e1d1e202afdaf91a888089f9fedb`. |
 | Exact-Unity representative world build | PASS | Two current-tree builds matched SHA-256 `afa3e9195e8e03199b414f8a5c9002e9f89831041a63c7e1c9b8eef173d9057d`; manifests, editor provenance, and companion/VPM inputs matched. |
 | Exact-Unity lifecycle smoke | NEEDS RERUN | A current-tree Unity `6000.0.23f1` run executed the managed validator and all 16 lifecycle cycles successfully with zero retained-resource delta. The protected workflow invokes and uploads the same evidence, but it must still be regenerated from the frozen candidate. |
-| Robotopia compatibility | PASS | Build `2227`; 219 bindings, 198 verifiable offline, 21 explicitly uncheckable offline, zero errors, warnings, or indeterminate findings; safe GravityGun, OppositeDay, Sandbox, and Zombies have no native binding declarations. |
-| Public build freshness | PASS | A fresh 2026-07-21 public probe confirms both platform records still identify build `2227`; CI/release fail if the public latest manifest changes. |
+| Robotopia compatibility | PASS | Build `2309`; 219 bindings, 198 verifiable offline, 21 explicitly uncheckable offline, zero errors, warnings, or indeterminate findings; safe GravityGun, OppositeDay, Sandbox, and Zombies have no native binding declarations. |
+| Public build freshness | PASS | A fresh 2026-07-28 public probe confirms both platform records identify build `2309`; CI/release fail if the public latest manifest changes. |
 | BepInEx/UnityDoorstop provenance | PASS | Pinned BepInEx `5.4.23.5` archives and extracted trees, UnityDoorstop commit/source, hashes, modes, and notices validate. |
 | Local macOS package structure | NEEDS RERUN | The retained universal-package record predates the V1 CLI, SDK, runtime, and canonical 15-mod release payload. Rebuild and validate the frozen V1 archive on macOS. |
 | Local macOS launch and Xcode development | NEEDS RERUN | A scrubbed debug build passed with Flutter `3.44.6`, Dart `3.12.2`, and CocoaPods `1.16.2`, with no tracked native-project drift. Launch and repeat the build from the frozen candidate before release. |
@@ -61,7 +63,7 @@ check is silently skipped.
 | Windows x64 signed package and clean-host run | BLOCKED | Requires a Windows runner, Authenticode identity, RFC 3161 timestamp service, and clean-machine QA; see `P0-WIN-01`. |
 | Linux x64 package and Proton run | BLOCKED | Flutter desktop builds are host-specific; requires Linux/Proton runners and gameplay QA; see `P0-LINUX-01`. |
 | Signed macOS arm64 and Intel clean-host runs | BLOCKED | Requires Apple credentials and quarantined clean hosts; see `P0-MAC-01`. |
-| Authorized Robotopia build-2227 acceptance | BLOCKED | Dynamic bindings, all mods, reloads, recovery, and profiler evidence require an authorized Robotopia environment; see `P0-GAME-01`. |
+| Authorized Robotopia build-2309 acceptance | BLOCKED | A local Windows startup smoke passed on 2026-07-28: BepInEx loaded TopiaForge, detected `0.0.2309`, consumed all 16 staged packages, loaded every enabled first-party mod, initialized the native prompt/performance/UI bridges, and left Robotopia responsive. The complete dynamic-binding, reload, recovery, multiplayer, and profiler matrix still requires retained evidence from the frozen candidate; see `P0-GAME-01`. |
 | Native UX/accessibility acceptance | BLOCKED | Screen Recording permission prevented screenshot comparison; screen-reader and native-platform manual QA remain; see `P1-UX-01`. |
 | Project license, IP, and OSS legal approval | BLOCKED | Project-owner/legal decisions cannot be inferred; see `P0-LIC-01`, `P0-IP-01`, and `P0-OSS-01`. |
 | Privacy/backend authorization and package trust policy | BLOCKED | Remote features default off, but owner approval is still required; see `P0-PRIV-01` and `P0-TRUST-01`. |
@@ -76,6 +78,62 @@ diagnostics for the intentional Unity compile/reference split while finding no f
 packages outside current compatible constraints; Node lists optional non-host native packages; package inspection
 warns that the intentionally unresolved project license blocks publication; and 21 GameCompat bindings are explicitly
 uncheckable offline and therefore belong to the Robotopia acceptance gate.
+
+## Build-2309 runtime adaptation (2026-07-28)
+
+The build-2309 managed surface is additive relative to the retired build-2227 baseline: the strict 219-binding audit
+found no removed or changed declared binding. Live startup did expose an independent loader defect: BepInEx 5 parses
+`BepInPlugin.Version` as `System.Version`, so the semantic prerelease value `1.0.0-rc.1` caused it to skip the
+TopiaForge plugin as invalid before `Awake`. The plugin now advertises the numeric core `1.0.0` to BepInEx while the
+runtime, package manifests, and compatibility engine retain the full `1.0.0-rc.1` SemVer. `VersionUtilTests` locks the
+two identities together, and the repaired live install loaded the plugin and consumed all 16 staged packages.
+
+## First-party mod audit (2026-07-27)
+
+An audit of all sixteen first-party mods found three engineering defects, all fixed in source. Each is listed with
+the mechanical gate that now prevents its recurrence, because every one of them escaped for the same structural
+reason: the affected sources reference UnityEngine and so were never compiled into the offline test assembly.
+
+| Defect | Severity | Fix | Gate |
+| --- | --- | --- | --- |
+| Launching a custom world blocked the main thread on `ICustomWorldContent.CreateAsync`. Because SDK asset tasks complete from a main-thread `AssetBundleCreateRequest` callback, the wait stopped the update pump that would have completed it and hung Robotopia permanently, with the arena fallback unreachable. | Critical | `WorldsService` now arms the creation and drains it from `UpdateTransition`, with cancellation, the existing 30s transition timeout, arena fallback, and main-thread release of content that arrives after a cancel. | `ModConcurrencyConventionTests`, `PendingWorldContentLoadTests`, analyzer `TF1008` |
+| `WorldsService.WriteCatalog` threw out of `WorldsMod.OnLoad` and blocked the main thread on a disk write. A read-only data directory, full disk, or file lock failed the Worlds provider outright, taking Zombies, Sandbox, UiGallery, and Creator Tools down with it — for a diagnostic file. | High | The catalog write is best-effort and asynchronous; failures are logged and never propagate out of `OnLoad`. | `ModConcurrencyConventionTests` |
+| Gravity Gun's `ConfigDefinition` supplied no validator, so `Normalize()` ran only on the default factory. A stored document with `NaN`, negative, or inverted hold bounds reached `IEntityMotion.MoveToward` unclamped and corrupted the held rigidbody. | High | Config types now declare `ISelfNormalizingConfig` and the SDK normalizes on every validated path, so this cannot be omitted. | `ModConcurrencyConventionTests`, `FirstPartyConfigTests` |
+
+Three lower-severity hardening changes landed in the same pass: Creator Content session cleanup is now fault-isolated
+per handle so one throwing scene adapter cannot strand the reversible-session teardown behind it; RobotKit releases
+the microphone on a defensive capture path that previously skipped it; and RobotKit drops its cached player token on
+unload, which matters because Mono never unloads the assembly.
+
+### Root causes addressed
+
+Fixing the three defects individually would have left the conditions that produced them, so each was traced to a
+cause and closed at that level.
+
+- **The SDK offered no way to drive asynchronous work from the game loop.** Twelve files hand-rolled the same
+  `IsCompleted` poll, and the one hand-roll that got it wrong hung the game. `PendingOperation<T>` is now a
+  supported SDK primitive covering cancellation, timeout, restart-while-draining, and release of a result that
+  arrives after the caller stopped wanting it. Worlds and the SDK acceptance mod use it; `TF1008` and the docs
+  point at it. Existing hand-rolled drains remain correct and can adopt it incrementally.
+- **Config normalization was opt-in by convention.** `ISelfNormalizingConfig` moves it into
+  `ConfigDefinition<T>`, so a config type that declares it is normalized on defaults, load, migration, and save.
+  Forgetting a hand-copied validator lambda is no longer possible.
+- **First-party mods never ran the SDK's own analyzer.** All sixteen now import the analyzer package's real
+  props/targets, so they build under exactly the MSBuild contract community authors get and the two populations
+  cannot drift. Mods that are genuinely native declare `TopiaForgeSafeProject=false`; main-thread rules still
+  apply to them, because opting out of the safe profile does not leave the game loop.
+
+Dogfooding the analyzer immediately paid for itself, finding four further issues: a latent blocking wait in
+`TopiaForge.SdkAcceptanceMod` (the reference example authors copy from); five mods copying reference-only SDK
+assemblies into their build output (`TF1003`), inconsistent with the other eleven; a `TF1005` false positive that
+rejected any mod declaring its own `LoadConfig`/`SaveConfig`/`GetService` member; and a `TF1008` scope bug that
+rejected a correct drain split across a partial class or written as `task?.IsCompleted`. The two analyzer bugs
+would have reached community authors in the shipped SDK package.
+
+Manual acceptance is not closed by these fixes. The custom-world flow in
+[`FirstPartyMods.md`](FirstPartyMods.md) — install and validate a bundle, then confirm a deliberately corrupt bundle
+falls back to the generated arena — must still be recorded against the frozen candidate, per the standing caveat that
+automated tests cannot close Unity object lifetime.
 
 ## P0 blockers
 
@@ -163,11 +221,11 @@ uncheckable offline and therefore belong to the Robotopia acceptance gate.
   and bundled payloads; run native launcher/CLI flows; exercise discovery, path translation, process launch,
   runtime repair, custom-world, recovery, and uninstall paths for Robotopia's Windows build under Proton.
 
-- [ ] **P0-GAME-01 — Complete authorized build-2227 runtime and first-party-mod acceptance.**
+- [ ] **P0-GAME-01 — Complete authorized build-2309 runtime and first-party-mod acceptance.**
 
   Owner: runtime/mod QA with authorized Robotopia access.
 
-  Exit criteria: on build `2227`, test startup/shutdown, repeated scenes, safe mode, reloads, enable/disable,
+  Exit criteria: on build `2309`, test startup/shutdown, repeated scenes, safe mode, reloads, enable/disable,
   dependency order, package inbox, collision isolation, partial failures, restart-required state, save compatibility,
   all 16 source-mod flows, TopiaForgeUi-only UI, dirty updates, and resource teardown. Verify every declared GameCompat binding and
   record profiler evidence of no steady-state allocation regressions or task/callback leaks.
@@ -262,7 +320,7 @@ uncheckable offline and therefore belong to the Robotopia acceptance gate.
   only. Opening submissions requires namespace ownership, moderation, malware review, transfer/dispute, yank,
   revocation, appeal, and installed-user response governance plus tests.
 - [x] **P2-WORLDS-01 — Custom worlds are Windows/Proton-only for v1.** Do not advertise native macOS Robotopia support.
-- [x] **P2-COMPAT-01 — Build `2227` is the sole supported Robotopia build.** Numeric build `N` maps to SemVer `0.0.N`.
+- [x] **P2-COMPAT-01 — Build `2309` is the sole supported Robotopia build.** Numeric build `N` maps to SemVer `0.0.N`.
   Any change in the public latest manifest stops release for a new compatibility audit; unknown constrained versions
   block mods but never block an empty safe-mode launch.
 

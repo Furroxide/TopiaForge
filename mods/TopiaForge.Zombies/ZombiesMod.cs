@@ -13,15 +13,13 @@ namespace TopiaForge.Zombies
         internal const string MenuEntryId = "io.github.furroxide.topiaforge.zombies.menu";
 
         private static readonly ConfigDefinition<ZombiesConfig> ConfigContract =
+            // ZombiesConfig is ISelfNormalizingConfig; the config service bounds every stored and migrated
+            // document, so this contract only has to describe the schema reshape.
             new ConfigDefinition<ZombiesConfig>(
                 2,
                 () => new ZombiesConfig(),
-                value =>
-                {
-                    value.Normalize();
-                    return OperationResult<bool>.Success(true);
-                },
-                (storedSchemaVersion, value) =>
+                validate: null,
+                migrate: (storedSchemaVersion, value) =>
                 {
                     value.MigrateFrom(storedSchemaVersion);
                     return OperationResult<ZombiesConfig>.Success(value);

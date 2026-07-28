@@ -272,6 +272,7 @@ namespace TopiaForge.ModManager.Tests
                 SandboxConfigTests.Run();
                 WorldAutoLoadRouterTests.Run();
                 WorldsSafetyTests.Run();
+                PendingOperationTests.Run();
                 SceneCoordinatorTests.Run();
                 ModServiceRegistryTests.Run();
                 SceneTransitionTrackerTests.Run();
@@ -290,6 +291,7 @@ namespace TopiaForge.ModManager.Tests
                 TopiaForgeStateFileTests.Run(root);
                 UnityToolingFileIoTests.Run(root);
                 UiKitSourceConventionTests.Run();
+                ModConcurrencyConventionTests.Run();
                 Console.WriteLine("All TopiaForge tests passed.");
                 return 0;
             }

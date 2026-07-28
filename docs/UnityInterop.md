@@ -13,6 +13,18 @@ low-level compatibility or performance patches. It is absent from normal templat
 `unsafe-native` capability, needs locally restored Robotopia reference assemblies, and is excluded from
 V1 source and binary compatibility guarantees.
 
+## The main thread is the game loop
+
+Mod code runs on Robotopia's main thread, and so does the completion of every asynchronous SDK
+operation — asset bundles, prefabs, custom-world content, and scene loads all finish from engine
+callbacks on that thread. Blocking it with `.Result`, `.Wait()`, or `.GetAwaiter().GetResult()`
+therefore stops the very loop that would complete the work: the task never finishes and the game
+hangs until the process is killed.
+
+Drive the work with `PendingOperation<T>` and poll it from your per-frame update. This holds for
+interop mods exactly as it does for safe mods — opting out of the safe profile does not move your
+code off the game loop, so [TF1008](Diagnostics.md#tf1008) applies to both.
+
 ## Before opting in
 
 If the safe SDK cannot express a common modding goal, open an SDK capability request. Adding a

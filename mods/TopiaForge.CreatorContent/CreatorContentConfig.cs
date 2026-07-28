@@ -5,7 +5,7 @@ using TopiaForge.Mods;
 namespace TopiaForge.CreatorContent
 {
     [DataContract]
-    internal sealed class CreatorContentConfig
+    internal sealed class CreatorContentConfig : ISelfNormalizingConfig
     {
         [DataMember(Name = "toggleKey", Order = 1)]
         public string ToggleKey { get; set; } = "F5";

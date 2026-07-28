@@ -145,6 +145,9 @@ namespace TopiaForge.RobotKit
 
             active.Clear();
             serviceCts.Dispose();
+            // Mono never unloads the assembly, so a cached player token would otherwise stay resident for the
+            // rest of the process after the mod is unloaded.
+            client.InvalidateToken();
         }
 
         private static bool HasMicrophone()
@@ -398,6 +401,9 @@ namespace TopiaForge.RobotKit
             {
                 if (clip == null || client == null)
                 {
+                    // Release the device on this path too. The capture is marked complete below and dropped
+                    // from the active list, so nothing else would ever stop the recording.
+                    StopMic();
                     CompleteEmpty("no clip");
                     return;
                 }

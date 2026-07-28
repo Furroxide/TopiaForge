@@ -448,6 +448,11 @@ namespace TopiaForge.ModManager.Tests
                 "participant.IsLocal",
                 "BindMultiplayer(multiplayer)",
                 "SubmitProbeLoopbackAsync",
+                // The submitted command is asynchronous by contract, so the probe drains it per frame rather
+                // than waiting on it (see TF1008). The drain stays inside the probe so this canonical case
+                // still reports its own outcome.
+                "loopbackConfirmation.IsCompleted",
+                "confirmation.WasPredicted",
                 "multiplayerProbeState.Value.Value",
                 "multiplayerPresentedValue"
             });

@@ -7,14 +7,8 @@ namespace TopiaForge.CreatorTools
     public sealed class CreatorToolsMod : TopiaForgeMod
     {
         private static readonly ConfigDefinition<CreatorToolsConfig> ConfigContract =
-            new ConfigDefinition<CreatorToolsConfig>(
-                1,
-                () => new CreatorToolsConfig(),
-                value =>
-                {
-                    value.Normalize();
-                    return OperationResult<bool>.Success(true);
-                });
+            // CreatorToolsConfig is ISelfNormalizingConfig, so the config service bounds a stored document.
+            new ConfigDefinition<CreatorToolsConfig>(1, () => new CreatorToolsConfig());
 
         private GlobalCreatorToolsHost? host;
         private ICreatorToolHostService? router;
@@ -25,7 +19,6 @@ namespace TopiaForge.CreatorTools
         {
             var loaded = Context.Config.Load(ConfigContract);
             var config = loaded.TryGetValue(out var value) ? value : new CreatorToolsConfig();
-            config.Normalize();
             Context.Config.Save(ConfigContract, config);
             RegisterCommands();
             if (!config.Enabled)

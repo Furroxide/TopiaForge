@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <!-- Import the analyzer's own package props/targets so first-party mods build under exactly the
+       MSBuild contract community authors get: CompilerVisibleProperty wiring, manifest AdditionalFiles,
+       and the copied-SDK-assembly guard. Drift between the two populations then cannot happen. -->
+  <Import Project="..\..\src\TopiaForge.Mods.Analyzers\buildTransitive\TopiaForge.Mods.Analyzers.props" />
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>TopiaForge.Worlds</AssemblyName>
@@ -11,9 +15,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
-    <ProjectReference Include="..\..\src\TopiaForge.Mods.Worlds\TopiaForge.Mods.Worlds.csproj" />
-    <ProjectReference Include="..\..\src\TopiaForge.Mods.UnityUi\TopiaForge.Mods.UnityUi.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Worlds\TopiaForge.Mods.Worlds.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.UnityUi\TopiaForge.Mods.UnityUi.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Analyzers\TopiaForge.Mods.Analyzers.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <!-- Shared clean-room game-reflection helpers (source-linked so the request shape lives in one place). -->
@@ -33,4 +40,5 @@
     <Reference Include="Unity.RenderPipelines.Core.Runtime" HintPath="$(RobotopiaManagedDir)\Unity.RenderPipelines.Core.Runtime.dll" Private="false" />
     <Reference Include="Unity.RenderPipelines.HighDefinition.Runtime" HintPath="$(RobotopiaManagedDir)\Unity.RenderPipelines.HighDefinition.Runtime.dll" Private="false" />
   </ItemGroup>
+  <Import Project="..\..\src\TopiaForge.Mods.Analyzers\buildTransitive\TopiaForge.Mods.Analyzers.targets" />
 </Project>

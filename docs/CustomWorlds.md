@@ -32,6 +32,14 @@ from the extracted release in CI.
 `BundleWorldContent.CreateAsync()` loads and spawns through opaque asset/entity handles. Returned
 content and registrations are released automatically after session teardown, unload, or failed load.
 
+**Never block on `CreateAsync()`.** It is driven by the game's own asynchronous asset loader, so the
+task completes on the main thread. Calling `.Result`, `.Wait()`, or `.GetAwaiter().GetResult()` from
+the main thread stops the frame loop that would have completed it, and the game hangs with no
+recovery. Drive it with `PendingOperation<IWorldContent>` and poll that from your per-frame update;
+it also hands back content that arrives after a cancel or timeout so you can release it. The analyzer
+reports a blocking wait as [TF1008](Diagnostics.md#tf1008). The same rule applies to every
+`IAssetService` load.
+
 ## Pause and save behavior
 
 World pause actions are registered through the Worlds provider and remain owner-bound.

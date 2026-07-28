@@ -328,6 +328,9 @@ type public interface TopiaForge.Mods.ISceneService
   method [abstract,virtual,newslot] System.IDisposable SubscribeCheckpointChanged(System.Action<TopiaForge.Mods.CheckpointSnapshot> handler)
   method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.SceneSnapshot>> LoadAsync(TopiaForge.Mods.SceneLoadRequest request, System.Threading.CancellationToken cancellationToken = null)
 
+type public interface TopiaForge.Mods.ISelfNormalizingConfig
+  method [abstract,virtual,newslot] System.Void Normalize()
+
 type public interface TopiaForge.Mods.ISpawnedEntity : System.IDisposable, TopiaForge.Mods.IEntity
   property TopiaForge.Mods.TransformState InitialTransform { get [abstract,virtual,newslot]; }
 
@@ -483,6 +486,22 @@ type public sealed class TopiaForge.Mods.OperationResult<T> : System.Object
   property System.String ErrorMessage { get; }
   property T? Value { get; }
   property TopiaForge.Mods.ModErrorCode ErrorCode { get; }
+
+type public sealed class TopiaForge.Mods.PendingOperation<T> : System.Object
+  constructor .ctor()
+  method System.Void Begin(System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<T>>> start, System.Threading.CancellationToken linkedTo, System.Single now)
+  method System.Void Cancel()
+  method System.Void Forget()
+  method TopiaForge.Mods.PendingOperationState Poll(System.Single now, System.Single timeoutSeconds, out TopiaForge.Mods.OperationResult<T> result)
+  property System.Boolean IsInFlight { get; }
+
+type public enum TopiaForge.Mods.PendingOperationState : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.PendingOperationState Abandoned = 4 (Abandoned)
+  field const TopiaForge.Mods.PendingOperationState Completed = 2 (Completed)
+  field const TopiaForge.Mods.PendingOperationState Idle = 0 (Idle)
+  field const TopiaForge.Mods.PendingOperationState TimedOut = 3 (TimedOut)
+  field const TopiaForge.Mods.PendingOperationState Waiting = 1 (Waiting)
 
 type public sealed class TopiaForge.Mods.PhysicsHit : System.Object
   constructor .ctor(TopiaForge.Mods.IEntity entity, TopiaForge.Mods.Vec3 point, TopiaForge.Mods.Vec3 normal, System.Single distance)

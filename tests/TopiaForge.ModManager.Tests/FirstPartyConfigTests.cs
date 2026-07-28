@@ -1,6 +1,8 @@
 using System;
+using System.Reflection;
 using TopiaForge.GravityGun;
 using TopiaForge.ModManager.Core;
+using TopiaForge.Mods;
 using TopiaForge.NoFeedbackUrl;
 using TopiaForge.Performance;
 using TopiaForge.PerfFixes;
@@ -12,11 +14,48 @@ namespace TopiaForge.ModManager.Tests
         public static void Run()
         {
             GravityGunDefaultsAndNormalization();
+            GravityGunContractNormalizesStoredDocuments();
             NoFeedbackUrlDefaults();
             PerfFixesDefaults();
             PerformanceDefaultsAndPresets();
             Console.WriteLine("FirstPartyConfigTests passed.");
         }
+
+        /// <summary>
+        /// Having a Normalize method is not the contract — running it on a stored document is. GravityGunConfig
+        /// declares ISelfNormalizingConfig, so ConfigDefinition normalizes on every path IModConfigService
+        /// validates. Without it, hand-edited or corrupted values reach the controller and a NaN lands in
+        /// IEntityMotion.MoveToward, corrupting the held rigidbody. This exercises the real contract object.
+        /// </summary>
+        private static void GravityGunContractNormalizesStoredDocuments()
+        {
+            var field = typeof(GravityGunMod).GetField("Config", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert(field != null, "GravityGunMod must declare its ConfigDefinition contract");
+            var definition = field!.GetValue(null) as ConfigDefinition<GravityGunConfig>;
+            Assert(definition != null, "GravityGunMod.Config must be a GravityGunConfig contract");
+
+            var stored = JsonUtil.Deserialize<GravityGunConfig>("{\"maxRange\":-5,\"scrollStep\":0}");
+            stored.MinHoldDistance = 40f;
+            stored.MaxHoldDistance = 3f;
+            stored.DefaultHoldDistance = float.NaN;
+            stored.PullStrength = float.NaN;
+            stored.Damping = float.NegativeInfinity;
+            stored.MaxVelocity = -12f;
+            stored.ThrowVelocity = float.PositiveInfinity;
+
+            var validation = definition!.Validate(stored);
+            Assert(validation.Succeeded && validation.Value,
+                "GravityGun contract must accept a normalizable stored document");
+            Assert(stored.MaxRange >= 1f && stored.ScrollStep >= 0.1f
+                   && stored.MaxHoldDistance >= stored.MinHoldDistance
+                   && stored.DefaultHoldDistance >= stored.MinHoldDistance
+                   && stored.DefaultHoldDistance <= stored.MaxHoldDistance
+                   && IsFinite(stored.PullStrength) && IsFinite(stored.Damping)
+                   && stored.MaxVelocity >= 1f && IsFinite(stored.ThrowVelocity),
+                "GravityGun contract must normalize a stored document before it reaches the controller");
+        }
+
+        private static bool IsFinite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
 
         private static void GravityGunDefaultsAndNormalization()
         {

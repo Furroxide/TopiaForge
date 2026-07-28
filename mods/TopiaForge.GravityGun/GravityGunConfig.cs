@@ -1,9 +1,10 @@
 using System.Runtime.Serialization;
+using TopiaForge.Mods;
 
 namespace TopiaForge.GravityGun
 {
     [DataContract]
-    public sealed class GravityGunConfig
+    public sealed class GravityGunConfig : ISelfNormalizingConfig
     {
         public GravityGunConfig()
         {

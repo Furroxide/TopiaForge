@@ -113,6 +113,9 @@
   <ItemGroup>
     <Compile Include="..\..\mods\TopiaForge.GravityGun\GravityGunConfig.cs" />
     <Compile Include="..\..\mods\TopiaForge.GravityGun\GravityGunController.cs" />
+    <!-- The entry point owns the ConfigDefinition contract (schema version, defaults, validator). It is the
+         seam where an unvalidated stored document reaches gameplay, so it is exercised here directly. -->
+    <Compile Include="..\..\mods\TopiaForge.GravityGun\GravityGunMod.cs" />
     <Compile Include="..\..\mods\TopiaForge.NoFeedbackUrl\NoFeedbackUrlConfig.cs" />
     <Compile Include="..\..\mods\TopiaForge.PerfFixes\PerfFixesConfig.cs" />
     <Compile Include="..\..\mods\TopiaForge.Performance\PerformanceConfig.cs" />

@@ -1,9 +1,10 @@
 using System.Runtime.Serialization;
+using TopiaForge.Mods;
 
 namespace TopiaForge.Sandbox
 {
     [DataContract]
-    public sealed class SandboxConfig
+    public sealed class SandboxConfig : ISelfNormalizingConfig
     {
         public SandboxConfig()
         {

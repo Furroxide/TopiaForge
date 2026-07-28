@@ -1,4 +1,5 @@
 using System.Runtime.Serialization;
+using TopiaForge.Mods;
 
 namespace TopiaForge.UgcLiveSync
 {
@@ -12,7 +13,7 @@ namespace TopiaForge.UgcLiveSync
     /// prefab, so they are registered programmatically via <see cref="TopiaForge.Mods.IUgcLiveSyncService"/>.
     /// </remarks>
     [DataContract]
-    public sealed class UgcLiveSyncConfig
+    public sealed class UgcLiveSyncConfig : ISelfNormalizingConfig
     {
         /// <summary>Default Automerge sync server (upgraded to wss:// at connect time by the game).</summary>
         public const string DefaultSyncServerUrl = "https://automerge-repo-sync-server-main.onrender.com";
@@ -60,6 +61,45 @@ namespace TopiaForge.UgcLiveSync
 
         /// <summary>True when <see cref="Transport"/> selects the Automerge channel.</summary>
         public bool UsesAutomerge => string.Equals(Transport, "automerge", System.StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Bounds a stored document. The launcher, the CLI, and hand edits all write this file, and none of
+        /// them clamp, so the mod does it at the config boundary. The service also defends its own bounds at
+        /// the point of use; normalizing here additionally repairs the persisted file and keeps the transport
+        /// and server fields honest rather than silently falling through to a default at read time.
+        /// </summary>
+        public void Normalize()
+        {
+            Transport = UsesAutomerge ? "automerge" : "localFolder";
+            WatchFolder = WatchFolder ?? string.Empty;
+            EditorUrl = EditorUrl ?? string.Empty;
+            DocumentUrl = DocumentUrl ?? string.Empty;
+            SceneId = SceneId ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(SyncServerUrl))
+            {
+                SyncServerUrl = DefaultSyncServerUrl;
+            }
+
+            // A non-positive cap would disable the allocation guard entirely, so it falls back to the default
+            // rather than clamping to a minimum; anything past int.MaxValue cannot be read in one buffer.
+            if (MaxSnapshotBytes <= 0)
+            {
+                MaxSnapshotBytes = 16L * 1024 * 1024;
+            }
+            else if (MaxSnapshotBytes > int.MaxValue)
+            {
+                MaxSnapshotBytes = int.MaxValue;
+            }
+
+            if (DebounceMilliseconds < 0)
+            {
+                DebounceMilliseconds = 0;
+            }
+            else if (DebounceMilliseconds > 60000)
+            {
+                DebounceMilliseconds = 60000;
+            }
+        }
 
         // DataContractJsonSerializer constructs the instance with FormatterServices.GetUninitializedObject, which
         // bypasses the constructor and property initializers, so absent members would be null/0. Seed real

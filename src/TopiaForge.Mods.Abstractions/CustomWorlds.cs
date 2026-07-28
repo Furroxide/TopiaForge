@@ -20,7 +20,15 @@ namespace TopiaForge.Mods
         /// <summary>Gets placement and teardown behavior.</summary>
         CustomWorldOptions Options { get; }
 
-        /// <summary>Creates content for one launch.</summary>
+        /// <summary>
+        /// Creates content for one launch.
+        /// </summary>
+        /// <remarks>
+        /// The returned task completes on the game's main thread. Never block on it — waiting from the main
+        /// thread stops the frame loop that would have completed it, and the game hangs with no recovery.
+        /// Keep the task, poll <see cref="Task.IsCompleted"/> from your per-frame update, and read the result
+        /// there. The analyzer reports a blocking wait as TF1008.
+        /// </remarks>
         Task<OperationResult<IWorldContent>> CreateAsync(
             CancellationToken cancellationToken = default);
     }

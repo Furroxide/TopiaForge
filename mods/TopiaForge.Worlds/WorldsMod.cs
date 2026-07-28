@@ -32,7 +32,11 @@ namespace TopiaForge.Worlds
                 throw new InvalidOperationException("The loader did not provide its scene-transition gate.");
             }
 
-            service = new WorldsService(Context.Logger, Context.Files, internalContext.SceneTransitions);
+            service = new WorldsService(
+                Context.Logger,
+                Context.Files,
+                internalContext.SceneTransitions,
+                Context.Lifetime.StoppingToken);
             // Track native scene hooks immediately so any later discovery/UI/config failure still releases them.
             Context.Lifetime.Track(service);
             service.EndSessionOnMenuScene = config.EndSessionOnMenuScene;

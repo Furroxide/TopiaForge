@@ -76,6 +76,16 @@ namespace TopiaForge.Mods.Analyzers
             helpLinkUri: DocsRoot + "TF1007",
             customTags: new[] { WellKnownDiagnosticTags.CompilationEnd });
 
+        private static readonly DiagnosticDescriptor BlockingWaitOnSdkTask = new DiagnosticDescriptor(
+            "TF1008",
+            "Blocking wait on an SDK task",
+            "'{0}' blocks the calling thread. TopiaForge SDK tasks complete on the game's main thread, so waiting on one from that thread stops the engine's update pump and hangs the game; drive the work with PendingOperation<T> and poll it from your per-frame update.",
+            Category,
+            DiagnosticSeverity.Error,
+            isEnabledByDefault: true,
+            description: "Mod code polls asynchronous SDK work from its per-frame update instead of waiting on it.",
+            helpLinkUri: DocsRoot + "TF1008");
+
         private static readonly ImmutableDictionary<string, ModuleRequirement> ModuleAssemblies =
             new Dictionary<string, ModuleRequirement>(StringComparer.Ordinal)
             {
@@ -110,7 +120,8 @@ namespace TopiaForge.Mods.Analyzers
                 MissingModuleDependency,
                 ObsoletePreV1Api,
                 MissingRequiredCapability,
-                LoaderOwnedUiReference);
+                LoaderOwnedUiReference,
+                BlockingWaitOnSdkTask);
 
         /// <inheritdoc/>
         public override void Initialize(AnalysisContext context)
@@ -122,14 +133,26 @@ namespace TopiaForge.Mods.Analyzers
 
         private static void StartCompilation(CompilationStartAnalysisContext context)
         {
+            // Test code may legitimately wait on a task: it is not running inside the game loop.
             if (HasBooleanBuildProperty(
-                    context.Options.AnalyzerConfigOptionsProvider,
-                    "TopiaForgeSafeProject",
-                    expected: false)
-                || HasBooleanBuildProperty(
                     context.Options.AnalyzerConfigOptionsProvider,
                     "IsTestProject",
                     expected: true))
+            {
+                return;
+            }
+
+            // Main-thread safety is not a safe-API-surface concern. A mod that opts out of the safe profile to
+            // use the unstable interop package still runs inside the game loop and can still hang it, so this
+            // rule is registered ahead of the safe-project gate below.
+            context.RegisterSyntaxNodeAction(
+                AnalyzeBlockingWait,
+                SyntaxKind.SimpleMemberAccessExpression);
+
+            if (HasBooleanBuildProperty(
+                    context.Options.AnalyzerConfigOptionsProvider,
+                    "TopiaForgeSafeProject",
+                    expected: false))
             {
                 return;
             }
@@ -157,6 +180,121 @@ namespace TopiaForge.Mods.Analyzers
             context.RegisterSyntaxNodeAction(
                 node => AnalyzeIdentifier(node, unsafeNative),
                 SyntaxKind.IdentifierName);
+        }
+
+        /// <summary>
+        /// Reports a synchronous wait on a task. SDK asset and scene work completes from Unity main-thread
+        /// callbacks, so blocking that thread stops the update pump that would have completed the task — the
+        /// game hangs with no recovery. A drain guarded by <c>Task.IsCompleted</c> is the supported pattern and
+        /// is not reported.
+        /// </summary>
+        private static void AnalyzeBlockingWait(SyntaxNodeAnalysisContext context)
+        {
+            var access = (MemberAccessExpressionSyntax)context.Node;
+            var name = access.Name.Identifier.ValueText;
+            if (name != "Result" && name != "Wait" && name != "GetResult")
+            {
+                return;
+            }
+
+            if (!(context.SemanticModel.GetSymbolInfo(access, context.CancellationToken).Symbol is ISymbol symbol)
+                || !IsBlockingTaskMember(symbol, name))
+            {
+                return;
+            }
+
+            if (PollsBeforeDraining(access, context))
+            {
+                return;
+            }
+
+            context.ReportDiagnostic(Diagnostic.Create(
+                BlockingWaitOnSdkTask,
+                access.GetLocation(),
+                access.ToString().Trim()));
+        }
+
+        private static bool IsBlockingTaskMember(ISymbol symbol, string name)
+        {
+            var containing = symbol.ContainingType?.ConstructedFrom ?? symbol.ContainingType;
+            if (containing == null)
+            {
+                return false;
+            }
+
+            var qualified = containing.ToDisplayString();
+            switch (name)
+            {
+                case "Result":
+                    // Task<T>.Result and ValueTask<T>.Result both block until the operation finishes.
+                    return symbol is IPropertySymbol
+                        && (qualified == "System.Threading.Tasks.Task<TResult>"
+                            || qualified == "System.Threading.Tasks.ValueTask<TResult>");
+
+                case "Wait":
+                    return symbol is IMethodSymbol && qualified == "System.Threading.Tasks.Task";
+
+                default:
+                    // GetResult() is only blocking on an awaiter; the same name on other types is unrelated.
+                    return symbol is IMethodSymbol
+                        && qualified.StartsWith("System.Runtime.CompilerServices.", StringComparison.Ordinal)
+                        && qualified.Contains("Awaiter");
+            }
+        }
+
+        /// <summary>
+        /// Returns whether the surrounding code already polls a task, which is how a drain is written: check
+        /// <c>IsCompleted</c>, then read the finished result without waiting.
+        /// </summary>
+        /// <remarks>
+        /// The scope is the whole declaring type, not one method. A drain is routinely split into a guard that
+        /// checks <c>IsCompleted</c> and a small helper that reads the finished result, and for a partial class
+        /// those two halves commonly live in different files. Scoping to the type symbol follows the language's
+        /// own notion of one type, so a correct drain is never reported because of how it was split up.
+        /// </remarks>
+        private static bool PollsBeforeDraining(SyntaxNode blockingAccess, SyntaxNodeAnalysisContext context)
+        {
+            var enclosing = blockingAccess.FirstAncestorOrSelf<TypeDeclarationSyntax>();
+            if (enclosing == null)
+            {
+                return DeclaresPoll(blockingAccess.FirstAncestorOrSelf<MemberDeclarationSyntax>());
+            }
+
+            var type = context.SemanticModel.GetDeclaredSymbol(enclosing, context.CancellationToken);
+            if (type == null)
+            {
+                return DeclaresPoll(enclosing);
+            }
+
+            foreach (var reference in type.DeclaringSyntaxReferences)
+            {
+                if (DeclaresPoll(reference.GetSyntax(context.CancellationToken)))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool DeclaresPoll(SyntaxNode? scope)
+        {
+            if (scope == null)
+            {
+                return false;
+            }
+
+            // Matches every spelling of the poll: `task.IsCompleted`, `task?.IsCompleted` (a member *binding*,
+            // not a member access), and an unqualified `IsCompleted` inside the awaiter itself.
+            foreach (var candidate in scope.DescendantNodes().OfType<SimpleNameSyntax>())
+            {
+                if (candidate.Identifier.ValueText == "IsCompleted")
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static void AnalyzeManifestContracts(
@@ -253,7 +391,9 @@ namespace TopiaForge.Mods.Analyzers
             bool unsafeNative)
         {
             var identifier = ((IdentifierNameSyntax)context.Node).Identifier.ValueText;
-            if (RetiredApis.TryGetValue(identifier, out var replacement))
+            var resolved = context.SemanticModel.GetSymbolInfo(context.Node, context.CancellationToken).Symbol;
+            if (RetiredApis.TryGetValue(identifier, out var replacement)
+                && IsRetiredSdkReference(resolved, context.Compilation))
             {
                 context.ReportDiagnostic(Diagnostic.Create(
                     ObsoletePreV1Api,
@@ -268,7 +408,7 @@ namespace TopiaForge.Mods.Analyzers
                 return;
             }
 
-            var symbol = context.SemanticModel.GetSymbolInfo(context.Node, context.CancellationToken).Symbol;
+            var symbol = resolved;
             var namespaceName = symbol?.ContainingNamespace?.ToDisplayString() ?? string.Empty;
             var assemblyName = symbol?.ContainingAssembly?.Name ?? string.Empty;
             if (IsNativeNamespace(namespaceName) || IsNativeAssembly(assemblyName))
@@ -278,6 +418,28 @@ namespace TopiaForge.Mods.Analyzers
                     context.Node.GetLocation(),
                     symbol?.ToDisplayString() ?? identifier));
             }
+        }
+
+        /// <summary>
+        /// Whether a retired-API name actually refers to the removed SDK member rather than something the
+        /// author declared. <c>LoadConfig</c>, <c>SaveConfig</c>, and <c>GetService</c> are ordinary method
+        /// names; matching on the identifier alone would reject perfectly correct V1 mods. Pre-V1 source is
+        /// still caught because the retired member no longer exists, so the name does not bind at all.
+        /// </summary>
+        private static bool IsRetiredSdkReference(ISymbol? symbol, Compilation compilation)
+        {
+            if (symbol == null)
+            {
+                return true;
+            }
+
+            var assembly = symbol.ContainingAssembly;
+            if (assembly == null || SymbolEqualityComparer.Default.Equals(assembly, compilation.Assembly))
+            {
+                return false;
+            }
+
+            return assembly.Name.StartsWith("TopiaForge.", StringComparison.Ordinal);
         }
 
         private static bool IsNativeNamespace(string value)

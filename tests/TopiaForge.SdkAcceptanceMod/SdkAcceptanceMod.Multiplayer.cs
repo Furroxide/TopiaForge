@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using TopiaForge.Mods;
 
 namespace TopiaForge.SdkAcceptance
@@ -10,6 +11,11 @@ namespace TopiaForge.SdkAcceptance
             new ReplicatedState<AcceptanceMultiplayerState>(new AcceptanceMultiplayerState());
 
         private int multiplayerPresentedValue;
+
+        // The standalone loopback provider confirms inline today, but a submitted command is asynchronous by
+        // contract and live transport will not. Waiting on it would hang the game the moment that changes, so
+        // the acceptance mod demonstrates the supported drain: keep the task and poll it per frame.
+        private Task<MultiplayerCommandConfirmation<AcceptanceMultiplayerResponse>>? loopbackConfirmation;
 
         private void RunMultiplayerLoopbackChecks()
         {
@@ -56,27 +62,51 @@ namespace TopiaForge.SdkAcceptance
 
             Context.Lifetime.Track(lease);
 
-            var confirmation = SubmitProbeLoopbackAsync(
-                    new AcceptanceMultiplayerRequest { Delta = 1 })
-                .GetAwaiter()
-                .GetResult();
-            if (!confirmation.Result.TryGetValue(out var response)
-                || confirmation.WasPredicted
-                || response.Value != 1
-                || multiplayerProbeState.Value.Value != 1
-                || multiplayerPresentedValue != 1)
+            // Submit, then drain per frame. Waiting on the returned task would block the main thread that the
+            // provider needs in order to complete it — the loopback provider confirms inline today, but live
+            // transport will not, and a blocking wait hangs the game outright (see TF1008).
+            loopbackConfirmation = SubmitProbeLoopbackAsync(new AcceptanceMultiplayerRequest { Delta = 1 });
+            Context.Lifetime.Track(Context.Events.SubscribeUpdate(_ =>
             {
-                Fail(
-                    "integration.multiplayer-loopback",
-                    "generated state, command, codec, or accepted presentation did not complete canonically");
-                return;
-            }
+                if (loopbackConfirmation == null || !loopbackConfirmation.IsCompleted)
+                {
+                    return;
+                }
 
-            Pass(
-                "integration.multiplayer-loopback",
-                "session=" + session.Id +
-                ";participant=" + localParticipant.GetValueOrDefault() +
-                ";generated-value=" + response.Value);
+                var finished = loopbackConfirmation;
+                loopbackConfirmation = null;
+
+                MultiplayerCommandConfirmation<AcceptanceMultiplayerResponse> confirmation;
+                try
+                {
+                    confirmation = finished.GetAwaiter().GetResult();
+                }
+                catch (System.Exception exception)
+                {
+                    Fail(
+                        "integration.multiplayer-loopback",
+                        "the generated command faulted: " + exception.Message);
+                    return;
+                }
+
+                if (!confirmation.Result.TryGetValue(out var response)
+                    || confirmation.WasPredicted
+                    || response.Value != 1
+                    || multiplayerProbeState.Value.Value != 1
+                    || multiplayerPresentedValue != 1)
+                {
+                    Fail(
+                        "integration.multiplayer-loopback",
+                        "generated state, command, codec, or accepted presentation did not complete canonically");
+                    return;
+                }
+
+                Pass(
+                    "integration.multiplayer-loopback",
+                    "session=" + session.Id +
+                    ";participant=" + localParticipant.GetValueOrDefault() +
+                    ";generated-value=" + response.Value);
+            }));
         }
 
         [MultiplayerCommand(

@@ -940,7 +940,10 @@ namespace TopiaForge.Mods.Multiplayer.Generators.Tests
                    !IsHiddenFromEditor(typeof(IReplicatedObject<,>)),
                 "Primary author concepts must remain discoverable.");
 
-            var generated = SingleGeneratedSource(Generate(ValidContractSource)).SourceText.ToString();
+            var generated = SingleGeneratedSource(Generate(ValidContractSource))
+                .SourceText
+                .ToString()
+                .Replace("\r\n", "\n", StringComparison.Ordinal);
             Assert(generated.Contains(
                        "[global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]\n    public global::TopiaForge.Mods.MultiplayerContractDescriptor",
                        StringComparison.Ordinal) &&
