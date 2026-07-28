@@ -36,6 +36,19 @@ extension _PathHelpers on LocalLauncherRepository {
 
   String _redact(String text, Iterable<String> gamePaths) {
     var result = text;
+    final normalizedGamePaths =
+        gamePaths
+            .map((path) => path.trim())
+            .where((path) => path.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort((left, right) => right.length.compareTo(left.length));
+    for (final gamePath in normalizedGamePaths) {
+      result = result.replaceAll(
+        RegExp(RegExp.escape(gamePath), caseSensitive: false),
+        r'%ROBOTOPIA_GAME%',
+      );
+    }
     final userHome =
         Platform.environment['USERPROFILE'] ?? Platform.environment['HOME'];
     if (userHome != null && userHome.isNotEmpty) {
@@ -43,14 +56,6 @@ extension _PathHelpers on LocalLauncherRepository {
         RegExp(RegExp.escape(userHome), caseSensitive: false),
         r'%USERHOME%',
       );
-    }
-    for (final gamePath in gamePaths) {
-      if (gamePath.trim().isNotEmpty) {
-        result = result.replaceAll(
-          RegExp(RegExp.escape(gamePath), caseSensitive: false),
-          r'%ROBOTOPIA_GAME%',
-        );
-      }
     }
     result = result.replaceAllMapped(
       RegExp(
