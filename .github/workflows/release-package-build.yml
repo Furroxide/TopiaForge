@@ -463,7 +463,7 @@ jobs:
           if [ "$RUNNER_OS" = Windows ]; then
             suffix='.exe'
           fi
-          dart pub get --enforce-lockfile
+          dart pub get
           dart compile exe tool/update_health_fixture.dart \
             -o "$temp/topiaforge-update-health-fixture$suffix"
           dart compile exe tool/update_no_health_fixture.dart \
