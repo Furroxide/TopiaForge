@@ -29,6 +29,12 @@ Directory _writeFixtureRepo(Directory temp) {
     'node_modules',
     'dependency.js',
   ], 'generated');
+  _writeFile(repo, [
+    'tools',
+    'sidecar',
+    'bin',
+    'compiled-host-artifact',
+  ], 'generated');
   _writeFile(repo, ['tools', 'sidecar', '.npmrc'], 'token=secret');
   _writeFile(repo, ['docs', 'Guide.md'], 'guide');
   _writeFile(repo, ['docs', 'internal', 'Plan.md'], 'internal');
