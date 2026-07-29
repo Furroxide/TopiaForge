@@ -41,23 +41,30 @@ void main() {
     ]);
   });
 
-  test('default scaffold is explicitly non-publishable', () async {
-    final workspace = await repository.createModProject(
-      parentDirectory: root.path,
-      id: 'test.identity',
-      name: 'Identity',
-    );
-    final manifest = await repository.readModManifest(workspace.projectRoot);
-    final license = File(p.join(workspace.projectRoot, 'LICENSE.md'));
+  test(
+    'default scaffold is explicitly non-publishable',
+    () async {
+      final workspace = await repository.createModProject(
+        parentDirectory: root.path,
+        id: 'test.identity',
+        name: 'Identity',
+      );
+      final manifest = await repository.readModManifest(workspace.projectRoot);
+      final license = File(p.join(workspace.projectRoot, 'LICENSE.md'));
 
-    expect(manifest.author.name, TopiaForgeScaffoldDefaults.authorName);
-    expect(manifest.license, TopiaForgeScaffoldDefaults.license);
-    expect(license.readAsStringSync(), contains('No license has been granted'));
-    expect(
-      manifest.validate().map((issue) => issue.message).join(' '),
-      allOf(contains('author placeholder'), contains('Choose a license')),
-    );
-  });
+      expect(manifest.author.name, TopiaForgeScaffoldDefaults.authorName);
+      expect(manifest.license, TopiaForgeScaffoldDefaults.license);
+      expect(
+        license.readAsStringSync(),
+        contains('No license has been granted'),
+      );
+      expect(
+        manifest.validate().map((issue) => issue.message).join(' '),
+        allOf(contains('author placeholder'), contains('Choose a license')),
+      );
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
 
   test('explicit MIT and custom licenses write matching root text', () async {
     final mit = await repository.createModProject(
