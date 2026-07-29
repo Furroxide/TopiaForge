@@ -253,7 +253,7 @@ namespace TopiaForge.Mods
                     ((ISelfNormalizingConfig)value).Normalize();
                     return check(value);
                 }
-                : check;
+            : check;
             Migrate = migrate;
         }
 
