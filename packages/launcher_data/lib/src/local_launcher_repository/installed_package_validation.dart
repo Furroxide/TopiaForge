@@ -101,11 +101,7 @@ extension _InstalledPackageValidationHelpers on LocalLauncherRepository {
       errors.add('Install receipt timestamp is invalid.');
     }
 
-    final criticalPaths = <String>{
-      'topiaforge.mod.json',
-      manifest.entryAssembly.replaceAll('\\', '/'),
-      ...manifest.apiAssemblies.map((path) => path.replaceAll('\\', '/')),
-    };
+    final criticalPaths = _packageReceiptCriticalPaths(manifest);
     final expected = <String, Map<String, Object?>>{};
     final rawFiles = receipt['files'];
     if (rawFiles is! List || rawFiles.length > _maxReceiptFiles) {

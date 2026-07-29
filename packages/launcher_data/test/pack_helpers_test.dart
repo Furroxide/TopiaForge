@@ -35,7 +35,7 @@ void main() {
   });
 
   Map<String, Object?> manifestJson() => {
-    'schemaVersion': 4,
+    'schemaVersion': 5,
     'name': 'sample.mod',
     'displayName': 'Sample Mod',
     'version': '1.2.3',
@@ -333,7 +333,7 @@ set -eu
 mkdir -p ${_shellQuote(output.path)}
 printf mod > ${_shellQuote(p.join(output.path, 'Sample.dll'))}
 printf private > ${_shellQuote(p.join(output.path, 'Private.Dependency.dll'))}
-for name in Abstractions Analyzers Chronos Interop.Unity Prompts RobotKit Testing Ugc UnityUi Worlds; do
+for name in Abstractions Analyzers Chronos Interop.Unity Multiplayer Prompts RobotKit Testing Ugc UnityUi Worlds; do
   printf sdk > ${_shellQuote(output.path)}/TopiaForge.Mods.\$name.dll
   printf pdb > ${_shellQuote(output.path)}/TopiaForge.Mods.\$name.pdb
 done

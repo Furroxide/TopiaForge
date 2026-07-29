@@ -39,14 +39,19 @@ class ModManifest {
     this.builtWith,
     this.worldGamemodes = const [],
     this.apiAssemblies = const [],
+    this.multiplayer,
+    bool? multiplayerIsPresent,
     this.extraFields = const {},
     List<String> structuralIssues = const [],
-  }) : _structuralIssues = structuralIssues;
+  }) : multiplayerIsPresent = multiplayerIsPresent ?? multiplayer != null,
+       _structuralIssues = structuralIssues;
 
   /// Canonical URL for the manifest JSON schema, used by editors for
   /// autocomplete and validation of `topiaforge.mod.json`.
   static const canonicalSchemaUrl =
       'https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json';
+  static const manifestV5SchemaVersion = 5;
+  static const currentSchemaVersion = manifestV5SchemaVersion;
 
   static bool isValidId(String id) {
     if (!_modIdPattern.hasMatch(id)) {
@@ -94,6 +99,14 @@ class ModManifest {
   final List<GamemodeDefinition> worldGamemodes;
   final List<String> apiAssemblies;
 
+  /// Optional multiplayer admission metadata. Its absence means the mod is
+  /// standalone-only.
+  final ModMultiplayerMetadata? multiplayer;
+
+  /// Distinguishes a missing value from a malformed non-object value so the
+  /// validator can report the correct version-specific contract error.
+  final bool multiplayerIsPresent;
+
   /// Namespaced `x-*` extension fields survive a read/edit/write cycle.
   /// Retired aliases and invalid unknown fields remain visible so validation
   /// can reject them explicitly.
@@ -105,7 +118,16 @@ class ModManifest {
     ...optionalDependencies,
   ];
 
+  /// Decodes a V5 manifest after rejecting other schema versions before any
+  /// version-specific fields are interpreted.
   factory ModManifest.fromJson(Map<String, Object?> json) {
+    switch (_dispatchManifestSchema(json)) {
+      case _ManifestSchemaContract.v5:
+        return ModManifest._fromV5Json(json);
+    }
+  }
+
+  factory ModManifest._fromV5Json(Map<String, Object?> json) {
     return ModManifest(
       schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 0,
       schemaUrl: (json[r'$schema'] as String?) ?? '',
@@ -157,6 +179,8 @@ class ModManifest {
           : ModBuildMetadata.fromJson(json['builtWith']),
       worldGamemodes: _gamemodeList(json['worldGamemodes']),
       apiAssemblies: _stringList(json['apiAssemblies']),
+      multiplayer: ModMultiplayerMetadata.tryFromJson(json['multiplayer']),
+      multiplayerIsPresent: json.containsKey('multiplayer'),
       structuralIssues: _manifestStructuralIssues(json),
       extraFields: Map<String, Object?>.unmodifiable(
         Map<String, Object?>.of(json)
@@ -209,9 +233,29 @@ class ModManifest {
     if (worldGamemodes.isNotEmpty)
       'worldGamemodes': worldGamemodes.map((item) => item.toJson()).toList(),
     if (apiAssemblies.isNotEmpty) 'apiAssemblies': apiAssemblies,
+    if (multiplayerIsPresent && multiplayer != null)
+      'multiplayer': multiplayer!.toJson(),
   };
 
   List<LauncherIssue> validate() {
+    if (schemaVersion == 4) {
+      return const [
+        LauncherIssue(
+          severity: IssueSeverity.error,
+          message:
+              'schemaVersion 4 was retired before TopiaForge 1.0; migrate to schemaVersion 5. The multiplayer field is optional for standalone-only mods.',
+        ),
+      ];
+    }
+    if (schemaVersion != manifestV5SchemaVersion) {
+      return const [
+        LauncherIssue(
+          severity: IssueSeverity.error,
+          message: 'schemaVersion must be 5.',
+        ),
+      ];
+    }
+
     final issues = <LauncherIssue>[];
     _validateRequiredFields(issues);
     _validateDependencies(issues);
@@ -230,7 +274,8 @@ class ModManifest {
         ),
       );
     }
-    _validateManifestV4Constraints(this, issues);
+    _validateManifestConstraints(this, issues);
+    _validateManifestMultiplayer(this, issues);
     _validateLicense(issues);
     _validateManifestLicenseFiles(this, issues);
     _validateScaffoldPlaceholders(this, issues);
@@ -238,14 +283,6 @@ class ModManifest {
   }
 
   void _validateRequiredFields(List<LauncherIssue> issues) {
-    if (schemaVersion != 4) {
-      issues.add(
-        const LauncherIssue(
-          severity: IssueSeverity.error,
-          message: 'schemaVersion must be 4.',
-        ),
-      );
-    }
     if (!ModManifest.isValidId(id)) {
       issues.add(
         const LauncherIssue(

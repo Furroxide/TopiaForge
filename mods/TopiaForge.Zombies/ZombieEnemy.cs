@@ -51,7 +51,12 @@ namespace TopiaForge.Zombies
         public bool WasRecentlyShot => RecentlyShotTimer > 0f;
         public float HealthFraction => Archetype.Health <= 0f ? 0f : Math.Max(0f, Health / Archetype.Health);
 
-        public bool ApplyDamage(float amount)
+        /// <param name="byPlayer">
+        /// Whether the human fired the shot. Only that sets <see cref="WasRecentlyShot"/>, because its one consumer
+        /// is the ground truth handed to the brain — reporting "the human just shot you" for an ally's crossfire
+        /// makes the robot argue against something the player did not do.
+        /// </param>
+        public bool ApplyDamage(float amount, bool byPlayer)
         {
             if (!IsActive || amount <= 0f || float.IsNaN(amount) || float.IsInfinity(amount))
             {
@@ -59,7 +64,11 @@ namespace TopiaForge.Zombies
             }
 
             Health = Math.Max(0f, Health - amount);
-            RecentlyShotTimer = 3f;
+            if (byPlayer)
+            {
+                RecentlyShotTimer = 3f;
+            }
+
             return Health <= 0f;
         }
 

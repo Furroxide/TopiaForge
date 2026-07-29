@@ -342,7 +342,7 @@ namespace TopiaForge.Mods.Testing
         }
 
         /// <inheritdoc/>
-        public bool TryGet<T>(out T? provider) where T : class
+        public bool TryGet<T>([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out T? provider) where T : class
         {
             var values = GetAll<T>();
             provider = values.Count == 0 ? null : values[0];

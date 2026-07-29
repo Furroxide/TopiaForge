@@ -43,7 +43,7 @@ generates `topiaforge.dev.props` so C# code can compile against exported APIs.
 
 ## Exported C# APIs
 
-Runtime-only code-mod dependencies belong in the schema-V4 `dependencies` or
+Runtime-only code-mod dependencies belong in the schema-V5 `dependencies` or
 `optionalDependencies` maps. Editor package dependencies remain isolated in editor project state.
 If a package intentionally exposes C# APIs for other mods to compile against,
 list those DLLs in `apiAssemblies`:

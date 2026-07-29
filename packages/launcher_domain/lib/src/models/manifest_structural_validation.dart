@@ -284,5 +284,59 @@ List<String> _manifestStructuralIssues(Map<String, Object?> json) {
     }
   }
 
+  final multiplayer = json['multiplayer'];
+  if (json.containsKey('multiplayer')) {
+    closedObject(
+      'multiplayer',
+      multiplayer,
+      const {'mode', 'presence', 'protocol', 'synchronizedFiles'},
+      const {'mode'},
+    );
+    if (multiplayer is Map) {
+      stringValue(
+        'multiplayer.mode',
+        multiplayer['mode'],
+        minimum: 1,
+        maximum: 32,
+        required: true,
+      );
+      stringValue(
+        'multiplayer.presence',
+        multiplayer['presence'],
+        minimum: 1,
+        maximum: 16,
+      );
+      if (multiplayer.containsKey('protocol')) {
+        closedObject(
+          'multiplayer.protocol',
+          multiplayer['protocol'],
+          const {'version', 'peerVersionRange'},
+          const {'version'},
+        );
+        final protocol = multiplayer['protocol'];
+        if (protocol is Map) {
+          stringValue(
+            'multiplayer.protocol.version',
+            protocol['version'],
+            minimum: 1,
+            maximum: 256,
+            required: true,
+          );
+          stringValue(
+            'multiplayer.protocol.peerVersionRange',
+            protocol['peerVersionRange'],
+            minimum: 1,
+            maximum: 256,
+          );
+        }
+      }
+      stringArray(
+        'multiplayer.synchronizedFiles',
+        multiplayer['synchronizedFiles'],
+        maximumItems: 256,
+      );
+    }
+  }
+
   return List.unmodifiable(issues);
 }

@@ -143,6 +143,24 @@ abstract interface class LauncherRepository {
   Future<UgcSceneInspectionResult> inspectWatchFolderScenes(String watchFolder);
 }
 
+abstract interface class LauncherUpdateRepository {
+  Stream<LauncherUpdateStatus> get statuses;
+
+  Future<LauncherUpdateStatus> checkForUpdate({
+    required String currentVersion,
+    required LauncherUpdateChannel channel,
+    bool force = false,
+  });
+
+  Future<LauncherUpdateStatus> stageUpdate(LauncherUpdateCandidate candidate);
+
+  Future<void> applyStagedUpdate(LauncherUpdateStatus staged);
+
+  Future<void> recoverPendingUpdate();
+
+  Future<void> dispose();
+}
+
 /// Optional launcher-repository capability for enumerating multiple installs.
 ///
 /// Consumers must continue to support a plain [LauncherRepository] by falling

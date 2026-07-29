@@ -5,8 +5,10 @@ List<String> validateRobotopiaGameBuildMetadata({
   required Map<String, Object?> baseline,
 }) {
   final issues = <String>[];
-  if (metadata['buildId'] != policyBuildId || policyBuildId != 2227) {
-    issues.add('Game build metadata must be pinned to build 2227.');
+  if (policyBuildId <= 0 || metadata['buildId'] != policyBuildId) {
+    issues.add(
+      'Game build metadata must match the positive build ID in release policy.',
+    );
   }
   if (!requireLatestAtRelease) {
     issues.add(
@@ -35,9 +37,10 @@ List<String> validateRobotopiaGameBuildMetadata({
   if (!_sameStringSet(archives.keys.toSet(), const {'windows', 'mac'})) {
     issues.add('Game build archives must contain exactly windows and mac.');
   }
-  const expectedPaths = {
-    'windows': 'Robotopia-v02227-Win64.7z',
-    'mac': 'Robotopia-v02227-Mac.7z',
+  final archiveBuild = policyBuildId.toString().padLeft(5, '0');
+  final expectedPaths = {
+    'windows': 'Robotopia-v$archiveBuild-Win64.7z',
+    'mac': 'Robotopia-v$archiveBuild-Mac.7z',
   };
   for (final platform in expectedPaths.keys) {
     final value = archives[platform];
@@ -50,13 +53,15 @@ List<String> validateRobotopiaGameBuildMetadata({
         archive['path'] != expectedPaths[platform] ||
         !_isSha256Value(archive['sha256'])) {
       issues.add(
-        'Game build archive $platform must have the expected build-2227 path and SHA-256.',
+        'Game build archive $platform must have the expected build-$policyBuildId path and SHA-256.',
       );
     }
   }
-  if (baseline['gameVersionLabel'] != 'build 2227' ||
-      baseline['gameVersion'] != '0.0.2227') {
-    issues.add('Compatibility baseline must identify build 2227 as 0.0.2227.');
+  if (baseline['gameVersionLabel'] != 'build $policyBuildId' ||
+      baseline['gameVersion'] != '0.0.$policyBuildId') {
+    issues.add(
+      'Compatibility baseline must identify build $policyBuildId as 0.0.$policyBuildId.',
+    );
   }
   return issues;
 }

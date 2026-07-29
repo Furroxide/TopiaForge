@@ -3,11 +3,11 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>TopiaForge.Mods.Testing</AssemblyName>
     <RootNamespace>TopiaForge.Mods.Testing</RootNamespace>
-    <Version>1.0.0</Version>
-    <PackageVersion>1.0.0</PackageVersion>
+    <Version>1.0.0-rc.1</Version>
+    <PackageVersion>1.0.0-rc.1</PackageVersion>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>
-    <InformationalVersion>1.0.0</InformationalVersion>
+    <InformationalVersion>1.0.0-rc.1</InformationalVersion>
     <PackageId>TopiaForge.Mods.Testing</PackageId>
     <Authors>TopiaForge</Authors>
     <Description>Runner-neutral fakes and lifecycle helpers for TopiaForge V1 mods.</Description>
@@ -27,6 +27,8 @@
   <ItemGroup>
     <ProjectReference Include="..\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
     <ProjectReference Include="..\TopiaForge.Mods.Chronos\TopiaForge.Mods.Chronos.csproj" />
+    <ProjectReference Include="..\TopiaForge.Mods.CreatorContent\TopiaForge.Mods.CreatorContent.csproj" />
+    <ProjectReference Include="..\TopiaForge.Mods.Multiplayer\TopiaForge.Mods.Multiplayer.csproj" />
     <ProjectReference Include="..\TopiaForge.Mods.Prompts\TopiaForge.Mods.Prompts.csproj" />
     <ProjectReference Include="..\TopiaForge.Mods.RobotKit\TopiaForge.Mods.RobotKit.csproj" />
     <ProjectReference Include="..\TopiaForge.Mods.Ugc\TopiaForge.Mods.Ugc.csproj" />
@@ -50,6 +52,10 @@
           Pack="true" PackagePath="lib\netstandard2.1\TopiaForge.Mods.Abstractions.dll" />
     <None Include="..\TopiaForge.Mods.Chronos\bin\$(Configuration)\netstandard2.1\TopiaForge.Mods.Chronos.dll"
           Pack="true" PackagePath="lib\netstandard2.1\TopiaForge.Mods.Chronos.dll" />
+    <None Include="..\TopiaForge.Mods.CreatorContent\bin\$(Configuration)\netstandard2.1\TopiaForge.Mods.CreatorContent.dll"
+          Pack="true" PackagePath="lib\netstandard2.1\TopiaForge.Mods.CreatorContent.dll" />
+    <None Include="..\TopiaForge.Mods.Multiplayer\bin\$(Configuration)\netstandard2.1\TopiaForge.Mods.Multiplayer.dll"
+          Pack="true" PackagePath="lib\netstandard2.1\TopiaForge.Mods.Multiplayer.dll" />
     <None Include="..\TopiaForge.Mods.Prompts\bin\$(Configuration)\netstandard2.1\TopiaForge.Mods.Prompts.dll"
           Pack="true" PackagePath="lib\netstandard2.1\TopiaForge.Mods.Prompts.dll" />
     <None Include="..\TopiaForge.Mods.RobotKit\bin\$(Configuration)\netstandard2.1\TopiaForge.Mods.RobotKit.dll"
@@ -62,6 +68,8 @@
 
   <ItemGroup>
     <TopiaForgeTestingRuntimeProject Include="..\TopiaForge.Mods.Chronos\TopiaForge.Mods.Chronos.csproj" />
+    <TopiaForgeTestingRuntimeProject Include="..\TopiaForge.Mods.CreatorContent\TopiaForge.Mods.CreatorContent.csproj" />
+    <TopiaForgeTestingRuntimeProject Include="..\TopiaForge.Mods.Multiplayer\TopiaForge.Mods.Multiplayer.csproj" />
     <TopiaForgeTestingRuntimeProject Include="..\TopiaForge.Mods.Prompts\TopiaForge.Mods.Prompts.csproj" />
     <TopiaForgeTestingRuntimeProject Include="..\TopiaForge.Mods.RobotKit\TopiaForge.Mods.RobotKit.csproj" />
     <TopiaForgeTestingRuntimeProject Include="..\TopiaForge.Mods.Ugc\TopiaForge.Mods.Ugc.csproj" />

@@ -18,7 +18,7 @@ namespace TopiaForge.ModManager
     {
         public const string PluginGuid = "io.github.furroxide.topiaforge.modmanager";
         public const string PluginName = "TopiaForge";
-        public const string PluginVersion = TopiaForgeVersions.LoaderVersion;
+        public const string PluginVersion = TopiaForgeVersions.BepInExPluginVersion;
 
         private readonly PackageInstaller packageInstaller = new PackageInstaller();
         private readonly ModRegistry registry = new ModRegistry();

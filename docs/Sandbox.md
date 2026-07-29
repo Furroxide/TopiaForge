@@ -1,44 +1,43 @@
 ---
-title: Sandbox acceptance mod
-description: How the first-party Robotopia Sandbox exercises safe Worlds and RobotKit V1 contracts.
+title: Sandbox creator gamemode
+description: Use Robotopia's managed, disposable Creator workbench through safe Worlds, RobotKit, and Creator Content contracts.
 ---
 
-# Sandbox acceptance mod
+# Sandbox creator gamemode
 
-Sandbox is TopiaForge's first-party Robotopia acceptance mod for custom-world, robot, dialogue,
-asset, interaction, and UI authoring through the safe V1 SDK. Its consumer project has no direct
-Unity or Robotopia assembly, reflection, or patching dependency.
+Sandbox is TopiaForge's managed, disposable Robotopia creator gamemode. Press **F5** to open the same fullscreen
+workbench used by the optional global Creator Tools package. Sandbox receives F5 routing priority and does not require
+the ordinary-world persistence-isolation gate.
 
 ## Dependencies
 
-The manifest declares schema V4 dependencies on the Worlds and RobotKit runtime providers, and the
-project references the exact `TopiaForge.Mods.Worlds` and `TopiaForge.Mods.RobotKit` contract
-packages. Providers are resolved with `Context.RequireExtension<T>()`.
+The manifest declares schema V5 dependencies on Worlds, RobotKit, and Creator Content. The consumer project references
+only their Unity-free contracts and links the shared workbench presentation/controller source. Providers are resolved
+through the owner-scoped extension service.
 
 ## Lifecycle
 
-Sandbox derives from `TopiaForgeMod`. During `OnLoad()` it registers its Robotopia world/menu
-definitions, named input actions, session observers, and safe in-game UI surfaces. Registrations,
-subscriptions, spawned entities, robot agents, conversations, and content handles belong to
-`Context.Lifetime`.
+Creator Content owns the single F5 action and routes it to Sandbox only while the Sandbox gamemode is active. The
+legacy default Q binding migrates to F5; genuinely customized bindings remain unchanged. F5 or window dismissal hides
+the editor and releases player controls without ending its session. The warning HUD remains until the destructive
+**End Session & Restore** action is confirmed.
 
-Session end, mod unload, and partial-load failure therefore follow the same reverse-order,
-idempotent cleanup path. Reload tests assert no actions, registrations, providers, UI surfaces,
-assets, entities, or scheduled work remain.
+World exit, scene replacement, mod unload, and partial-load failure follow the same reverse-order, idempotent cleanup
+path. Cleanup stops the graph, restores borrowed edits, removes owned content, and releases UI/focus resources.
 
 ## Feature coverage
 
-- Worlds: Robotopia custom content root, menu entry, current session, pause/exit behavior, and teardown.
-- RobotKit: type discovery, reachable spawn, objectives, interaction, dialogue, and optional voice.
-- Core services: named input, Robotopia player and camera aim state, physics/entity queries, package assets, audio, config,
-  save-scoped storage, localization, commands, diagnostics, and scheduling.
-- Robotopia UI: HUD/window/modal/toast behavior through `Context.Ui`, including scale, high
-  contrast, and reduced motion.
+- Searchable RobotKit and Creator Content catalog plus live scene roster.
+- Spawn, select, transform, safe duplicate, temporary native hide, despawn, undo, and cleanup.
+- Robot brain mode, real temporary personality, objective, emote, and bounded conversation tests.
+- Local event-project list/save/load/delete and a typed, acyclic visual graph runner.
+- TopiaForgeUi fullscreen Paper presentation with split panes, graph canvas, status bar, destructive modal, warning
+  HUD, keyboard focus, scale, high contrast, and reduced motion.
 
 Remote dialogue remains optional and has a deterministic fallback. Any unavailable Robotopia
 provider binding disables only the affected feature and reports the reason in the mod's attributed
 diagnostics.
 
-Sandbox is a live acceptance case, not a substitute for the smaller generated templates. New
-modders should begin with [Your first mod](YourFirstMod.md), then add [Specialist modules](Modules.md)
-as their feature needs grow.
+Sandbox is a live acceptance case, not a substitute for the smaller generated templates. See [Creator Tools](CreatorTools.md)
+for the shared safety and event-project model. New modders should begin with [Your first mod](YourFirstMod.md), then
+add [Specialist modules](Modules.md) as their feature needs grow.

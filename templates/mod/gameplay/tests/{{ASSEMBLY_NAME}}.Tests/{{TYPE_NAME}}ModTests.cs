@@ -12,7 +12,7 @@ namespace {{ASSEMBLY_NAME}}.Tests
         {
             var context = new FakeModContext();
             var target = context.Entities.Create("Puzzle Robot", new Vec3(0f, 0f, 8f));
-            context.Player.Snapshot = new PlayerSnapshot(
+            context.LocalPlayer.Snapshot = new PlayerSnapshot(
                 Vec3.Zero,
                 new Ray(Vec3.Zero, new Vec3(0f, 0f, 1f)));
             context.Physics.RaycastHit = new PhysicsHit(

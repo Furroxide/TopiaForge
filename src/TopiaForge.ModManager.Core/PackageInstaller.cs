@@ -100,7 +100,10 @@ namespace TopiaForge.ModManager.Core
                     try
                     {
                         var existing = state.Find(manifest.Id);
-                        state.Upsert(manifest, enabled: existing?.Enabled ?? true, restartRequired: restartRequired);
+                        state.Upsert(
+                            manifest,
+                            enabled: existing?.Enabled ?? ModActivationPolicy.IsEnabledByDefault(manifest),
+                            restartRequired: restartRequired);
                     }
                     catch (Exception stateError)
                     {
@@ -174,6 +177,12 @@ namespace TopiaForge.ModManager.Core
                 if (errors.Count > 0)
                 {
                     return PackagePreflightResult.Fail(stagingPath, manifest, errors);
+                }
+
+                var contentErrors = ManifestContentValidator.Validate(stagingPath, manifest);
+                if (contentErrors.Count > 0)
+                {
+                    return PackagePreflightResult.Fail(stagingPath, manifest, contentErrors);
                 }
 
                 var entryAssemblyPath = Path.Combine(stagingPath, manifest.EntryAssembly);

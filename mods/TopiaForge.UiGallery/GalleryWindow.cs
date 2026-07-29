@@ -82,7 +82,7 @@ namespace TopiaForge.UiGallery
             uiScaleControls.Add(controls.Slider(
                 "UI scale", 0.75f, 1.5f, ui.AccessibilityProfile.UiScale, SetUiScale));
 
-            var tabs = column.Tabs("WIDGETS", "STATES", "LISTS", "SHOP", "OVERLAYS", "HUD", "MOTION");
+            var tabs = column.Tabs("WIDGETS", "STATES", "LISTS", "GRAPH", "SHOP", "OVERLAYS", "HUD", "MOTION");
             var pageHost = column.Scroll(TopiaForgeGap.Md, TopiaForgeGap.Sm);
             pageHost.Flex(1f, 1f);
 
@@ -91,6 +91,7 @@ namespace TopiaForge.UiGallery
                 Pages.WidgetsPage.Build,
                 Pages.StatesPage.Build,
                 Pages.ListsPage.Build,
+                Pages.GraphPage.Build,
                 Pages.ShopPage.Build,
                 Pages.OverlaysPage.Build,
                 Pages.HudPage.Build,

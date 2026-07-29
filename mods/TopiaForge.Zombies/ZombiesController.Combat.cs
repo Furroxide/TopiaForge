@@ -8,10 +8,14 @@ namespace TopiaForge.Zombies
     {
         private const float ChargedShotRadius = 1.1f;
 
+        /// <summary>
+        /// Advances the timers that gate <em>player</em> actions. These stay on the control clock because the
+        /// player is deliberately exempt from Chronos scaling, so their inputs must keep responding while the world
+        /// is slowed or frozen.
+        /// </summary>
         private void AdvanceControlTimers(float controlDelta)
         {
             fireCooldown = Math.Max(0f, fireCooldown - controlDelta);
-            broadcastCooldown = Math.Max(0f, broadcastCooldown - controlDelta);
             if (comboTimer > 0f)
             {
                 comboTimer = Math.Max(0f, comboTimer - controlDelta);
@@ -21,6 +25,16 @@ namespace TopiaForge.Zombies
                     comboMultiplier = 1;
                 }
             }
+        }
+
+        /// <summary>
+        /// Advances the uplink economy. This is world-scaled on purpose: a stand-down broadcast freezes the world,
+        /// and on the control clock its own cooldown and charge regeneration kept running through the freeze it
+        /// created, so the player could chain broadcasts and never face a moving horde.
+        /// </summary>
+        private void AdvanceWorldTimers(float worldDelta)
+        {
+            broadcastCooldown = Math.Max(0f, broadcastCooldown - worldDelta);
 
             var maximum = MaximumUplinkCharges;
             uplinkCharges = Math.Min(uplinkCharges, maximum);
@@ -30,7 +44,7 @@ namespace TopiaForge.Zombies
                 return;
             }
 
-            uplinkRegenTimer += controlDelta;
+            uplinkRegenTimer += worldDelta;
             while (uplinkRegenTimer >= config.OverrideChargeRegenSeconds && uplinkCharges < maximum)
             {
                 uplinkRegenTimer -= config.OverrideChargeRegenSeconds;
@@ -100,7 +114,7 @@ namespace TopiaForge.Zombies
 
         private void FireZapper(bool charged)
         {
-            if (!context.Player.TryGetSnapshot(out var player) || player == null)
+            if (!context.LocalPlayer.TryGetSnapshot(out var player) || player == null)
             {
                 return;
             }
@@ -214,7 +228,7 @@ namespace TopiaForge.Zombies
                 enemy.PenalizeLoyalty(config.LoyaltyShotPenalty, config);
             }
 
-            if (!enemy.ApplyDamage(damage))
+            if (!enemy.ApplyDamage(damage, playerKill))
             {
                 return false;
             }

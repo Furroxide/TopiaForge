@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 5,
+  "name": "fixtures.v5-unsafe-api-assembly-path",
+  "displayName": "Unsafe API assembly path",
+  "version": "1.0.0",
+  "author": { "name": "TopiaForge Tests" },
+  "entryAssembly": "Fixture.dll",
+  "entryType": "Fixtures.V5Mod",
+  "supportedGameVersionRange": "*",
+  "supportedLoaderVersionRange": "*",
+  "supportedSdkVersionRange": "*",
+  "apiAssemblies": ["../Private.dll"]
+}

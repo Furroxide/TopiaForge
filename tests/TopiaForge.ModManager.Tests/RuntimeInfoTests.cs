@@ -9,17 +9,20 @@ namespace TopiaForge.ModManager.Tests
     {
         public static void Run()
         {
-            var runtime = new RuntimeInfo("0.0.2227");
+            var runtime = new RuntimeInfo("0.0.2309");
             runtime.ConfigureProviders(Array.Empty<ModPackage>());
             Assert(runtime.ProviderVersions.ContainsKey("topiaforge.core"),
                 "runtime metadata should always expose the manager-owned core provider version");
             Assert(runtime.TryGetUnavailableCapability("robotkit", out var missing)
                 && missing!.Contains("not installed", StringComparison.Ordinal),
                 "missing specialist modules should have a stable plain-language reason");
+            Assert(runtime.TryGetUnavailableCapability("multiplayer", out var missingMultiplayer)
+                && missingMultiplayer!.Contains("not installed", StringComparison.Ordinal),
+                "the multiplayer preview provider should participate in runtime availability metadata");
 
             var manifest = new ModManifest
             {
-                SchemaVersion = 4,
+                SchemaVersion = 5,
                 Id = "io.github.furroxide.topiaforge.robotkit",
                 Name = "RobotKit",
                 Version = "1.2.3-beta.1+acceptance",
@@ -50,7 +53,7 @@ namespace TopiaForge.ModManager.Tests
 
             var customProvider = new ModManifest
             {
-                SchemaVersion = 4,
+                SchemaVersion = 5,
                 Id = "example.weather-provider",
                 Name = "Weather Provider",
                 Version = "1.4.0+provider.7",
@@ -72,7 +75,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static void TestLoadedButUnavailableProvider(ModPackage package, ModManifest manifest)
         {
-            var runtime = new RuntimeInfo("0.0.2227");
+            var runtime = new RuntimeInfo("0.0.2309");
             var registry = new ModServiceRegistry();
             var lifetime = new FakeModLifetime();
             var agents = new FakeRobotAgentService(lifetime)

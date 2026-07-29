@@ -246,7 +246,7 @@ jobs:
           dotnet build TopiaForge.slnx -c Release --no-restore
 
           loader=src/TopiaForge.ModManager/bin/Release/netstandard2.1
-          test "$(find "$loader" -maxdepth 1 -type f -name '*.dll' | wc -l | tr -d ' ')" = 12
+          test "$(find "$loader" -maxdepth 1 -type f -name '*.dll' | wc -l | tr -d ' ')" = 13
           test "$(sha256sum "$loader/System.Collections.Immutable.dll" | awk '{print $1}')" = \
             98de9f34c748b709f26c07fd4df54b2509218511dfaf741fa61aa2adb74e8c8c
           test "$(sha256sum "$loader/System.Reflection.Metadata.dll" | awk '{print $1}')" = \

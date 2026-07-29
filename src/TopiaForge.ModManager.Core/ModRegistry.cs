@@ -77,6 +77,11 @@ namespace TopiaForge.ModManager.Core
 
                         if (errors.Count == 0)
                         {
+                            errors.AddRange(ManifestContentValidator.Validate(versionDirectory, manifest));
+                        }
+
+                        if (errors.Count == 0)
+                        {
                             errors.AddRange(PackageInstallReceipt.Verify(versionDirectory, manifest));
                         }
 
@@ -366,7 +371,10 @@ namespace TopiaForge.ModManager.Core
             {
                 if (modState == null)
                 {
-                    modState = state.Upsert(selected.Manifest, enabled: true, restartRequired: true);
+                    modState = state.Upsert(
+                        selected.Manifest,
+                        enabled: ModActivationPolicy.IsEnabledByDefault(selected.Manifest),
+                        restartRequired: true);
                 }
                 else if (!modState.VersionPinned)
                 {

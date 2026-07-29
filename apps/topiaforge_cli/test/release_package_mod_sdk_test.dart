@@ -25,6 +25,12 @@ void main() {
 
   setUpAll(() async {
     dotnet = await resolveRepositoryDotnetSdk(repositoryRoot);
+    final restore = await Process.run(dotnet.executable, [
+      'restore',
+      p.join(repositoryRoot.path, 'TopiaForge.slnx'),
+      '--nologo',
+    ], workingDirectory: repositoryRoot.path);
+    expect(restore.exitCode, 0, reason: '${restore.stdout}\n${restore.stderr}');
     final projects = Directory(p.join(repositoryRoot.path, 'src'))
         .listSync()
         .whereType<Directory>()
@@ -41,7 +47,7 @@ void main() {
         project,
         '-c',
         'Release',
-        '-p:GenerateDocumentationFile=true',
+        '--no-restore',
         '--nologo',
       ], workingDirectory: repositoryRoot.path);
       expect(
@@ -137,7 +143,9 @@ void main() {
       (file) =>
           file.name == 'buildTransitive/TopiaForge.Mods.Interop.Unity.props',
     );
-    expect(utf8.decode(props.content as List<int>), contains('TF1101'));
+    final propsText = utf8.decode(props.content as List<int>);
+    expect(propsText, contains('TopiaForgeSafeProject'));
+    expect(propsText, contains('TF1101'));
   });
 
   test(

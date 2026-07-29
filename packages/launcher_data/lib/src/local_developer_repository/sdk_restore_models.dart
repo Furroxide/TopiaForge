@@ -13,7 +13,7 @@ final class _SourceSdkProject {
   final String targetFramework;
   final List<String> dependencies;
 
-  bool get isAnalyzer => name == 'TopiaForge.Mods.Analyzers';
+  bool get isAnalyzer => topiaForgeAnalyzerPackageIds.contains(name);
 
   File get implementation => File(
     p.join(

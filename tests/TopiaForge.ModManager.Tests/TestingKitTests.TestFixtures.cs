@@ -94,6 +94,18 @@ namespace TopiaForge.ModManager.Tests
             }
         }
 
+        private sealed class ThrowingUnloadMod : TopiaForgeMod
+        {
+            protected override void OnLoad()
+            {
+            }
+
+            protected override void OnUnload()
+            {
+                throw new InvalidOperationException("expected unload failure");
+            }
+        }
+
         private sealed class ResourceHeavyMod : TopiaForgeMod
         {
             private readonly IEntity entity;
@@ -119,7 +131,7 @@ namespace TopiaForge.ModManager.Tests
                     "Resource probe",
                     new[] { InputBinding.Key("R"), InputBinding.GamepadButton(InputGamepadButton.North) })).Succeeded,
                     "resource-heavy mod should register its input action");
-                Assert(Context.Player.AcquireControl("resource test").Succeeded,
+                Assert(Context.LocalPlayer.AcquireControl("resource test").Succeeded,
                     "resource-heavy mod should acquire player controls");
                 Assert(Context.Entities.AcquireMotion(entity).Succeeded,
                     "resource-heavy mod should acquire entity motion");

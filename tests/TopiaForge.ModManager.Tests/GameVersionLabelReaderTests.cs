@@ -16,6 +16,7 @@ namespace TopiaForge.ModManager.Tests
                 ReadsLauncherBuildBesideMacApp(root);
                 FallsBackToMacBundleVersion(root);
                 ReadsLauncherBuildFromWindowsInstall(root);
+                ReadsPublicManagedReferenceCacheBuild(root);
                 IgnoresAmbiguousChangelog(root);
                 RejectsOversizedMetadata(root);
             }
@@ -33,12 +34,12 @@ namespace TopiaForge.ModManager.Tests
             var launcher = Path.Combine(root, "mac-build");
             var managed = MacManagedDir(launcher);
             Directory.CreateDirectory(managed);
-            File.WriteAllText(Path.Combine(launcher, "installed-build.json"), "{\"id\":2227}");
+            File.WriteAllText(Path.Combine(launcher, "installed-build.json"), "{\"id\":2309}");
             WriteInfoPlist(launcher, "0.1", "0");
 
-            Assert(GameVersionLabelReader.Read(managed) == "build 2227",
+            Assert(GameVersionLabelReader.Read(managed) == "build 2309",
                 "macOS capture should read installed-build.json beside Robotopia.app");
-            Assert(GameVersionLabelReader.ReadCanonicalVersion(managed) == "0.0.2227",
+            Assert(GameVersionLabelReader.ReadCanonicalVersion(managed) == "0.0.2309",
                 "macOS capture should expose the canonical build SemVer");
         }
 
@@ -61,15 +62,20 @@ namespace TopiaForge.ModManager.Tests
 
         private static void ReadsLauncherBuildFromWindowsInstall(string root)
         {
-            var install = Path.Combine(root, "windows-build");
+            var launcher = Path.Combine(root, "windows-build");
+            var install = Path.Combine(launcher, "Robotopia");
             var managed = Path.Combine(install, "Robotopia_Data", "Managed");
             Directory.CreateDirectory(managed);
-            File.WriteAllText(Path.Combine(install, "installed-build.json"), "{\"id\":\"310\"}");
+            File.WriteAllText(Path.Combine(launcher, "installed-build.json"), "{\"id\":\"310\"}");
 
             Assert(GameVersionLabelReader.Read(managed) == "build 310",
-                "Windows/Proton capture should read launcher metadata from the install root");
+                "Windows/Proton capture should read launcher metadata beside the install root");
             Assert(GameVersionLabelReader.ReadCanonicalVersion(managed) == "0.0.310",
                 "Windows/Proton capture should expose the canonical build SemVer");
+
+            File.WriteAllText(Path.Combine(install, "installed-build.json"), "{\"id\":\"311\"}");
+            Assert(GameVersionLabelReader.ReadCanonicalVersion(managed) == "0.0.311",
+                "Windows/Proton capture should prefer metadata inside the install root");
         }
 
         private static void IgnoresAmbiguousChangelog(string root)
@@ -81,6 +87,31 @@ namespace TopiaForge.ModManager.Tests
 
             Assert(GameVersionLabelReader.Read(managed) == string.Empty,
                 "a bundled dependency changelog must not be reported as the Robotopia game version");
+        }
+
+        private static void ReadsPublicManagedReferenceCacheBuild(string root)
+        {
+            var hash = new string('a', 64);
+            var managed = Path.Combine(
+                root,
+                "robotopia-managed-refs",
+                "public-2309-mac-" + hash,
+                "Managed");
+            Directory.CreateDirectory(managed);
+
+            Assert(GameVersionLabelReader.Read(managed) == "build 2309",
+                "public managed-reference cache should preserve its pinned build label");
+            Assert(GameVersionLabelReader.ReadCanonicalVersion(managed) == "0.0.2309",
+                "public managed-reference cache should preserve the canonical build SemVer");
+
+            var ambiguous = Path.Combine(
+                root,
+                "robotopia-managed-refs",
+                "public-2309-linux-" + hash,
+                "Managed");
+            Directory.CreateDirectory(ambiguous);
+            Assert(GameVersionLabelReader.Read(ambiguous) == string.Empty,
+                "unknown cache platforms must not be interpreted as trusted build provenance");
         }
 
         private static void RejectsOversizedMetadata(string root)

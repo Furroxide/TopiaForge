@@ -7,17 +7,18 @@
   "required": ["schemaVersion", "releases"],
   "properties": {
     "$schema": { "type": "string" },
-    "schemaVersion": { "const": 2 },
+    "schemaVersion": { "const": 3 },
     "releases": {
       "type": "array",
       "minItems": 1,
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["version", "tag", "status", "notesFile", "components", "vpmPackages", "mods", "excludedDeveloperMods", "artifacts"],
+        "required": ["version", "tag", "prerelease", "status", "notesFile", "components", "vpmPackages", "mods", "excludedDeveloperMods", "artifacts"],
         "properties": {
           "version": { "$ref": "#/definitions/semver" },
           "tag": { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
+          "prerelease": { "type": "boolean" },
           "status": { "enum": ["blocked", "ready", "published", "withdrawn"] },
           "notesFile": { "type": "string", "minLength": 1 },
           "components": { "$ref": "#/definitions/componentVersionMap" },

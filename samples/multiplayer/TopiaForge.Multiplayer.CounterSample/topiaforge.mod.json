@@ -1,0 +1,34 @@
+{
+  "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+  "schemaVersion": 5,
+  "name": "io.github.furroxide.topiaforge.samples.counter",
+  "displayName": "Multiplayer Counter Sample",
+  "version": "1.0.0-rc.1",
+  "author": {
+    "name": "TopiaForge"
+  },
+  "description": "First-party generated replicated-state, predicted-command, and presentation-event sample.",
+  "entryAssembly": "TopiaForge.Multiplayer.CounterSample.dll",
+  "entryType": "TopiaForge.Multiplayer.CounterSample.CounterSampleMod",
+  "dependencies": {
+    "io.github.furroxide.topiaforge.multiplayer": "1.0.0-rc.1"
+  },
+  "supportedGameVersionRange": "0.0.2309",
+  "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "category": "Sample",
+  "tags": [
+    "sample",
+    "multiplayer",
+    "prediction"
+  ],
+  "license": "MIT",
+  "multiplayer": {
+    "mode": "session",
+    "presence": "required",
+    "protocol": {
+      "version": "1.0.0",
+      "peerVersionRange": ">=1.0.0 <2.0.0"
+    }
+  }
+}

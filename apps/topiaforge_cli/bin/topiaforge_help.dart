@@ -30,6 +30,7 @@ const _commands = [
   'updates',
   'registry',
   'release',
+  'launcher',
 ];
 
 /// Shared remediation message for commands that need a detected game install.
@@ -108,10 +109,13 @@ extension _HelpCommand on _TopiaForgeCli {
       '  topiaforge mod add|remove <module>     Couple a V1 module PackageReference with its runtime dependency.',
     );
     stdout.writeln(
+      '  topiaforge mod sync multiplayer        Refresh generated wire IDs and schema hashes in the checked-in lock.',
+    );
+    stdout.writeln(
       '  topiaforge mod bump [major|minor|patch]  Increment the manifest version.',
     );
     stdout.writeln(
-      '  topiaforge migrate-manifest            Convert a schema-V3 manifest to V4.',
+      '  topiaforge migrate-manifest            Convert a schema-V3 or retired V4 manifest to V5.',
     );
     stdout.writeln(
       '  topiaforge check project [path]        Validate a developer project.',
@@ -151,7 +155,7 @@ extension _HelpCommand on _TopiaForgeCli {
       '  topiaforge pack [--output dir]         Build and package the current mod project.',
     );
     stdout.writeln(
-      '  topiaforge pack --all                  Pack every first-party mod under mods/.',
+      '  topiaforge pack --all                  Pack non-DevTool first-party mods (--include-dev-mods to include all).',
     );
     stdout.writeln(
       '  topiaforge install [package] [--game-dir p] Install a .topiaforgemod into Robotopia.',
@@ -253,6 +257,12 @@ extension _HelpCommand on _TopiaForgeCli {
     );
     stdout.writeln(
       '  topiaforge release build-metadata ...  Build deterministic BOM, SBOM, and checksums.',
+    );
+    stdout.writeln(
+      '  topiaforge release build-update-metadata ... Sign immutable launcher update metadata.',
+    );
+    stdout.writeln(
+      '  topiaforge release verify-update-metadata ... Verify update signature and archive inventory.',
     );
     stdout.writeln('');
     stdout.writeln(

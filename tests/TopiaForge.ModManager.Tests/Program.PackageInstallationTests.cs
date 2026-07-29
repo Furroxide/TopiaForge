@@ -57,6 +57,42 @@ namespace TopiaForge.ModManager.Tests
             Assert(state.Find("alpha.mod")?.RestartRequired == true, "update should mark restart required");
         }
 
+        private static void TestDevToolInstallsDisabledAndUpdatePreservesState(string root)
+        {
+            var paths = NewPaths(root, "devtool-default");
+            var state = new ManagerState();
+            var firstPackage = Path.Combine(root, "creator-tools-1.0.0.topiaforgemod");
+            var secondPackage = Path.Combine(root, "creator-tools-1.1.0.topiaforgemod");
+            var installer = new PackageInstaller();
+            CreatePackage(
+                firstPackage,
+                "creator.tools",
+                "Creator Tools",
+                "1.0.0",
+                "CreatorTools.dll",
+                "CreatorTools.Entry",
+                category: "DevTool");
+            CreatePackage(
+                secondPackage,
+                "creator.tools",
+                "Creator Tools",
+                "1.1.0",
+                "CreatorTools.dll",
+                "CreatorTools.Entry",
+                category: "DevTool");
+
+            Assert(installer.Install(firstPackage, paths, state, restartRequired: false).Ok,
+                "DevTool package should install");
+            Assert(state.Find("creator.tools")?.Enabled == false,
+                "new DevTool packages must be disabled by default");
+
+            state.Find("creator.tools")!.Enabled = true;
+            Assert(installer.Install(secondPackage, paths, state, restartRequired: true).Ok,
+                "DevTool update should install");
+            Assert(state.Find("creator.tools")?.Enabled == true,
+                "DevTool updates must preserve an explicit enabled state");
+        }
+
         private static void TestLegacyPackageExtensionRejected(string root)
         {
             var paths = NewPaths(root, "legacy-extension");
@@ -78,7 +114,7 @@ namespace TopiaForge.ModManager.Tests
             var state = new ManagerState();
             var appliedManifest = new ModManifest
             {
-                SchemaVersion = 4,
+                SchemaVersion = 5,
                 Id = "applied.mod",
                 Name = "Applied",
                 Version = "1.0.0",
@@ -87,7 +123,7 @@ namespace TopiaForge.ModManager.Tests
             };
             var pendingManifest = new ModManifest
             {
-                SchemaVersion = 4,
+                SchemaVersion = 5,
                 Id = "pending.mod",
                 Name = "Pending",
                 Version = "1.0.0",
@@ -131,7 +167,7 @@ namespace TopiaForge.ModManager.Tests
                 zip.CreateEntry("../escape.txt");
                 WriteEntry(zip, "topiaforge.mod.json", JsonUtil.Serialize(new ModManifest
                 {
-                    SchemaVersion = 4,
+                    SchemaVersion = 5,
                     Id = "bad.mod",
                     Name = "Bad",
                     Version = "1.0.0",
@@ -392,7 +428,8 @@ namespace TopiaForge.ModManager.Tests
             }
 
             var result = new PackageInstaller().Install(package, paths, new ManagerState(), restartRequired: false);
-            Assert(!result.Ok && result.Errors.Any(e => e.Contains("schemaVersion must be 4")), "schema v1 should be rejected");
+            Assert(!result.Ok && result.Errors.Any(e => e.Contains("schemaVersion 5 is required")),
+                "schema v1 should be rejected without being reinterpreted");
         }
 
         private static void TestInstallPreservesOtherVersions(string root)
@@ -417,10 +454,10 @@ namespace TopiaForge.ModManager.Tests
         {
             var paths = NewPaths(root, "retired-manifest-aliases");
             var package = Path.Combine(root, "retired-manifest-aliases.topiaforgemod");
-            const string manifest = "{\"schemaVersion\":4,\"name\":\"alias.mod\"," +
+            const string manifest = "{\"schemaVersion\":5,\"name\":\"alias.mod\"," +
                 "\"displayName\":\"Alias\",\"version\":\"1.0.0\"," +
                 "\"author\":{\"name\":\"TopiaForge\"},\"entryAssembly\":\"Alias.dll\"," +
-                "\"entryType\":\"Alias.Entry\",\"gameVersion\":\"2227\"," +
+                "\"entryType\":\"Alias.Entry\",\"gameVersion\":\"2309\"," +
                 "\"supportedGameVersionRange\":\"*\",\"supportedLoaderVersionRange\":\"*\"," +
                 "\"supportedSdkVersionRange\":\"*\",\"vpmDependencies\":{},\"permissions\":[]}";
             using (var zip = ZipFile.Open(package, ZipArchiveMode.Create))

@@ -7,14 +7,16 @@ void _registerRuntimeLoaderPayloadTests({
   test('loader payload is complete, pinned, and carries notices', () async {
     expect(releaseLoaderDlls, same(topiaForgeRuntimeLoaderDlls));
     expect(releaseLoaderAssemblies, same(topiaForgeRuntimeLoaderAssemblies));
-    expect(releaseLoaderDlls, hasLength(12));
+    expect(releaseLoaderDlls, hasLength(14));
     expect(
       releaseLoaderDlls,
       containsAll(const [
         'System.Collections.Immutable.dll',
         'System.Reflection.Metadata.dll',
         'TopiaForge.Mods.Chronos.dll',
+        'TopiaForge.Mods.CreatorContent.dll',
         'TopiaForge.Mods.Interop.Unity.dll',
+        'TopiaForge.Mods.Multiplayer.dll',
         'TopiaForge.Mods.Prompts.dll',
         'TopiaForge.Mods.RobotKit.dll',
         'TopiaForge.Mods.Ugc.dll',

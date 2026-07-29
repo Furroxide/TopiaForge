@@ -9,7 +9,7 @@ void main() {
   group('ModManifest', () {
     test('parses extended clean manifest fields', () {
       final manifest = ModManifest.fromJson({
-        'schemaVersion': 4,
+        'schemaVersion': 5,
         'name': 'author.spawn_tools',
         'displayName': 'Spawn Tools',
         'version': '1.2.0',
@@ -58,7 +58,7 @@ void main() {
     test(r'preserves $schema through a fromJson/toJson round-trip', () {
       final manifest = ModManifest.fromJson({
         r'$schema': ModManifest.canonicalSchemaUrl,
-        'schemaVersion': 4,
+        'schemaVersion': 5,
         'name': 'author.schema_mod',
         'displayName': 'Schema Mod',
         'version': '1.0.0',
@@ -72,7 +72,7 @@ void main() {
       expect(json.keys.first, r'$schema');
 
       final withoutSchema = ModManifest.fromJson({
-        'schemaVersion': 4,
+        'schemaVersion': 5,
         'name': 'author.schema_mod',
         'displayName': 'Schema Mod',
         'version': '1.0.0',
@@ -85,7 +85,7 @@ void main() {
 
     test('rejects malformed manifests and unsafe entry paths', () {
       final manifest = ModManifest.fromJson({
-        'schemaVersion': 2,
+        'schemaVersion': 5,
         'name': '../bad',
         'displayName': '',
         'version': 'nope',
@@ -98,7 +98,7 @@ void main() {
       });
 
       final issues = manifest.validate();
-      expect(issues.where((issue) => issue.isBlocking), hasLength(7));
+      expect(issues.where((issue) => issue.isBlocking), hasLength(6));
     });
 
     test('blocks unknown capabilities', () {
@@ -287,7 +287,7 @@ void main() {
   });
 
   group('LauncherUpdateSettings', () {
-    test('keeps canonical launcher updates manual-only', () {
+    test('round trips signed launcher update preferences', () {
       const settings = LauncherUpdateSettings(
         enabled: true,
         checkAutomatically: false,
@@ -297,10 +297,18 @@ void main() {
 
       final restored = LauncherUpdateSettings.fromJson(settings.toJson());
 
-      expect(restored.enabled, isFalse);
+      expect(restored.enabled, isTrue);
       expect(restored.checkAutomatically, isFalse);
       expect(restored.channel, LauncherUpdateChannel.beta);
       expect(restored.archiveUrl, settings.archiveUrl);
+    });
+
+    test('prerelease defaults opt into beta checks with a cooldown', () {
+      final settings = LauncherUpdateSettings.fromJson(const {});
+
+      expect(settings.enabled, isTrue);
+      expect(settings.checkAutomatically, isTrue);
+      expect(settings.channel, LauncherUpdateChannel.beta);
     });
 
     test('launcher update settings reject plaintext and credential URLs', () {
@@ -450,7 +458,7 @@ ModManifest _manifest(
   String license = '',
 }) {
   return ModManifest(
-    schemaVersion: 4,
+    schemaVersion: 5,
     id: id,
     name: id,
     version: version,

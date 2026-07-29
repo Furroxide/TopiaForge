@@ -85,7 +85,7 @@ class PackageInstallAction {
   final String version;
 
   /// Exact manifest advertised by the source and approved by the install
-  /// planner. Downloaded package bytes must contain the same canonical V4
+  /// planner. Downloaded package bytes must contain the same canonical V5
   /// manifest before they can be staged.
   final ModManifest expectedManifest;
 

@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": [
     "schemaVersion", "version", "tag", "targetSha", "distributable", "blockingReasons",
-    "rollback", "gameBuild", "gameArchives", "toolchains", "license", "components",
+    "rollback", "gameBuild", "gameArchives", "toolchains", "license", "codeSigning", "components",
     "vpmPackages", "mods", "excludedDeveloperMods", "expectedArtifactSet", "artifacts",
     "ecosystem", "provenance", "legalInventory"
   ],
@@ -39,6 +39,24 @@
         "decisionStatus": { "type": "string", "minLength": 1 },
         "file": { "type": ["string", "null"] },
         "sha256": { "oneOf": [{ "$ref": "#/definitions/sha256" }, { "type": "null" }] }
+      }
+    },
+    "codeSigning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exceptionVersion", "platforms"],
+      "properties": {
+        "exceptionVersion": { "type": ["string", "null"] },
+        "platforms": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["windows-x64", "linux-x64", "macos-universal"],
+          "properties": {
+            "windows-x64": { "$ref": "#/definitions/codeSigningStatus" },
+            "linux-x64": { "$ref": "#/definitions/codeSigningStatus" },
+            "macos-universal": { "$ref": "#/definitions/codeSigningStatus" }
+          }
+        }
       }
     },
     "components": { "$ref": "#/definitions/versionMap" },
@@ -142,6 +160,14 @@
       "properties": {
         "path": { "type": "string", "minLength": 1 },
         "sha256": { "$ref": "#/definitions/sha256" }
+      }
+    },
+    "codeSigningStatus": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "exceptionApplied"],
+      "properties": {
+        "status": { "enum": ["not-applicable", "trusted", "ad-hoc", "unsigned"] },
+        "exceptionApplied": { "type": "boolean" }
       }
     }
   }

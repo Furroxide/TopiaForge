@@ -4,7 +4,7 @@ using TopiaForge.Mods;
 namespace TopiaForge.Zombies
 {
     [DataContract]
-    public sealed partial class ZombiesConfig
+    public sealed partial class ZombiesConfig : ISelfNormalizingConfig
     {
         // Keep the serialized contract readable here. Defaults and input validation live in responsibility-named
         // partials so mod authors can find the setting surface without wading through persistence mechanics.
@@ -453,5 +453,10 @@ namespace TopiaForge.Zombies
 
         [DataMember(Name = "shopComboWindowBonusSeconds")]
         public float ShopComboWindowBonusSeconds { get; set; }
+
+        // Wave/archetype RNG seed. 0 (the default) seeds each run from entropy so no two runs are identical.
+        // Set any non-zero value to replay a fixed sequence — useful for practice, sharing a run, or filing a bug.
+        [DataMember(Name = "seed")]
+        public int Seed { get; set; }
     }
 }

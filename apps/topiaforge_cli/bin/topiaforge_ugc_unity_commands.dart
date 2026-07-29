@@ -226,7 +226,9 @@ extension _TopiaForgeUgcCommands on _TopiaForgeCli {
       }
     }
 
-    final launcher = LocalLauncherRepository();
+    final launcher = LocalLauncherRepository(
+      knownGamePath: Platform.environment['ROBOTOPIA_GAME_DIR'],
+    );
     final failures = <String>[];
     String errorMessage(Object error) =>
         error is StateError ? error.message : error.toString();
@@ -273,6 +275,9 @@ extension _TopiaForgeUgcCommands on _TopiaForgeCli {
       } on Object catch (error) {
         failures.add('saved game install lookup: ${errorMessage(error)}');
       }
+    }
+    if (install?.issues.any((issue) => issue.isBlocking) ?? false) {
+      install = null;
     }
 
     if (install == null) {

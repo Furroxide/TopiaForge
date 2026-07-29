@@ -17,7 +17,7 @@ import 'package:launcher_domain/launcher_domain.dart';
 
 final resolution = const DependencyPlanner().resolveInstalled(
   installedMods,
-  gameVersion: '0.0.2227',
+  gameVersion: '0.0.2309',
   requireKnownGameVersion: true,
 );
 if (resolution.hasBlockingIssues) {

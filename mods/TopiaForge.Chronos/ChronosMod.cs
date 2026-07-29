@@ -12,7 +12,7 @@ namespace TopiaForge.Chronos
         /// <inheritdoc />
         protected override void OnLoad()
         {
-            service = new TimeControlService(Context.Identity.Id, Context.Logger, Context.Player);
+            service = new TimeControlService(Context.Identity.Id, Context.Logger, Context.LocalPlayer);
             Context.Lifetime.Track(service);
             var registration = Context.Extensions.Register<ITimeControlService>(service);
             if (!registration.Succeeded)
@@ -29,7 +29,7 @@ namespace TopiaForge.Chronos
 
         private void OnSceneLoaded(SceneLoadEvent scene)
         {
-            if (scene.IsAuthoritativeReplacement)
+            if (scene.IsWorldReplacement)
             {
                 service?.OnSceneChanged();
             }

@@ -15,6 +15,7 @@ namespace TopiaForge.ModManager.Tests
             TestDisposeIsIdempotent();
             TestReleaseOwnerClearsAllClaims();
             TestThrowingLoggerCannotChangeDecisions();
+            TestAuthorityPolicyDeniesBeforeClaiming();
             Console.WriteLine("All scene coordinator tests passed.");
         }
 
@@ -120,6 +121,28 @@ namespace TopiaForge.ModManager.Tests
                 "second.mod", "SceneB", SceneTransitionPriority.UserInitiated));
             Assert(takeover.Approved && coordinator.ActiveClaims.Count == 2,
                 "a throwing log sink must not prevent a user-initiated takeover");
+        }
+
+        private static void TestAuthorityPolicyDeniesBeforeClaiming()
+        {
+            var coordinator = new SceneCoordinator(authorityPolicy: new DenyAuthorityPolicy());
+
+            var decision = coordinator.RequestTransition(new SceneTransitionRequest(
+                "client.mod",
+                "SharedWorld",
+                SceneTransitionPriority.UserInitiated));
+
+            Assert(!decision.Approved
+                && decision.ErrorCode == TopiaForge.Mods.ModErrorCode.NotAuthoritative
+                && decision.Claim == null
+                && !coordinator.IsSceneBusy,
+                "an authority denial returns NotAuthoritative before coordinator state or native work changes");
+        }
+
+        private sealed class DenyAuthorityPolicy : ISceneTransitionAuthorityPolicy
+        {
+            public SceneTransitionAuthorityDecision Evaluate(SceneTransitionRequest request) =>
+                SceneTransitionAuthorityDecision.Deny("Only the server can replace the shared world.");
         }
 
         private static void Assert(bool condition, string message)

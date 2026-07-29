@@ -1,9 +1,9 @@
 {
   "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "name": "io.github.furroxide.topiaforge.no-feedback-url",
   "displayName": "No Feedback URL",
-  "version": "1.0.0",
+  "version": "1.0.0-rc.1",
   "author": {
     "name": "TopiaForge"
   },
@@ -11,9 +11,9 @@
   "entryAssembly": "TopiaForge.NoFeedbackUrl.dll",
   "entryType": "TopiaForge.NoFeedbackUrl.NoFeedbackUrlMod",
   "dependencies": {},
-  "supportedGameVersionRange": "0.0.2227",
-  "supportedLoaderVersionRange": ">=1.0.0 <2.0.0",
-  "supportedSdkVersionRange": ">=1.0.0 <2.0.0",
+  "supportedGameVersionRange": "0.0.2309",
+  "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
   "category": "Utility",
   "tags": [
     "privacy",
@@ -21,7 +21,10 @@
     "shutdown",
     "browser"
   ],
-  "license": "NOASSERTION",
+  "license": "MIT",
+  "licenseFiles": [
+    "LICENSE"
+  ],
   "capabilities": [
     "unsafe-native",
     "harmony-patch"

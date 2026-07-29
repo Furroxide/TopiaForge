@@ -330,14 +330,15 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
   ) {
     final manifest = <String, Object?>{
       ...versionJson,
-      'schemaVersion': versionJson['schemaVersion'] ?? 4,
+      'schemaVersion':
+          versionJson['schemaVersion'] ?? ModManifest.currentSchemaVersion,
       'name': versionJson['name'] ?? packageId,
       'displayName':
           versionJson['displayName'] ?? packageJson['displayName'] ?? packageId,
       'version': versionJson['version'] ?? version,
     };
     // Registry transport metadata belongs to the source document, not the
-    // strict V4 manifest synthesized from a VPM-style version entry.
+    // strict V5 manifest synthesized from a VPM-style version entry.
     for (final field in const <String>{
       'manifest',
       'downloadUrl',

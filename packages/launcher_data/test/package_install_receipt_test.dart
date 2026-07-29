@@ -177,9 +177,61 @@ void main() {
       );
     },
   );
+
+  test(
+    'V5 synchronized files use runtime-compatible critical classification',
+    () async {
+      final fixture = await _createFixture(
+        'package-receipt-multiplayer-',
+        multiplayer: true,
+      );
+      addTearDown(fixture.dispose);
+
+      await fixture.repository.installPackage(
+        fixture.package.path,
+        fixture.install,
+      );
+
+      final receipt = _jsonObject(fixture.receiptFile);
+      final files = (receipt['files']! as List<Object?>)
+          .map((raw) => Map<String, Object?>.from(raw! as Map))
+          .toList();
+      receipt['files'] = files;
+      final inventory = <String, Map<String, Object?>>{
+        for (final item in files) item['path']! as String: item,
+      };
+      expect(inventory[_multiplayerContractLockPath]!['critical'], isTrue);
+      expect(inventory[_synchronizedRulesPath]!['critical'], isTrue);
+      expect(inventory[_localContentPath]!['critical'], isFalse);
+
+      var installed = (await fixture.repository.loadSnapshot()).installedMods
+          .singleWhere((mod) => mod.id == _modId);
+      expect(
+        installed.errors,
+        isEmpty,
+        reason: 'A launcher receipt must pass the shared runtime contract.',
+      );
+
+      inventory[_synchronizedRulesPath]!['critical'] = false;
+      fixture.receiptFile.writeAsStringSync(jsonEncode(receipt), flush: true);
+      installed = (await fixture.repository.loadSnapshot()).installedMods
+          .singleWhere((mod) => mod.id == _modId);
+      expect(
+        installed.errors,
+        contains(
+          contains(
+            'critical classification changed for $_synchronizedRulesPath',
+          ),
+        ),
+      );
+    },
+  );
 }
 
-Future<_ReceiptFixture> _createFixture(String prefix) async {
+Future<_ReceiptFixture> _createFixture(
+  String prefix, {
+  bool multiplayer = false,
+}) async {
   final root = Directory.systemTemp.createTempSync(prefix);
   final game = Directory(p.join(root.path, 'TopiaForge'))..createSync();
   _createGame(game);
@@ -194,7 +246,9 @@ Future<_ReceiptFixture> _createFixture(String prefix) async {
     game: game,
     repository: repository,
     install: install,
-    package: _createPackage(root),
+    package: multiplayer
+        ? _createMultiplayerPackage(root)
+        : _createPackage(root),
   );
 }
 
@@ -236,6 +290,9 @@ const _version = '1.2.3';
 const _entryAssembly = 'Example.Receipt.dll';
 const _apiAssembly = 'contracts/Example.Receipt.Api.dll';
 const _receiptName = 'topiaforge.install.json';
+const _multiplayerContractLockPath = 'topiaforge.multiplayer.lock.json';
+const _synchronizedRulesPath = 'Content/gameplay-rules.json';
+const _localContentPath = 'Content/local-note.txt';
 final _lowerSha256 = RegExp(r'^[0-9a-f]{64}$');
 const _expectedFiles = <String, bool>{
   _entryAssembly: true,
@@ -257,7 +314,7 @@ void _createGame(Directory game) {
 
 File _createPackage(Directory root) {
   final manifest = <String, Object?>{
-    'schemaVersion': 4,
+    'schemaVersion': 5,
     'name': _modId,
     'displayName': 'Receipt fixture',
     'version': _version,
@@ -275,6 +332,52 @@ File _createPackage(Directory root) {
     ..addFile(ArchiveFile.string('topiaforge.mod.json', jsonEncode(manifest)))
     ..addFile(ArchiveFile.string('content/a-first.txt', 'alpha'))
     ..addFile(ArchiveFile.string(_entryAssembly, 'entry assembly'));
+  final package = File(p.join(root.path, '$_modId-$_version.topiaforgemod'));
+  package.writeAsBytesSync(ZipEncoder().encode(archive));
+  return package;
+}
+
+File _createMultiplayerPackage(Directory root) {
+  const contractLock = '{"schemaVersion":1,"contracts":[]}';
+  const synchronizedRules = '{"difficulty":2}';
+  const localContent = 'not synchronized';
+  final manifest = <String, Object?>{
+    'schemaVersion': 5,
+    'name': _modId,
+    'displayName': 'Multiplayer receipt fixture',
+    'version': _version,
+    'author': {'name': 'TopiaForge'},
+    'entryAssembly': _entryAssembly,
+    'entryType': 'Example.Receipt.Entry',
+    'supportedGameVersionRange': '*',
+    'supportedLoaderVersionRange': '*',
+    'supportedSdkVersionRange': '*',
+    'apiAssemblies': [_apiAssembly],
+    'multiplayer': {
+      'mode': 'session',
+      'presence': 'required',
+      'protocol': {'version': '1.0.0', 'peerVersionRange': '>=1.0.0 <2.0.0'},
+      'synchronizedFiles': [
+        _multiplayerContractLockPath,
+        _synchronizedRulesPath,
+      ],
+    },
+    'hashes': {
+      _multiplayerContractLockPath: sha256
+          .convert(utf8.encode(contractLock))
+          .toString(),
+      _synchronizedRulesPath: sha256
+          .convert(utf8.encode(synchronizedRules))
+          .toString(),
+    },
+  };
+  final archive = Archive()
+    ..addFile(ArchiveFile.string(_entryAssembly, 'entry assembly'))
+    ..addFile(ArchiveFile.string(_apiAssembly, 'public contract'))
+    ..addFile(ArchiveFile.string(_multiplayerContractLockPath, contractLock))
+    ..addFile(ArchiveFile.string(_synchronizedRulesPath, synchronizedRules))
+    ..addFile(ArchiveFile.string(_localContentPath, localContent))
+    ..addFile(ArchiveFile.string('topiaforge.mod.json', jsonEncode(manifest)));
   final package = File(p.join(root.path, '$_modId-$_version.topiaforgemod'));
   package.writeAsBytesSync(ZipEncoder().encode(archive));
   return package;

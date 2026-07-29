@@ -26,9 +26,8 @@ type public interface TopiaForge.Mods.ITimeControlService
 type public interface TopiaForge.Mods.ITimeDriver
   method [abstract,virtual,newslot] System.Single ComputeScale(in TopiaForge.Mods.TimeSignal signal)
 
-type public interface TopiaForge.Mods.ITimeLease : System.IDisposable
+type public interface TopiaForge.Mods.ITimeLease : System.IDisposable, TopiaForge.Mods.IGameplayLease
   method [abstract,virtual,newslot] System.Void Release()
-  property System.Boolean IsActive { get [abstract,virtual,newslot]; }
 
 type public interface TopiaForge.Mods.ITurnScheduler : System.IDisposable
   method [abstract,virtual,newslot] System.Void Tick(System.Single controlDeltaTime)
@@ -44,6 +43,9 @@ type public sealed class TopiaForge.Mods.SuperhotTimeDriver : System.Object, Top
   constructor .ctor(System.Single idleScale = 0.03, System.Single moveThreshold = 0.05, System.Single actionRate = 14, System.Single moveRate = 9, System.Single easeDownRate = 4)
   method System.Single ComputeScale(in TopiaForge.Mods.TimeSignal signal)
   property System.Single IdleScale { get; }
+
+type public static class TopiaForge.Mods.TimeControlPauseExtensions : System.Object
+  method extension [static] System.Func<System.String, TopiaForge.Mods.OperationResult<TopiaForge.Mods.IGameplayLease>> AsPauseSource(TopiaForge.Mods.ITimeControlService? service, System.Boolean suspendPlayer = true)
 
 type public enum TopiaForge.Mods.TimeMode : System.Int32
   field System.Int32 value__

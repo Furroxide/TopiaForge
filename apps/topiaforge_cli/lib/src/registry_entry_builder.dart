@@ -51,6 +51,8 @@ ModPackageSummary readModPackage(List<int> bytes) {
           )
           as Map<String, Object?>,
     );
+  } on FormatException catch (error) {
+    throw StateError(error.message);
   } on Object {
     throw StateError('topiaforge.mod.json in the package is not valid JSON.');
   }

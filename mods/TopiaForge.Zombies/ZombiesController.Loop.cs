@@ -104,12 +104,13 @@ namespace TopiaForge.Zombies
             {
                 if (worldDelta > 0f)
                 {
+                    AdvanceWorldTimers(worldDelta);
                     AdvanceSpawning(worldDelta);
                     AdvanceEnemies(worldDelta);
                 }
 
                 if (phase == ZombiesPhase.Wave
-                    && pendingSpawns <= 0 && spawnSearch == null && CountActiveNonAllies() == 0)
+                    && pendingSpawns <= 0 && !spawnSearch.IsInFlight && CountActiveNonAllies() == 0)
                 {
                     BeginInterWave();
                 }
@@ -128,7 +129,7 @@ namespace TopiaForge.Zombies
             }
 
             if (!robots.IsAvailable
-                || !context.Player.TryGetSnapshot(out var player) || player == null
+                || !context.LocalPlayer.TryGetSnapshot(out var player) || player == null
                 || !RefreshPlayerEntity())
             {
                 return false;

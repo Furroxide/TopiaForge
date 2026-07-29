@@ -175,7 +175,7 @@ namespace TopiaForge.ModManager.Tests
             paths.EnsureCreated();
             var manifest = new ModManifest
             {
-                SchemaVersion = 4,
+                SchemaVersion = 5,
                 Id = "test.config",
                 Name = "Config test",
                 Version = "1.0.0",

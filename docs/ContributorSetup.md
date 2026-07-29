@@ -36,7 +36,20 @@ winget install GitHub.GitLFS
 winget install Microsoft.PowerShell
 winget install 7zip.7zip
 choco install fvm
+New-ItemProperty -LiteralPath "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
+    -Name LongPathsEnabled -PropertyType DWord -Value 1 -Force
+New-ItemProperty -LiteralPath "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock" `
+    -Name AllowDevelopmentWithoutDevLicense -PropertyType DWord -Value 1 -Force
+git config --global core.longpaths true
 ```
+
+Windows long-path support is required by the locked NuGet and Flutter dependency trees. Open a new terminal after
+enabling it; `bootstrap-dev.ps1` checks the machine policy before restoring packages and configures the checkout's
+Git long-path support. Windows Developer Mode allows FVM and the repository's security tests to create symlinks
+without running the contributor workflow as Administrator; bootstrap probes this capability before invoking FVM.
+During full verification, bootstrap also keeps the FVM-managed Dart sources at LF. This works around a Dart 3.12.2
+dartdoc `@docImport` offset bug when Git for Windows is configured to check out text files as CRLF; repository source
+files and the contributor's global Git configuration are not changed.
 
 On Linux, install FVM with its standalone installer after installing Git, PowerShell 7, and 7-Zip through the
 host package manager:

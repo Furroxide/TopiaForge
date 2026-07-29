@@ -84,7 +84,6 @@ class ReleasePackageBuilder {
       p.join(repositoryRoot, 'TopiaForge.slnx'),
       '-c',
       configuration,
-      '-p:GenerateDocumentationFile=true',
     ], workingDirectory: repositoryRoot);
 
     if (prebuiltDist.trim().isNotEmpty) {
@@ -106,6 +105,20 @@ class ReleasePackageBuilder {
       p.join('bin', 'topiaforge.dart'),
       'pack',
       '--all',
+      '--output',
+      p.join(repositoryRoot, 'dist'),
+      '--configuration',
+      configuration,
+    ], workingDirectory: cliApp);
+    // Normal bulk packing deliberately omits every DevTool. Creator Tools is
+    // the one supported developer package in the release payload; pack it
+    // explicitly so UiGallery remains a source-only QA surface.
+    await _runDart([
+      'run',
+      p.join('bin', 'topiaforge.dart'),
+      'pack',
+      '--project',
+      p.join(repositoryRoot, 'mods', 'TopiaForge.CreatorTools'),
       '--output',
       p.join(repositoryRoot, 'dist'),
       '--configuration',

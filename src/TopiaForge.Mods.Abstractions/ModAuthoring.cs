@@ -150,7 +150,7 @@ namespace TopiaForge.Mods
     public static class ModEventExtensions
     {
         /// <summary>
-        /// Subscribes to detailed scene transition notifications. Older event hosts fall back to an authoritative single
+        /// Subscribes to detailed scene transition notifications. Older event hosts fall back to a world-replacing single
         /// load, matching the only scene-load semantics their string-only contract could represent.
         /// </summary>
         /// <param name="events">The owner-scoped mod event source.</param>
@@ -199,11 +199,38 @@ namespace TopiaForge.Mods
         }
     }
 
+    /// <summary>
+    /// A configuration document that can repair itself into a valid, bounded state.
+    /// </summary>
+    /// <remarks>
+    /// A stored document is written by hand, by the launcher, by the CLI, or by an interrupted save, so it can
+    /// contain anything the type system allows — NaN, negatives, inverted minimum/maximum pairs, unknown enum
+    /// strings. Implement this on the config type and <see cref="ConfigDefinition{T}"/> calls
+    /// <see cref="Normalize"/> automatically after defaults, load, and migration, and again before every save.
+    /// Bounding the document is then part of the contract rather than something each mod has to remember.
+    /// </remarks>
+    public interface ISelfNormalizingConfig
+    {
+        /// <summary>
+        /// Clamps or replaces every member that is out of range, non-finite, or mutually inconsistent. Must be
+        /// idempotent and must not throw: it runs on values that are already known to be untrustworthy.
+        /// </summary>
+        void Normalize();
+    }
+
     /// <summary>Defines defaults, schema version, validation, and migration for one typed config document.</summary>
     /// <typeparam name="T">The serializable configuration type.</typeparam>
     public sealed class ConfigDefinition<T> where T : class
     {
         /// <summary>Creates a typed configuration definition.</summary>
+        /// <param name="schemaVersion">The current positive schema version.</param>
+        /// <param name="createDefault">The factory used when no document exists.</param>
+        /// <param name="validate">
+        /// An optional additional check. When <typeparamref name="T"/> implements
+        /// <see cref="ISelfNormalizingConfig"/>, the value is normalized before this runs, so a validator is
+        /// needed only for rules that normalization cannot express.
+        /// </param>
+        /// <param name="migrate">An optional migrator from an older stored schema version.</param>
         public ConfigDefinition(
             int schemaVersion,
             Func<T> createDefault,
@@ -217,7 +244,16 @@ namespace TopiaForge.Mods
 
             SchemaVersion = schemaVersion;
             CreateDefault = createDefault ?? throw new ArgumentNullException(nameof(createDefault));
-            Validate = validate ?? (_ => OperationResult<bool>.Success(true));
+            var check = validate ?? (_ => OperationResult<bool>.Success(true));
+            Validate = typeof(ISelfNormalizingConfig).IsAssignableFrom(typeof(T))
+                ? value =>
+                {
+                    // Normalization is part of the contract, not an opt-in step a mod can forget. It runs on
+                    // every path the config service validates: defaults, load, migration, and save.
+                    ((ISelfNormalizingConfig)value).Normalize();
+                    return check(value);
+                }
+            : check;
             Migrate = migrate;
         }
 
@@ -310,8 +346,11 @@ namespace TopiaForge.Mods
             CancellationToken cancellationToken = default);
     }
 
-    /// <summary>Provides typed JSON key-value persistence scoped to the current mod.</summary>
-    public interface IModStorageService
+    /// <summary>
+    /// Provides installation-local typed JSON key-value persistence scoped to the current mod. Values are not
+    /// save-scoped, synchronized, or replicated between processes.
+    /// </summary>
+    public interface ILocalModStorageService
     {
         /// <summary>Gets whether a key currently exists.</summary>
         bool Contains(string key);
@@ -324,14 +363,5 @@ namespace TopiaForge.Mods
 
         /// <summary>Deletes a key when it exists.</summary>
         OperationResult<bool> Delete(string key);
-
-        /// <summary>Tries to read a mod-owned story flag from the current save scope.</summary>
-        bool TryGetStoryFlag(string key, out bool value);
-
-        /// <summary>Creates or updates a mod-owned story flag in the current save scope.</summary>
-        OperationResult<bool> SetStoryFlag(string key, bool value);
-
-        /// <summary>Deletes a mod-owned story flag when it exists.</summary>
-        OperationResult<bool> DeleteStoryFlag(string key);
     }
 }

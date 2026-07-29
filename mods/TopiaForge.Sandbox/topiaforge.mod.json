@@ -1,27 +1,29 @@
 {
   "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "name": "io.github.furroxide.topiaforge.sandbox",
   "displayName": "Sandbox",
-  "version": "1.0.0",
+  "version": "1.0.0-rc.1",
   "author": {
     "name": "TopiaForge"
   },
-  "description": "A safe-SDK creator sandbox for the Open Sandbox arena. Spawn RobotKit robots at the aim point, toggle follow behavior through interactions, pause their programs, undo the latest spawn, or clean the session through commands and the pause companion. All world, input, physics, entity, UI, and teardown work uses TopiaForge V1 services.",
+  "description": "The Sandbox host for the shared F5 Creator Tools workbench. Browse the safe content catalog, manage a live scene roster, edit robots and reversible native targets, and author or run bounded local event graphs.",
   "entryAssembly": "TopiaForge.Sandbox.dll",
   "entryType": "TopiaForge.Sandbox.SandboxMod",
   "dependencies": {
-    "io.github.furroxide.topiaforge.worlds": ">=1.0.0 <2.0.0",
-    "io.github.furroxide.topiaforge.robotkit": ">=1.0.0 <2.0.0"
+    "io.github.furroxide.topiaforge.worlds": ">=1.0.0-rc.1 <2.0.0",
+    "io.github.furroxide.topiaforge.robotkit": ">=1.0.0-rc.1 <2.0.0",
+    "io.github.furroxide.topiaforge.creatorcontent": ">=1.0.0-rc.1 <2.0.0"
   },
   "loadAfter": [
     "io.github.furroxide.topiaforge.worlds",
     "io.github.furroxide.topiaforge.robotkit",
+    "io.github.furroxide.topiaforge.creatorcontent",
     "io.github.furroxide.topiaforge.gravitygun"
   ],
-  "supportedGameVersionRange": "0.0.2227",
-  "supportedLoaderVersionRange": ">=1.0.0 <2.0.0",
-  "supportedSdkVersionRange": ">=1.0.0 <2.0.0",
+  "supportedGameVersionRange": "0.0.2309",
+  "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
   "category": "Gameplay",
   "tags": [
     "sandbox",
@@ -33,7 +35,10 @@
     "objectives",
     "safe-sdk"
   ],
-  "license": "NOASSERTION",
+  "license": "MIT",
+  "licenseFiles": [
+    "LICENSE"
+  ],
   "capabilities": [
     "world-service",
     "robot-spawning",

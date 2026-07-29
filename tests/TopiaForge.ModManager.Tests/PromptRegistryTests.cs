@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
+using TopiaForge.Mods.Testing;
 using TopiaForge.Prompts;
 
 namespace TopiaForge.ModManager.Tests
@@ -13,6 +16,8 @@ namespace TopiaForge.ModManager.Tests
             TestHandleDispose();
             TestValidationAndRegistryDispose();
             TestConflictOwnsAnImmutableOverrideSnapshot();
+            TestWellKnownDirectivePriorityConflictAndOwnerCleanup();
+            TestConcurrentWellKnownDirectiveLookup();
             Console.WriteLine("All prompt registry tests passed.");
         }
 
@@ -76,6 +81,72 @@ namespace TopiaForge.ModManager.Tests
 
             Assert(conflict.Overrides.Count == 1 && ReferenceEquals(conflict.Overrides[0], first),
                 "prompt conflicts must snapshot caller-owned override collections");
+        }
+
+        private static void TestWellKnownDirectivePriorityConflictAndOwnerCleanup()
+        {
+            var registry = new PromptOverrideRegistry("provider");
+            var factory = (IOwnerBoundExtensionFactory)registry;
+            var lowLifetime = new FakeModLifetime();
+            var highLifetime = new FakeModLifetime();
+            var low = (IPromptOverrideRegistry)factory.CreateOwnerFacade(
+                typeof(IPromptOverrideRegistry),
+                "low.mod",
+                lowLifetime);
+            var high = (IPromptOverrideRegistry)factory.CreateOwnerFacade(
+                typeof(IPromptOverrideRegistry),
+                "high.mod",
+                highLifetime);
+
+            Assert(low.Register(new PromptOverrideRequest(
+                    WellKnownPromptIds.GlobalRobotDirective,
+                    "low",
+                    priority: 10)).Succeeded,
+                "the lower-priority global directive should register");
+            Assert(high.Register(new PromptOverrideRequest(
+                    WellKnownPromptIds.GlobalRobotDirective,
+                    "high",
+                    priority: 1000)).Succeeded,
+                "the higher-priority global directive should register");
+            Assert(registry.TryGetEffectiveOverride(WellKnownPromptIds.GlobalRobotDirective, out var effective)
+                && effective!.ReplacementText == "high",
+                "the global directive slot should use ordinary deterministic priority resolution");
+            var conflicts = registry.GetConflicts();
+            Assert(conflicts.Count == 1
+                && conflicts[0].PromptId == WellKnownPromptIds.GlobalRobotDirective
+                && conflicts[0].Overrides.Count == 2,
+                "competing global robot directives should remain visible to diagnostics");
+
+            highLifetime.Dispose();
+            Assert(registry.TryGetEffectiveOverride(WellKnownPromptIds.GlobalRobotDirective, out effective)
+                && effective!.ReplacementText == "low",
+                "unloading the winning owner should reveal the remaining directive");
+            lowLifetime.Dispose();
+            Assert(!registry.TryGetEffectiveOverride(WellKnownPromptIds.GlobalRobotDirective, out _),
+                "unloading the final owner should clear the global directive");
+            registry.Dispose();
+        }
+
+        private static void TestConcurrentWellKnownDirectiveLookup()
+        {
+            var registry = new PromptOverrideRegistry("concurrent.mod");
+            Assert(registry.Register(new PromptOverrideRequest(
+                    WellKnownPromptIds.GlobalRobotDirective,
+                    "directive",
+                    priority: 1000)).Succeeded,
+                "the concurrent lookup directive should register");
+
+            Parallel.For(0, 128, _ =>
+            {
+                if (!registry.TryGetEffectiveOverride(WellKnownPromptIds.GlobalRobotDirective, out var value)
+                    || value == null
+                    || value.ReplacementText != "directive")
+                {
+                    throw new InvalidOperationException("concurrent global directive lookup returned inconsistent state");
+                }
+            });
+
+            registry.Dispose();
         }
 
         private static void Assert(bool condition, string message)

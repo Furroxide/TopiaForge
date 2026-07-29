@@ -1,4 +1,5 @@
 using System.Runtime.Serialization;
+using TopiaForge.Mods;
 
 namespace TopiaForge.Performance
 {
@@ -11,7 +12,7 @@ namespace TopiaForge.Performance
     /// (so fields absent from an existing JSON file still get real defaults).
     /// </summary>
     [DataContract]
-    public sealed class PerformanceConfig
+    public sealed class PerformanceConfig : ISelfNormalizingConfig
     {
         public PerformanceConfig()
         {

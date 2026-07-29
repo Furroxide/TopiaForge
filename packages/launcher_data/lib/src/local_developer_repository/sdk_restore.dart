@@ -348,7 +348,7 @@ extension LocalDeveloperSdkRestore on LocalDeveloperRepository {
           match.group(1)!.replaceAll('\\', '/'),
         );
         if (dependency.startsWith('TopiaForge.Mods.') &&
-            dependency != 'TopiaForge.Mods.Analyzers') {
+            !topiaForgeAnalyzerPackageIds.contains(dependency)) {
           dependencies.add(dependency);
         }
       }

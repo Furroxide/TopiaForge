@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Threading;
+using System.Threading.Tasks;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 using UnityEngine;
@@ -20,6 +22,7 @@ namespace TopiaForge.Worlds
         private readonly IModLogger logger;
         private readonly IModFiles files;
         private readonly GameLevelBridge levelBridge;
+        private readonly IInternalSceneTransitionService sceneTransitions;
         private readonly List<WorldDefinition> worlds = new List<WorldDefinition>();
         private readonly List<GamemodeDefinition> gamemodes = new List<GamemodeDefinition>();
         private readonly List<GamemodeMenuEntry> menuEntries = new List<GamemodeMenuEntry>();
@@ -52,11 +55,28 @@ namespace TopiaForge.Worlds
         // world's pre-created content, waiting for the play scene (and its player spawn) to exist.
         private PendingCustomWorld? pendingCustomWorld;
         private IWorldContent? activeWorldContent;
+        private IDisposable? pendingSceneClaim;
+        // In-flight ICustomWorldContent.CreateAsync for the world currently being placed. SDK asset tasks only
+        // complete on Unity's main thread, so this is started on the scene-loaded callback and drained from
+        // UpdateTransition; it is never waited on.
+        private readonly PendingOperation<IWorldContent> contentLoad = new PendingOperation<IWorldContent>();
+        private PendingCustomWorld? placingCustomWorld;
+        private Vector3 placingSpawnPosition;
+        // Best-effort diagnostic catalog write. A catalog failure must never take down the provider that
+        // Zombies, Sandbox, UiGallery, and Creator Tools all depend on, so the result is drained and logged.
+        private Task<OperationResult<bool>>? catalogWrite;
+        private readonly CancellationToken lifetimeToken;
 
-        public WorldsService(IModLogger logger, IModFiles files)
+        internal WorldsService(
+            IModLogger logger,
+            IModFiles files,
+            IInternalSceneTransitionService sceneTransitions,
+            CancellationToken lifetimeToken = default)
         {
             this.logger = logger;
             this.files = files;
+            this.sceneTransitions = sceneTransitions ?? throw new ArgumentNullException(nameof(sceneTransitions));
+            this.lifetimeToken = lifetimeToken;
             levelBridge = new GameLevelBridge(logger);
             worldsView = new ReadOnlyCollection<WorldDefinition>(worlds);
             gamemodesView = new ReadOnlyCollection<GamemodeDefinition>(gamemodes);
@@ -97,7 +117,7 @@ namespace TopiaForge.Worlds
         {
             return result.Ok && result.Session != null
                 ? OperationResult<WorldSession>.Success(result.Session)
-                : OperationResult<WorldSession>.Failure(ModErrorCode.External, result.Message);
+                : OperationResult<WorldSession>.Failure(result.ErrorCode, result.Message);
         }
         private sealed class PendingCustomWorld
         {
@@ -114,22 +134,30 @@ namespace TopiaForge.Worlds
 
         internal sealed class WorldLoadResult
         {
-            private WorldLoadResult(bool ok, WorldSession? session, string message)
+            private WorldLoadResult(
+                bool ok,
+                WorldSession? session,
+                ModErrorCode errorCode,
+                string message)
             {
                 Ok = ok;
                 Session = session;
+                ErrorCode = errorCode;
                 Message = message;
             }
 
             public bool Ok { get; }
             public WorldSession? Session { get; }
+            public ModErrorCode ErrorCode { get; }
             public string Message { get; }
 
             public static WorldLoadResult Success(WorldSession session, string message) =>
-                new WorldLoadResult(true, session, message);
+                new WorldLoadResult(true, session, ModErrorCode.None, message);
 
-            public static WorldLoadResult Fail(string message) =>
-                new WorldLoadResult(false, null, message);
+            public static WorldLoadResult Fail(
+                string message,
+                ModErrorCode errorCode = ModErrorCode.External) =>
+                new WorldLoadResult(false, null, errorCode, message);
         }
     }
 }

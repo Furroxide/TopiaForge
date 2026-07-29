@@ -177,12 +177,12 @@ namespace TopiaForge.ModManager.Tests
                 "a restart-cleanup enemy should spawn");
 
             harness.Controller.TestingDamagePlayer(40f);
-            Assert(harness.Context.Player.Health!.Current == 60f
+            Assert(harness.Context.LocalPlayer.Health!.Current == 60f
                 && harness.Controller.TestingIntegrity == 60f,
                 "Zombies damage keeps native health and gamemode integrity synchronized");
             Assert(harness.Controller.Restart().Succeeded,
                 "an active Zombies run should restart");
-            Assert(harness.Context.Player.Health!.Current == 100f
+            Assert(harness.Context.LocalPlayer.Health!.Current == 100f
                 && harness.Controller.TestingIntegrity == 100f
                 && harness.Robots.Agents.ActiveAgents.Count == 0
                 && harness.Controller.TestingPhase == ZombiesPhase.WaitingForWorld,
@@ -194,13 +194,13 @@ namespace TopiaForge.ModManager.Tests
             var config = FastConfig();
             config.PlayerIntegrity = 100f;
             using var harness = new Harness(config);
-            harness.Context.Player.Health = new PlayerHealthSnapshot(60f, 100f);
+            harness.Context.LocalPlayer.Health = new PlayerHealthSnapshot(60f, 100f);
             harness.Advance(0.01f);
-            Assert(harness.Context.Player.Heal(25f, "temporary field repair").Succeeded,
+            Assert(harness.Context.LocalPlayer.Heal(25f, "temporary field repair").Succeeded,
                 "the partial-health fixture should receive temporary run healing");
 
             Assert(harness.Controller.Restart().Succeeded
-                && harness.Context.Player.Health!.Current == 60f,
+                && harness.Context.LocalPlayer.Health!.Current == 60f,
                 "restart removes temporary run healing and restores the exact captured native health");
         }
 
@@ -209,14 +209,14 @@ namespace TopiaForge.ModManager.Tests
             var config = FastConfig();
             config.PlayerIntegrity = 100f;
             using var harness = new Harness(config);
-            harness.Context.Player.Health = null;
+            harness.Context.LocalPlayer.Health = null;
             harness.Advance(0.01f);
-            harness.Context.Player.Health = new PlayerHealthSnapshot(80f, 100f);
+            harness.Context.LocalPlayer.Health = new PlayerHealthSnapshot(80f, 100f);
             harness.Controller.TestingDamagePlayer(20f);
 
-            Assert(harness.Context.Player.Health.Current == 60f
+            Assert(harness.Context.LocalPlayer.Health.Current == 60f
                 && harness.Controller.Restart().Succeeded
-                && harness.Context.Player.Health.Current == 80f,
+                && harness.Context.LocalPlayer.Health.Current == 80f,
                 "the first later health snapshot becomes the cleanup baseline before Zombies mirrors damage");
         }
 
@@ -228,15 +228,15 @@ namespace TopiaForge.ModManager.Tests
             harness.Advance(0.01f);
             var original = (FakeEntity)harness.Robots.Agents.PlayerEntity!;
             harness.Controller.TestingDamagePlayer(40f);
-            Assert(harness.Context.Player.Health!.Current == 60f,
+            Assert(harness.Context.LocalPlayer.Health!.Current == 60f,
                 "the original player fixture should receive Zombies native-health mirroring");
 
             original.Destroy();
             harness.Robots.Agents.PlayerEntity = new FakeEntity(original.Id, "Replacement Player", Vec3.Zero);
-            harness.Context.Player.Health = new PlayerHealthSnapshot(25f, 100f);
+            harness.Context.LocalPlayer.Health = new PlayerHealthSnapshot(25f, 100f);
 
             Assert(harness.Controller.Restart().Succeeded
-                && harness.Context.Player.Health.Current == 25f,
+                && harness.Context.LocalPlayer.Health.Current == 25f,
                 "cleanup must compare player identity by reference, not reuse a stale same-ID health baseline");
         }
 

@@ -114,6 +114,44 @@ namespace TopiaForge.ModManager.Tests
                 "IRobotObjectiveService exposes the target metadata view");
         }
 
+        private static void TestRobotEditingContracts()
+        {
+            var draft = new RobotPersonalityDraft(
+                "Curious helper",
+                "Ask concise questions and explore the authored scene.",
+                0.6f);
+            Assert(draft.DisplayName == "Curious helper"
+                && draft.Instructions.StartsWith("Ask concise", StringComparison.Ordinal)
+                && Math.Abs(draft.Temperature - 0.6f) < 0.0001f,
+                "RobotPersonalityDraft keeps bounded native/conversation guidance");
+
+            Assert(typeof(IRobotSceneEditorService).GetMethod("BeginTemporaryEdit") != null
+                && typeof(IRobotSceneEditorService).GetMethod("TryResolve") != null,
+                "RobotKit exposes additive scene editing through an optional focused service");
+            Assert(typeof(IRobotEditLease).GetMethod("PreviewTransform") != null
+                && typeof(IRobotEditLease).GetMethod("PreviewBrainMode") != null
+                && typeof(IRobotEditLease).GetMethod("PreviewPersonality") != null
+                && typeof(IRobotEditLease).GetMethod("Restore") != null,
+                "robot edit leases expose only reversible preview operations");
+            Assert(typeof(IRobotEditLease).GetMethod("Commit") == null
+                && typeof(IRobotEditTarget).GetProperty("NativeHandle") == null,
+                "robot editing cannot commit native changes or expose raw handles");
+            Assert(typeof(IRobotAgent).GetMethod("SetPersonality") == null
+                && typeof(IRobotAgentService).GetMethod("BeginTemporaryEdit") == null,
+                "the existing stable robot agent interfaces remain unchanged");
+
+            var rejected = false;
+            try
+            {
+                _ = new RobotPersonalityDraft("Helper", "Instructions", 2.1f);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                rejected = true;
+            }
+            Assert(rejected, "personality temperature must remain within the verified native range");
+        }
+
         private static void TestRobotInteractionContracts()
         {
             Assert((int)RobotNativeTalkMode.Enabled == 0 && (int)RobotNativeTalkMode.Disabled == 1,

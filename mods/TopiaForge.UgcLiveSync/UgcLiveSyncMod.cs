@@ -19,6 +19,8 @@ namespace TopiaForge.UgcLiveSync
         private const float CommandPollIntervalSeconds = 0.35f;
         private const string StatusFileName = "topiaforge.ugc.livesync.status.json";
         private const string CommandFileName = "topiaforge.ugc.livesync.command.json";
+        // UgcLiveSyncConfig is ISelfNormalizingConfig, so the launcher-, CLI-, and hand-written document is
+        // bounded by the config service before the service or the overlay reads it.
         private static readonly ConfigDefinition<UgcLiveSyncConfig> ConfigContract =
             new ConfigDefinition<UgcLiveSyncConfig>(1, () => new UgcLiveSyncConfig());
 

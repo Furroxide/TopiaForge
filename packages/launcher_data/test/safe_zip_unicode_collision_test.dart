@@ -44,6 +44,57 @@ void main() {
       throwsA(isA<StateError>()),
     );
   });
+
+  test('rejects escaping and nested symbolic links in update archives', () {
+    final escaping = Archive()
+      ..addFile(
+        (ArchiveFile.string('bundle/link', '../../outside')
+          ..symbolicLink = '../../outside'
+          ..mode = 0xa1ff),
+      );
+    expect(
+      () => SafeZipArchive.decode(
+        ZipEncoder().encode(escaping),
+        allowContainedLinks: true,
+      ),
+      throwsA(predicate((error) => error.toString().contains('escaping'))),
+    );
+
+    final nested = Archive()
+      ..addFile(
+        (ArchiveFile.string('bundle/link', 'target')
+          ..symbolicLink = 'target'
+          ..mode = 0xa1ff),
+      )
+      ..addFile(ArchiveFile.string('bundle/link/payload', 'unsafe'));
+    expect(
+      () => SafeZipArchive.decode(
+        ZipEncoder().encode(nested),
+        allowContainedLinks: true,
+      ),
+      throwsA(
+        predicate((error) => error.toString().contains('beneath a link')),
+      ),
+    );
+  });
+
+  test('rejects special files and privileged permission bits', () {
+    final privileged = Archive()
+      ..addFile(ArchiveFile.string('payload', 'unsafe')..mode = 0x89a4);
+    expect(
+      () => SafeZipArchive.decode(ZipEncoder().encode(privileged)),
+      throwsA(predicate((error) => error.toString().contains('setuid'))),
+    );
+
+    final device = Archive()
+      ..addFile(ArchiveFile.string('device', 'unsafe')..mode = 0x21a4);
+    expect(
+      () => SafeZipArchive.decode(ZipEncoder().encode(device)),
+      throwsA(
+        predicate((error) => error.toString().contains('unsupported file')),
+      ),
+    );
+  });
 }
 
 final _duplicatePath = predicate(

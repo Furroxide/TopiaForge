@@ -17,7 +17,7 @@ void main() {
     expect(readBoundedJsonObjectSync(file, maxBytes: 64)['ok'], isTrue);
   });
 
-  test('rejects oversized, invalid UTF-8, and symlink inputs', () {
+  test('rejects oversized and invalid UTF-8 inputs', () {
     final oversized = File(p.join(temp.path, 'large'))
       ..writeAsBytesSync(List.filled(65, 1));
     expect(
@@ -30,7 +30,12 @@ void main() {
       () => readBoundedTextFileSync(invalid, maxBytes: 64),
       throwsStateError,
     );
-    final link = Link(p.join(temp.path, 'link'))..createSync(invalid.path);
+  });
+
+  test('rejects symlink inputs', () {
+    final target = File(p.join(temp.path, 'target'))
+      ..writeAsStringSync('target');
+    final link = Link(p.join(temp.path, 'link'))..createSync(target.path);
     expect(
       () => readBoundedRegularFileSync(File(link.path), maxBytes: 64),
       throwsStateError,

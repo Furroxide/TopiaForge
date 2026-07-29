@@ -6,24 +6,24 @@
     "dotnetRuntime": "10.0.9",
     "dart": "3.12.2",
     "flutter": "3.44.6",
-    "nodeMinimum": "20.0.0",
+    "nodeMinimum": "24.16.0",
     "unity": "6000.0.23f1"
   },
   "gameBuild": {
-    "id": 2227,
+    "id": 2309,
     "metadataFile": ".github/robotopia-game-build.json",
     "requireLatestAtRelease": true
   },
   "projectLicense": {
-    "spdxExpression": "OWNER_DECISION_REQUIRED",
-    "licenseFile": null,
-    "decisionStatus": "blocked"
+    "spdxExpression": "MIT",
+    "licenseFile": "LICENSE",
+    "decisionStatus": "approved"
   },
   "thirdPartyProvenance": [
     "third_party/BepInEx/provenance.json"
   ],
   "versioning": {
-    "productVersion": "1.0.0",
+    "productVersion": "1.0.0-rc.1",
     "componentVersionsAreIndependent": true,
     "rollback": "none-initial-release"
   },
@@ -36,6 +36,8 @@
     "generatedMetadata": [
       "release-bom.json",
       "release-sbom.spdx.json",
+      "topiaforge-update-v1.json",
+      "topiaforge-update-v1.json.sig",
       "SHA256SUMS"
     ],
     "canonicalEcosystemPayload": true
@@ -50,6 +52,11 @@
     "mode": "draft-only",
     "allowTagCreation": false,
     "allowAssetReplacement": false,
-    "requireImmutableReleasesBeforeManualPublish": true
+    "requireImmutableReleasesBeforeManualPublish": true,
+    "codeSigningException": {
+      "version": "1.0.0-rc.1",
+      "allowUnsignedWindows": true,
+      "allowAdHocMacOS": true
+    }
   }
 }

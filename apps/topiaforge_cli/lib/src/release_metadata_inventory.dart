@@ -115,63 +115,67 @@ class ReleaseMetadataInventoryBuilder {
     } finally {
       await input.close();
     }
-    if (archive.length > 20000) {
-      throw StateError('Release archive has too many entries: ${file.path}');
-    }
-    final found = <String, Map<String, Object?>>{};
-    var selectedBytes = 0;
-    for (final entry in archive.files) {
-      final normalized = entry.name.replaceAll('\\', '/');
-      final marker = normalized.indexOf('dist/');
-      if (marker < 0 ||
-          (marker > 0 && normalized[marker - 1] != '/') ||
-          entry.isDirectory ||
-          entry.isSymbolicLink) {
-        continue;
+    try {
+      if (archive.length > 20000) {
+        throw StateError('Release archive has too many entries: ${file.path}');
       }
-      final path = normalized.substring(marker);
-      if (!expectedPaths.contains(path)) {
-        if (path.endsWith('.topiaforgemod') || path.startsWith('dist/vpm/')) {
+      final found = <String, Map<String, Object?>>{};
+      var selectedBytes = 0;
+      for (final entry in archive.files) {
+        final normalized = entry.name.replaceAll('\\', '/');
+        final marker = normalized.indexOf('dist/');
+        if (marker < 0 ||
+            (marker > 0 && normalized[marker - 1] != '/') ||
+            entry.isDirectory ||
+            entry.isSymbolicLink) {
+          continue;
+        }
+        final path = normalized.substring(marker);
+        if (!expectedPaths.contains(path)) {
+          if (path.endsWith('.topiaforgemod') || path.startsWith('dist/vpm/')) {
+            throw StateError(
+              'Unexpected ecosystem entry $path in ${p.basename(file.path)}.',
+            );
+          }
+          continue;
+        }
+        if (found.containsKey(path) ||
+            entry.size <= 0 ||
+            entry.size > 256 * 1024 * 1024) {
           throw StateError(
-            'Unexpected ecosystem entry $path in ${p.basename(file.path)}.',
+            'Duplicate, empty, or oversized ecosystem entry $path.',
           );
         }
-        continue;
+        selectedBytes += entry.size;
+        if (selectedBytes > 512 * 1024 * 1024) {
+          throw StateError('Canonical ecosystem payload exceeds 512 MB.');
+        }
+        final bytes = entry.readBytes();
+        if (bytes == null || bytes.length != entry.size) {
+          throw StateError('Could not read the complete nested entry $path.');
+        }
+        if (path == 'dist/vpm/index.json') {
+          final decoded = jsonDecode(utf8.decode(bytes, allowMalformed: false));
+          if (decoded is! Map) {
+            throw StateError('Nested VPM index must be a JSON object.');
+          }
+        }
+        found[path] = {
+          'path': path,
+          'size': bytes.length,
+          'sha256': sha256.convert(bytes).toString(),
+        };
       }
-      if (found.containsKey(path) ||
-          entry.size <= 0 ||
-          entry.size > 256 * 1024 * 1024) {
+      if (found.length != expectedPaths.length ||
+          !found.keys.toSet().containsAll(expectedPaths)) {
         throw StateError(
-          'Duplicate, empty, or oversized ecosystem entry $path.',
+          'Canonical ecosystem set is incomplete in ${p.basename(file.path)}.',
         );
       }
-      selectedBytes += entry.size;
-      if (selectedBytes > 512 * 1024 * 1024) {
-        throw StateError('Canonical ecosystem payload exceeds 512 MB.');
-      }
-      final bytes = entry.readBytes();
-      if (bytes == null || bytes.length != entry.size) {
-        throw StateError('Could not read the complete nested entry $path.');
-      }
-      if (path == 'dist/vpm/index.json') {
-        final decoded = jsonDecode(utf8.decode(bytes, allowMalformed: false));
-        if (decoded is! Map) {
-          throw StateError('Nested VPM index must be a JSON object.');
-        }
-      }
-      found[path] = {
-        'path': path,
-        'size': bytes.length,
-        'sha256': sha256.convert(bytes).toString(),
-      };
+      return {for (final key in found.keys.toList()..sort()) key: found[key]!};
+    } finally {
+      await archive.clear();
     }
-    if (found.length != expectedPaths.length ||
-        !found.keys.toSet().containsAll(expectedPaths)) {
-      throw StateError(
-        'Canonical ecosystem set is incomplete in ${p.basename(file.path)}.',
-      );
-    }
-    return {for (final key in found.keys.toList()..sort()) key: found[key]!};
   }
 
   Future<Map<String, Object?>> _provenanceInventory(

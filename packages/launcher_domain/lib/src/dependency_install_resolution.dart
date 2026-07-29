@@ -335,6 +335,9 @@ List<LauncherIssue> _runtimeCompatibilityIssues(
   List<String> contentTargets = const [],
 }) {
   final issues = <LauncherIssue>[];
+  final supportedGameBuilds = _gameVersionRangeDisplay(
+    manifest.gameVersionRange,
+  );
   if (!manifest.gameVersionRange.isAny) {
     if ((gameVersion == null || gameVersion.isEmpty) &&
         requireKnownGameVersion) {
@@ -343,9 +346,10 @@ List<LauncherIssue> _runtimeCompatibilityIssues(
           severity: IssueSeverity.error,
           subjectId: manifest.id,
           message:
-              '${manifest.name} requires a known Robotopia game build in '
-              '${manifest.gameVersionRange}, but installed-build.json could '
-              'not be verified.',
+              '${manifest.name} supports Robotopia '
+              '$supportedGameBuilds, but TopiaForge could not verify '
+              'the installed build. Finish or repair Robotopia in its game '
+              'launcher, then refresh TopiaForge.',
         ),
       );
     } else if (gameVersion != null &&
@@ -356,8 +360,9 @@ List<LauncherIssue> _runtimeCompatibilityIssues(
           severity: IssueSeverity.error,
           subjectId: manifest.id,
           message:
-              '${manifest.name} supports game ${manifest.gameVersionRange}, '
-              'not $gameVersion.',
+              '${manifest.name} supports Robotopia $supportedGameBuilds; '
+              'installed: ${RobotopiaGameVersion.tryBuildLabel(gameVersion) ?? gameVersion}. '
+              'Update Robotopia or choose a compatible mod version.',
         ),
       );
     }
@@ -428,6 +433,9 @@ List<LauncherIssue> _runtimeCompatibilityIssues(
   }
   return issues;
 }
+
+String _gameVersionRangeDisplay(VersionRange range) =>
+    RobotopiaGameVersion.tryBuildLabel(range.toString()) ?? range.toString();
 
 int _compareDependencyVersions(String left, String right) {
   final leftVersion = SemanticVersion.tryParse(left);

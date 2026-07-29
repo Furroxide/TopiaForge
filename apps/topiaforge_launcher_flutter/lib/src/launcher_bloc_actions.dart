@@ -229,3 +229,22 @@ extension LauncherBlocActions on LauncherBloc {
     ].join(' ');
   }
 }
+
+String _packageInboxMessage(PackageInboxInstallOutcome outcome) {
+  final summary = switch (outcome.status) {
+    PackageInboxInstallStatus.success when outcome.candidateCount == 0 =>
+      'Package inbox is empty.',
+    PackageInboxInstallStatus.success =>
+      'Installed ${outcome.installedCount} package(s) and consumed '
+          '${outcome.consumedCount} inbox file(s).',
+    PackageInboxInstallStatus.partial =>
+      'Package inbox partially processed: ${outcome.installedCount} '
+          'installed, ${outcome.retainedCount} retained.',
+    PackageInboxInstallStatus.failure =>
+      'Package inbox failed: no packages installed; '
+          '${outcome.retainedCount} retained.',
+  };
+  return outcome.issues.isEmpty
+      ? summary
+      : '$summary ${outcome.issues.first.message}';
+}

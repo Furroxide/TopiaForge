@@ -35,63 +35,66 @@ namespace TopiaForge.Zombies
 
         private void AdvanceSpawning(float worldDelta)
         {
-            if (spawnSearch != null)
+            // The reachable-spawn search is a bounded candidate loop pumped by RobotKit's own tick and a stalled
+            // one is recoverable through Restart, so it relies on cancellation rather than a deadline.
+            switch (spawnSearch.Poll(
+                (float)context.Time.Frame.ElapsedTime,
+                float.PositiveInfinity,
+                out var result))
             {
-                if (!spawnSearch.IsCompleted)
-                {
-                    return;
-                }
-
-                var completed = spawnSearch;
-                spawnSearch = null;
-                spawnCancellation?.Dispose();
-                spawnCancellation = null;
-                var result = CompletedResult(completed);
-                if (result.TryGetValue(out var placement)
-                    && placement != null
-                    && TrySpawnEnemy(placement.Position, requestedSpawnKind))
-                {
-                    pendingSpawns = Math.Max(0, pendingSpawns - 1);
-                    if (packRemaining > 0)
+                case PendingOperationState.Completed:
+                    if (result.TryGetValue(out var placement)
+                        && placement != null
+                        && TrySpawnEnemy(placement.Position, requestedSpawnKind))
                     {
-                        packRemaining--;
+                        pendingSpawns = Math.Max(0, pendingSpawns - 1);
+                        if (packRemaining > 0)
+                        {
+                            packRemaining--;
+                        }
+
+                        consecutiveSpawnFailures = 0;
+                        hordePressure = Math.Max(0f, hordePressure - 0.05f);
+                        spawnTimer = EffectiveSpawnInterval;
+                    }
+                    else
+                    {
+                        HandleSpawnFailure(result.ErrorMessage);
                     }
 
-                    consecutiveSpawnFailures = 0;
-                    hordePressure = Math.Max(0f, hordePressure - 0.05f);
-                    spawnTimer = EffectiveSpawnInterval;
-                }
-                else
-                {
-                    HandleSpawnFailure(result.ErrorMessage);
-                }
+                    break;
+
+                case PendingOperationState.Waiting:
+                    return;
             }
 
-            if (spawnSearch != null || pendingSpawns <= 0 || CountActiveNonAllies() >= EffectiveAliveCap)
+            if (spawnSearch.IsInFlight || pendingSpawns <= 0 || CountActiveNonAllies() >= EffectiveAliveCap)
             {
                 return;
             }
 
             spawnTimer = Math.Max(0f, spawnTimer - worldDelta);
             if (spawnTimer > 0f
-                || !context.Player.TryGetSnapshot(out var player) || player == null)
+                || !context.LocalPlayer.TryGetSnapshot(out var player) || player == null)
             {
                 return;
             }
 
             requestedSpawnKind = ChooseSpawnKind();
-            spawnCancellation = CancellationTokenSource.CreateLinkedTokenSource(context.Lifetime.StoppingToken);
-            spawnSearch = robots.FindReachableSpawnAsync(
-                new ReachableSpawnRequest(
-                    player.Position,
-                    player.Position,
-                    config.MinSpawnDistance,
-                    config.SpawnRadius,
-                    config.SpawnSearchAttempts,
-                    verticalScan: 4f,
-                    groundProbeDepth: 16f,
-                    heightOffset: config.SpawnHeightOffset),
-                spawnCancellation.Token);
+            spawnSearch.Begin(
+                token => robots.FindReachableSpawnAsync(
+                    new ReachableSpawnRequest(
+                        player.Position,
+                        player.Position,
+                        config.MinSpawnDistance,
+                        config.SpawnRadius,
+                        config.SpawnSearchAttempts,
+                        verticalScan: 4f,
+                        groundProbeDepth: 16f,
+                        heightOffset: config.SpawnHeightOffset),
+                    token),
+                context.Lifetime.StoppingToken,
+                (float)context.Time.Frame.ElapsedTime);
         }
 
         private ZombieKind ChooseSpawnKind()
@@ -158,7 +161,7 @@ namespace TopiaForge.Zombies
                 agent.Chase(playerEntity);
             }
             else if (usingPositionalPlayerFallback
-                && context.Player.TryGetSnapshot(out var player) && player != null)
+                && context.LocalPlayer.TryGetSnapshot(out var player) && player != null)
             {
                 agent.MoveTo(player.Position);
             }

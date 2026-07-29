@@ -50,15 +50,24 @@ namespace TopiaForge.Mods
         TransformState InitialTransform { get; }
     }
 
-    /// <summary>Loads package assets and spawns opaque, lifetime-owned entities.</summary>
+    /// <summary>
+    /// Loads package assets and spawns opaque, lifetime-owned entities.
+    /// </summary>
+    /// <remarks>
+    /// Every asset load here is driven by the game's own asynchronous loader, so the returned tasks complete
+    /// on the main thread. Never block on one: waiting from the main thread stops the frame loop that would
+    /// have completed it, and the game hangs with no recovery. Keep the task, poll
+    /// <see cref="Task.IsCompleted"/> from your per-frame update, and read the result there. The analyzer
+    /// reports a blocking wait as TF1008.
+    /// </remarks>
     public interface IAssetService
     {
-        /// <summary>Loads an asset bundle from a safe package-relative path.</summary>
+        /// <summary>Loads an asset bundle from a safe package-relative path. Poll the task; never wait on it.</summary>
         Task<OperationResult<IAssetBundle>> LoadBundleAsync(
             string relativePath,
             CancellationToken cancellationToken = default);
 
-        /// <summary>Loads a prefab from a bundle created by this context.</summary>
+        /// <summary>Loads a prefab from a bundle created by this context. Poll the task; never wait on it.</summary>
         Task<OperationResult<IPrefabAsset>> LoadPrefabAsync(
             IAssetBundle bundle,
             string assetName,
@@ -90,7 +99,18 @@ namespace TopiaForge.Mods
             Position = position;
         }
 
-        /// <summary>Gets the framework or provider cue id.</summary>
+        /// <summary>Gets the framework cue id.</summary>
+        /// <remarks>
+        /// V1 framework cues are short synthesized notification tones, not sampled audio. The tone is chosen from
+        /// intent words in the id — <c>danger</c>, <c>failure</c>, <c>warning</c>, <c>success</c>, <c>confirm</c> —
+        /// and any other id yields a stable derived tone. They are for feedback beeps, not for a soundtrack.
+        /// <para>
+        /// To ship your own audio, put an <c>AudioSource</c> on a prefab inside your package's asset bundle and
+        /// spawn it through <see cref="IAssetService"/>. There is no way to hand a sampled clip to this service, and
+        /// an unrecognised cue id succeeds rather than failing, so a mod that expects its own sound here will hear
+        /// a beep and get no error.
+        /// </para>
+        /// </remarks>
         public string CueId { get; }
 
         /// <summary>Gets the normalized playback volume.</summary>

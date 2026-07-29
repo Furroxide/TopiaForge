@@ -36,3 +36,6 @@ type public sealed class TopiaForge.Mods.PromptOverrideRequest : System.Object
   property System.String Description { get; }
   property System.String PromptId { get; }
   property System.String ReplacementText { get; }
+
+type public static class TopiaForge.Mods.WellKnownPromptIds : System.Object
+  field const System.String GlobalRobotDirective = "topiaforge.robot.global-directive"

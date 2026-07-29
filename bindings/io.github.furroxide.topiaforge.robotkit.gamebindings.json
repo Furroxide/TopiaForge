@@ -1054,6 +1054,111 @@
       "criticality": "Optional",
       "feature": "Player exclusion from prefab candidates",
       "sourceRef": "mods/TopiaForge.RobotKit/RobotPrefabResolver.cs:117"
+    },
+    {
+      "id": "robotkit.type.personalityasset.creator-editing",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "PersonalityAsset",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Temporary autonomous robot personality editing",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotPersonalityBridge.cs:12"
+    },
+    {
+      "id": "robotkit.property.llmagent.defaultpersonality",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "LLMAgent",
+      "member": "DefaultPersonality",
+      "matchMode": "DynamicInstance",
+      "criticality": "Degraded",
+      "feature": "Snapshot source for temporary autonomous personality",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotPersonalityBindingSurface.cs:46",
+      "returnType": "PersonalityAsset"
+    },
+    {
+      "id": "robotkit.property.llmagent.hackedpersonality",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "LLMAgent",
+      "member": "HackedPersonality",
+      "matchMode": "DynamicInstance",
+      "criticality": "Degraded",
+      "feature": "Conflict-safe temporary personality restoration",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotPersonalityBindingSurface.cs:47",
+      "returnType": "PersonalityAsset"
+    },
+    {
+      "id": "robotkit.method.personalityasset.createhacked",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "PersonalityAsset",
+      "member": "CreateHacked",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Create an isolated temporary autonomous personality",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotPersonalityBindingSurface.cs:50",
+      "parameters": [
+        {
+          "type": "PersonalityAsset",
+          "constrained": true
+        },
+        {
+          "type": "UnityEngine.TextAsset[]",
+          "constrained": true
+        }
+      ],
+      "returnType": "PersonalityAsset"
+    },
+    {
+      "id": "robotkit.method.personalityasset.settemperature",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "PersonalityAsset",
+      "member": "SetTemperature",
+      "matchMode": "DynamicInstance",
+      "criticality": "Degraded",
+      "feature": "Set temporary autonomous personality temperature",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotPersonalityBindingSurface.cs:57",
+      "parameters": [
+        {
+          "type": "System.Single",
+          "constrained": true
+        }
+      ],
+      "returnType": "System.Void"
+    },
+    {
+      "id": "robotkit.method.llmagent.sethackedpersonality",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "LLMAgent",
+      "member": "SetHackedPersonality",
+      "matchMode": "DynamicInstance",
+      "criticality": "Degraded",
+      "feature": "Apply and restore a temporary autonomous personality",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotPersonalityBindingSurface.cs:63",
+      "parameters": [
+        {
+          "type": "PersonalityAsset",
+          "constrained": true
+        }
+      ],
+      "returnType": "System.Void"
+    },
+    {
+      "id": "robotkit.method.llmagent.clearhackedpersonality",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "LLMAgent",
+      "member": "ClearHackedPersonality",
+      "matchMode": "DynamicInstance",
+      "criticality": "Degraded",
+      "feature": "Restore a robot with no prior personality override",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotPersonalityBindingSurface.cs:69",
+      "parameters": [],
+      "returnType": "System.Void"
     }
   ]
 }

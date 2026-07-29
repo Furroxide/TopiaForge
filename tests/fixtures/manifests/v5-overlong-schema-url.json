@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 5,
+  "name": "fixtures.schema-url",
+  "displayName": "V5 Adversarial Fixture",
+  "version": "1.0.0",
+  "author": {
+    "name": "TopiaForge Tests"
+  },
+  "entryAssembly": "Fixture.dll",
+  "entryType": "Fixtures.V5Mod",
+  "supportedGameVersionRange": "*",
+  "supportedLoaderVersionRange": "*",
+  "supportedSdkVersionRange": "*",
+  "$schema": "sssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss"
+}

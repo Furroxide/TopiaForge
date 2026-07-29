@@ -50,6 +50,9 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
 
     final gameRoot = Directory(layout.gameRoot);
     final gameBuild = await _readInstalledGameBuild(layout);
+    if (gameBuild.issue case final issue?) {
+      issues.add(issue);
+    }
     return GameInstall(
       path: layout.gameRoot,
       executablePath: layout.executablePath,
@@ -57,8 +60,8 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
       loaderStatus: await _detectLoader(gameRoot),
       layout: layout.kind,
       architecture: _readGameArchitecture(File(layout.executablePath)),
-      gameVersion: gameBuild?.version,
-      gameVersionLabel: gameBuild?.label ?? '',
+      gameVersion: gameBuild.version,
+      gameVersionLabel: gameBuild.label,
       issues: issues,
       compatStatus: await _checkGameCompat(gameRoot, managedDir),
     );
@@ -68,9 +71,8 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
   /// reflection extractor. Invalid, oversized, linked, or concurrently torn
   /// metadata is treated as unknown so constrained mods fail closed later in
   /// dependency planning while unconstrained installs remain usable.
-  Future<({String version, String label})?> _readInstalledGameBuild(
-    GameLayout layout,
-  ) async {
+  Future<({String? version, String label, LauncherIssue? issue})>
+  _readInstalledGameBuild(GameLayout layout) async {
     for (final file in _installedBuildCandidates(layout)) {
       try {
         final type = FileSystemEntity.typeSync(file.path, followLinks: false);
@@ -78,31 +80,48 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
           continue;
         }
         if (type != FileSystemEntityType.file) {
-          return null;
+          return _unknownInstalledGameBuild(invalid: true);
         }
         final bytes = await _readStableInstalledBuild(file);
         final decoded = jsonDecode(utf8.decode(bytes, allowMalformed: false));
         if (decoded is! Map) {
-          return null;
+          return _unknownInstalledGameBuild(invalid: true);
         }
         final version = RobotopiaGameVersion.tryFromBuildId(decoded['id']);
         final label = RobotopiaGameVersion.tryBuildLabel(version);
         return version == null || label == null
-            ? null
-            : (version: version, label: label);
+            ? _unknownInstalledGameBuild(invalid: true)
+            : (version: version, label: label, issue: null);
       } on Object {
         // An existing higher-priority marker must fail closed instead of
         // allowing a lower-priority file to override corrupt provenance.
-        return null;
+        return _unknownInstalledGameBuild(invalid: true);
       }
     }
-    return null;
+    return _unknownInstalledGameBuild();
   }
+
+  ({String? version, String label, LauncherIssue? issue})
+  _unknownInstalledGameBuild({bool invalid = false}) => (
+    version: null,
+    label: '',
+    issue: LauncherIssue(
+      severity: IssueSeverity.warning,
+      message:
+          'Robotopia build metadata is ${invalid ? 'invalid or unreadable' : 'missing'}. '
+          'Finish or repair Robotopia in its game launcher, then refresh '
+          'TopiaForge.',
+    ),
+  );
 
   List<File> _installedBuildCandidates(GameLayout layout) {
     final root = Directory(layout.gameRoot).absolute.path;
     if (layout.kind != GameInstallLayout.macAppBundle) {
-      return [File(p.join(root, 'installed-build.json'))];
+      return [
+        File(p.join(root, 'installed-build.json')),
+        if (p.basename(root).toLowerCase() == 'robotopia')
+          File(p.join(p.dirname(root), 'installed-build.json')),
+      ];
     }
     final appRoot = p.basename(root) == 'Robotopia.app'
         ? root

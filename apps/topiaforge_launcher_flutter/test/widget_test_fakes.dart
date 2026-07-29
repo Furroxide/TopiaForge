@@ -17,7 +17,7 @@ class _FakeLauncherRepository extends _PublisherFakeLauncherRepository {
              packageSources: const [],
              worldCatalog: WorldCatalog.fallback(),
              recentLog: '',
-             launcherUpdates: const LauncherUpdateSettings(enabled: false),
+             launcherUpdates: const LauncherUpdateSettings(),
              developerMode: developerMode,
            );
   LauncherSnapshot _snapshot;
@@ -287,7 +287,7 @@ class _FakeDeveloperRepository implements DeveloperRepository {
   Future<ModManifest> readModManifest(String projectPath) {
     return Future.value(
       const ModManifest(
-        schemaVersion: 4,
+        schemaVersion: 5,
         id: 'sample.mod',
         name: 'Sample Mod',
         version: '0.1.0',

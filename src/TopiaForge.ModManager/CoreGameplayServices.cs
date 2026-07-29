@@ -1,5 +1,6 @@
 using System;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 using UnityEngine;
 
 namespace TopiaForge.ModManager
@@ -13,12 +14,14 @@ namespace TopiaForge.ModManager
         private readonly UnityScheduler scheduler = new UnityScheduler();
         private readonly UnityPlayerBackend player = new UnityPlayerBackend();
         private readonly UnitySceneBackend scenes = new UnitySceneBackend();
+        private readonly SceneCoordinator sceneCoordinator;
         private readonly UnityPhysicsBackend physics;
         private readonly GameObject loopObject;
         private bool disposed;
 
-        public CoreGameplayServices()
+        public CoreGameplayServices(SceneCoordinator sceneCoordinator)
         {
+            this.sceneCoordinator = sceneCoordinator ?? throw new ArgumentNullException(nameof(sceneCoordinator));
             UnityMainThreadGuard.CaptureCurrentThread();
             physics = new UnityPhysicsBackend(entities);
             loopObject = new GameObject("TopiaForge.CoreGameplayLoop");
@@ -43,6 +46,7 @@ namespace TopiaForge.ModManager
                 throw new ObjectDisposedException(nameof(CoreGameplayServices));
             }
 
+            var sceneTransitions = new OwnerSceneTransitionService(ownerModId, sceneCoordinator);
             return new GameplayContextServices(
                 new OwnerInputService(ownerModId, lifetime, input),
                 new OwnerPlayerService(lifetime, player),
@@ -50,13 +54,14 @@ namespace TopiaForge.ModManager
                 physics,
                 time,
                 new OwnerScheduler(lifetime, scheduler, logger),
-                new OwnerSceneService(lifetime, scenes, logger),
+                new OwnerSceneService(lifetime, scenes, logger, sceneTransitions),
                 new OwnerInteractionService(lifetime, entities, player, logger),
                 new OwnerItemService(lifetime, entities, logger),
                 new OwnerAssetService(packagePath, lifetime, entities),
                 new OwnerAudioService(lifetime),
                 new OwnerUiService(ownerModId, dataPath, lifetime, logger),
-                new OwnerUnityInteropService(ownerModId, lifetime, entities));
+                new OwnerUnityInteropService(ownerModId, lifetime, entities),
+                sceneTransitions);
         }
 
         public GameTimeSample BeginFrame(float deltaTime)

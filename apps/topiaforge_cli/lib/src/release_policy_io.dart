@@ -236,24 +236,149 @@ void _expectCsprojVersion(
   String root,
   String path,
   String? expected,
-  List<String> issues,
-) {
+  List<String> issues, {
+  String? expectedAssemblyVersion,
+}) {
   final text = readBoundedTextFileSync(
     File(p.join(root, path)),
     maxBytes: CliFileLimits.metadata,
   );
   for (final element in const [
     'Version',
+    'AssemblyVersion',
     'FileVersion',
     'InformationalVersion',
   ]) {
     final match = RegExp('<$element>([^<]+)</$element>').firstMatch(text);
     final actual = match?.group(1)?.trim();
-    if (actual == null ||
-        (element == 'FileVersion'
-            ? !actual.startsWith('$expected')
-            : actual != expected)) {
-      issues.add('$path $element $actual does not match $expected.');
+    final numericVersion = _numericAssemblyVersion(expected);
+    final required = switch (element) {
+      'AssemblyVersion' => expectedAssemblyVersion ?? numericVersion,
+      'FileVersion' => numericVersion,
+      _ => expected,
+    };
+    final matches = switch (element) {
+      'AssemblyVersion' || 'FileVersion' => actual == required,
+      _ => actual == expected,
+    };
+    if (!matches) {
+      issues.add('$path $element $actual does not match $required.');
+    }
+  }
+}
+
+void _expectSdkCsprojVersion(
+  String root,
+  String path,
+  String packageId,
+  String? expected,
+  List<String> issues,
+) {
+  _expectCsprojVersion(
+    root,
+    path,
+    expected,
+    issues,
+    expectedAssemblyVersion: _v1StableContractPackageIds.contains(packageId)
+        ? _stableMajorAssemblyVersion(expected)
+        : null,
+  );
+  final text = readBoundedTextFileSync(
+    File(p.join(root, path)),
+    maxBytes: CliFileLimits.metadata,
+  );
+  final actual = RegExp(
+    r'<PackageVersion>([^<]+)</PackageVersion>',
+  ).firstMatch(text)?.group(1)?.trim();
+  if (actual != expected) {
+    issues.add('$path PackageVersion $actual does not match $expected.');
+  }
+}
+
+const _v1StableContractPackageIds = <String>{
+  'TopiaForge.Mods.Abstractions',
+  'TopiaForge.Mods.Chronos',
+  'TopiaForge.Mods.CreatorContent',
+  'TopiaForge.Mods.Multiplayer',
+  'TopiaForge.Mods.Prompts',
+  'TopiaForge.Mods.RobotKit',
+  'TopiaForge.Mods.Testing',
+  'TopiaForge.Mods.Ugc',
+  'TopiaForge.Mods.Worlds',
+};
+
+String? _stableMajorAssemblyVersion(String? packageVersion) {
+  final match = RegExp(r'^(\d+)\.').firstMatch(packageVersion ?? '');
+  return match == null ? null : '${match.group(1)}.0.0.0';
+}
+
+String? _numericAssemblyVersion(String? packageVersion) {
+  final match = RegExp(
+    r'^(\d+)\.(\d+)\.(\d+)(?:[-+]|$)',
+  ).firstMatch(packageVersion ?? '');
+  return match == null
+      ? null
+      : '${match.group(1)}.${match.group(2)}.${match.group(3)}.0';
+}
+
+extension _ReleasePolicyModValidation on ReleasePolicyValidator {
+  void _validateMods(
+    TopiaForgeReleaseCatalogEntry release,
+    String root,
+    List<String> issues,
+  ) {
+    final found = <String, String>{};
+    final modsRoot = Directory(p.join(root, 'mods'));
+    for (final directory in listBoundedDirectorySync(
+      modsRoot,
+    ).whereType<Directory>()) {
+      final file = File(p.join(directory.path, 'topiaforge.mod.json'));
+      if (!file.existsSync()) continue;
+      final json = _readObject(file);
+      final id = json['name'] as String? ?? '';
+      final version = json['version'] as String? ?? '';
+      if (found.containsKey(id.toLowerCase())) {
+        issues.add('Duplicate first-party mod id $id.');
+      }
+      found[id.toLowerCase()] = version;
+      final projects = listBoundedDirectorySync(directory)
+          .whereType<File>()
+          .where((candidate) => p.extension(candidate.path) == '.csproj')
+          .toList();
+      if (projects.length != 1) {
+        issues.add(
+          '$id must have exactly one first-party mod project; found ${projects.length}.',
+        );
+      } else {
+        _expectCsprojVersion(
+          root,
+          p.relative(projects.single.path, from: root),
+          version,
+          issues,
+        );
+      }
+      final changelog = File(p.join(directory.path, 'CHANGELOG.md'));
+      if (FileSystemEntity.typeSync(changelog.path, followLinks: false) !=
+          FileSystemEntityType.file) {
+        issues.add('$id is missing a regular CHANGELOG.md.');
+      } else {
+        final text = readBoundedTextFileSync(
+          changelog,
+          maxBytes: CliFileLimits.changelog,
+        );
+        if (!RegExp(
+          '^## ${RegExp.escape(version)}(?:\\s|\$)',
+          multiLine: true,
+        ).hasMatch(text)) {
+          issues.add('$id CHANGELOG.md has no release heading for $version.');
+        }
+      }
+    }
+    final expected = {...release.mods, ...release.excludedDeveloperMods};
+    if (!_sameMap(expected, found)) {
+      issues.add(
+        'First-party mod ids/versions do not match release/catalog.json.',
+      );
     }
   }
 }

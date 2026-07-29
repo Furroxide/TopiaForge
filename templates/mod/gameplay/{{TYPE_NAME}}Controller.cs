@@ -38,7 +38,7 @@ namespace {{ASSEMBLY_NAME}}
                 return;
             }
 
-            if (!context.Player.TryGetSnapshot(out var player) || player == null)
+            if (!context.LocalPlayer.TryGetSnapshot(out var player) || player == null)
             {
                 context.Ui.ShowToast("The player camera is not available yet.", UiTone.Warning);
                 return;

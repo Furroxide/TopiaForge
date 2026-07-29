@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using TopiaForge.Mods;
 
 namespace TopiaForge.ModManager
 {
@@ -10,10 +11,14 @@ namespace TopiaForge.ModManager
         private readonly object gate = new object();
         private readonly List<Claim> claims = new List<Claim>();
         private readonly Action<string> logInfo;
+        private readonly ISceneTransitionAuthorityPolicy authorityPolicy;
 
-        public SceneCoordinator(Action<string>? logInfo = null)
+        public SceneCoordinator(
+            Action<string>? logInfo = null,
+            ISceneTransitionAuthorityPolicy? authorityPolicy = null)
         {
             this.logInfo = logInfo ?? (_ => { });
+            this.authorityPolicy = authorityPolicy ?? StandaloneSceneTransitionAuthorityPolicy.Instance;
         }
 
         public bool IsSceneBusy
@@ -51,6 +56,17 @@ namespace TopiaForge.ModManager
                 throw new ArgumentNullException(nameof(request));
             }
 
+            var authority = authorityPolicy.Evaluate(request);
+            if (!authority.Allowed)
+            {
+                var message = string.IsNullOrWhiteSpace(authority.Message)
+                    ? "The current process is not authoritative for scene transitions."
+                    : authority.Message;
+                TryLog("Scene transition refused for '" + request.OwnerModId + "' -> '"
+                    + request.SceneName + "': " + message);
+                return SceneTransitionDecision.Refuse(ModErrorCode.NotAuthoritative, message);
+            }
+
             SceneTransitionDecision decision;
             string? logMessage = null;
             lock (gate)
@@ -63,7 +79,7 @@ namespace TopiaForge.ModManager
                         + "; automatic transitions must yield.";
                     logMessage = "Scene transition refused for '" + request.OwnerModId + "' -> '"
                         + request.SceneName + "': " + message;
-                    decision = SceneTransitionDecision.Refuse(message);
+                    decision = SceneTransitionDecision.Refuse(ModErrorCode.Conflict, message);
                 }
                 else
                 {
@@ -199,25 +215,76 @@ namespace TopiaForge.ModManager
 
     internal sealed class SceneTransitionDecision
     {
-        private SceneTransitionDecision(bool approved, IDisposable? claim, string message)
+        private SceneTransitionDecision(
+            bool approved,
+            IDisposable? claim,
+            ModErrorCode errorCode,
+            string message)
         {
             Approved = approved;
             Claim = claim;
+            ErrorCode = errorCode;
             Message = message;
         }
 
         public bool Approved { get; }
         public IDisposable? Claim { get; }
+        public ModErrorCode ErrorCode { get; }
         public string Message { get; }
 
         public static SceneTransitionDecision Approve(IDisposable claim, string message)
         {
-            return new SceneTransitionDecision(true, claim, message);
+            return new SceneTransitionDecision(true, claim, ModErrorCode.None, message);
         }
 
-        public static SceneTransitionDecision Refuse(string message)
+        public static SceneTransitionDecision Refuse(ModErrorCode errorCode, string message)
         {
-            return new SceneTransitionDecision(false, null, message);
+            if (errorCode == ModErrorCode.None)
+            {
+                throw new ArgumentOutOfRangeException(nameof(errorCode));
+            }
+
+            return new SceneTransitionDecision(false, null, errorCode, message);
         }
+    }
+
+    /// <summary>
+    /// Future networking providers can replace this policy to deny client-side world mutations. The V1 host is
+    /// standalone, so all owner-bound requests are authorized before ordinary coordinator arbitration.
+    /// </summary>
+    internal interface ISceneTransitionAuthorityPolicy
+    {
+        SceneTransitionAuthorityDecision Evaluate(SceneTransitionRequest request);
+    }
+
+    internal sealed class StandaloneSceneTransitionAuthorityPolicy : ISceneTransitionAuthorityPolicy
+    {
+        public static readonly StandaloneSceneTransitionAuthorityPolicy Instance =
+            new StandaloneSceneTransitionAuthorityPolicy();
+
+        private StandaloneSceneTransitionAuthorityPolicy()
+        {
+        }
+
+        public SceneTransitionAuthorityDecision Evaluate(SceneTransitionRequest request) =>
+            SceneTransitionAuthorityDecision.Allow();
+    }
+
+    internal readonly struct SceneTransitionAuthorityDecision
+    {
+        private SceneTransitionAuthorityDecision(bool allowed, string message)
+        {
+            Allowed = allowed;
+            Message = message;
+        }
+
+        public bool Allowed { get; }
+        public string Message { get; }
+
+        public static SceneTransitionAuthorityDecision Allow() =>
+            new SceneTransitionAuthorityDecision(true, string.Empty);
+
+        public static SceneTransitionAuthorityDecision Deny(string message) =>
+            new SceneTransitionAuthorityDecision(false, message ?? string.Empty);
     }
 }

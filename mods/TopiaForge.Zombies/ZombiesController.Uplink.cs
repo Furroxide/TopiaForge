@@ -13,7 +13,7 @@ namespace TopiaForge.Zombies
                 return;
             }
 
-            if (!context.Player.TryGetSnapshot(out var player) || player == null)
+            if (!context.LocalPlayer.TryGetSnapshot(out var player) || player == null)
             {
                 context.Ui.ShowToast("JACK IN unavailable: player tracking is offline.", UiTone.Warning);
                 return;
@@ -164,7 +164,7 @@ namespace TopiaForge.Zombies
                     showFeedback);
             }
 
-            if (!context.Player.TryGetSnapshot(out var player) || player == null)
+            if (!context.LocalPlayer.TryGetSnapshot(out var player) || player == null)
             {
                 return BroadcastFailure(
                     ModErrorCode.Unavailable,
@@ -196,6 +196,10 @@ namespace TopiaForge.Zombies
 
             if (affected == 0)
             {
+                // The transmitter fired and found nothing, so the charge is not spent — but the cooldown still
+                // applies. Without it this path costs nothing at all, and the player can hold the key as a free
+                // proximity scanner until a robot wanders into range.
+                broadcastCooldown = config.BroadcastCooldownSeconds;
                 return BroadcastFailure(
                     ModErrorCode.NotFound,
                     "No hostile infected robots answered within broadcast range.",
@@ -235,7 +239,7 @@ namespace TopiaForge.Zombies
                 case HijackOutcome.Convert:
                     if (CountAllies() < config.MaxConvertedAllies)
                     {
-                        enemy.Convert(config, ConversationDirector.SeedDisposition(enemy.Mind, ConversationTuningValues()));
+                        enemy.Convert(config, ConversationDirector.SeedDisposition(enemy.Mind, enemy.Archetype.BaseResistance, ConversationTuningValues()));
                         context.Ui.ShowToast(enemy.Archetype.DisplayName + " joined your side.", UiTone.Success);
                     }
                     else
@@ -267,7 +271,7 @@ namespace TopiaForge.Zombies
 
         private void MoveEnemyAway(ZombieEnemy enemy)
         {
-            if (!context.Player.TryGetSnapshot(out var player) || player == null)
+            if (!context.LocalPlayer.TryGetSnapshot(out var player) || player == null)
             {
                 return;
             }

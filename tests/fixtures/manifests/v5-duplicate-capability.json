@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 5,
+  "name": "fixtures.v5-duplicate-capability",
+  "displayName": "Duplicate capability",
+  "version": "1.0.0",
+  "author": { "name": "TopiaForge Tests" },
+  "entryAssembly": "Fixture.dll",
+  "entryType": "Fixtures.V5Mod",
+  "supportedGameVersionRange": "*",
+  "supportedLoaderVersionRange": "*",
+  "supportedSdkVersionRange": "*",
+  "capabilities": ["input", "input"]
+}

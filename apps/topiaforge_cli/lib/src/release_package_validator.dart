@@ -276,7 +276,9 @@ class ReleasePackageValidator {
 
   Future<void> _assertExecutable(String path) async {
     _assertPath(path, 'Expected executable file.');
-    if (platform == ReleasePackagePlatform.windows) {
+    if (platform == ReleasePackagePlatform.windows || Platform.isWindows) {
+      // Windows does not expose an extracted ZIP entry's POSIX executable
+      // bits. Native Unix validation still checks the mode with `test -x`.
       return;
     }
     final result = await processRunner.runResult('test', ['-x', path]);

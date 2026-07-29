@@ -5,15 +5,20 @@
     <Nullable>enable</Nullable>
     <AssemblyName>TopiaForge.SdkAcceptanceMod</AssemblyName>
     <RootNamespace>TopiaForge.SdkAcceptance</RootNamespace>
-    <Version>1.0.0</Version>
+    <Version>1.0.0-rc.1</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>
-    <InformationalVersion>1.0.0</InformationalVersion>
+    <InformationalVersion>1.0.0-rc.1</InformationalVersion>
     <TopiaForgeSafeProject>true</TopiaForgeSafeProject>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Chronos\TopiaForge.Mods.Chronos.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.CreatorContent\TopiaForge.Mods.CreatorContent.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Multiplayer\TopiaForge.Mods.Multiplayer.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Multiplayer.Generators\TopiaForge.Mods.Multiplayer.Generators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Prompts\TopiaForge.Mods.Prompts.csproj" Private="false" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.RobotKit\TopiaForge.Mods.RobotKit.csproj" Private="false" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Ugc\TopiaForge.Mods.Ugc.csproj" Private="false" />

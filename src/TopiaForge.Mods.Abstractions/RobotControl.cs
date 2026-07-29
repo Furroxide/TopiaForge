@@ -15,7 +15,7 @@ namespace TopiaForge.Mods
     /// </summary>
     /// <remarks>
     /// Published by the <c>TopiaForge.RobotKit</c> framework mod and resolved with
-    /// <c>context.Extensions.TryGet&lt;IRobotAgentService&gt;()</c>. Declare a dependency on
+    /// <c>context.RequireExtension&lt;IRobotAgentService&gt;()</c>. Declare a dependency on
     /// <c>io.github.furroxide.topiaforge.robotkit</c> so the service is
     /// registered before your <c>OnLoad</c> runs. All operations degrade gracefully: when the game symbols this
     /// relies on are absent, <see cref="IsAvailable"/> is <c>false</c> and spawning returns a stable

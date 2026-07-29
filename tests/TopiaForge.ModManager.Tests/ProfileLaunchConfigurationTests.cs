@@ -143,7 +143,7 @@ namespace TopiaForge.ModManager.Tests
             Directory.CreateDirectory(packagePath);
             JsonUtil.SaveFile(Path.Combine(packagePath, "topiaforge.mod.json"), new ModManifest
             {
-                SchemaVersion = 4,
+                SchemaVersion = 5,
                 Id = id,
                 Name = "Alpha",
                 Version = version,

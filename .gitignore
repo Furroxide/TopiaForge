@@ -3,6 +3,8 @@ src/**/[Bb]in/
 src/**/[Oo]bj/
 mods/**/[Bb]in/
 mods/**/[Oo]bj/
+samples/**/[Bb]in/
+samples/**/[Oo]bj/
 tests/**/[Bb]in/
 tests/**/[Oo]bj/
 templates/**/[Bb]in/
@@ -31,6 +33,7 @@ packages/**/[Bb]uild/
 # Generated distributables and local package caches
 /dist/
 /out/
+/release-artifacts/
 /.topiaforge/packages/
 /.topiaforge/cache/
 topiaforge.dev.props
@@ -63,3 +66,6 @@ topiaforge.dev.props
 
 # CI pack-smoke scratch (release.yml scaffolds here)
 .pack-smoke/
+
+# FVM Version Cache
+.fvm/

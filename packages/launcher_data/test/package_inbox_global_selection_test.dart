@@ -104,7 +104,7 @@ class _GlobalInboxFixture {
     File(p.join(game.path, 'Robotopia.exe')).writeAsStringSync('');
     File(
       p.join(game.path, 'installed-build.json'),
-    ).writeAsStringSync('{"id":2227}');
+    ).writeAsStringSync('{"id":2309}');
     final managed = Directory(p.join(game.path, 'Robotopia_Data', 'Managed'))
       ..createSync(recursive: true);
     File(p.join(managed.path, 'UnityEngine.dll')).writeAsStringSync('');
@@ -144,7 +144,7 @@ class _GlobalInboxFixture {
   }) {
     final assembly = id.replaceAll('.', '_');
     final manifest = <String, Object?>{
-      'schemaVersion': 4,
+      'schemaVersion': 5,
       'name': id,
       'displayName': id,
       'version': version,

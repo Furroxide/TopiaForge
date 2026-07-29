@@ -25,6 +25,8 @@ class ReleaseMetadataResult {
 class TopiaForgeReleaseMetadataBuilder {
   const TopiaForgeReleaseMetadataBuilder();
 
+  static const trustEvidenceFileName = '.platform-trust-evidence.json';
+
   Future<ReleaseMetadataResult> build({
     required String repositoryRoot,
     required String version,
@@ -64,6 +66,7 @@ class TopiaForgeReleaseMetadataBuilder {
     final actualNames = <String>{};
     for (final entity in listBoundedDirectorySync(assets)) {
       final name = p.basename(entity.path);
+      if (name == trustEvidenceFileName) continue;
       if (policy.generatedMetadata.contains(name)) continue;
       if (entity is! File ||
           FileSystemEntity.typeSync(entity.path, followLinks: false) !=
@@ -101,6 +104,25 @@ class TopiaForgeReleaseMetadataBuilder {
     }
 
     final output = Directory(outputDirectory)..createSync(recursive: true);
+    final signedUpdateFiles = <String, File>{
+      for (final name in const [
+        'topiaforge-update-v1.json',
+        'topiaforge-update-v1.json.sig',
+      ])
+        name: File(p.join(assets.path, name)),
+    };
+    for (final entry in signedUpdateFiles.entries) {
+      if (FileSystemEntity.typeSync(entry.value.path, followLinks: false) !=
+          FileSystemEntityType.file) {
+        throw StateError(
+          'Signed launcher update metadata is missing: ${entry.key}.',
+        );
+      }
+    }
+    final codeSigning = _readCodeSigningEvidence(
+      File(p.join(assets.path, trustEvidenceFileName)),
+      policy,
+    );
     final licenseSha = policy.hasApprovedLicense
         ? await _sha256File(File(p.join(repositoryRoot, policy.licenseFile!)))
         : null;
@@ -138,6 +160,7 @@ class TopiaForgeReleaseMetadataBuilder {
         'file': policy.licenseFile,
         'sha256': licenseSha,
       },
+      'codeSigning': codeSigning,
       'components': _sortedMap(release.components),
       'vpmPackages': _sortedMap(release.vpmPackages),
       'mods': _sortedMap(release.mods),
@@ -173,6 +196,8 @@ class TopiaForgeReleaseMetadataBuilder {
     final checksumEntries = <({String name, File file})>[
       for (final name in release.artifacts)
         (name: name, file: File(p.join(assets.path, name))),
+      for (final entry in signedUpdateFiles.entries)
+        (name: entry.key, file: entry.value),
       (name: p.basename(bomFile.path), file: bomFile),
       (name: p.basename(sbomFile.path), file: sbomFile),
     ]..sort((left, right) => left.name.compareTo(right.name));
@@ -249,17 +274,14 @@ class TopiaForgeReleaseMetadataBuilder {
     final blockingReasons = (bom['blockingReasons'] as List?)
         ?.whereType<String>()
         .toList();
-    if (allowUnresolvedPolicy) {
-      if (bom['distributable'] != false ||
-          blockingReasons == null ||
-          blockingReasons.isEmpty) {
-        throw StateError(
-          'Technical metadata must explicitly record why it is non-distributable.',
-        );
-      }
-    } else if (bom['distributable'] != true ||
-        blockingReasons == null ||
-        blockingReasons.isNotEmpty) {
+    if (blockingReasons == null ||
+        (bom['distributable'] == true && blockingReasons.isNotEmpty) ||
+        (bom['distributable'] == false && blockingReasons.isEmpty)) {
+      throw StateError(
+        'Release BOM distributability and blocking reasons disagree.',
+      );
+    }
+    if (!allowUnresolvedPolicy && bom['distributable'] != true) {
       throw StateError('Publication metadata is marked non-distributable.');
     }
     final assets = Directory(assetsDirectory);
@@ -279,6 +301,13 @@ class TopiaForgeReleaseMetadataBuilder {
         'Release BOM artifact inventory differs from exact bytes.',
       );
     }
+    final expectedCodeSigning = _readCodeSigningEvidence(
+      File(p.join(assets.path, trustEvidenceFileName)),
+      policy,
+    );
+    if (jsonEncode(bom['codeSigning']) != jsonEncode(expectedCodeSigning)) {
+      throw StateError('Release BOM code-signing evidence was changed.');
+    }
     final inventory = await const ReleaseMetadataInventoryBuilder().build(
       repositoryRoot: repositoryRoot,
       policy: policy,
@@ -296,6 +325,11 @@ class TopiaForgeReleaseMetadataBuilder {
     verifyReleaseSpdxSbom(sbom, release);
     final expected = <String, File>{
       for (final name in release.artifacts)
+        name: File(p.join(assetsDirectory, name)),
+      for (final name in const [
+        'topiaforge-update-v1.json',
+        'topiaforge-update-v1.json.sig',
+      ])
         name: File(p.join(assetsDirectory, name)),
       'release-bom.json': bomFile,
       'release-sbom.spdx.json': sbomFile,
@@ -361,3 +395,62 @@ bool _sameSet(Set<String> left, Set<String> right) =>
 
 Future<String> _sha256File(File file) async =>
     (await sha256.bind(file.openRead()).single).toString();
+
+Map<String, Object?> _readCodeSigningEvidence(
+  File file,
+  TopiaForgeReleasePolicy policy,
+) {
+  final json = _readJsonObject(file);
+  const platforms = {'windows-x64', 'linux-x64', 'macos-universal'};
+  if (!_sameSet(json.keys.toSet(), platforms)) {
+    throw StateError(
+      '${TopiaForgeReleaseMetadataBuilder.trustEvidenceFileName} must '
+      'contain the exact supported platform set.',
+    );
+  }
+  final normalized = <String, Object?>{};
+  for (final platform in platforms.toList()..sort()) {
+    final value = json[platform];
+    if (value is! Map) {
+      throw StateError('Code-signing evidence for $platform is invalid.');
+    }
+    final entry = Map<String, Object?>.from(value);
+    final status = entry['status'];
+    final exceptionApplied = entry['exceptionApplied'];
+    if (entry.length != 2 || status is! String || exceptionApplied is! bool) {
+      throw StateError('Code-signing evidence for $platform is invalid.');
+    }
+    switch (platform) {
+      case 'windows-x64':
+        if (status == 'trusted' && !exceptionApplied) break;
+        if (status == 'unsigned' &&
+            exceptionApplied &&
+            policy.allowsUnsignedWindows) {
+          break;
+        }
+        throw StateError(
+          'Windows code-signing evidence is not permitted by release policy.',
+        );
+      case 'macos-universal':
+        if (status == 'trusted' && !exceptionApplied) break;
+        if (status == 'ad-hoc' && exceptionApplied && policy.allowsAdHocMacOS) {
+          break;
+        }
+        throw StateError(
+          'macOS code-signing evidence is not permitted by release policy.',
+        );
+      case 'linux-x64':
+        if (status != 'not-applicable' || exceptionApplied) {
+          throw StateError('Linux code-signing evidence is invalid.');
+        }
+    }
+    normalized[platform] = {
+      'status': status,
+      'exceptionApplied': exceptionApplied,
+    };
+  }
+  return {
+    'exceptionVersion': policy.codeSigningException?.version,
+    'platforms': normalized,
+  };
+}

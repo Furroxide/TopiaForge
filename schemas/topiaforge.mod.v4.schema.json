@@ -1,0 +1,7 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.v4.schema.json",
+  "title": "Retired TopiaForge Mod Manifest V4",
+  "description": "Manifest V4 was retired before TopiaForge 1.0. Migrate to V5 and omit multiplayer for a standalone-only mod.",
+  "not": {}
+}

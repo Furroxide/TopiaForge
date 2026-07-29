@@ -31,4 +31,4 @@ assemblies. Published player content is repacked and validated through the ordin
 `.topiaforgemod` pipeline.
 
 See [UGC live sync](UgcLiveSync.md), [Custom worlds](CustomWorlds.md), and
-[Manifest V4](ManifestV4.md#dependencies-and-ordering).
+[Manifest V5](ManifestV5.md#package-contract).

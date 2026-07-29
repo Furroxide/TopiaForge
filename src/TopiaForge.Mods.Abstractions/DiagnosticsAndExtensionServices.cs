@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -120,8 +121,15 @@ namespace TopiaForge.Mods
             T provider,
             ExtensionCardinality cardinality = ExtensionCardinality.Singleton) where T : class;
 
-        /// <summary>Tries to resolve the deterministic first dependency-scoped provider.</summary>
-        bool TryGet<T>(out T? provider) where T : class;
+        /// <summary>
+        /// Tries to resolve the deterministic first dependency-scoped provider.
+        /// </summary>
+        /// <remarks>
+        /// This is the low-level primitive. Prefer <see cref="ModContextExtensions.RequireExtension{T}"/> for a
+        /// required manifest dependency and <see cref="ModContextExtensions.TryGetExtension{T}"/> for an optional
+        /// one; both read better at the call site and carry the same nullability contract.
+        /// </remarks>
+        bool TryGet<T>([NotNullWhen(true)] out T? provider) where T : class;
 
         /// <summary>Returns every dependency-scoped provider ordered by normalized provider identity.</summary>
         IReadOnlyList<T> GetAll<T>() where T : class;

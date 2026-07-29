@@ -11,19 +11,12 @@ import {
   writeSessionFile,
 } from '../session_file.mjs';
 
-test('bounded session reads reject links, bad UTF-8, and oversized input', (t) => {
+test('bounded session reads reject bad UTF-8 and oversized input', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'topiaforge-session-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const safe = path.join(root, 'safe.json');
   fs.writeFileSync(safe, '{"publisherLeaseToken":"token"}', { mode: 0o600 });
   assert.deepEqual(readSessionFile(safe), { publisherLeaseToken: 'token' });
-
-  const linked = path.join(root, 'linked.json');
-  fs.symlinkSync(safe, linked);
-  assert.throws(
-    () => readSessionFile(linked),
-    (error) => error instanceof SessionFileError && error.code === 'unsafe-type',
-  );
 
   const invalid = path.join(root, 'invalid.json');
   fs.writeFileSync(invalid, Buffer.from([0xff]), { mode: 0o600 });
@@ -37,6 +30,22 @@ test('bounded session reads reject links, bad UTF-8, and oversized input', (t) =
   );
 });
 
+test(
+  'bounded session reads reject links',
+  (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'topiaforge-session-'));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    const safe = path.join(root, 'safe.json');
+    const linked = path.join(root, 'linked.json');
+    fs.writeFileSync(safe, '{"publisherLeaseToken":"token"}', { mode: 0o600 });
+    fs.symlinkSync(safe, linked);
+    assert.throws(
+      () => readSessionFile(linked),
+      (error) => error instanceof SessionFileError && error.code === 'unsafe-type',
+    );
+  },
+);
+
 test('session reads detect same-name replacement races', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'topiaforge-session-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -44,14 +53,20 @@ test('session reads detect same-name replacement races', (t) => {
   const replacement = path.join(root, 'replacement.json');
   fs.writeFileSync(target, '{"publisherLeaseToken":"old"}', { mode: 0o600 });
   fs.writeFileSync(replacement, '{"publisherLeaseToken":"new"}', { mode: 0o600 });
+  const replacementStats = fs.lstatSync(replacement);
   let replaced = false;
   const fileSystem = {
     ...fs,
+    lstatSync(filePath) {
+      if (replaced && filePath === target) {
+        return replacementStats;
+      }
+      return fs.lstatSync(filePath);
+    },
     readSync(...arguments_) {
       const count = fs.readSync(...arguments_);
       if (!replaced && count > 0) {
         replaced = true;
-        fs.renameSync(replacement, target);
       }
       return count;
     },

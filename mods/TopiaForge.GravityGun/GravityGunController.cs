@@ -10,7 +10,7 @@ namespace TopiaForge.GravityGun
     internal sealed class GravityGunController : IDisposable
     {
         private readonly GravityGunConfig config;
-        private readonly IPlayerService player;
+        private readonly ILocalPlayerService player;
         private readonly IEntityService entities;
         private readonly IPhysicsService physics;
         private readonly IModLogger logger;
@@ -25,7 +25,7 @@ namespace TopiaForge.GravityGun
             : this(
                 config,
                 context?.Input ?? throw new ArgumentNullException(nameof(context)),
-                context.Player,
+                context.LocalPlayer,
                 context.Entities,
                 context.Physics,
                 context.Events,
@@ -37,7 +37,7 @@ namespace TopiaForge.GravityGun
         internal GravityGunController(
             GravityGunConfig config,
             IInputService input,
-            IPlayerService player,
+            ILocalPlayerService player,
             IEntityService entities,
             IPhysicsService physics,
             IModEvents events,

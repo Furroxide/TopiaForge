@@ -21,6 +21,12 @@ extension LauncherEventDispatch on LauncherBloc {
       SelectedProfileDuplicated() => _onSelectedProfileDuplicated(event, emit),
       SelectedProfileDeleted() => _onSelectedProfileDeleted(event, emit),
       SafeModeToggled() => _onSafeModeToggled(event, emit),
+      ProfileManagerStateInheritanceChanged() =>
+        _onProfileManagerStateInheritanceChanged(event, emit),
+      ProfileModSelectionChanged() => _onProfileModSelectionChanged(
+        event,
+        emit,
+      ),
       WorldSelectionChanged() => _onWorldSelectionChanged(event, emit),
       KnownInstallDetected() => _onKnownInstallDetected(event, emit),
       GameDirectorySelected() => _onGameDirectorySelected(event, emit),
@@ -48,6 +54,22 @@ extension LauncherEventDispatch on LauncherBloc {
       ),
       PackageSourceRemoved() => _onPackageSourceRemoved(event, emit),
       LauncherUpdateSettingsChanged() => _onLauncherUpdateSettingsChanged(
+        event,
+        emit,
+      ),
+      LauncherUpdateCheckRequested() => _onLauncherUpdateCheckRequested(
+        event,
+        emit,
+      ),
+      LauncherUpdateDownloadRequested() => _onLauncherUpdateDownloadRequested(
+        event,
+        emit,
+      ),
+      LauncherUpdateInstallConfirmed() => _onLauncherUpdateInstallConfirmed(
+        event,
+        emit,
+      ),
+      LauncherUpdateStatusChanged() => _onLauncherUpdateStatusChanged(
         event,
         emit,
       ),

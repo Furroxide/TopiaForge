@@ -6,9 +6,9 @@ import 'package:test/test.dart';
 
 void main() {
   test('launcher compatibility versions match the bundled runtime', () {
-    expect(TopiaForgeRuntimeVersions.loaderVersion, '1.0.0');
-    expect(TopiaForgeRuntimeVersions.sdkVersion, '1.0.0');
-    expect(TopiaForgeRuntimeVersions.gameVersion, '0.0.2227');
+    expect(TopiaForgeRuntimeVersions.loaderVersion, '1.0.0-rc.1');
+    expect(TopiaForgeRuntimeVersions.sdkVersion, '1.0.0-rc.1');
+    expect(TopiaForgeRuntimeVersions.gameVersion, '0.0.2309');
     final policyFile = [
       File('release/release-policy.json'),
       File('../../release/release-policy.json'),

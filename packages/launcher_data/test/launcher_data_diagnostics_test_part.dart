@@ -9,8 +9,8 @@ void _registerDiagnosticDataTests({
     final game = gameRoot();
     final selected = await repository().selectGameDirectory(game.path);
     final install = selected.copyWith(
-      gameVersion: '0.0.2227',
-      gameVersionLabel: 'build 2227',
+      gameVersion: '0.0.2309',
+      gameVersionLabel: 'build 2309',
     );
 
     final launcherLog = File(p.join(dataRoot().path, 'logs', 'launcher.log'));
@@ -66,7 +66,7 @@ void _registerDiagnosticDataTests({
     expect(contents, contains('%ROBOTOPIA_GAME%'));
     expect(contents, contains('%REDACTED%'));
     expect(contents, contains('earlier content omitted'));
-    expect(contents, contains('"gameVersion": "0.0.2227"'));
+    expect(contents, contains('"gameVersion": "0.0.2309"'));
     expect(contents, isNot(contains(game.path)));
     expect(contents, isNot(contains(configuredGamePath)));
     expect(contents, isNot(contains('launcher-secret')));
