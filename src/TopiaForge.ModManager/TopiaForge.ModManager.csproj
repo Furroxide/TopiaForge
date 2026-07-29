@@ -31,11 +31,11 @@
        here and copy only those two missing assemblies beside the loader. -->
   <ItemGroup>
     <PackageReference Include="System.Collections.Immutable"
-                      Version="10.0.9"
+                      Version="10.0.10"
                       GeneratePathProperty="true"
                       PrivateAssets="all" />
     <PackageReference Include="System.Reflection.Metadata"
-                      Version="10.0.9"
+                      Version="10.0.10"
                       GeneratePathProperty="true"
                       PrivateAssets="all" />
   </ItemGroup>
