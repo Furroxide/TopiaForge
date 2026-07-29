@@ -57,6 +57,10 @@ void _registerReleasePackagingTests() {
       false,
     );
     expect(
+      Directory(p.join(extracted.path, 'tools', 'sidecar', 'bin')).existsSync(),
+      false,
+    );
+    expect(
       File(p.join(extracted.path, 'tools', 'sidecar', '.npmrc')).existsSync(),
       false,
     );
