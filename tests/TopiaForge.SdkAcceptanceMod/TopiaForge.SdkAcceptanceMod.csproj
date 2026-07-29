@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <AssemblyName>TopiaForge.SdkAcceptanceMod</AssemblyName>
+    <RootNamespace>TopiaForge.SdkAcceptance</RootNamespace>
+    <Version>1.0.0-rc.1</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <InformationalVersion>1.0.0-rc.1</InformationalVersion>
+    <TopiaForgeSafeProject>true</TopiaForgeSafeProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Chronos\TopiaForge.Mods.Chronos.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.CreatorContent\TopiaForge.Mods.CreatorContent.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Multiplayer\TopiaForge.Mods.Multiplayer.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Multiplayer.Generators\TopiaForge.Mods.Multiplayer.Generators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Prompts\TopiaForge.Mods.Prompts.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.RobotKit\TopiaForge.Mods.RobotKit.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Ugc\TopiaForge.Mods.Ugc.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Worlds\TopiaForge.Mods.Worlds.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Analyzers\TopiaForge.Mods.Analyzers.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <AdditionalFiles Include="topiaforge.mod.json" />
+    <Content Include="..\..\mods\TopiaForge.Worlds\AssetBundles\topiaforge-representative-world.bundle"
+             Link="third_party\sdk-acceptance-world.bundle"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

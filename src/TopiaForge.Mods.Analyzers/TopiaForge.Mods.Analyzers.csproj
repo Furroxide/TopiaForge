@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <AssemblyName>TopiaForge.Mods.Analyzers</AssemblyName>
+    <RootNamespace>TopiaForge.Mods.Analyzers</RootNamespace>
+    <Version>1.0.0-rc.1</Version>
+    <PackageVersion>1.0.0-rc.1</PackageVersion>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <InformationalVersion>1.0.0-rc.1</InformationalVersion>
+    <Description>Build-time safety and manifest diagnostics for TopiaForge V1 mods.</Description>
+    <PackageId>TopiaForge.Mods.Analyzers</PackageId>
+    <Authors>TopiaForge</Authors>
+    <PackageTags>topiaforge;modding;analyzers;devex</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Nullable>enable</Nullable>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Roslyn supplies these assemblies at analyzer load time. Keep them compile-only. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0"
+                      PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="$(TargetPath)" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <None Include="buildTransitive/TopiaForge.Mods.Analyzers.props"
+          Pack="true" PackagePath="buildTransitive/TopiaForge.Mods.Analyzers.props" />
+    <None Include="buildTransitive/TopiaForge.Mods.Analyzers.targets"
+          Pack="true" PackagePath="buildTransitive/TopiaForge.Mods.Analyzers.targets" />
+    <None Include="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>

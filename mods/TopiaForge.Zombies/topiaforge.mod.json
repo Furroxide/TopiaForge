@@ -1,0 +1,69 @@
+{
+  "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+  "schemaVersion": 5,
+  "name": "io.github.furroxide.topiaforge.zombies",
+  "displayName": "Zombies",
+  "version": "1.0.0-rc.1",
+  "author": {
+    "name": "TopiaForge"
+  },
+  "description": "A safe-SDK wave-survival showcase built from Worlds, RobotKit, Chronos, named input, physics, dialogue, audio, and TopiaForgeUi. Fight distinct infected archetypes with headshots and charged piercing fire, build combos, recruit wavering allies through deterministic or explicitly enabled live JACK IN conversations, buy run upgrades, and restart or return to the menu cleanly.",
+  "entryAssembly": "TopiaForge.Zombies.dll",
+  "entryType": "TopiaForge.Zombies.ZombiesMod",
+  "dependencies": {
+    "io.github.furroxide.topiaforge.worlds": ">=1.0.0-rc.1 <2.0.0",
+    "io.github.furroxide.topiaforge.robotkit": ">=1.0.0-rc.1 <2.0.0",
+    "io.github.furroxide.topiaforge.chronos": ">=1.0.0-rc.1 <2.0.0"
+  },
+  "loadAfter": [
+    "io.github.furroxide.topiaforge.worlds",
+    "io.github.furroxide.topiaforge.robotkit",
+    "io.github.furroxide.topiaforge.chronos"
+  ],
+  "supportedGameVersionRange": "0.0.2309",
+  "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "category": "Gameplay",
+  "tags": [
+    "zombies",
+    "gamemode",
+    "wave-survival",
+    "robots",
+    "zapper",
+    "archetypes",
+    "combo",
+    "safe-sdk",
+    "stand-down",
+    "jack-in",
+    "allies",
+    "requisitions",
+    "chronos"
+  ],
+  "license": "MIT",
+  "licenseFiles": [
+    "LICENSE"
+  ],
+  "capabilities": [
+    "world-service",
+    "robot-spawning",
+    "navigation",
+    "input",
+    "physics",
+    "hud",
+    "time",
+    "player-control",
+    "scene-management",
+    "network",
+    "remote-ai",
+    "player-token",
+    "microphone",
+    "speech-to-text"
+  ],
+  "worldGamemodes": [
+    {
+      "id": "io.github.furroxide.topiaforge.zombies.survival",
+      "name": "Zombies",
+      "description": "Survive escalating waves of infected robots with a built-in zapper."
+    }
+  ]
+}

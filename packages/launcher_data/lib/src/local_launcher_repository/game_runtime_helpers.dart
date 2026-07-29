@@ -49,15 +49,107 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
     }
 
     final gameRoot = Directory(layout.gameRoot);
+    final gameBuild = await _readInstalledGameBuild(layout);
+    if (gameBuild.issue case final issue?) {
+      issues.add(issue);
+    }
     return GameInstall(
       path: layout.gameRoot,
       executablePath: layout.executablePath,
       bepInExStatus: _detectBepInEx(gameRoot, layout),
-      loaderStatus: _detectLoader(gameRoot),
+      loaderStatus: await _detectLoader(gameRoot),
       layout: layout.kind,
+      architecture: _readGameArchitecture(File(layout.executablePath)),
+      gameVersion: gameBuild.version,
+      gameVersionLabel: gameBuild.label,
       issues: issues,
       compatStatus: await _checkGameCompat(gameRoot, managedDir),
     );
+  }
+
+  /// Reads launcher-owned build provenance without depending on the optional
+  /// reflection extractor. Invalid, oversized, linked, or concurrently torn
+  /// metadata is treated as unknown so constrained mods fail closed later in
+  /// dependency planning while unconstrained installs remain usable.
+  Future<({String? version, String label, LauncherIssue? issue})>
+  _readInstalledGameBuild(GameLayout layout) async {
+    for (final file in _installedBuildCandidates(layout)) {
+      try {
+        final type = FileSystemEntity.typeSync(file.path, followLinks: false);
+        if (type == FileSystemEntityType.notFound) {
+          continue;
+        }
+        if (type != FileSystemEntityType.file) {
+          return _unknownInstalledGameBuild(invalid: true);
+        }
+        final bytes = await _readStableInstalledBuild(file);
+        final decoded = jsonDecode(utf8.decode(bytes, allowMalformed: false));
+        if (decoded is! Map) {
+          return _unknownInstalledGameBuild(invalid: true);
+        }
+        final version = RobotopiaGameVersion.tryFromBuildId(decoded['id']);
+        final label = RobotopiaGameVersion.tryBuildLabel(version);
+        return version == null || label == null
+            ? _unknownInstalledGameBuild(invalid: true)
+            : (version: version, label: label, issue: null);
+      } on Object {
+        // An existing higher-priority marker must fail closed instead of
+        // allowing a lower-priority file to override corrupt provenance.
+        return _unknownInstalledGameBuild(invalid: true);
+      }
+    }
+    return _unknownInstalledGameBuild();
+  }
+
+  ({String? version, String label, LauncherIssue? issue})
+  _unknownInstalledGameBuild({bool invalid = false}) => (
+    version: null,
+    label: '',
+    issue: LauncherIssue(
+      severity: IssueSeverity.warning,
+      message:
+          'Robotopia build metadata is ${invalid ? 'invalid or unreadable' : 'missing'}. '
+          'Finish or repair Robotopia in its game launcher, then refresh '
+          'TopiaForge.',
+    ),
+  );
+
+  List<File> _installedBuildCandidates(GameLayout layout) {
+    final root = Directory(layout.gameRoot).absolute.path;
+    if (layout.kind != GameInstallLayout.macAppBundle) {
+      return [
+        File(p.join(root, 'installed-build.json')),
+        if (p.basename(root).toLowerCase() == 'robotopia')
+          File(p.join(p.dirname(root), 'installed-build.json')),
+      ];
+    }
+    final appRoot = p.basename(root) == 'Robotopia.app'
+        ? root
+        : p.join(root, 'Robotopia.app');
+    final launcherRoot = p.basename(root) == 'Robotopia.app'
+        ? p.dirname(root)
+        : root;
+    return [
+      File(p.join(appRoot, 'installed-build.json')),
+      File(p.join(launcherRoot, 'installed-build.json')),
+    ];
+  }
+
+  Future<Uint8List> _readStableInstalledBuild(File file) async {
+    final initial = file.statSync();
+    _requireUnchangedInstalledBuild(file, initial);
+    final first = await _readLauncherFileBounded(file, _maxInstalledBuildBytes);
+    _requireUnchangedInstalledBuild(file, initial);
+    final middle = file.statSync();
+    final second = await _readLauncherFileBounded(
+      file,
+      _maxInstalledBuildBytes,
+    );
+    _requireUnchangedInstalledBuild(file, middle);
+    if (sha256.convert(first).toString() != sha256.convert(second).toString()) {
+      throw StateError('Installed build marker changed while being read.');
+    }
+    return Uint8List.fromList(second);
   }
 
   /// Checks the installed game against the mods' declared reflection bindings by running the bundled
@@ -75,20 +167,24 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
       return GameCompatStatus.skipped();
     }
 
-    final gameCodeSha = sha256.convert(gameCode.readAsBytesSync()).toString();
+    final gameCodeSha = (await sha256.bind(gameCode.openRead()).first)
+        .toString();
     final cacheFile = File(
-      p.join(
-        gameDir.path,
-        'BepInEx',
-        'RobotopiaModManager',
-        'compat-status.json',
-      ),
+      p.join(gameDir.path, 'BepInEx', 'TopiaForge', 'compat-status.json'),
     );
 
     if (!force && cacheFile.existsSync()) {
       try {
         final cached = GameCompatStatus.fromJson(
-          jsonDecode(cacheFile.readAsStringSync()) as Map<String, Object?>,
+          jsonDecode(
+                utf8.decode(
+                  await _readLauncherFileBounded(
+                    cacheFile,
+                    _maxCompatStatusBytes,
+                  ),
+                ),
+              )
+              as Map<String, Object?>,
         );
         // Same game build we already analysed → reuse it (no process spawn).
         if (cached.gameCodeSha == gameCodeSha && cached.isKnown) {
@@ -104,8 +200,7 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
     // Only cache a real verdict; never cache 'unknown'/'skipped' so it retries once the tool is available.
     if (status.isKnown) {
       try {
-        cacheFile.parent.createSync(recursive: true);
-        cacheFile.writeAsStringSync(jsonEncode(status.toJson()));
+        await _writeJsonFileAtomic(cacheFile, status.toJson());
       } catch (_) {
         // Non-writable install dir; skip caching but still return the live result.
       }
@@ -124,19 +219,20 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
     }
 
     try {
-      final result = await Process.run(exe, [
-        'verify',
-        '--managed',
-        managedDir.path,
-        '--format',
-        'json',
-      ], workingDirectory: managedDir.path);
+      final result = await runBoundedProcess(
+        exe,
+        ['verify', '--managed', managedDir.path, '--format', 'json'],
+        workingDirectory: managedDir.path,
+        timeout: const Duration(minutes: 2),
+        maxStdoutBytes: _maxCompatStatusBytes,
+        maxStderrBytes: 1024 * 1024,
+      );
       // Exit 0 = all critical bindings present; 1 = a critical binding is broken (still a valid report).
       if (result.exitCode != 0 && result.exitCode != 1) {
         return GameCompatStatus.unknown();
       }
 
-      final out = (result.stdout as String).trim();
+      final out = result.stdout.trim();
       if (out.isEmpty) {
         return GameCompatStatus.unknown();
       }
@@ -145,6 +241,9 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
       final resolve = (json['resolve'] as Map<String, Object?>?) ?? const {};
       return GameCompatStatus(
         status: (json['status'] as String?) ?? 'unknown',
+        gameVersion: SemanticVersion.tryParse(
+          (json['gameVersion'] as String?)?.trim() ?? '',
+        )?.toString(),
         gameVersionLabel: (json['gameVersionLabel'] as String?) ?? '',
         surfaceHash: (json['surfaceHash'] as String?) ?? '',
         gameCodeSha: gameCodeSha,
@@ -166,25 +265,22 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
   }
 
   String? _resolveExtractorExe() {
-    final executableDir = File(Platform.resolvedExecutable).absolute.parent;
     final candidates = <String>[
-      // 1. bundled in the package payload root (consumer install)
+      // 1. Bundled in the package payload root.
       ..._extractorCandidates(_repositoryRoot.path),
-      // 2. legacy Windows bundle location beside the launcher executable
-      ..._extractorCandidates(executableDir.path),
-      // 3. dev dist payload
+      // 2. Developer distribution payload.
       ..._extractorCandidates(
-        p.join(_repositoryRoot.path, 'dist', 'RobotopiaModManager'),
+        p.join(_repositoryRoot.path, 'dist', 'TopiaForge'),
       ),
-      // 4. dev source build
+      // 3. Developer source build.
       ..._extractorCandidates(
         p.join(
           _repositoryRoot.path,
           'src',
-          'Robotopia.GameCompat.Extractor',
+          'TopiaForge.GameCompat.Extractor',
           'bin',
           'Release',
-          'net8.0',
+          'net10.0',
         ),
       ),
     ];
@@ -198,8 +294,8 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
 
   List<String> _extractorCandidates(String directory) {
     return [
-      p.join(directory, 'Robotopia.GameCompat.Extractor'),
-      p.join(directory, 'Robotopia.GameCompat.Extractor.exe'),
+      p.join(directory, 'TopiaForge.GameCompat.Extractor'),
+      p.join(directory, 'TopiaForge.GameCompat.Extractor.exe'),
     ];
   }
 
@@ -215,18 +311,13 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
     return present == 0 ? ComponentState.missing : ComponentState.partial;
   }
 
-  ComponentState _detectLoader(Directory gameDir) {
-    const loaderDlls = [
-      'Robotopia.ModManager.dll',
-      'Robotopia.ModManager.Core.dll',
-      'Robotopia.Mods.Abstractions.dll',
-      'Robotopia.Mods.UnityUi.dll',
-    ];
+  Future<ComponentState> _detectLoader(Directory gameDir) async {
     final pluginDir = Directory(
-      p.join(gameDir.path, 'BepInEx', 'plugins', 'RobotopiaModManager'),
+      p.join(gameDir.path, 'BepInEx', 'plugins', 'TopiaForge.ModManager'),
     );
     final installed = [
-      for (final dll in loaderDlls) File(p.join(pluginDir.path, dll)),
+      for (final dll in topiaForgeRuntimeLoaderDlls)
+        File(p.join(pluginDir.path, dll)),
     ];
     final present = installed.where((file) => file.existsSync()).length;
     if (present == 0) {
@@ -240,21 +331,22 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
       p.join(
         _repositoryRoot.path,
         'src',
-        'Robotopia.ModManager',
+        'TopiaForge.ModManager',
         'bin',
         'Release',
         'netstandard2.1',
       ),
     );
     final built = [
-      for (final dll in loaderDlls) File(p.join(builtDir.path, dll)),
+      for (final dll in topiaForgeRuntimeLoaderDlls)
+        File(p.join(builtDir.path, dll)),
     ];
     if (!built.every((file) => file.existsSync())) {
       return ComponentState.ready;
     }
 
-    for (var index = 0; index < loaderDlls.length; index++) {
-      if (!_sameFileContents(installed[index], built[index])) {
+    for (var index = 0; index < topiaForgeRuntimeLoaderDlls.length; index++) {
+      if (!await _sameFileContents(installed[index], built[index])) {
         return ComponentState.partial;
       }
     }
@@ -262,12 +354,27 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
     return ComponentState.ready;
   }
 
-  bool _sameFileContents(File left, File right) {
-    if (left.lengthSync() != right.lengthSync()) {
+  Future<bool> _sameFileContents(File left, File right) async {
+    if (await left.length() != await right.length()) {
       return false;
     }
-    final leftHash = sha256.convert(left.readAsBytesSync()).toString();
-    final rightHash = sha256.convert(right.readAsBytesSync()).toString();
-    return leftHash == rightHash;
+    final leftHash = await sha256.bind(left.openRead()).first;
+    final rightHash = await sha256.bind(right.openRead()).first;
+    return leftHash.toString() == rightHash.toString();
   }
 }
+
+void _requireUnchangedInstalledBuild(File file, FileStat expected) {
+  if (FileSystemEntity.typeSync(file.path, followLinks: false) !=
+      FileSystemEntityType.file) {
+    throw StateError('Installed build marker is not a regular file.');
+  }
+  final actual = file.statSync();
+  if (actual.size != expected.size || actual.modified != expected.modified) {
+    throw StateError('Installed build marker changed while being read.');
+  }
+}
+
+const _maxInstalledBuildBytes = 64 * 1024;
+
+const _maxCompatStatusBytes = 4 * 1024 * 1024;

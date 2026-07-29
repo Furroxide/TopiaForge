@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>TopiaForge.Mods.Multiplayer.Tests</AssemblyName>
+    <RootNamespace>TopiaForge.Mods.Multiplayer.Tests</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\mods\TopiaForge.Multiplayer\TopiaForge.Multiplayer.csproj" />
+    <ProjectReference Include="..\..\samples\multiplayer\TopiaForge.Multiplayer.CounterSample\TopiaForge.Multiplayer.CounterSample.csproj" />
+    <ProjectReference Include="..\..\samples\multiplayer\TopiaForge.Multiplayer.DroneSample\TopiaForge.Multiplayer.DroneSample.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Multiplayer\TopiaForge.Mods.Multiplayer.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Testing\TopiaForge.Mods.Testing.csproj" />
+  </ItemGroup>
+</Project>

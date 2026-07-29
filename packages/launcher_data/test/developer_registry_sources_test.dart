@@ -12,7 +12,7 @@ void main() {
   late LocalDeveloperRepository repository;
 
   setUp(() async {
-    temp = await Directory.systemTemp.createTemp('robotopia-dev-sources-');
+    temp = await Directory.systemTemp.createTemp('topiaforge-dev-sources-');
     repository = LocalDeveloperRepository(
       dataRoot: p.join(temp.path, 'devdata'),
       repositoryRoot: p.join(temp.path, 'fake-repo'),
@@ -70,6 +70,39 @@ void main() {
     expect(sourceIssue.isBlocking, isFalse);
     expect(resolved.issues.where((issue) => issue.isBlocking), isEmpty);
   });
+
+  for (final formatVersion in <int?>[null, 1]) {
+    final label = formatVersion == null ? 'missing' : 'version 1';
+    test('developer flat registry rejects $label formatVersion', () async {
+      final workspace = await repository.createModProject(
+        parentDirectory: p.join(temp.path, 'projects'),
+        id: 'author.jet',
+        name: 'Jet',
+      );
+      final sourceId = 'retired-${formatVersion ?? 'missing'}';
+      final index = File(p.join(temp.path, '$sourceId.json'));
+      final payload = <String, Object?>{'mods': <Object?>[]};
+      if (formatVersion != null) {
+        payload['formatVersion'] = formatVersion;
+      }
+      index.writeAsStringSync(jsonEncode(payload));
+      await repository.addProjectPackageSource(
+        workspace.projectRoot,
+        PackageSource(id: sourceId, name: 'Retired', url: index.path),
+      );
+
+      final resolved = await repository.resolveDeveloperProject(
+        workspace.projectRoot,
+        restore: false,
+      );
+      final issue = resolved.issues.singleWhere(
+        (item) => item.subjectId == sourceId,
+      );
+
+      expect(issue.severity, IssueSeverity.warning);
+      expect(issue.message, contains('formatVersion 2'));
+    });
+  }
 }
 
 void _writePackage(
@@ -81,20 +114,23 @@ void _writePackage(
   final archive = Archive()
     ..addFile(
       ArchiveFile.string(
-        'robotopia.mod.json',
+        'topiaforge.mod.json',
         jsonEncode({
-          'schemaVersion': 2,
+          'schemaVersion': 5,
           'name': id,
           'displayName': id,
           'version': version,
           'author': {'name': 'Tester'},
           'entryAssembly': 'Mod.dll',
           'entryType': 'Test.Mod',
+          'supportedGameVersionRange': '*',
+          'supportedLoaderVersionRange': '*',
+          'supportedSdkVersionRange': '*',
         }),
       ),
     )
     ..addFile(ArchiveFile.string('Mod.dll', 'dll'));
   File(
-    p.join(directory.path, '$id-$version.robotopiamod'),
+    p.join(directory.path, '$id-$version.topiaforgemod'),
   ).writeAsBytesSync(ZipEncoder().encode(archive));
 }

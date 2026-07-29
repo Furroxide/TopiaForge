@@ -1,12 +1,13 @@
 name: launcher_domain
-description: UI-independent QuantumWorks launcher domain models and planning logic.
-version: 1.0.0
+description: UI-independent TopiaForge launcher domain models and planning logic.
+version: 1.0.0-rc.1
 publish_to: none
 
 environment:
   sdk: ^3.11.1
 
 dependencies:
+  unorm_dart: ^0.3.2
 
 dev_dependencies:
   json_schema: ^5.2.2

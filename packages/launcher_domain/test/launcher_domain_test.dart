@@ -2,25 +2,28 @@ import 'package:launcher_domain/launcher_domain.dart';
 import 'package:test/test.dart';
 
 part 'launcher_domain_environment_world_part.dart';
+part 'launcher_domain_developer_part.dart';
 part 'launcher_domain_vpm_part.dart';
 
 void main() {
   group('ModManifest', () {
     test('parses extended clean manifest fields', () {
       final manifest = ModManifest.fromJson({
-        'schemaVersion': 2,
+        'schemaVersion': 5,
         'name': 'author.spawn_tools',
         'displayName': 'Spawn Tools',
         'version': '1.2.0',
         'author': {'name': 'Author Name'},
         'entryAssembly': 'SpawnTools.dll',
         'entryType': 'SpawnTools.Entry',
-        'vpmDependencies': {'robotopia.core': '>=1.0.0 <2.0.0'},
-        'optionalDependencies': [
-          {'id': 'robotopia.prompts', 'version': '1.0.0'},
-        ],
+        'dependencies': {
+          'io.github.furroxide.topiaforge.core': '>=1.0.0 <2.0.0',
+        },
+        'optionalDependencies': {
+          'io.github.furroxide.topiaforge.prompts': '1.0.0',
+        },
         'conflicts': [
-          {'id': 'legacy.prompt_patch', 'reason': 'Both override prompts.'},
+          {'id': 'community.prompt_patch', 'reason': 'Both override prompts.'},
         ],
         'supportedGameVersionRange': '>=0.8.0 <1.0.0',
         'supportedLoaderVersionRange': '>=0.1.0',
@@ -28,21 +31,26 @@ void main() {
         'category': 'Tools',
         'tags': ['sdk', 'assetbundle'],
         'license': 'MIT',
-        'hashes': {'sha256': 'abc'},
+        'hashes': {
+          'SpawnTools.dll':
+              'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        },
         'apiAssemblies': ['ref/SpawnTools.Api.dll'],
-        'legacyFolders': {'LegacySpawnTools': 'SpawnTools'},
-        'legacyFiles': {'SpawnToolsLegacy.dll': 'SpawnTools.dll'},
-        'legacyPackages': ['spawn-tools.zip'],
       });
 
       expect(manifest.validate(), isEmpty);
       expect(manifest.dependencies.single.versionRange.allows('1.5.0'), isTrue);
-      expect(manifest.optionalDependencies.single.id, 'robotopia.prompts');
-      expect(manifest.conflicts.single.id, 'legacy.prompt_patch');
+      expect(
+        manifest.optionalDependencies.single.id,
+        'io.github.furroxide.topiaforge.prompts',
+      );
+      expect(manifest.conflicts.single.id, 'community.prompt_patch');
       expect(manifest.tags, contains('assetbundle'));
-      expect(manifest.hashes['sha256'], 'abc');
+      expect(
+        manifest.hashes['SpawnTools.dll'],
+        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      );
       expect(manifest.apiAssemblies.single, 'ref/SpawnTools.Api.dll');
-      expect(manifest.legacyFiles.keys.single, 'SpawnToolsLegacy.dll');
       expect(manifest.toJson()['name'], 'author.spawn_tools');
       expect(manifest.toJson()['displayName'], 'Spawn Tools');
     });
@@ -50,7 +58,7 @@ void main() {
     test(r'preserves $schema through a fromJson/toJson round-trip', () {
       final manifest = ModManifest.fromJson({
         r'$schema': ModManifest.canonicalSchemaUrl,
-        'schemaVersion': 2,
+        'schemaVersion': 5,
         'name': 'author.schema_mod',
         'displayName': 'Schema Mod',
         'version': '1.0.0',
@@ -64,7 +72,7 @@ void main() {
       expect(json.keys.first, r'$schema');
 
       final withoutSchema = ModManifest.fromJson({
-        'schemaVersion': 2,
+        'schemaVersion': 5,
         'name': 'author.schema_mod',
         'displayName': 'Schema Mod',
         'version': '1.0.0',
@@ -77,26 +85,44 @@ void main() {
 
     test('rejects malformed manifests and unsafe entry paths', () {
       final manifest = ModManifest.fromJson({
-        'schemaVersion': 1,
+        'schemaVersion': 5,
         'name': '../bad',
         'displayName': '',
         'version': 'nope',
         'author': {'name': ''},
         'entryAssembly': '../Bad.dll',
         'entryType': '',
+        'supportedGameVersionRange': '*',
+        'supportedLoaderVersionRange': '*',
+        'supportedSdkVersionRange': '*',
       });
 
       final issues = manifest.validate();
-      expect(issues.where((issue) => issue.isBlocking), hasLength(7));
+      expect(issues.where((issue) => issue.isBlocking), hasLength(6));
     });
 
-    test('warns but does not block on unknown permissions', () {
-      final manifest = _manifest('permission.mod', permissions: ['new-scope']);
+    test('blocks unknown capabilities', () {
+      final manifest = _manifest('permission.mod', capabilities: ['new-scope']);
 
       final issues = manifest.validate();
 
-      expect(issues.where((issue) => issue.isBlocking), isEmpty);
+      expect(issues.where((issue) => issue.isBlocking), isNotEmpty);
       expect(issues.single.message, contains('unknown value new-scope'));
+    });
+
+    test('accepts canonical descriptive capabilities', () {
+      final manifest = _manifest(
+        'capabilities.mod',
+        capabilities: const [
+          'network',
+          'remote-ai',
+          'player-token',
+          'microphone',
+          'speech-to-text',
+        ],
+      );
+
+      expect(manifest.validate(), isEmpty);
     });
 
     test('warns but does not block on non-SPDX-looking licenses', () {
@@ -126,7 +152,7 @@ void main() {
         _manifest(
           'main.mod',
           dependencies: [
-            const ModDependency(
+            ModDependency(
               id: 'dependency.mod',
               versionRange: VersionRange(min: SemanticVersion(1, 0, 0)),
             ),
@@ -154,7 +180,7 @@ void main() {
           _manifest(
             'main.mod',
             dependencies: [
-              const ModDependency(
+              ModDependency(
                 id: 'dependency.mod',
                 versionRange: VersionRange(min: SemanticVersion(1, 0, 0)),
               ),
@@ -176,7 +202,9 @@ void main() {
       final installed = _installed(_manifest('old.prompt'));
       final candidate = _manifest(
         'new.prompt',
-        dependencies: [const ModDependency(id: 'robotopia.core')],
+        dependencies: [
+          const ModDependency(id: 'io.github.furroxide.topiaforge.core'),
+        ],
         conflicts: [
           const ModConflict(id: 'old.prompt', reason: 'Prompt override clash.'),
         ],
@@ -187,22 +215,28 @@ void main() {
       ]);
 
       expect(plan.hasBlockingIssues, isTrue);
-      expect(plan.dependenciesToInstall.single.id, 'robotopia.core');
+      expect(
+        plan.dependenciesToInstall.single.id,
+        'io.github.furroxide.topiaforge.core',
+      );
       expect(plan.conflictingMods.single.id, 'old.prompt');
     });
 
     test('plans registry dependencies before the root package', () {
       final dependency = RegistryMod(
-        manifest: _manifest('robotopia.worlds', version: '1.0.0'),
-        downloadUrl: 'file:///worlds.robotopiamod',
+        manifest: _manifest(
+          'io.github.furroxide.topiaforge.worlds',
+          version: '1.0.0',
+        ),
+        downloadUrl: 'file:///worlds.topiaforgemod',
         packageSha256: 'abc',
         sourceName: 'Default',
       );
       final candidate = _manifest(
         'creator.mod',
         dependencies: [
-          const ModDependency(
-            id: 'robotopia.worlds',
+          ModDependency(
+            id: 'io.github.furroxide.topiaforge.worlds',
             versionRange: VersionRange(min: SemanticVersion(1, 0, 0)),
           ),
         ],
@@ -211,14 +245,14 @@ void main() {
       final plan = const DependencyPlanner().previewInstall(
         candidate,
         const [],
-        packageUrl: 'file:///creator.robotopiamod',
+        packageUrl: 'file:///creator.topiaforgemod',
         packageSha256: 'def',
         availableMods: [dependency],
       );
 
       expect(plan.hasBlockingIssues, isFalse);
       expect(plan.installActions.map((action) => action.modId), [
-        'robotopia.worlds',
+        'io.github.furroxide.topiaforge.worlds',
         'creator.mod',
       ]);
     });
@@ -227,7 +261,7 @@ void main() {
       final plan = const DependencyPlanner().previewInstall(
         _manifest('remote.mod'),
         const [],
-        packageUrl: 'https://mods.example.com/remote.robotopiamod',
+        packageUrl: 'https://mods.example.com/remote.topiaforgemod',
       );
 
       expect(plan.hasBlockingIssues, isTrue);
@@ -253,12 +287,12 @@ void main() {
   });
 
   group('LauncherUpdateSettings', () {
-    test('round-trips release channel settings', () {
+    test('round trips signed launcher update preferences', () {
       const settings = LauncherUpdateSettings(
         enabled: true,
         checkAutomatically: false,
         channel: LauncherUpdateChannel.beta,
-        appArchiveUrl: 'https://updates.example.com/app-archive.json',
+        archiveUrl: 'https://updates.example.com/manual-releases.json',
       );
 
       final restored = LauncherUpdateSettings.fromJson(settings.toJson());
@@ -266,7 +300,67 @@ void main() {
       expect(restored.enabled, isTrue);
       expect(restored.checkAutomatically, isFalse);
       expect(restored.channel, LauncherUpdateChannel.beta);
-      expect(restored.appArchiveUrl, settings.appArchiveUrl);
+      expect(restored.archiveUrl, settings.archiveUrl);
+    });
+
+    test('prerelease defaults opt into beta checks with a cooldown', () {
+      final settings = LauncherUpdateSettings.fromJson(const {});
+
+      expect(settings.enabled, isTrue);
+      expect(settings.checkAutomatically, isTrue);
+      expect(settings.channel, LauncherUpdateChannel.beta);
+    });
+
+    test('launcher update settings reject plaintext and credential URLs', () {
+      for (final unsafe in [
+        'http://updates.example.com/manual-releases.json',
+        'https://user:secret@updates.example.com/manual-releases.json',
+        'file:///tmp/manual-releases.json',
+        'https://updates.example.com/manual-releases.json?token=secret',
+        'https://updates.example.com/manual-releases.json#latest',
+        'https://updates.example.com/${List.filled(4100, 'a').join()}',
+      ]) {
+        final settings = LauncherUpdateSettings.fromJson({
+          'archiveUrl': unsafe,
+        });
+        expect(settings.archiveUrl, LauncherUpdateSettings.defaultArchiveUrl);
+      }
+    });
+
+    test('rejects retired launcher update URL keys', () {
+      for (final key in const ['manualReleasesUrl', 'appArchiveUrl']) {
+        expect(
+          () => LauncherUpdateSettings.fromJson({
+            key: 'https://updates.example.com/manual-releases.json',
+          }),
+          throwsFormatException,
+        );
+      }
+    });
+
+    test('validates the manual release catalog format 2 contract', () {
+      final catalog = ManualReleaseCatalog.fromJson({
+        'formatVersion': 2,
+        'manualOnly': true,
+        'releaseUrl': 'https://github.com/example/project/releases/tag/v1',
+        'platforms': {
+          'windows': {
+            'url': 'https://downloads.example/launcher-windows.zip',
+            'sha256': List.filled(64, 'a').join(),
+            'size': 1024,
+          },
+        },
+      });
+
+      expect(catalog.isValid, isTrue);
+      expect(catalog.toJson()['manualOnly'], isTrue);
+      expect(
+        ManualReleaseCatalog.fromJson({
+          ...catalog.toJson(),
+          'manualOnly': false,
+        }).isValid,
+        isFalse,
+      );
     });
 
     test('treats stable as release channel for older settings', () {
@@ -302,8 +396,8 @@ void main() {
 
     test('round trips the world selection', () {
       const selection = WorldSelection(
-        worldId: 'robotopia.level.city',
-        gamemodeId: 'robotopia.zombies.survival',
+        worldId: 'io.github.furroxide.topiaforge.worlds.level.city',
+        gamemodeId: 'io.github.furroxide.topiaforge.zombies.survival',
         loadMode: WorldSelection.sceneReplacement,
         autoLoadOnStart: true,
       );
@@ -320,141 +414,34 @@ void main() {
       expect(restored.worldSelection.loadMode, selection.loadMode);
       expect(restored.worldSelection.autoLoadOnStart, isTrue);
     });
-  });
 
-  group('UgcLiveSyncSettings', () {
-    test(
-      'toRuntimeConfig emits exactly the keys the C# UgcLiveSyncConfig expects',
-      () {
-        final config = const UgcLiveSyncSettings(
-          transport: 'automerge',
-          watchFolder: r'C:\watch',
-          editorUrl: 'https://h/?project=automerge:doc&scene=main',
-          documentUrl: 'automerge:doc',
-          sceneId: 'main',
-          autoConnectOnStart: true,
-        ).toRuntimeConfig();
-
-        // The mod (mods/Robotopia.UgcLiveSync/UgcLiveSyncConfig.cs) deserializes these exact DataMember names; this
-        // pins the cross-language contract so a renamed/dropped key can never silently ship.
-        expect(
-          config.keys.toSet(),
-          equals({
-            'transport',
-            'watchFolder',
-            'editorUrl',
-            'documentUrl',
-            'syncServerUrl',
-            'sceneId',
-            'autoConnectOnStart',
-            'maxSnapshotBytes',
-            'debounceMilliseconds',
-          }),
-        );
-        expect(config['transport'], 'automerge');
-        expect(config['autoConnectOnStart'], isTrue);
-        expect(
-          config['maxSnapshotBytes'],
-          UgcLiveSyncSettings.defaultMaxSnapshotBytes,
-        );
-      },
-    );
-
-    test('normalizes an unknown transport to localFolder', () {
-      expect(UgcLiveSyncSettings.normalizeTransport('bogus'), 'localFolder');
-      expect(UgcLiveSyncSettings.normalizeTransport('Automerge'), 'automerge');
-      expect(
-        const UgcLiveSyncSettings(
-          transport: 'weird',
-        ).toRuntimeConfig()['transport'],
-        'localFolder',
-      );
-    });
-
-    test('round-trips through toJson and back', () {
-      const settings = UgcLiveSyncSettings(
-        transport: 'automerge',
-        watchFolder: 'watch',
-        editorUrl: 'https://h/?project=automerge:doc',
-        sceneId: 'main',
-        autoConnectOnStart: true,
-        debounceMilliseconds: 350,
-      );
-
-      final restored = UgcLiveSyncSettings.fromJson(settings.toJson());
-
-      expect(restored.transport, 'automerge');
-      expect(restored.watchFolder, 'watch');
-      expect(restored.editorUrl, settings.editorUrl);
-      expect(restored.sceneId, 'main');
-      expect(restored.autoConnectOnStart, isTrue);
-      expect(restored.debounceMilliseconds, 350);
-    });
-
-    test('UnityCompanionSettings persists nested liveSync', () {
-      const companion = UnityCompanionSettings(
-        enabled: true,
-        liveSync: UgcLiveSyncSettings(transport: 'automerge'),
-      );
-
-      final restored = UnityCompanionSettings.fromJson(companion.toJson());
-
-      expect(restored.liveSync.transport, 'automerge');
-    });
-
-    test('UgcLiveSyncStatusSnapshot parses the C# status handshake', () {
-      // Keys mirror the C# UgcLiveSyncStatusFile [DataMember] names (cross-language contract).
-      final snapshot = UgcLiveSyncStatusSnapshot.fromJson(const {
-        'schemaVersion': 1,
-        'status': 'Connected',
-        'transport': 'automerge',
-        'defaultWatchFolder': r'C:\game\ugc',
-        'connectedDocumentUrl': 'automerge:abc123',
-        'sceneId': 'main',
-        'availableScenes': ['main', 'lobby'],
-        'lastAppliedUtc': '2026-06-30T12:00:00Z',
+    test('profile parsing ignores runtime-only world selection keys', () {
+      final profile = LauncherProfile.fromJson({
+        'worldSelection': {
+          'selectedWorldId': 'retired-world',
+          'selectedGamemodeId': 'retired-mode',
+        },
       });
 
-      expect(snapshot.status, 'Connected');
-      expect(snapshot.isLive, isTrue);
-      expect(snapshot.transport, 'automerge');
-      expect(snapshot.defaultWatchFolder, r'C:\game\ugc');
-      expect(snapshot.connectedDocumentUrl, 'automerge:abc123');
-      expect(snapshot.availableScenes, ['main', 'lobby']);
-
-      // A bare/empty status is non-live and has safe defaults.
-      final empty = UgcLiveSyncStatusSnapshot.fromJson(const {});
-      expect(empty.isLive, isFalse);
-      expect(empty.status, 'Idle');
-      expect(empty.availableScenes, isEmpty);
+      expect(profile.worldSelection.worldId, WorldCatalog.openSandboxWorldId);
+      expect(profile.worldSelection.gamemodeId, WorldCatalog.sandboxGamemodeId);
     });
 
-    test('RegisteredProject + UnityEditor round-trip and kind parsing', () {
-      const project = RegisteredProject(
-        path: r'C:\proj\my-world',
-        name: 'My World',
-        kind: ProjectKind.unityWorld,
-        unityVersion: '6000.0.23f1',
-        lastOpenedUtc: '2026-06-30T12:00:00Z',
+    test('profile parsing rejects retired canonical world selection ids', () {
+      expect(
+        () => LauncherProfile.fromJson({
+          'worldSelection': {
+            'worldId':
+                'robo'
+                'topia.world.old',
+          },
+        }),
+        throwsFormatException,
       );
-      final restored = RegisteredProject.fromJson(project.toJson());
-      expect(restored.path, project.path);
-      expect(restored.kind, ProjectKind.unityWorld);
-      expect(restored.isUnity, isTrue);
-      expect(restored.unityVersion, '6000.0.23f1');
-      expect(restored.lastOpenedUtc, '2026-06-30T12:00:00Z');
-
-      expect(projectKindFromString('modCSharp'), ProjectKind.modCSharp);
-      expect(projectKindFromString('unityPackage'), ProjectKind.unityPackage);
-      expect(projectKindFromString('bogus'), ProjectKind.unknown);
-      expect(const RegisteredProject(path: 'p', name: 'n').isUnity, isFalse);
-
-      const editor = UnityEditor(version: '6000.0.23f1', path: r'C:\unity.exe');
-      final editorBack = UnityEditor.fromJson(editor.toJson());
-      expect(editorBack.version, '6000.0.23f1');
-      expect(editorBack.path, r'C:\unity.exe');
     });
   });
+
+  _developerModelTests();
 
   _unityVpmResolverTests();
   _environmentAndWorldModelTests();
@@ -467,22 +454,22 @@ ModManifest _manifest(
   List<ModConflict> conflicts = const [],
   List<String> loadAfter = const [],
   List<String> apiAssemblies = const [],
-  List<String> permissions = const [],
+  List<String> capabilities = const [],
   String license = '',
 }) {
   return ModManifest(
-    schemaVersion: 2,
+    schemaVersion: 5,
     id: id,
     name: id,
     version: version,
-    author: const ModAuthor(name: 'QuantumWorks'),
+    author: const ModAuthor(name: 'TopiaForge'),
     entryAssembly: '$id.dll',
     entryType: '$id.Entry',
     dependencies: dependencies,
     conflicts: conflicts,
     loadAfter: loadAfter,
     apiAssemblies: apiAssemblies,
-    permissions: permissions,
+    capabilities: capabilities,
     license: license,
   );
 }

@@ -1,0 +1,9 @@
+{
+  "bundle": "topiaforge-representative-world.bundle",
+  "worldPrefab": "Assets/World/World.prefab",
+  "editorVersion": "6000.0.23f1",
+  "sha256": "f6e6a9802eb043eb5b81d3d519eead7cbb47f348d4c1d110747ec73378464bc9",
+  "assets": [
+    "Assets/World/World.prefab"
+  ]
+}

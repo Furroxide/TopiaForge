@@ -1,0 +1,8 @@
+# VCC-style: VPM packages are restored from vpm-manifest.json, so don't commit them — except the read-only
+# recovery bridge, which detects missing packages and directs a fresh clone to the hardened launcher/CLI.
+/io.github.furroxide.topiaforge.ugc-companion/
+/vpm-resolver-repos.json
+!/io.github.furroxide.topiaforge.vpm-resolver/
+!/.gitignore
+!/manifest.json
+!/vpm-manifest.json

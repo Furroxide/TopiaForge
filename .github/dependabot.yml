@@ -1,0 +1,104 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    target-branch: dev
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: nuget
+    # Cover PackageReference manifests wherever they are added in the monorepo.
+    directories:
+      - "**/*"
+    schedule:
+      interval: weekly
+    target-branch: dev
+    commit-message:
+      prefix: deps
+    groups:
+      dotnet:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /tools/ugc-automerge-sidecar
+    schedule:
+      interval: weekly
+    target-branch: dev
+    commit-message:
+      prefix: deps
+    groups:
+      sidecar:
+        patterns: ["*"]
+
+  # The website is pending on the bootstrap branch. This entry becomes active
+  # when its package.json and package-lock.json are promoted to the default branch.
+  - package-ecosystem: npm
+    directory: /website
+    schedule:
+      interval: weekly
+    target-branch: dev
+    commit-message:
+      prefix: deps
+    groups:
+      website:
+        patterns: ["*"]
+
+  - package-ecosystem: pub
+    directory: /packages/launcher_domain
+    schedule:
+      interval: weekly
+    target-branch: dev
+    commit-message:
+      prefix: deps
+    groups:
+      launcher-domain:
+        patterns: ["*"]
+
+  - package-ecosystem: pub
+    directory: /packages/launcher_data
+    schedule:
+      interval: weekly
+    target-branch: dev
+    commit-message:
+      prefix: deps
+    groups:
+      launcher-data:
+        patterns: ["*"]
+
+  - package-ecosystem: pub
+    directory: /packages/launcher_ui
+    schedule:
+      interval: weekly
+    target-branch: dev
+    commit-message:
+      prefix: deps
+    groups:
+      launcher-ui:
+        patterns: ["*"]
+
+  - package-ecosystem: pub
+    directory: /apps/topiaforge_cli
+    schedule:
+      interval: weekly
+    target-branch: dev
+    commit-message:
+      prefix: deps
+    groups:
+      cli:
+        patterns: ["*"]
+
+  - package-ecosystem: pub
+    directory: /apps/topiaforge_launcher_flutter
+    schedule:
+      interval: weekly
+    target-branch: dev
+    commit-message:
+      prefix: deps
+    groups:
+      launcher-app:
+        patterns: ["*"]

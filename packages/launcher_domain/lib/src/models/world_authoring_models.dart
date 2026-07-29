@@ -1,18 +1,18 @@
 part of '../models.dart';
 
 /// Pairing config between a Unity world-authoring project and the mod that ships its bundle, stored as
-/// `robotopia.world.json` at the Unity project root. Build-time input only — the game runtime never reads
+/// `topiaforge.world.json` at the Unity project root. Build-time input only — the game runtime never reads
 /// it (world identity/metadata are baked into the mod's C#).
 class WorldAuthoringConfig {
   const WorldAuthoringConfig({
-    this.schemaVersion = 1,
+    this.schemaVersion = 2,
     this.worldId = '',
     this.bundleName = '',
     this.worldPrefab = defaultWorldPrefab,
     this.modPath = '',
   });
 
-  static const String fileName = 'robotopia.world.json';
+  static const String fileName = 'topiaforge.world.json';
   static const String defaultWorldPrefab = 'Assets/World/World.prefab';
 
   final int schemaVersion;
@@ -31,7 +31,7 @@ class WorldAuthoringConfig {
 
   factory WorldAuthoringConfig.fromJson(Map<String, Object?> json) =>
       WorldAuthoringConfig(
-        schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 1,
+        schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 0,
         worldId: (json['worldId'] as String?) ?? '',
         bundleName: (json['bundleName'] as String?) ?? '',
         worldPrefab: (json['worldPrefab'] as String?) ?? defaultWorldPrefab,
@@ -59,7 +59,8 @@ class WorldAuthoringConfig {
     modPath: modPath ?? this.modPath,
   );
 
-  /// Derives a bundle name from a mod/world id: lowercase, non [a-z0-9-] runs collapsed to '-'.
+  /// Derives a bundle name from a mod/world id: lowercase, non-`[a-z0-9-]`
+  /// runs collapsed to `-`.
   static String deriveBundleName(String id) {
     final lowered = id.toLowerCase();
     final cleaned = lowered
@@ -70,28 +71,46 @@ class WorldAuthoringConfig {
   }
 }
 
-/// Pure editor-version gate for world/UI bundle builds: bundles must come from the same Unity stream as
-/// the game player (6000.0.x) with a patch no newer than the player's (31, i.e. 6000.0.31f1) — bundles
-/// built by newer editors may fail to load in the shipped player. Enforced by
-/// `robotopia world build` and `robotopia unity build-ui-bundle`.
-class WorldBundleEditorGate {
-  static const int maxPatch = 31;
+/// Unity editor compatibility for TopiaForge authoring. Code-only mods do not
+/// require Unity, but Unity-authored assets/worlds must be serialized by the
+/// same editor version as the shipped player.
+class RobotopiaGameUnityCompatibility {
+  static const requiredEditorVersion = '6000.0.23f1';
+  static const requiredEditorChangeset = '1c4764c07fb4';
+  static const requiredEditorDisplay =
+      '$requiredEditorVersion ($requiredEditorChangeset)';
+  static const installHint =
+      'Install Unity $requiredEditorVersion via Unity Hub (Installs > '
+      'Install Editor > Archive), or headless with the Hub CLI ("Unity Hub.exe" '
+      'on Windows, unityhub on macOS/Linux): <hub> -- --headless install '
+      '--version $requiredEditorVersion --changeset $requiredEditorChangeset';
 
-  static bool isEligible(String version) {
-    final match = RegExp(r'^6000\.0\.(\d+)').firstMatch(version.trim());
-    if (match == null) {
-      return false;
+  /// Selects only the exact editor requested by a project, or the TopiaForge
+  /// release editor when the project has no explicit pin. The order returned
+  /// by Unity Hub discovery must never change this compatibility decision.
+  static UnityEditor? selectEditor(
+    Iterable<UnityEditor> editors, {
+    String configuredVersion = '',
+  }) {
+    final configured = configuredVersion.trim();
+    final required = configured.isEmpty ? requiredEditorVersion : configured;
+    for (final editor in editors) {
+      if (editor.version.trim() == required) {
+        return editor;
+      }
     }
-    final patch = int.tryParse(match.group(1) ?? '');
-    return patch != null && patch <= maxPatch;
+    return null;
   }
+}
+
+/// Pure editor-version gate for world/UI bundle builds. Enforced by
+/// `topiaforge world build` and `topiaforge unity build-ui-bundle`.
+class WorldBundleEditorGate {
+  static bool isEligible(String version) =>
+      version.trim() == RobotopiaGameUnityCompatibility.requiredEditorVersion;
 
   /// Remediation shown when no eligible editor exists.
-  static const String installHint =
-      'Install Unity 6000.0.31f1 via Unity Hub (Installs > Install Editor > '
-      'Archive), or headless with the Hub CLI ("Unity Hub.exe" on Windows, '
-      'unityhub on macOS/Linux): '
-      '<hub> -- --headless install --version 6000.0.31f1 --changeset a206c360e2a8';
+  static const String installHint = RobotopiaGameUnityCompatibility.installHint;
 }
 
 /// Outcome of a headless world-bundle build.

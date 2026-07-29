@@ -1,53 +1,111 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:ffi' as ffi;
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
+import 'package:unorm_dart/unorm_dart.dart' as unicode;
+
+import 'bounded_process.dart';
+import 'data_root.dart';
+import 'dotnet_sdk.dart';
+import 'game_install_discovery.dart';
+import 'process_identity.dart';
+import 'package_contract.dart';
+import 'public_url.dart';
+import 'secure_http.dart';
+import 'ugc_sidecar_runtime.dart';
+import 'safe_zip_archive.dart';
 
 part 'local_launcher_repository/game_layout.dart';
+part 'local_launcher_repository/game_install_discovery_helpers.dart';
+part 'local_launcher_repository/game_architecture.dart';
+part 'local_launcher_repository/diagnostics_helpers.dart';
 part 'local_launcher_repository/game_runtime_helpers.dart';
-part 'local_launcher_repository/legacy_diagnostics_helpers.dart';
 part 'local_launcher_repository/manager_state_helpers.dart';
+part 'local_launcher_repository/installed_package_validation.dart';
+part 'local_launcher_repository/noncritical_logging.dart';
+part 'local_launcher_repository/package_install_receipt.dart';
+part 'local_launcher_repository/package_inbox.dart';
+part 'local_launcher_repository/package_inbox_consumption.dart';
+part 'local_launcher_repository/package_inbox_selection.dart';
 part 'local_launcher_repository/package_installation_helpers.dart';
+part 'local_launcher_repository/package_repair.dart';
+part 'local_launcher_repository/package_metadata_validation.dart';
 part 'local_launcher_repository/package_helpers.dart';
 part 'local_launcher_repository/path_helpers.dart';
+part 'local_launcher_repository/profile_launch_helpers.dart';
 part 'local_launcher_repository/process_helpers.dart';
 part 'local_launcher_repository/registry_source_helpers.dart';
+part 'local_launcher_repository/registry_source_models.dart';
+part 'local_launcher_repository/repository_hooks.dart';
+part 'local_launcher_repository/runtime_transaction.dart';
 part 'local_launcher_repository/runtime_repair_helpers.dart';
 part 'local_launcher_repository/storage_helpers.dart';
+part 'local_launcher_repository/ugc_live_sync_helpers.dart';
+part 'local_launcher_repository/ugc_publisher_helpers.dart';
 
-class LocalLauncherRepository implements LauncherRepository {
+class LocalLauncherRepository implements GameInstallDiscoveryRepository {
   LocalLauncherRepository({
     String? dataRoot,
     String? repositoryRoot,
     String? workingDirectory,
     String? knownGamePath,
+    GameInstallDiscoveryService? gameInstallDiscoveryService,
     DependencyPlanner dependencyPlanner = const DependencyPlanner(),
-  }) : _dataRoot = Directory(dataRoot ?? _defaultDataRoot()),
+    PackageMetadataValidator? packageMetadataValidator,
+    PackageInstallCommitHook? packageInstallCommitHook,
+    RuntimeRepairCommitHook? runtimeRepairCommitHook,
+    UgcInspectionReadHook? ugcInspectionReadHook,
+    GameProcessStarter? gameProcessStarter,
+  }) : _dataRoot = Directory(dataRoot ?? resolveTopiaForgeDataRoot()),
        _repositoryRoot = Directory(
          repositoryRoot ?? _findRepositoryRoot(workingDirectory),
        ),
        _knownGamePath = knownGamePath,
-       _dependencyPlanner = dependencyPlanner;
-
+       _gameInstallDiscovery =
+           gameInstallDiscoveryService ??
+           _defaultGameInstallDiscovery(knownGamePath),
+       _dependencyPlanner = dependencyPlanner,
+       _packageMetadataValidator = packageMetadataValidator,
+       _packageInstallCommitHook = packageInstallCommitHook,
+       _runtimeRepairCommitHook = runtimeRepairCommitHook,
+       _ugcInspectionReadHook = ugcInspectionReadHook,
+       _gameProcessStarter = gameProcessStarter ?? _startDetachedGameProcess;
   final Directory _dataRoot;
   final Directory _repositoryRoot;
   final String? _knownGamePath;
+  final GameInstallDiscoveryService _gameInstallDiscovery;
   final DependencyPlanner _dependencyPlanner;
-
-  static const _bepInExVersion = '5.4.23.5';
-  static const _loaderVersion = RobotopiaRuntimeVersions.loaderVersion;
-  static const _sdkVersion = RobotopiaRuntimeVersions.sdkVersion;
+  final PackageMetadataValidator? _packageMetadataValidator;
+  final Map<String, Future<List<String>>> _installedMetadataCache = {};
+  final PackageInstallCommitHook? _packageInstallCommitHook;
+  final RuntimeRepairCommitHook? _runtimeRepairCommitHook;
+  final UgcInspectionReadHook? _ugcInspectionReadHook;
+  final GameProcessStarter _gameProcessStarter;
+  Future<void> _settingsMutationTail = Future<void>.value();
+  Future<void> _launcherLogMutationTail = Future<void>.value();
+  final StreamController<UgcPublisherEvent> _ugcPublisherEvents =
+      StreamController<UgcPublisherEvent>.broadcast();
+  Process? _ugcPublisher;
+  StreamSubscription<String>? _ugcPublisherStdout;
+  StreamSubscription<String>? _ugcPublisherStderr;
+  int _ugcPublisherSessionId = 0;
+  bool _ugcPublisherStopping = false;
+  bool _disposed = false;
   @override
   String get dataRoot => _dataRoot.path;
-
   File get _settingsFile => File(p.join(_dataRoot.path, 'settings.json'));
   File get _profilesFile => File(p.join(_dataRoot.path, 'profiles.json'));
   File get _sourcesFile => File(p.join(_dataRoot.path, 'package_sources.json'));
   File get _launcherLogFile =>
       File(p.join(_dataRoot.path, 'logs', 'launcher.log'));
+  File get _ugcPublisherSessionFile =>
+      File(p.join(_dataRoot.path, 'ugc-session.json'));
   Directory get _packageCache =>
       Directory(p.join(_dataRoot.path, 'package-cache'));
 
@@ -58,18 +116,21 @@ class LocalLauncherRepository implements LauncherRepository {
     final settings = await _loadSettings();
     final selectedProfileId =
         (settings['selectedProfileId'] as String?) ?? profiles.first.id;
-    final configuredPath = settings['gamePath'] as String?;
-    final gameInstall =
-        configuredPath != null && configuredPath.trim().isNotEmpty
-        ? await _validateGameDirectory(configuredPath)
-        : await detectKnownInstall();
+    final discovery = await _resolveGameInstallDiscovery(settings);
+    final gameInstallCandidates = discovery.candidates;
+    final gameInstall = discovery.install;
     final installedMods = gameInstall == null
         ? <InstalledMod>[]
         : await _loadInstalledMods(gameInstall);
     final packageSources = await _loadPackageSources();
-    final registryMods = await _loadRegistryMods(installedMods, packageSources);
+    final registryOutcome = await _loadRegistryOutcome(
+      installedMods,
+      packageSources,
+    );
+    final registryMods = registryOutcome.mods;
     return LauncherSnapshot(
       gameInstall: gameInstall,
+      gameInstallCandidates: gameInstallCandidates,
       profiles: profiles,
       selectedProfileId: selectedProfileId,
       installedMods: installedMods,
@@ -78,9 +139,6 @@ class LocalLauncherRepository implements LauncherRepository {
       worldCatalog: gameInstall == null
           ? WorldCatalog.fallback()
           : await _loadWorldCatalog(gameInstall, installedMods, registryMods),
-      legacyMods: gameInstall == null
-          ? <LegacyMod>[]
-          : await detectLegacyMods(gameInstall),
       recentLog: gameInstall == null
           ? await _readLauncherLog()
           : await readRecentLog(gameInstall),
@@ -88,46 +146,36 @@ class LocalLauncherRepository implements LauncherRepository {
         _objectMap(settings['launcherUpdates']),
       ),
       developerMode: (settings['developerMode'] as bool?) ?? false,
+      sourceStatuses: registryOutcome.statuses,
+      launcherLog: await _readLauncherLog(),
     );
   }
 
   @override
   Future<void> setDeveloperMode(bool enabled) async {
-    final settings = await _loadSettings();
-    settings['developerMode'] = enabled;
-    await _saveSettings(settings);
+    await _updateSettings((settings) => settings['developerMode'] = enabled);
   }
 
   @override
   Future<void> saveLauncherUpdateSettings(
     LauncherUpdateSettings settings,
   ) async {
-    final persisted = await _loadSettings();
-    persisted['launcherUpdates'] = settings.toJson();
-    await _saveSettings(persisted);
+    final trustedSettings = LauncherUpdateSettings.fromJson(settings.toJson());
+    await _updateSettings(
+      (persisted) => persisted['launcherUpdates'] = trustedSettings.toJson(),
+    );
   }
 
   @override
-  Future<GameInstall?> detectKnownInstall() async {
-    final knownPath = _knownGamePath ?? _defaultKnownGamePath();
-    if (knownPath == null || GameLayout.resolve(knownPath) == null) {
-      return null;
-    }
-    return _validateGameDirectory(knownPath);
-  }
+  Future<List<GameInstallCandidate>> discoverGameInstalls() =>
+      _discoverGameInstalls();
 
   @override
-  Future<GameInstall> selectGameDirectory(String path) async {
-    final install = await _validateGameDirectory(path);
-    if (install.issues.any((issue) => issue.isBlocking)) {
-      throw StateError(install.issues.map((issue) => issue.message).join(' '));
-    }
-    final settings = await _loadSettings();
-    settings['gamePath'] = install.path;
-    await _saveSettings(settings);
-    await _appendLauncherLog('Selected game directory ${install.path}.');
-    return install;
-  }
+  Future<GameInstall?> detectKnownInstall() => _detectKnownInstall();
+
+  @override
+  Future<GameInstall> selectGameDirectory(String path) =>
+      _selectGameDirectory(path);
 
   @override
   Future<GameCompatStatus> checkGameCompat(GameInstall install) async {
@@ -168,72 +216,28 @@ class LocalLauncherRepository implements LauncherRepository {
     String packagePath,
     GameInstall install, {
     String expectedSha256 = '',
-  }) => _installPackage(packagePath, install, expectedSha256: expectedSha256);
+    String sourceId = '',
+  }) => _installPackage(
+    packagePath,
+    install,
+    expectedSha256: expectedSha256,
+    sourceId: sourceId,
+  );
 
   @override
-  Future<List<PackageSource>> savePackageSources(
-    List<PackageSource> sources,
-  ) async {
-    final normalized = sources.isEmpty ? _defaultPackageSources() : sources;
-    await _sourcesFile.create(recursive: true);
-    await _sourcesFile.writeAsString(
-      _prettyJson({
-        'sources': normalized.map((source) => source.toJson()).toList(),
-      }),
-    );
-    await _appendLauncherLog('Saved ${normalized.length} package sources.');
-    return normalized;
-  }
+  Future<List<PackageSource>> savePackageSources(List<PackageSource> sources) =>
+      _savePackageSources(sources);
 
-  void _extractPackageToInstall(
-    _PackageReadResult package,
+  @override
+  Future<PackageInboxInstallOutcome> installInboxPackages(
     GameInstall install,
-  ) {
-    final target = Directory(
-      p.join(
-        _packagesRoot(install).path,
-        package.manifest.id,
-        package.manifest.version,
-      ),
-    );
-    if (target.existsSync()) {
-      target.deleteSync(recursive: true);
-    }
-    target.createSync(recursive: true);
-
-    for (final file in package.archive.files) {
-      final outputPath = p.join(target.path, _safeArchivePath(file.name));
-      if (file.isFile) {
-        File(outputPath)
-          ..createSync(recursive: true)
-          ..writeAsBytesSync(file.content as List<int>);
-      } else {
-        Directory(outputPath).createSync(recursive: true);
-      }
-    }
-  }
+  ) => _installInboxPackages(install);
 
   @override
-  Future<List<InstalledMod>> installInboxPackages(GameInstall install) async {
-    final inbox = _packageInbox(install);
-    if (!inbox.existsSync()) {
-      return _loadInstalledMods(install);
-    }
-
-    for (final file in inbox.listSync().whereType<File>().where(
-      (file) => file.path.toLowerCase().endsWith('.robotopiamod'),
-    )) {
-      try {
-        await installPackage(file.path, install);
-      } on Object catch (error) {
-        await _appendLauncherLog(
-          'Inbox install failed for ${file.path}: $error',
-        );
-      }
-    }
-
-    return _loadInstalledMods(install);
-  }
+  Future<List<InstalledMod>> repairInstalledMod(
+    GameInstall install,
+    InstalledMod mod,
+  ) => _repairInstalledMod(install, mod);
 
   @override
   Future<List<InstalledMod>> setModEnabled(
@@ -241,6 +245,7 @@ class LocalLauncherRepository implements LauncherRepository {
     String modId,
     bool enabled,
   ) async {
+    _requireSafeModId(modId);
     final state = await _readManagerState(install);
     for (final item in (state['mods'] as List).whereType<Map>()) {
       if ((item['id'] as String?)?.toLowerCase() == modId.toLowerCase()) {
@@ -250,7 +255,9 @@ class LocalLauncherRepository implements LauncherRepository {
       }
     }
     await _saveManagerState(install, state);
-    await _appendLauncherLog('${enabled ? 'Enabled' : 'Disabled'} $modId.');
+    await _appendLauncherLogBestEffort(
+      '${enabled ? 'Enabled' : 'Disabled'} $modId.',
+    );
     return _loadInstalledMods(install);
   }
 
@@ -263,7 +270,7 @@ class LocalLauncherRepository implements LauncherRepository {
       item['updatedAtUtc'] = DateTime.now().toUtc().toIso8601String();
     }
     await _saveManagerState(install, state);
-    await _appendLauncherLog('Disabled all mods.');
+    await _appendLauncherLogBestEffort('Disabled all mods.');
     return _loadInstalledMods(install);
   }
 
@@ -272,6 +279,7 @@ class LocalLauncherRepository implements LauncherRepository {
     GameInstall install,
     String modId,
   ) async {
+    _requireSafeModId(modId);
     final modRoot = Directory(p.join(_packagesRoot(install).path, modId));
     if (modRoot.existsSync()) {
       modRoot.deleteSync(recursive: true);
@@ -284,7 +292,7 @@ class LocalLauncherRepository implements LauncherRepository {
     );
     state['mods'] = mods;
     await _saveManagerState(install, state);
-    await _appendLauncherLog('Uninstalled $modId.');
+    await _appendLauncherLogBestEffort('Uninstalled $modId.');
     return _loadInstalledMods(install);
   }
 
@@ -296,22 +304,62 @@ class LocalLauncherRepository implements LauncherRepository {
     final normalizedProfiles = profiles.isEmpty
         ? [LauncherProfile.defaultProfile()]
         : profiles;
-    await _profilesFile
-        .create(recursive: true)
-        .then(
-          (file) => file.writeAsString(
-            _prettyJson({
-              'profiles': normalizedProfiles
-                  .map((profile) => profile.toJson())
-                  .toList(),
-            }),
-          ),
-        );
-
-    final settings = await _loadSettings();
-    settings['selectedProfileId'] = selectedProfileId;
-    await _saveSettings(settings);
+    for (final profile in normalizedProfiles) {
+      _requireValidLauncherProfile(profile);
+    }
+    await _writeJsonFileAtomic(
+      _profilesFile,
+      {
+        'schemaVersion': _profileFormatVersion,
+        'profiles': normalizedProfiles
+            .map((profile) => profile.toJson())
+            .toList(),
+      },
+      maxBytes: _maxProfilesBytes,
+      label: 'Launcher profiles',
+    );
+    await _updateSettings(
+      (settings) => settings['selectedProfileId'] = selectedProfileId,
+    );
     return normalizedProfiles;
+  }
+
+  @override
+  Future<void> exportProfile(LauncherProfile profile, String path) async {
+    _requireProfileExportPath(path);
+    _requireValidLauncherProfile(profile);
+    await _writeJsonFileAtomic(
+      File(path),
+      {'schemaVersion': _profileFormatVersion, 'profile': profile.toJson()},
+      maxBytes: _maxProfilesBytes,
+      label: 'Exported launcher profile',
+    );
+  }
+
+  @override
+  Future<LauncherProfile> importProfile(String path) async {
+    _requireProfileExportPath(path);
+    final decoded = await _readJsonFileBounded(
+      File(path),
+      maxBytes: _maxProfilesBytes,
+      label: 'Imported launcher profile',
+    );
+    if (decoded is! Map || decoded['schemaVersion'] != _profileFormatVersion) {
+      throw const FormatException(
+        'Imported launcher profile must use TopiaForge schemaVersion 2.',
+      );
+    }
+    final profile = decoded['profile'];
+    if (profile is! Map) {
+      throw const FormatException(
+        'Imported launcher profile is missing profile.',
+      );
+    }
+    return _requireValidLauncherProfile(
+      LauncherProfile.fromJson(
+        profile.map((key, value) => MapEntry(key.toString(), value)),
+      ),
+    );
   }
 
   @override
@@ -324,11 +372,14 @@ class LocalLauncherRepository implements LauncherRepository {
       return prepared.failure!;
     }
     final launchInstall = prepared.install!;
-    await _writeWorldSelection(launchInstall, profile.worldSelection);
     final message = profile.launchSettings.safeMode
-        ? 'Launched Robotopia in safe mode. All mods were disabled first.'
-        : 'Launched Robotopia.';
-    return _startGame(launchInstall, profile, message: message);
+        ? 'Launched TopiaForge in safe mode for this run only.'
+        : 'Launched TopiaForge.';
+    return _startGameWithWorldSelection(
+      launchInstall,
+      profile,
+      message: message,
+    );
   }
 
   @override
@@ -342,120 +393,62 @@ class LocalLauncherRepository implements LauncherRepository {
       return prepared.failure!;
     }
     final launchInstall = prepared.install!;
-    await _writeWorldSelection(launchInstall, profile.worldSelection);
     final message = switch ((stopped, profile.launchSettings.safeMode)) {
-      (true, true) =>
-        'Restarted Robotopia in safe mode. All mods were disabled first.',
-      (true, false) => 'Restarted Robotopia.',
+      (true, true) => 'Restarted TopiaForge in safe mode for this run only.',
+      (true, false) => 'Restarted TopiaForge.',
       (false, true) =>
-        'Started Robotopia in safe mode. No running process was found.',
-      (false, false) => 'Started Robotopia. No running process was found.',
+        'Started TopiaForge in temporary safe mode. No running process was found.',
+      (false, false) => 'Started TopiaForge. No running process was found.',
     };
-    return _startGame(launchInstall, profile, message: message);
+    return _startGameWithWorldSelection(
+      launchInstall,
+      profile,
+      message: message,
+    );
   }
-
-  @override
-  Future<List<LegacyMod>> detectLegacyMods(GameInstall install) =>
-      _detectLegacyMods(install);
 
   @override
   Future<String> deployUgcLiveSyncConfig(
     GameInstall install,
     UgcLiveSyncSettings settings,
-  ) async {
-    final path = p.join(
-      _managerConfig(install).path,
-      'robotopia.ugc.livesync.json',
-    );
-    final file = File(path);
-    await file.create(recursive: true);
-    await file.writeAsString(_prettyJson(settings.toRuntimeConfig()));
-    return file.path;
+  ) => _deployUgcLiveSyncConfig(install, settings);
+
+  @override
+  Future<UgcLiveSyncCleanupReport> cleanupUgcLiveSync(
+    GameInstall install,
+    UgcLiveSyncSettings fallbackSettings,
+  ) => _cleanupUgcLiveSync(install, fallbackSettings);
+
+  @override
+  Stream<UgcPublisherEvent> get ugcPublisherEvents =>
+      _ugcPublisherEvents.stream;
+
+  @override
+  bool get isUgcPublisherRunning => _ugcPublisher != null;
+
+  @override
+  Future<UgcPublisherStartResult> startUgcPublisher(
+    UgcLiveSyncSettings settings,
+  ) => _startUgcPublisher(settings);
+
+  @override
+  Future<void> stopUgcPublisher({bool waitForExit = false}) =>
+      _stopUgcPublisher(waitForExit: waitForExit);
+
+  @override
+  Future<void> revokeUgcPublisherSession() async {
+    await _deleteFileIfExists(_ugcPublisherSessionFile);
   }
 
   @override
   Future<UgcLiveSyncStatusSnapshot?> readUgcLiveSyncStatus(
     GameInstall install,
-  ) async {
-    final path = p.join(
-      _managerConfig(install).path,
-      'robotopia.ugc.livesync.status.json',
-    );
-    final file = File(path);
-    if (!file.existsSync()) {
-      return null;
-    }
-    try {
-      final decoded = jsonDecode(await file.readAsString());
-      if (decoded is Map<String, Object?>) {
-        return UgcLiveSyncStatusSnapshot.fromJson(decoded);
-      }
-    } on Object {
-      /* Ignore malformed or half-written status files. */
-    }
-    return null;
-  }
+  ) => _readUgcLiveSyncStatus(install);
 
   @override
-  Future<List<UgcSceneRef>> listWatchFolderScenes(String watchFolder) async {
-    if (watchFolder.trim().isEmpty) {
-      return const [];
-    }
-    final dir = Directory(watchFolder);
-    if (!dir.existsSync()) {
-      return const [];
-    }
-
-    File? newest;
-    DateTime newestTime = DateTime.fromMillisecondsSinceEpoch(0);
-    for (final entity in dir.listSync().whereType<File>()) {
-      final lower = entity.path.toLowerCase();
-      if (!lower.endsWith('.json') && !lower.endsWith('.json.gz')) {
-        continue;
-      }
-      final modified = entity.statSync().modified;
-      if (newest == null || modified.isAfter(newestTime)) {
-        newest = entity;
-        newestTime = modified;
-      }
-    }
-    if (newest == null) {
-      return const [];
-    }
-
-    try {
-      var bytes = await newest.readAsBytes();
-      if (newest.path.toLowerCase().endsWith('.gz') ||
-          (bytes.length >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b)) {
-        bytes = GZipDecoder().decodeBytes(bytes);
-      }
-      var text = utf8.decode(bytes, allowMalformed: true);
-      if (text.isNotEmpty && text.codeUnitAt(0) == 0xfeff) {
-        text = text.substring(1);
-      }
-      final decoded = jsonDecode(text);
-      if (decoded is! Map<String, Object?>) {
-        return const [];
-      }
-      final scenes = decoded['scenes'];
-      if (scenes is! Map) {
-        return const [];
-      }
-      final result = <UgcSceneRef>[];
-      scenes.forEach((key, value) {
-        final id = value is Map && value['id'] is String
-            ? value['id'] as String
-            : key.toString();
-        final name = value is Map && value['name'] is String
-            ? value['name'] as String
-            : '';
-        result.add(UgcSceneRef(id: id, name: name));
-      });
-      return result;
-    } on Object {
-      return const [];
-    }
-  }
+  Future<UgcSceneInspectionResult> inspectWatchFolderScenes(
+    String watchFolder,
+  ) => _inspectWatchFolderScenes(watchFolder);
 
   @override
   Future<DiagnosticBundle> createDiagnosticBundle(
@@ -469,4 +462,27 @@ class LocalLauncherRepository implements LauncherRepository {
 
   @override
   Future<void> openPath(String path) => _openPath(path);
+
+  @override
+  Future<void> openContainingFolder(String path) =>
+      _openPath(File(path).absolute.parent.path);
+
+  @override
+  Future<void> ensureDirectory(String path) async {
+    await Directory(path).create(recursive: true);
+  }
+
+  @override
+  Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
+    try {
+      await _stopUgcPublisher(waitForExit: true);
+    } finally {
+      await _cancelUgcPublisherOutput();
+      if (!_ugcPublisherEvents.isClosed) {
+        await _ugcPublisherEvents.close();
+      }
+    }
+  }
 }

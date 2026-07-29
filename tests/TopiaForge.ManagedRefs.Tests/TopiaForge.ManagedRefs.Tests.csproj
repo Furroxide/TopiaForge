@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>TopiaForge.ManagedRefs.Tests</AssemblyName>
+    <RootNamespace>TopiaForge.ManagedRefs.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj" />
+  </ItemGroup>
+</Project>

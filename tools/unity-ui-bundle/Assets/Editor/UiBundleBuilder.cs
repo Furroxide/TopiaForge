@@ -9,18 +9,18 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.TextCore.LowLevel;
 
-namespace Robotopia
+namespace TopiaForge
 {
     /// <summary>
-    /// Builds the QuantumWorks brand AssetBundle consumed by Robotopia.Mods.UnityUi.
-    /// Run headless via `robotopia unity build-ui-bundle`, or in-editor via the menu item.
-    /// The output bundle is copied into src/Robotopia.Mods.UnityUi/Assets/ where the
+    /// Builds the TopiaForge brand AssetBundle consumed by TopiaForge.Mods.UnityUi.
+    /// Run headless via `topiaforge unity build-ui-bundle`, or in-editor via the menu item.
+    /// The output bundle is copied into src/TopiaForge.Mods.UnityUi/Assets/ where the
     /// kit csproj embeds it into the DLL as an EmbeddedResource.
     /// </summary>
     public static class UiBundleBuilder
     {
-        private const string BundleName = "quantumworks-ui";
-        private const string BundleFileName = "quantumworks-ui.bundle";
+        private const string BundleName = "topiaforge-ui";
+        private const string BundleFileName = "topiaforge-ui.bundle";
         private const string OutputDir = "Build/Bundles";
         private const string ManifestAssetPath = "Assets/UiBundleManifest.json";
 
@@ -31,35 +31,35 @@ namespace Robotopia
         // instance), so no separate bold asset is baked.
         private static readonly string[] RequiredAssets =
         {
-            QuicksandAssetPath,
-            AudiowideAssetPath,
+            BodyAssetPath,
+            DisplayAssetPath,
             ManifestAssetPath,
         };
 
-        private const string QuicksandAssetPath = "Assets/FontAssets/QuantumWorks-Quicksand SDF.asset";
-        private const string AudiowideAssetPath = "Assets/FontAssets/QuantumWorks-Audiowide SDF.asset";
+        private const string BodyAssetPath = "Assets/FontAssets/TopiaForge Body SDF.asset";
+        private const string DisplayAssetPath = "Assets/FontAssets/TopiaForge Display SDF.asset";
         private const string CharacterSet =
             " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~" +
             " ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ" +
             "ĀāĂăĄąĆćĈĉĊċČčĎďĐđĒēĔĕĖėĘęĚěĜĝĞğĠġĢģĤĥĦħĨĩĪīĬĭĮįİıĲĳĴĵĶķĸĹĺĻļĽľĿŀŁłŃńŅņŇňŉŊŋŌōŎŏŐőŒœŔŕŖŗŘřŚśŜŝŞşŠšŢţŤťŦŧŨũŪūŬŭŮůŰűŲųŴŵŶŷŸŹźŻżŽž" +
             "–—‘’‚“”„…•·‰′″‹›€™✓";
 
-        [MenuItem("QuantumWorks/Build UI Bundle")]
+        [MenuItem("TopiaForge/Build UI Bundle")]
         public static void BuildFromMenu()
         {
             try
             {
                 BuildInternal();
-                EditorUtility.DisplayDialog("QuantumWorks", "UI bundle built and copied into src/Robotopia.Mods.UnityUi/Assets.", "OK");
+                EditorUtility.DisplayDialog("TopiaForge", "UI bundle built and copied into src/TopiaForge.Mods.UnityUi/Assets.", "OK");
             }
             catch (Exception ex)
             {
-                EditorUtility.DisplayDialog("QuantumWorks", "UI bundle build failed: " + ex.Message, "OK");
+                EditorUtility.DisplayDialog("TopiaForge", "UI bundle build failed: " + ex.Message, "OK");
                 throw;
             }
         }
 
-        /// <summary>Batch-mode entry point (invoked by -executeMethod Robotopia.UiBundleBuilder.Build).</summary>
+        /// <summary>Batch-mode entry point (invoked by -executeMethod TopiaForge.UiBundleBuilder.Build).</summary>
         public static void Build()
         {
             try
@@ -102,13 +102,18 @@ namespace Robotopia
 
             // Optional sprite assets ride along automatically when labeled; verify nothing
             // else accidentally joined the bundle.
-            var labeled = AssetDatabase.GetAssetPathsFromAssetBundle(BundleName);
+            var labeled = AssetDatabase.GetAssetPathsFromAssetBundle(BundleName)
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .ToArray();
             Debug.Log("[UiBundleBuilder] Bundle contents:\n  " + string.Join("\n  ", labeled));
 
             Directory.CreateDirectory(OutputDir);
             var manifest = BuildPipeline.BuildAssetBundles(
                 OutputDir,
-                BuildAssetBundleOptions.ChunkBasedCompression | BuildAssetBundleOptions.DeterministicAssetBundle,
+                // Unity 5+ always produces deterministic AssetBundles. The old
+                // DeterministicAssetBundle flag is obsolete in Unity 6 and only
+                // adds a compiler warning.
+                BuildAssetBundleOptions.ChunkBasedCompression,
                 BuildTarget.StandaloneWindows64);
             if (manifest == null)
             {
@@ -122,7 +127,7 @@ namespace Robotopia
             }
 
             var repoRoot = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "..", ".."));
-            var targetDir = Path.Combine(repoRoot, "src", "Robotopia.Mods.UnityUi", "Assets");
+            var targetDir = Path.Combine(repoRoot, "src", "TopiaForge.Mods.UnityUi", "Assets");
             Directory.CreateDirectory(targetDir);
             var target = Path.Combine(targetDir, BundleFileName);
             File.Copy(built, target, overwrite: true);
@@ -140,8 +145,9 @@ namespace Robotopia
         {
             EnsureTmpEssentials();
             Directory.CreateDirectory("Assets/FontAssets");
-            BakeFontAsset("Assets/Fonts/Quicksand-VariableFont_wght.ttf", QuicksandAssetPath, "QuantumWorks-Quicksand SDF", 1024);
-            BakeFontAsset("Assets/Fonts/Audiowide-Regular.ttf", AudiowideAssetPath, "QuantumWorks-Audiowide SDF", 512);
+            BakeFontAsset("Assets/Fonts/Quicksand-VariableFont_wght.ttf", BodyAssetPath, "TopiaForge Body SDF", 1024);
+            BakeFontAsset("Assets/Fonts/Audiowide-Regular.ttf", DisplayAssetPath, "TopiaForge Display SDF", 512);
+            AssetDatabase.SaveAssets();
         }
 
         private const string EssentialsPackage = "Packages/com.unity.ugui/Package Resources/TMP Essential Resources.unitypackage";
@@ -190,7 +196,7 @@ namespace Robotopia
             if (!AssetDatabase.IsValidFolder("Assets/TextMesh Pro"))
             {
                 throw new InvalidOperationException(
-                    "TMP essentials are missing - run the ImportEssentials phase first ('robotopia unity build-ui-bundle' does this automatically).");
+                    "TMP essentials are missing - run the ImportEssentials phase first ('topiaforge unity build-ui-bundle' does this automatically).");
             }
         }
 
@@ -198,6 +204,13 @@ namespace Robotopia
         {
             if (AssetDatabase.AssetPathToGUID(assetPath, AssetPathToGUIDOptions.OnlyExistingAssets) != string.Empty)
             {
+                var existing = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(assetPath);
+                if (existing == null)
+                {
+                    throw new InvalidOperationException("Existing TMP font asset could not be loaded: " + assetPath);
+                }
+
+                NormalizeDerivativeNames(existing, assetName);
                 return;
             }
 
@@ -212,7 +225,7 @@ namespace Robotopia
                 (Shader.Find("TextMeshPro/Mobile/Distance Field") != null) + " tmpSettings=" +
                 (Resources.Load<TMP_Settings>("TMP Settings") != null));
 
-            TMP_FontAsset? fontAsset;
+            TMP_FontAsset fontAsset;
             try
             {
                 fontAsset = TMP_FontAsset.CreateFontAsset(
@@ -246,27 +259,55 @@ namespace Robotopia
             // Freeze to a static atlas so the committed asset is deterministic and the
             // runtime never rasterizes.
             fontAsset.atlasPopulationMode = AtlasPopulationMode.Static;
-            fontAsset.name = assetName;
 
             AssetDatabase.CreateAsset(fontAsset, assetPath);
-            if (fontAsset.material != null)
-            {
-                fontAsset.material.name = assetName + " Material";
-                AssetDatabase.AddObjectToAsset(fontAsset.material, fontAsset);
-            }
-
-            foreach (var texture in fontAsset.atlasTextures)
-            {
-                if (texture != null)
-                {
-                    texture.name = assetName + " Atlas";
-                    AssetDatabase.AddObjectToAsset(texture, fontAsset);
-                }
-            }
+            NormalizeDerivativeNames(fontAsset, assetName, addSubAssets: true);
 
             AssetDatabase.SaveAssets();
             AssetDatabase.ImportAsset(assetPath);
             Debug.Log("[UiBundleBuilder] Baked " + assetName + " (" + atlasSize + "px atlas) from " + ttfPath + ".");
+        }
+
+        private static void NormalizeDerivativeNames(
+            TMP_FontAsset fontAsset,
+            string assetName,
+            bool addSubAssets = false)
+        {
+            fontAsset.name = assetName;
+            if (fontAsset.material != null)
+            {
+                fontAsset.material.name = assetName + " Material";
+                if (addSubAssets)
+                {
+                    AssetDatabase.AddObjectToAsset(fontAsset.material, fontAsset);
+                }
+            }
+
+            foreach (var texture in fontAsset.atlasTextures)
+            {
+                if (texture == null)
+                {
+                    continue;
+                }
+
+                texture.name = assetName + " Atlas";
+                if (addSubAssets)
+                {
+                    AssetDatabase.AddObjectToAsset(texture, fontAsset);
+                }
+            }
+
+            // OFL reserved names must not be retained by generated derivatives. The
+            // unmodified source TTF and its license remain bundled with attribution.
+            var serialized = new SerializedObject(fontAsset);
+            var familyName = serialized.FindProperty("m_FaceInfo.m_FamilyName");
+            if (familyName != null)
+            {
+                familyName.stringValue = assetName.Replace(" SDF", string.Empty);
+            }
+
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(fontAsset);
         }
 
         private static void StampManifest()
@@ -275,7 +316,6 @@ namespace Robotopia
             payload.AppendLine("{");
             payload.AppendLine("  \"bundle\": \"" + BundleName + "\",");
             payload.AppendLine("  \"editorVersion\": \"" + Application.unityVersion + "\",");
-            payload.AppendLine("  \"builtUtc\": \"" + DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ") + "\",");
             payload.AppendLine("  \"assets\": [");
             payload.AppendLine(string.Join(",\n", RequiredAssets.Select(a => "    \"" + a + "\"")));
             payload.AppendLine("  ]");
@@ -289,13 +329,12 @@ namespace Robotopia
             payload.AppendLine("{");
             payload.AppendLine("  \"bundle\": \"" + BundleFileName + "\",");
             payload.AppendLine("  \"editorVersion\": \"" + Application.unityVersion + "\",");
-            payload.AppendLine("  \"builtUtc\": \"" + DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ") + "\",");
             payload.AppendLine("  \"sha256\": \"" + sha256 + "\",");
             payload.AppendLine("  \"assets\": [");
             payload.AppendLine(string.Join(",\n", labeled.Select(a => "    \"" + a + "\"")));
             payload.AppendLine("  ]");
             payload.AppendLine("}");
-            File.WriteAllText(Path.Combine(targetDir, "quantumworks-ui.manifest.json"), payload.ToString());
+            File.WriteAllText(Path.Combine(targetDir, "topiaforge-ui.manifest.json"), payload.ToString());
         }
 
         private static string ComputeSha256(string path)

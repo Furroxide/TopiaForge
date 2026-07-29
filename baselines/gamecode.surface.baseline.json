@@ -1,8 +1,9 @@
 {
-  "capturedUtc": "2026-07-01T14:12:35.9925608Z",
-  "extractorVersion": "1.0.0",
-  "gameCodeMvid": "1e5af2f5-c5cc-4768-94c4-c98d2713d1dd",
-  "gameVersionLabel": "4 commits since v5.4.23.4",
+  "capturedUtc": "2026-07-28T19:17:18.4229594Z",
+  "extractorVersion": "1.1.0-rc.1",
+  "gameCodeMvid": "b8ed3429-6de2-4b89-b303-1d20b5981528",
+  "gameVersion": "0.0.2309",
+  "gameVersionLabel": "build 2309",
   "referenceSet": [
     "02 City Streets 0.0.0.0",
     "AcidChamber 0.0.0.0",
@@ -12,6 +13,10 @@
     "BehaviorDesignerRuntime 0.0.0.0",
     "BlackBox.Runtime 0.0.0.0",
     "CaseConverter 2.0.1.0",
+    "ClockworkLabs.Motion 0.0.0.0",
+    "ClockworkLabs.Rish 0.0.0.0",
+    "ClockworkLabs.Roots 0.0.0.0",
+    "ClockworkLabs.Sappy 0.0.0.0",
     "Collector 0.0.0.0",
     "ConstructionYard 0.0.0.0",
     "CubePuzzle 0.0.0.0",
@@ -42,6 +47,7 @@
     "Newtonsoft.Json 13.0.0.0",
     "OilInTheBasement 0.0.0.0",
     "PostHog 0.0.0.0",
+    "RoboUI 0.0.0.0",
     "SampleScene 0.0.0.0",
     "SchvetFart 0.0.0.0",
     "Sentry 4.13.0.0",
@@ -113,6 +119,7 @@
     "Unity.InputSystem 1.11.2.0",
     "Unity.InputSystem.ForUI 0.0.0.0",
     "Unity.Mathematics 0.0.0.0",
+    "Unity.MemoryProfiler 0.0.0.0",
     "Unity.Multiplayer.Center.Common 0.0.0.0",
     "Unity.Polybrush 0.0.0.0",
     "Unity.ProBuilder 0.0.0.0",
@@ -120,6 +127,7 @@
     "Unity.ProBuilder.KdTree 0.0.0.0",
     "Unity.ProBuilder.Poly2Tri 0.0.0.0",
     "Unity.ProBuilder.Stl 0.0.0.0",
+    "Unity.Profiling.Core 0.0.0.0",
     "Unity.Recorder 0.0.0.0",
     "Unity.Recorder.Base 0.0.0.0",
     "Unity.RenderPipelines.Core.Runtime 0.0.0.0",
@@ -221,7 +229,7 @@
     "mscorlib 4.0.0.0",
     "netstandard 2.1.0.0"
   ],
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "simpleNameCounts": {
     "GameCode|AgentHead": 1,
     "GameCode|CameraUtils": 1,
@@ -229,20 +237,17 @@
     "GameCode|FirstPersonController": 1,
     "GameCode|Health": 1,
     "GameCode|Killed": 2,
-    "GameCode|LLMAgent": 1,
     "GameCode|LevelSettingsApplier": 1,
-    "GameCode|LocomotionController": 1,
     "GameCode|Pathfinder": 1,
     "GameCode|PerformanceLogger": 1,
     "GameCode|PlayerController": 1,
     "GameCode|PooledSpawner": 1,
     "GameCode|PostHogUtils": 1,
     "GameCode|RobotBody": 1,
-    "GameCode|RobotBodyPart": 1,
     "GameCode|SentryRuntimeConfiguration": 1,
     "GameCode|SettingsScreen": 1
   },
-  "surfaceContentHash": "d9900ebb963bbba86b7849d3f50deb9141a7061db0a97b5fa29cd2b211bc328b",
+  "surfaceContentHash": "ded8678112496a9331e2a6a72ae79c76c4b055f23105381df23f847e866fbbc3",
   "types": {
     "GameCode|ActionTarget": {
       "assembly": "GameCode",
@@ -575,7 +580,7 @@
         {
           "isPublic": false,
           "isStatic": false,
-          "name": "<Say>b__80_0",
+          "name": "<Say>b__82_0",
           "parameters": [],
           "returnType": "System.Void"
         },
@@ -902,6 +907,12 @@
         {
           "canRead": true,
           "canWrite": false,
+          "name": "IsSpeaking",
+          "type": "System.Boolean"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
           "name": "IsTalking",
           "type": "System.Boolean"
         },
@@ -963,6 +974,43 @@
       "status": "Resolved",
       "typeKey": "GameCode|AgentState"
     },
+    "GameCode|CameraUtils": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [],
+      "enumMembers": {},
+      "fields": [],
+      "fullName": "CameraUtils",
+      "isAbstract": true,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "isPublic": true,
+          "isStatic": true,
+          "name": "GetViewportBounds",
+          "parameters": [
+            "UnityEngine.Camera"
+          ],
+          "returnType": "UnityEngine.Bounds"
+        },
+        {
+          "isPublic": true,
+          "isStatic": true,
+          "name": "TryGetMainCamera",
+          "parameters": [
+            "UnityEngine.Camera&"
+          ],
+          "returnType": "System.Boolean"
+        }
+      ],
+      "properties": [],
+      "simpleName": "CameraUtils",
+      "status": "Resolved",
+      "typeKey": "GameCode|CameraUtils"
+    },
     "GameCode|CheckpointAsset": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [
@@ -1022,6 +1070,73 @@
       "status": "Resolved",
       "typeKey": "GameCode|CheckpointAsset"
     },
+    "GameCode|CollisionEventProxy": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "MonoBehaviour",
+        "Behaviour",
+        "Component",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "bodyPart",
+          "type": "BodyPart"
+        }
+      ],
+      "fullName": "CollisionEventProxy",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "IterReceivers",
+          "parameters": [],
+          "returnType": "System.Collections.Generic.IEnumerable<ICollisionEventReceiver>"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnCollisionEnter",
+          "parameters": [
+            "UnityEngine.Collision"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnCollisionExit",
+          "parameters": [
+            "UnityEngine.Collision"
+          ],
+          "returnType": "System.Void"
+        }
+      ],
+      "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "BodyPartType",
+          "type": "BodyPart"
+        }
+      ],
+      "simpleName": "CollisionEventProxy",
+      "status": "Resolved",
+      "typeKey": "GameCode|CollisionEventProxy"
+    },
     "GameCode|DamageType": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [
@@ -1047,6 +1162,977 @@
       "simpleName": "DamageType",
       "status": "Resolved",
       "typeKey": "GameCode|DamageType"
+    },
+    "GameCode|EquippableItemEntry": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "ValueType",
+        "Object"
+      ],
+      "constructors": [],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "bodyParts",
+          "type": "EquippableBodyPart[]"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "equipAnimation",
+          "type": "EquipAnimation"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "worldItemPrefab",
+          "type": "UnityEngine.GameObject"
+        }
+      ],
+      "fullName": "EquippableItemEntry",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [],
+      "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "WorldItemName",
+          "type": "System.String"
+        }
+      ],
+      "simpleName": "EquippableItemEntry",
+      "status": "Resolved",
+      "typeKey": "GameCode|EquippableItemEntry"
+    },
+    "GameCode|EquippableItemRegistry": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "ScriptableObject",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "InstanceSuffixRegex",
+          "type": "System.Text.RegularExpressions.Regex"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "_byBodyPartId",
+          "type": "System.Collections.Generic.Dictionary<System.Int32, EquippableItemEntry>"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "_byWorldItemName",
+          "type": "System.Collections.Generic.Dictionary<System.String, EquippableItemEntry>"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "_instance",
+          "type": "EquippableItemRegistry"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "entries",
+          "type": "EquippableItemEntry[]"
+        }
+      ],
+      "fullName": "EquippableItemRegistry",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "BuildLookups",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "IterEntries",
+          "parameters": [],
+          "returnType": "System.Collections.Generic.IEnumerable<EquippableItemEntry>"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnEnable",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "TryGetEntryByBodyPart",
+          "parameters": [
+            "UnityEngine.GameObject",
+            "EquippableItemEntry&"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "TryGetEntryByWorldItem",
+          "parameters": [
+            "UnityEngine.GameObject",
+            "EquippableItemEntry&"
+          ],
+          "returnType": "System.Boolean"
+        }
+      ],
+      "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "ByBodyPartId",
+          "type": "System.Collections.Generic.Dictionary<System.Int32, EquippableItemEntry>"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "ByWorldItemName",
+          "type": "System.Collections.Generic.Dictionary<System.String, EquippableItemEntry>"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "Instance",
+          "type": "EquippableItemRegistry"
+        }
+      ],
+      "simpleName": "EquippableItemRegistry",
+      "status": "Resolved",
+      "typeKey": "GameCode|EquippableItemRegistry"
+    },
+    "GameCode|FirstPersonController": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "MonoBehaviour",
+        "Behaviour",
+        "Component",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "CAMERA_SMOOTHING_FACTOR",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "PlayerLayerMask",
+          "type": "System.Int32"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "airAcceleration",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "airDeceleration",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "airSpeed",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "bobAmount",
+          "type": "UnityEngine.Vector3"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "bobSpeed",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "cameraAttachPoint",
+          "type": "UnityEngine.GameObject"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "cameraCanMove",
+          "type": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "cameraPrefab",
+          "type": "UnityEngine.GameObject"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "capsuleRadius",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "capsuleStandingHeight",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "controller",
+          "type": "UnityEngine.CharacterController"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "crosshairColor",
+          "type": "UnityEngine.Color"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "crouchButtonHeld",
+          "type": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "crouchHeight",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "crouchHeightDifference",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "crouchStateChangeDuration",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "crouchStateChangeStartTime",
+          "type": "System.DateTime"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "currentPlatformVelocity",
+          "type": "UnityEngine.Vector3"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "enableCrouch",
+          "type": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "enableHeadBob",
+          "type": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "enableJump",
+          "type": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "fov",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "groundAcceleration",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "groundDeceleration",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "groundSpeed",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "hand",
+          "type": "UnityEngine.Transform"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "headBobTimer",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "invertCamera",
+          "type": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "isCrouched",
+          "type": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "isWalking",
+          "type": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "joint",
+          "type": "UnityEngine.Transform"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "jointOriginalPos",
+          "type": "UnityEngine.Vector3"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "jumpHeight",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "lastLockTarget",
+          "type": "UnityEngine.Collider"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "localHandPosition",
+          "type": "UnityEngine.Vector3"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "lockInTime",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "lockedFov",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "lockedTargetDir",
+          "type": "System.Nullable<UnityEngine.Vector3>"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "lockedTargetPos",
+          "type": "UnityEngine.Vector3"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "lookDir",
+          "type": "UnityEngine.Vector3"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "lookInput",
+          "type": "UnityEngine.Vector2"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "maxLookAngle",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "mouseSensitivity",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "moveInput",
+          "type": "UnityEngine.Vector3"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "originalCameraY",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "originalFov",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "platformData",
+          "type": "PlatformData"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "platformSpeedDrag",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "playerCanMove",
+          "type": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "playerVelocity",
+          "type": "UnityEngine.Vector3"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "positionLoggerCts",
+          "type": "System.Threading.CancellationTokenSource"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "ragdolledUntil",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "retryUncrouch",
+          "type": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "speedReduction",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "strafeMultiplier",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "timeSinceLockStateChange",
+          "type": "System.Single"
+        }
+      ],
+      "fullName": "FirstPersonController",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "<CalculateLockDir>g__Rescale01|84_0",
+          "parameters": [
+            "System.Single"
+          ],
+          "returnType": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "<HandleInput>g__CalcDv|89_0",
+          "parameters": [
+            "System.Single"
+          ],
+          "returnType": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "Awake",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "CalculateFOVToFitTarget",
+          "parameters": [
+            "UnityEngine.Vector3",
+            "System.Single",
+            "UnityEngine.Camera"
+          ],
+          "returnType": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "CalculateLockDir",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "CalculateMinLockedFovToTarget",
+          "parameters": [
+            "UnityEngine.Collider"
+          ],
+          "returnType": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "CameraUpdate",
+          "parameters": [
+            "System.Single"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "CanUncrouch",
+          "parameters": [],
+          "returnType": "System.Boolean"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "DisablePhysics",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "DoCameraZoomLock",
+          "parameters": [
+            "AgentHead"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "EnablePhysics",
+          "parameters": [
+            "System.Single"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "EnsurePlayerCameraExists",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "EnterGrabbedMode",
+          "parameters": [
+            "UnityEngine.Transform"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "ExitGrabbedMode",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "FixedUpdate",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "HandleInput",
+          "parameters": [
+            "System.Single"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "HasFocus",
+          "parameters": [],
+          "returnType": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "HeadBob",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "LateUpdate",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "LogPlayerPosition",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "MouseSensitivyChanged",
+          "parameters": [
+            "System.Single"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "NextLookDir",
+          "parameters": [],
+          "returnType": "UnityEngine.Vector3"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnDestroy",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "OnDevTeleport",
+          "parameters": [
+            "UnityEngine.InputSystem.InputValue"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnDisable",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnEnable",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "OnHoldCrouch",
+          "parameters": [
+            "UnityEngine.InputSystem.InputValue"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "OnJump",
+          "parameters": [
+            "UnityEngine.InputSystem.InputValue"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnLevelLoaded",
+          "parameters": [
+            "UnityEngine.SceneManagement.Scene",
+            "UnityEngine.SceneManagement.LoadSceneMode"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnLockTargetChange",
+          "parameters": [
+            "AgentHead"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "OnLook",
+          "parameters": [
+            "UnityEngine.InputSystem.InputValue"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "OnLook",
+          "parameters": [
+            "UnityEngine.Vector2"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "OnMove",
+          "parameters": [
+            "UnityEngine.InputSystem.InputValue"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "OnMove",
+          "parameters": [
+            "UnityEngine.Vector2"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "OnToggleCrouch",
+          "parameters": [
+            "UnityEngine.InputSystem.InputValue"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "PlayerUpdate",
+          "parameters": [
+            "System.Single"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "SetCrouched",
+          "parameters": [
+            "System.Boolean"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "SetGroundSpeed",
+          "parameters": [
+            "System.Single"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "SetParentForPlayer",
+          "parameters": [
+            "UnityEngine.Transform"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "StartPositionLogger",
+          "parameters": [
+            "System.Threading.CancellationToken"
+          ],
+          "returnType": "Cysharp.Threading.Tasks.UniTaskVoid"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "TeleportTo",
+          "parameters": [
+            "UnityEngine.Vector3",
+            "System.Nullable<UnityEngine.Quaternion>"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "TogglePlayerCanMove",
+          "parameters": [
+            "System.Boolean"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "Update",
+          "parameters": [],
+          "returnType": "System.Void"
+        }
+      ],
+      "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "CameraAttachPoint",
+          "type": "UnityEngine.GameObject"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "CanExitRagdoll",
+          "type": "System.Boolean"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "Collider",
+          "type": "UnityEngine.CapsuleCollider"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "Controller",
+          "type": "UnityEngine.CharacterController"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "GroundSpeed",
+          "type": "System.Single"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "Grounded",
+          "type": "System.Boolean"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "Hand",
+          "type": "UnityEngine.Transform"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "IsCrouched",
+          "type": "System.Boolean"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "IsForcedRagdoll",
+          "type": "System.Boolean"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "IsIdle",
+          "type": "System.Boolean"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "IsRagdoll",
+          "type": "System.Boolean"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "Rigidbody",
+          "type": "UnityEngine.Rigidbody"
+        }
+      ],
+      "simpleName": "FirstPersonController",
+      "status": "Resolved",
+      "typeKey": "GameCode|FirstPersonController"
     },
     "GameCode|GlobalAssetsMap": {
       "assembly": "GameCode",
@@ -1078,6 +2164,12 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "cancelAction",
+          "type": "UnityEngine.InputSystem.InputActionReference"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "checkpointAssets",
           "type": "CheckpointAsset[]"
         },
@@ -1092,18 +2184,6 @@
           "isStatic": false,
           "name": "danceAction",
           "type": "ActionAsset"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "debugOverrideAnalysisModel",
-          "type": "ModelAsset"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "debugOverrideModel",
-          "type": "ModelAsset"
         },
         {
           "isPublic": false,
@@ -1174,6 +2254,12 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "navigateAction",
+          "type": "UnityEngine.InputSystem.InputActionReference"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "oldDropAction",
           "type": "ActionAsset"
         },
@@ -1194,6 +2280,18 @@
           "isStatic": false,
           "name": "sayInterruptedEvent",
           "type": "GameEventAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "sideQuestMarkerPrefab",
+          "type": "UnityEngine.GameObject"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "submitAction",
+          "type": "UnityEngine.InputSystem.InputActionReference"
         },
         {
           "isPublic": false,
@@ -1227,18 +2325,15 @@
             "Id64"
           ],
           "returnType": "CheckpointAsset"
-        },
-        {
-          "isPublic": true,
-          "isStatic": true,
-          "name": "ValidateIsNull",
-          "parameters": [
-            "ModelAsset"
-          ],
-          "returnType": "System.Boolean"
         }
       ],
       "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "CancelAction",
+          "type": "UnityEngine.InputSystem.InputAction"
+        },
         {
           "canRead": true,
           "canWrite": false,
@@ -1256,18 +2351,6 @@
           "canWrite": false,
           "name": "DanceAction",
           "type": "ActionAsset"
-        },
-        {
-          "canRead": true,
-          "canWrite": false,
-          "name": "DebugOverrideAnalysisModel",
-          "type": "ModelAsset"
-        },
-        {
-          "canRead": true,
-          "canWrite": false,
-          "name": "DebugOverrideModel",
-          "type": "ModelAsset"
         },
         {
           "canRead": true,
@@ -1344,6 +2427,12 @@
         {
           "canRead": true,
           "canWrite": false,
+          "name": "NavigateAction",
+          "type": "UnityEngine.InputSystem.InputAction"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
           "name": "OldDropAction",
           "type": "ActionAsset"
         },
@@ -1364,6 +2453,18 @@
           "canWrite": false,
           "name": "SayInterruptedEvent",
           "type": "GameEventAsset"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "SideQuestMarkerPrefab",
+          "type": "UnityEngine.GameObject"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "SubmitAction",
+          "type": "UnityEngine.InputSystem.InputAction"
         },
         {
           "canRead": true,
@@ -1551,6 +2652,54 @@
       "status": "Resolved",
       "typeKey": "GameCode|ICollisionEventReceiver"
     },
+    "GameCode|Killed": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "MonoBehaviour",
+        "Behaviour",
+        "Component",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [],
+      "fullName": "Killed",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "DestroyWhenAtRest",
+          "parameters": [
+            "System.Single",
+            "System.Single",
+            "System.Single"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "IPooledSpawnerListener.OnSpawnedBy",
+          "parameters": [
+            "PooledSpawner"
+          ],
+          "returnType": "System.Void"
+        }
+      ],
+      "properties": [],
+      "simpleName": "Killed",
+      "status": "Resolved",
+      "typeKey": "GameCode|Killed"
+    },
     "GameCode|LLMAgent": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [
@@ -1573,6 +2722,12 @@
           "isStatic": false,
           "name": "<AgentId>k__BackingField",
           "type": "System.Guid"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "<FastForwardOnInterrupt>k__BackingField",
+          "type": "System.Boolean"
         },
         {
           "isPublic": false,
@@ -1811,7 +2966,7 @@
         {
           "isPublic": false,
           "isStatic": false,
-          "name": "<Awake>b__148_0",
+          "name": "<Awake>b__152_0",
           "parameters": [
             "AgentHead"
           ],
@@ -1820,7 +2975,7 @@
         {
           "isPublic": false,
           "isStatic": false,
-          "name": "<EnterStandbyImpl>b__112_0",
+          "name": "<EnterStandbyImpl>b__116_0",
           "parameters": [
             "IStandbyReceiver"
           ],
@@ -1829,7 +2984,7 @@
         {
           "isPublic": false,
           "isStatic": false,
-          "name": "<FixedUpdate>b__155_0",
+          "name": "<FixedUpdate>b__159_0",
           "parameters": [
             "LLMAgent+UnhandledMessageData"
           ],
@@ -1838,7 +2993,7 @@
         {
           "isPublic": false,
           "isStatic": false,
-          "name": "<OnDisable>b__156_0",
+          "name": "<OnDisable>b__160_0",
           "parameters": [
             "IAgentStatusListener"
           ],
@@ -1847,7 +3002,7 @@
         {
           "isPublic": false,
           "isStatic": false,
-          "name": "<OnEnable>b__151_0",
+          "name": "<OnEnable>b__155_0",
           "parameters": [
             "IAgentStatusListener"
           ],
@@ -1856,7 +3011,7 @@
         {
           "isPublic": false,
           "isStatic": false,
-          "name": "<UpdateThinking>b__97_0",
+          "name": "<UpdateThinking>b__101_0",
           "parameters": [
             "IAgentStatusListener"
           ],
@@ -1865,7 +3020,7 @@
         {
           "isPublic": false,
           "isStatic": false,
-          "name": "<WaitUntilIdle>b__118_0",
+          "name": "<WaitUntilIdle>b__122_0",
           "parameters": [],
           "returnType": "System.Boolean"
         },
@@ -2016,7 +3171,8 @@
           "name": "ForceInterrupt",
           "parameters": [
             "AgentHead",
-            "UnityEngine.GameObject"
+            "UnityEngine.GameObject",
+            "System.Boolean"
           ],
           "returnType": "System.Void"
         },
@@ -2546,6 +3702,12 @@
           "canWrite": false,
           "name": "DefaultPersonality",
           "type": "PersonalityAsset"
+        },
+        {
+          "canRead": true,
+          "canWrite": true,
+          "name": "FastForwardOnInterrupt",
+          "type": "System.Boolean"
         },
         {
           "canRead": true,
@@ -3297,6 +4459,12 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "spawnedFromPool",
+          "type": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "sprintingSpeed",
           "type": "System.Single"
         },
@@ -3405,7 +4573,7 @@
         {
           "isPublic": false,
           "isStatic": false,
-          "name": "<WaitTransformSync>g__CloseEnough|149_0",
+          "name": "<WaitTransformSync>g__CloseEnough|150_0",
           "parameters": [],
           "returnType": "System.Boolean"
         },
@@ -3700,6 +4868,13 @@
           "returnType": "System.Void"
         },
         {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "SnapRagdollToAnimatedPose",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
           "isPublic": true,
           "isStatic": false,
           "name": "StartAscend",
@@ -3960,6 +5135,50 @@
       "status": "Resolved",
       "typeKey": "GameCode|LocomotionController"
     },
+    "GameCode|LogData.Killed": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "ValueType",
+        "Object"
+      ],
+      "constructors": [],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "cause",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "game_object_name",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "killer_object_name",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "telemetry_id",
+          "type": "System.String"
+        }
+      ],
+      "fullName": "LogData.Killed",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [],
+      "properties": [],
+      "simpleName": "Killed",
+      "status": "Resolved",
+      "typeKey": "GameCode|LogData.Killed"
+    },
     "GameCode|OpenFeedBackURL": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [
@@ -4001,6 +5220,371 @@
       "simpleName": "OpenFeedBackURL",
       "status": "Resolved",
       "typeKey": "GameCode|OpenFeedBackURL"
+    },
+    "GameCode|PerformanceLogger": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "cts",
+          "type": "System.Threading.CancellationTokenSource"
+        }
+      ],
+      "fullName": "PerformanceLogger",
+      "isAbstract": true,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "Initialize",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": true,
+          "name": "LogDisplayConfig",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "LogHardwareInfo",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "OnSceneLoaded",
+          "parameters": [
+            "UnityEngine.SceneManagement.Scene",
+            "UnityEngine.SceneManagement.LoadSceneMode"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "OnSceneUnloaded",
+          "parameters": [
+            "UnityEngine.SceneManagement.Scene"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "StartFrametimeTracking",
+          "parameters": [
+            "System.Threading.CancellationToken"
+          ],
+          "returnType": "Cysharp.Threading.Tasks.UniTask"
+        }
+      ],
+      "properties": [],
+      "simpleName": "PerformanceLogger",
+      "status": "Resolved",
+      "typeKey": "GameCode|PerformanceLogger"
+    },
+    "GameCode|PersonalityAsset": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "ScriptableObject",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "analysisModel",
+          "type": "ModelAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "bios",
+          "type": "UnityEngine.TextAsset[]"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "crits",
+          "type": "CritAsset[]"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "exampleQuotes",
+          "type": "FactMapAsset[]"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "hardCommands",
+          "type": "System.Collections.Generic.List<HardCommand>"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "hints",
+          "type": "HintAsset[]"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "knowledge",
+          "type": "LoreAsset[]"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "maxAutoContinues",
+          "type": "System.UInt32"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "maxExampleQuoteTokens",
+          "type": "System.UInt32"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "minStatusCertainty",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "model",
+          "type": "ModelAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "onBoot",
+          "type": "GameEventAsset"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "scenePrompt",
+          "type": "UnityEngine.TextAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "statusFactCount",
+          "type": "System.UInt32"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "temperature",
+          "type": "System.Single"
+        }
+      ],
+      "fullName": "PersonalityAsset",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "CopyTemplateFields",
+          "parameters": [
+            "PersonalityAsset"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": true,
+          "name": "CreateHacked",
+          "parameters": [
+            "PersonalityAsset",
+            "UnityEngine.TextAsset[]"
+          ],
+          "returnType": "PersonalityAsset"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "IterGlobalFacts",
+          "parameters": [],
+          "returnType": "System.Collections.Generic.IEnumerable<Fact>"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "IterPrivateFacts",
+          "parameters": [],
+          "returnType": "System.Collections.Generic.IEnumerable<Fact>"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "Precompile",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "SetBio",
+          "parameters": [
+            "UnityEngine.TextAsset"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "SetExampleQuotes",
+          "parameters": [
+            "FactMapAsset"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "SetKnowledge",
+          "parameters": [
+            "LoreAsset[]"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "SetTemperature",
+          "parameters": [
+            "System.Single"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": true,
+          "name": "ValidateBios",
+          "parameters": [
+            "UnityEngine.TextAsset[]"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "isPublic": true,
+          "isStatic": true,
+          "name": "ValidateIsPublic",
+          "parameters": [
+            "ModelAsset"
+          ],
+          "returnType": "System.Boolean"
+        }
+      ],
+      "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "AnalysisModel",
+          "type": "ModelAsset"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "Bios",
+          "type": "System.Collections.Generic.IEnumerable<UnityEngine.TextAsset>"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "Crits",
+          "type": "System.Collections.Generic.IEnumerable<CritAsset>"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "HardCommands",
+          "type": "System.Collections.Generic.List<HardCommand>"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "Hints",
+          "type": "System.Collections.Generic.IEnumerable<HintAsset>"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "Knowledge",
+          "type": "System.Collections.Generic.IEnumerable<LoreAsset>"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "MaxAutoInvokes",
+          "type": "System.UInt32"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "MaxExampleQuoteTokens",
+          "type": "System.UInt32"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "MinStatusCertainty",
+          "type": "System.Single"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "Model",
+          "type": "ModelAsset"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "OnBoot",
+          "type": "GameEventAsset"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "StatusFactCount",
+          "type": "System.UInt32"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "Temperature",
+          "type": "System.Single"
+        }
+      ],
+      "simpleName": "PersonalityAsset",
+      "status": "Resolved",
+      "typeKey": "GameCode|PersonalityAsset"
     },
     "GameCode|PlayerController": {
       "assembly": "GameCode",
@@ -4066,6 +5650,12 @@
           "isStatic": false,
           "name": "actorsMask",
           "type": "System.Int32"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "busyInteractSound",
+          "type": "FMODAudioClipAsset"
         },
         {
           "isPublic": false,
@@ -4568,6 +6158,13 @@
         {
           "isPublic": true,
           "isStatic": false,
+          "name": "PlayBusyInteractSound",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
           "name": "PushToRecordStart",
           "parameters": [],
           "returnType": "System.Void"
@@ -4957,6 +6554,59 @@
       "status": "Resolved",
       "typeKey": "GameCode|PooledSpawner"
     },
+    "GameCode|PostHogUtils": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "API_KEY",
+          "type": "System.String"
+        }
+      ],
+      "fullName": "PostHogUtils",
+      "isAbstract": true,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "AddIfNotEmpty",
+          "parameters": [
+            "System.Collections.Generic.Dictionary<System.String, System.Object>",
+            "System.String",
+            "System.String"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "Initialize",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "OnSessionLogEntry",
+          "parameters": [
+            "SessionLog+SessionLogEntry"
+          ],
+          "returnType": "System.Void"
+        }
+      ],
+      "properties": [],
+      "simpleName": "PostHogUtils",
+      "status": "Resolved",
+      "typeKey": "GameCode|PostHogUtils"
+    },
     "GameCode|ReflectionProbeManager": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [
@@ -5195,6 +6845,73 @@
       "simpleName": "ReflectionProbeManager",
       "status": "Resolved",
       "typeKey": "GameCode|ReflectionProbeManager"
+    },
+    "GameCode|RoboAPI.Agent+PlanRequest": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": [
+            "ModelAsset",
+            "AgentEnvironment",
+            "System.Collections.Generic.IReadOnlyList<System.String>",
+            "System.Collections.Generic.IReadOnlyList<System.String>",
+            "System.Single",
+            "System.String"
+          ]
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "bioTemplates",
+          "type": "System.Collections.Generic.IReadOnlyList<System.String>"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "critStatusTemplates",
+          "type": "System.Collections.Generic.IReadOnlyList<System.String>"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "environment",
+          "type": "AgentEnvironment"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "modelName",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "systemPromptOverride",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "temperature",
+          "type": "System.Single"
+        }
+      ],
+      "fullName": "RoboAPI.Agent+PlanRequest",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [],
+      "properties": [],
+      "simpleName": "PlanRequest",
+      "status": "Resolved",
+      "typeKey": "GameCode|RoboAPI.Agent+PlanRequest"
     },
     "GameCode|RoboPath.Goal": {
       "assembly": "GameCode",
@@ -6140,7 +7857,239 @@
       "status": "Resolved",
       "typeKey": "GameCode|SceneUtil"
     },
-    "GameCode|UgcBuiltInAssetMap": {
+    "GameCode|SentryRuntimeConfiguration": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "SentryRuntimeOptionsConfiguration",
+        "ScriptableObject",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [],
+      "fullName": "SentryRuntimeConfiguration",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "Configure",
+          "parameters": [
+            "Sentry.Unity.SentryUnityOptions"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "InitializeSentryListeners",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "OnSessionStarted",
+          "parameters": [
+            "System.Guid"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "OnTokenInitialized",
+          "parameters": [
+            "RoboToken"
+          ],
+          "returnType": "System.Void"
+        }
+      ],
+      "properties": [],
+      "simpleName": "SentryRuntimeConfiguration",
+      "status": "Resolved",
+      "typeKey": "GameCode|SentryRuntimeConfiguration"
+    },
+    "GameCode|SettingsScreen": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "MonoBehaviour",
+        "Behaviour",
+        "Component",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "KEY_FPS_VISIBLE",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "KEY_QUALITY_LEVEL",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "PlayerReflectionProbesToggle",
+          "type": "UnityEngine.UI.Toggle"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "QualityLevelDropdown",
+          "type": "TMPro.TMP_Dropdown"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "_currentFullScreenMode",
+          "type": "UnityEngine.FullScreenMode"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "_resolutions",
+          "type": "UnityEngine.Resolution[]"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "fpsToggle",
+          "type": "UnityEngine.UI.Toggle"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "fullscreenModeDropdown",
+          "type": "TMPro.TMP_Dropdown"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "resolutionDropdown",
+          "type": "TMPro.TMP_Dropdown"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "systemInfoText",
+          "type": "TMPro.TextMeshProUGUI"
+        }
+      ],
+      "fullName": "SettingsScreen",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "InitFullscreenModes",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "InitQualityLevels",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "InitResolutions",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnFpsToggleValueChanged",
+          "parameters": [
+            "System.Boolean"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnFullscreenModeChanged",
+          "parameters": [
+            "System.Int32"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnPlayerReflectionProbesToggleChanged",
+          "parameters": [
+            "System.Boolean"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnQualityLevelChanged",
+          "parameters": [
+            "System.Int32"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnResolutionChanged",
+          "parameters": [
+            "System.Int32"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "SetNumberOfPlayerReflectionProbes",
+          "parameters": [
+            "System.Int32"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "Start",
+          "parameters": [],
+          "returnType": "System.Void"
+        }
+      ],
+      "properties": [],
+      "simpleName": "SettingsScreen",
+      "status": "Resolved",
+      "typeKey": "GameCode|SettingsScreen"
+    },
+    "GameCode|UgcEnvironmentPrefabMap": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [
         "ScriptableObject",
@@ -6158,46 +8107,33 @@
         {
           "isPublic": false,
           "isStatic": false,
-          "name": "defaultPersonality",
-          "type": "PersonalityAsset"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
           "name": "entries",
-          "type": "UgcBuiltInAssetMap+Entry[]"
+          "type": "UgcEnvironmentPrefabMap+Entry[]"
         },
         {
           "isPublic": false,
           "isStatic": false,
-          "name": "fallbackMaterial",
-          "type": "UnityEngine.Material"
+          "name": "index",
+          "type": "System.Collections.Generic.Dictionary<System.String, UnityEngine.GameObject>"
         },
         {
           "isPublic": false,
           "isStatic": false,
           "name": "runtimeOverrides",
-          "type": "System.Collections.Generic.Dictionary<System.String, UgcBuiltInAssetMap+RuntimeOverride>"
+          "type": "System.Collections.Generic.Dictionary<System.String, UnityEngine.GameObject>"
         }
       ],
-      "fullName": "UgcBuiltInAssetMap",
+      "fullName": "UgcEnvironmentPrefabMap",
       "isAbstract": false,
       "isEnum": false,
       "isInterface": false,
       "methods": [
         {
-          "isPublic": true,
+          "isPublic": false,
           "isStatic": false,
-          "name": "ClearRuntimeOverrides",
+          "name": "BuildIndex",
           "parameters": [],
-          "returnType": "System.Void"
-        },
-        {
-          "isPublic": true,
-          "isStatic": false,
-          "name": "GetCompatibilityOnlyAssetIds",
-          "parameters": [],
-          "returnType": "System.Collections.Generic.IEnumerable<System.String>"
+          "returnType": "System.Collections.Generic.Dictionary<System.String, UnityEngine.GameObject>"
         },
         {
           "isPublic": true,
@@ -6205,8 +8141,7 @@
           "name": "SetRuntimeOverride",
           "parameters": [
             "System.String",
-            "UnityEngine.GameObject",
-            "System.Nullable<UnityEngine.Vector3>"
+            "UnityEngine.GameObject"
           ],
           "returnType": "System.Void"
         },
@@ -6219,36 +8154,48 @@
             "UnityEngine.GameObject&"
           ],
           "returnType": "System.Boolean"
+        }
+      ],
+      "properties": [],
+      "simpleName": "UgcEnvironmentPrefabMap",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcEnvironmentPrefabMap"
+    },
+    "GameCode|UgcEnvironmentPrefabMap+Entry": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "prefab",
+          "type": "UnityEngine.GameObject"
         },
         {
           "isPublic": true,
           "isStatic": false,
-          "name": "TryResolve",
-          "parameters": [
-            "System.String",
-            "UnityEngine.GameObject&",
-            "UnityEngine.Vector3&"
-          ],
-          "returnType": "System.Boolean"
+          "name": "presetKey",
+          "type": "System.String"
         }
       ],
-      "properties": [
-        {
-          "canRead": true,
-          "canWrite": false,
-          "name": "DefaultPersonality",
-          "type": "PersonalityAsset"
-        },
-        {
-          "canRead": true,
-          "canWrite": false,
-          "name": "FallbackMaterial",
-          "type": "UnityEngine.Material"
-        }
-      ],
-      "simpleName": "UgcBuiltInAssetMap",
+      "fullName": "UgcEnvironmentPrefabMap+Entry",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [],
+      "properties": [],
+      "simpleName": "Entry",
       "status": "Resolved",
-      "typeKey": "GameCode|UgcBuiltInAssetMap"
+      "typeKey": "GameCode|UgcEnvironmentPrefabMap+Entry"
     },
     "GameCode|UgcExportLoader": {
       "assembly": "GameCode",
@@ -6625,12 +8572,6 @@
         {
           "isPublic": false,
           "isStatic": false,
-          "name": "builtInAssetMap",
-          "type": "UgcBuiltInAssetMap"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
           "name": "config",
           "type": "UgcImportHostConfig"
         },
@@ -6663,6 +8604,12 @@
           "isStatic": false,
           "name": "refreshFileListOnEnable",
           "type": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "runtimeAssetConfig",
+          "type": "UgcRuntimeAssetConfig"
         },
         {
           "isPublic": false,
@@ -6806,12 +8753,6 @@
         {
           "canRead": true,
           "canWrite": false,
-          "name": "BuiltInAssetMap",
-          "type": "UgcBuiltInAssetMap"
-        },
-        {
-          "canRead": true,
-          "canWrite": false,
           "name": "DiscoveredFiles",
           "type": "System.Collections.Generic.IReadOnlyList<UgcImportFileRecord>"
         },
@@ -6838,6 +8779,12 @@
           "canWrite": true,
           "name": "LastImportedScene",
           "type": "UgcExportScene"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "RuntimeAssetConfig",
+          "type": "UgcRuntimeAssetConfig"
         },
         {
           "canRead": true,
@@ -6888,14 +8835,68 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "editorSessionId",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "importMode",
           "type": "UgcImportPlayBootstrap+StartupImportMode"
         },
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "initialProject",
+          "type": "UgcExportProject"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "initialScene",
+          "type": "UgcExportScene"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "initialSourceLabel",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "loggedPlayStarted",
+          "type": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "playDocumentUrl",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "playRequestedSceneId",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "playSourceType",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "playerPrefab",
           "type": "UnityEngine.GameObject"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "publishedCloudImportFailed",
+          "type": "System.Boolean"
         },
         {
           "isPublic": false,
@@ -6913,6 +8914,12 @@
           "isPublic": false,
           "isStatic": false,
           "name": "waitingForLiveInitialImport",
+          "type": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "waitingForPublishedCloudImport",
           "type": "System.Boolean"
         }
       ],
@@ -6940,6 +8947,57 @@
         },
         {
           "isPublic": false,
+          "isStatic": false,
+          "name": "CanLogStartup",
+          "parameters": [],
+          "returnType": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "CanSpawnOnStartup",
+          "parameters": [],
+          "returnType": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "CaptureInitialImport",
+          "parameters": [
+            "UgcExportProject",
+            "UgcExportScene",
+            "System.String"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "CaptureInitialImport",
+          "parameters": [
+            "UgcImportHostSceneController"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "CaptureLiveSourceMetadata",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "ConfigurePlayTelemetrySource",
+          "parameters": [
+            "UgcImportPlayBootstrap+StartupImportMode",
+            "UgcPlayLaunchRequest"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
           "isStatic": true,
           "name": "DestroyLaunchRequest",
           "parameters": [
@@ -6951,6 +9009,65 @@
           "isPublic": false,
           "isStatic": false,
           "name": "EnsureRuntimeSpawnPoint",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "ExtractAutomergeDocumentId",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "ExtractUgcId",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "GetSourceUrl",
+          "parameters": [],
+          "returnType": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "GetTelemetryUrl",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "ImportPublishedCloudAsync",
+          "parameters": [
+            "UgcImportHostSceneController",
+            "System.String",
+            "System.Threading.CancellationToken"
+          ],
+          "returnType": "Cysharp.Threading.Tasks.UniTask"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "IsStartupImportComplete",
+          "parameters": [],
+          "returnType": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "LogUgcPlayStartedIfNeeded",
           "parameters": [],
           "returnType": "System.Void"
         },
@@ -6981,6 +9098,15 @@
             "UgcImportHostSceneController"
           ],
           "returnType": "UgcLiveSyncController"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "ResolvePublishedProjectUrl",
+          "parameters": [
+            "UgcPlayLaunchRequest"
+          ],
+          "returnType": "System.String"
         },
         {
           "isPublic": false,
@@ -7196,7 +9322,20 @@
           "returnType": "System.Void"
         }
       ],
-      "properties": [],
+      "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "DocumentUrl",
+          "type": "System.String"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "SceneId",
+          "type": "System.String"
+        }
+      ],
       "simpleName": "UgcLiveSyncController",
       "status": "Resolved",
       "typeKey": "GameCode|UgcLiveSyncController"
@@ -7253,6 +9392,12 @@
           "isStatic": false,
           "name": "<Mode>k__BackingField",
           "type": "UgcPlayLaunchMode"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "<PublishedProjectUrl>k__BackingField",
+          "type": "System.String"
         },
         {
           "isPublic": false,
@@ -7332,6 +9477,12 @@
         {
           "canRead": true,
           "canWrite": true,
+          "name": "PublishedProjectUrl",
+          "type": "System.String"
+        },
+        {
+          "canRead": true,
+          "canWrite": true,
           "name": "SelectedExportFilePath",
           "type": "System.String"
         }
@@ -7386,6 +9537,12 @@
         {
           "isPublic": true,
           "isStatic": false,
+          "name": "PublishedProjectUrl",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
           "name": "SelectedExportFilePath",
           "type": "System.String"
         },
@@ -7431,6 +9588,101 @@
       "simpleName": "UgcPlayLauncherLastRun",
       "status": "Resolved",
       "typeKey": "GameCode|UgcPlayLauncherLastRun"
+    },
+    "GameCode|UgcPrefabAssetMap": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "ScriptableObject",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "entries",
+          "type": "UgcPrefabAssetMap+Entry[]"
+        }
+      ],
+      "fullName": "UgcPrefabAssetMap",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "SetEntries",
+          "parameters": [
+            "UgcPrefabAssetMap+Entry[]"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "TryResolve",
+          "parameters": [
+            "System.String",
+            "UnityEngine.GameObject&",
+            "UnityEngine.Vector3&"
+          ],
+          "returnType": "System.Boolean"
+        }
+      ],
+      "properties": [],
+      "simpleName": "UgcPrefabAssetMap",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcPrefabAssetMap"
+    },
+    "GameCode|UgcPrefabAssetMap+Entry": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "assetUri",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "localPositionOffset",
+          "type": "UnityEngine.Vector3"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "prefab",
+          "type": "UnityEngine.GameObject"
+        }
+      ],
+      "fullName": "UgcPrefabAssetMap+Entry",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [],
+      "properties": [],
+      "simpleName": "Entry",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcPrefabAssetMap+Entry"
     },
     "GameCode|UgcProjectDiffer": {
       "assembly": "GameCode",
@@ -7510,6 +9762,164 @@
       "status": "Resolved",
       "typeKey": "GameCode|UgcProjectDiffer"
     },
+    "GameCode|UgcRuntimeAssetConfig": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "ScriptableObject",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "defaultPersonality",
+          "type": "PersonalityAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "entries",
+          "type": "UgcRuntimeAssetConfig+Entry[]"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "exportedPrefabMap",
+          "type": "UgcPrefabAssetMap"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "fallbackMaterial",
+          "type": "UnityEngine.Material"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "materialMap",
+          "type": "UgcMaterialMap"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "robotPartMap",
+          "type": "UgcRobotPartMap"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "runtimeOverrides",
+          "type": "System.Collections.Generic.Dictionary<System.String, UgcRuntimeAssetConfig+RuntimeOverride>"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "voiceMap",
+          "type": "UgcVoiceMap"
+        }
+      ],
+      "fullName": "UgcRuntimeAssetConfig",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "ClearRuntimeOverrides",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "GetCompatibilityOnlyAssetIds",
+          "parameters": [],
+          "returnType": "System.Collections.Generic.IEnumerable<System.String>"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "SetRuntimeOverride",
+          "parameters": [
+            "System.String",
+            "UnityEngine.GameObject",
+            "System.Nullable<UnityEngine.Vector3>"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "TryGetPrefab",
+          "parameters": [
+            "System.String",
+            "UnityEngine.GameObject&"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "TryResolve",
+          "parameters": [
+            "System.String",
+            "UnityEngine.GameObject&",
+            "UnityEngine.Vector3&"
+          ],
+          "returnType": "System.Boolean"
+        }
+      ],
+      "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "DefaultPersonality",
+          "type": "PersonalityAsset"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "ExportedPrefabMap",
+          "type": "UgcPrefabAssetMap"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "FallbackMaterial",
+          "type": "UnityEngine.Material"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "MaterialMap",
+          "type": "UgcMaterialMap"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "RobotPartMap",
+          "type": "UgcRobotPartMap"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "VoiceMap",
+          "type": "UgcVoiceMap"
+        }
+      ],
+      "simpleName": "UgcRuntimeAssetConfig",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcRuntimeAssetConfig"
+    },
     "GameCode|UgcScenePatcher": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [
@@ -7520,7 +9930,7 @@
           "isPublic": true,
           "parameters": [
             "UgcSceneRoot",
-            "UgcBuiltInAssetMap",
+            "UgcRuntimeAssetConfig",
             "UgcEnvironmentPrefabMap",
             "UnityEngine.MonoBehaviour"
           ]
@@ -7528,12 +9938,6 @@
       ],
       "enumMembers": {},
       "fields": [
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "builtInAssetMap",
-          "type": "UgcBuiltInAssetMap"
-        },
         {
           "isPublic": false,
           "isStatic": false,
@@ -7551,6 +9955,12 @@
           "isStatic": false,
           "name": "logContext",
           "type": "UnityEngine.MonoBehaviour"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "runtimeAssetConfig",
+          "type": "UgcRuntimeAssetConfig"
         },
         {
           "isPublic": false,

@@ -1,0 +1,170 @@
+name: PR policy
+
+on:
+  pull_request:
+    branches:
+      - main
+      - dev
+      - "release/**"
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - edited
+      - ready_for_review
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-policy-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  policy:
+    name: Validate pull request policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate title and branch routing
+        shell: bash
+        env:
+          AUTHOR_LOGIN: ${{ github.event.pull_request.user.login }}
+          BASE_REF: ${{ github.base_ref }}
+          BASE_REPOSITORY: ${{ github.event.pull_request.base.repo.full_name }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          failures=()
+          conventional_title='^[a-z][a-z0-9-]*(\([a-z0-9][a-z0-9._/-]*\))?!?:[[:space:]][^[:space:]].*$'
+          semver='[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?'
+          same_repository=false
+          if [[ "$HEAD_REPOSITORY" == "$BASE_REPOSITORY" ]]; then
+            same_repository=true
+          fi
+
+          if [[ ! $PR_TITLE =~ $conventional_title ]]; then
+            failures+=("PR title must use Conventional Commits, for example 'feat(launcher): add profile import'.")
+          fi
+          if [[ "$AUTHOR_LOGIN" == 'dependabot[bot]' && "$BASE_REF" != dev ]]; then
+            failures+=("Dependabot pull requests may target only dev.")
+          fi
+          if [[ "$same_repository" == false && "$BASE_REF" != dev ]]; then
+            failures+=("Fork and community pull requests may target only dev.")
+          fi
+
+          if [[ "$BASE_REF" == main ]]; then
+            if [[ "$same_repository" == false ]]; then
+              failures+=("main accepts only same-repository release branches.")
+            fi
+            if [[ ! $HEAD_REF =~ ^release/$semver$ ]]; then
+              failures+=("main accepts only release/<semver> pull requests.")
+            fi
+          elif [[ "$BASE_REF" == release/* ]]; then
+            if [[ ! $BASE_REF =~ ^release/$semver$ ]]; then
+              failures+=("Release branches must be named release/<semver>.")
+            fi
+            if [[ "$same_repository" == false ]]; then
+              failures+=("Release stabilization accepts only same-repository branches.")
+            fi
+          elif [[ "$BASE_REF" == dev && "$same_repository" == true ]]; then
+            if [[ "$HEAD_REF" == main || "$HEAD_REF" == release/* ]]; then
+              failures+=("Backflow to dev must use a sync/main-v<semver> branch.")
+            fi
+          fi
+
+          if [[ "$HEAD_REF" == sync/* && ! $HEAD_REF =~ ^sync/main-v$semver$ ]]; then
+            failures+=("Sync branches must be named sync/main-v<semver>.")
+          fi
+          if [[ "$HEAD_REF" == sync/* && "$same_repository" == false ]]; then
+            failures+=("Synchronization branches must belong to the base repository.")
+          fi
+
+          if (( ${#failures[@]} > 0 )); then
+            printf '::error::%s\n' "${failures[@]}"
+            exit 1
+          fi
+
+      - name: Check out the exact policy-sensitive head
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Enforce DCO after the rc.1 cutover
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --force --no-tags origin "$BASE_SHA"
+          git fetch --force origin \
+            refs/tags/v1.0.0-rc.1:refs/tags/v1.0.0-rc.1 2>/dev/null || true
+          if ! git rev-parse --verify refs/tags/v1.0.0-rc.1 >/dev/null 2>&1; then
+            echo 'DCO cutover tag does not exist yet; existing history is grandfathered.'
+            exit 0
+          fi
+          failures=0
+          while IFS= read -r commit; do
+            if ! git show -s --format=%B "$commit" |
+              grep -Eiq '^Signed-off-by:[[:space:]].+<[^<>[:space:]]+@[^<>[:space:]]+>[[:space:]]*$'; then
+              echo "::error::Commit $commit is missing a valid Signed-off-by trailer."
+              failures=1
+            fi
+          done < <(git rev-list --reverse "$BASE_SHA..$HEAD_SHA")
+          exit "$failures"
+
+      - name: Validate release source against the product version
+        if: github.base_ref == 'main'
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          policy_path=release/release-policy.json
+          if ! version=$(jq -er '.versioning.productVersion | select(type == "string")' "$policy_path"); then
+            echo "::error::Cannot read a string productVersion from $policy_path."
+            exit 1
+          fi
+          semver='^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'
+          if [[ ! $version =~ $semver ]]; then
+            echo "::error::Invalid productVersion: $version"
+            exit 1
+          fi
+          expected="release/$version"
+          if [[ "$HEAD_REF" != "$expected" ]]; then
+            echo "::error::main requires exact source $expected; received $HEAD_REF."
+            exit 1
+          fi
+
+      - name: Verify main ancestry on synchronization pull requests
+        if: >-
+          github.base_ref == 'dev' &&
+          startsWith(github.head_ref, 'sync/main-v')
+        shell: bash
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor origin/main "$HEAD_SHA"; then
+            echo "::error::sync/* must contain the current main tip as an ancestor."
+            exit 1
+          fi
+
+  required:
+    name: Required / PR policy
+    if: always()
+    needs: policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Enforce pull request policy
+        shell: bash
+        env:
+          POLICY_RESULT: ${{ needs.policy.result }}
+        run: test "$POLICY_RESULT" = success

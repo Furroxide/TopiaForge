@@ -13,7 +13,7 @@ class DeveloperDoctorReport {
   final String projectRoot;
   final List<String> messages;
 
-  /// Whether a developer project (robotopia.project.json) was found —
+  /// Whether a developer project (topiaforge.project.json) was found —
   /// [projectRoot] alone can't tell, it falls back to the requested path.
   final bool hasProject;
   final String unityHubPath;
@@ -83,18 +83,6 @@ class DeveloperSetupResult {
   final List<LauncherIssue> issues;
 
   bool get ok => environment.developerReady;
-}
-
-class LegacyMigrationResult {
-  const LegacyMigrationResult({
-    required this.outputRoot,
-    required this.createdProjects,
-    required this.issues,
-  });
-
-  final String outputRoot;
-  final List<String> createdProjects;
-  final List<LauncherIssue> issues;
 }
 
 List<PackageSource> _packageSourceList(Object? value) {

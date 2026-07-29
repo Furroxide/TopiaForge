@@ -1,0 +1,376 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:archive/archive.dart';
+import 'package:crypto/crypto.dart';
+import 'package:json_schema/json_schema.dart';
+import 'package:path/path.dart' as p;
+import 'package:topiaforge/src/release_metadata.dart';
+import 'package:topiaforge/src/release_policy.dart';
+import 'package:test/test.dart';
+
+void main() {
+  late Directory temp;
+  late String root;
+  late TopiaForgeReleaseCatalogEntry release;
+  const targetSha = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
+  setUp(() {
+    temp = Directory.systemTemp.createTempSync('topiaforge-metadata-test-');
+    root = _repositoryRoot();
+    release = TopiaForgeReleaseCatalog.load(root).release('1.0.0-rc.1');
+    _writeCandidateAssets(temp, release);
+  });
+
+  tearDown(() {
+    if (temp.existsSync()) temp.deleteSync(recursive: true);
+  });
+
+  test('release catalog schema and parser retain prerelease state', () {
+    final catalogFile = File(p.join(root, 'release', 'catalog.json'));
+    final schemaFile = File(
+      p.join(root, 'schemas', 'topiaforge.release-catalog.schema.json'),
+    );
+    final catalogJson =
+        jsonDecode(catalogFile.readAsStringSync()) as Map<String, Object?>;
+    final schemaJson =
+        jsonDecode(schemaFile.readAsStringSync()) as Map<String, Object?>;
+    final schema = JsonSchema.create(schemaJson);
+    final result = schema.validate(catalogJson);
+
+    expect(result.isValid, isTrue, reason: result.errors.join('\n'));
+    expect(catalogJson['schemaVersion'], 3);
+    expect(release.version, '1.0.0-rc.1');
+    expect(release.tag, 'v1.0.0-rc.1');
+    expect(release.prerelease, isTrue);
+
+    final entryWithoutFlag = Map<String, Object?>.from(
+      (catalogJson['releases'] as List).single as Map,
+    )..remove('prerelease');
+    final invalidCatalog = <String, Object?>{
+      ...catalogJson,
+      'releases': [entryWithoutFlag],
+    };
+    expect(schema.validate(invalidCatalog).isValid, isFalse);
+    expect(
+      () => TopiaForgeReleaseCatalogEntry.fromJson(entryWithoutFlag),
+      throwsStateError,
+    );
+
+    final legacyCatalog = <String, Object?>{...catalogJson, 'schemaVersion': 2};
+    expect(schema.validate(legacyCatalog).isValid, isFalse);
+    final legacyRoot = Directory(p.join(temp.path, 'legacy-catalog-root'));
+    final legacyFile = File(p.join(legacyRoot.path, 'release', 'catalog.json'))
+      ..createSync(recursive: true)
+      ..writeAsStringSync(jsonEncode(legacyCatalog));
+    expect(legacyFile.existsSync(), isTrue);
+    expect(
+      () => TopiaForgeReleaseCatalog.load(legacyRoot.path),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.toString(),
+          'message',
+          contains('schemaVersion 3'),
+        ),
+      ),
+    );
+  });
+
+  test('release policy rejects a mismatched prerelease flag', () async {
+    final mismatched = TopiaForgeReleaseCatalogEntry(
+      version: release.version,
+      tag: release.tag,
+      prerelease: false,
+      status: release.status,
+      notesFile: release.notesFile,
+      components: release.components,
+      vpmPackages: release.vpmPackages,
+      mods: release.mods,
+      excludedDeveloperMods: release.excludedDeveloperMods,
+      artifacts: release.artifacts,
+    );
+    final issues = await const ReleasePolicyValidator().validate(
+      policy: TopiaForgeReleasePolicy.load(root),
+      release: mismatched,
+      allowUnresolvedPolicy: true,
+      verifyArchiveHashes: false,
+    );
+
+    expect(
+      issues,
+      contains('Catalog prerelease false does not match version 1.0.0-rc.1.'),
+    );
+  });
+
+  test(
+    'release metadata is schema-valid, complete, and distributable',
+    () async {
+      final builder = const TopiaForgeReleaseMetadataBuilder();
+      await builder.build(
+        repositoryRoot: root,
+        version: release.version,
+        targetSha: targetSha,
+        assetsDirectory: temp.path,
+        outputDirectory: temp.path,
+        allowUnresolvedPolicy: true,
+      );
+      final bom = _json(File(p.join(temp.path, 'release-bom.json')));
+      final sbom = _json(File(p.join(temp.path, 'release-sbom.spdx.json')));
+
+      expect(bom['distributable'], isTrue);
+      expect((bom['blockingReasons'] as List), isEmpty);
+      expect(((bom['codeSigning'] as Map)['platforms'] as Map)['windows-x64'], {
+        'status': 'unsigned',
+        'exceptionApplied': true,
+      });
+      expect(
+        (bom['expectedArtifactSet'] as List).toSet(),
+        release.artifacts.toSet(),
+      );
+      expect(
+        ((bom['ecosystem'] as Map)['platformCopies'] as List),
+        hasLength(3),
+      );
+      expect(
+        (bom['provenance'] as Map).keys,
+        containsAll(['unity', 'bepInEx']),
+      );
+      expect((bom['legalInventory'] as List), isNotEmpty);
+      expect(sbom['spdxVersion'], 'SPDX-2.3');
+      await builder.verify(
+        repositoryRoot: root,
+        version: release.version,
+        targetSha: targetSha,
+        assetsDirectory: temp.path,
+        metadataDirectory: temp.path,
+        allowUnresolvedPolicy: true,
+      );
+    },
+  );
+
+  test(
+    'nested payload, provenance, and legal inventory tampering fails',
+    () async {
+      final builder = const TopiaForgeReleaseMetadataBuilder();
+      await builder.build(
+        repositoryRoot: root,
+        version: release.version,
+        targetSha: targetSha,
+        assetsDirectory: temp.path,
+        outputDirectory: temp.path,
+        allowUnresolvedPolicy: true,
+      );
+
+      final bomFile = File(p.join(temp.path, 'release-bom.json'));
+      for (final section in const ['provenance', 'legalInventory']) {
+        final bom = _json(bomFile);
+        if (section == 'provenance') {
+          ((bom[section] as Map)['unity'] as Map)['bundleSha256'] = List.filled(
+            64,
+            '0',
+          ).join();
+        } else {
+          ((bom[section] as List).first as Map)['sha256'] = List.filled(
+            64,
+            '0',
+          ).join();
+        }
+        _writeJson(bomFile, bom);
+        _refreshChecksum(temp, 'release-bom.json');
+        await expectLater(
+          builder.verify(
+            repositoryRoot: root,
+            version: release.version,
+            targetSha: targetSha,
+            assetsDirectory: temp.path,
+            metadataDirectory: temp.path,
+            allowUnresolvedPolicy: true,
+          ),
+          throwsStateError,
+        );
+        await builder.build(
+          repositoryRoot: root,
+          version: release.version,
+          targetSha: targetSha,
+          assetsDirectory: temp.path,
+          outputDirectory: temp.path,
+          allowUnresolvedPolicy: true,
+        );
+      }
+
+      _writePlatformArchive(
+        File(p.join(temp.path, 'TopiaForge-linux-x64.zip')),
+        release,
+        prefix: 'TopiaForge/',
+        changedPath: 'dist/vpm/index.json',
+      );
+      _refreshChecksum(temp, 'TopiaForge-linux-x64.zip');
+      await expectLater(
+        builder.verify(
+          repositoryRoot: root,
+          version: release.version,
+          targetSha: targetSha,
+          assetsDirectory: temp.path,
+          metadataDirectory: temp.path,
+          allowUnresolvedPolicy: true,
+        ),
+        throwsStateError,
+      );
+    },
+  );
+
+  test('V1 safe contract assembly identity survives patch releases', () async {
+    final next = TopiaForgeReleaseCatalogEntry(
+      version: release.version,
+      tag: release.tag,
+      prerelease: release.prerelease,
+      status: release.status,
+      notesFile: release.notesFile,
+      components: {...release.components, 'sdk': '1.0.1', 'unityUi': '1.0.1'},
+      vpmPackages: release.vpmPackages,
+      mods: release.mods,
+      excludedDeveloperMods: release.excludedDeveloperMods,
+      artifacts: release.artifacts,
+    );
+    final issues = await const ReleasePolicyValidator().validate(
+      policy: TopiaForgeReleasePolicy.load(root),
+      release: next,
+      allowUnresolvedPolicy: true,
+      verifyArchiveHashes: false,
+    );
+
+    const abstractions =
+        'src/TopiaForge.Mods.Abstractions/TopiaForge.Mods.Abstractions.csproj';
+    const interop =
+        'src/TopiaForge.Mods.Interop.Unity/TopiaForge.Mods.Interop.Unity.csproj';
+    const unityUi =
+        'src/TopiaForge.Mods.UnityUi/TopiaForge.Mods.UnityUi.csproj';
+    bool hasAssemblyIssue(String project) => issues.any(
+      (issue) =>
+          issue.startsWith('$project AssemblyVersion ') &&
+          issue.contains('does not match'),
+    );
+
+    expect(
+      issues,
+      contains('$abstractions Version 1.0.0-rc.1 does not match 1.0.1.'),
+    );
+    expect(hasAssemblyIssue(abstractions), isFalse);
+    expect(hasAssemblyIssue(unityUi), isFalse);
+    expect(
+      hasAssemblyIssue(interop),
+      isTrue,
+      reason: 'the explicitly unstable interop package is not V1-frozen',
+    );
+  });
+}
+
+void _writeCandidateAssets(
+  Directory output,
+  TopiaForgeReleaseCatalogEntry release,
+) {
+  for (final entry in release.mods.entries) {
+    File(p.join(output.path, '${entry.key}-${entry.value}.topiaforgemod'))
+      ..parent.createSync(recursive: true)
+      ..writeAsStringSync('package:${entry.key}:${entry.value}\n');
+  }
+  _writePlatformArchive(
+    File(p.join(output.path, 'TopiaForge-linux-x64.zip')),
+    release,
+    prefix: 'TopiaForge/',
+  );
+  _writePlatformArchive(
+    File(p.join(output.path, 'TopiaForge-windows-x64.zip')),
+    release,
+    prefix: 'TopiaForge/',
+  );
+  _writePlatformArchive(
+    File(p.join(output.path, 'TopiaForge-macos-universal.zip')),
+    release,
+    prefix: 'TopiaForge.app/Contents/Resources/TopiaForge/',
+  );
+  File(
+    p.join(output.path, 'topiaforge-update-v1.json'),
+  ).writeAsStringSync('{"fixture":true}\n');
+  File(
+    p.join(output.path, 'topiaforge-update-v1.json.sig'),
+  ).writeAsStringSync('{"fixture":true}\n');
+  _writeJson(
+    File(
+      p.join(
+        output.path,
+        TopiaForgeReleaseMetadataBuilder.trustEvidenceFileName,
+      ),
+    ),
+    {
+      'windows-x64': {'status': 'unsigned', 'exceptionApplied': true},
+      'linux-x64': {'status': 'not-applicable', 'exceptionApplied': false},
+      'macos-universal': {'status': 'ad-hoc', 'exceptionApplied': true},
+    },
+  );
+}
+
+void _writePlatformArchive(
+  File file,
+  TopiaForgeReleaseCatalogEntry release, {
+  required String prefix,
+  String? changedPath,
+}) {
+  final archive = Archive();
+  for (final entry in release.mods.entries) {
+    final relative = 'dist/${entry.key}-${entry.value}.topiaforgemod';
+    final bytes = File(
+      p.join(file.parent.path, p.basename(relative)),
+    ).readAsBytesSync();
+    archive.addFile(ArchiveFile.bytes('$prefix$relative', bytes));
+  }
+  final indexBytes = utf8.encode(
+    changedPath == 'dist/vpm/index.json'
+        ? '{"changed":true}\n'
+        : '{"packages":{}}\n',
+  );
+  archive.addFile(
+    ArchiveFile.bytes('${prefix}dist/vpm/index.json', indexBytes),
+  );
+  for (final entry in release.vpmPackages.entries) {
+    final relative = 'dist/vpm/${entry.key}-${entry.value}.zip';
+    archive.addFile(
+      ArchiveFile.string(
+        '$prefix$relative',
+        changedPath == relative
+            ? 'changed\n'
+            : 'vpm:${entry.key}:${entry.value}\n',
+      ),
+    );
+  }
+  file.writeAsBytesSync(ZipEncoder().encode(archive));
+}
+
+void _refreshChecksum(Directory directory, String name) {
+  final sums = File(p.join(directory.path, 'SHA256SUMS'));
+  final file = File(p.join(directory.path, name));
+  final hash = sha256.convert(file.readAsBytesSync()).toString();
+  final lines = sums.readAsLinesSync();
+  final replacement = '$hash  $name';
+  sums.writeAsStringSync(
+    '${lines.map((line) => line.endsWith('  $name') ? replacement : line).join('\n')}\n',
+  );
+}
+
+Map<String, Object?> _json(File file) =>
+    (jsonDecode(file.readAsStringSync()) as Map).cast<String, Object?>();
+
+void _writeJson(File file, Object value) => file.writeAsStringSync(
+  '${const JsonEncoder.withIndent('  ').convert(value)}\n',
+);
+
+String _repositoryRoot() {
+  var directory = Directory.current.absolute;
+  while (!File(p.join(directory.path, 'TopiaForge.slnx')).existsSync()) {
+    if (directory.parent.path == directory.path) {
+      throw StateError('Repository root not found.');
+    }
+    directory = directory.parent;
+  }
+  return directory.path;
+}

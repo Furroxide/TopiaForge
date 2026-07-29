@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Offline game-surface extractor. Uses System.Reflection.MetadataLoadContext to read GameCode.dll (and the
+       other Managed-dir assemblies the mods reach into) as METADATA ONLY — no Unity runtime, no code execution —
+       so it runs on a plain net10.0 machine. It turns the real installed DLLs into a SurfaceSnapshot that the
+       Unity-free Surface library then diffs. This project is a dev/CI tool; it is never shipped inside a mod. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>TopiaForge.GameCompat.Extractor</AssemblyName>
+    <RootNamespace>TopiaForge.GameCompat.Extractor</RootNamespace>
+    <Version>1.1.0-rc.1</Version>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <FileVersion>1.1.0.0</FileVersion>
+    <InformationalVersion>1.1.0-rc.1</InformationalVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Reflection.MetadataLoadContext" Version="10.0.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TopiaForge.GameCompat.Surface\TopiaForge.GameCompat.Surface.csproj" />
+    <ProjectReference Include="..\TopiaForge.ModManager.Core\TopiaForge.ModManager.Core.csproj" />
+  </ItemGroup>
+
+</Project>

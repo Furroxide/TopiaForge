@@ -1,70 +1,100 @@
-# Mod Packaging
+---
+title: Mod package format
+description: Understand .topiaforgemod layout, validation, receipts, and installation.
+---
 
-A `.robotopiamod` is a plain zip. This page is the exact anatomy: what `robotopia pack` puts in it, how
-integrity is tracked, and how packages land inside the game.
+# Mod package format
 
-## Filename
+A `.topiaforgemod` is a bounded zip archive with one schema-V5 `topiaforge.mod.json` at its root.
+Its canonical filename is `<normalized-id>-<semver>.topiaforgemod`; the manifest identity and version
+must match the containing install directory.
 
-`<id>-<version>.robotopiamod` — both tokens sanitized (any character outside `A-Za-z0-9_.-` becomes `_`).
+## Pack a project
 
-## What `pack` includes
-
-For a buildable mod (a `.csproj` in the project root), `robotopia pack` runs `dotnet build -c Release`
-(override with `--configuration`) and stages:
-
-| In the zip | Comes from |
-|---|---|
-| `robotopia.mod.json` (zip root) | the project manifest |
-| `*.dll` + `*.pdb` (zip root) | the build output (first target-framework dir under `bin/<Configuration>/`) — **except** `Robotopia.Mods.Abstractions.*`, which the loader provides |
-| `ref/`, `assets/`, `AssetBundles/`, `Resources/` | copied verbatim (recursive) from the project root, when present |
-| `apiAssemblies` entries | resolved from the project root first, then the build output; a missing entry fails the pack |
-| `bindings/<id>.gamebindings.json` | the repo-root `bindings/` dir, when present (first-party checkouts) — the game-compat manifest travels with the mod |
-
-`pack` requires `name`, `displayName`, `version`, `entryAssembly`, and `entryType` in the manifest, and
-fails if `entryAssembly` is missing from the build output.
-
-**Manifest-only mods** (no `.csproj`): the whole project tree ships, minus `bin/`, `obj/`, `dist/`, and
-`.robotopia/`.
-
-## dist/ is generated output
-
-- A single-project `robotopia pack` writes to `<project>/dist/` (override with `--output`).
-- In a repo checkout, `robotopia pack --all` packs every first-party mod under `mods/` into `<repo>/dist/`,
-  keeping exactly one current package per id (superseded versions are deleted). `DevTool`-category mods are
-  skipped unless `--include-dev-mods` — the same rule release payloads use.
-- Everything under `dist/` is generated — safe to delete at any time.
-
-## sha256 travels outside the package
-
-`pack` does **not** write the manifest's `hashes` field. Package integrity is tracked next to the download
-location instead:
-
-- registry entries pin a `packageSha256` per published version ([RegistryFormat.md](RegistryFormat.md));
-- project dependency installs pin the hash in the lockfile;
-- `robotopia check package <zip>` prints `sha256=<hex> (<size> MB)` for the exact bytes on disk.
-
-Remote installs require the sha256 up front and verify the downloaded bytes; the launcher caps package
-downloads at **512 MB**.
-
-## Zip safety
-
-Package entries must be relative, forward-slash paths. Archives containing absolute paths (`/…`, `C:/…`) or
-`..` segments are rejected at install time (`Package contains an unsafe path`).
-
-## Where packages land in the game
-
-```text
-<game>/BepInEx/RobotopiaModManager/
-├── packages/<id>/<version>/    # installed packages, one directory per version
-├── package-inbox/              # drop .robotopiamod files here — auto-installed at game launch
-├── config/                     # per-mod config JSON
-└── logs/manager.log            # game-side manager log
+```sh
+topiaforge pack
+topiaforge check package dist/example.first-mod-1.0.0.topiaforgemod
 ```
 
-- `BepInEx/plugins/` holds **only the loader DLL** — mod files never go there.
-- **Inbox flow:** any `.robotopiamod` dropped into `package-inbox/` is installed at the next game launch;
-  the highest version per id wins and superseded versions are pruned.
-- **Restart required:** Unity Mono cannot unload loaded assemblies, so enable, disable, update, and
-  uninstall are staged and applied on the next restart (`robotopia restart` in a dev loop).
+For a code mod, `pack` builds Release configuration and stages:
 
-Ready to ship the package to players? See [PublishingYourMod.md](PublishingYourMod.md).
+| Package entry | Source |
+| --- | --- |
+| `topiaforge.mod.json` | Validated manifest plus generated `builtWith` metadata. |
+| `topiaforge.multiplayer.lock.json` | Generated and pack-verified contract descriptor for multiplayer mods. |
+| Entry DLL and symbols | Selected target output. |
+| `apiAssemblies` | Explicit public dependency contracts only. |
+| `assets/`, `AssetBundles/`, `Resources/` | Declared project content when present. |
+| license/provenance files | Manifest-declared package metadata. |
+
+Reference-only TopiaForge SDK assemblies are supplied by the loader and must not be bundled. The
+analyzer and package validator reject copied framework assemblies.
+
+## Validation never executes mod code
+
+Before installation or load, TopiaForge checks:
+
+- bounded, portable archive paths with no traversal, roots, device names, links, or case collisions;
+- schema V5, known capabilities, required compatibility ranges, and bounded dependency graphs;
+- canonical package id, SemVer, directory layout, and supported platform/content constraints;
+- managed PE validity and declared assembly identity;
+- a public parameterless `entryType` deriving from `TopiaForgeMod`;
+- SDK compatibility and absence of bundled framework contracts; and
+- every exported `apiAssemblies` path.
+
+A bad optional provider is reported and skipped without blocking consumers that do not require it.
+Valid installed versions coexist so profiles can switch without reinstalling. An exact profile pin
+fails closed when its package is absent and never deletes another installed version. An unpinned
+profile selects the highest compatible SemVer deterministically and records that recovery decision.
+
+## Integrity receipt
+
+Installation writes `topiaforge.install.json` beside the unpacked payload. The receipt records:
+
+- normalized mod identity and version;
+- source archive filename, SHA-256, and sanitized provenance (`local`, `inbox`, `cache`,
+  registry ID, or remote host) without credentials, query strings, or filesystem paths;
+- install timestamp, validator version, and trust result; and
+- a bounded inventory containing path, byte length, SHA-256, and critical-file classification.
+
+The manifest, entry assembly, and every exported API assembly are critical. Before load, TopiaForge
+compares the receipt with installed bytes. A missing, added, changed, or linked file blocks execution
+and offers reinstall/repair. A receipt proves integrity relative to the installed archive; it is not
+a signature or security sandbox.
+
+## Archive integrity in registries
+
+Registry records and project locks pin the SHA-256 of the exact archive. Published versions are
+immutable: changed bytes require a new SemVer. Remote downloads are size-bounded, use HTTPS, verify
+the declared hash before extraction, and install atomically.
+
+## Install layout
+
+```text
+<Robotopia>/BepInEx/TopiaForge/
+├── packages/<id>/<version>/
+│   ├── topiaforge.mod.json
+│   ├── topiaforge.install.json
+│   └── <package payload>
+├── package-inbox/
+├── config/
+├── state/
+└── logs/
+```
+
+The package inbox safely preflights every bounded, regular archive without executing it. Candidates
+are grouped by normalized ID, then selected deterministically by highest compatible SemVer and
+normalized path. A package that fails archive, manifest, runtime-constraint, managed-metadata, or
+atomic-install validation is reported with a stable `TFINBOX` diagnostic and retained for inspection
+or retry. Successful winners and their valid superseded candidates are consumed only after their
+preflight SHA-256 is reverified; a file changed during processing is retained. Inbox dependency
+groups are retried deterministically so a provider in the same batch can unblock its consumer.
+
+Installing a new version preserves other valid installed versions; replacing the same ID and version
+remains atomic, and explicit uninstall removes the package ID. Loader-owned framework assemblies are
+placed in the host plugin directory; mod payloads remain under versioned package roots.
+
+Enable, disable, update, and uninstall operations may require a Robotopia restart because loaded managed
+assemblies cannot be replaced safely in-process.
+
+Ready to distribute immutable bytes? Continue with [Publish a mod](PublishingYourMod.md).

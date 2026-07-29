@@ -1,9 +1,0 @@
-{
-  "name": "Robotopia.Example.Runtime",
-  "rootNamespace": "Robotopia.Example",
-  "references": [],
-  "includePlatforms": [],
-  "excludePlatforms": [],
-  "allowUnsafeCode": false,
-  "autoReferenced": true
-}

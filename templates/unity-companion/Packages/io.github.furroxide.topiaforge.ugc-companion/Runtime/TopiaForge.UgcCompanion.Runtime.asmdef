@@ -1,0 +1,8 @@
+{
+  "name": "TopiaForge.UgcCompanion.Runtime",
+  "rootNamespace": "TopiaForge.UgcCompanion",
+  "references": [],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "autoReferenced": true
+}

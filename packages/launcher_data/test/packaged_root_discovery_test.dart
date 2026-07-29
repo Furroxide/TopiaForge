@@ -14,10 +14,12 @@ void main() {
   late Directory gameRoot;
 
   setUp(() {
-    root = Directory.systemTemp.createTempSync('robotopia-packaged-root-data-');
+    root = Directory.systemTemp.createTempSync(
+      'topiaforge-packaged-root-data-',
+    );
     dataRoot = Directory(p.join(root.path, 'data'))..createSync();
     repoRoot = Directory(p.join(root.path, 'package'))..createSync();
-    gameRoot = Directory(p.join(root.path, 'Robotopia'))..createSync();
+    gameRoot = Directory(p.join(root.path, 'TopiaForge'))..createSync();
     _createGame(gameRoot);
     // Keep the official remote source disabled: this suite is about packaged
     // dist discovery, so a network fetch would only slow the test and add
@@ -25,9 +27,10 @@ void main() {
     // URL from the discovered root.
     File(p.join(dataRoot.path, 'package_sources.json')).writeAsStringSync(
       jsonEncode({
+        'formatVersion': 2,
         'sources': [
           {
-            'id': 'robotopia.local',
+            'id': 'io.github.furroxide.topiaforge.local',
             'name': 'Bundled Local Packages',
             'url': 'file:///reconciled-at-load-time',
             'enabled': true,
@@ -108,6 +111,27 @@ void main() {
 Directory _createPackagedRoot(Directory repoRoot) {
   Directory(p.join(repoRoot.path, 'tools')).createSync(recursive: true);
   Directory(p.join(repoRoot.path, 'templates')).createSync(recursive: true);
+  final fixture = File(p.join(repoRoot.path, 'fixture', 'Sdk.dll'))
+    ..createSync(recursive: true)
+    ..writeAsStringSync('sdk');
+  final docs = File(p.join(repoRoot.path, 'fixture', 'Sdk.xml'))
+    ..writeAsStringSync('<doc />');
+  final pack = const SdkReferencePackWriter().write(
+    destination: Directory(p.join(repoRoot.path, 'sdk', '1.0.0')),
+    sdkVersion: '1.0.0',
+    dotnetSdkVersion: '10.0.301',
+    references: {'TopiaForge.Mods.Abstractions': fixture},
+    documentation: {'TopiaForge.Mods.Abstractions': docs},
+  );
+  File(p.join(repoRoot.path, 'sdk', 'index.json')).writeAsStringSync(
+    jsonEncode({
+      'schemaVersion': 1,
+      'defaultVersion': '1.0.0',
+      'versions': {
+        '1.0.0': {'manifestSha256': pack.manifestSha256},
+      },
+    }),
+  );
   return Directory(p.join(repoRoot.path, 'dist'))..createSync(recursive: true);
 }
 
@@ -126,11 +150,11 @@ File _createPackage(
   required String id,
   required String version,
 }) {
-  final package = File(p.join(dist.path, '$id-$version.robotopiamod'));
+  final package = File(p.join(dist.path, '$id-$version.topiaforgemod'));
   final archive = Archive()
     ..addFile(
       ArchiveFile.string(
-        'robotopia.mod.json',
+        'topiaforge.mod.json',
         jsonEncode(_manifestJson(id, version)),
       ),
     )
@@ -140,13 +164,16 @@ File _createPackage(
 }
 
 Map<String, Object?> _manifestJson(String id, String version) => {
-  'schemaVersion': 2,
+  'schemaVersion': 5,
   'name': id,
   'displayName': id,
   'version': version,
-  'author': {'name': 'QuantumWorks'},
+  'author': {'name': 'TopiaForge'},
   'entryAssembly': '${_assemblyName(id)}.dll',
   'entryType': '$id.Entry',
+  'supportedGameVersionRange': '0.0.2309',
+  'supportedLoaderVersionRange': '>=1.0.0-rc.1 <2.0.0',
+  'supportedSdkVersionRange': '>=1.0.0-rc.1 <2.0.0',
 };
 
 String _assemblyName(String id) {
@@ -158,10 +185,10 @@ String _assemblyName(String id) {
 }
 
 void _skipWhenRepositoryRootEnvIsSet() {
-  final configured = Platform.environment['ROBOTOPIA_REPOSITORY_ROOT'];
+  final configured = Platform.environment['TOPIAFORGE_REPOSITORY_ROOT'];
   if (configured != null && configured.trim().isNotEmpty) {
     markTestSkipped(
-      'ROBOTOPIA_REPOSITORY_ROOT is set, so default discovery must prefer it.',
+      'TOPIAFORGE_REPOSITORY_ROOT is set, so default discovery must prefer it.',
     );
   }
 }

@@ -9,6 +9,13 @@ import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 part 'launcher_data_test_helpers.dart';
+part 'installed_build_provenance_test_part.dart';
+part 'launcher_data_diagnostics_test_part.dart';
+part 'devtool_installation_test_part.dart';
+part 'launcher_data_ugc_test_part.dart';
+part 'profile_launch_test_part.dart';
+part 'runtime_repair_security_test_part.dart';
+part 'runtime_loader_payload_test_part.dart';
 
 void main() {
   late Directory root;
@@ -18,10 +25,10 @@ void main() {
   late LocalLauncherRepository repository;
 
   setUp(() {
-    root = Directory.systemTemp.createTempSync('robotopia-launcher-data-');
+    root = Directory.systemTemp.createTempSync('topiaforge-launcher-data-');
     dataRoot = Directory(p.join(root.path, 'data'))..createSync();
     repoRoot = Directory(p.join(root.path, 'repo'))..createSync();
-    gameRoot = Directory(p.join(root.path, 'Robotopia'))..createSync();
+    gameRoot = Directory(p.join(root.path, 'TopiaForge'))..createSync();
     _createGame(gameRoot);
     _createRuntimeSources(repoRoot);
     _createRegistry(repoRoot);
@@ -29,6 +36,7 @@ void main() {
       dataRoot: dataRoot.path,
       repositoryRoot: repoRoot.path,
       knownGamePath: gameRoot.path,
+      packageMetadataValidator: _acceptPackageMetadata,
     );
   });
 
@@ -38,13 +46,52 @@ void main() {
     }
   });
 
+  _registerUgcDataTests(
+    repository: () => repository,
+    dataRoot: () => dataRoot,
+    gameRoot: () => gameRoot,
+  );
+  _registerDiagnosticDataTests(
+    repository: () => repository,
+    dataRoot: () => dataRoot,
+    gameRoot: () => gameRoot,
+  );
+  _registerProfileLaunchTests(
+    root: () => root,
+    dataRoot: () => dataRoot,
+    repositoryRoot: () => repoRoot,
+    gameRoot: () => gameRoot,
+  );
+  _registerRuntimeRepairSecurityTests(
+    repository: () => repository,
+    repositoryRoot: () => repoRoot,
+    gameRoot: () => gameRoot,
+  );
+  _registerRuntimeLoaderPayloadTests(
+    repository: () => repository,
+    gameRoot: () => gameRoot,
+  );
+  _registerDevToolInstallationTests(
+    repository: () => repository,
+    root: () => root,
+    gameRoot: () => gameRoot,
+  );
+  _registerInstalledBuildProvenanceTests(
+    repository: () => repository,
+    root: () => root,
+    gameRoot: () => gameRoot,
+  );
+
   test('detects known install and repairs BepInEx plus loader', () async {
     final install = await repository.detectKnownInstall();
     expect(install, isNotNull);
     expect(install!.bepInExStatus, ComponentState.missing);
+    final blockedLog = Directory(p.join(dataRoot.path, 'logs', 'launcher.log'))
+      ..createSync(recursive: true);
 
     final report = await repository.installOrRepairRuntime(install);
     expect(report.ok, isTrue);
+    blockedLog.deleteSync();
 
     final repaired = await repository.selectGameDirectory(gameRoot.path);
     expect(repaired.bepInExStatus, ComponentState.ready);
@@ -59,7 +106,7 @@ void main() {
       expect(install!.needsRepair, isTrue);
 
       Directory(
-        p.join(repoRoot.path, 'src', 'Robotopia.ModManager'),
+        p.join(repoRoot.path, 'src', 'TopiaForge.ModManager'),
       ).deleteSync(recursive: true);
 
       final result = await repository.launch(
@@ -73,7 +120,7 @@ void main() {
         contains('Automatic runtime repair could not complete.'),
       );
       expect(result.message, contains('Built loader DLLs were not found.'));
-      expect(File(p.join(gameRoot.path, 'winhttp.dll')).existsSync(), isTrue);
+      expect(File(p.join(gameRoot.path, 'winhttp.dll')).existsSync(), isFalse);
     },
   );
 
@@ -87,8 +134,8 @@ void main() {
         gameRoot.path,
         'BepInEx',
         'plugins',
-        'RobotopiaModManager',
-        'Robotopia.Mods.Abstractions.dll',
+        'TopiaForge.ModManager',
+        'TopiaForge.Mods.Abstractions.dll',
       ),
     ).writeAsStringSync('old abstraction dll');
 
@@ -109,14 +156,15 @@ void main() {
           gameRoot.path,
           'BepInEx',
           'plugins',
-          'RobotopiaModManager',
-          'Robotopia.Mods.UnityUi.dll',
+          'TopiaForge.ModManager',
+          'TopiaForge.Mods.UnityUi.dll',
         ),
       );
       expect(
         unityUi.existsSync(),
         isTrue,
-        reason: 'runtime repair must deploy the QwUi kit beside the loader',
+        reason:
+            'runtime repair must deploy the TopiaForge Unity UI kit beside the loader',
       );
 
       // The manager plugin hard-depends on the kit, so losing it alone must drop
@@ -180,14 +228,56 @@ void main() {
     expect(mods.single.restartRequired, isTrue);
   });
 
+  test('re-enables disabled dependencies for dependent installs', () async {
+    final install = await repository.selectGameDirectory(gameRoot.path);
+    final dependencyPackage = _createPackage(
+      root,
+      id: 'dependency.mod',
+      version: '1.0.0',
+    );
+
+    await repository.installPackage(dependencyPackage.path, install);
+    var mods = await repository.setModEnabled(install, 'dependency.mod', false);
+    expect(mods.single.enabled, isFalse);
+
+    final rootPackage = _createPackage(
+      root,
+      id: 'main.mod',
+      version: '1.0.0',
+      dependencies: [
+        {'id': 'dependency.mod', 'versionRange': '>=1.0.0'},
+      ],
+    );
+
+    final plan = await repository.previewPackage(rootPackage.path, install);
+    expect(plan.hasBlockingIssues, isFalse);
+    expect(plan.installActions.map((action) => action.modId), [
+      'dependency.mod',
+      'main.mod',
+    ]);
+    expect(plan.installActions.first.enableOnly, isTrue);
+
+    mods = await repository.installPackage(rootPackage.path, install);
+    final byId = {for (final mod in mods) mod.id: mod};
+    expect(byId['dependency.mod']!.enabled, isTrue);
+    expect(byId['main.mod']!.enabled, isTrue);
+
+    final resolution = const DependencyPlanner().resolveInstalled(mods);
+    expect(resolution.hasBlockingIssues, isFalse);
+    expect(resolution.orderedMods.map((mod) => mod.id), [
+      'dependency.mod',
+      'main.mod',
+    ]);
+  });
+
   test('rejects zip traversal during preview', () async {
     final install = await repository.selectGameDirectory(gameRoot.path);
-    final package = File(p.join(root.path, 'traversal.robotopiamod'));
+    final package = File(p.join(root.path, 'traversal.topiaforgemod'));
     final archive = Archive()
       ..addFile(ArchiveFile.string('../escape.txt', 'nope'))
       ..addFile(
         ArchiveFile.string(
-          'robotopia.mod.json',
+          'topiaforge.mod.json',
           jsonEncode(_manifestJson('bad.mod', '1.0.0')),
         ),
       )
@@ -200,27 +290,6 @@ void main() {
     );
   });
 
-  test('parses registry and detects legacy RoboPatch-style mods', () async {
-    final legacyRoot = Directory(p.join(gameRoot.path, 'Mods'))..createSync();
-    File(p.join(legacyRoot.path, 'LegacyPrompt.dll')).writeAsStringSync('dll');
-    final manifestLegacy = Directory(p.join(legacyRoot.path, 'ManifestLegacy'))
-      ..createSync();
-    File(
-      p.join(manifestLegacy.path, 'robotopia.mod.json'),
-    ).writeAsStringSync(jsonEncode(_manifestJson('manifest.legacy', '1.0.0')));
-
-    final snapshot = await repository.loadSnapshot();
-
-    expect(snapshot.registryMods.single.manifest.id, 'registry.sample');
-    expect(snapshot.legacyMods.map((mod) => mod.id), contains('LegacyPrompt'));
-    expect(
-      snapshot.legacyMods
-          .singleWhere((mod) => mod.id == 'manifest.legacy')
-          .canMigrate,
-      isTrue,
-    );
-  });
-
   test('derives the catalog from dist packages, keeping latest per id', () async {
     final dist = Directory(p.join(repoRoot.path, 'dist'));
     // A newer build of the same mod supersedes the fixture's 1.0.0 in the listing.
@@ -228,7 +297,7 @@ void main() {
     _writeDistPackage(dist, id: 'other.mod', version: '0.3.0');
     // A malformed file must be skipped, not break the whole catalog.
     File(
-      p.join(dist.path, 'broken.robotopiamod'),
+      p.join(dist.path, 'broken.topiaforgemod'),
     ).writeAsStringSync('not a zip');
 
     final snapshot = await repository.loadSnapshot();
@@ -370,3 +439,5 @@ void main() {
     expect(snapshot.launcherUpdates.channel, LauncherUpdateChannel.nightly);
   });
 }
+
+Future<List<String>> _acceptPackageMetadata(Directory _) async => const [];

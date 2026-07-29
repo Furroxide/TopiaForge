@@ -1,33 +1,22 @@
-using Robotopia.Mods;
+using System;
+using TopiaForge.Mods;
 
 namespace {{ASSEMBLY_NAME}}
 {
-    /// <summary>
-    /// Publishes I{{TYPE_NAME}}Service to the shared service registry on load and withdraws it on unload, so
-    /// other mods can resolve it with context.GetService&lt;I{{TYPE_NAME}}Service&gt;().
-    /// </summary>
-    public sealed class {{TYPE_NAME}}Mod : IRobotopiaMod
+    /// <summary>Publishes a dependency-scoped singleton extension for the current mod lifetime.</summary>
+    public sealed class {{TYPE_NAME}}Mod : TopiaForgeMod
     {
-        private IModContext? context;
-        private {{TYPE_NAME}}Service? service;
-
-        public void OnLoad(IModContext context)
+        protected override void OnLoad()
         {
-            this.context = context;
-            service = new {{TYPE_NAME}}Service(context.Logger);
-            context.GetService<IModServiceRegistry>()?.Register<I{{TYPE_NAME}}Service>(context.ModId, service);
-            context.Logger.Info("{{DISPLAY_NAME}} loaded; I{{TYPE_NAME}}Service registered.");
-        }
-
-        public void OnUnload()
-        {
-            if (context != null)
+            var registration = Context.Extensions.Register<I{{TYPE_NAME}}Service>(
+                new {{TYPE_NAME}}Service(Context.Logger));
+            if (!registration.Succeeded)
             {
-                context.GetService<IModServiceRegistry>()?.UnregisterOwner(context.ModId);
+                throw new InvalidOperationException(
+                    "Could not publish I{{TYPE_NAME}}Service: " + registration.ErrorMessage);
             }
 
-            service = null;
-            context = null;
+            Context.Logger.Info("{{DISPLAY_NAME}} loaded; I{{TYPE_NAME}}Service registered.");
         }
     }
 }

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 4,
+  "name": "fixtures.v4-retired",
+  "displayName": "Retired V4 Fixture",
+  "version": "1.0.0",
+  "author": { "name": "TopiaForge Tests" },
+  "entryAssembly": "Fixture.dll",
+  "entryType": "Fixtures.InvalidMod",
+  "supportedGameVersionRange": "*",
+  "supportedLoaderVersionRange": "*",
+  "supportedSdkVersionRange": "*"
+}

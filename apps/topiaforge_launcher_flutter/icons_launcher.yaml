@@ -1,0 +1,7 @@
+icons_launcher:
+  image_path: assets/brand/topiaforge-app-icon.png
+  platforms:
+    macos:
+      enable: true
+    windows:
+      enable: true

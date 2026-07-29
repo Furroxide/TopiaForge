@@ -3,25 +3,41 @@ src/**/[Bb]in/
 src/**/[Oo]bj/
 mods/**/[Bb]in/
 mods/**/[Oo]bj/
+samples/**/[Bb]in/
+samples/**/[Oo]bj/
 tests/**/[Bb]in/
 tests/**/[Oo]bj/
 templates/**/[Bb]in/
 templates/**/[Oo]bj/
+/tools/TopiaForge.ManagedRefs/[Bb]in/
+/tools/TopiaForge.ManagedRefs/[Oo]bj/
 
 # Dart and Flutter generated output
 **/.dart_tool/
 **/.flutter-plugins
 **/.flutter-plugins-dependencies
+/.fvm/
 apps/**/[Bb]uild/
 packages/**/[Bb]uild/
 /build/
 
+# JavaScript and repository-local tool state
+**/node_modules/
+/.tools/
+/website/.astro/
+/website/dist/
+/website/obj/
+/website/src/content/docs/
+/website/public/source/
+
 # Generated distributables and local package caches
 /dist/
 /out/
-/.robotopia/packages/
-/.robotopia/cache/
-robotopia.dev.props
+/release-artifacts/
+/.topiaforge/packages/
+/.topiaforge/cache/
+topiaforge.dev.props
+/Directory.Build.local.props
 
 # Local game/runtime installs. The bundled third-party runtime under
 # third_party/BepInEx is source-controlled and protected by .gitattributes.
@@ -30,6 +46,7 @@ robotopia.dev.props
 # IDE and user-local state
 .vs/
 .idea/
+.DS_Store
 *.iml
 *.user
 *.suo
@@ -49,3 +66,6 @@ robotopia.dev.props
 
 # CI pack-smoke scratch (release.yml scaffolds here)
 .pack-smoke/
+
+# FVM Version Cache
+.fvm/

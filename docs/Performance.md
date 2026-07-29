@@ -1,14 +1,14 @@
-# Robotopia Performance mod
+# TopiaForge Performance mod
 
-`robotopia.performance` is a runtime, **fully-reversible** performance mod for Robotopia (Unity 6 / HDRP).
+`io.github.furroxide.topiaforge.performance` is a runtime, **fully-reversible** performance mod for Robotopia (Unity 6 / HDRP).
 It exposes a small set of presets plus fine-grained per-effect overrides, and reverts everything it
-touched when it unloads. Nothing is baked into game assets — every lever is applied at runtime via an
+touched when it unloads. Nothing is baked into Robotopia assets — every lever is applied at runtime via an
 injected HDRP override Volume, reflection on the active render-pipeline asset, plain
 `QualitySettings`/`Application`/`Time`/`Physics` calls, or guarded Harmony patches.
 
 ## Presets (`performance_mode`)
 
-Set `performance_mode` in `config/robotopia.performance.json` (created on first launch). A preset rewrites
+Set `performance_mode` in `config/topiaforge.performance.json` (created on first launch). A preset rewrites
 the individual lever fields below unless you set `override_manual: true`.
 
 | Mode | What it does | Fidelity cost |
@@ -30,7 +30,7 @@ their "leave" sentinel (`-1`, `0`, or `false`) are not touched.
 ### Safe levers (on in `balanced`)
 | Field | Default | Effect |
 |-------|---------|--------|
-| `motion_blur_off` | `true` | Force motion blur off (the game ships it on). |
+| `motion_blur_off` | `true` | Force motion blur off (Robotopia ships it on). |
 | `depth_of_field_off` | `true` | Force depth-of-field off (overrides the per-frame DoF write during dialogue). |
 | `vignette_off` | `false` | Force vignette off (cosmetic). |
 | `vsync_count` | `1` | VSync interval. `-1` leaves the engine default. |
@@ -41,7 +41,7 @@ their "leave" sentinel (`-1`, `0`, or `false`) are not touched.
 ### Aggressive levers (on in `performance` / `potato`)
 | Field | Effect |
 |-------|--------|
-| `force_quality_level_1` | Force the game's low quality level regardless of detected GPU. |
+| `force_quality_level_1` | Force Robotopia's low quality level regardless of detected GPU. |
 | `dynamic_resolution_enabled` / `dynamic_resolution_percent` | HDRP dynamic resolution + STP upscale (50–100%). |
 | `reflection_probe_pool` | Player reflection-probe pool size. `0` kills them; `-1` leaves it. |
 | `ssr_off` / `ssgi_off` / `ssao_off` / `volumetric_fog_off` / `fog_off` / `contact_shadows_off` / `volumetric_clouds_off` / `lens_flare_off` | Disable that effect via the override Volume. |
@@ -68,17 +68,18 @@ their "leave" sentinel (`-1`, `0`, or `false`) are not touched.
 ## How it stays reversible
 Each applier captures the original value of everything it touches before changing it, and restores it on
 unload. The injected Volume's `GameObject` and `VolumeProfile`/component `ScriptableObject`s are destroyed
-explicitly (Unity does not GC them). Harmony patches are removed with `UnpatchSelf()`. Game interaction
-goes through clean-room reflection (`AccessTools` / `Type.GetType("…, GameCode")`), so a future game
+explicitly (Unity does not GC them). Harmony patches are owned by a lifetime-tracked interop lease and removed
+as a group during unload or partial-load cleanup. Robotopia interaction goes through clean-room reflection
+(`AccessTools` / `Type.GetType("…, GameCode")`), so a future Robotopia
 update that renames a member downgrades a single lever to an inert, logged no-op instead of breaking the
 mod.
 
 ## Build & install
 ```
-dotnet build mods/Robotopia.Performance/Robotopia.Performance.csproj -c Release
+dotnet build mods/TopiaForge.Performance/TopiaForge.Performance.csproj -c Release
 ```
-`robotopia dev-install` packs every `mods/*` with a `robotopia.mod.json` into the game's
-`package-inbox`; launch the game once and install from the F10 overlay (or the main-menu Mod Manager
+`topiaforge dev-install` packs every `mods/*` with a `topiaforge.mod.json` into Robotopia's
+`package-inbox`; launch Robotopia once and install from the F10 overlay (or the main-menu Mod Manager
 button) to apply.
 
 ## Caveats
@@ -94,7 +95,7 @@ button) to apply.
   build.** It enables Unity 6's GPU Resident Drawer, which hands plain `MeshRenderer` submission to a
   GPU-driven (DOTS-instancing) path.
   - **The hard prerequisite.** The drawer needs the DOTS-instancing shader variants present in the build.
-    Unity only keeps them when the game is built with *Graphics → Shader Stripping → "BatchRendererGroup
+    Unity only keeps them when Robotopia is built with *Graphics → Shader Stripping → "BatchRendererGroup
     Variants" = "Keep All"*. Robotopia shipped with the drawer **off** and ships **no Entities Graphics**
     package, so under Unity's default (`KeepIfEntitiesGraphics`) those variants were **stripped**. Routing
     meshes through the drawer would then render them **pink/invisible**, and that failure is **silent**
@@ -112,14 +113,14 @@ button) to apply.
     so per-instance-tinted materials could look different. It does not manage `SkinnedMeshRenderer`s, but it
     flips the global `USE_LEGACY_LIGHTMAPS` keyword while active, which can subtly change lightmap appearance
     on all lightmapped geometry (reverted on unload). Fully reversed on unload.
-  - **To make it actually work:** rebuild the game with "BatchRendererGroup Variants = Keep All", then set
+  - **To make it actually work:** rebuild Robotopia with "BatchRendererGroup Variants = Keep All", then set
     `asset_rebuild_allowed`, `gpu_occlusion_culling`, and `gpu_occlusion_allow_unverified` all true.
 
 ## Notes to verify live
 - Dynamic resolution needs the camera flag (`Camera.allowDynamicResolution` +
   `HDAdditionalCameraData.allowDynamicResolution`), which the mod sets on Game cameras every scene/frame.
   Confirm the main camera actually downscales (watch the render-target size) before relying on it.
-- The override Volume runs at priority 1000 (above the game's ~0 and the Worlds mod's 50). If a future
+- The override Volume runs at priority 1000 (above Robotopia's ~0 and the Worlds mod's 50). If a future
   level uses a higher-priority volume, bump it.
 - GPU occlusion culling logs whether it actually engaged a few frames after apply: look for
   `GPU occlusion culling is ACTIVE` (engaged) or `did NOT engage` (unsupported — rendering unchanged).

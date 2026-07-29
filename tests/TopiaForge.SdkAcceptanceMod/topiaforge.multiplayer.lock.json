@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 2,
+  "protocolVersion": "1.0.0",
+  "contracts": [
+    {
+      "id": "dev.topiaforge.sdk-acceptance.loopback",
+      "wireFormatRevision": 1,
+      "schemaSha256": "e1f980d88867b22c2780e3d8556fe56ddf32ae0677941a525d68a156948bd653",
+      "stateIds": [
+        "dev.topiaforge.sdk-acceptance.loopback/loopback-state"
+      ],
+      "commandIds": [
+        "dev.topiaforge.sdk-acceptance.loopback/loopback-probe"
+      ],
+      "objectTypeIds": [],
+      "eventIds": [
+        "dev.topiaforge.sdk-acceptance.loopback/loopback-accepted"
+      ]
+    }
+  ]
+}

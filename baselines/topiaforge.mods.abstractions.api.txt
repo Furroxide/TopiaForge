@@ -1,0 +1,943 @@
+# TopiaForge.Mods.Abstractions public API baseline
+# Format version: 2
+# Regenerate with: dotnet run --project tests/TopiaForge.ModManager.Tests -c Release -- --print-sdk-api-baseline topiaforge.mods.abstractions
+# Review every change. Breaking changes require explicit V1 compatibility approval.
+
+assembly TopiaForge.Mods.Abstractions, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null
+target-framework .NETStandard,Version=v2.1
+
+type public sealed class TopiaForge.Mods.AssetSpawnRequest : System.Object
+  constructor .ctor(TopiaForge.Mods.IPrefabAsset prefab, TopiaForge.Mods.TransformState transform)
+  property TopiaForge.Mods.IPrefabAsset Prefab { get; }
+  property TopiaForge.Mods.TransformState Transform { get; }
+
+type public sealed class TopiaForge.Mods.AudioPlayRequest : System.Object
+  constructor .ctor(System.String cueId, System.Single volume = 1, System.Boolean loop = false, System.Nullable<TopiaForge.Mods.Vec3> position = null)
+  property System.Boolean Loop { get; }
+  property System.Nullable<TopiaForge.Mods.Vec3> Position { get; }
+  property System.Single Volume { get; }
+  property System.String CueId { get; }
+
+type public readonly struct TopiaForge.Mods.Bounds : System.ValueType, System.IEquatable<TopiaForge.Mods.Bounds>
+  constructor .ctor(TopiaForge.Mods.Vec3 center, TopiaForge.Mods.Vec3 size)
+  method System.Boolean Contains(TopiaForge.Mods.Vec3 point)
+  method System.Boolean Intersects(TopiaForge.Mods.Bounds other)
+  method [static] System.Boolean op_Equality(TopiaForge.Mods.Bounds left, TopiaForge.Mods.Bounds right)
+  method [static] System.Boolean op_Inequality(TopiaForge.Mods.Bounds left, TopiaForge.Mods.Bounds right)
+  method [virtual,final,newslot] System.Boolean Equals(TopiaForge.Mods.Bounds other)
+  method [virtual] System.Boolean Equals(System.Object? obj)
+  method [virtual] System.Int32 GetHashCode()
+  property TopiaForge.Mods.Vec3 Center { get; }
+  property TopiaForge.Mods.Vec3 Extents { get; }
+  property TopiaForge.Mods.Vec3 Max { get; }
+  property TopiaForge.Mods.Vec3 Min { get; }
+  property TopiaForge.Mods.Vec3 Size { get; }
+
+type public sealed class TopiaForge.Mods.CapturedDiagnostic : System.Object
+  constructor .ctor(TopiaForge.Mods.DiagnosticEntry entry, System.DateTimeOffset timestamp)
+  property System.DateTimeOffset Timestamp { get; }
+  property TopiaForge.Mods.DiagnosticEntry Entry { get; }
+
+type public sealed class TopiaForge.Mods.CheckpointSnapshot : System.Object
+  constructor .ctor(System.String id, System.String sceneName, TopiaForge.Mods.Vec3 position)
+  property System.String Id { get; }
+  property System.String SceneName { get; }
+  property TopiaForge.Mods.Vec3 Position { get; }
+
+type public sealed class TopiaForge.Mods.CommandDefinition : System.Object
+  constructor .ctor(System.String name, System.String description, System.String usage = "")
+  property System.String Description { get; }
+  property System.String Name { get; }
+  property System.String Usage { get; }
+
+type public sealed class TopiaForge.Mods.CommandInvocation : System.Object
+  constructor .ctor(System.String name, System.Collections.Generic.IReadOnlyList<System.String> arguments)
+  property System.Collections.Generic.IReadOnlyList<System.String> Arguments { get; }
+  property System.String Name { get; }
+
+type public sealed class TopiaForge.Mods.ConfigDefinition<T> : System.Object where T : class
+  constructor .ctor(System.Int32 schemaVersion, System.Func<T> createDefault, System.Func<T, TopiaForge.Mods.OperationResult<System.Boolean>>? validate = null, System.Func<System.Int32, T, TopiaForge.Mods.OperationResult<T>>? migrate = null)
+  property System.Func<System.Int32, T, TopiaForge.Mods.OperationResult<T>>? Migrate { get; }
+  property System.Func<T, TopiaForge.Mods.OperationResult<System.Boolean>> Validate { get; }
+  property System.Func<T> CreateDefault { get; }
+  property System.Int32 SchemaVersion { get; }
+
+type public sealed class TopiaForge.Mods.DiagnosticEntry : System.Object
+  constructor .ctor(System.String code, System.String message, TopiaForge.Mods.DiagnosticSeverity severity = 1 (Info), System.String detail = "")
+  property System.String Code { get; }
+  property System.String Detail { get; }
+  property System.String Message { get; }
+  property TopiaForge.Mods.DiagnosticSeverity Severity { get; }
+
+type public enum TopiaForge.Mods.DiagnosticSeverity : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.DiagnosticSeverity Debug = 0 (Debug)
+  field const TopiaForge.Mods.DiagnosticSeverity Error = 3 (Error)
+  field const TopiaForge.Mods.DiagnosticSeverity Info = 1 (Info)
+  field const TopiaForge.Mods.DiagnosticSeverity Warning = 2 (Warning)
+
+type public sealed class TopiaForge.Mods.EntityQuery : System.Object
+  constructor .ctor(System.Nullable<TopiaForge.Mods.Vec3> center = null, System.Single radius = 0, System.String nameContains = "", System.Int32 maximumResults = 64)
+  property System.Int32 MaximumResults { get; }
+  property System.Nullable<TopiaForge.Mods.Vec3> Center { get; }
+  property System.Single Radius { get; }
+  property System.String NameContains { get; }
+
+type public enum TopiaForge.Mods.ExtensionCardinality : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.ExtensionCardinality Multiple = 1 (Multiple)
+  field const TopiaForge.Mods.ExtensionCardinality Singleton = 0 (Singleton)
+
+type public enum TopiaForge.Mods.GameLoopPhase : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.GameLoopPhase Fixed = 1 (Fixed)
+  field const TopiaForge.Mods.GameLoopPhase Frame = 0 (Frame)
+  field const TopiaForge.Mods.GameLoopPhase Late = 2 (Late)
+
+type public static class TopiaForge.Mods.GameScenes : System.Object
+  field const System.String MainMenuSceneName = "TestCityStartMenu"
+  method [static] System.Boolean IsMainMenuScene(System.String sceneName)
+  method [static] System.Boolean IsNonGameplayScene(System.String sceneName)
+
+type public readonly struct TopiaForge.Mods.GameTimeSample : System.ValueType, System.IEquatable<TopiaForge.Mods.GameTimeSample>
+  constructor .ctor(TopiaForge.Mods.GameLoopPhase phase, System.Single deltaTime, System.Single unscaledDeltaTime, System.Double elapsedTime, System.Int64 frameIndex)
+  method [virtual,final,newslot] System.Boolean Equals(TopiaForge.Mods.GameTimeSample other)
+  method [virtual] System.Boolean Equals(System.Object? obj)
+  method [virtual] System.Int32 GetHashCode()
+  property System.Double ElapsedTime { get; }
+  property System.Int64 FrameIndex { get; }
+  property System.Single DeltaTime { get; }
+  property System.Single UnscaledDeltaTime { get; }
+  property TopiaForge.Mods.GameLoopPhase Phase { get; }
+
+type public sealed class TopiaForge.Mods.GameplayPause : System.Object, System.IDisposable
+  constructor .ctor(TopiaForge.Mods.IModContext context, System.String usage, System.Func<System.String, TopiaForge.Mods.OperationResult<TopiaForge.Mods.IGameplayLease>>? preferred = null, System.String diagnosticCode = "", System.Single retrySeconds = 0.5)
+  field const System.Single DefaultRetrySeconds = 0.5
+  method System.Void Release()
+  method System.Void Request()
+  method System.Void Tick(System.Single unscaledDeltaTime)
+  method [virtual,final,newslot] System.Void Dispose()
+  property System.Boolean IsActive { get; }
+  property System.Boolean IsRetrying { get; }
+  property TopiaForge.Mods.GameplayPauseKind Kind { get; }
+
+type public enum TopiaForge.Mods.GameplayPauseKind : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.GameplayPauseKind None = 0 (None)
+  field const TopiaForge.Mods.GameplayPauseKind PlayerControl = 2 (PlayerControl)
+  field const TopiaForge.Mods.GameplayPauseKind Preferred = 1 (Preferred)
+
+type public sealed class TopiaForge.Mods.HeldItemSnapshot : System.Object
+  constructor .ctor(System.String itemId, TopiaForge.Mods.IEntity entity)
+  property System.String ItemId { get; }
+  property TopiaForge.Mods.IEntity Entity { get; }
+
+type public interface TopiaForge.Mods.IAssetBundle : System.IDisposable
+  property System.Boolean IsAlive { get [abstract,virtual,newslot]; }
+  property System.String RelativePath { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IAssetService
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.IAssetBundle>> LoadBundleAsync(System.String relativePath, System.Threading.CancellationToken cancellationToken = null)
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.IPrefabAsset>> LoadPrefabAsync(TopiaForge.Mods.IAssetBundle bundle, System.String assetName, System.Threading.CancellationToken cancellationToken = null)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.ISpawnedEntity> Spawn(TopiaForge.Mods.AssetSpawnRequest request)
+
+type public interface TopiaForge.Mods.IAudioPlayback : System.IDisposable
+  method [abstract,virtual,newslot] System.Void Stop()
+  property System.Boolean IsPlaying { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IAudioService
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IAudioPlayback> Play(TopiaForge.Mods.AudioPlayRequest request)
+
+type public interface TopiaForge.Mods.ICommandRegistration : System.IDisposable
+  property System.String QualifiedName { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.ICommandService
+  method [abstract,virtual,newslot] System.Boolean TryExecute(System.String name, System.Collections.Generic.IReadOnlyList<System.String> arguments, out TopiaForge.Mods.OperationResult<System.String>? result)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.ICommandRegistration> Register(TopiaForge.Mods.CommandDefinition definition, System.Func<TopiaForge.Mods.CommandInvocation, TopiaForge.Mods.OperationResult<System.String>> handler)
+
+type public interface TopiaForge.Mods.IDiagnosticsService
+  method [abstract,virtual,newslot] System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.CapturedDiagnostic> GetSnapshot()
+  method [abstract,virtual,newslot] System.Void Report(TopiaForge.Mods.DiagnosticEntry entry)
+
+type public interface TopiaForge.Mods.IEntity
+  property System.Boolean IsAlive { get [abstract,virtual,newslot]; }
+  property System.String Id { get [abstract,virtual,newslot]; }
+  property System.String Name { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.Vec3 Position { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IEntityMotion : System.IDisposable
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.Vec3> MoveToward(TopiaForge.Mods.Vec3 target, System.Single responsiveness, System.Single damping, System.Single maximumSpeed, System.Single deltaTime)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.Vec3> Throw(TopiaForge.Mods.Vec3 direction, System.Single speed)
+  property System.Boolean IsAlive { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IEntity Entity { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IEntityService
+  method [abstract,virtual,newslot] System.Boolean TryGetTransform(TopiaForge.Mods.IEntity entity, out TopiaForge.Mods.TransformState transform)
+  method [abstract,virtual,newslot] System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.IEntity> Query(TopiaForge.Mods.EntityQuery query)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Destroy(TopiaForge.Mods.IEntity entity)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IEntityMotion> AcquireMotion(TopiaForge.Mods.IEntity entity)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.TransformState> SetTransform(TopiaForge.Mods.IEntity entity, TopiaForge.Mods.TransformState transform)
+
+type public interface TopiaForge.Mods.IExtensionRegistration : System.IDisposable
+  property System.Boolean IsActive { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IExtensionService
+  method [abstract,virtual,newslot] System.Boolean TryGet<T>(out T? provider) where T : class
+  method [abstract,virtual,newslot] System.Collections.Generic.IReadOnlyList<T> GetAll<T>() where T : class
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IExtensionRegistration> Register<T>(T provider, TopiaForge.Mods.ExtensionCardinality cardinality = 0 (Singleton)) where T : class
+
+type public interface TopiaForge.Mods.IGameTime
+  property TopiaForge.Mods.GameTimeSample Fixed { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.GameTimeSample Frame { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.GameTimeSample Late { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IGameplayLease : System.IDisposable
+  property System.Boolean IsActive { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IInputAction : System.IDisposable
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Rebind(System.Collections.Generic.IEnumerable<TopiaForge.Mods.InputBinding> bindings)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> ResetBindings()
+  property System.Boolean IsHeld { get [abstract,virtual,newslot]; }
+  property System.Boolean WasPressed { get [abstract,virtual,newslot]; }
+  property System.Boolean WasReleased { get [abstract,virtual,newslot]; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.InputBinding> Bindings { get [abstract,virtual,newslot]; }
+  property System.Single Value { get [abstract,virtual,newslot]; }
+  property System.String Name { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IInputService
+  method [abstract,virtual,newslot] System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.InputConflict> GetConflicts()
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IInputAction> RegisterAction(TopiaForge.Mods.InputActionDefinition definition)
+  property System.Boolean IsUiFocused { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IInteractableRegistration : System.IDisposable
+  property System.Boolean IsActive { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IEntity Entity { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IInteractionService
+  method [abstract,virtual,newslot] System.Boolean TryGetFocused(out TopiaForge.Mods.IInteractableRegistration? interaction)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IInteractableRegistration> Register(TopiaForge.Mods.IEntity entity, TopiaForge.Mods.InteractableDefinition definition, System.Action<TopiaForge.Mods.InteractionEvent> handler)
+
+type public interface TopiaForge.Mods.IItemService
+  method [abstract,virtual,newslot] System.Boolean TryGetHeld(out TopiaForge.Mods.HeldItemSnapshot? item)
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.HeldItemSnapshot>> GiveAsync(TopiaForge.Mods.ItemGrantRequest request, System.Threading.CancellationToken cancellationToken = null)
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.IEntity>> DropHeldAsync(TopiaForge.Mods.Vec3 velocity, System.Threading.CancellationToken cancellationToken = null)
+
+type public interface TopiaForge.Mods.ILocalModStorageService
+  method [abstract,virtual,newslot] System.Boolean Contains(System.String key)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Delete(System.String key)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Save<T>(System.String key, T value) where T : class
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<T> Load<T>(System.String key) where T : class
+
+type public interface TopiaForge.Mods.ILocalPlayerService
+  method [abstract,virtual,newslot] System.Boolean TryGetHealth(out TopiaForge.Mods.PlayerHealthSnapshot? health)
+  method [abstract,virtual,newslot] System.Boolean TryGetSnapshot(out TopiaForge.Mods.PlayerSnapshot? snapshot)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IPlayerControlLease> AcquireControl(System.String reason)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.PlayerHealthSnapshot> Damage(TopiaForge.Mods.PlayerDamageRequest request)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.PlayerHealthSnapshot> Heal(System.Single amount, System.String source)
+
+type public interface TopiaForge.Mods.ILocalizationRegistration : System.IDisposable
+  property System.String Locale { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.ILocalizationService
+  method [abstract,virtual,newslot] System.Boolean TryGet(System.String key, out System.String? text)
+  method [abstract,virtual,newslot] System.String Get(System.String key, System.String fallback)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.ILocalizationRegistration> Register(TopiaForge.Mods.LocalizationCatalog catalog)
+  property System.String CurrentLocale { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IModConfigService
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Save<T>(TopiaForge.Mods.ConfigDefinition<T> definition, T value) where T : class
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<T> Load<T>(TopiaForge.Mods.ConfigDefinition<T> definition) where T : class
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<T> Reset<T>(TopiaForge.Mods.ConfigDefinition<T> definition) where T : class
+
+type public interface TopiaForge.Mods.IModContext
+  property TopiaForge.Mods.IAssetService Assets { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IAudioService Audio { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.ICommandService Commands { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IDiagnosticsService Diagnostics { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IEntityService Entities { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IExtensionService Extensions { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IGameTime Time { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IInputService Input { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IInteractionService Interactions { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IItemService Items { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.ILocalModStorageService LocalStorage { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.ILocalPlayerService LocalPlayer { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.ILocalizationService Localization { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IModConfigService Config { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IModEvents Events { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IModFiles Files { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IModLifetime Lifetime { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IModLogger Logger { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IModScheduler Scheduler { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IPhysicsService Physics { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IRuntimeInfo Runtime { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.ISceneService Scenes { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IUiService Ui { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.ModIdentity Identity { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IModEvents
+  method [abstract,virtual,newslot] System.IDisposable SubscribeFixedUpdate(System.Action<TopiaForge.Mods.GameTimeSample> handler)
+  method [abstract,virtual,newslot] System.IDisposable SubscribeLateUpdate(System.Action<TopiaForge.Mods.GameTimeSample> handler)
+  method [abstract,virtual,newslot] System.IDisposable SubscribeSceneLoaded(System.Action<System.String> handler)
+  method [abstract,virtual,newslot] System.IDisposable SubscribeUpdate(System.Action<System.Single> handler)
+
+type public interface TopiaForge.Mods.IModFiles
+  method [abstract,virtual,newslot] System.Boolean DataFileExists(System.String relativePath)
+  method [abstract,virtual,newslot] System.Boolean PackageFileExists(System.String relativePath)
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>> DeleteDataFileAsync(System.String relativePath, System.Threading.CancellationToken cancellationToken = null)
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>> WriteDataBytesAsync(System.String relativePath, System.Byte[] content, System.Threading.CancellationToken cancellationToken = null)
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>> WriteDataTextAsync(System.String relativePath, System.String content, System.Threading.CancellationToken cancellationToken = null)
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Byte[]>> ReadDataBytesAsync(System.String relativePath, System.Threading.CancellationToken cancellationToken = null)
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Byte[]>> ReadPackageBytesAsync(System.String relativePath, System.Threading.CancellationToken cancellationToken = null)
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.String>> ReadDataTextAsync(System.String relativePath, System.Threading.CancellationToken cancellationToken = null)
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.String>> ReadPackageTextAsync(System.String relativePath, System.Threading.CancellationToken cancellationToken = null)
+
+type public interface TopiaForge.Mods.IModLifetime : System.IDisposable
+  method [abstract,virtual,newslot] System.IDisposable Defer(System.Action cleanup)
+  method [abstract,virtual,newslot] System.IDisposable Track(System.IDisposable resource)
+  property System.Boolean IsStopping { get [abstract,virtual,newslot]; }
+  property System.Threading.CancellationToken StoppingToken { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IModLogger
+  method [abstract,virtual,newslot] System.Void Debug(System.String message)
+  method [abstract,virtual,newslot] System.Void Error(System.Exception exception, System.String message)
+  method [abstract,virtual,newslot] System.Void Error(System.String message)
+  method [abstract,virtual,newslot] System.Void Info(System.String message)
+  method [abstract,virtual,newslot] System.Void Warn(System.String message)
+
+type public interface TopiaForge.Mods.IModScheduler
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>> DelayAsync(System.TimeSpan delay, System.Threading.CancellationToken cancellationToken = null)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.IDisposable> After(System.TimeSpan delay, System.Action action)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.IDisposable> Every(System.TimeSpan interval, System.Action action)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.IDisposable> NextFrame(System.Action action)
+
+type public interface TopiaForge.Mods.IPhysicsService
+  method [abstract,virtual,newslot] System.Boolean TryRaycast(TopiaForge.Mods.Ray ray, System.Single maximumDistance, out TopiaForge.Mods.PhysicsHit? hit)
+  method [abstract,virtual,newslot] System.Boolean TrySphereCast(TopiaForge.Mods.Ray ray, System.Single radius, System.Single maximumDistance, out TopiaForge.Mods.PhysicsHit? hit)
+  method [abstract,virtual,newslot] System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.IEntity> Overlap(TopiaForge.Mods.Bounds bounds, System.Int32 maximumResults = 64)
+
+type public interface TopiaForge.Mods.IPlayerControlLease : System.IDisposable, TopiaForge.Mods.IGameplayLease
+  property System.String Reason { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IPrefabAsset : System.IDisposable
+  property System.Boolean IsAlive { get [abstract,virtual,newslot]; }
+  property System.String Name { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IRuntimeInfo
+  method [abstract,virtual,newslot] System.Boolean TryGetGameVersion(out TopiaForge.Mods.SemanticVersion version)
+  method [abstract,virtual,newslot] System.Boolean TryGetUnavailableCapability(System.String capability, out System.String? reason)
+  property System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> UnavailableCapabilities { get [abstract,virtual,newslot]; }
+  property System.Collections.Generic.IReadOnlyDictionary<System.String, TopiaForge.Mods.SemanticVersion> ProviderVersions { get [abstract,virtual,newslot]; }
+  property System.String Architecture { get [abstract,virtual,newslot]; }
+  property System.String Platform { get [abstract,virtual,newslot]; }
+  property System.String RuntimeIdentifier { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.SemanticVersion LoaderVersion { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.SemanticVersion SdkVersion { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.ISceneLifecycleEventSource
+  method [abstract,virtual,newslot] System.IDisposable SubscribeSceneLifecycle(System.Action<TopiaForge.Mods.SceneLifecycleEvent> handler)
+
+type public interface TopiaForge.Mods.ISceneLoadEventSource
+  method [abstract,virtual,newslot] System.IDisposable SubscribeSceneLoaded(System.Action<TopiaForge.Mods.SceneLoadEvent> handler)
+
+type public interface TopiaForge.Mods.ISceneService
+  method [abstract,virtual,newslot] System.Boolean TryGetActive(out TopiaForge.Mods.SceneSnapshot? scene)
+  method [abstract,virtual,newslot] System.Boolean TryGetCheckpoint(out TopiaForge.Mods.CheckpointSnapshot? checkpoint)
+  method [abstract,virtual,newslot] System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.SceneSnapshot> GetLoadedScenes()
+  method [abstract,virtual,newslot] System.IDisposable SubscribeCheckpointChanged(System.Action<TopiaForge.Mods.CheckpointSnapshot> handler)
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.SceneSnapshot>> LoadAsync(TopiaForge.Mods.SceneLoadRequest request, System.Threading.CancellationToken cancellationToken = null)
+
+type public interface TopiaForge.Mods.ISelfNormalizingConfig
+  method [abstract,virtual,newslot] System.Void Normalize()
+
+type public interface TopiaForge.Mods.ISpawnedEntity : System.IDisposable, TopiaForge.Mods.IEntity
+  property TopiaForge.Mods.TransformState InitialTransform { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IUiModal : System.IDisposable
+  method [abstract,virtual,newslot] System.Void Close()
+  property System.Boolean IsOpen { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IUiService
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> ShowToast(System.String message, TopiaForge.Mods.UiTone tone = 0 (Neutral))
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUiModal> ShowModal(TopiaForge.Mods.UiModalRequest request, System.Action<System.Boolean> completed)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUiSurface> CreateSurface(TopiaForge.Mods.UiSurfaceRequest request)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.UiAccessibilityPreferences> ApplyAccessibility(TopiaForge.Mods.UiAccessibilityPreferences preferences)
+  property TopiaForge.Mods.UiAccessibilityPreferences Accessibility { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IUiSurface : System.IDisposable
+  method [abstract,virtual,newslot] System.Void Hide()
+  method [abstract,virtual,newslot] System.Void SetBody(System.String body)
+  method [abstract,virtual,newslot] System.Void Show()
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> SetContent(TopiaForge.Mods.UiNode content)
+  property System.Boolean IsVisible { get [abstract,virtual,newslot]; }
+  property System.String Id { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IUiSurfaceDismissalSource
+  event System.Action? Dismissed { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
+
+type public sealed class TopiaForge.Mods.InputActionDefinition : System.Object
+  constructor .ctor(System.String name, System.String displayName, System.Collections.Generic.IEnumerable<TopiaForge.Mods.InputBinding> defaultBindings, System.Boolean suppressWhileUiFocused = true)
+  property System.Boolean SuppressWhileUiFocused { get; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.InputBinding> DefaultBindings { get; }
+  property System.String DisplayName { get; }
+  property System.String Name { get; }
+
+type public enum TopiaForge.Mods.InputAxis : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.InputAxis Horizontal = 0 (Horizontal)
+  field const TopiaForge.Mods.InputAxis PointerX = 2 (PointerX)
+  field const TopiaForge.Mods.InputAxis PointerY = 3 (PointerY)
+  field const TopiaForge.Mods.InputAxis Scroll = 4 (Scroll)
+  field const TopiaForge.Mods.InputAxis Vertical = 1 (Vertical)
+
+type public readonly struct TopiaForge.Mods.InputBinding : System.ValueType, System.IEquatable<TopiaForge.Mods.InputBinding>
+  method [static] TopiaForge.Mods.InputBinding Axis(TopiaForge.Mods.InputAxis axis, System.Single scale = 1)
+  method [static] TopiaForge.Mods.InputBinding GamepadAxis(TopiaForge.Mods.InputGamepadAxis axis, System.Single scale = 1)
+  method [static] TopiaForge.Mods.InputBinding GamepadButton(TopiaForge.Mods.InputGamepadButton button)
+  method [static] TopiaForge.Mods.InputBinding Key(System.String keyName)
+  method [static] TopiaForge.Mods.InputBinding MouseButton(TopiaForge.Mods.InputMouseButton button)
+  method [virtual,final,newslot] System.Boolean Equals(TopiaForge.Mods.InputBinding other)
+  method [virtual] System.Boolean Equals(System.Object? obj)
+  method [virtual] System.Int32 GetHashCode()
+  property System.Single Scale { get; }
+  property System.String Control { get; }
+  property TopiaForge.Mods.InputBindingKind Kind { get; }
+
+type public enum TopiaForge.Mods.InputBindingKind : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.InputBindingKind Axis = 2 (Axis)
+  field const TopiaForge.Mods.InputBindingKind GamepadAxis = 4 (GamepadAxis)
+  field const TopiaForge.Mods.InputBindingKind GamepadButton = 3 (GamepadButton)
+  field const TopiaForge.Mods.InputBindingKind Key = 0 (Key)
+  field const TopiaForge.Mods.InputBindingKind MouseButton = 1 (MouseButton)
+
+type public sealed class TopiaForge.Mods.InputConflict : System.Object
+  constructor .ctor(System.String actionName, System.String otherActionName, TopiaForge.Mods.InputBinding binding)
+  property System.String ActionName { get; }
+  property System.String OtherActionName { get; }
+  property TopiaForge.Mods.InputBinding Binding { get; }
+
+type public enum TopiaForge.Mods.InputGamepadAxis : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.InputGamepadAxis LeftTrigger = 4 (LeftTrigger)
+  field const TopiaForge.Mods.InputGamepadAxis LeftX = 0 (LeftX)
+  field const TopiaForge.Mods.InputGamepadAxis LeftY = 1 (LeftY)
+  field const TopiaForge.Mods.InputGamepadAxis RightTrigger = 5 (RightTrigger)
+  field const TopiaForge.Mods.InputGamepadAxis RightX = 2 (RightX)
+  field const TopiaForge.Mods.InputGamepadAxis RightY = 3 (RightY)
+
+type public enum TopiaForge.Mods.InputGamepadButton : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.InputGamepadButton East = 1 (East)
+  field const TopiaForge.Mods.InputGamepadButton LeftShoulder = 4 (LeftShoulder)
+  field const TopiaForge.Mods.InputGamepadButton LeftStick = 8 (LeftStick)
+  field const TopiaForge.Mods.InputGamepadButton Menu = 7 (Menu)
+  field const TopiaForge.Mods.InputGamepadButton North = 3 (North)
+  field const TopiaForge.Mods.InputGamepadButton RightShoulder = 5 (RightShoulder)
+  field const TopiaForge.Mods.InputGamepadButton RightStick = 9 (RightStick)
+  field const TopiaForge.Mods.InputGamepadButton South = 0 (South)
+  field const TopiaForge.Mods.InputGamepadButton View = 6 (View)
+  field const TopiaForge.Mods.InputGamepadButton West = 2 (West)
+
+type public enum TopiaForge.Mods.InputMouseButton : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.InputMouseButton Back = 3 (Back)
+  field const TopiaForge.Mods.InputMouseButton Forward = 4 (Forward)
+  field const TopiaForge.Mods.InputMouseButton Middle = 2 (Middle)
+  field const TopiaForge.Mods.InputMouseButton Primary = 0 (Primary)
+  field const TopiaForge.Mods.InputMouseButton Secondary = 1 (Secondary)
+
+type public sealed class TopiaForge.Mods.InteractableDefinition : System.Object
+  constructor .ctor(System.String prompt, System.Single maximumDistance = 3)
+  property System.Single MaximumDistance { get; }
+  property System.String Prompt { get; }
+
+type public sealed class TopiaForge.Mods.InteractionEvent : System.Object
+  constructor .ctor(TopiaForge.Mods.IEntity target, TopiaForge.Mods.PlayerSnapshot player)
+  property TopiaForge.Mods.IEntity Target { get; }
+  property TopiaForge.Mods.PlayerSnapshot Player { get; }
+
+type public sealed class TopiaForge.Mods.ItemGrantRequest : System.Object
+  constructor .ctor(System.String itemId, System.Int32 quantity = 1)
+  property System.Int32 Quantity { get; }
+  property System.String ItemId { get; }
+
+type public sealed class TopiaForge.Mods.LocalizationCatalog : System.Object
+  constructor .ctor(System.String locale, System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> entries)
+  property System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> Entries { get; }
+  property System.String Locale { get; }
+
+type public static class TopiaForge.Mods.ModContextExtensions : System.Object
+  method extension [static] System.Boolean TryGetExtension<T>(TopiaForge.Mods.IModContext context, out T? provider) where T : class
+  method extension [static] T RequireExtension<T>(TopiaForge.Mods.IModContext context) where T : class
+
+type public enum TopiaForge.Mods.ModErrorCode : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.ModErrorCode Cancelled = 6 (Cancelled)
+  field const TopiaForge.Mods.ModErrorCode Conflict = 4 (Conflict)
+  field const TopiaForge.Mods.ModErrorCode External = 9 (External)
+  field const TopiaForge.Mods.ModErrorCode InvalidArgument = 1 (InvalidArgument)
+  field const TopiaForge.Mods.ModErrorCode InvalidState = 5 (InvalidState)
+  field const TopiaForge.Mods.ModErrorCode Io = 8 (Io)
+  field const TopiaForge.Mods.ModErrorCode None = 0 (None)
+  field const TopiaForge.Mods.ModErrorCode NotAuthoritative = 11 (NotAuthoritative)
+  field const TopiaForge.Mods.ModErrorCode NotFound = 2 (NotFound)
+  field const TopiaForge.Mods.ModErrorCode RateLimited = 12 (RateLimited)
+  field const TopiaForge.Mods.ModErrorCode TimedOut = 7 (TimedOut)
+  field const TopiaForge.Mods.ModErrorCode Unavailable = 3 (Unavailable)
+  field const TopiaForge.Mods.ModErrorCode Unknown = 10 (Unknown)
+
+type public static class TopiaForge.Mods.ModEventExtensions : System.Object
+  method extension [static] System.IDisposable SubscribeSceneLifecycle(TopiaForge.Mods.IModEvents events, System.Action<TopiaForge.Mods.SceneLifecycleEvent> handler)
+  method extension [static] System.IDisposable SubscribeSceneLoaded(TopiaForge.Mods.IModEvents events, System.Action<TopiaForge.Mods.SceneLoadEvent> handler)
+
+type public sealed class TopiaForge.Mods.ModIdentity : System.Object
+  constructor .ctor(System.String id, System.String name, TopiaForge.Mods.SemanticVersion version)
+  property System.String Id { get; }
+  property System.String Name { get; }
+  property TopiaForge.Mods.SemanticVersion Version { get; }
+
+type public sealed class TopiaForge.Mods.OperationResult<T> : System.Object
+  method System.Boolean TryGetValue(out T? value)
+  method [static] TopiaForge.Mods.OperationResult<T> Failure(TopiaForge.Mods.ModErrorCode errorCode, System.String errorMessage)
+  method [static] TopiaForge.Mods.OperationResult<T> Success(T value)
+  property System.Boolean Succeeded { get; }
+  property System.String ErrorMessage { get; }
+  property T? Value { get; }
+  property TopiaForge.Mods.ModErrorCode ErrorCode { get; }
+
+type public sealed class TopiaForge.Mods.PendingOperation<T> : System.Object
+  constructor .ctor()
+  method System.Void Begin(System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<T>>> start, System.Threading.CancellationToken linkedTo, System.Single now)
+  method System.Void Cancel()
+  method System.Void Forget()
+  method TopiaForge.Mods.PendingOperationState Poll(System.Single now, System.Single timeoutSeconds, out TopiaForge.Mods.OperationResult<T> result)
+  property System.Boolean IsInFlight { get; }
+
+type public enum TopiaForge.Mods.PendingOperationState : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.PendingOperationState Abandoned = 4 (Abandoned)
+  field const TopiaForge.Mods.PendingOperationState Completed = 2 (Completed)
+  field const TopiaForge.Mods.PendingOperationState Idle = 0 (Idle)
+  field const TopiaForge.Mods.PendingOperationState TimedOut = 3 (TimedOut)
+  field const TopiaForge.Mods.PendingOperationState Waiting = 1 (Waiting)
+
+type public sealed class TopiaForge.Mods.PhysicsHit : System.Object
+  constructor .ctor(TopiaForge.Mods.IEntity entity, TopiaForge.Mods.Vec3 point, TopiaForge.Mods.Vec3 normal, System.Single distance)
+  property System.Single Distance { get; }
+  property TopiaForge.Mods.IEntity Entity { get; }
+  property TopiaForge.Mods.Vec3 Normal { get; }
+  property TopiaForge.Mods.Vec3 Point { get; }
+
+type public sealed class TopiaForge.Mods.PlayerDamageRequest : System.Object
+  constructor .ctor(System.Single amount, System.String source)
+  property System.Single Amount { get; }
+  property System.String Source { get; }
+
+type public sealed class TopiaForge.Mods.PlayerHealthSnapshot : System.Object
+  constructor .ctor(System.Single current, System.Single maximum)
+  property System.Boolean IsDepleted { get; }
+  property System.Single Current { get; }
+  property System.Single Fraction { get; }
+  property System.Single Maximum { get; }
+
+type public sealed class TopiaForge.Mods.PlayerSnapshot : System.Object
+  constructor .ctor(TopiaForge.Mods.Vec3 position, TopiaForge.Mods.Ray aimRay)
+  property TopiaForge.Mods.Ray AimRay { get; }
+  property TopiaForge.Mods.Vec3 Position { get; }
+
+type public readonly struct TopiaForge.Mods.Quat : System.ValueType, System.IEquatable<TopiaForge.Mods.Quat>
+  constructor .ctor(System.Single x, System.Single y, System.Single z, System.Single w)
+  method [static] System.Boolean op_Equality(TopiaForge.Mods.Quat left, TopiaForge.Mods.Quat right)
+  method [static] System.Boolean op_Inequality(TopiaForge.Mods.Quat left, TopiaForge.Mods.Quat right)
+  method [static] TopiaForge.Mods.Quat op_Multiply(TopiaForge.Mods.Quat left, TopiaForge.Mods.Quat right)
+  method [static] TopiaForge.Mods.Vec3 op_Multiply(TopiaForge.Mods.Quat rotation, TopiaForge.Mods.Vec3 point)
+  method [virtual,final,newslot] System.Boolean Equals(TopiaForge.Mods.Quat other)
+  method [virtual] System.Boolean Equals(System.Object? obj)
+  method [virtual] System.Int32 GetHashCode()
+  method [virtual] System.String ToString()
+  property System.Boolean IsFinite { get; }
+  property System.Single LengthSquared { get; }
+  property System.Single W { get; }
+  property System.Single X { get; }
+  property System.Single Y { get; }
+  property System.Single Z { get; }
+  property TopiaForge.Mods.Quat Normalized { get; }
+  property static TopiaForge.Mods.Quat Identity { get [static]; }
+
+type public readonly struct TopiaForge.Mods.Ray : System.ValueType, System.IEquatable<TopiaForge.Mods.Ray>
+  constructor .ctor(TopiaForge.Mods.Vec3 origin, TopiaForge.Mods.Vec3 direction)
+  method TopiaForge.Mods.Vec3 GetPoint(System.Single distance)
+  method [static] System.Boolean op_Equality(TopiaForge.Mods.Ray left, TopiaForge.Mods.Ray right)
+  method [static] System.Boolean op_Inequality(TopiaForge.Mods.Ray left, TopiaForge.Mods.Ray right)
+  method [virtual,final,newslot] System.Boolean Equals(TopiaForge.Mods.Ray other)
+  method [virtual] System.Boolean Equals(System.Object? obj)
+  method [virtual] System.Int32 GetHashCode()
+  property TopiaForge.Mods.Vec3 Direction { get; }
+  property TopiaForge.Mods.Vec3 Origin { get; }
+
+type public readonly struct TopiaForge.Mods.RgbaColor : System.ValueType, System.IEquatable<TopiaForge.Mods.RgbaColor>
+  constructor .ctor(System.Single red, System.Single green, System.Single blue, System.Single alpha = 1)
+  method [static] System.Boolean op_Equality(TopiaForge.Mods.RgbaColor left, TopiaForge.Mods.RgbaColor right)
+  method [static] System.Boolean op_Inequality(TopiaForge.Mods.RgbaColor left, TopiaForge.Mods.RgbaColor right)
+  method [static] TopiaForge.Mods.RgbaColor Lerp(TopiaForge.Mods.RgbaColor from, TopiaForge.Mods.RgbaColor to, System.Single amount)
+  method [virtual,final,newslot] System.Boolean Equals(TopiaForge.Mods.RgbaColor other)
+  method [virtual] System.Boolean Equals(System.Object? obj)
+  method [virtual] System.Int32 GetHashCode()
+  method [virtual] System.String ToString()
+  property System.Single Alpha { get; }
+  property System.Single Blue { get; }
+  property System.Single Green { get; }
+  property System.Single Red { get; }
+  property TopiaForge.Mods.RgbaColor Clamped { get; }
+  property static TopiaForge.Mods.RgbaColor Clear { get [static]; }
+  property static TopiaForge.Mods.RgbaColor White { get [static]; }
+
+type public sealed class TopiaForge.Mods.SceneLifecycleEvent : System.Object
+  constructor .ctor(System.Int32 sceneInstanceId, System.String sceneName, TopiaForge.Mods.SceneLifecyclePhase phase, TopiaForge.Mods.SceneLoadMode mode, System.Boolean isActive, System.Boolean isInitial = false)
+  property System.Boolean IsActive { get; }
+  property System.Boolean IsInitial { get; }
+  property System.Int32 SceneInstanceId { get; }
+  property System.String SceneName { get; }
+  property TopiaForge.Mods.SceneLifecyclePhase Phase { get; }
+  property TopiaForge.Mods.SceneLoadMode Mode { get; }
+
+type public enum TopiaForge.Mods.SceneLifecyclePhase : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.SceneLifecyclePhase Activated = 1 (Activated)
+  field const TopiaForge.Mods.SceneLifecyclePhase Loaded = 0 (Loaded)
+  field const TopiaForge.Mods.SceneLifecyclePhase Unloaded = 2 (Unloaded)
+
+type public sealed class TopiaForge.Mods.SceneLoadEvent : System.Object
+  constructor .ctor(System.String sceneName, TopiaForge.Mods.SceneLoadMode mode, System.Boolean isActive)
+  property System.Boolean IsActive { get; }
+  property System.Boolean IsWorldReplacement { get; }
+  property System.String SceneName { get; }
+  property TopiaForge.Mods.SceneLoadMode Mode { get; }
+
+type public enum TopiaForge.Mods.SceneLoadMode : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.SceneLoadMode Additive = 1 (Additive)
+  field const TopiaForge.Mods.SceneLoadMode Single = 0 (Single)
+
+type public sealed class TopiaForge.Mods.SceneLoadRequest : System.Object
+  constructor .ctor(System.String sceneName, TopiaForge.Mods.SceneLoadMode mode = 0 (Single))
+  property System.String SceneName { get; }
+  property TopiaForge.Mods.SceneLoadMode Mode { get; }
+
+type public sealed class TopiaForge.Mods.SceneSnapshot : System.Object
+  constructor .ctor(System.String name, System.Boolean isLoaded, System.Boolean isActive)
+  property System.Boolean IsActive { get; }
+  property System.Boolean IsLoaded { get; }
+  property System.String Name { get; }
+
+type public readonly struct TopiaForge.Mods.SemanticVersion : System.ValueType, System.IComparable<TopiaForge.Mods.SemanticVersion>, System.IEquatable<TopiaForge.Mods.SemanticVersion>
+  method [static] System.Boolean TryParse(System.String? value, out TopiaForge.Mods.SemanticVersion version)
+  method [static] System.Boolean op_Equality(TopiaForge.Mods.SemanticVersion left, TopiaForge.Mods.SemanticVersion right)
+  method [static] System.Boolean op_GreaterThan(TopiaForge.Mods.SemanticVersion left, TopiaForge.Mods.SemanticVersion right)
+  method [static] System.Boolean op_GreaterThanOrEqual(TopiaForge.Mods.SemanticVersion left, TopiaForge.Mods.SemanticVersion right)
+  method [static] System.Boolean op_Inequality(TopiaForge.Mods.SemanticVersion left, TopiaForge.Mods.SemanticVersion right)
+  method [static] System.Boolean op_LessThan(TopiaForge.Mods.SemanticVersion left, TopiaForge.Mods.SemanticVersion right)
+  method [static] System.Boolean op_LessThanOrEqual(TopiaForge.Mods.SemanticVersion left, TopiaForge.Mods.SemanticVersion right)
+  method [static] TopiaForge.Mods.SemanticVersion Parse(System.String value)
+  method [virtual,final,newslot] System.Boolean Equals(TopiaForge.Mods.SemanticVersion other)
+  method [virtual,final,newslot] System.Int32 CompareTo(TopiaForge.Mods.SemanticVersion other)
+  method [virtual] System.Boolean Equals(System.Object? obj)
+  method [virtual] System.Int32 GetHashCode()
+  method [virtual] System.String ToString()
+  property System.Boolean IsPrerelease { get; }
+  property System.String BuildMetadata { get; }
+  property System.String Major { get; }
+  property System.String Minor { get; }
+  property System.String Patch { get; }
+  property System.String Prerelease { get; }
+
+type public abstract class TopiaForge.Mods.TopiaForgeMod : System.Object
+
+type public readonly struct TopiaForge.Mods.TransformState : System.ValueType, System.IEquatable<TopiaForge.Mods.TransformState>
+  constructor .ctor(TopiaForge.Mods.Vec3 position, TopiaForge.Mods.Quat rotation, TopiaForge.Mods.Vec3 scale)
+  method [static] System.Boolean op_Equality(TopiaForge.Mods.TransformState left, TopiaForge.Mods.TransformState right)
+  method [static] System.Boolean op_Inequality(TopiaForge.Mods.TransformState left, TopiaForge.Mods.TransformState right)
+  method [virtual,final,newslot] System.Boolean Equals(TopiaForge.Mods.TransformState other)
+  method [virtual] System.Boolean Equals(System.Object? obj)
+  method [virtual] System.Int32 GetHashCode()
+  property TopiaForge.Mods.Quat Rotation { get; }
+  property TopiaForge.Mods.Vec3 Position { get; }
+  property TopiaForge.Mods.Vec3 Scale { get; }
+  property static TopiaForge.Mods.TransformState Identity { get [static]; }
+
+type public sealed class TopiaForge.Mods.UiAccessibilityPreferences : System.Object
+  constructor .ctor(System.Boolean highContrast = false, System.Single uiScale = 1, System.Boolean reducedMotion = false, System.Single motionIntensity = 1)
+  property System.Boolean HighContrast { get; }
+  property System.Boolean ReducedMotion { get; }
+  property System.Single MotionIntensity { get; }
+  property System.Single UiScale { get; }
+  property static TopiaForge.Mods.UiAccessibilityPreferences Default { get [static]; }
+
+type public sealed class TopiaForge.Mods.UiButton : TopiaForge.Mods.UiNode
+  constructor .ctor(System.String id, System.String label, System.Action activated, TopiaForge.Mods.UiButtonStyle style = 0 (Primary), System.Boolean enabled = true)
+  property System.Action Activated { get; }
+  property System.Boolean Enabled { get; }
+  property System.String Label { get; }
+  property TopiaForge.Mods.UiButtonStyle Style { get; }
+
+type public enum TopiaForge.Mods.UiButtonStyle : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.UiButtonStyle Danger = 3 (Danger)
+  field const TopiaForge.Mods.UiButtonStyle Ghost = 2 (Ghost)
+  field const TopiaForge.Mods.UiButtonStyle Primary = 0 (Primary)
+  field const TopiaForge.Mods.UiButtonStyle Secondary = 1 (Secondary)
+
+type public sealed class TopiaForge.Mods.UiChoice : System.Object
+  constructor .ctor(System.String value, System.String label)
+  property System.String Label { get; }
+  property System.String Value { get; }
+
+type public sealed class TopiaForge.Mods.UiColumn : TopiaForge.Mods.UiLayoutNode
+  constructor .ctor(System.Collections.Generic.IEnumerable<TopiaForge.Mods.UiNode> children)
+  constructor .ctor(params TopiaForge.Mods.UiNode[] children)
+
+type public sealed class TopiaForge.Mods.UiDropdown : TopiaForge.Mods.UiNode
+  constructor .ctor(System.String id, System.String label, System.Collections.Generic.IEnumerable<TopiaForge.Mods.UiChoice> choices, System.String selectedValue, System.Action<System.String> changed, System.Boolean enabled = true)
+  property System.Action<System.String> Changed { get; }
+  property System.Boolean Enabled { get; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.UiChoice> Choices { get; }
+  property System.String Label { get; }
+  property System.String SelectedValue { get; }
+
+type public sealed class TopiaForge.Mods.UiGraphCanvas : TopiaForge.Mods.UiNode
+  constructor .ctor(System.String id, System.Collections.Generic.IEnumerable<TopiaForge.Mods.UiGraphNode> nodes, System.Collections.Generic.IEnumerable<TopiaForge.Mods.UiGraphEdge> edges, System.Action<System.String?> selectionChanged, System.String? selectedNodeId = null, System.Nullable<TopiaForge.Mods.UiGraphViewport> viewport = null, System.Single height = 480, System.Boolean enabled = true, System.Action<TopiaForge.Mods.UiGraphNodeMove>? nodeMoved = null, System.Action<TopiaForge.Mods.UiGraphConnectionRequest>? connectionRequested = null, System.Action<System.String>? connectionRemoved = null, System.Action<TopiaForge.Mods.UiGraphViewport>? viewportChanged = null)
+  field const System.Int32 MaximumEdges = 1024
+  field const System.Int32 MaximumNodes = 512
+  field const System.Int32 MaximumPortsPerNode = 32
+  property System.Action<System.String>? ConnectionRemoved { get; }
+  property System.Action<System.String?> SelectionChanged { get; }
+  property System.Action<TopiaForge.Mods.UiGraphConnectionRequest>? ConnectionRequested { get; }
+  property System.Action<TopiaForge.Mods.UiGraphNodeMove>? NodeMoved { get; }
+  property System.Action<TopiaForge.Mods.UiGraphViewport>? ViewportChanged { get; }
+  property System.Boolean Enabled { get; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.UiGraphEdge> Edges { get; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.UiGraphNode> Nodes { get; }
+  property System.Single Height { get; }
+  property System.String? SelectedNodeId { get; }
+  property TopiaForge.Mods.UiGraphViewport Viewport { get; }
+
+type public readonly struct TopiaForge.Mods.UiGraphConnectionRequest : System.ValueType
+  constructor .ctor(System.String sourceNodeId, System.String sourcePortId, System.String targetNodeId, System.String targetPortId)
+  property System.String SourceNodeId { get; }
+  property System.String SourcePortId { get; }
+  property System.String TargetNodeId { get; }
+  property System.String TargetPortId { get; }
+
+type public sealed class TopiaForge.Mods.UiGraphEdge : System.Object
+  constructor .ctor(System.String id, System.String sourceNodeId, System.String sourcePortId, System.String targetNodeId, System.String targetPortId, TopiaForge.Mods.UiTone tone = 0 (Neutral))
+  property System.String Id { get; }
+  property System.String SourceNodeId { get; }
+  property System.String SourcePortId { get; }
+  property System.String TargetNodeId { get; }
+  property System.String TargetPortId { get; }
+  property TopiaForge.Mods.UiTone Tone { get; }
+
+type public sealed class TopiaForge.Mods.UiGraphNode : System.Object
+  constructor .ctor(System.String id, System.String type, System.String title, TopiaForge.Mods.Vec2 position, System.Collections.Generic.IEnumerable<TopiaForge.Mods.UiGraphPort> ports, System.String subtitle = "", TopiaForge.Mods.UiTone tone = 0 (Neutral), System.Boolean enabled = true)
+  property System.Boolean Enabled { get; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.UiGraphPort> Ports { get; }
+  property System.String Id { get; }
+  property System.String Subtitle { get; }
+  property System.String Title { get; }
+  property System.String Type { get; }
+  property TopiaForge.Mods.UiTone Tone { get; }
+  property TopiaForge.Mods.Vec2 Position { get; }
+
+type public readonly struct TopiaForge.Mods.UiGraphNodeMove : System.ValueType
+  constructor .ctor(System.String nodeId, TopiaForge.Mods.Vec2 position)
+  property System.String NodeId { get; }
+  property TopiaForge.Mods.Vec2 Position { get; }
+
+type public sealed class TopiaForge.Mods.UiGraphPort : System.Object
+  constructor .ctor(System.String id, System.String label, TopiaForge.Mods.UiGraphPortDirection direction, System.String dataType = "flow", System.Boolean required = false)
+  property System.Boolean Required { get; }
+  property System.String DataType { get; }
+  property System.String Id { get; }
+  property System.String Label { get; }
+  property TopiaForge.Mods.UiGraphPortDirection Direction { get; }
+
+type public enum TopiaForge.Mods.UiGraphPortDirection : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.UiGraphPortDirection Input = 0 (Input)
+  field const TopiaForge.Mods.UiGraphPortDirection Output = 1 (Output)
+
+type public readonly struct TopiaForge.Mods.UiGraphViewport : System.ValueType, System.IEquatable<TopiaForge.Mods.UiGraphViewport>
+  constructor .ctor(TopiaForge.Mods.Vec2 offset, System.Single zoom = 1)
+  field const System.Single MaximumZoom = 2
+  field const System.Single MinimumZoom = 0.25
+  method [static] System.Boolean op_Equality(TopiaForge.Mods.UiGraphViewport left, TopiaForge.Mods.UiGraphViewport right)
+  method [static] System.Boolean op_Inequality(TopiaForge.Mods.UiGraphViewport left, TopiaForge.Mods.UiGraphViewport right)
+  method [virtual,final,newslot] System.Boolean Equals(TopiaForge.Mods.UiGraphViewport other)
+  method [virtual] System.Boolean Equals(System.Object? obj)
+  method [virtual] System.Int32 GetHashCode()
+  property System.Single Zoom { get; }
+  property TopiaForge.Mods.Vec2 Offset { get; }
+  property static TopiaForge.Mods.UiGraphViewport Default { get [static]; }
+
+type public abstract class TopiaForge.Mods.UiLayoutNode : TopiaForge.Mods.UiNode
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.UiNode> Children { get; }
+
+type public sealed class TopiaForge.Mods.UiListItem : System.Object
+  constructor .ctor(System.String id, System.String title, System.String subtitle = "", System.String badge = "")
+  property System.String Badge { get; }
+  property System.String Id { get; }
+  property System.String Subtitle { get; }
+  property System.String Title { get; }
+
+type public sealed class TopiaForge.Mods.UiModalRequest : System.Object
+  constructor .ctor(System.String title, System.String body, System.String confirmLabel = "CONFIRM", System.String cancelLabel = "CANCEL", System.Boolean destructive = false)
+  property System.Boolean Destructive { get; }
+  property System.String Body { get; }
+  property System.String CancelLabel { get; }
+  property System.String ConfirmLabel { get; }
+  property System.String Title { get; }
+
+type public abstract class TopiaForge.Mods.UiNode : System.Object
+  property System.String? Id { get; }
+
+type public sealed class TopiaForge.Mods.UiRow : TopiaForge.Mods.UiLayoutNode
+  constructor .ctor(System.Collections.Generic.IEnumerable<TopiaForge.Mods.UiNode> children)
+  constructor .ctor(params TopiaForge.Mods.UiNode[] children)
+
+type public sealed class TopiaForge.Mods.UiScroll : TopiaForge.Mods.UiNode
+  constructor .ctor(TopiaForge.Mods.UiNode content, System.Single height = 240)
+  property System.Single Height { get; }
+  property TopiaForge.Mods.UiNode Content { get; }
+
+type public sealed class TopiaForge.Mods.UiSlider : TopiaForge.Mods.UiNode
+  constructor .ctor(System.String id, System.String label, System.Single minimum, System.Single maximum, System.Single value, System.Action<System.Single> changed, System.Boolean enabled = true)
+  property System.Action<System.Single> Changed { get; }
+  property System.Boolean Enabled { get; }
+  property System.Single Maximum { get; }
+  property System.Single Minimum { get; }
+  property System.Single Value { get; }
+  property System.String Label { get; }
+
+type public enum TopiaForge.Mods.UiSplitOrientation : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.UiSplitOrientation Horizontal = 0 (Horizontal)
+  field const TopiaForge.Mods.UiSplitOrientation Vertical = 1 (Vertical)
+
+type public sealed class TopiaForge.Mods.UiSplitPane : TopiaForge.Mods.UiNode
+  constructor .ctor(TopiaForge.Mods.UiNode primary, TopiaForge.Mods.UiNode secondary, TopiaForge.Mods.UiSplitOrientation orientation = 0 (Horizontal), System.Single primaryFraction = 0.5)
+  property System.Single PrimaryFraction { get; }
+  property TopiaForge.Mods.UiNode Primary { get; }
+  property TopiaForge.Mods.UiNode Secondary { get; }
+  property TopiaForge.Mods.UiSplitOrientation Orientation { get; }
+
+type public enum TopiaForge.Mods.UiSurfaceKind : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.UiSurfaceKind FullscreenTool = 2 (FullscreenTool)
+  field const TopiaForge.Mods.UiSurfaceKind Hud = 0 (Hud)
+  field const TopiaForge.Mods.UiSurfaceKind Window = 1 (Window)
+
+type public sealed class TopiaForge.Mods.UiSurfaceRequest : System.Object
+  constructor .ctor(System.String id, System.String title, System.String body, TopiaForge.Mods.UiSurfaceKind kind = 1 (Window), System.Single width = 460, System.Single height = 320, TopiaForge.Mods.UiNode? content = null)
+  property System.Single Height { get; }
+  property System.Single Width { get; }
+  property System.String Body { get; }
+  property System.String Id { get; }
+  property System.String Title { get; }
+  property TopiaForge.Mods.UiNode? Content { get; }
+  property TopiaForge.Mods.UiSurfaceKind Kind { get; }
+
+type public sealed class TopiaForge.Mods.UiText : TopiaForge.Mods.UiNode
+  constructor .ctor(System.String text, TopiaForge.Mods.UiTextStyle style = 0 (Body), TopiaForge.Mods.UiTone tone = 0 (Neutral))
+  property System.String Text { get; }
+  property TopiaForge.Mods.UiTextStyle Style { get; }
+  property TopiaForge.Mods.UiTone Tone { get; }
+
+type public sealed class TopiaForge.Mods.UiTextInput : TopiaForge.Mods.UiNode
+  constructor .ctor(System.String id, System.String label, System.String value, System.Action<System.String> changed, System.String placeholder = "", System.Int32 maximumLength = 256, System.Boolean enabled = true)
+  property System.Action<System.String> Changed { get; }
+  property System.Boolean Enabled { get; }
+  property System.Int32 MaximumLength { get; }
+  property System.String Label { get; }
+  property System.String Placeholder { get; }
+  property System.String Value { get; }
+
+type public enum TopiaForge.Mods.UiTextStyle : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.UiTextStyle Body = 0 (Body)
+  field const TopiaForge.Mods.UiTextStyle Caption = 2 (Caption)
+  field const TopiaForge.Mods.UiTextStyle Heading = 1 (Heading)
+
+type public sealed class TopiaForge.Mods.UiToggle : TopiaForge.Mods.UiNode
+  constructor .ctor(System.String id, System.String label, System.Boolean value, System.Action<System.Boolean> changed, System.Boolean enabled = true)
+  property System.Action<System.Boolean> Changed { get; }
+  property System.Boolean Enabled { get; }
+  property System.Boolean Value { get; }
+  property System.String Label { get; }
+
+type public enum TopiaForge.Mods.UiTone : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.UiTone Danger = 3 (Danger)
+  field const TopiaForge.Mods.UiTone Neutral = 0 (Neutral)
+  field const TopiaForge.Mods.UiTone Success = 1 (Success)
+  field const TopiaForge.Mods.UiTone Warning = 2 (Warning)
+
+type public sealed class TopiaForge.Mods.UiVirtualList : TopiaForge.Mods.UiNode
+  constructor .ctor(System.String id, System.Collections.Generic.IEnumerable<TopiaForge.Mods.UiListItem> items, System.Action<System.String> selected, System.String? selectedItemId = null, System.Int32 visibleRows = 6, System.Boolean enabled = true)
+  property System.Action<System.String> Selected { get; }
+  property System.Boolean Enabled { get; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.UiListItem> Items { get; }
+  property System.Int32 VisibleRows { get; }
+  property System.String? SelectedItemId { get; }
+
+type public readonly struct TopiaForge.Mods.Vec2 : System.ValueType, System.IEquatable<TopiaForge.Mods.Vec2>
+  constructor .ctor(System.Single x, System.Single y)
+  method [static] System.Boolean op_Equality(TopiaForge.Mods.Vec2 left, TopiaForge.Mods.Vec2 right)
+  method [static] System.Boolean op_Inequality(TopiaForge.Mods.Vec2 left, TopiaForge.Mods.Vec2 right)
+  method [static] System.Single Dot(TopiaForge.Mods.Vec2 left, TopiaForge.Mods.Vec2 right)
+  method [static] TopiaForge.Mods.Vec2 op_Addition(TopiaForge.Mods.Vec2 left, TopiaForge.Mods.Vec2 right)
+  method [static] TopiaForge.Mods.Vec2 op_Division(TopiaForge.Mods.Vec2 value, System.Single scale)
+  method [static] TopiaForge.Mods.Vec2 op_Multiply(System.Single scale, TopiaForge.Mods.Vec2 value)
+  method [static] TopiaForge.Mods.Vec2 op_Multiply(TopiaForge.Mods.Vec2 value, System.Single scale)
+  method [static] TopiaForge.Mods.Vec2 op_Subtraction(TopiaForge.Mods.Vec2 left, TopiaForge.Mods.Vec2 right)
+  method [static] TopiaForge.Mods.Vec2 op_UnaryNegation(TopiaForge.Mods.Vec2 value)
+  method [virtual,final,newslot] System.Boolean Equals(TopiaForge.Mods.Vec2 other)
+  method [virtual] System.Boolean Equals(System.Object? obj)
+  method [virtual] System.Int32 GetHashCode()
+  method [virtual] System.String ToString()
+  property System.Boolean IsFinite { get; }
+  property System.Single Length { get; }
+  property System.Single LengthSquared { get; }
+  property System.Single X { get; }
+  property System.Single Y { get; }
+  property TopiaForge.Mods.Vec2 Normalized { get; }
+  property static TopiaForge.Mods.Vec2 Zero { get [static]; }
+
+type public readonly struct TopiaForge.Mods.Vec3 : System.ValueType, System.IEquatable<TopiaForge.Mods.Vec3>
+  constructor .ctor(System.Single x, System.Single y, System.Single z)
+  method System.Single[] ToArray()
+  method [static] System.Boolean op_Equality(TopiaForge.Mods.Vec3 left, TopiaForge.Mods.Vec3 right)
+  method [static] System.Boolean op_Inequality(TopiaForge.Mods.Vec3 left, TopiaForge.Mods.Vec3 right)
+  method [static] System.Single Distance(TopiaForge.Mods.Vec3 first, TopiaForge.Mods.Vec3 second)
+  method [static] System.Single Dot(TopiaForge.Mods.Vec3 left, TopiaForge.Mods.Vec3 right)
+  method [static] TopiaForge.Mods.Vec3 ClampLength(TopiaForge.Mods.Vec3 value, System.Single maximumLength)
+  method [static] TopiaForge.Mods.Vec3 Cross(TopiaForge.Mods.Vec3 left, TopiaForge.Mods.Vec3 right)
+  method [static] TopiaForge.Mods.Vec3 FromArray(System.Single[]? values)
+  method [static] TopiaForge.Mods.Vec3 op_Addition(TopiaForge.Mods.Vec3 left, TopiaForge.Mods.Vec3 right)
+  method [static] TopiaForge.Mods.Vec3 op_Division(TopiaForge.Mods.Vec3 vector, System.Single scale)
+  method [static] TopiaForge.Mods.Vec3 op_Multiply(System.Single scale, TopiaForge.Mods.Vec3 vector)
+  method [static] TopiaForge.Mods.Vec3 op_Multiply(TopiaForge.Mods.Vec3 vector, System.Single scale)
+  method [static] TopiaForge.Mods.Vec3 op_Subtraction(TopiaForge.Mods.Vec3 left, TopiaForge.Mods.Vec3 right)
+  method [static] TopiaForge.Mods.Vec3 op_UnaryNegation(TopiaForge.Mods.Vec3 value)
+  method [virtual,final,newslot] System.Boolean Equals(TopiaForge.Mods.Vec3 other)
+  method [virtual] System.Boolean Equals(System.Object? obj)
+  method [virtual] System.Int32 GetHashCode()
+  method [virtual] System.String ToString()
+  property System.Boolean IsFinite { get; }
+  property System.Single Length { get; }
+  property System.Single LengthSquared { get; }
+  property System.Single X { get; }
+  property System.Single Y { get; }
+  property System.Single Z { get; }
+  property TopiaForge.Mods.Vec3 Normalized { get; }
+  property static TopiaForge.Mods.Vec3 Zero { get [static]; }

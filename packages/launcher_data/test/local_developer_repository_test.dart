@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:launcher_data/launcher_data.dart';
+import 'package:launcher_data/src/ugc_sidecar_runtime.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
@@ -12,16 +13,14 @@ void main() {
   late Directory root;
   late Directory dataRoot;
   late Directory repoRoot;
-  late Directory gameRoot;
   late LocalDeveloperRepository repository;
 
   setUp(() {
-    root = Directory.systemTemp.createTempSync('robotopia-developer-data-');
+    root = Directory.systemTemp.createTempSync('topiaforge-developer-data-');
     dataRoot = Directory(p.join(root.path, 'data'))..createSync();
     repoRoot = Directory(p.join(root.path, 'repo'))..createSync();
     // The built-in local source derives from dist/ packages; with no dist/ here it simply yields an
     // empty catalog, so these tests drive their own custom package source instead.
-    gameRoot = Directory(p.join(root.path, 'Robotopia'))..createSync();
     repository = LocalDeveloperRepository(
       dataRoot: dataRoot.path,
       repositoryRoot: repoRoot.path,
@@ -70,7 +69,7 @@ void main() {
                 '1.0.0': {
                   'manifest': {
                     ..._manifestJson('feature.mod', '1.0.0'),
-                    'vpmDependencies': {'base.mod': '>=1.0.0'},
+                    'dependencies': {'base.mod': '>=1.0.0'},
                   },
                   'url': featurePackage.uri.toString(),
                   'sha256': sha256Of(featurePackage),
@@ -87,6 +86,13 @@ void main() {
       name: 'Creator Mod',
       includeUnityCompanion: true,
     );
+    final fallbackEntry = File(
+      p.join(workspace.projectRoot, 'CreatorModMod.cs'),
+    ).readAsStringSync();
+    expect(fallbackEntry, contains('CreatorModMod : TopiaForgeMod'));
+    expect(fallbackEntry, contains('protected override void OnLoad()'));
+    expect(fallbackEntry, contains('Context.Logger.Info'));
+    expect(fallbackEntry, isNot(contains('ITopiaForgeMod')));
     expect(workspace.project!.packageSources, isEmpty);
     // The Unity companion is scaffolded with a README + a sample runtime config, and the project records it.
     expect(workspace.project!.unityCompanion.enabled, isTrue);
@@ -101,7 +107,7 @@ void main() {
         p.join(
           workspace.projectRoot,
           'unity-companion',
-          'robotopia.ugc.livesync.sample.json',
+          'topiaforge.ugc.livesync.sample.json',
         ),
       ).existsSync(),
       isTrue,
@@ -130,11 +136,11 @@ void main() {
       'feature.mod',
     ]);
     expect(
-      File(p.join(workspace.projectRoot, 'robotopia.lock.json')).existsSync(),
+      File(p.join(workspace.projectRoot, 'topiaforge.lock.json')).existsSync(),
       isTrue,
     );
     final props = File(
-      p.join(workspace.projectRoot, 'robotopia.dev.props'),
+      p.join(workspace.projectRoot, 'topiaforge.dev.props'),
     ).readAsStringSync();
     expect(props, contains('Base.Api'));
     expect(props, contains('<Private>false</Private>'));
@@ -142,7 +148,7 @@ void main() {
       File(
         p.join(
           workspace.projectRoot,
-          '.robotopia',
+          '.topiaforge',
           'packages',
           'base.mod',
           '1.0.0',
@@ -156,8 +162,8 @@ void main() {
     final gitignore = File(
       p.join(workspace.projectRoot, '.gitignore'),
     ).readAsStringSync();
-    expect(gitignore, contains('.robotopia/packages/'));
-    expect(gitignore, contains('robotopia.dev.props'));
+    expect(gitignore, contains('.topiaforge/packages/'));
+    expect(gitignore, contains('topiaforge.dev.props'));
   });
 
   test('blocks developer restore when package SHA does not match', () async {
@@ -208,30 +214,6 @@ void main() {
     );
   });
 
-  test('migrates legacy folders and reports unconvertible entries', () async {
-    final legacyRoot = Directory(p.join(gameRoot.path, 'Mods'))..createSync();
-    final folder = Directory(p.join(legacyRoot.path, 'ManifestLegacy'))
-      ..createSync();
-    File(
-      p.join(folder.path, 'robotopia.mod.json'),
-    ).writeAsStringSync(jsonEncode(_manifestJson('manifest.legacy', '1.0.0')));
-    Directory(p.join(legacyRoot.path, 'NeedsManualWork')).createSync();
-
-    final result = await repository.migrateLegacyMods(
-      gameRoot.path,
-      p.join(root.path, 'migrated'),
-    );
-
-    expect(result.createdProjects, hasLength(1));
-    expect(
-      File(
-        p.join(result.createdProjects.single, 'robotopia.project.json'),
-      ).existsSync(),
-      isTrue,
-    );
-    expect(result.issues.single.message, contains('needs manual migration'));
-  });
-
   test('doctor checks the UGC companion package and watch folder', () async {
     final workspace = await repository.createModProject(
       parentDirectory: root.path,
@@ -243,7 +225,7 @@ void main() {
     // Inject a watch folder into the project's unityCompanion.liveSync config.
     final watch = p.join(root.path, 'watch-out');
     final projectFile = File(
-      p.join(workspace.projectRoot, 'robotopia.project.json'),
+      p.join(workspace.projectRoot, 'topiaforge.project.json'),
     );
     final json =
         jsonDecode(projectFile.readAsStringSync()) as Map<String, Object?>;
@@ -293,7 +275,7 @@ void main() {
     expect(updated.unityCompanion.enabled, isTrue);
     expect(updated.unityCompanion.liveSync.transport, 'automerge');
 
-    // Reload from disk to confirm it round-tripped through robotopia.project.json.
+    // Reload from disk to confirm it round-tripped through topiaforge.project.json.
     final reloaded = await repository.loadDeveloperWorkspace(
       projectPath: workspace.projectRoot,
     );
@@ -362,13 +344,53 @@ void main() {
     },
   );
 
+  test('project registry rejects an old mod project schema', () async {
+    final oldProject = Directory(p.join(root.path, 'old-project'))
+      ..createSync();
+    File(p.join(oldProject.path, 'topiaforge.project.json')).writeAsStringSync(
+      jsonEncode({
+        'schemaVersion': 1,
+        'id': 'author.old',
+        'name': 'Old Project',
+      }),
+    );
+
+    await expectLater(
+      repository.addExistingProject(oldProject.path),
+      throwsFormatException,
+    );
+    expect(await repository.listProjects(), isEmpty);
+  });
+
   test('runSetup performs safe fixes and returns an environment', () async {
     // A sidecar with deps already present means no real `npm install` runs (hermetic).
     final sidecarDir = Directory(
       p.join(repoRoot.path, 'tools', 'ugc-automerge-sidecar'),
     )..createSync(recursive: true);
     File(p.join(sidecarDir.path, 'index.mjs')).writeAsStringSync('// sidecar');
-    Directory(p.join(sidecarDir.path, 'node_modules')).createSync();
+    const package = {
+      'name': 'topiaforge-sidecar',
+      'version': '1.0.0',
+      'engines': {'node': '>=24.16.0'},
+      'dependencies': <String, String>{},
+    };
+    File(
+      p.join(sidecarDir.path, 'package.json'),
+    ).writeAsStringSync(jsonEncode(package));
+    File(p.join(sidecarDir.path, 'package-lock.json')).writeAsStringSync(
+      jsonEncode({
+        ...package,
+        'lockfileVersion': 3,
+        'requires': true,
+        'packages': {'': package},
+      }),
+    );
+    final inspected = TrustedUgcSidecar.inspectDirectory(sidecarDir);
+    final nodeModules = Directory(p.join(sidecarDir.path, 'node_modules'))
+      ..createSync();
+    File(
+      p.join(nodeModules.path, '.topiaforge-lock-sha256'),
+    ).writeAsStringSync(inspected.lockDigest);
 
     final result = await repository.runSetup();
 
@@ -402,11 +424,11 @@ File _createPackage(
   required String version,
   List<String> apiAssemblies = const [],
 }) {
-  final package = File(p.join(root.path, '$id-$version.robotopiamod'));
+  final package = File(p.join(root.path, '$id-$version.topiaforgemod'));
   final archive = Archive()
     ..addFile(
       ArchiveFile.string(
-        'robotopia.mod.json',
+        'topiaforge.mod.json',
         jsonEncode(_manifestJson(id, version, apiAssemblies: apiAssemblies)),
       ),
     )
@@ -423,13 +445,16 @@ Map<String, Object?> _manifestJson(
   String version, {
   List<String> apiAssemblies = const [],
 }) => {
-  'schemaVersion': 2,
+  'schemaVersion': 5,
   'name': id,
   'displayName': id,
   'version': version,
-  'author': {'name': 'QuantumWorks'},
+  'author': {'name': 'TopiaForge'},
   'entryAssembly': '${_assemblyName(id)}.dll',
   'entryType': '$id.Entry',
+  'supportedGameVersionRange': '*',
+  'supportedLoaderVersionRange': '*',
+  'supportedSdkVersionRange': '*',
   if (apiAssemblies.isNotEmpty) 'apiAssemblies': apiAssemblies,
 };
 
