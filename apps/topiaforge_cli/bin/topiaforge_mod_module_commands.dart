@@ -5,6 +5,10 @@ const _sdkModules = <String, _SdkModule>{
     packageId: 'TopiaForge.Mods.Chronos',
     runtimeDependency: 'io.github.furroxide.topiaforge.chronos',
   ),
+  'creatorcontent': _SdkModule(
+    packageId: 'TopiaForge.Mods.CreatorContent',
+    runtimeDependency: 'io.github.furroxide.topiaforge.creatorcontent',
+  ),
   'prompts': _SdkModule(
     packageId: 'TopiaForge.Mods.Prompts',
     runtimeDependency: 'io.github.furroxide.topiaforge.prompts',
@@ -21,6 +25,13 @@ const _sdkModules = <String, _SdkModule>{
     packageId: 'TopiaForge.Mods.Worlds',
     runtimeDependency: 'io.github.furroxide.topiaforge.worlds',
   ),
+  'multiplayer': _SdkModule(
+    packageId: 'TopiaForge.Mods.Multiplayer',
+    additionalPackageIds: <String>['TopiaForge.Mods.Multiplayer.Generators'],
+    runtimeDependency: 'io.github.furroxide.topiaforge.multiplayer',
+    exactRuntimeDependency: true,
+    managesMultiplayerManifest: true,
+  ),
   'interop-unity': _SdkModule(
     packageId: 'TopiaForge.Mods.Interop.Unity',
     capability: 'unsafe-native',
@@ -28,6 +39,28 @@ const _sdkModules = <String, _SdkModule>{
 };
 
 extension _TopiaForgeModModuleCommands on _TopiaForgeCli {
+  Future<int> _modSync(List<String> args) async {
+    if (args.firstOrNull != 'multiplayer') {
+      throw UsageError(
+        'Usage: topiaforge mod sync multiplayer '
+        '[--project path] [--configuration name]',
+      );
+    }
+    final root = _findModRoot(_modProjectPath(args));
+    final configuration = _option(args, '--configuration') ?? 'Release';
+    if (!RegExp(r'^[A-Za-z0-9_.-]{1,64}$').hasMatch(configuration)) {
+      throw UsageError('Invalid --configuration value.');
+    }
+    final path = await developerRepository.synchronizeMultiplayerContractLock(
+      root.path,
+      configuration: configuration,
+    );
+    stdout.writeln(
+      'Synchronized ${p.basename(path)} from generated multiplayer contracts.',
+    );
+    return 0;
+  }
+
   Future<int> _mutateSdkModule(
     List<String> args,
     String moduleName,
@@ -39,6 +72,23 @@ extension _TopiaForgeModModuleCommands on _TopiaForgeCli {
     final manifestFile = File(p.join(root.path, 'topiaforge.mod.json'));
     final manifest = await developerRepository.readModManifest(root.path);
     final map = manifest.toJson();
+    if (module.managesMultiplayerManifest) {
+      if (add) {
+        map.putIfAbsent(
+          'multiplayer',
+          () => <String, Object?>{
+            'mode': 'session',
+            'presence': 'required',
+            'protocol': <String, Object?>{
+              'version': '1.0.0',
+              'peerVersionRange': '>=1.0.0 <2.0.0',
+            },
+          },
+        );
+      } else {
+        map.remove('multiplayer');
+      }
+    }
     if (module.runtimeDependency.isNotEmpty) {
       final dependencies = Map<String, Object?>.of(
         map['dependencies'] is Map
@@ -46,8 +96,9 @@ extension _TopiaForgeModModuleCommands on _TopiaForgeCli {
             : const <String, Object?>{},
       );
       if (add) {
-        dependencies[module.runtimeDependency] =
-            '>=${TopiaForgeRuntimeVersions.sdkVersion} <2.0.0';
+        dependencies[module.runtimeDependency] = module.exactRuntimeDependency
+            ? TopiaForgeRuntimeVersions.sdkVersion
+            : '>=${TopiaForgeRuntimeVersions.sdkVersion} <2.0.0';
       } else {
         dependencies.remove(module.runtimeDependency);
       }
@@ -79,22 +130,57 @@ extension _TopiaForgeModModuleCommands on _TopiaForgeCli {
       projectFile,
       maxBytes: CliFileLimits.metadata,
     );
-    final updatedProject = _editSdkPackageReference(
-      originalProject,
-      packageId: module.packageId,
-      version: TopiaForgeRuntimeVersions.sdkVersion,
-      add: add,
-    );
-    await _writeModulePairAtomically(
-      manifestFile,
-      '${const JsonEncoder.withIndent('  ').convert(updatedManifest.toJson())}\n',
-      projectFile,
-      updatedProject,
-    );
-    stdout.writeln(
-      '${add ? 'Added' : 'Removed'} SDK module $moduleName '
-      '(${module.packageId}). Run `topiaforge restore` to refresh the lock file.',
-    );
+    var updatedProject = originalProject;
+    for (final packageId in <String>[
+      module.packageId,
+      ...module.additionalPackageIds,
+    ]) {
+      updatedProject = _editSdkPackageReference(
+        updatedProject,
+        packageId: packageId,
+        version: TopiaForgeRuntimeVersions.sdkVersion,
+        add: add,
+      );
+    }
+    final updates = <File, String?>{
+      manifestFile:
+          '${const JsonEncoder.withIndent('  ').convert(updatedManifest.toJson())}\n',
+      projectFile: updatedProject,
+    };
+    if (module.managesMultiplayerManifest) {
+      final contractLock = File(
+        p.join(root.path, 'topiaforge.multiplayer.lock.json'),
+      );
+      final protocolVersion =
+          updatedManifest.multiplayer?.protocol?.version ?? '';
+      final initialContractLock = <String, Object?>{
+        'schemaVersion': 2,
+        if (protocolVersion.isNotEmpty) 'protocolVersion': protocolVersion,
+        'contracts': <Object?>[],
+      };
+      updates[contractLock] = add
+          ? (contractLock.existsSync()
+                ? readBoundedTextFileSync(
+                    contractLock,
+                    maxBytes: CliFileLimits.metadata,
+                  )
+                : '${const JsonEncoder.withIndent('  ').convert(initialContractLock)}\n')
+          : null;
+    }
+    await _writeModuleFilesAtomically(updates);
+    if (add && module.managesMultiplayerManifest) {
+      stdout.writeln(
+        'Added SDK module $moduleName (${module.packageId}). '
+        'Run `topiaforge restore`, then `topiaforge mod sync multiplayer`, '
+        'and commit packages.lock.json, topiaforge.sdk.lock.json, and '
+        'topiaforge.multiplayer.lock.json.',
+      );
+    } else {
+      stdout.writeln(
+        '${add ? 'Added' : 'Removed'} SDK module $moduleName '
+        '(${module.packageId}). Run `topiaforge restore` to refresh the lock file.',
+      );
+    }
     _printIssues(issues);
     return 0;
   }
@@ -157,61 +243,83 @@ extension _TopiaForgeModModuleCommands on _TopiaForgeCli {
               '<PackageReference ',
               '<PackageReference Version="$version" ',
             );
+      if (topiaForgeAnalyzerPackageIds.contains(packageId) &&
+          !item.contains('PrivateAssets=')) {
+        item = item.replaceFirst(
+          '<PackageReference ',
+          '<PackageReference PrivateAssets="all" ',
+        );
+      }
       return project.replaceRange(match.start, match.end, item);
     }
     final close = project.lastIndexOf('</Project>');
     if (close < 0) throw StateError('The C# project is malformed.');
+    final privateAssets = topiaForgeAnalyzerPackageIds.contains(packageId)
+        ? ' PrivateAssets="all"'
+        : '';
     return '${project.substring(0, close)}  <ItemGroup>\n'
-        '    <PackageReference Include="$packageId" Version="$version" />\n'
+        '    <PackageReference Include="$packageId" Version="$version"$privateAssets />\n'
         '  </ItemGroup>\n${project.substring(close)}';
   }
 
-  Future<void> _writeModulePairAtomically(
-    File manifest,
-    String manifestText,
-    File project,
-    String projectText,
-  ) async {
-    for (final file in [manifest, project]) {
-      if (FileSystemEntity.typeSync(file.path, followLinks: false) !=
-          FileSystemEntityType.file) {
-        throw StateError('Refusing to replace a linked or missing file.');
+  Future<void> _writeModuleFilesAtomically(Map<File, String?> updates) async {
+    final originalTypes = <File, FileSystemEntityType>{};
+    for (final file in updates.keys) {
+      final type = FileSystemEntity.typeSync(file.path, followLinks: false);
+      if (type != FileSystemEntityType.file &&
+          type != FileSystemEntityType.notFound) {
+        throw StateError('Refusing to replace a linked or special file.');
       }
+      originalTypes[file] = type;
     }
     final nonce = '$pid-${DateTime.now().microsecondsSinceEpoch}';
-    final manifestTemp = File('${manifest.path}.$nonce.tmp');
-    final projectTemp = File('${project.path}.$nonce.tmp');
-    final manifestBackup = File('${manifest.path}.$nonce.bak');
-    final projectBackup = File('${project.path}.$nonce.bak');
+    final temps = <File, File>{};
+    final backups = <File, File>{};
+    final installed = <File>{};
+    var committed = false;
     try {
-      await manifestTemp.writeAsString(manifestText, flush: true);
-      await projectTemp.writeAsString(projectText, flush: true);
-      manifest.renameSync(manifestBackup.path);
-      try {
-        project.renameSync(projectBackup.path);
-        manifestTemp.renameSync(manifest.path);
-        projectTemp.renameSync(project.path);
-      } on Object {
-        if (manifestBackup.existsSync()) {
-          if (manifest.existsSync()) manifest.deleteSync();
-          manifestBackup.renameSync(manifest.path);
+      for (final entry in updates.entries) {
+        if (entry.value != null) {
+          final temp = File('${entry.key.path}.$nonce.tmp');
+          await temp.writeAsString(entry.value!, flush: true);
+          temps[entry.key] = temp;
         }
-        if (projectBackup.existsSync()) {
-          if (project.existsSync()) project.deleteSync();
-          projectBackup.renameSync(project.path);
-        }
-        rethrow;
       }
-      if (manifestBackup.existsSync()) manifestBackup.deleteSync();
-      if (projectBackup.existsSync()) projectBackup.deleteSync();
+      for (final file in updates.keys) {
+        if (originalTypes[file] == FileSystemEntityType.file) {
+          final backup = File('${file.path}.$nonce.bak');
+          file.renameSync(backup.path);
+          backups[file] = backup;
+        }
+      }
+      for (final entry in temps.entries) {
+        entry.value.renameSync(entry.key.path);
+        installed.add(entry.key);
+      }
+      committed = true;
+    } on Object {
+      for (final file in installed) {
+        if (file.existsSync()) file.deleteSync();
+      }
+      for (final entry in backups.entries) {
+        if (entry.value.existsSync()) {
+          if (entry.key.existsSync()) entry.key.deleteSync();
+          entry.value.renameSync(entry.key.path);
+        }
+      }
+      rethrow;
     } finally {
-      if (manifestTemp.existsSync()) manifestTemp.deleteSync();
-      if (projectTemp.existsSync()) projectTemp.deleteSync();
-      if (manifestBackup.existsSync() && manifest.existsSync()) {
-        manifestBackup.deleteSync();
+      for (final temp in temps.values) {
+        if (temp.existsSync()) temp.deleteSync();
       }
-      if (projectBackup.existsSync() && project.existsSync()) {
-        projectBackup.deleteSync();
+    }
+    for (final backup in backups.values) {
+      if (!committed || !backup.existsSync()) continue;
+      try {
+        backup.deleteSync();
+      } on FileSystemException {
+        // The transaction committed; a stale nonce backup is recoverable and
+        // safer than reporting a failed module change after files were saved.
       }
     }
   }

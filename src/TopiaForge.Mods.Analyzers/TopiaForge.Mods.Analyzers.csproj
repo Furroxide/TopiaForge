@@ -3,11 +3,11 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <AssemblyName>TopiaForge.Mods.Analyzers</AssemblyName>
     <RootNamespace>TopiaForge.Mods.Analyzers</RootNamespace>
-    <Version>1.0.0</Version>
-    <PackageVersion>1.0.0</PackageVersion>
+    <Version>1.0.0-rc.1</Version>
+    <PackageVersion>1.0.0-rc.1</PackageVersion>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>
-    <InformationalVersion>1.0.0</InformationalVersion>
+    <InformationalVersion>1.0.0-rc.1</InformationalVersion>
     <Description>Build-time safety and manifest diagnostics for TopiaForge V1 mods.</Description>
     <PackageId>TopiaForge.Mods.Analyzers</PackageId>
     <Authors>TopiaForge</Authors>

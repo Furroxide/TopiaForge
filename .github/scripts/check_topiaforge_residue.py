@@ -110,7 +110,16 @@ TEXT_ONLY_BYTE_RULES = (
 LOWERCASE_ROBOTOPIA_ALLOWLIST = (
     re.compile(r"robotopia\.gg", re.IGNORECASE),
     re.compile(r"@robotopia(?:-parts)?/", re.IGNORECASE),
-    re.compile(r"robotopia-(?:bundled-refs|game-build|managed-refs|public-refs)", re.IGNORECASE),
+    re.compile(
+        r"robotopia-(?:bundled-refs|game-build|managed-refs|public-refs)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?<![A-Za-z0-9_.-])"
+        r"robotopia\.(?:characters|items|ugc-props|vehicles)"
+        r"(?![A-Za-z0-9_.-])",
+        re.IGNORECASE,
+    ),
     re.compile(r"-robotopiaManagedDir\b"),
 )
 
@@ -140,6 +149,7 @@ MAX_ARCHIVE_UNCOMPRESSED_BYTES = 8 * 1024 * 1024 * 1024
 
 LOWERCASE_LITERAL_ALLOWLIST = {
     "packages/launcher_data/lib/src/local_launcher_repository/game_layout.dart",
+    "packages/launcher_data/lib/src/local_launcher_repository/game_runtime_helpers.dart",
     "packages/launcher_data/test/game_layout_test.dart",
     "packages/launcher_data/test/mac_layout_repository_test.dart",
 }

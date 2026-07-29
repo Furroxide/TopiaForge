@@ -25,11 +25,11 @@ namespace TopiaForge.Mods.Testing
             FileSystem = new InMemoryModFileSystem();
             Files = new InMemoryModFiles(FileSystem, Lifetime);
             Config = new InMemoryModConfigService();
-            Storage = new InMemoryModStorageService();
+            LocalStorage = new InMemoryLocalModStorageService();
             Input = new FakeInputService(Lifetime);
             Time = new DeterministicGameTime();
             Scheduler = new DeterministicModScheduler(Lifetime, Logger);
-            Player = new FakePlayerService(Lifetime);
+            LocalPlayer = new FakeLocalPlayerService(Lifetime);
             Entities = new FakeEntityService(Lifetime);
             Physics = new FakePhysicsService();
             Interactions = new FakeInteractionService(Lifetime);
@@ -65,14 +65,14 @@ namespace TopiaForge.Mods.Testing
         /// <summary>Gets typed in-memory configuration.</summary>
         public InMemoryModConfigService Config { get; }
 
-        /// <summary>Gets scoped in-memory save storage.</summary>
-        public InMemoryModStorageService Storage { get; }
+        /// <summary>Gets installation-local in-memory mod storage.</summary>
+        public InMemoryLocalModStorageService LocalStorage { get; }
 
         /// <summary>Gets deterministic named input.</summary>
         public FakeInputService Input { get; }
 
-        /// <summary>Gets mutable player state.</summary>
-        public FakePlayerService Player { get; }
+        /// <summary>Gets mutable process-local player state.</summary>
+        public FakeLocalPlayerService LocalPlayer { get; }
 
         /// <summary>Gets deterministic entities and motion leases.</summary>
         public FakeEntityService Entities { get; }
@@ -124,9 +124,9 @@ namespace TopiaForge.Mods.Testing
         IModEvents IModContext.Events => Events;
         IModFiles IModContext.Files => Files;
         IModConfigService IModContext.Config => Config;
-        IModStorageService IModContext.Storage => Storage;
+        ILocalModStorageService IModContext.LocalStorage => LocalStorage;
         IInputService IModContext.Input => Input;
-        IPlayerService IModContext.Player => Player;
+        ILocalPlayerService IModContext.LocalPlayer => LocalPlayer;
         ISceneService IModContext.Scenes => Scenes;
         IEntityService IModContext.Entities => Entities;
         IPhysicsService IModContext.Physics => Physics;

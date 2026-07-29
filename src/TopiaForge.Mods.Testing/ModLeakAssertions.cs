@@ -18,7 +18,7 @@ namespace TopiaForge.Mods.Testing
             Add(leaks, "lifetime resources", context.Lifetime.TrackedResourceCount);
             Add(leaks, "event subscriptions", context.Events.ActiveSubscriptionCount);
             Add(leaks, "input actions", context.Input.ActiveActionCount);
-            Add(leaks, "player-control leases", context.Player.ActiveControlLeaseCount);
+            Add(leaks, "player-control leases", context.LocalPlayer.ActiveControlLeaseCount);
             Add(leaks, "entity-motion leases", context.Entities.ActiveMotionCount);
             Add(leaks, "scheduled operations", context.Scheduler.PendingCount);
             Add(leaks, "pending scene loads", context.Scenes.PendingLoadCount);

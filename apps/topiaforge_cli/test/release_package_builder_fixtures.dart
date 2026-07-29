@@ -173,7 +173,7 @@ Directory _writeFixtureRepo(Directory temp) {
 
 void _writeFixtureSdkProjects(Directory repo) {
   for (final package in topiaForgeSdkPackageIds) {
-    final analyzer = package == 'TopiaForge.Mods.Analyzers';
+    final analyzer = topiaForgeAnalyzerPackageIds.contains(package);
     final target = analyzer ? 'netstandard2.0' : 'netstandard2.1';
     _writeFile(
       repo,
@@ -247,7 +247,7 @@ void _addSdkPayload(Archive archive, {String prefix = ''}) {
       final dll = File(p.join(temp.path, 'input', '$package.dll'))
         ..createSync(recursive: true)
         ..writeAsStringSync('$package assembly');
-      if (package == 'TopiaForge.Mods.Analyzers') {
+      if (topiaForgeAnalyzerPackageIds.contains(package)) {
         analyzers[package] = dll;
         continue;
       }

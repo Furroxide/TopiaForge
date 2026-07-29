@@ -101,6 +101,7 @@ namespace TopiaForge.ModManager.Tests
             foreach (var modId in new[]
                      {
                          "io.github.furroxide.topiaforge.gravitygun",
+                         "io.github.furroxide.topiaforge.opposite-day",
                          "io.github.furroxide.topiaforge.sandbox",
                          "io.github.furroxide.topiaforge.zombies"
                      })

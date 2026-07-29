@@ -16,7 +16,15 @@ namespace TopiaForge.Prompts
                 throw new System.InvalidOperationException(registration.ErrorMessage);
             }
 
-            Context.Logger.Info("TopiaForge Prompts loaded; prompt override extension registered.");
+            var nativeBridge = NativeRobotPromptBridge.TryInstall(Context, registry);
+            if (nativeBridge != null)
+            {
+                Context.Lifetime.Track(nativeBridge);
+            }
+
+            Context.Logger.Info(
+                "TopiaForge Prompts loaded; prompt override extension registered" +
+                (nativeBridge == null ? " (native robot bridge degraded)." : "."));
         }
     }
 }

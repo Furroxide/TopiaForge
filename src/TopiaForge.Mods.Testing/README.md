@@ -20,14 +20,18 @@ The fake context provides captured logging, in-memory configuration/files/storag
 scheduling, controllable scene completion, player/entity/physics state, and all other non-null V1 core services.
 SDK-owned resources are released in reverse order on ordinary unload and partial load failure.
 
-`FakeUiService` captures safe declarative trees. Its `FakeUiSurface` can invoke buttons, toggles, sliders, text
-input, dropdowns, and virtual-list selections by stable id, inspect the resulting state, replace content, and
-assert that one failing callback did not starve later subscribers.
+`FakeUiService` captures safe declarative trees. Its `FakeUiSurface` can invoke buttons, toggles,
+sliders, text input, dropdowns, virtual-list selections, and graph selection/edit/viewport requests
+by stable id, inspect the resulting state, replace content, raise dismissal when hidden, and assert
+that one failing callback did not starve later subscribers.
 
 Specialist modules have first-class, engine-free fakes too:
 
-- `FakeRobotKit` groups agent, objective, brain-query, conversation, and voice-input fakes. Brain queries can be
-  held pending and completed or failed explicitly.
+- `FakeRobotKit` groups agent, objective, brain-query, conversation, and voice-input fakes. Brain
+  queries can be held pending and completed or failed explicitly.
+- `FakeCreatorContentService`, `FakeCreatorMutationSafetyService`,
+  `FakeCreatorProjectLibrary`, and `FakeCreatorSceneTarget` cover catalog registrations, owned
+  spawns, temporary native edits, persistence-isolation leases, and local event projects.
 - `FakeWorldGamemodeService` owns typed registrations and lets tests pause and complete a world load.
 - `FakeTimeControlService` derives freeze/slow state and advances scaled and control clocks only on request.
 - `FakePromptOverrideRegistry` reproduces deterministic priority and conflict selection.

@@ -12,11 +12,14 @@ Linux packages expose the launcher in `launcher/` and a root `topiaforge` CLI ex
 or macOS runtime payload, and lets you browse, install, enable/disable, and launch mods. The **Developer** tab is hidden by
 default -- turn it on under **Settings -> Developer mode** only if you build mods.
 
-For the initial release, launcher upgrades are manual: download the next signed platform package from the official
-GitHub Releases page. Automatic self-update is intentionally excluded until the client can verify owner-signed
-metadata and enforce bounded extraction independently of the update index.
+Prerelease launchers check the signed beta channel by default after a persisted
+cooldown. Updates are verified against embedded Ed25519 trust, downloaded and
+extracted within signed bounds, and replace the complete package only after
+explicit confirmation; a startup health handshake enables automatic rollback.
+Unsupported layouts use the verified manual GitHub Releases download. See
+[launcher updates](docs/LauncherUpdates.md).
 
-The initial compatibility target is Robotopia build **2227**. The built-in registry initially carries verified
+The current compatibility target is Robotopia build **2309**. The built-in registry initially carries verified
 first-party release artifacts only; community authors can use the documented self-hosted registry format while
 official submission governance is being established.
 
@@ -31,9 +34,17 @@ Start with the walkthrough: [docs/YourFirstMod.md](docs/YourFirstMod.md). The re
 [docs/Modding.md → Install the CLI](docs/Modding.md#install-the-cli)). Validate your machine first
 (`topiaforge setup` to auto-fix what it safely can, or `topiaforge doctor` to audit read-only). Only the .NET SDK
 is required to build mods; Node/Unity are optional (UGC live-sync). See [docs/Modding.md](docs/Modding.md) for
-the full reference. Build branded in-game UI for Robotopia (windows, HUDs, modals, toasts) with the TopiaForge UI kit — see
-[docs/UiKit.md](docs/UiKit.md) and the F8 gallery mod. The complete first-party catalog and candidate gameplay
-acceptance flows are in [docs/FirstPartyMods.md](docs/FirstPartyMods.md).
+the full reference. Build branded in-game UI for Robotopia (windows, fullscreen tools, graph
+editors, HUDs, modals, and toasts) with the TopiaForge UI kit — see
+[docs/UiKit.md](docs/UiKit.md) and the F8 gallery mod. Add safe creator catalogs and reversible
+sessions with [Creator Content](docs/CreatorTools.md). The complete first-party catalog and
+candidate gameplay acceptance flows are in [docs/FirstPartyMods.md](docs/FirstPartyMods.md).
+
+TopiaForge 1.0 remains standalone-only, while the stable multiplayer API preview lets authors opt a V5 mod into
+generated server-canonical contracts, loopback play, and deterministic multi-peer tests before live
+transport ships. V5 is also the normal standalone manifest when `multiplayer` is omitted; pre-release V4 was retired.
+See
+[docs/Multiplayer.md](docs/Multiplayer.md) and [docs/ManifestV5.md](docs/ManifestV5.md).
 
 ## Standalone launcher
 
@@ -107,7 +118,10 @@ cd yourname.firstmod
 topiaforge pack
 ```
 
-`topiaforge pack --all` packs every first-party mod under `mods/`, and `topiaforge unity pack-packages` regenerates the VPM listing in `dist/vpm/`.
+`topiaforge pack --all` packs the non-DevTool first-party mods under `mods/`; add
+`--include-dev-mods` to include Creator Tools and UiGallery. Release packaging adds Creator Tools
+explicitly while keeping UiGallery out of the player payload. `topiaforge unity pack-packages`
+regenerates the VPM listing in `dist/vpm/`.
 
 Packages can be installed from the Robotopia manager's package tab by full path, or by placing them into:
 
@@ -134,6 +148,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [SUPPORT.md]
 ```powershell
 dotnet build TopiaForge.slnx -c Release
 dotnet run --project tests\TopiaForge.ModManager.Tests\TopiaForge.ModManager.Tests.csproj -c Release
+dotnet run --project tests\TopiaForge.ModRuntime.Tests\TopiaForge.ModRuntime.Tests.csproj -c Release
+dotnet run --project tests\TopiaForge.Mods.Analyzers.Tests\TopiaForge.Mods.Analyzers.Tests.csproj -c Release
+dotnet run --project tests\TopiaForge.Mods.Multiplayer.Generators.Tests\TopiaForge.Mods.Multiplayer.Generators.Tests.csproj -c Release
+dotnet run --project tests\TopiaForge.Mods.Multiplayer.Tests\TopiaForge.Mods.Multiplayer.Tests.csproj -c Release
 Push-Location packages\launcher_domain; dart test; dart analyze; Pop-Location
 Push-Location packages\launcher_data; dart test; dart analyze; Pop-Location
 Push-Location apps\topiaforge_cli; dart test; dart analyze; Pop-Location

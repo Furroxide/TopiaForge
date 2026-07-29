@@ -108,7 +108,7 @@ extension _NewCommands on _TopiaForgeCli {
   }
 
   /// Parses every scaffold-time manifest flag of `new mod`. `hashes`
-  /// (pack-time) and `schemaVersion` (pinned to 4) are intentionally not flags.
+  /// (pack-time) and `schemaVersion` (pinned to 5) are intentionally not flags.
   ModScaffoldOptions _parseModScaffoldOptions(List<String> args) {
     ModDependency parseDependency(String spec, {bool optional = false}) {
       final at = spec.indexOf('@');

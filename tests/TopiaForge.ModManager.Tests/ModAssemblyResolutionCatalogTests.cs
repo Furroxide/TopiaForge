@@ -90,7 +90,7 @@ namespace TopiaForge.ModManager.Tests
         {
             var manifest = new ModManifest
             {
-                SchemaVersion = 4,
+                SchemaVersion = 5,
                 Id = id,
                 Name = id,
                 Version = "1.0.0",

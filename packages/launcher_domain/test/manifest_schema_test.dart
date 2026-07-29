@@ -6,7 +6,40 @@ import 'package:launcher_domain/launcher_domain.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test('checked-in manifests satisfy schema v4', () {
+  test('versioned V5 schema is frozen and self-contained', () {
+    final root = _repoRoot();
+    Map<String, Object?> readSchema(String name) =>
+        jsonDecode(File(_join(root.path, ['schemas', name])).readAsStringSync())
+            as Map<String, Object?>;
+
+    final latest = readSchema('topiaforge.mod.schema.json');
+    final versioned = readSchema('topiaforge.mod.v5.schema.json');
+    expect(
+      jsonEncode(versioned),
+      isNot(contains('/schemas/topiaforge.mod.schema.json')),
+      reason:
+          'a frozen versioned schema must never reference the mutable latest schema',
+    );
+    expect(versioned['properties'], isA<Map>());
+    expect(
+      ((versioned['properties'] as Map)['schemaVersion'] as Map)['const'],
+      ModManifest.currentSchemaVersion,
+    );
+
+    for (final schema in [latest, versioned]) {
+      schema.remove(r'$id');
+      schema.remove('title');
+      schema.remove('description');
+    }
+    expect(
+      versioned,
+      latest,
+      reason:
+          'while V5 is latest, its frozen schema and editor alias must remain semantically identical',
+    );
+  });
+
+  test('checked-in manifests satisfy schema V5', () {
     final root = _repoRoot();
     final schemaJson =
         jsonDecode(
@@ -93,7 +126,7 @@ void main() {
     }
   });
 
-  test('shared V4 fixtures agree across schema and domain validators', () {
+  test('shared V5 fixtures agree across schema and domain validators', () {
     final root = _repoRoot();
     final schema = _manifestSchema();
     final fixtureRoot = _join(root.path, ['tests', 'fixtures', 'manifests']);
@@ -150,7 +183,7 @@ JsonSchema _manifestSchema() {
 }
 
 Map<String, Object?> _validManifest() => {
-  'schemaVersion': 4,
+  'schemaVersion': 5,
   'name': 'sample.schema-parity',
   'displayName': 'Schema parity',
   'version': '1.2.3',

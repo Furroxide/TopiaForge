@@ -10,9 +10,9 @@ namespace TopiaForge.ModManager.Tests
 {
     internal static class FirstPartyManifestTests
     {
-        private const string GameRange = "0.0.2227";
-        private const string LoaderRange = ">=1.0.0 <2.0.0";
-        private const string SdkRange = ">=1.0.0 <2.0.0";
+        private const string GameRange = "0.0.2309";
+        private const string LoaderRange = ">=1.0.0-rc.1 <2.0.0";
+        private const string SdkRange = ">=1.0.0-rc.1 <2.0.0";
 
         internal static void Run()
         {
@@ -23,14 +23,14 @@ namespace TopiaForge.ModManager.Tests
                     SearchOption.AllDirectories)
                 .OrderBy(path => path, StringComparer.Ordinal)
                 .ToList();
-            Assert(manifestPaths.Count == 12, "exactly 12 first-party manifests should be release-audited");
+            Assert(manifestPaths.Count == 16, "exactly 16 first-party manifests should be release-audited");
 
             var manifests = new Dictionary<string, ModManifest>(StringComparer.OrdinalIgnoreCase);
             foreach (var path in manifestPaths)
             {
                 var manifest = ModManifestJson.LoadFile(path);
                 manifests.Add(manifest.Id, manifest);
-                Assert(manifest.SchemaVersion == 4,
+                Assert(manifest.SchemaVersion == ModManifest.CurrentSchemaVersion,
                     manifest.Id + " must use the TopiaForge manifest schema discriminator");
                 Assert(manifest.Id.StartsWith("io.github.furroxide.topiaforge.", StringComparison.Ordinal),
                     manifest.Id + " must live under the first-party TopiaForge identifier namespace");
@@ -38,19 +38,21 @@ namespace TopiaForge.ModManager.Tests
                     && manifest.EntryType.StartsWith("TopiaForge.", StringComparison.Ordinal),
                     manifest.Id + " must expose only TopiaForge assembly and type identities");
                 Assert(manifest.SupportedGameVersionRange == GameRange,
-                    manifest.Id + " must pin the audited Robotopia build 2227");
+                    manifest.Id + " must pin the audited Robotopia build 2309");
                 Assert(manifest.SupportedLoaderVersionRange == LoaderRange,
                     manifest.Id + " must declare the compatible V1 loader line");
                 Assert(manifest.SupportedSdkVersionRange == SdkRange,
                     manifest.Id + " must declare the compatible V1 SDK line");
-                Assert(manifest.License == "NOASSERTION",
-                    manifest.Id + " must use the fail-closed SPDX sentinel until owner licensing is resolved");
+                Assert(manifest.License == "MIT",
+                    manifest.Id + " must use the approved project license");
+                Assert(manifest.LicenseFiles.SequenceEqual(new[] { "LICENSE" }),
+                    manifest.Id + " must include the approved project license in its package");
                 Assert(!manifest.Capabilities.Contains("ai", StringComparer.OrdinalIgnoreCase),
                     manifest.Id + " must use descriptive capabilities instead of the ambiguous ai alias");
 
                 var errors = ManifestValidator.Validate(
                     manifest,
-                    new ManifestValidationContext("0.0.2227", requireKnownGameVersion: true));
+                    new ManifestValidationContext("0.0.2309", requireKnownGameVersion: true));
                 Assert(errors.Count == 0, manifest.Id + " failed strict compatibility validation: " + string.Join("; ", errors));
 
                 var projectPath = Directory.GetFiles(Path.GetDirectoryName(path)!, "*.csproj").Single();
@@ -59,7 +61,9 @@ namespace TopiaForge.ModManager.Tests
                 var fileVersion = project.Descendants("FileVersion").Select(element => element.Value).SingleOrDefault();
                 var informational = project.Descendants("InformationalVersion").Select(element => element.Value).SingleOrDefault();
                 Assert(version == manifest.Version, manifest.Id + " project Version must match its manifest");
-                Assert(fileVersion == manifest.Version + ".0", manifest.Id + " FileVersion must match its manifest");
+                var numericVersion = manifest.Version.Split('-', '+')[0] + ".0";
+                Assert(fileVersion == numericVersion,
+                    manifest.Id + " FileVersion must preserve the numeric release-line version");
                 Assert(informational == manifest.Version, manifest.Id + " InformationalVersion must match its manifest");
                 ValidateProjectAndLifecycleContract(path, manifest, project);
             }
@@ -70,9 +74,28 @@ namespace TopiaForge.ModManager.Tests
             AssertCapabilities(
                 manifests["io.github.furroxide.topiaforge.robotkit"],
                 "network", "remote-ai", "player-token", "microphone", "speech-to-text");
+            AssertCapabilities(
+                manifests["io.github.furroxide.topiaforge.opposite-day"],
+                "prompt-overrides", "remote-ai");
+            AssertCapabilities(
+                manifests["io.github.furroxide.topiaforge.prompts"],
+                "prompt-overrides", "unsafe-native", "harmony-patch");
+            Assert(manifests["io.github.furroxide.topiaforge.opposite-day"].Dependencies.ContainsKey(
+                    "io.github.furroxide.topiaforge.prompts"),
+                "Opposite Day must require the Prompts provider");
+            Assert(manifests["io.github.furroxide.topiaforge.robotkit"].OptionalDependencies.ContainsKey(
+                    "io.github.furroxide.topiaforge.prompts"),
+                "RobotKit must declare its optional Prompts integration");
             AssertLacksCapabilities(
                 manifests["io.github.furroxide.topiaforge.sandbox"],
                 "network", "remote-ai", "player-token", "microphone", "speech-to-text");
+            Assert(manifests["io.github.furroxide.topiaforge.creatorcontent"].Category == "Framework",
+                "Creator Content must ship as a normal framework dependency");
+            Assert(manifests["io.github.furroxide.topiaforge.creatortools"].Category == "DevTool",
+                "Creator Tools must remain an explicitly packaged DevTool");
+            Assert(manifests["io.github.furroxide.topiaforge.creatortools"].Dependencies.ContainsKey(
+                    "io.github.furroxide.topiaforge.creatorcontent"),
+                "Creator Tools must require the Creator Content framework");
             AssertCapabilities(
                 manifests["io.github.furroxide.topiaforge.zombies"],
                 "navigation", "scene-management", "network", "remote-ai", "player-token", "microphone", "speech-to-text");
@@ -88,14 +111,16 @@ namespace TopiaForge.ModManager.Tests
             {
                 "io.github.furroxide.topiaforge.performance",
                 "io.github.furroxide.topiaforge.perffixes",
-                "io.github.furroxide.topiaforge.no-feedback-url"
+                "io.github.furroxide.topiaforge.no-feedback-url",
+                "io.github.furroxide.topiaforge.prompts",
+                "io.github.furroxide.topiaforge.creatorcontent"
             }, StringComparer.OrdinalIgnoreCase);
 
             foreach (var manifest in manifests.Values)
             {
                 var isAdvanced = advancedIds.Contains(manifest.Id);
                 Assert(manifest.Capabilities.Contains("unsafe-native", StringComparer.OrdinalIgnoreCase) == isAdvanced,
-                    manifest.Id + " must keep native access isolated to the three allowlisted advanced mods");
+                    manifest.Id + " must keep native access isolated to the allowlisted advanced providers and mods");
                 var manifestPath = manifestPaths.Single(path => string.Equals(
                     ModManifestJson.LoadFile(path).Id,
                     manifest.Id,
@@ -172,6 +197,8 @@ namespace TopiaForge.ModManager.Tests
             if (manifest.Id == "io.github.furroxide.topiaforge.gravitygun"
                 || manifest.Id == "io.github.furroxide.topiaforge.sandbox"
                 || manifest.Id == "io.github.furroxide.topiaforge.zombies"
+                || manifest.Id == "io.github.furroxide.topiaforge.opposite-day"
+                || manifest.Id == "io.github.furroxide.topiaforge.creatortools"
                 || manifest.Id == "io.github.furroxide.topiaforge.uigallery")
             {
                 ValidateSafeConsumerSource(manifest, project, source);
@@ -236,6 +263,15 @@ namespace TopiaForge.ModManager.Tests
                         manifest.Id + " dependency " + dependency.Key + " is not a first-party catalog entry");
                     Assert(target != null && VersionUtil.AllowsRange(target.Version, dependency.Value),
                         manifest.Id + " dependency range " + dependency.Value + " excludes catalog version "
+                        + target?.Version + " of " + dependency.Key);
+                }
+
+                foreach (var dependency in manifest.OptionalDependencies ?? new Dictionary<string, string>())
+                {
+                    Assert(manifests.TryGetValue(dependency.Key, out var target),
+                        manifest.Id + " optional dependency " + dependency.Key + " is not a first-party catalog entry");
+                    Assert(target != null && VersionUtil.AllowsRange(target.Version, dependency.Value),
+                        manifest.Id + " optional dependency range " + dependency.Value + " excludes catalog version "
                         + target?.Version + " of " + dependency.Key);
                 }
 

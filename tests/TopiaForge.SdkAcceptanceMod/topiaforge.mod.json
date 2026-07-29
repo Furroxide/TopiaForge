@@ -1,9 +1,9 @@
 {
   "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "name": "dev.topiaforge.sdk-acceptance",
   "displayName": "TopiaForge SDK Live Acceptance",
-  "version": "1.0.0",
+  "version": "1.0.0-rc.1",
   "author": {
     "name": "TopiaForge"
   },
@@ -11,24 +11,29 @@
   "entryAssembly": "TopiaForge.SdkAcceptanceMod.dll",
   "entryType": "TopiaForge.SdkAcceptance.SdkAcceptanceMod",
   "dependencies": {
-    "io.github.furroxide.topiaforge.chronos": ">=1.0.0 <2.0.0",
-    "io.github.furroxide.topiaforge.prompts": ">=1.0.0 <2.0.0",
-    "io.github.furroxide.topiaforge.robotkit": ">=1.0.0 <2.0.0",
-    "io.github.furroxide.topiaforge.worlds": ">=1.0.0 <2.0.0"
+    "io.github.furroxide.topiaforge.chronos": ">=1.0.0-rc.1 <2.0.0",
+    "io.github.furroxide.topiaforge.creatorcontent": ">=1.0.0-rc.1 <2.0.0",
+    "io.github.furroxide.topiaforge.multiplayer": "1.0.0-rc.1",
+    "io.github.furroxide.topiaforge.prompts": ">=1.0.0-rc.1 <2.0.0",
+    "io.github.furroxide.topiaforge.robotkit": ">=1.0.0-rc.1 <2.0.0",
+    "io.github.furroxide.topiaforge.worlds": ">=1.0.0-rc.1 <2.0.0"
   },
   "optionalDependencies": {
     "dev.topiaforge.sdk-acceptance.missing-provider": ">=1.0.0 <2.0.0",
-    "io.github.furroxide.topiaforge.ugc.livesync": ">=1.0.0 <2.0.0"
+    "io.github.furroxide.topiaforge.ugc.livesync": ">=1.0.0-rc.1 <2.0.0"
   },
-  "supportedGameVersionRange": "0.0.2227",
-  "supportedLoaderVersionRange": ">=1.0.0 <2.0.0",
-  "supportedSdkVersionRange": ">=1.0.0 <2.0.0",
+  "supportedGameVersionRange": "0.0.2309",
+  "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
   "platforms": ["windows", "linux"],
   "architectures": ["x64"],
   "contentTargets": ["code"],
   "category": "Developer",
   "tags": ["acceptance", "safe-sdk", "non-distributable"],
-  "license": "NOASSERTION",
+  "license": "MIT",
+  "licenseFiles": [
+    "LICENSE"
+  ],
   "capabilities": [
     "asset-bundles",
     "filesystem",
@@ -45,5 +50,14 @@
     "speech-to-text",
     "world-service"
   ],
+  "multiplayer": {
+    "mode": "session",
+    "presence": "required",
+    "protocol": {
+      "version": "1.0.0",
+      "peerVersionRange": ">=1.0.0 <2.0.0"
+    },
+    "synchronizedFiles": []
+  },
   "x-topiaforge-non-distributable": true
 }

@@ -9,7 +9,11 @@ namespace TopiaForge.ModManager
 {
     internal sealed partial class OwnerUiService
     {
-        private static void RenderNode(UiNode node, TopiaForgeContainer parent, UiCallbackGate callbacks)
+        private static void RenderNode(
+            UiNode node,
+            TopiaForgeContainer parent,
+            UiCallbackGate callbacks,
+            UiGraphRetentionTransaction graphs)
         {
             if (node is UiText text)
             {
@@ -20,14 +24,14 @@ namespace TopiaForge.ModManager
             if (node is UiColumn column)
             {
                 var container = parent.Column(TopiaForgeGap.Sm, TopiaForgeGap.None);
-                foreach (var child in column.Children) RenderNode(child, container, callbacks);
+                foreach (var child in column.Children) RenderNode(child, container, callbacks, graphs);
                 return;
             }
 
             if (node is UiRow row)
             {
                 var container = parent.Row(TopiaForgeGap.Sm, TopiaForgeGap.None);
-                foreach (var child in row.Children) RenderNode(child, container, callbacks);
+                foreach (var child in row.Children) RenderNode(child, container, callbacks, graphs);
                 return;
             }
 
@@ -35,7 +39,39 @@ namespace TopiaForge.ModManager
             {
                 var scroll = parent.Scroll(TopiaForgeGap.Sm, TopiaForgeGap.None)
                     .FixedHeight(scrollNode.Height);
-                RenderNode(scrollNode.Content, scroll.Content, callbacks);
+                RenderNode(scrollNode.Content, scroll.Content, callbacks, graphs);
+                return;
+            }
+
+            if (node is UiSplitPane split)
+            {
+                if (split.Orientation == UiSplitOrientation.Horizontal)
+                {
+                    var splitRow = parent.Row(TopiaForgeGap.Md, TopiaForgeGap.None, expandChildWidth: true);
+                    var primary = splitRow.Column(TopiaForgeGap.Sm, TopiaForgeGap.None)
+                        .Flex(split.PrimaryFraction, 1f);
+                    var secondary = splitRow.Column(TopiaForgeGap.Sm, TopiaForgeGap.None)
+                        .Flex(1f - split.PrimaryFraction, 1f);
+                    RenderNode(split.Primary, primary, callbacks, graphs);
+                    RenderNode(split.Secondary, secondary, callbacks, graphs);
+                }
+                else
+                {
+                    var splitColumn = parent.Column(TopiaForgeGap.Md, TopiaForgeGap.None);
+                    var primary = splitColumn.Column(TopiaForgeGap.Sm, TopiaForgeGap.None)
+                        .Flex(1f, split.PrimaryFraction);
+                    var secondary = splitColumn.Column(TopiaForgeGap.Sm, TopiaForgeGap.None)
+                        .Flex(1f, 1f - split.PrimaryFraction);
+                    RenderNode(split.Primary, primary, callbacks, graphs);
+                    RenderNode(split.Secondary, secondary, callbacks, graphs);
+                }
+
+                return;
+            }
+
+            if (node is UiGraphCanvas graph)
+            {
+                graphs.Render(graph, parent, callbacks);
                 return;
             }
 

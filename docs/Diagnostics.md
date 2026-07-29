@@ -42,7 +42,8 @@ The project references a specialist contract assembly without its manifest/runti
 `topiaforge mod add <module>`, then `topiaforge restore`. This adds both the exact contract package
 and its root `dependencies` entry; an intentional nonblocking integration may instead use the
 root `optionalDependencies` map. Text in descriptions or `x-*` metadata does not count. Commit
-`packages.lock.json` and `topiaforge.sdk.lock.json` after restore.
+`packages.lock.json` and `topiaforge.sdk.lock.json` after restore. Multiplayer projects must also run
+`topiaforge mod sync multiplayer` and commit `topiaforge.multiplayer.lock.json`.
 
 ### TF1005
 
@@ -66,10 +67,60 @@ text in descriptions or `x-*` metadata does not count.
 
 **Loader-owned renderer referenced by a safe project.**
 
-`TopiaForge.Mods.UnityUi` is an internal Robotopia-runtime renderer, not an authoring package. Remove
-the reference and express HUDs, windows, modals, toasts, and accessibility preferences through
-`Context.Ui`. Declaring `unsafe-native` does not authorize coupling a mod to the loader-owned
-renderer.
+`TopiaForge.Mods.UnityUi` is an internal Robotopia-runtime renderer, not an authoring package.
+Remove the reference and express HUDs, windows, fullscreen tools, modals, toasts, and accessibility
+preferences through `Context.Ui`. Declaring `unsafe-native` does not authorize coupling a mod to
+the loader-owned renderer.
+
+### TF1008
+
+**Blocking wait on an SDK task.**
+
+The code calls `.Result`, `.Wait()`, or `.GetAwaiter().GetResult()` on a task. Asynchronous SDK work —
+asset bundles, prefabs, custom-world content, scene loads — is driven by the game's own loader and
+completes on the main thread. Blocking that thread stops the frame loop that would have completed the
+task, so the task never finishes and the game hangs with no recovery but ending the process.
+
+Use `PendingOperation<T>` — the SDK primitive for exactly this. It starts the work, polls it, and never
+waits. It also surfaces a result that arrives *after* you cancelled or timed out, so game objects the
+SDK still handed back are released on the main thread instead of leaking:
+
+```csharp
+private readonly PendingOperation<IAssetBundle> load = new PendingOperation<IAssetBundle>();
+
+protected override void OnLoad()
+{
+    Context.Events.SubscribeUpdate(OnUpdate);
+    load.Begin(
+        token => Context.Assets.LoadBundleAsync("content/level.bundle", token),
+        Context.Lifetime.StoppingToken,
+        Context.Time.Frame.UnscaledTime);
+}
+
+private void OnUpdate(float deltaTime)
+{
+    switch (load.Poll(Context.Time.Frame.UnscaledTime, timeoutSeconds: 30f, out var result))
+    {
+        case PendingOperationState.Completed when result.TryGetValue(out var bundle):
+            Use(bundle);
+            break;
+        case PendingOperationState.Abandoned when result.TryGetValue(out var orphan):
+            orphan.Dispose();
+            break;
+        case PendingOperationState.TimedOut:
+            ShowLoadFailed();
+            break;
+    }
+}
+```
+
+A hand-rolled `IsCompleted` poll is still accepted by this rule, but `PendingOperation<T>` is the
+supported shape: cancellation, timeout, late-result release, and restart-while-draining are all
+already handled and covered by tests.
+
+This rule applies to every mod project, including one that sets `TopiaForgeSafeProject` to `false`:
+opting into the unstable interop package does not move the code off the game loop. Test projects
+(`IsTestProject`) are exempt.
 
 ### TF1101
 
@@ -168,7 +219,7 @@ bundled-framework finding. Validation reads metadata only and never loads mod co
 ### TFPKG170
 
 **Downloaded package metadata differs from the manifest approved during planning.** Refresh the
-package source and retry. Source maintainers must publish immutable bytes whose canonical V4
+package source and retry. Source maintainers must publish immutable bytes whose canonical V5
 manifest exactly matches the indexed manifest; TopiaForge does not stage mismatched packages.
 
 ### TFINBOX100–TFINBOX130

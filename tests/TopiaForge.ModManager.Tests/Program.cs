@@ -29,6 +29,13 @@ namespace TopiaForge.ModManager.Tests
                 return 0;
             }
 
+            if (args.Length == 2 &&
+                string.Equals(args[0], "--update-sdk-api-baselines", StringComparison.Ordinal))
+            {
+                SdkPublicApiBaselineTests.UpdateBaselines(args[1]);
+                return 0;
+            }
+
             if (args.Length == 1 &&
                 string.Equals(args[0], "--sdk-api-baselines", StringComparison.Ordinal))
             {
@@ -65,6 +72,50 @@ namespace TopiaForge.ModManager.Tests
                 return 0;
             }
 
+            if (args.Length == 1 && string.Equals(args[0], "--creator-workbench", StringComparison.Ordinal))
+            {
+                CreatorWorkbenchLifecycleTests.Run();
+                return 0;
+            }
+
+            if (args.Length == 1 && string.Equals(args[0], "--creator-event-graph", StringComparison.Ordinal))
+            {
+                CreatorEventGraphRunnerTests.Run();
+                return 0;
+            }
+
+            if (args.Length == 1 && string.Equals(args[0], "--robot-personality-bindings", StringComparison.Ordinal))
+            {
+                RobotPersonalityBindingSurfaceTests.Run();
+                return 0;
+            }
+
+            if (args.Length == 1 && string.Equals(args[0], "--scene-coordinator", StringComparison.Ordinal))
+            {
+                SceneCoordinatorTests.Run();
+                SceneTransitionTrackerTests.Run();
+                return 0;
+            }
+
+            if (args.Length == 1 && string.Equals(args[0], "--manifest-v5", StringComparison.Ordinal))
+            {
+                var manifestRoot = Path.Combine(
+                    Path.GetTempPath(),
+                    "TopiaForgeManifestV5Tests-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(manifestRoot);
+                try
+                {
+                    TestStrictManifestExtensions();
+                    ManifestV5Tests.Run(manifestRoot);
+                    MultiplayerContractLockBoundaryTests.Run(manifestRoot);
+                    return 0;
+                }
+                finally
+                {
+                    TryDelete(manifestRoot);
+                }
+            }
+
             if (args.Length == 1 && string.Equals(args[0], "--zombies-controller", StringComparison.Ordinal))
             {
                 ZombiesControllerTests.Run();
@@ -83,12 +134,18 @@ namespace TopiaForge.ModManager.Tests
                 ModuleContractSurfaceTests.Run();
                 TestingKitTests.Run();
                 PromptRegistryTests.Run();
+                RobotDirectiveTests.Run();
                 OverrideTests.Run();
                 ConversationTests.Run();
+                RobotPersonalityBindingSurfaceTests.Run();
                 ObjectiveRunnerTests.Run();
                 SandboxProgramDirectorTests.Run();
                 ModServiceRegistryTests.Run();
                 ChronosTests.Run();
+                CreatorContentTests.Run();
+                CreatorSceneAdapterTests.Run();
+                CreatorEventGraphRunnerTests.Run();
+                CreatorWorkbenchLifecycleTests.Run();
                 WorldsSafetyTests.Run();
                 return 0;
             }
@@ -125,6 +182,7 @@ namespace TopiaForge.ModManager.Tests
                 TestInstallSuccess(root);
                 TestLegacyPackageExtensionRejected(root);
                 TestUpdatePreservesDisabledState(root);
+                TestDevToolInstallsDisabledAndUpdatePreservesState(root);
                 TestAppliedRestartRequirementsClear();
                 RuntimePersistenceSecurityTests.Run(root);
                 StartupJournalTests.Run(root);
@@ -165,6 +223,7 @@ namespace TopiaForge.ModManager.Tests
                 TestInboxFailureLeavesFile(root);
                 TestScanIgnoresSupersededBrokenVersions(root);
                 TestScanStillReportsFullyBrokenPackage(root);
+                TestScanRecoversDevToolAsDisabled(root);
                 TestScanSelectsDependencyCompatibleProviderVersion(root);
                 TestScanBacktracksConsumerVersionForCompleteAssignment(root);
                 InstalledVersionCoexistenceTests.Run(root);
@@ -179,6 +238,9 @@ namespace TopiaForge.ModManager.Tests
                 VersionUtilTests.Run();
                 GameCompatibilityTests.Run(root);
                 ManifestPathValidationTests.Run();
+                ManifestV5Tests.Run(root);
+                MultiplayerContractLockBoundaryTests.Run(root);
+                MultiplayerAdmissionTests.Run();
                 FirstPartyManifestTests.Run();
                 FirstPartyConfigTests.Run();
                 ModAssemblyResolutionCatalogTests.Run(root);
@@ -199,15 +261,18 @@ namespace TopiaForge.ModManager.Tests
                 TestingKitTests.Run();
                 SdkPublicApiBaselineTests.Run();
                 PromptRegistryTests.Run();
+                RobotDirectiveTests.Run();
                 OverrideTests.Run();
                 ConversationTests.Run();
                 ConversationDirectorTests.Run();
+                RobotPersonalityBindingSurfaceTests.Run();
                 ObjectiveRunnerTests.Run();
                 RobotTargetFactsTests.Run();
                 SandboxProgramDirectorTests.Run();
                 SandboxConfigTests.Run();
                 WorldAutoLoadRouterTests.Run();
                 WorldsSafetyTests.Run();
+                PendingOperationTests.Run();
                 SceneCoordinatorTests.Run();
                 ModServiceRegistryTests.Run();
                 SceneTransitionTrackerTests.Run();
@@ -215,6 +280,10 @@ namespace TopiaForge.ModManager.Tests
                 MainThreadGuardTests.Run();
                 SafeEventTests.Run();
                 ChronosTests.Run();
+                CreatorContentTests.Run();
+                CreatorSceneAdapterTests.Run();
+                CreatorEventGraphRunnerTests.Run();
+                CreatorWorkbenchLifecycleTests.Run();
                 ShopTests.Run();
                 GameCompatTests.Run();
                 GameVersionLabelReaderTests.Run();
@@ -222,6 +291,7 @@ namespace TopiaForge.ModManager.Tests
                 TopiaForgeStateFileTests.Run(root);
                 UnityToolingFileIoTests.Run(root);
                 UiKitSourceConventionTests.Run();
+                ModConcurrencyConventionTests.Run();
                 Console.WriteLine("All TopiaForge tests passed.");
                 return 0;
             }

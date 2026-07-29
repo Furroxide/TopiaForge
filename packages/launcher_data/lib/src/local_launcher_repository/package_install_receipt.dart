@@ -12,6 +12,13 @@ const _maxReceiptSourceIdentifierLength = 128;
 const _maxReceiptFiles = 8192;
 const _maxReceiptTotalBytes = 2 * 1024 * 1024 * 1024;
 
+Set<String> _packageReceiptCriticalPaths(ModManifest manifest) => <String>{
+  'topiaforge.mod.json',
+  manifest.entryAssembly.replaceAll('\\', '/'),
+  ...manifest.apiAssemblies.map((path) => path.replaceAll('\\', '/')),
+  ...(manifest.multiplayer?.synchronizedFiles ?? const <String>[]),
+};
+
 extension _PackageInstallReceiptWriter on LocalLauncherRepository {
   Future<void> _writePackageInstallReceipt(
     Directory packageRoot,
@@ -50,13 +57,7 @@ extension _PackageInstallReceiptWriter on LocalLauncherRepository {
       receiptFile.deleteSync();
     }
 
-    final criticalPaths = <String>{
-      'topiaforge.mod.json',
-      package.manifest.entryAssembly.replaceAll('\\', '/'),
-      ...package.manifest.apiAssemblies.map(
-        (path) => path.replaceAll('\\', '/'),
-      ),
-    };
+    final criticalPaths = _packageReceiptCriticalPaths(package.manifest);
     final files = await _receiptPayloadFiles(packageRoot, criticalPaths);
     final receipt = <String, Object?>{
       'schemaVersion': _packageInstallReceiptSchemaVersion,

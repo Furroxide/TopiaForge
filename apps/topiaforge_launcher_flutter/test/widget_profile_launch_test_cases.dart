@@ -82,4 +82,59 @@ void _registerProfileLaunchWidgetTests(_PumpHome pumpHome) {
     expect(created.selectedVersions, {'timer.mod': '1.0.0'});
     expect(repository.savedSelectedProfileId, created.id);
   });
+
+  testWidgets('profile enables Creator Tools with its dependency closure', (
+    tester,
+  ) async {
+    const robotKitId = 'io.github.furroxide.topiaforge.robotkit';
+    const contentId = 'io.github.furroxide.topiaforge.creatorcontent';
+    const toolsId = 'io.github.furroxide.topiaforge.creatortools';
+    const worldsId = 'io.github.furroxide.topiaforge.worlds';
+    final robotKit = _manifest(robotKitId, version: '1.0.0', name: 'RobotKit');
+    final content = _manifest(
+      contentId,
+      version: '1.0.0',
+      name: 'Creator Content',
+    );
+    final worlds = _manifest(worldsId, version: '1.0.0', name: 'Worlds');
+    final tools = _manifest(
+      toolsId,
+      version: '1.0.0',
+      name: 'Creator Tools',
+      category: 'DevTool',
+      dependencies: const [
+        ModDependency(id: contentId),
+        ModDependency(id: robotKitId),
+        ModDependency(id: worldsId),
+      ],
+    );
+    const ordinary = LauncherProfile(
+      id: 'ordinary',
+      name: 'Ordinary',
+      enabledMods: {'ordinary.mod'},
+    );
+    final repository = _FakeLauncherRepository(
+      snapshot: _readySnapshot(
+        profiles: [LauncherProfile.defaultProfile(), ordinary],
+        installedMods: [
+          _installedMod(robotKit),
+          _installedMod(content),
+          _installedMod(worlds),
+          _installedMod(tools),
+        ],
+      ),
+    );
+    await pumpHome(tester, repository);
+
+    await tester.tap(find.text('Profiles'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('profile-mod-$toolsId')));
+    await tester.pumpAndSettle();
+
+    final updated = repository.savedProfiles.first;
+    expect(updated.inheritManagerModState, isFalse);
+    expect(updated.enabledMods, {robotKitId, contentId, worldsId, toolsId});
+    expect(updated.selectedVersions.keys, containsAll(updated.enabledMods));
+    expect(repository.savedProfiles.last, same(ordinary));
+  });
 }

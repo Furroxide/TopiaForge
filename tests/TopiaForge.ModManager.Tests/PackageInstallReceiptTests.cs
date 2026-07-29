@@ -20,7 +20,7 @@ namespace TopiaForge.ModManager.Tests
             File.WriteAllText(archive, "archive bytes");
             var manifest = new ModManifest
             {
-                SchemaVersion = 4,
+                SchemaVersion = 5,
                 Id = "example.mod",
                 Name = "Example",
                 Version = "1.0.0",
@@ -173,7 +173,7 @@ namespace TopiaForge.ModManager.Tests
             paths.EnsureCreated();
             var manifest = new ModManifest
             {
-                SchemaVersion = 4,
+                SchemaVersion = 5,
                 Id = "launcher.receipt",
                 Name = "Launcher receipt",
                 Version = "1.0.0",

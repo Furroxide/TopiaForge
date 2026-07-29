@@ -1,7 +1,8 @@
-## 1.0.0
+## 1.0.0-rc.1
 
-- Added the strict manifest V4, SemVer, dependency, compatibility, capability,
-  profile, and package-selection contracts used by the V1 launcher and CLI.
+- Added the strict manifest V5, SemVer, dependency, compatibility, capability,
+  profile, multiplayer admission/inactive-reason, and package-selection
+  contracts used by the V1 launcher and CLI.
 
 ## 0.1.1
 

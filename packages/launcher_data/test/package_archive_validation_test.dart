@@ -203,7 +203,7 @@ Archive _validArchive() => Archive()
     ArchiveFile.string(
       'topiaforge.mod.json',
       jsonEncode({
-        'schemaVersion': 4,
+        'schemaVersion': 5,
         'name': 'validation.mod',
         'displayName': 'Validation Mod',
         'version': '1.0.0',
@@ -223,7 +223,7 @@ Archive _archiveWithAuthor(Object author) => Archive()
     ArchiveFile.string(
       'topiaforge.mod.json',
       jsonEncode({
-        'schemaVersion': 4,
+        'schemaVersion': 5,
         'name': 'validation.mod',
         'displayName': 'Validation Mod',
         'version': '1.0.0',

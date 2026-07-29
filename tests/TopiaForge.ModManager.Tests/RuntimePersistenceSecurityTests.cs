@@ -54,7 +54,7 @@ namespace TopiaForge.ModManager.Tests
                 Path.Combine(packageDirectory, "topiaforge.mod.json"),
                 JsonUtil.Serialize(new ModManifest
                 {
-                    SchemaVersion = 4,
+                    SchemaVersion = 5,
                     Id = unsafeId,
                     Name = "Tampered",
                     Version = "1.0.0",

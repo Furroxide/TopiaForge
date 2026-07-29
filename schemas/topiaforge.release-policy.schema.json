@@ -86,7 +86,17 @@
         "mode": { "const": "draft-only" },
         "allowTagCreation": { "const": false },
         "allowAssetReplacement": { "const": false },
-        "requireImmutableReleasesBeforeManualPublish": { "const": true }
+        "requireImmutableReleasesBeforeManualPublish": { "const": true },
+        "codeSigningException": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["version", "allowUnsignedWindows", "allowAdHocMacOS"],
+          "properties": {
+            "version": { "const": "1.0.0-rc.1" },
+            "allowUnsignedWindows": { "const": true },
+            "allowAdHocMacOS": { "const": true }
+          }
+        }
       }
     }
   }

@@ -27,7 +27,7 @@ namespace TopiaForge.Mods
         /// <summary>Gets the current session, or null outside a modded world session.</summary>
         WorldSession? CurrentSession { get; }
 
-        /// <summary>Raised after a new session becomes authoritative.</summary>
+        /// <summary>Raised after a new session becomes current.</summary>
         event Action<WorldSession>? SessionChanged;
 
         /// <summary>Raised exactly once after a session is cleared.</summary>

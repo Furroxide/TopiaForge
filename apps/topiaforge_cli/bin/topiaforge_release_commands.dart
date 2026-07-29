@@ -9,8 +9,15 @@ extension _TopiaForgeReleaseCommands on _TopiaForgeCli {
       'validate-policy' => _releaseValidatePolicy(args.skip(1).toList()),
       'build-metadata' => _releaseBuildMetadata(args.skip(1).toList()),
       'verify-metadata' => _releaseVerifyMetadata(args.skip(1).toList()),
+      'generate-update-key' => _releaseGenerateUpdateKey(args.skip(1).toList()),
+      'build-update-metadata' => _releaseBuildUpdateMetadata(
+        args.skip(1).toList(),
+      ),
+      'verify-update-metadata' => _releaseVerifyUpdateMetadata(
+        args.skip(1).toList(),
+      ),
       _ => throw UsageError(
-        'Usage: topiaforge release build-package|build-sdk-payload|test-package|validate-policy|build-metadata|verify-metadata ...',
+        'Usage: topiaforge release build-package|build-sdk-payload|test-package|validate-policy|build-metadata|verify-metadata|generate-update-key|build-update-metadata|verify-update-metadata ...',
       ),
     };
   }
@@ -140,6 +147,49 @@ extension _TopiaForgeReleaseCommands on _TopiaForgeCli {
       allowUnresolvedPolicy: args.contains('--allow-unresolved-policy'),
     );
     stdout.writeln('Release metadata and checksums are valid.');
+    return 0;
+  }
+
+  Future<int> _releaseGenerateUpdateKey(List<String> args) async {
+    final privateOutput = _option(args, '--private-output');
+    if (privateOutput == null || privateOutput.trim().isEmpty) {
+      throw UsageError(
+        'Usage: topiaforge release generate-update-key '
+        '--private-output <owner-controlled-file>',
+      );
+    }
+    await const ReleaseUpdateMetadataBuilder().generateKey(
+      repositoryRoot: _releaseRepositoryRoot(),
+      privateOutput: privateOutput,
+    );
+    stdout.writeln(
+      'Generated release/update-keys.json and an owner-controlled private seed.',
+    );
+    return 0;
+  }
+
+  Future<int> _releaseBuildUpdateMetadata(List<String> args) async {
+    final version = _requiredReleaseOption(args, '--version');
+    final assets = _requiredReleaseOption(args, '--assets');
+    final result = await const ReleaseUpdateMetadataBuilder().build(
+      repositoryRoot: _releaseRepositoryRoot(),
+      version: version,
+      assetsDirectory: assets,
+    );
+    stdout.writeln(result.payload);
+    stdout.writeln(result.signature);
+    return 0;
+  }
+
+  Future<int> _releaseVerifyUpdateMetadata(List<String> args) async {
+    final version = _requiredReleaseOption(args, '--version');
+    final assets = _requiredReleaseOption(args, '--assets');
+    await const ReleaseUpdateMetadataBuilder().verify(
+      repositoryRoot: _releaseRepositoryRoot(),
+      version: version,
+      assetsDirectory: assets,
+    );
+    stdout.writeln('Signed launcher update metadata is valid.');
     return 0;
   }
 

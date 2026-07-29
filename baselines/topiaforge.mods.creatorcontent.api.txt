@@ -1,0 +1,375 @@
+# TopiaForge.Mods.CreatorContent public API baseline
+# Format version: 2
+# Regenerate with: dotnet run --project tests/TopiaForge.ModManager.Tests -c Release -- --print-sdk-api-baseline topiaforge.mods.creatorcontent
+# Review every change. Breaking changes require explicit V1 compatibility approval.
+
+assembly TopiaForge.Mods.CreatorContent, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null
+target-framework .NETStandard,Version=v2.1
+
+type public sealed class TopiaForge.Mods.CreatorCatalogSnapshot : System.Object
+  constructor .ctor(System.Int64 revision, System.Collections.Generic.IEnumerable<TopiaForge.Mods.CreatorContentDescriptor> entries, System.Collections.Generic.IEnumerable<TopiaForge.Mods.CreatorCatalogSourceStatus> sources)
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.CreatorCatalogSourceStatus> Sources { get; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.CreatorContentDescriptor> Entries { get; }
+  property System.Int64 Revision { get; }
+
+type public enum TopiaForge.Mods.CreatorCatalogSourceState : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.CreatorCatalogSourceState Degraded = 1 (Degraded)
+  field const TopiaForge.Mods.CreatorCatalogSourceState Ready = 0 (Ready)
+  field const TopiaForge.Mods.CreatorCatalogSourceState Unavailable = 2 (Unavailable)
+
+type public sealed class TopiaForge.Mods.CreatorCatalogSourceStatus : System.Object
+  constructor .ctor(System.String sourceId, System.String displayName, TopiaForge.Mods.CreatorCatalogSourceState state, System.String message, System.Int32 entryCount)
+  property System.Int32 EntryCount { get; }
+  property System.String DisplayName { get; }
+  property System.String Message { get; }
+  property System.String SourceId { get; }
+  property TopiaForge.Mods.CreatorCatalogSourceState State { get; }
+
+type public sealed class TopiaForge.Mods.CreatorContentDescriptor : System.Object
+  constructor .ctor(System.String contentId, System.String sourceId, System.String sourceVersion, System.String localId, System.String displayName, System.String description, TopiaForge.Mods.CreatorContentKind kind, TopiaForge.Mods.CreatorTransformCapabilities transformCapabilities)
+  property System.String ContentId { get; }
+  property System.String Description { get; }
+  property System.String DisplayName { get; }
+  property System.String LocalId { get; }
+  property System.String SourceId { get; }
+  property System.String SourceVersion { get; }
+  property TopiaForge.Mods.CreatorContentKind Kind { get; }
+  property TopiaForge.Mods.CreatorTransformCapabilities TransformCapabilities { get; }
+
+type public enum TopiaForge.Mods.CreatorContentKind : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.CreatorContentKind Character = 2 (Character)
+  field const TopiaForge.Mods.CreatorContentKind Item = 3 (Item)
+  field const TopiaForge.Mods.CreatorContentKind Other = 0 (Other)
+  field const TopiaForge.Mods.CreatorContentKind Prop = 4 (Prop)
+  field const TopiaForge.Mods.CreatorContentKind Robot = 1 (Robot)
+  field const TopiaForge.Mods.CreatorContentKind Vehicle = 5 (Vehicle)
+
+type public sealed class TopiaForge.Mods.CreatorContentRegistrationRequest : System.Object
+  constructor .ctor(System.String localId, System.String displayName, System.String description, TopiaForge.Mods.CreatorContentKind kind, TopiaForge.Mods.CreatorTransformCapabilities transformCapabilities, TopiaForge.Mods.ICreatorContentFactory factory)
+  property System.String Description { get; }
+  property System.String DisplayName { get; }
+  property System.String LocalId { get; }
+  property TopiaForge.Mods.CreatorContentKind Kind { get; }
+  property TopiaForge.Mods.CreatorTransformCapabilities TransformCapabilities { get; }
+  property TopiaForge.Mods.ICreatorContentFactory Factory { get; }
+
+type public sealed class TopiaForge.Mods.CreatorEventProject : System.Object
+  constructor .ctor(System.Int32 schemaVersion, System.String id, System.String displayName, System.String description, TopiaForge.Mods.CreatorProjectScope scope, System.String worldId, System.String sceneName, System.DateTimeOffset modifiedAtUtc, System.Collections.Generic.IEnumerable<TopiaForge.Mods.CreatorProjectEntity>? entities = null, System.Collections.Generic.IEnumerable<TopiaForge.Mods.CreatorNativeBinding>? nativeBindings = null, System.Collections.Generic.IEnumerable<TopiaForge.Mods.CreatorPersona>? personas = null, System.Collections.Generic.IEnumerable<TopiaForge.Mods.CreatorGraphNode>? nodes = null, System.Collections.Generic.IEnumerable<TopiaForge.Mods.CreatorGraphEdge>? edges = null, TopiaForge.Mods.CreatorProjectOrigin origin = 0 (World))
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.CreatorGraphEdge> Edges { get; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.CreatorGraphNode> Nodes { get; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.CreatorNativeBinding> NativeBindings { get; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.CreatorPersona> Personas { get; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.CreatorProjectEntity> Entities { get; }
+  property System.DateTimeOffset ModifiedAtUtc { get; }
+  property System.Int32 SchemaVersion { get; }
+  property System.String Description { get; }
+  property System.String DisplayName { get; }
+  property System.String Id { get; }
+  property System.String SceneName { get; }
+  property System.String WorldId { get; }
+  property TopiaForge.Mods.CreatorProjectOrigin Origin { get; }
+  property TopiaForge.Mods.CreatorProjectScope Scope { get; }
+
+type public sealed class TopiaForge.Mods.CreatorGraphEdge : System.Object
+  constructor .ctor(System.String fromNodeId, System.String fromPort, System.String toNodeId, System.String toPort)
+  property System.String FromNodeId { get; }
+  property System.String FromPort { get; }
+  property System.String ToNodeId { get; }
+  property System.String ToPort { get; }
+
+type public sealed class TopiaForge.Mods.CreatorGraphNode : System.Object
+  constructor .ctor(System.String id, TopiaForge.Mods.CreatorGraphNodeKind kind, TopiaForge.Mods.Vec2 editorPosition, System.Collections.Generic.IReadOnlyDictionary<System.String, System.String>? parameters = null)
+  property System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> Parameters { get; }
+  property System.String Id { get; }
+  property TopiaForge.Mods.CreatorGraphNodeKind Kind { get; }
+  property TopiaForge.Mods.Vec2 EditorPosition { get; }
+
+type public enum TopiaForge.Mods.CreatorGraphNodeKind : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.CreatorGraphNodeKind BeginConversation = 47 (BeginConversation)
+  field const TopiaForge.Mods.CreatorGraphNodeKind ConfigureRobot = 43 (ConfigureRobot)
+  field const TopiaForge.Mods.CreatorGraphNodeKind ConversationDecision = 6 (ConversationDecision)
+  field const TopiaForge.Mods.CreatorGraphNodeKind Delay = 20 (Delay)
+  field const TopiaForge.Mods.CreatorGraphNodeKind DespawnContent = 41 (DespawnContent)
+  field const TopiaForge.Mods.CreatorGraphNodeKind EntityRemoved = 4 (EntityRemoved)
+  field const TopiaForge.Mods.CreatorGraphNodeKind InteractionTrigger = 2 (InteractionTrigger)
+  field const TopiaForge.Mods.CreatorGraphNodeKind ManualTrigger = 1 (ManualTrigger)
+  field const TopiaForge.Mods.CreatorGraphNodeKind PlayAudio = 49 (PlayAudio)
+  field const TopiaForge.Mods.CreatorGraphNodeKind PlayerEnteredRadius = 3 (PlayerEnteredRadius)
+  field const TopiaForge.Mods.CreatorGraphNodeKind ProjectStart = 0 (ProjectStart)
+  field const TopiaForge.Mods.CreatorGraphNodeKind Repeat = 22 (Repeat)
+  field const TopiaForge.Mods.CreatorGraphNodeKind RobotObjectiveState = 5 (RobotObjectiveState)
+  field const TopiaForge.Mods.CreatorGraphNodeKind SetRobotEmote = 46 (SetRobotEmote)
+  field const TopiaForge.Mods.CreatorGraphNodeKind SetRobotObjective = 45 (SetRobotObjective)
+  field const TopiaForge.Mods.CreatorGraphNodeKind SetRobotPersonality = 44 (SetRobotPersonality)
+  field const TopiaForge.Mods.CreatorGraphNodeKind SetTransform = 42 (SetTransform)
+  field const TopiaForge.Mods.CreatorGraphNodeKind ShowToast = 48 (ShowToast)
+  field const TopiaForge.Mods.CreatorGraphNodeKind SpawnContent = 40 (SpawnContent)
+  field const TopiaForge.Mods.CreatorGraphNodeKind StateCondition = 21 (StateCondition)
+
+type public sealed class TopiaForge.Mods.CreatorMutationLeaseRequest : System.Object
+  constructor .ctor(System.String purpose, System.Boolean userAcknowledgedTemporaryChanges)
+  property System.Boolean UserAcknowledgedTemporaryChanges { get; }
+  property System.String Purpose { get; }
+
+type public sealed class TopiaForge.Mods.CreatorMutationSafetySnapshot : System.Object
+  constructor .ctor(TopiaForge.Mods.CreatorMutationSafetyState state, System.Boolean persistenceIsolationAvailable, System.String message)
+  property System.Boolean PersistenceIsolationAvailable { get; }
+  property System.String Message { get; }
+  property TopiaForge.Mods.CreatorMutationSafetyState State { get; }
+
+type public enum TopiaForge.Mods.CreatorMutationSafetyState : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.CreatorMutationSafetyState Ready = 2 (Ready)
+  field const TopiaForge.Mods.CreatorMutationSafetyState RequiresAcknowledgement = 1 (RequiresAcknowledgement)
+  field const TopiaForge.Mods.CreatorMutationSafetyState Unavailable = 0 (Unavailable)
+
+type public sealed class TopiaForge.Mods.CreatorNativeBinding : System.Object
+  constructor .ctor(System.String id, System.String displayName, System.String sceneName, System.String nameContains, TopiaForge.Mods.Vec3 expectedPosition, System.Single searchRadius, System.String adapterId = "")
+  property System.Single SearchRadius { get; }
+  property System.String AdapterId { get; }
+  property System.String DisplayName { get; }
+  property System.String Id { get; }
+  property System.String NameContains { get; }
+  property System.String SceneName { get; }
+  property TopiaForge.Mods.Vec3 ExpectedPosition { get; }
+
+type public sealed class TopiaForge.Mods.CreatorPersona : System.Object
+  constructor .ctor(System.String id, System.String displayName, System.String systemFrame, System.String replyGuidance, System.Collections.Generic.IReadOnlyDictionary<System.String, System.String>? facts = null)
+  property System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> Facts { get; }
+  property System.String DisplayName { get; }
+  property System.String Id { get; }
+  property System.String ReplyGuidance { get; }
+  property System.String SystemFrame { get; }
+
+type public sealed class TopiaForge.Mods.CreatorPrefabContentFactory : System.Object, TopiaForge.Mods.ICreatorContentFactory
+  constructor .ctor(TopiaForge.Mods.IAssetService assets, TopiaForge.Mods.IEntityService entities, TopiaForge.Mods.IPrefabAsset prefab)
+  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.ICreatorSourceInstance> Spawn(TopiaForge.Mods.TransformState transform)
+
+type public sealed class TopiaForge.Mods.CreatorProjectEntity : System.Object
+  constructor .ctor(System.String id, System.String displayName, System.String contentId, System.String expectedSourceVersion, TopiaForge.Mods.TransformState transform, System.Boolean spawnOnStart)
+  property System.Boolean SpawnOnStart { get; }
+  property System.String ContentId { get; }
+  property System.String DisplayName { get; }
+  property System.String ExpectedSourceVersion { get; }
+  property System.String Id { get; }
+  property TopiaForge.Mods.TransformState Transform { get; }
+
+type public sealed class TopiaForge.Mods.CreatorProjectLibrarySnapshot : System.Object
+  constructor .ctor(System.Int64 revision, System.Collections.Generic.IEnumerable<TopiaForge.Mods.CreatorProjectSummary> projects)
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.CreatorProjectSummary> Projects { get; }
+  property System.Int64 Revision { get; }
+
+type public enum TopiaForge.Mods.CreatorProjectOrigin : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.CreatorProjectOrigin PlayerAtRun = 1 (PlayerAtRun)
+  field const TopiaForge.Mods.CreatorProjectOrigin World = 0 (World)
+
+type public enum TopiaForge.Mods.CreatorProjectScope : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.CreatorProjectScope Global = 1 (Global)
+  field const TopiaForge.Mods.CreatorProjectScope Sandbox = 0 (Sandbox)
+
+type public sealed class TopiaForge.Mods.CreatorProjectSummary : System.Object
+  constructor .ctor(System.String id, System.String displayName, TopiaForge.Mods.CreatorProjectScope scope, System.DateTimeOffset modifiedAtUtc)
+  property System.DateTimeOffset ModifiedAtUtc { get; }
+  property System.String DisplayName { get; }
+  property System.String Id { get; }
+  property TopiaForge.Mods.CreatorProjectScope Scope { get; }
+
+type public sealed class TopiaForge.Mods.CreatorProjectValidationIssue : System.Object
+  constructor .ctor(System.String code, System.String message, TopiaForge.Mods.CreatorProjectValidationSeverity severity, System.String subjectId = "")
+  property System.String Code { get; }
+  property System.String Message { get; }
+  property System.String SubjectId { get; }
+  property TopiaForge.Mods.CreatorProjectValidationSeverity Severity { get; }
+
+type public sealed class TopiaForge.Mods.CreatorProjectValidationResult : System.Object
+  constructor .ctor(System.Collections.Generic.IEnumerable<TopiaForge.Mods.CreatorProjectValidationIssue> issues)
+  property System.Boolean IsValid { get; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.CreatorProjectValidationIssue> Issues { get; }
+
+type public enum TopiaForge.Mods.CreatorProjectValidationSeverity : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.CreatorProjectValidationSeverity Error = 1 (Error)
+  field const TopiaForge.Mods.CreatorProjectValidationSeverity Warning = 0 (Warning)
+
+type public sealed class TopiaForge.Mods.CreatorSceneAdapterDescriptor : System.Object
+  constructor .ctor(System.String adapterId, System.String sourceId, System.String localId, System.String displayName)
+  property System.String AdapterId { get; }
+  property System.String DisplayName { get; }
+  property System.String LocalId { get; }
+  property System.String SourceId { get; }
+
+type public sealed class TopiaForge.Mods.CreatorSceneAdapterRegistrationRequest : System.Object
+  constructor .ctor(System.String localId, System.String displayName, TopiaForge.Mods.ICreatorSceneAdapter adapter)
+  property System.String DisplayName { get; }
+  property System.String LocalId { get; }
+  property TopiaForge.Mods.ICreatorSceneAdapter Adapter { get; }
+
+type public sealed class TopiaForge.Mods.CreatorSceneQuery : System.Object
+  constructor .ctor(System.Nullable<TopiaForge.Mods.Vec3> center = null, System.Single radius = 0, System.String nameContains = "", System.Int32 maximumResults = 128, System.String adapterId = "")
+  property System.Int32 MaximumResults { get; }
+  property System.Nullable<TopiaForge.Mods.Vec3> Center { get; }
+  property System.Single Radius { get; }
+  property System.String AdapterId { get; }
+  property System.String NameContains { get; }
+
+type public flags enum TopiaForge.Mods.CreatorSceneTargetCapabilities : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.CreatorSceneTargetCapabilities CatalogDuplicate = 16 (CatalogDuplicate)
+  field const TopiaForge.Mods.CreatorSceneTargetCapabilities None = 0 (None)
+  field const TopiaForge.Mods.CreatorSceneTargetCapabilities Position = 1 (Position)
+  field const TopiaForge.Mods.CreatorSceneTargetCapabilities Rotation = 2 (Rotation)
+  field const TopiaForge.Mods.CreatorSceneTargetCapabilities Scale = 4 (Scale)
+  field const TopiaForge.Mods.CreatorSceneTargetCapabilities TemporaryVisibility = 8 (TemporaryVisibility)
+  field const TopiaForge.Mods.CreatorSceneTargetCapabilities Transform = 7 (Transform)
+
+type public sealed class TopiaForge.Mods.CreatorSessionOptions : System.Object
+  constructor .ctor(System.String purpose, System.Int32 maximumInstances = 256)
+  property System.Int32 MaximumInstances { get; }
+  property System.String Purpose { get; }
+
+type public sealed class TopiaForge.Mods.CreatorSpawnRequest : System.Object
+  constructor .ctor(System.String contentId, TopiaForge.Mods.TransformState transform)
+  property System.String ContentId { get; }
+  property TopiaForge.Mods.TransformState Transform { get; }
+
+type public enum TopiaForge.Mods.CreatorToolCloseReason : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.CreatorToolCloseReason HostUnavailable = 2 (HostUnavailable)
+  field const TopiaForge.Mods.CreatorToolCloseReason ProviderStopping = 3 (ProviderStopping)
+  field const TopiaForge.Mods.CreatorToolCloseReason Requested = 4 (Requested)
+  field const TopiaForge.Mods.CreatorToolCloseReason SceneChanged = 1 (SceneChanged)
+  field const TopiaForge.Mods.CreatorToolCloseReason UserToggle = 0 (UserToggle)
+
+type public sealed class TopiaForge.Mods.CreatorToolHostDescriptor : System.Object
+  constructor .ctor(System.String hostId, System.String sourceId, System.String localId, System.String displayName, System.Int32 priority)
+  property System.Int32 Priority { get; }
+  property System.String DisplayName { get; }
+  property System.String HostId { get; }
+  property System.String LocalId { get; }
+  property System.String SourceId { get; }
+
+type public sealed class TopiaForge.Mods.CreatorToolHostRegistrationRequest : System.Object
+  constructor .ctor(System.String localId, System.String displayName, System.Int32 priority, TopiaForge.Mods.ICreatorToolHost host, System.String toggleBinding = "")
+  property System.Int32 Priority { get; }
+  property System.String DisplayName { get; }
+  property System.String LocalId { get; }
+  property System.String ToggleBinding { get; }
+  property TopiaForge.Mods.ICreatorToolHost Host { get; }
+
+type public sealed class TopiaForge.Mods.CreatorToolOpenContext : System.Object
+  constructor .ctor(System.String activeSceneName)
+  property System.String ActiveSceneName { get; }
+
+type public flags enum TopiaForge.Mods.CreatorTransformCapabilities : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.CreatorTransformCapabilities All = 7 (All)
+  field const TopiaForge.Mods.CreatorTransformCapabilities None = 0 (None)
+  field const TopiaForge.Mods.CreatorTransformCapabilities Position = 1 (Position)
+  field const TopiaForge.Mods.CreatorTransformCapabilities Rotation = 2 (Rotation)
+  field const TopiaForge.Mods.CreatorTransformCapabilities Scale = 4 (Scale)
+
+type public interface TopiaForge.Mods.ICreatorContentFactory
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.ICreatorSourceInstance> Spawn(TopiaForge.Mods.TransformState transform)
+
+type public interface TopiaForge.Mods.ICreatorContentRegistration : System.IDisposable
+  property System.Boolean IsAlive { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.CreatorContentDescriptor Descriptor { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.ICreatorContentService
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.CreatorCatalogSnapshot> RefreshCatalog()
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.ICreatorContentRegistration> Register(TopiaForge.Mods.CreatorContentRegistrationRequest request)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.ICreatorSession> BeginSession(TopiaForge.Mods.CreatorSessionOptions options)
+  property TopiaForge.Mods.CreatorCatalogSnapshot Catalog { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.ICreatorMutationLease : System.IDisposable
+  property System.Boolean IsAlive { get [abstract,virtual,newslot]; }
+  property System.Boolean IsPersistenceIsolated { get [abstract,virtual,newslot]; }
+  property System.String Purpose { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.ICreatorMutationSafetyService
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.ICreatorMutationLease> Acquire(TopiaForge.Mods.CreatorMutationLeaseRequest request)
+  property TopiaForge.Mods.CreatorMutationSafetySnapshot Status { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.ICreatorProjectLibrary
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>> DeleteAsync(System.String projectId, System.Threading.CancellationToken cancellationToken = null)
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.CreatorEventProject>> LoadAsync(System.String projectId, System.Threading.CancellationToken cancellationToken = null)
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.CreatorProjectLibrarySnapshot>> ListAsync(System.Threading.CancellationToken cancellationToken = null)
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.CreatorProjectSummary>> SaveAsync(TopiaForge.Mods.CreatorEventProject project, System.Threading.CancellationToken cancellationToken = null)
+  method [abstract,virtual,newslot] TopiaForge.Mods.CreatorProjectValidationResult Validate(TopiaForge.Mods.CreatorEventProject project)
+
+type public interface TopiaForge.Mods.ICreatorSceneAdapter
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.ICreatorSceneTarget>> QuerySceneTargets(TopiaForge.Mods.CreatorSceneQuery query)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.ICreatorSceneTarget> ResolveSceneTarget(TopiaForge.Mods.IEntity entity)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.ICreatorTemporaryEdit> BeginTemporaryEdit(TopiaForge.Mods.ICreatorSceneTarget target)
+
+type public interface TopiaForge.Mods.ICreatorSceneAdapterRegistration : System.IDisposable
+  property System.Boolean IsAlive { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.CreatorSceneAdapterDescriptor Descriptor { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.ICreatorSceneAdapterRegistry
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.ICreatorSceneAdapterRegistration> RegisterSceneAdapter(TopiaForge.Mods.CreatorSceneAdapterRegistrationRequest request)
+
+type public interface TopiaForge.Mods.ICreatorSceneTarget
+  property System.Boolean IsAlive { get [abstract,virtual,newslot]; }
+  property System.String AdapterId { get [abstract,virtual,newslot]; }
+  property System.String CatalogContentId { get [abstract,virtual,newslot]; }
+  property System.String DisplayName { get [abstract,virtual,newslot]; }
+  property System.String Id { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.CreatorContentKind Kind { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.CreatorSceneTargetCapabilities Capabilities { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IEntity Entity { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.ICreatorSession : System.IDisposable
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.ICreatorSceneTarget>> QuerySceneTargets(TopiaForge.Mods.CreatorSceneQuery query)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.ICreatorSceneTarget> ResolveSceneTarget(TopiaForge.Mods.IEntity entity)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.ICreatorSpawnHandle> Spawn(TopiaForge.Mods.CreatorSpawnRequest request)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.ICreatorTemporaryEdit> BeginTemporaryEdit(TopiaForge.Mods.ICreatorSceneTarget target)
+  property System.Boolean IsAlive { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.CreatorSessionOptions Options { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.ICreatorSourceInstance : System.IDisposable
+  method [abstract,virtual,newslot] System.Boolean TryGetTransform(out TopiaForge.Mods.TransformState transform)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.TransformState> SetTransform(TopiaForge.Mods.TransformState transform)
+  property System.Boolean IsAlive { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IEntity Entity { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.ICreatorSpawnHandle : System.IDisposable
+  method [abstract,virtual,newslot] System.Boolean TryGetTransform(out TopiaForge.Mods.TransformState transform)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Despawn()
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.ICreatorSpawnHandle> Duplicate(TopiaForge.Mods.TransformState transform)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.TransformState> SetTransform(TopiaForge.Mods.TransformState transform)
+  property System.Boolean IsAlive { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.CreatorContentDescriptor Descriptor { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IEntity Entity { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.ICreatorTemporaryEdit : System.IDisposable
+  method [abstract,virtual,newslot] System.Boolean TryGetTransform(out TopiaForge.Mods.TransformState transform)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Restore()
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> SetTemporarilyHidden(System.Boolean hidden)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.TransformState> SetTransform(TopiaForge.Mods.TransformState transform)
+  property System.Boolean IsAlive { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.CreatorSceneTargetCapabilities Capabilities { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.ICreatorSceneTarget Target { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.ICreatorToolHost
+  method [abstract,virtual,newslot] System.Boolean CanOpen(TopiaForge.Mods.CreatorToolOpenContext context)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Close(TopiaForge.Mods.CreatorToolCloseReason reason)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Open(TopiaForge.Mods.CreatorToolOpenContext context)
+  property System.Boolean IsOpen { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.ICreatorToolHostRegistration : System.IDisposable
+  property System.Boolean IsAlive { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.CreatorToolHostDescriptor Descriptor { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.ICreatorToolHostRouter : TopiaForge.Mods.ICreatorToolHostService
+
+type public interface TopiaForge.Mods.ICreatorToolHostService
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> CloseActive(TopiaForge.Mods.CreatorToolCloseReason reason = 4 (Requested))
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Toggle()
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.ICreatorToolHostRegistration> RegisterHost(TopiaForge.Mods.CreatorToolHostRegistrationRequest request)
+  property TopiaForge.Mods.CreatorToolHostDescriptor? ActiveHost { get [abstract,virtual,newslot]; }

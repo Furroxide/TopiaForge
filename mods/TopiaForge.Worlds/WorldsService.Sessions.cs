@@ -17,6 +17,10 @@ namespace TopiaForge.Worlds
             sandboxArenaPending = false;
 
             pendingCustomWorld = null;
+            // Abandon (but keep draining) any in-flight creation: the SDK can still hand back live content,
+            // and only the main thread may release the Unity objects it owns. UpdateTransition does that.
+            contentLoad.Cancel();
+            placingCustomWorld = null;
             activeWorldContent?.Dispose();
             activeWorldContent = null;
 
@@ -78,6 +82,12 @@ namespace TopiaForge.Worlds
 
             EndSession(WorldSessionEndReason.ProviderUnloading);
             disposed = true;
+            // Past this point no drain runs again. The mod lifetime is stopping, so the runtime's own asset
+            // tracking releases anything the SDK still produces; dropping the task here cannot leak it.
+            contentLoad.Forget();
+            placingCustomWorld = null;
+            catalogWrite = null;
+            ReleasePendingSceneClaim();
             levelBridge.Dispose();
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.activeSceneChanged -= OnActiveSceneChanged;
@@ -110,12 +120,22 @@ namespace TopiaForge.Worlds
             // results here so logging, callbacks, and transition state changes stay on Unity's main thread.
             levelBridge.DrainAsyncLoadOutcomes();
 
+            // SDK asset tasks complete on this thread, so custom-world creation and the diagnostic catalog
+            // write are both armed elsewhere and finished here. Neither is ever waited on.
+            UpdateCustomWorldPlacement();
+            UpdateCatalogWrite();
+
             var failure = transitionTracker.ConsumeFailure(
                 Time.realtimeSinceStartup,
                 TransitionTimeoutSeconds);
             if (failure == null)
             {
                 return;
+            }
+
+            if (!transitionTracker.IsQuarantined)
+            {
+                ReleasePendingSceneClaim();
             }
 
             EndSession(WorldSessionEndReason.LoadFailed);
@@ -130,7 +150,10 @@ namespace TopiaForge.Worlds
 
             // Admission stays serialized until the expected target arrives. An unrelated/menu single scene does
             // not retire an abandoned/timed-out dispatch, so its target still cannot resolve a newer retry.
-            transitionTracker.ResolveSceneArrival(scene.name);
+            if (transitionTracker.ResolveSceneArrival(scene.name))
+            {
+                ReleasePendingSceneClaim();
+            }
 
             // Reaching a non-gameplay scene (menu/boot/loader) under a live session means the player left the
             // world — most commonly via the game's own pause-menu exit. End the session so no gamemode stays
@@ -242,8 +265,9 @@ namespace TopiaForge.Worlds
             logger.Info("Worlds open sandbox arena ready in scene '" + scene.name + "'.");
         }
 
-        // Materializes SDK-owned content in the freshly loaded sandbox play scene. The content owns its own
-        // transform and teardown; this provider supplies environment and player safety only.
+        // Starts materializing SDK-owned content in the freshly loaded sandbox play scene. Creation is
+        // asynchronous and its task can only complete on Unity's main thread, so it is armed here and drained
+        // by UpdateTransition; blocking on it from this scene-loaded callback would deadlock the process.
         private void PlaceCustomWorld(PendingCustomWorld pending, Scene scene)
         {
             var spawnPosition = levelBridge.GetSandboxSpawnPosition();
@@ -252,39 +276,125 @@ namespace TopiaForge.Worlds
                 arenaRoot = new GameObject("TopiaForge Worlds - Custom World: " + pending.World.Id);
                 UnityEngine.Object.DontDestroyOnLoad(arenaRoot);
 
-                var options = pending.Content.Options;
-                var result = pending.Content.CreateAsync().GetAwaiter().GetResult();
-                if (!result.TryGetValue(out var created))
+                placingCustomWorld = pending;
+                placingSpawnPosition = spawnPosition;
+                contentLoad.Begin(
+                    token => pending.Content.CreateAsync(token),
+                    lifetimeToken,
+                    Time.realtimeSinceStartup);
+                logger.Debug("Custom world '" + pending.World.Name + "' is being created for scene '"
+                    + scene.name + "'.");
+            }
+            catch (Exception ex)
+            {
+                FailCustomWorldPlacement(pending.World.Name, ex.Message, spawnPosition);
+            }
+        }
+
+        // Main-thread drain for the armed creation. Runs from UpdateTransition, so every Unity object the SDK
+        // hands back — including one that arrives after a cancel or timeout — is placed or released here.
+        private void UpdateCustomWorldPlacement()
+        {
+            var state = contentLoad.Poll(
+                Time.realtimeSinceStartup,
+                TransitionTimeoutSeconds,
+                out var result);
+            switch (state)
+            {
+                case PendingOperationState.Idle:
+                case PendingOperationState.Waiting:
+                    return;
+
+                case PendingOperationState.Abandoned:
+                    // The session moved on while the SDK was still working. Release any content it produced
+                    // rather than leaking the bundle, prefab, and spawned entity it owns. A newer placement may
+                    // already be armed, so nothing else about the current placement is touched here.
+                    if (result.TryGetValue(out var orphaned))
+                    {
+                        orphaned.Dispose();
+                    }
+
+                    return;
+
+                case PendingOperationState.TimedOut:
+                    FailCustomWorldPlacement(
+                        placingCustomWorld?.World.Name ?? "unknown",
+                        "creation did not complete within " + TransitionTimeoutSeconds + " seconds",
+                        placingSpawnPosition);
+                    return;
+
+                default:
+                    CompleteCustomWorldPlacement(result);
+                    return;
+            }
+        }
+
+        private void CompleteCustomWorldPlacement(OperationResult<IWorldContent> result)
+        {
+            var pending = placingCustomWorld;
+            var spawnPosition = placingSpawnPosition;
+            placingCustomWorld = null;
+            if (pending == null)
+            {
+                if (result.TryGetValue(out var orphaned))
                 {
-                    throw new InvalidOperationException(result.ErrorCode + ": " + result.ErrorMessage);
+                    orphaned.Dispose();
+                }
+
+                return;
+            }
+
+            if (!result.TryGetValue(out var created))
+            {
+                FailCustomWorldPlacement(
+                    pending.World.Name,
+                    result.ErrorCode + ": " + result.ErrorMessage,
+                    spawnPosition);
+                return;
+            }
+
+            try
+            {
+                if (arenaRoot == null)
+                {
+                    // The arena root was torn down while the SDK was working; the content has nowhere to live.
+                    created.Dispose();
+                    return;
                 }
 
                 activeWorldContent = created;
-                var effectiveSpawn = spawnPosition;
-
+                var options = pending.Content.Options;
                 if (options.ApplyDefaultEnvironment)
                 {
                     arenaProfile = HdrpEnvironment.Apply(arenaRoot, logger);
                 }
 
                 var guard = arenaRoot.AddComponent<SandboxPlayerGuard>();
-                guard.Initialize(levelBridge, levelBridge.ResolveSandboxPlayerPrefab(), effectiveSpawn, logger, 1.5f);
+                guard.Initialize(levelBridge, levelBridge.ResolveSandboxPlayerPrefab(), spawnPosition, logger, 1.5f);
                 if (options.EnableKillPlane)
                 {
                     var killPlane = arenaRoot.AddComponent<CustomWorldPlayerGuard>();
-                    killPlane.Initialize(levelBridge, effectiveSpawn, effectiveSpawn.y - options.KillPlaneDepth, logger);
+                    killPlane.Initialize(levelBridge, spawnPosition, spawnPosition.y - options.KillPlaneDepth, logger);
                 }
 
-                logger.Info("Custom world '" + pending.World.Name + "' placed in scene '" + scene.name + "'.");
+                logger.Info("Custom world '" + pending.World.Name + "' placed.");
             }
             catch (Exception ex)
             {
-                // Never strand the player on a void: tear down whatever half-placed content exists and fall
-                // back to the generated arena so the session stays playable.
-                logger.Error(ex, "Custom world '" + pending.World.Name + "' failed to place; falling back to the arena.");
-                UnloadArena();
-                BuildArena(spawnPosition);
+                logger.Error(ex, "Custom world '" + pending.World.Name + "' could not be placed.");
+                FailCustomWorldPlacement(pending.World.Name, ex.Message, spawnPosition);
             }
+        }
+
+        // Never strand the player on a void: tear down whatever half-placed content exists and fall back to
+        // the generated arena so the session stays playable.
+        private void FailCustomWorldPlacement(string worldName, string reason, Vector3 spawnPosition)
+        {
+            logger.Warn("Custom world '" + worldName + "' failed to place (" + reason
+                + "); falling back to the generated arena.");
+            placingCustomWorld = null;
+            UnloadArena();
+            BuildArena(spawnPosition);
         }
 
         private static Transform? FindDescendant(Transform root, string name)
@@ -339,6 +449,20 @@ namespace TopiaForge.Worlds
             CurrentSession = session;
             sessionSceneName = sceneName;
 
+            if (launchClaim != null)
+            {
+                if (transitionTracker.BlocksAdmission)
+                {
+                    ReleasePendingSceneClaim();
+                    pendingSceneClaim = launchClaim;
+                }
+                else
+                {
+                    // A synchronous fallback may complete its scene callback before StartSession runs.
+                    launchClaim.Dispose();
+                }
+            }
+
             // A consumer must not turn an already-dispatched world load into a reported failure (which
             // would also cause the caller to dispose the now session-owned scene claim), nor starve later
             // subscribers that also own session-scoped state.
@@ -350,6 +474,13 @@ namespace TopiaForge.Worlds
                 + " [" + gamemode.Id + "] via " + mode + " in scene '" + sceneName + "'.";
             logger.Info("World session started: " + message);
             return WorldLoadResult.Success(session, message);
+        }
+
+        private void ReleasePendingSceneClaim()
+        {
+            var claim = pendingSceneClaim;
+            pendingSceneClaim = null;
+            claim?.Dispose();
         }
 
         private void BuildArena()

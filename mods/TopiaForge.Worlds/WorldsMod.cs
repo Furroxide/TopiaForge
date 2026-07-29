@@ -1,5 +1,6 @@
 using System;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 using TopiaForge.Mods.UnityUi;
 using UnityEngine.SceneManagement;
 
@@ -26,7 +27,16 @@ namespace TopiaForge.Worlds
             config = loaded.TryGetValue(out var value) ? value : new WorldsConfig();
             Context.Config.Save(ConfigContract, config);
 
-            service = new WorldsService(Context.Logger, Context.Files);
+            if (!(Context is IInternalSceneTransitionContext internalContext))
+            {
+                throw new InvalidOperationException("The loader did not provide its scene-transition gate.");
+            }
+
+            service = new WorldsService(
+                Context.Logger,
+                Context.Files,
+                internalContext.SceneTransitions,
+                Context.Lifetime.StoppingToken);
             // Track native scene hooks immediately so any later discovery/UI/config failure still releases them.
             Context.Lifetime.Track(service);
             service.EndSessionOnMenuScene = config.EndSessionOnMenuScene;

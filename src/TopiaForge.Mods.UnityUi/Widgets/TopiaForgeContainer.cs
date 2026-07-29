@@ -225,6 +225,12 @@ namespace TopiaForge.Mods.UnityUi
             return new TopiaForgeListView<T>(this, rowHeight);
         }
 
+        /// <summary>Creates and adds a bounded, pooled node-graph canvas.</summary>
+        public TopiaForgeGraphCanvas GraphCanvas(TopiaForge.Mods.UiGraphCanvas graph)
+        {
+            return new TopiaForgeGraphCanvas(this, graph);
+        }
+
         internal TopiaForgeContainer CreateChild(string name)
         {
             var go = new GameObject(name, typeof(RectTransform));

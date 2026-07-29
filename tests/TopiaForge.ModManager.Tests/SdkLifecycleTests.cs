@@ -139,7 +139,7 @@ namespace TopiaForge.ModManager.Tests
             var context = new ModContext(
                 new ModManifest
                 {
-                    SchemaVersion = 4,
+                    SchemaVersion = 5,
                     Id = "example.lifecycle",
                     Name = "Lifecycle Example",
                     Version = "1.2.3-beta.1+test",
@@ -150,21 +150,25 @@ namespace TopiaForge.ModManager.Tests
                 Path.Combine(root, "package"),
                 logger,
                 new ModServiceRegistry(),
-                new RuntimeInfo("0.0.2227"));
+                new RuntimeInfo("0.0.2309"));
 
             Assert(context.Identity.Id == "example.lifecycle" &&
                    context.Identity.Version.ToString() == "1.2.3-beta.1+test",
                 "context identity should preserve complete manifest identity");
             Assert(context.Runtime.TryGetGameVersion(out var gameVersion) &&
-                   gameVersion.ToString() == "0.0.2227" &&
+                   gameVersion.ToString() == "0.0.2309" &&
                    context.Runtime.RuntimeIdentifier.Contains("-", StringComparison.Ordinal),
                 "context should expose real runtime metadata");
+            Assert(!context.LocalPlayer.TryGetSnapshot(out _)
+                && context.LocalPlayer.AcquireControl("headless probe").ErrorCode == ModErrorCode.Unavailable
+                && context.Ui.ShowToast("headless probe").ErrorCode == ModErrorCode.Unavailable,
+                "hosts without gameplay presentation should expose unavailable local facades, not fabricate a player");
             var fileWrite = context.Files.WriteDataTextAsync("nested/value.txt", "owned").GetAwaiter().GetResult();
-            var storageWrite = context.Storage.Save("nested/value", new StoredValue { Value = "owned" });
+            var storageWrite = context.LocalStorage.Save("nested/value", new StoredValue { Value = "owned" });
             Assert(fileWrite.Succeeded
                 && context.Files.DataFileExists("nested/value.txt")
                 && storageWrite.Succeeded
-                && context.Storage.Contains("nested/value"),
+                && context.LocalStorage.Contains("nested/value"),
                 "files and typed storage should remain owner-scoped without exposing raw paths");
 
             var updateCount = 0;
@@ -193,7 +197,7 @@ namespace TopiaForge.ModManager.Tests
             var failingContext = new ModContext(
                 new ModManifest
                 {
-                    SchemaVersion = 4,
+                    SchemaVersion = 5,
                     Id = "example.partial",
                     Name = "Partial Example",
                     Version = "1.0.0",

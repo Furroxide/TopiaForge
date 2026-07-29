@@ -40,6 +40,12 @@ credentials, query, or fragment. Redirects are disabled.
 | Multi-turn robot conversation | The current player line, a compact transcript of earlier turns, mod-authored system framing, structured decision options, and current facts | `/agent/check3` | Same as above | First-party conversation features default off. Consumers must treat model text as untrusted presentation and use only validated, closed-set decisions for game state. Failure falls back to deterministic behavior. |
 | Push-to-talk transcription | Gzip-compressed 16 kHz mono PCM audio, capped at 2 MiB after compression | `/agent/stt` | Same as above | First-party voice input defaults off. Capture begins only after the player enables the feature and performs the documented push-to-talk action. Cancel, missing microphone/token, offline, timeout, or rejection produces no transcript and falls back to typed input. |
 
+Opposite Day and other prompt consumers can register the shared global robot directive through TopiaForge Prompts.
+When such a consumer is enabled, RobotKit adds that fixed mod-authored text to an already-enabled structured brain or
+conversation request. This creates no additional request, token read, microphone access, endpoint, or logging. The
+direct consumer declares `remote-ai` and `prompt-overrides`; the launcher still presents the aggregate capabilities of
+it and its dependencies.
+
 The client limits token-file reads to 32 KiB, brain responses to 256 KiB, transcription responses to 64 KiB, and
 transcription request bodies to 2 MiB. It does not follow HTTP redirects. Authentication tokens and session headers
 must never be written to logs, diagnostic bundles, manifests, lock files, or release metadata.

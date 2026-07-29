@@ -305,7 +305,7 @@ Directory _createSdkSmokeGame(Directory temp) {
   File(p.join(managed.path, 'UnityEngine.dll')).writeAsStringSync('unity');
   File(
     p.join(root.path, 'installed-build.json'),
-  ).writeAsStringSync(jsonEncode({'id': '2227'}));
+  ).writeAsStringSync(jsonEncode({'id': '2309'}));
   return root;
 }
 
@@ -320,7 +320,7 @@ Future<void> _expectPackagedCliRejectsBadPe(
       ArchiveFile.string(
         'topiaforge.mod.json',
         jsonEncode({
-          'schemaVersion': 4,
+          'schemaVersion': 5,
           'name': 'test.packaged.bad-pe',
           'displayName': 'Packaged Bad PE',
           'version': '1.0.0',

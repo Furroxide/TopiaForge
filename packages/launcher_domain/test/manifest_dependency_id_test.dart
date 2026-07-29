@@ -61,7 +61,7 @@ ModManifest _manifest(
   List<ModConflict> conflicts = const [],
   List<String> loadAfter = const [],
 }) => ModManifest(
-  schemaVersion: 4,
+  schemaVersion: 5,
   id: id,
   name: id,
   version: '1.0.0',

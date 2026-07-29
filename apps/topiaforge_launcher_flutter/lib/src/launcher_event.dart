@@ -65,6 +65,19 @@ class SafeModeToggled extends LauncherEvent {
   final bool enabled;
 }
 
+class ProfileManagerStateInheritanceChanged extends LauncherEvent {
+  const ProfileManagerStateInheritanceChanged(this.enabled);
+
+  final bool enabled;
+}
+
+class ProfileModSelectionChanged extends LauncherEvent {
+  const ProfileModSelectionChanged(this.modId, this.enabled);
+
+  final String modId;
+  final bool enabled;
+}
+
 class KnownInstallDetected extends LauncherEvent {
   const KnownInstallDetected();
 }
@@ -196,6 +209,26 @@ class LauncherUpdateSettingsChanged extends LauncherEvent {
   final bool? enabled;
   final bool? checkAutomatically;
   final LauncherUpdateChannel? channel;
+}
+
+class LauncherUpdateCheckRequested extends LauncherEvent {
+  const LauncherUpdateCheckRequested({this.force = true});
+
+  final bool force;
+}
+
+class LauncherUpdateDownloadRequested extends LauncherEvent {
+  const LauncherUpdateDownloadRequested();
+}
+
+class LauncherUpdateInstallConfirmed extends LauncherEvent {
+  const LauncherUpdateInstallConfirmed();
+}
+
+class LauncherUpdateStatusChanged extends LauncherEvent {
+  const LauncherUpdateStatusChanged(this.status);
+
+  final LauncherUpdateStatus status;
 }
 
 class GameFolderOpened extends LauncherEvent {

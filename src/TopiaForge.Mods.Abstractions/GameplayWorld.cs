@@ -6,7 +6,10 @@ namespace TopiaForge.Mods
     /// <summary>An opaque, engine-independent handle to a live world entity.</summary>
     public interface IEntity
     {
-        /// <summary>Gets an opaque identifier stable for this entity's current lifetime.</summary>
+        /// <summary>
+        /// Gets a process-local opaque identifier stable for this entity's current lifetime. It is not a network
+        /// identity and must not be compared across processes.
+        /// </summary>
         string Id { get; }
 
         /// <summary>Gets the best available user-facing or diagnostic name.</summary>
@@ -173,13 +176,13 @@ namespace TopiaForge.Mods
         IReadOnlyList<IEntity> Overlap(Bounds bounds, int maximumResults = 64);
     }
 
-    /// <summary>Provides the current player and view state without exposing game components.</summary>
-    public interface IPlayerService
+    /// <summary>Provides the process-local player and view state without exposing game components.</summary>
+    public interface ILocalPlayerService
     {
-        /// <summary>Attempts to read the current player and active gameplay camera.</summary>
+        /// <summary>Attempts to read the process-local player and active gameplay camera.</summary>
         bool TryGetSnapshot(out PlayerSnapshot? snapshot);
 
-        /// <summary>Attempts to read the current player health state.</summary>
+        /// <summary>Attempts to read the process-local player health state.</summary>
         bool TryGetHealth(out PlayerHealthSnapshot? health);
 
         /// <summary>Applies positive damage through the game's supported player-health adapter.</summary>
@@ -226,7 +229,7 @@ namespace TopiaForge.Mods
         public bool IsDepleted => Current <= 0f;
     }
 
-    /// <summary>Describes framework-mediated damage to the current player.</summary>
+    /// <summary>Describes framework-mediated damage to the process-local player.</summary>
     public sealed class PlayerDamageRequest
     {
         /// <summary>Creates a player damage request.</summary>
@@ -253,7 +256,7 @@ namespace TopiaForge.Mods
         public string Source { get; }
     }
 
-    /// <summary>Immutable player and view state sampled from the current game frame.</summary>
+    /// <summary>Immutable process-local player and view state sampled from the current game frame.</summary>
     public sealed class PlayerSnapshot
     {
         /// <summary>Creates a player snapshot.</summary>
@@ -271,11 +274,8 @@ namespace TopiaForge.Mods
     }
 
     /// <summary>A reversible lease over normal player movement and look controls.</summary>
-    public interface IPlayerControlLease : IDisposable
+    public interface IPlayerControlLease : IGameplayLease
     {
-        /// <summary>Gets whether this lease has not yet been released.</summary>
-        bool IsActive { get; }
-
         /// <summary>Gets the diagnostic reason supplied when the lease was acquired.</summary>
         string Reason { get; }
     }

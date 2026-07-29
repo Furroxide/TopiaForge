@@ -1,9 +1,9 @@
 {
   "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "name": "io.github.furroxide.topiaforge.zombies",
   "displayName": "Zombies",
-  "version": "1.0.0",
+  "version": "1.0.0-rc.1",
   "author": {
     "name": "TopiaForge"
   },
@@ -11,18 +11,18 @@
   "entryAssembly": "TopiaForge.Zombies.dll",
   "entryType": "TopiaForge.Zombies.ZombiesMod",
   "dependencies": {
-    "io.github.furroxide.topiaforge.worlds": ">=1.0.0 <2.0.0",
-    "io.github.furroxide.topiaforge.robotkit": ">=1.0.0 <2.0.0",
-    "io.github.furroxide.topiaforge.chronos": ">=1.0.0 <2.0.0"
+    "io.github.furroxide.topiaforge.worlds": ">=1.0.0-rc.1 <2.0.0",
+    "io.github.furroxide.topiaforge.robotkit": ">=1.0.0-rc.1 <2.0.0",
+    "io.github.furroxide.topiaforge.chronos": ">=1.0.0-rc.1 <2.0.0"
   },
   "loadAfter": [
     "io.github.furroxide.topiaforge.worlds",
     "io.github.furroxide.topiaforge.robotkit",
     "io.github.furroxide.topiaforge.chronos"
   ],
-  "supportedGameVersionRange": "0.0.2227",
-  "supportedLoaderVersionRange": ">=1.0.0 <2.0.0",
-  "supportedSdkVersionRange": ">=1.0.0 <2.0.0",
+  "supportedGameVersionRange": "0.0.2309",
+  "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
   "category": "Gameplay",
   "tags": [
     "zombies",
@@ -39,7 +39,10 @@
     "requisitions",
     "chronos"
   ],
-  "license": "NOASSERTION",
+  "license": "MIT",
+  "licenseFiles": [
+    "LICENSE"
+  ],
   "capabilities": [
     "world-service",
     "robot-spawning",

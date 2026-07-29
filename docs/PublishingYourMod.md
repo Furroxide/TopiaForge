@@ -20,7 +20,7 @@ topiaforge check package .
 ```
 
 Fix every line it prints — warnings included. Typical last-mile fixes are a valid SPDX expression and declared license
-file, only known [capability values](ManifestV4.md#capabilities), explicit author identity, and a real SemVer `version`.
+file, only known [capability values](ManifestV5.md#package-contract), explicit author identity, and a real SemVer `version`.
 If your mod has dependencies, add
 `--resolve` to dry-run resolution against your configured sources.
 
@@ -56,7 +56,9 @@ topiaforge registry index --dir dist --output site/registry --base-url https://e
 
 The builder revalidates each package, computes SHA-256 and size, rejects conflicting duplicate id/version pairs, and
 writes a deterministic static index. Replace the example base URL with the HTTPS directory where package assets will
-live. Local/LAN-only sources can omit `--base-url` and keep the generated relative URLs.
+live. It takes the inline manifest from the packed package, preserving derived synchronized contract-lock metadata;
+do not build registry entries from the source manifest. Local/LAN-only sources can omit `--base-url` and keep the
+generated relative URLs.
 
 ## 6. Upload and verify
 

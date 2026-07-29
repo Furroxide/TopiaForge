@@ -259,7 +259,7 @@ namespace TopiaForge.ModRuntime.Tests
             return new ModContext(
                 new ModManifest
                 {
-                    SchemaVersion = 4,
+                    SchemaVersion = 5,
                     Id = "tests.events." + name,
                     Name = "Event dispatch " + name,
                     Version = "1.0.0",
@@ -270,7 +270,7 @@ namespace TopiaForge.ModRuntime.Tests
                 packagePath,
                 logger,
                 new ModServiceRegistry(),
-                new RuntimeInfo("0.0.2227"));
+                new RuntimeInfo("0.0.2309"));
         }
 
         private sealed class AlwaysThrowingSubscriber

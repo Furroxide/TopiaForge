@@ -238,7 +238,7 @@ namespace $assembly
               _dataRoot.path,
               'sdk-nuget-cache',
               sdk.version,
-              sdk.manifestSha256,
+              _compactSha256(sdk.manifestSha256),
             ),
           );
     final managedDir = _resolveRobotopiaManagedDir();
@@ -260,6 +260,14 @@ ${references.join('\n')}
   </ItemGroup>
 </Project>
 ''');
+  }
+
+  String _compactSha256(String hex) {
+    final bytes = <int>[
+      for (var offset = 0; offset < hex.length; offset += 2)
+        int.parse(hex.substring(offset, offset + 2), radix: 16),
+    ];
+    return base64Url.encode(bytes).replaceAll('=', '');
   }
 
   String _resolveRobotopiaManagedDir() {

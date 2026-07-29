@@ -12,7 +12,7 @@ void _registerProfileLaunchTests({
       () async {
         File(
           p.join(gameRoot().path, 'installed-build.json'),
-        ).writeAsStringSync('{"id":2227}');
+        ).writeAsStringSync('{"id":2309}');
         var processStarted = false;
         final prepared = await _prepareProfileLaunchRepository(
           dataRoot: dataRoot(),
@@ -30,7 +30,7 @@ void _registerProfileLaunchTests({
             root(),
             id: 'versioned.mod',
             version: '1.0.0',
-            gameVersionRange: '0.0.2227',
+            gameVersionRange: '0.0.2309',
           ).path,
           install,
         );
@@ -53,7 +53,7 @@ void _registerProfileLaunchTests({
         );
 
         expect(result.started, isFalse);
-        expect(result.message, contains('not 0.0.2228'));
+        expect(result.message, contains('installed: build 2228'));
         expect(processStarted, isFalse);
       },
     );
@@ -127,6 +127,45 @@ void _registerProfileLaunchTests({
         expect(launchJson['selectedVersions'], {'alpha.mod': '1.0.0'});
         expect(stateFile.readAsStringSync(), stateBefore);
         expect(File(launchFilePath).existsSync(), isFalse);
+      },
+    );
+
+    test(
+      'ignores unavailable version pins for disabled profile mods',
+      () async {
+        var processStarted = false;
+        final prepared = await _prepareProfileLaunchRepository(
+          dataRoot: dataRoot(),
+          repositoryRoot: repositoryRoot(),
+          gameRoot: gameRoot(),
+          starter: (request) async {
+            processStarted = true;
+            final path = request
+                .environment[ProfileLaunchConfiguration.environmentVariable]!;
+            File(path).deleteSync();
+            return 17;
+          },
+        );
+        final repository = prepared.$1;
+        final install = prepared.$2;
+        await repository.installPackage(
+          _createPackage(root(), id: 'alpha.mod', version: '1.0.0').path,
+          install,
+        );
+
+        final result = await repository.launch(
+          install,
+          const LauncherProfile(
+            id: 'disabled-pin',
+            name: 'Disabled Pin',
+            enabledMods: {'alpha.mod'},
+            selectedVersions: {'alpha.mod': '1.0.0', 'disabled.mod': '9.0.0'},
+          ),
+        );
+
+        expect(result.started, isTrue);
+        expect(result.processId, 17);
+        expect(processStarted, isTrue);
       },
     );
 

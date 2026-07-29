@@ -12,7 +12,7 @@ namespace TopiaForge.Zombies
                 || !robots.TryGetPlayerEntity(out var identity)
                 || identity == null
                 || !identity.IsAlive
-                || !context.Player.TryGetHealth(out var health)
+                || !context.LocalPlayer.TryGetHealth(out var health)
                 || health == null)
             {
                 return;
@@ -40,7 +40,7 @@ namespace TopiaForge.Zombies
             var missing = starting.Current - current.Current;
             if (missing > 0.001f)
             {
-                var healed = context.Player.Heal(missing, "Zombies run cleanup");
+                var healed = context.LocalPlayer.Heal(missing, "Zombies run cleanup");
                 if (!healed.Succeeded)
                 {
                     context.Logger.Warn("Zombies could not restore native player health: " + healed.ErrorMessage);
@@ -48,7 +48,7 @@ namespace TopiaForge.Zombies
             }
             else if (missing < -0.001f)
             {
-                var damaged = context.Player.Damage(new PlayerDamageRequest(
+                var damaged = context.LocalPlayer.Damage(new PlayerDamageRequest(
                     Math.Min(-missing, Math.Max(0f, current.Current - starting.Current)),
                     "Zombies run cleanup"));
                 if (!damaged.Succeeded)
@@ -75,7 +75,7 @@ namespace TopiaForge.Zombies
                     Math.Max(0f, scaledDamage),
                     Math.Max(0f, native.Current - reserve));
                 var result = nativeDamage > 0.001f
-                    ? context.Player.Damage(new PlayerDamageRequest(nativeDamage, "infected robot"))
+                    ? context.LocalPlayer.Damage(new PlayerDamageRequest(nativeDamage, "infected robot"))
                     : OperationResult<PlayerHealthSnapshot>.Success(native);
                 if (!result.Succeeded && !nativeHealthWarningLogged)
                 {
@@ -106,7 +106,7 @@ namespace TopiaForge.Zombies
             var target = health.Maximum * Math.Max(0f, Math.Min(1f, integrity / maximumIntegrity));
             if (target > health.Current + 0.001f)
             {
-                var healed = context.Player.Heal(target - health.Current, "Zombies field repair");
+                var healed = context.LocalPlayer.Heal(target - health.Current, "Zombies field repair");
                 if (!healed.Succeeded && !nativeHealthWarningLogged)
                 {
                     nativeHealthWarningLogged = true;
@@ -127,34 +127,14 @@ namespace TopiaForge.Zombies
                 return false;
             }
 
-            return context.Player.TryGetHealth(out health) && health != null;
+            return context.LocalPlayer.TryGetHealth(out health) && health != null;
         }
 
-        private void CancelSpawnSearch()
-        {
-            if (spawnCancellation != null)
-            {
-                try { spawnCancellation.Cancel(); }
-                catch (ObjectDisposedException) { }
-                spawnCancellation.Dispose();
-                spawnCancellation = null;
-            }
+        // PendingOperation keeps a cancelled operation draining so a late result is still released on the main
+        // thread, and frees the armed slot immediately so a restart never waits on work we already discarded.
+        private void CancelSpawnSearch() => spawnSearch.Cancel();
 
-            spawnSearch = null;
-        }
-
-        private void CancelReturnToMenu()
-        {
-            if (returnCancellation != null)
-            {
-                try { returnCancellation.Cancel(); }
-                catch (ObjectDisposedException) { }
-                returnCancellation.Dispose();
-                returnCancellation = null;
-            }
-
-            returnTask = null;
-        }
+        private void CancelReturnToMenu() => returnOperation.Cancel();
 
         private void ClearEnemies()
         {
@@ -240,18 +220,6 @@ namespace TopiaForge.Zombies
             }
 
             return float.IsNaN(value) || float.IsInfinity(value) || value < 0f ? 0f : value;
-        }
-
-        private static OperationResult<T> CompletedResult<T>(Task<OperationResult<T>> task) where T : notnull
-        {
-            try
-            {
-                return task.GetAwaiter().GetResult();
-            }
-            catch (Exception exception)
-            {
-                return OperationResult<T>.Failure(ModErrorCode.External, exception.Message);
-            }
         }
 
         private int EffectiveAliveCap => Math.Min(

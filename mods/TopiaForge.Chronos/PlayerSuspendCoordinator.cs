@@ -9,14 +9,14 @@ namespace TopiaForge.Chronos
     {
         private const float RetrySeconds = 0.5f;
 
-        private readonly IPlayerService player;
+        private readonly ILocalPlayerService player;
         private readonly IModLogger logger;
         private IPlayerControlLease? lease;
         private string pendingUsage = "time freeze";
         private float retryTimer;
         private bool acquireFailureLogged;
 
-        public PlayerSuspendCoordinator(IPlayerService player, IModLogger logger)
+        public PlayerSuspendCoordinator(ILocalPlayerService player, IModLogger logger)
         {
             this.player = player ?? throw new ArgumentNullException(nameof(player));
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));

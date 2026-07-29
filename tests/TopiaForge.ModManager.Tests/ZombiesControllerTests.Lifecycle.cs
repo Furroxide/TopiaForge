@@ -74,15 +74,15 @@ namespace TopiaForge.ModManager.Tests
             var config = FastConfig();
             context.Config.Seed(2, config);
             context.Scenes.Load(arenaScene);
-            context.Player.Snapshot = new PlayerSnapshot(
+            context.LocalPlayer.Snapshot = new PlayerSnapshot(
                 Vec3.Zero,
                 new Ray(Vec3.Zero, new Vec3(0f, 0f, 1f)));
-            context.Player.Health = new PlayerHealthSnapshot(config.PlayerIntegrity, config.PlayerIntegrity);
+            context.LocalPlayer.Health = new PlayerHealthSnapshot(config.PlayerIntegrity, config.PlayerIntegrity);
 
             var worlds = new FakeWorldGamemodeService(context.Lifetime);
             var robots = new FakeRobotKit(context.Lifetime);
             robots.Agents.AutoCompleteAgentMovement = false;
-            var pauseMenu = new TestWorldPauseMenuService(context.Lifetime);
+            var pauseMenu = new FakeWorldPauseMenuService(context.Lifetime);
             Assert(worlds.RegisterWorld(new WorldDefinition(
                     WellKnownWorldIds.OpenSandboxWorld,
                     "Open Sandbox",
@@ -108,10 +108,10 @@ namespace TopiaForge.ModManager.Tests
                     "Player",
                     new Vec3(cycle, 0f, 0f));
                 robots.Agents.PlayerEntity = player;
-                context.Player.Snapshot = new PlayerSnapshot(
+                context.LocalPlayer.Snapshot = new PlayerSnapshot(
                     player.Position,
                     new Ray(player.Position, new Vec3(0f, 0f, 1f)));
-                context.Player.Health = new PlayerHealthSnapshot(config.PlayerIntegrity, config.PlayerIntegrity);
+                context.LocalPlayer.Health = new PlayerHealthSnapshot(config.PlayerIntegrity, config.PlayerIntegrity);
 
                 var launched = worlds.LaunchMenuEntryAsync(ZombiesMod.MenuEntryId).GetAwaiter().GetResult();
                 Assert(launched.Succeeded
@@ -163,7 +163,7 @@ namespace TopiaForge.ModManager.Tests
             harness.Advance(0.01f);
             Assert(harness.Controller.TestingPhase == ZombiesPhase.Wave
                 && harness.Controller.TestingWave == 1,
-                "Zombies begins only after the authoritative session scene and safe player entity are ready");
+                "Zombies begins only after the current session scene and safe local-player entity are ready");
         }
 
 

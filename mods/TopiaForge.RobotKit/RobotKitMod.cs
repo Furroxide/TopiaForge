@@ -15,6 +15,7 @@ namespace TopiaForge.RobotKit
         private RobotConversationService? conversationService;
         private PlayerDialogueInputService? dialogueInputService;
         private RobotObjectiveService? objectiveService;
+        private RobotSceneEditorService? sceneEditorService;
         private bool agentTickFailed;
         private bool objectiveTickFailed;
         private bool brainTickFailed;
@@ -27,7 +28,7 @@ namespace TopiaForge.RobotKit
 
             service = new RobotAgentService(logger);
             Context.Lifetime.Track(service);
-            brainService = new RobotBrainQueryService(logger);
+            brainService = new RobotBrainQueryService(logger, ResolvePromptRegistry);
             Context.Lifetime.Track(brainService);
             // The objective service resolves Reprogram courier recipients back to agent handles via the agent
             // service (live-object reference -> IRobotAgent), staying Unity-free itself.
@@ -42,11 +43,14 @@ namespace TopiaForge.RobotKit
             Context.Lifetime.Track(dialogueInputService);
             conversationService = new RobotConversationService(brainService, logger);
             Context.Lifetime.Track(conversationService);
+            sceneEditorService = new RobotSceneEditorService(service, logger);
+            Context.Lifetime.Track(sceneEditorService);
             RegisterExtension<IRobotAgentService>(service);
             RegisterExtension<IRobotBrainQueryService>(brainService);
             RegisterExtension<IRobotConversationService>(conversationService);
             RegisterExtension<IPlayerDialogueInputService>(dialogueInputService);
             RegisterExtension<IRobotObjectiveService>(objectiveService);
+            RegisterExtension<IRobotSceneEditorService>(sceneEditorService);
 
             Context.Events.SubscribeUpdate(OnUpdate);
             Context.Events.SubscribeSceneLoaded(OnSceneLoaded);
@@ -115,12 +119,13 @@ namespace TopiaForge.RobotKit
 
         private void OnSceneLoaded(SceneLoadEvent scene)
         {
-            if (!scene.IsAuthoritativeReplacement)
+            if (!scene.IsWorldReplacement)
             {
                 return;
             }
 
             // Consumers release handles before providers clear their underlying agents/queries.
+            RunLifecycle(() => sceneEditorService?.OnSceneChanged(), "scene editor cleanup");
             RunLifecycle(() => conversationService?.OnSceneChanged(), "conversation scene cleanup");
             RunLifecycle(() => dialogueInputService?.OnSceneChanged(), "dialogue scene cleanup");
             RunLifecycle(() => objectiveService?.OnSceneChanged(), "objective scene cleanup");
@@ -158,6 +163,13 @@ namespace TopiaForge.RobotKit
             {
                 throw new InvalidOperationException(registration.ErrorMessage);
             }
+        }
+
+        private IPromptOverrideRegistry? ResolvePromptRegistry()
+        {
+            return Context.TryGetExtension<IPromptOverrideRegistry>(out var registry)
+                ? registry
+                : null;
         }
     }
 }

@@ -119,6 +119,12 @@ namespace TopiaForge.Mods.Testing
         /// <summary>Gets or sets the maximum content size accepted by reads and writes.</summary>
         public int MaximumFileBytes { get; set; } = 16 * 1024 * 1024;
 
+        /// <summary>Gets or sets one normalized path whose next write should fail.</summary>
+        public string FailNextWritePath { get; set; } = string.Empty;
+
+        /// <summary>Gets or sets the stable error returned by the next matching write.</summary>
+        public ModErrorCode FailNextWriteErrorCode { get; set; }
+
         /// <inheritdoc/>
         public bool PackageFileExists(string relativePath) => fileSystem.PackageExists(relativePath);
 
@@ -164,6 +170,16 @@ namespace TopiaForge.Mods.Testing
             if (IsCancelled(cancellationToken))
             {
                 return Cancelled<bool>();
+            }
+
+            var normalizedPath = InMemoryModFileSystem.Normalize(relativePath);
+            if (FailNextWriteErrorCode != ModErrorCode.None
+                && string.Equals(normalizedPath, FailNextWritePath, StringComparison.Ordinal))
+            {
+                var error = FailNextWriteErrorCode;
+                FailNextWriteErrorCode = ModErrorCode.None;
+                FailNextWritePath = string.Empty;
+                return Task.FromResult(OperationResult<bool>.Failure(error, "The in-memory write failed by test configuration."));
             }
 
             if (content.Length > MaximumFileBytes)
@@ -263,15 +279,13 @@ namespace TopiaForge.Mods.Testing
     }
 
     /// <summary>Provides typed in-memory key/value persistence.</summary>
-    public sealed class InMemoryModStorageService : IModStorageService
+    public sealed class InMemoryLocalModStorageService : ILocalModStorageService
     {
         private readonly Dictionary<string, object> values =
             new Dictionary<string, object>(StringComparer.Ordinal);
-        private readonly Dictionary<string, bool> storyFlags =
-            new Dictionary<string, bool>(StringComparer.Ordinal);
 
         /// <summary>Gets the number of stored keys.</summary>
-        public int Count => values.Count + storyFlags.Count;
+        public int Count => values.Count;
 
         /// <inheritdoc/>
         public bool Contains(string key) => values.ContainsKey(ValidateKey(key));
@@ -304,26 +318,10 @@ namespace TopiaForge.Mods.Testing
         public OperationResult<bool> Delete(string key) =>
             OperationResult<bool>.Success(values.Remove(ValidateKey(key)));
 
-        /// <inheritdoc/>
-        public bool TryGetStoryFlag(string key, out bool value) =>
-            storyFlags.TryGetValue(ValidateKey(key), out value);
-
-        /// <inheritdoc/>
-        public OperationResult<bool> SetStoryFlag(string key, bool value)
-        {
-            storyFlags[ValidateKey(key)] = value;
-            return OperationResult<bool>.Success(true);
-        }
-
-        /// <inheritdoc/>
-        public OperationResult<bool> DeleteStoryFlag(string key) =>
-            OperationResult<bool>.Success(storyFlags.Remove(ValidateKey(key)));
-
         /// <summary>Removes every stored key.</summary>
         public void Clear()
         {
             values.Clear();
-            storyFlags.Clear();
         }
 
         private static string ValidateKey(string key)

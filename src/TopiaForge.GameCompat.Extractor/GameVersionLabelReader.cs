@@ -33,6 +33,12 @@ namespace TopiaForge.GameCompat.Extractor
         {
             try
             {
+                var cachedBuild = ReadPublicManagedReferenceCacheBuild(managedDir);
+                if (cachedBuild.Label.Length > 0)
+                {
+                    return cachedBuild;
+                }
+
                 var layout = ResolveLayout(managedDir);
                 if (layout == null)
                 {
@@ -58,6 +64,62 @@ namespace TopiaForge.GameCompat.Extractor
                 // incomplete, metadata is malformed, or files change under the reader.
                 return GameVersionInfo.Empty;
             }
+        }
+
+        private static GameVersionInfo ReadPublicManagedReferenceCacheBuild(string managedDir)
+        {
+            if (string.IsNullOrWhiteSpace(managedDir))
+            {
+                return GameVersionInfo.Empty;
+            }
+
+            var managed = new DirectoryInfo(Path.GetFullPath(managedDir));
+            if (!managed.Name.Equals("Managed", StringComparison.OrdinalIgnoreCase)
+                || managed.Parent == null)
+            {
+                return GameVersionInfo.Empty;
+            }
+
+            // TopiaForge.ManagedRefs publishes public archives under the stable,
+            // platform-independent cache key:
+            // public-<build>-<windows|mac>-<sha256>/Managed.
+            // Preserve that provenance when the extractor targets the cache
+            // directly instead of a launcher installation.
+            var segments = managed.Parent.Name.Split('-');
+            if (segments.Length != 4
+                || !segments[0].Equals("public", StringComparison.Ordinal)
+                || !(segments[2].Equals("windows", StringComparison.Ordinal)
+                    || segments[2].Equals("mac", StringComparison.Ordinal))
+                || segments[3].Length != 64
+                || !IsLowerHex(segments[3])
+                || !long.TryParse(
+                    segments[1],
+                    NumberStyles.None,
+                    CultureInfo.InvariantCulture,
+                    out var buildId)
+                || buildId <= 0)
+            {
+                return GameVersionInfo.Empty;
+            }
+
+            var build = buildId.ToString(CultureInfo.InvariantCulture);
+            return GameBuildVersion.TryFromBuildId(build, out var semanticVersion)
+                ? new GameVersionInfo("build " + build, semanticVersion)
+                : GameVersionInfo.Empty;
+        }
+
+        private static bool IsLowerHex(string value)
+        {
+            foreach (var character in value)
+            {
+                if (!((character >= '0' && character <= '9')
+                    || (character >= 'a' && character <= 'f')))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private static InstallLayout? ResolveLayout(string managedDir)
@@ -103,10 +165,18 @@ namespace TopiaForge.GameCompat.Extractor
             }
 
             // Windows and Proton use Robotopia_Data/Managed. The launcher metadata,
-            // when present, is stored at the game install root beside Robotopia_Data.
+            // when present, is stored either at the game install root or beside the
+            // launcher-owned Robotopia directory.
             if (data.Name.EndsWith("_Data", StringComparison.OrdinalIgnoreCase) && data.Parent != null)
             {
-                return new InstallLayout(new[] { data.Parent.FullName }, infoPlist: null);
+                var roots = new List<string> { data.Parent.FullName };
+                if (data.Parent.Name.Equals("Robotopia", StringComparison.OrdinalIgnoreCase)
+                    && data.Parent.Parent != null)
+                {
+                    roots.Add(data.Parent.Parent.FullName);
+                }
+
+                return new InstallLayout(roots, infoPlist: null);
             }
 
             return null;

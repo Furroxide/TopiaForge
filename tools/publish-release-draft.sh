@@ -2,22 +2,30 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: publish-release-draft.sh <owner/repo> <tag> <target-sha> <title> <notes-file> <assets-dir>" >&2
+  echo "Usage: publish-release-draft.sh <owner/repo> <tag> <target-sha> <title> <notes-file> <assets-dir> <prerelease>" >&2
   exit 64
 }
 
-[[ $# -eq 6 ]] || usage
+[[ $# -eq 7 ]] || usage
 repository=$1
 tag=$2
 target_sha=$3
 title=$4
 notes_file=$5
 assets_dir=$6
+prerelease=$7
 script_dir=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
 [[ $repository =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || usage
-[[ $tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || usage
+[[ $tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || usage
 [[ $target_sha =~ ^[0-9a-f]{40,64}$ ]] || usage
+[[ $prerelease == true || $prerelease == false ]] || usage
+tag_is_prerelease=false
+[[ $tag == *-* ]] && tag_is_prerelease=true
+[[ $prerelease == "$tag_is_prerelease" ]] || {
+  echo "Prerelease flag $prerelease does not match release tag $tag." >&2
+  exit 1
+}
 [[ -f $notes_file && -s $notes_file ]] || {
   echo "Release notes are missing or empty: $notes_file" >&2
   exit 1
@@ -97,12 +105,17 @@ else
     --arg tag "$tag" \
     --arg name "$title" \
     --arg body "$notes" \
-    '{tag_name:$tag,name:$name,body:$body,draft:true,prerelease:false}')
+    --argjson prerelease "$prerelease" \
+    '{tag_name:$tag,name:$name,body:$body,draft:true,prerelease:$prerelease}')
   gh api --method POST "repos/$repository/releases" --input - \
     <<<"$payload" >"$release_file"
 fi
 
 [[ $(jq -r '.draft' "$release_file") == true ]] || exit 1
+[[ $(jq -r '.prerelease' "$release_file") == "$prerelease" ]] || {
+  echo "Draft prerelease state differs from the reviewed catalog." >&2
+  exit 1
+}
 [[ $(jq -r '.tag_name' "$release_file") == "$tag" ]] || {
   echo "Draft tag differs from the reviewed catalog." >&2
   exit 1

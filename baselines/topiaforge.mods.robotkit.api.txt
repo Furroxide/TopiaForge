@@ -85,6 +85,22 @@ type public interface TopiaForge.Mods.IRobotConversationService
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IRobotConversation> BeginConversation(TopiaForge.Mods.RobotConversationRequest request)
   property System.Boolean IsAvailable { get [abstract,virtual,newslot]; }
 
+type public interface TopiaForge.Mods.IRobotEditLease : System.IDisposable
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> PreviewBrainMode(TopiaForge.Mods.RobotBrainMode mode)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> PreviewPersonality(TopiaForge.Mods.RobotPersonalityDraft personality)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Restore()
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.TransformState> PreviewTransform(TopiaForge.Mods.TransformState transform)
+  property System.Boolean IsActive { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IRobotEditTarget Target { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IRobotEditTarget
+  method [abstract,virtual,newslot] System.Boolean TryGetTransform(out TopiaForge.Mods.TransformState transform)
+  property System.Boolean IsAlive { get [abstract,virtual,newslot]; }
+  property System.Boolean IsNativeSceneObject { get [abstract,virtual,newslot]; }
+  property System.String DisplayName { get [abstract,virtual,newslot]; }
+  property System.String Id { get [abstract,virtual,newslot]; }
+  property System.String SceneName { get [abstract,virtual,newslot]; }
+
 type public interface TopiaForge.Mods.IRobotObjectiveHandle : System.IDisposable
   property System.Boolean IsActive { get [abstract,virtual,newslot]; }
   property System.Int32 WaypointIndex { get [abstract,virtual,newslot]; }
@@ -105,6 +121,12 @@ type public interface TopiaForge.Mods.IRobotObjectiveService
 
 type public interface TopiaForge.Mods.IRobotPlayerEntitySource
   method [abstract,virtual,newslot] System.Boolean TryGetPlayerEntity(out TopiaForge.Mods.IEntity? entity)
+
+type public interface TopiaForge.Mods.IRobotSceneEditorService
+  method [abstract,virtual,newslot] System.Boolean TryResolve(TopiaForge.Mods.IRobotAgent agent, out TopiaForge.Mods.IRobotEditTarget? target)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IRobotEditLease> BeginTemporaryEdit(TopiaForge.Mods.IRobotEditTarget target)
+  property System.Boolean IsAvailable { get [abstract,virtual,newslot]; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.IRobotEditTarget> Targets { get [abstract,virtual,newslot]; }
 
 type public interface TopiaForge.Mods.IRobotTargetRegistration : System.IDisposable
   property System.Boolean IsActive { get [abstract,virtual,newslot]; }
@@ -296,6 +318,12 @@ type public enum TopiaForge.Mods.RobotObjectiveState : System.Int32
   field const TopiaForge.Mods.RobotObjectiveState Idle = 0 (Idle)
   field const TopiaForge.Mods.RobotObjectiveState Seeking = 1 (Seeking)
   field const TopiaForge.Mods.RobotObjectiveState TargetMissing = 4 (TargetMissing)
+
+type public sealed class TopiaForge.Mods.RobotPersonalityDraft : System.Object
+  constructor .ctor(System.String displayName, System.String instructions, System.Single temperature = 0.7)
+  property System.Single Temperature { get; }
+  property System.String DisplayName { get; }
+  property System.String Instructions { get; }
 
 type public sealed class TopiaForge.Mods.RobotProgramDelivery : System.Object
   constructor .ctor(TopiaForge.Mods.IRobotAgent sender, TopiaForge.Mods.IRobotAgent recipient, TopiaForge.Mods.RobotObjective payload)

@@ -30,7 +30,7 @@ export const dartReferencePackages = Object.freeze([
     name: 'launcher_ui',
     label: 'Launcher UI',
     description: 'Shared Flutter BLoC state and presentation components.',
-    dependencyCommand: 'flutter',
+    dependencyCommand: 'dart',
   }),
 ]);
 
@@ -57,6 +57,29 @@ export function dartdocHasDiagnostics(output) {
     return true;
   }
   return /\b[1-9]\d*\s+(?:warnings?|errors?)\b/iu.test(output);
+}
+
+export function resolveDartCommand(
+  root = repositoryRoot,
+  environment = process.env,
+  platform = process.platform,
+  fileExists = existsSync,
+) {
+  if (environment.TOPIAFORGE_DART_BIN) {
+    return environment.TOPIAFORGE_DART_BIN;
+  }
+  const executable = platform === 'win32' ? 'dart.exe' : 'dart';
+  const projectDart = resolve(
+    root,
+    '.fvm',
+    'flutter_sdk',
+    'bin',
+    'cache',
+    'dart-sdk',
+    'bin',
+    executable,
+  );
+  return fileExists(projectDart) ? projectDart : 'dart';
 }
 
 export function renderDartReferenceLanding(packages = dartReferencePackages) {
@@ -101,13 +124,23 @@ export function renderDartReferenceLanding(packages = dartReferencePackages) {
 export function buildDartReference() {
   rmSync(outputRoot, { recursive: true, force: true });
   mkdirSync(outputRoot, { recursive: true });
+  const dartCommand = resolveDartCommand();
+  const flutterRoot = resolve(repositoryRoot, '.fvm', 'flutter_sdk');
+  const dartEnvironment = existsSync(flutterRoot)
+    ? { ...process.env, FLUTTER_ROOT: flutterRoot }
+    : process.env;
 
   for (const entry of createDartdocPlan()) {
     if (!existsSync(resolve(entry.packageRoot, 'pubspec.yaml'))) {
       throw new Error(`Dart reference package is missing: ${entry.packageRoot}`);
     }
-    run(toolCommand(entry.dependencyCommand), entry.dependencyArgs, entry.packageRoot);
-    const dartdocOutput = run(toolCommand('dart'), entry.dartdocArgs, entry.packageRoot);
+    run(dartCommand, entry.dependencyArgs, entry.packageRoot, dartEnvironment);
+    const dartdocOutput = run(
+      dartCommand,
+      entry.dartdocArgs,
+      entry.packageRoot,
+      dartEnvironment,
+    );
     if (dartdocHasDiagnostics(dartdocOutput)) {
       throw new Error(`dartdoc reported warnings or errors for ${entry.name}.`);
     }
@@ -123,20 +156,11 @@ export function buildDartReference() {
   console.log(`Dart reference: pass (${dartReferencePackages.length} packages)`);
 }
 
-function toolCommand(name) {
-  if (name === 'dart') {
-    return process.env.TOPIAFORGE_DART_BIN || 'dart';
-  }
-  if (name === 'flutter') {
-    return process.env.TOPIAFORGE_FLUTTER_BIN || 'flutter';
-  }
-  return name;
-}
-
-function run(command, args, cwd) {
+function run(command, args, cwd, env = process.env) {
   const result = spawnSync(command, args, {
     cwd,
     encoding: 'utf8',
+    env,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;

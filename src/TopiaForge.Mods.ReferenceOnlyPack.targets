@@ -7,6 +7,7 @@
     <PackageLicenseExpression Condition="'$(PackageLicenseExpression)' == ''">MIT</PackageLicenseExpression>
     <_TopiaForgeUsesDefaultReadme Condition="'$(PackageReadmeFile)' == ''">true</_TopiaForgeUsesDefaultReadme>
     <PackageReadmeFile Condition="'$(PackageReadmeFile)' == ''">README.md</PackageReadmeFile>
+    <TopiaForgePackDefaultBuildTransitiveProps Condition="'$(TopiaForgePackDefaultBuildTransitiveProps)' == ''">true</TopiaForgePackDefaultBuildTransitiveProps>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <!-- NU5131 validates legacy nuspec <references>/packages.config behavior. V1 supports
          PackageReference only, where the ref/<tfm> convention is the authoritative compile surface. -->
@@ -25,7 +26,8 @@
     <None Include="$(MSBuildThisFileDirectory)TopiaForge.Mods.Package.targets"
           Pack="true" PackagePath="build/$(PackageId).targets" Visible="false" />
     <None Include="$(MSBuildThisFileDirectory)TopiaForge.Mods.Package.props"
-          Pack="true" PackagePath="buildTransitive/$(PackageId).props" Visible="false" />
+          Pack="true" PackagePath="buildTransitive/$(PackageId).props" Visible="false"
+          Condition="'$(TopiaForgePackDefaultBuildTransitiveProps)' == 'true'" />
     <None Include="$(MSBuildThisFileDirectory)TopiaForge.Mods.Package.targets"
           Pack="true" PackagePath="buildTransitive/$(PackageId).targets" Visible="false" />
   </ItemGroup>

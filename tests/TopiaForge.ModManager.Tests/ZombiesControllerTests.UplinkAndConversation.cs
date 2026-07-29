@@ -43,6 +43,9 @@ namespace TopiaForge.ModManager.Tests
             config.BiasAmplitude = 0f;
             config.OverrideResistGrunt = 0f;
             config.OverrideDifficulty = 0.25f;
+            // Short enough that clearing it does not simulate 22 seconds of wave, which would strand and despawn
+            // the responder and end the phase this case is about.
+            config.BroadcastCooldownSeconds = 0.5f;
             using var harness = new Harness(config);
             harness.Advance(0.01f);
             harness.Controller.TestingSetWavePhase();
@@ -64,7 +67,14 @@ namespace TopiaForge.ModManager.Tests
                 && harness.Controller.TestingUplinkCharges == initialCharges,
                 "stand-down should explain an empty responder set without consuming charge");
 
+            // Finding nobody costs no charge, but it does start the cooldown — otherwise holding the key is a
+            // free proximity scanner that eventually catches a robot wandering into range.
             enemy.RestoreHostile(config);
+            Assert(!harness.Controller.BroadcastStandDown().Succeeded
+                && LastToast(harness.Context).IndexOf("cooling down", StringComparison.OrdinalIgnoreCase) >= 0,
+                "an empty responder set must still rate-limit the transmitter");
+
+            harness.Advance(config.BroadcastCooldownSeconds + 0.05f);
             Assert(harness.Controller.BroadcastStandDown().Succeeded,
                 "the deterministic responder should acknowledge an in-range stand-down");
             var afterSuccess = harness.Controller.TestingUplinkCharges;
@@ -72,6 +82,55 @@ namespace TopiaForge.ModManager.Tests
                 && LastToast(harness.Context).IndexOf("cooling down", StringComparison.OrdinalIgnoreCase) >= 0
                 && harness.Controller.TestingUplinkCharges == afterSuccess,
                 "cooldown rejection should be visible and must not double-spend uplink charge");
+        }
+
+        private static void UplinkEconomyRunsOnTheWorldClock()
+        {
+            var config = FastConfig();
+            config.OverrideEnabled = true;
+            config.OverrideCharges = 2;
+            config.OverrideChargeRegenSeconds = 4f;
+            using var harness = new Harness(config, withChronos: true);
+            harness.Advance(0.01f);
+            harness.Controller.TestingSetWavePhase();
+            Assert(harness.Controller.TestingSpawn(ZombieKind.Grunt, new Vec3(0f, 0f, 5f)),
+                "an economy target should spawn");
+
+            Assert(harness.Controller.BroadcastStandDown().Succeeded, "the first broadcast should land");
+            var spent = harness.Controller.TestingUplinkCharges;
+            Assert(spent < config.OverrideCharges, "a successful broadcast spends charge");
+
+            // A stand-down freezes the world. On the control clock the cooldown and charge regeneration kept
+            // running through the freeze the player had just created, so broadcasts could be chained forever.
+            var frozen = harness.Chronos!.Freeze("test-freeze");
+            Assert(frozen.Succeeded, "the fake should freeze");
+            harness.Advance(config.OverrideChargeRegenSeconds * 3f);
+            Assert(harness.Controller.TestingUplinkCharges == spent,
+                "uplink charge must not regenerate while the world is frozen");
+
+            frozen.Value!.Dispose();
+            harness.Advance(config.OverrideChargeRegenSeconds + 0.05f);
+            Assert(harness.Controller.TestingUplinkCharges > spent,
+                "uplink charge regenerates once the world is running again");
+        }
+
+        private static void AllyCrossfireIsNotReportedAsPlayerFire()
+        {
+            var config = FastConfig();
+            using var harness = new Harness(config);
+            harness.Advance(0.01f);
+            harness.Controller.TestingSetWavePhase();
+            Assert(harness.Controller.TestingSpawn(ZombieKind.Grunt, new Vec3(0f, 0f, 5f)),
+                "a crossfire target should spawn");
+            var enemy = harness.Controller.TestingEnemies[0];
+
+            // WasRecentlyShot has exactly one consumer: the ground truth handed to the brain. Attributing an
+            // ally's crossfire to the human makes the robot argue against something the player did not do.
+            enemy.ApplyDamage(1f, byPlayer: false);
+            Assert(!enemy.WasRecentlyShot, "ally crossfire must not read as player fire");
+
+            enemy.ApplyDamage(1f, byPlayer: true);
+            Assert(enemy.WasRecentlyShot, "player fire still reads as player fire");
         }
 
         private static void FullyStabilizedAllyCheckIsFreeAtZeroCharge()
@@ -137,7 +196,7 @@ namespace TopiaForge.ModManager.Tests
                 && harness.Controller.TestingUplinkCharges == initialCharges - 1,
                 "failed live composition should consume one charge and take the deterministic conversion fallback");
             Assert(harness.Robots.Conversations.ActiveConversationCount == 0
-                && harness.Context.Player.ActiveControlLeaseCount == 0
+                && harness.Context.LocalPlayer.ActiveControlLeaseCount == 0
                 && harness.Chronos!.ActiveLeaseCount == 0
                 && harness.Context.Ui.Surfaces.Count == 1,
                 "failed live composition must release its conversation, control, time, and window ownership");
@@ -173,7 +232,7 @@ namespace TopiaForge.ModManager.Tests
             harness.Context.Input.SetValue("jack-in", 0f);
             var channel = FindSurface(harness.Context, "zombies-jack-in");
             Assert(harness.Robots.Conversations.ActiveConversationCount == 1
-                && harness.Context.Player.ActiveControlLeaseCount == 1
+                && harness.Context.LocalPlayer.ActiveControlLeaseCount == 1
                 && harness.Controller.TestingIntegrity == integrityBeforeOpen
                 && !harness.Controller.TestingCharging,
                 "live JACK IN blocks the final horde tick and clears any charge whose release may be consumed by UI focus");
@@ -184,7 +243,7 @@ namespace TopiaForge.ModManager.Tests
 
             Assert(harness.Controller.TestingEnemies[0].IsAlly
                 && harness.Robots.Conversations.ActiveConversationCount == 0
-                && harness.Context.Player.ActiveControlLeaseCount == 0,
+                && harness.Context.LocalPlayer.ActiveControlLeaseCount == 0,
                 "a brain CONVERT decision still passes the engine disposition gate and releases every channel lease");
         }
 
@@ -223,7 +282,7 @@ namespace TopiaForge.ModManager.Tests
 
             Assert(harness.Controller.TestingEnemies[0].State == HijackState.Hostile
                 && harness.Robots.Conversations.ActiveConversationCount == 0
-                && harness.Context.Player.ActiveControlLeaseCount == 0
+                && harness.Context.LocalPlayer.ActiveControlLeaseCount == 0
                 && agent.IsMoving && agent.MovementTarget != null,
                 "window X or Escape dismissal refuses without deterministic fallback and resumes the stopped horde");
         }

@@ -18,6 +18,7 @@ namespace TopiaForge.Mods.UnityUi
         private readonly List<ITopiaForgeThemeAware> themeAware = new List<ITopiaForgeThemeAware>();
         private readonly List<TopiaForgeWidget> widgets = new List<TopiaForgeWidget>();
         private readonly List<TopiaForgeWindow> windows = new List<TopiaForgeWindow>();
+        private readonly List<TopiaForgeFullscreenTool> fullscreenTools = new List<TopiaForgeFullscreenTool>();
         private readonly List<TopiaForgeModalInstance> modalInstances = new List<TopiaForgeModalInstance>();
         private TopiaForgeModals? modals;
         private TopiaForgeResolvedTheme? paperTheme;
@@ -115,6 +116,22 @@ namespace TopiaForge.Mods.UnityUi
             return window;
         }
 
+        /// <summary>
+        /// Creates an immersive tool that fills the screen's safe area, traps UI focus,
+        /// leases the cursor while shown, and closes through the shared Escape stack.
+        /// </summary>
+        public TopiaForgeFullscreenTool FullscreenTool(
+            string id,
+            string title,
+            TopiaForgeScheme scheme = TopiaForgeScheme.Paper,
+            bool persistent = false)
+        {
+            var layer = Layer("fullscreen:" + id, TopiaForgeLayerBand.Window, scheme, interactive: true, persistent);
+            var tool = new TopiaForgeFullscreenTool(this, layer, title);
+            fullscreenTools.Add(tool);
+            return tool;
+        }
+
         /// <summary>Modal dialog presets (Confirm/Destructive/Custom).</summary>
         public TopiaForgeModals Modal
         {
@@ -191,7 +208,12 @@ namespace TopiaForge.Mods.UnityUi
         {
             if (widget != null && widget.Go != null)
             {
-                DestroySubtree(widget is TopiaForgeWindow window ? window.CanvasRoot : widget.Go);
+                var root = widget is TopiaForgeWindow window
+                    ? window.CanvasRoot
+                    : widget is TopiaForgeFullscreenTool fullscreen
+                        ? fullscreen.CanvasRoot
+                        : widget.Go;
+                DestroySubtree(root);
             }
         }
 
@@ -216,6 +238,13 @@ namespace TopiaForge.Mods.UnityUi
             {
                 modalInstances[modalInstances.Count - 1].Teardown();
             }
+
+            for (var index = fullscreenTools.Count - 1; index >= 0; index--)
+            {
+                fullscreenTools[index].Teardown();
+            }
+
+            fullscreenTools.Clear();
 
             for (var index = windows.Count - 1; index >= 0; index--)
             {
@@ -267,6 +296,16 @@ namespace TopiaForge.Mods.UnityUi
                 {
                     window.Teardown();
                     windows.RemoveAt(index);
+                }
+            }
+
+            for (var index = fullscreenTools.Count - 1; index >= 0; index--)
+            {
+                var fullscreen = fullscreenTools[index];
+                if (fullscreen.Go == root || fullscreen.Go != null && fullscreen.Go.transform.IsChildOf(root.transform))
+                {
+                    fullscreen.Teardown();
+                    fullscreenTools.RemoveAt(index);
                 }
             }
 

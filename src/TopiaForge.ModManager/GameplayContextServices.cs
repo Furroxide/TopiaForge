@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 using TopiaForge.Mods.Interop.Unity;
 
 namespace TopiaForge.ModManager
@@ -20,7 +21,7 @@ namespace TopiaForge.ModManager
     {
         public GameplayContextServices(
             IInputService input,
-            IPlayerService player,
+            ILocalPlayerService localPlayer,
             IEntityService entities,
             IPhysicsService physics,
             IGameTime time,
@@ -31,10 +32,11 @@ namespace TopiaForge.ModManager
             IAssetService assets,
             IAudioService audio,
             IUiService ui,
-            IUnityInteropService? unityInterop)
+            IUnityInteropService? unityInterop,
+            IInternalSceneTransitionService sceneTransitions)
         {
             Input = input;
-            Player = player;
+            LocalPlayer = localPlayer;
             Entities = entities;
             Physics = physics;
             Time = time;
@@ -46,10 +48,11 @@ namespace TopiaForge.ModManager
             Audio = audio;
             Ui = ui;
             UnityInterop = unityInterop;
+            SceneTransitions = sceneTransitions;
         }
 
         public IInputService Input { get; }
-        public IPlayerService Player { get; }
+        public ILocalPlayerService LocalPlayer { get; }
         public IEntityService Entities { get; }
         public IPhysicsService Physics { get; }
         public IGameTime Time { get; }
@@ -61,6 +64,7 @@ namespace TopiaForge.ModManager
         public IAudioService Audio { get; }
         public IUiService Ui { get; }
         public IUnityInteropService? UnityInterop { get; }
+        public IInternalSceneTransitionService SceneTransitions { get; }
 
         public static GameplayContextServices Unavailable(IModLifetime lifetime)
         {
@@ -78,12 +82,13 @@ namespace TopiaForge.ModManager
                 unavailable,
                 unavailable,
                 unavailable,
-                null);
+                null,
+                unavailable);
         }
 
         private sealed class UnavailableGameplayService :
             IInputService,
-            IPlayerService,
+            ILocalPlayerService,
             IEntityService,
             IPhysicsService,
             IGameTime,
@@ -93,7 +98,8 @@ namespace TopiaForge.ModManager
             IItemService,
             IAssetService,
             IAudioService,
-            IUiService
+            IUiService,
+            IInternalSceneTransitionService
         {
             private readonly IModLifetime lifetime;
 
@@ -159,6 +165,13 @@ namespace TopiaForge.ModManager
             public OperationResult<IPlayerControlLease> AcquireControl(string reason)
             {
                 return OperationResult<IPlayerControlLease>.Failure(ModErrorCode.Unavailable, "Player controls are unavailable in this host.");
+            }
+
+            public OperationResult<IDisposable> Acquire(string sceneName, bool automatic, string reason)
+            {
+                return OperationResult<IDisposable>.Failure(
+                    ModErrorCode.Unavailable,
+                    "Scene transitions are unavailable in this host.");
             }
 
             public OperationResult<IEntityMotion> AcquireMotion(IEntity entity)

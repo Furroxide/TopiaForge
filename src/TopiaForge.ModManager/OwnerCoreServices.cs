@@ -338,7 +338,7 @@ namespace TopiaForge.ModManager
             return result;
         }
 
-        public bool TryGet<T>(out T? provider) where T : class
+        public bool TryGet<T>([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out T? provider) where T : class
         {
             provider = GetAll<T>().FirstOrDefault();
             return provider != null;

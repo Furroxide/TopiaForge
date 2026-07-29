@@ -15,7 +15,10 @@ const topiaForgeSdkPackageIds = <String>{
   'TopiaForge.Mods.Abstractions',
   'TopiaForge.Mods.Analyzers',
   'TopiaForge.Mods.Chronos',
+  'TopiaForge.Mods.CreatorContent',
   'TopiaForge.Mods.Interop.Unity',
+  'TopiaForge.Mods.Multiplayer',
+  'TopiaForge.Mods.Multiplayer.Generators',
   'TopiaForge.Mods.Prompts',
   'TopiaForge.Mods.RobotKit',
   'TopiaForge.Mods.Testing',
@@ -23,10 +26,18 @@ const topiaForgeSdkPackageIds = <String>{
   'TopiaForge.Mods.Worlds',
 };
 
+/// SDK packages consumed exclusively through Roslyn's analyzer/source-generator path.
+const topiaForgeAnalyzerPackageIds = <String>{
+  'TopiaForge.Mods.Analyzers',
+  'TopiaForge.Mods.Multiplayer.Generators',
+};
+
 /// Unity-free contract implementations supplied only to test runners by the testing package.
 const topiaForgeTestingRuntimeSupportPackageIds = <String>{
   'TopiaForge.Mods.Abstractions',
   'TopiaForge.Mods.Chronos',
+  'TopiaForge.Mods.CreatorContent',
+  'TopiaForge.Mods.Multiplayer',
   'TopiaForge.Mods.Prompts',
   'TopiaForge.Mods.RobotKit',
   'TopiaForge.Mods.Ugc',

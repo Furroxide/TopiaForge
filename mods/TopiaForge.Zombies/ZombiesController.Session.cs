@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Threading;
 using TopiaForge.Mods;
 
@@ -17,7 +18,7 @@ namespace TopiaForge.Zombies
             hordeMotionSuspendedForConversation = false;
             ClearEnemies();
             shop.Reset();
-            random = new Random(RandomSeed);
+            random = CreateRandom();
             playerEntity = null;
             usingPositionalPlayerFallback = false;
             startingNativeHealth = null;
@@ -51,6 +52,13 @@ namespace TopiaForge.Zombies
                 context.Ui.ShowToast("Zombies run restarted.", UiTone.Success);
             }
         }
+
+        /// <summary>
+        /// Builds the run's RNG. A configured non-zero seed replays a fixed wave and archetype sequence; the
+        /// default of 0 seeds from entropy, so the mod does not ship every player the same run forever.
+        /// </summary>
+        private Random CreateRandom() =>
+            config.Seed != 0 ? new Random(config.Seed) : new Random();
 
         private void RestartFromUi()
         {
@@ -105,7 +113,7 @@ namespace TopiaForge.Zombies
 
         private void BeginReturnToMenu()
         {
-            if (disposed || phase != ZombiesPhase.GameOver || returnTask != null)
+            if (disposed || phase != ZombiesPhase.GameOver || returnOperation.IsInFlight)
             {
                 return;
             }
@@ -121,9 +129,12 @@ namespace TopiaForge.Zombies
             RestoreNativeHealth();
             try
             {
-                returnCancellation = CancellationTokenSource.CreateLinkedTokenSource(
-                    context.Lifetime.StoppingToken);
-                returnTask = returnToMenu(returnCancellation.Token);
+                // Unscaled time, because this phase holds a world freeze — a scaled clock would stop the very
+                // deadline that is supposed to rescue the player from a scene load that never settles.
+                returnOperation.Begin(
+                    returnToMenu,
+                    context.Lifetime.StoppingToken,
+                    (float)context.Time.Frame.ElapsedTime);
             }
             catch (Exception exception)
             {
@@ -133,27 +144,34 @@ namespace TopiaForge.Zombies
 
         private void ProcessReturnTask()
         {
-            if (returnTask == null || !returnTask.IsCompleted)
+            switch (returnOperation.Poll(
+                (float)context.Time.Frame.ElapsedTime,
+                ReturnToMenuTimeoutSeconds,
+                out var result))
             {
-                return;
-            }
+                case PendingOperationState.Completed when !result.Succeeded:
+                    HandleReturnFailure(result.ErrorMessage);
+                    break;
 
-            var completed = returnTask;
-            returnTask = null;
-            returnCancellation?.Dispose();
-            returnCancellation = null;
-            var result = CompletedResult(completed);
-            if (!result.Succeeded)
-            {
-                HandleReturnFailure(result.ErrorMessage);
+                case PendingOperationState.TimedOut:
+                    // Without this the run is stuck in ReturningToMenu forever: Restart refuses that phase, the
+                    // game-over window has no controls, and the freeze is reacquired every frame.
+                    HandleReturnFailure(
+                        "The main menu did not finish loading within "
+                        + ReturnToMenuTimeoutSeconds.ToString("0", CultureInfo.InvariantCulture)
+                        + " seconds.");
+                    break;
+
+                case PendingOperationState.Abandoned:
+                    // A scene load we stopped wanting still landed. Nothing to release, but never treat a late
+                    // result as the live one.
+                    break;
             }
         }
 
         private void HandleReturnFailure(string message)
         {
-            returnTask = null;
-            returnCancellation?.Dispose();
-            returnCancellation = null;
+            returnOperation.Cancel();
             phase = ZombiesPhase.GameOver;
             context.Logger.Warn("Zombies could not return to the menu: " + message);
             context.Ui.ShowToast("Return to menu failed. The run is still paused.", UiTone.Danger);
@@ -169,79 +187,11 @@ namespace TopiaForge.Zombies
             }
         }
 
-        private void AcquireGameOverControl()
-        {
-            ReleaseGameOverControl(resetRetryState: false);
-            if (time?.IsAvailable == true)
-            {
-                var frozen = time.Freeze("zombies-game-over", suspendPlayer: true);
-                if (frozen.TryGetValue(out var lease))
-                {
-                    gameOverFreeze = lease;
-                    gameOverControlRetryTimer = 0f;
-                    gameOverControlFailureReported = false;
-                    return;
-                }
+        private void AcquireGameOverControl() => gameOverPause.Request();
 
-                if (!gameOverControlFailureReported)
-                {
-                    context.Logger.Warn("Zombies game-over freeze failed: " + frozen.ErrorMessage);
-                }
-            }
+        private void EnsureGameOverControl(float controlDelta) => gameOverPause.Tick(controlDelta);
 
-            var control = context.Player.AcquireControl("Zombies game over");
-            if (control.TryGetValue(out var fallback))
-            {
-                gameOverControl = fallback;
-                gameOverControlRetryTimer = 0f;
-                gameOverControlFailureReported = false;
-            }
-            else
-            {
-                gameOverControlRetryTimer = GameOverControlRetrySeconds;
-                if (!gameOverControlFailureReported)
-                {
-                    gameOverControlFailureReported = true;
-                    context.Diagnostics.Report(new DiagnosticEntry(
-                        "ZOMBIES_GAME_OVER_CONTROL_FAILED",
-                        "Zombies could not suspend player control at game over; it will retry in the background.",
-                        DiagnosticSeverity.Warning,
-                        control.ErrorMessage));
-                }
-            }
-        }
-
-        private void EnsureGameOverControl(float controlDelta)
-        {
-            if (gameOverFreeze?.IsActive == true || gameOverControl?.IsActive == true)
-            {
-                gameOverControlRetryTimer = 0f;
-                return;
-            }
-
-            gameOverControlRetryTimer = Math.Max(
-                0f,
-                gameOverControlRetryTimer - Math.Max(0f, controlDelta));
-            if (gameOverControlRetryTimer > 0f)
-            {
-                return;
-            }
-
-            AcquireGameOverControl();
-        }
-
-        private void ReleaseGameOverControl(bool resetRetryState = true)
-        {
-            gameOverFreeze?.Dispose();
-            gameOverFreeze = null;
-            gameOverControl?.Dispose();
-            gameOverControl = null;
-            if (resetRetryState)
-            {
-                gameOverControlRetryTimer = 0f;
-                gameOverControlFailureReported = false;
-            }
-        }
+        private void ReleaseGameOverControl() => gameOverPause.Release();
 
         private void SetupSuperhot()
         {

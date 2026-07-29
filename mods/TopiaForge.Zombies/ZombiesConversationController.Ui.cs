@@ -16,7 +16,7 @@ namespace TopiaForge.Zombies
             }
 
             UpdateStatus();
-            var busy = turnTask != null || voiceTask != null || voiceCapture != null;
+            var busy = turnOperation.IsInFlight || voiceOperation.IsInFlight || voiceCapture != null;
             var voiceAvailable = voiceAction != null && dialogueInput?.IsVoiceAvailable == true;
             UiNode actions = voiceAvailable
                 ? new UiRow(
@@ -89,76 +89,10 @@ namespace TopiaForge.Zombies
                 + " / " + (conversation?.MaxTurns ?? 0).ToString(CultureInfo.InvariantCulture));
         }
 
-        private void AcquirePause()
-        {
-            var chronosError = string.Empty;
-            if (time?.IsAvailable == true)
-            {
-                var result = time.Freeze("zombies-jack-in", suspendPlayer: true);
-                if (result.TryGetValue(out var lease))
-                {
-                    freeze = lease;
-                    PauseAcquired();
-                    return;
-                }
-
-                chronosError = result.ErrorMessage;
-            }
-
-            var fallback = context.Player.AcquireControl("Zombies JACK IN");
-            if (fallback.TryGetValue(out var playerControl))
-            {
-                control = playerControl;
-                PauseAcquired();
-            }
-            else
-            {
-                pauseRetryTimer = PauseRetrySeconds;
-                if (!pauseFailureReported)
-                {
-                    pauseFailureReported = true;
-                    context.Diagnostics.Report(new DiagnosticEntry(
-                        "ZOMBIES_JACK_IN_PAUSE_FAILED",
-                        "JACK IN could not pause gameplay; pause acquisition will retry in the background.",
-                        DiagnosticSeverity.Warning,
-                        string.IsNullOrWhiteSpace(chronosError)
-                            ? fallback.ErrorMessage
-                            : "Chronos: " + chronosError + " Player fallback: " + fallback.ErrorMessage));
-                }
-            }
-        }
-
-        private void EnsurePause(float controlDelta)
-        {
-            if (freeze?.IsActive == true || control?.IsActive == true)
-            {
-                PauseAcquired();
-                return;
-            }
-
-            pauseRetryTimer = Math.Max(0f, pauseRetryTimer - Math.Max(0f, controlDelta));
-            if (pauseRetryTimer > 0f)
-            {
-                return;
-            }
-
-            freeze?.Dispose();
-            freeze = null;
-            control?.Dispose();
-            control = null;
-            AcquirePause();
-        }
-
-        private void PauseAcquired()
-        {
-            pauseRetryTimer = 0f;
-            pauseFailureReported = false;
-        }
-
         private void ToggleVoiceMode()
         {
             if (dialogueInput?.IsVoiceAvailable != true
-                || turnTask != null || voiceTask != null || voiceCapture != null)
+                || turnOperation.IsInFlight || voiceOperation.IsInFlight || voiceCapture != null)
             {
                 return;
             }

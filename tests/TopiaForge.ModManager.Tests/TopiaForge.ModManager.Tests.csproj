@@ -12,6 +12,8 @@
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Interop.Unity\TopiaForge.Mods.Interop.Unity.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Chronos\TopiaForge.Mods.Chronos.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.CreatorContent\TopiaForge.Mods.CreatorContent.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Multiplayer\TopiaForge.Mods.Multiplayer.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Prompts\TopiaForge.Mods.Prompts.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.RobotKit\TopiaForge.Mods.RobotKit.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Ugc\TopiaForge.Mods.Ugc.csproj" />
@@ -23,6 +25,7 @@
     <ProjectReference Include="..\..\src\TopiaForge.GameCompat.Extractor\TopiaForge.GameCompat.Extractor.csproj" />
     <ProjectReference Include="..\TopiaForge.ValidTestMod\TopiaForge.ValidTestMod.csproj" />
     <ProjectReference Include="..\TopiaForge.ValidTestMod.Api\TopiaForge.ValidTestMod.Api.csproj" />
+    <ProjectReference Include="..\..\mods\TopiaForge.CreatorContent\TopiaForge.CreatorContent.csproj" />
     <!-- ModContext's opt-in interop implementation mentions Unity types. Copy only the two reference
          assemblies needed to load that internal type while exercising the manager context off-game. -->
     <Reference Include="UnityEngine" HintPath="$(RobotopiaManagedDir)\UnityEngine.dll" Private="true" />
@@ -36,8 +39,11 @@
   <ItemGroup Condition="'$(TestingKitOnly)' == 'true'">
     <!-- Focused sources use core and specialist SDK contracts directly; keep those dependencies explicit
          instead of relying on the testing package's intentionally reference-only transitive graph. -->
+    <ProjectReference Include="..\..\src\TopiaForge.ModManager.Core\TopiaForge.ModManager.Core.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Chronos\TopiaForge.Mods.Chronos.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.CreatorContent\TopiaForge.Mods.CreatorContent.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Multiplayer\TopiaForge.Mods.Multiplayer.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Prompts\TopiaForge.Mods.Prompts.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.RobotKit\TopiaForge.Mods.RobotKit.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Testing\TopiaForge.Mods.Testing.csproj" />
@@ -66,6 +72,7 @@
        excluded. -->
   <ItemGroup>
     <Compile Include="..\..\mods\TopiaForge.RobotKit\MiniJson.cs" />
+    <Compile Include="..\..\mods\TopiaForge.RobotKit\BrainQueryDirectiveComposer.cs" />
     <Compile Include="..\..\mods\TopiaForge.RobotKit\RoboApiProtocol.cs" />
     <Compile Include="..\..\mods\TopiaForge.RobotKit\RoboApiClient.cs" />
     <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesConfig.cs" />
@@ -95,11 +102,20 @@
     <Compile Include="..\..\mods\TopiaForge.Zombies\ZombiesShopController.cs" />
   </ItemGroup>
 
+  <!-- The personality binding validator is reflection-only and shared with this test assembly so every native
+       apply-and-restore dependency can be exercised against intentionally incomplete fake surfaces. -->
+  <ItemGroup>
+    <Compile Include="..\..\mods\TopiaForge.RobotKit\RobotPersonalityBindingSurface.cs" />
+  </ItemGroup>
+
   <!-- Unity-free first-party config contracts: defaults, partial deserialization, normalization, and preset
        safety remain executable without loading Unity/GameCode assemblies. -->
   <ItemGroup>
     <Compile Include="..\..\mods\TopiaForge.GravityGun\GravityGunConfig.cs" />
     <Compile Include="..\..\mods\TopiaForge.GravityGun\GravityGunController.cs" />
+    <!-- The entry point owns the ConfigDefinition contract (schema version, defaults, validator). It is the
+         seam where an unvalidated stored document reaches gameplay, so it is exercised here directly. -->
+    <Compile Include="..\..\mods\TopiaForge.GravityGun\GravityGunMod.cs" />
     <Compile Include="..\..\mods\TopiaForge.NoFeedbackUrl\NoFeedbackUrlConfig.cs" />
     <Compile Include="..\..\mods\TopiaForge.PerfFixes\PerfFixesConfig.cs" />
     <Compile Include="..\..\mods\TopiaForge.Performance\PerformanceConfig.cs" />
@@ -121,6 +137,12 @@
     <Compile Include="..\..\mods\TopiaForge.RobotKit\RobotObjectiveService.cs" />
     <Compile Include="..\..\mods\TopiaForge.Sandbox\RobotProgramDirector.cs" />
     <Compile Include="..\..\mods\TopiaForge.Sandbox\SandboxConfig.cs" />
+    <!-- The shared creator workbench is deliberately Unity-free. Compile the real linked implementation into the
+         offline test executable so lifecycle, rollback, and host-eligibility behavior are exercised without the game. -->
+    <Compile Include="..\..\mods\Shared\CreatorTools\*.cs" />
+    <Compile Include="..\..\mods\TopiaForge.CreatorTools\CreatorToolsConfig.cs" />
+    <Compile Include="..\..\mods\TopiaForge.CreatorTools\CreatorToolsMultiplayerPolicy.cs" />
+    <Compile Include="..\..\mods\TopiaForge.CreatorTools\GlobalCreatorToolsHost.cs" />
   </ItemGroup>
 
   <!-- Chronos time-control: lease/logical-state derivation, native-pause ownership, fixedDeltaTime math, and
@@ -138,6 +160,8 @@
   <!-- Prompt framework registry is Unity-free, so the implementation is compiled directly for fast contract tests. -->
   <ItemGroup>
     <Compile Include="..\..\mods\TopiaForge.Prompts\PromptOverrideRegistry.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Prompts\PromptDirectiveComposer.cs" />
+    <Compile Include="..\..\mods\TopiaForge.OppositeDay\OppositeDayMod.cs" />
   </ItemGroup>
 
   <!-- Worlds routing, fallback safety, owner-event lifetime plumbing, and transition tracking are pure SDK policy;
@@ -164,7 +188,7 @@
     <Compile Include="..\..\src\TopiaForge.ModManager\UnityTimingServices.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\ModContext.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\ModContext.Configuration.cs" />
-    <Compile Include="..\..\src\TopiaForge.ModManager\ModContext.Storage.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\ModContext.LocalStorage.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\ModContext.Files.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\ModContext.Events.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\OwnerCoreServices.cs" />
@@ -201,6 +225,10 @@
                       LogicalName="TopiaForge.ModManager.Tests.topiaforge.mods.worlds.api.txt" />
     <EmbeddedResource Include="..\..\baselines\topiaforge.mods.chronos.api.txt"
                       LogicalName="TopiaForge.ModManager.Tests.topiaforge.mods.chronos.api.txt" />
+    <EmbeddedResource Include="..\..\baselines\topiaforge.mods.creatorcontent.api.txt"
+                      LogicalName="TopiaForge.ModManager.Tests.topiaforge.mods.creatorcontent.api.txt" />
+    <EmbeddedResource Include="..\..\baselines\topiaforge.mods.multiplayer.api.txt"
+                      LogicalName="TopiaForge.ModManager.Tests.topiaforge.mods.multiplayer.api.txt" />
     <EmbeddedResource Include="..\..\baselines\topiaforge.mods.prompts.api.txt"
                       LogicalName="TopiaForge.ModManager.Tests.topiaforge.mods.prompts.api.txt" />
     <EmbeddedResource Include="..\..\baselines\topiaforge.mods.ugc.api.txt"

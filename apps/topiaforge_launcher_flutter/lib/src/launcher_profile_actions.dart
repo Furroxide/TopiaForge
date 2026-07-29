@@ -142,4 +142,157 @@ extension LauncherProfileActions on LauncherBloc {
       ),
     );
   }
+
+  Future<void> _onProfileManagerStateInheritanceChanged(
+    ProfileManagerStateInheritanceChanged event,
+    Emitter<LauncherState> emit,
+  ) async {
+    final selected = state.selectedProfile;
+    if (selected == null) {
+      return;
+    }
+
+    final updated = selected.copyWith(
+      inheritManagerModState: event.enabled,
+      enabledMods: event.enabled
+          ? selected.enabledMods
+          : {
+              for (final mod in state.installedMods)
+                if (mod.enabled && !mod.uninstallPending) mod.id,
+            },
+      selectedVersions: event.enabled
+          ? selected.selectedVersions
+          : {for (final mod in state.installedMods) mod.id: mod.version},
+    );
+    await _saveUpdatedProfile(
+      updated,
+      emit,
+      event.enabled
+          ? 'Profile now follows global mod choices.'
+          : 'Profile now has its own mod choices.',
+    );
+  }
+
+  Future<void> _onProfileModSelectionChanged(
+    ProfileModSelectionChanged event,
+    Emitter<LauncherState> emit,
+  ) async {
+    final selected = state.selectedProfile;
+    final installedById = {
+      for (final mod in state.installedMods)
+        if (!mod.uninstallPending) mod.id.toLowerCase(): mod,
+    };
+    final requested = installedById[event.modId.toLowerCase()];
+    if (selected == null || requested == null) {
+      emit(state.copyWith(statusMessage: 'That installed mod is unavailable.'));
+      return;
+    }
+
+    final enabled = selected.inheritManagerModState
+        ? <String>{
+            for (final mod in state.installedMods)
+              if (mod.enabled && !mod.uninstallPending) mod.id,
+          }
+        : <String>{...selected.enabledMods};
+    final versions = <String, String>{...selected.selectedVersions};
+    var relatedChanges = 0;
+    final unresolved = <String>[];
+
+    if (event.enabled) {
+      final pending = <InstalledMod>[requested];
+      final visited = <String>{};
+      while (pending.isNotEmpty) {
+        final mod = pending.removeLast();
+        if (!visited.add(mod.id.toLowerCase())) {
+          continue;
+        }
+        if (!_containsModId(enabled, mod.id)) {
+          enabled.add(mod.id);
+          if (mod.id.toLowerCase() != requested.id.toLowerCase()) {
+            relatedChanges += 1;
+          }
+        }
+        versions[mod.id] = mod.version;
+        for (final dependency
+            in mod.manifest?.dependencies.where((item) => !item.optional) ??
+                const <ModDependency>[]) {
+          final installed = installedById[dependency.id.toLowerCase()];
+          if (installed == null ||
+              !dependency.versionRange.allows(installed.version)) {
+            unresolved.add(dependency.id);
+          } else {
+            pending.add(installed);
+          }
+        }
+      }
+    } else {
+      final removed = <String>{requested.id.toLowerCase()};
+      _removeModId(enabled, requested.id);
+      var changed = true;
+      while (changed) {
+        changed = false;
+        for (final mod in installedById.values) {
+          if (!_containsModId(enabled, mod.id)) {
+            continue;
+          }
+          final dependsOnRemoved =
+              mod.manifest?.dependencies
+                  .where((item) => !item.optional)
+                  .any((item) => removed.contains(item.id.toLowerCase())) ??
+              false;
+          if (dependsOnRemoved) {
+            _removeModId(enabled, mod.id);
+            removed.add(mod.id.toLowerCase());
+            relatedChanges += 1;
+            changed = true;
+          }
+        }
+      }
+    }
+
+    final updated = selected.copyWith(
+      inheritManagerModState: false,
+      enabledMods: enabled,
+      selectedVersions: versions,
+    );
+    final action = event.enabled ? 'Enabled' : 'Disabled';
+    final related = relatedChanges == 0
+        ? ''
+        : ' and ${event.enabled ? 'included' : 'disabled'} '
+              '$relatedChanges required mod(s)';
+    final warning = unresolved.isEmpty
+        ? ''
+        : ' Missing or incompatible: ${unresolved.toSet().join(', ')}.';
+    await _saveUpdatedProfile(
+      updated,
+      emit,
+      '$action ${requested.name}$related.$warning',
+    );
+  }
+
+  Future<void> _saveUpdatedProfile(
+    LauncherProfile updated,
+    Emitter<LauncherState> emit,
+    String message,
+  ) async {
+    final profiles = [
+      for (final profile in state.profiles)
+        if (profile.id == updated.id) updated else profile,
+    ];
+    await _repository.saveProfiles(profiles, updated.id);
+    emit(
+      state.copyWith(
+        profiles: profiles,
+        selectedProfileId: updated.id,
+        statusMessage: message,
+      ),
+    );
+  }
+}
+
+bool _containsModId(Set<String> ids, String id) =>
+    ids.any((candidate) => candidate.toLowerCase() == id.toLowerCase());
+
+void _removeModId(Set<String> ids, String id) {
+  ids.removeWhere((candidate) => candidate.toLowerCase() == id.toLowerCase());
 }

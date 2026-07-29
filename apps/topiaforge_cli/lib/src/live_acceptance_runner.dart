@@ -177,7 +177,7 @@ final class LiveAcceptanceRunner {
       throw LiveAcceptanceError(
         'TFACCEPT102',
         'Robotopia game directory does not exist: ${options.gameDirectory}',
-        'Select the installed build-2227 game directory.',
+        'Select the installed build-2309 game directory.',
       );
     }
     _validateReleaseJourney(options);

@@ -58,6 +58,9 @@ export default defineConfig({
             { label: 'Core services', slug: 'guides/core-services' },
             { label: 'In-game UI', slug: 'guides/ui' },
             { label: 'Specialist modules', slug: 'guides/modules' },
+            { label: 'Creator Tools', slug: 'guides/creator-tools' },
+            { label: 'Sandbox creator mode', slug: 'guides/sandbox' },
+            { label: 'Multiplayer preview', slug: 'guides/multiplayer' },
             { label: 'RobotKit', slug: 'guides/robotkit' },
             { label: 'Zombies worked example', slug: 'guides/zombies' },
             { label: 'Custom worlds and modes', slug: 'guides/custom-worlds' },
@@ -69,7 +72,7 @@ export default defineConfig({
         {
           label: 'Reference',
           items: [
-            { label: 'Manifest V4', slug: 'reference/manifest-v4' },
+            { label: 'Manifest V5', slug: 'reference/manifest-v5' },
             { label: 'Diagnostics', slug: 'reference/diagnostics' },
             { label: 'Capabilities and trust', slug: 'reference/capabilities' },
             { label: 'V1 capability coverage', slug: 'reference/capability-matrix' },

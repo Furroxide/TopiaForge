@@ -13,7 +13,7 @@ namespace TopiaForge.ModManager.Tests
             using var context = new FakeModContext();
             var baseline = context.Lifetime.TrackedResourceCount;
 
-            var control = context.Player.AcquireControl("zombie resource regression");
+            var control = context.LocalPlayer.AcquireControl("zombie resource regression");
             Assert(control.TryGetValue(out var controlLease) && controlLease is FakePlayerControlLease,
                 "player control preserves the inspectable fake lease identity");
             controlLease!.Dispose();

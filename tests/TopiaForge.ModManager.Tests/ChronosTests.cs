@@ -117,37 +117,37 @@ namespace TopiaForge.ModManager.Tests
         private static void TestPlayerSuspensionComposesWithOtherControlLeases()
         {
             using var context = new FakeModContext();
-            var externalResult = context.Player.AcquireControl("another mod's modal");
+            var externalResult = context.LocalPlayer.AcquireControl("another mod's modal");
             Assert(externalResult.TryGetValue(out _), "external control lease acquired");
             var external = externalResult.Value
                 ?? throw new InvalidOperationException("The successful control result had no lease.");
-            using var coordinator = new PlayerSuspendCoordinator(context.Player, context.Logger);
+            using var coordinator = new PlayerSuspendCoordinator(context.LocalPlayer, context.Logger);
 
             coordinator.Suspend("conversation");
             coordinator.Suspend("duplicate request");
-            Assert(context.Player.ActiveControlLeaseCount == 2, "Chronos acquires one shared control lease");
+            Assert(context.LocalPlayer.ActiveControlLeaseCount == 2, "Chronos acquires one shared control lease");
 
             coordinator.Release();
-            Assert(context.Player.ActiveControlLeaseCount == 1, "Chronos release preserves the other mod's lease");
+            Assert(context.LocalPlayer.ActiveControlLeaseCount == 1, "Chronos release preserves the other mod's lease");
             Assert(external.IsActive, "the other mod retains player control ownership");
 
             external.Dispose();
-            Assert(context.Player.ActiveControlLeaseCount == 0, "controls restore after the final owner releases");
+            Assert(context.LocalPlayer.ActiveControlLeaseCount == 0, "controls restore after the final owner releases");
         }
 
         private static void TestPlayerSuspensionRetriesAfterTransientFailure()
         {
             using var context = new FakeModContext();
-            context.Player.AcquireControlErrorCode = ModErrorCode.Unavailable;
-            using var coordinator = new PlayerSuspendCoordinator(context.Player, context.Logger);
+            context.LocalPlayer.AcquireControlErrorCode = ModErrorCode.Unavailable;
+            using var coordinator = new PlayerSuspendCoordinator(context.LocalPlayer, context.Logger);
 
             coordinator.Suspend("player not ready");
-            Assert(!coordinator.IsSuspended && context.Player.ActiveControlLeaseCount == 0,
+            Assert(!coordinator.IsSuspended && context.LocalPlayer.ActiveControlLeaseCount == 0,
                 "a transient player-control failure leaves the coordinator eligible to retry");
 
-            context.Player.AcquireControlErrorCode = ModErrorCode.None;
+            context.LocalPlayer.AcquireControlErrorCode = ModErrorCode.None;
             coordinator.Tick(0.5f);
-            Assert(coordinator.IsSuspended && context.Player.ActiveControlLeaseCount == 1,
+            Assert(coordinator.IsSuspended && context.LocalPlayer.ActiveControlLeaseCount == 1,
                 "the active hard freeze reacquires player control when the player becomes ready");
         }
 

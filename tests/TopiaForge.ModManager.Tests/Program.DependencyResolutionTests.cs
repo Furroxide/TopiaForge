@@ -15,7 +15,7 @@ namespace TopiaForge.ModManager.Tests
         {
             var manifest = new ModManifest
             {
-                SchemaVersion = 4,
+                SchemaVersion = 5,
                 Id = "eta.mod",
                 Name = "Eta",
                 Version = "1.0.0",
@@ -46,7 +46,7 @@ namespace TopiaForge.ModManager.Tests
             var state = new ManagerState();
             var depManifest = new ModManifest
             {
-                SchemaVersion = 4,
+                SchemaVersion = 5,
                 Id = "dependency.mod",
                 Name = "Dependency",
                 Version = "1.0.0",
@@ -55,7 +55,7 @@ namespace TopiaForge.ModManager.Tests
             };
             var mainManifest = new ModManifest
             {
-                SchemaVersion = 4,
+                SchemaVersion = 5,
                 Id = "main.mod",
                 Name = "Main",
                 Version = "1.0.0",
@@ -78,33 +78,33 @@ namespace TopiaForge.ModManager.Tests
             var state = new ManagerState();
             var worldsManifest = new ModManifest
             {
-                SchemaVersion = 4,
+                SchemaVersion = 5,
                 Id = "io.github.furroxide.topiaforge.worlds",
                 Name = "TopiaForge Worlds",
-                Version = "1.0.0",
+                Version = "1.0.0-rc.1",
                 EntryAssembly = "TopiaForge.Worlds.dll",
                 EntryType = "TopiaForge.Worlds.WorldsMod"
             };
             var promptsManifest = new ModManifest
             {
-                SchemaVersion = 4,
+                SchemaVersion = 5,
                 Id = "io.github.furroxide.topiaforge.prompts",
                 Name = "TopiaForge Prompts",
-                Version = "1.0.0",
+                Version = "1.0.0-rc.1",
                 EntryAssembly = "TopiaForge.Prompts.dll",
                 EntryType = "TopiaForge.Prompts.PromptsMod"
             };
             var consumerManifest = new ModManifest
             {
-                SchemaVersion = 4,
+                SchemaVersion = 5,
                 Id = "consumer.mod",
                 Name = "Consumer",
                 Version = "1.0.0",
                 EntryAssembly = "Consumer.dll",
                 EntryType = "Consumer.Entry"
             };
-            consumerManifest.Dependencies.Add("io.github.furroxide.topiaforge.worlds", ">=1.0.0 <2.0.0");
-            consumerManifest.Dependencies.Add("io.github.furroxide.topiaforge.prompts", ">=1.0.0 <2.0.0");
+            consumerManifest.Dependencies.Add("io.github.furroxide.topiaforge.worlds", ">=1.0.0-rc.1 <2.0.0");
+            consumerManifest.Dependencies.Add("io.github.furroxide.topiaforge.prompts", ">=1.0.0-rc.1 <2.0.0");
             consumerManifest.LoadAfter.Add("io.github.furroxide.topiaforge.worlds");
             consumerManifest.LoadAfter.Add("io.github.furroxide.topiaforge.prompts");
 

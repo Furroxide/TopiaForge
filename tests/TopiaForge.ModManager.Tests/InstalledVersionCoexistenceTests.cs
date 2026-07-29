@@ -151,7 +151,7 @@ namespace TopiaForge.ModManager.Tests
         {
             return new ModManifest
             {
-                SchemaVersion = 4,
+                SchemaVersion = 5,
                 Id = ModId,
                 Name = "Coexistence",
                 Author = new ModAuthor { Name = "TopiaForge" },
@@ -159,8 +159,8 @@ namespace TopiaForge.ModManager.Tests
                 EntryAssembly = FixtureAssembly,
                 EntryType = FixtureType,
                 SupportedGameVersionRange = "*",
-                SupportedLoaderVersionRange = ">=1.0.0 <2.0.0",
-                SupportedSdkVersionRange = ">=1.0.0 <2.0.0"
+                SupportedLoaderVersionRange = ">=1.0.0-rc.1 <2.0.0",
+                SupportedSdkVersionRange = ">=1.0.0-rc.1 <2.0.0"
             };
         }
 

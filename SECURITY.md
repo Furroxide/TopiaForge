@@ -10,9 +10,10 @@ channel specifically requests a minimal encrypted sample.
 
 ## Reporting a vulnerability
 
-Use GitHub's private vulnerability reporting for this repository when available. If it is unavailable, contact the
-repository owner privately through GitHub and ask for a confidential reporting channel. Do not open a public issue for
-an unpatched vulnerability or include secrets, game-account data, private paths, or proprietary game assemblies.
+Use GitHub's private vulnerability reporting for this repository when available; repository administrator
+`@furroxide` is the interim intake owner. If private reporting is unavailable, contact that owner privately through
+GitHub and ask for a confidential reporting channel. Do not open a public issue for an unpatched vulnerability or
+include secrets, game-account data, private paths, or proprietary game assemblies.
 
 Include the affected component/version, impact, reproduction steps, proof-of-concept files, and any suggested
 mitigation. Reports involving archive traversal, signature/hash bypass, unsafe process launch, registry compromise,

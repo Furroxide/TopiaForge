@@ -6,7 +6,7 @@
       "goal": "Utility mods",
       "apiTypes": [
         "TopiaForge.Mods.IModConfigService, TopiaForge.Mods.Abstractions",
-        "TopiaForge.Mods.IModStorageService, TopiaForge.Mods.Abstractions",
+        "TopiaForge.Mods.ILocalModStorageService, TopiaForge.Mods.Abstractions",
         "TopiaForge.Mods.ILocalizationService, TopiaForge.Mods.Abstractions",
         "TopiaForge.Mods.ICommandService, TopiaForge.Mods.Abstractions",
         "TopiaForge.Mods.IDiagnosticsService, TopiaForge.Mods.Abstractions"
@@ -17,7 +17,7 @@
       "guide": "docs/CoreServices.md",
       "fakeTypes": [
         "TopiaForge.Mods.Testing.InMemoryModConfigService, TopiaForge.Mods.Testing",
-        "TopiaForge.Mods.Testing.InMemoryModStorageService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.InMemoryLocalModStorageService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeLocalizationService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeCommandService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeDiagnosticsService, TopiaForge.Mods.Testing"
@@ -38,6 +38,7 @@
       ],
       "sampleProjects": [
         "mods/TopiaForge.Sandbox/TopiaForge.Sandbox.csproj",
+        "mods/TopiaForge.Zombies/TopiaForge.Zombies.csproj",
         "tests/TopiaForge.SdkAcceptanceMod/TopiaForge.SdkAcceptanceMod.csproj"
       ],
       "guide": "docs/UiKit.md",
@@ -55,7 +56,7 @@
       "id": "gameplay",
       "goal": "Gameplay abilities",
       "apiTypes": [
-        "TopiaForge.Mods.IPlayerService, TopiaForge.Mods.Abstractions",
+        "TopiaForge.Mods.ILocalPlayerService, TopiaForge.Mods.Abstractions",
         "TopiaForge.Mods.IEntityService, TopiaForge.Mods.Abstractions",
         "TopiaForge.Mods.IPhysicsService, TopiaForge.Mods.Abstractions",
         "TopiaForge.Mods.IGameTime, TopiaForge.Mods.Abstractions",
@@ -63,11 +64,12 @@
       ],
       "sampleProjects": [
         "mods/TopiaForge.GravityGun/TopiaForge.GravityGun.csproj",
+        "mods/TopiaForge.Zombies/TopiaForge.Zombies.csproj",
         "tests/TopiaForge.SdkAcceptanceMod/TopiaForge.SdkAcceptanceMod.csproj"
       ],
-      "guide": "docs/Modding.md",
+      "guide": "docs/CoreServices.md",
       "fakeTypes": [
-        "TopiaForge.Mods.Testing.FakePlayerService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeLocalPlayerService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeEntityService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakePhysicsService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.DeterministicGameTime, TopiaForge.Mods.Testing",
@@ -86,17 +88,27 @@
         "TopiaForge.Mods.IInteractionService, TopiaForge.Mods.Abstractions",
         "TopiaForge.Mods.IItemService, TopiaForge.Mods.Abstractions",
         "TopiaForge.Mods.IAssetService, TopiaForge.Mods.Abstractions",
-        "TopiaForge.Mods.IAudioService, TopiaForge.Mods.Abstractions"
+        "TopiaForge.Mods.IAudioService, TopiaForge.Mods.Abstractions",
+        "TopiaForge.Mods.ICreatorContentService, TopiaForge.Mods.CreatorContent",
+        "TopiaForge.Mods.ICreatorSceneAdapterRegistry, TopiaForge.Mods.CreatorContent",
+        "TopiaForge.Mods.ICreatorProjectLibrary, TopiaForge.Mods.CreatorContent",
+        "TopiaForge.Mods.ICreatorToolHostService, TopiaForge.Mods.CreatorContent",
+        "TopiaForge.Mods.ICreatorMutationSafetyService, TopiaForge.Mods.CreatorContent"
       ],
       "sampleProjects": [
+        "mods/TopiaForge.CreatorTools/TopiaForge.CreatorTools.csproj",
+        "mods/TopiaForge.Sandbox/TopiaForge.Sandbox.csproj",
         "tests/TopiaForge.SdkAcceptanceMod/TopiaForge.SdkAcceptanceMod.csproj"
       ],
-      "guide": "docs/CoreServices.md",
+      "guide": "docs/CreatorTools.md",
       "fakeTypes": [
         "TopiaForge.Mods.Testing.FakeInteractionService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeItemService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeAssetService, TopiaForge.Mods.Testing",
-        "TopiaForge.Mods.Testing.FakeAudioService, TopiaForge.Mods.Testing"
+        "TopiaForge.Mods.Testing.FakeAudioService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeCreatorContentService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeCreatorProjectLibrary, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeCreatorMutationSafetyService, TopiaForge.Mods.Testing"
       ],
       "acceptanceCases": [
         "world.physics-entities-items-interactions",
@@ -116,6 +128,7 @@
         "TopiaForge.Mods.IUgcLiveSyncService, TopiaForge.Mods.Ugc"
       ],
       "sampleProjects": [
+        "mods/TopiaForge.Zombies/TopiaForge.Zombies.csproj",
         "tests/TopiaForge.SdkAcceptanceMod/TopiaForge.SdkAcceptanceMod.csproj"
       ],
       "guide": "docs/CustomWorlds.md",
@@ -123,6 +136,7 @@
         "TopiaForge.Mods.Testing.FakeModEvents, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeSceneService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeWorldGamemodeService, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeWorldPauseMenuService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeUgcLiveSyncService, TopiaForge.Mods.Testing"
       ],
       "acceptanceCases": [
@@ -139,7 +153,8 @@
         "TopiaForge.Mods.IRobotObjectiveService, TopiaForge.Mods.RobotKit",
         "TopiaForge.Mods.IRobotConversationService, TopiaForge.Mods.RobotKit",
         "TopiaForge.Mods.IPlayerDialogueInputService, TopiaForge.Mods.RobotKit",
-        "TopiaForge.Mods.IRobotBrainQueryService, TopiaForge.Mods.RobotKit"
+        "TopiaForge.Mods.IRobotBrainQueryService, TopiaForge.Mods.RobotKit",
+        "TopiaForge.Mods.IRobotSceneEditorService, TopiaForge.Mods.RobotKit"
       ],
       "sampleProjects": [
         "mods/TopiaForge.Sandbox/TopiaForge.Sandbox.csproj",

@@ -33,6 +33,8 @@ namespace TopiaForge.ModManager.Tests
             HudSkipsSteadyStateBodyWrites();
             DisabledShopSkipsCreditsAndRequisitionFeedback();
             UplinkFailuresExplainWithoutSpendingCharge();
+            UplinkEconomyRunsOnTheWorldClock();
+            AllyCrossfireIsNotReportedAsPlayerFire();
             FullyStabilizedAllyCheckIsFreeAtZeroCharge();
             LiveJackInCompositionFailureCleansUpAndFallsBack();
             LiveJackInUsesRobotKitConversationAndReleasesControl();
@@ -51,6 +53,9 @@ namespace TopiaForge.ModManager.Tests
         {
             var config = new ZombiesConfig
             {
+                // Shipped runs seed from entropy; the suite pins a seed so wave and archetype sequences stay
+                // byte-deterministic across runs.
+                Seed = 1949,
                 StartingCountdownSeconds = 0f,
                 InterWaveDelaySeconds = 30f,
                 BaseZombiesPerWave = 1,
@@ -159,10 +164,10 @@ namespace TopiaForge.ModManager.Tests
                 Config = config;
                 Context = new FakeModContext();
                 Context.Scenes.Load(activeScene);
-                Context.Player.Snapshot = new PlayerSnapshot(
+                Context.LocalPlayer.Snapshot = new PlayerSnapshot(
                     Vec3.Zero,
                     new Ray(Vec3.Zero, new Vec3(0f, 0f, 1f)));
-                Context.Player.Health = new PlayerHealthSnapshot(config.PlayerIntegrity, config.PlayerIntegrity);
+                Context.LocalPlayer.Health = new PlayerHealthSnapshot(config.PlayerIntegrity, config.PlayerIntegrity);
                 Robots = new FakeRobotKit(Context.Lifetime);
                 Robots.Agents.AutoCompleteAgentMovement = false;
                 Robots.Agents.PlayerEntity = new FakeEntity("zombies-player", "Player", Vec3.Zero);
@@ -228,108 +233,6 @@ namespace TopiaForge.ModManager.Tests
                 Controller.Dispose();
                 Context.Dispose();
                 Context.AssertNoLeaks();
-            }
-        }
-
-        private sealed class TestWorldPauseMenuService : IWorldPauseMenuService
-        {
-            private readonly FakeModLifetime lifetime;
-            private readonly Dictionary<string, PauseRegistration> actions =
-                new Dictionary<string, PauseRegistration>(StringComparer.Ordinal);
-
-            public TestWorldPauseMenuService(FakeModLifetime lifetime)
-            {
-                this.lifetime = lifetime;
-            }
-
-            public bool IsAvailable => !lifetime.IsStopping;
-            public int ActiveActionCount => actions.Count;
-
-            public OperationResult<IDisposable> RegisterAction(WorldPauseAction action)
-            {
-                if (actions.ContainsKey(action.Id))
-                {
-                    return OperationResult<IDisposable>.Failure(
-                        ModErrorCode.Conflict,
-                        "A pause action already uses '" + action.Id + "'.");
-                }
-
-                var registration = new PauseRegistration(
-                    action.Id,
-                    action.Callback,
-                    id => actions.Remove(id));
-                actions.Add(action.Id, registration);
-                try
-                {
-                    registration.AttachLifetimeLease(lifetime.Track(registration));
-                    return OperationResult<IDisposable>.Success(registration);
-                }
-                catch (ObjectDisposedException)
-                {
-                    registration.Dispose();
-                    return OperationResult<IDisposable>.Failure(
-                        ModErrorCode.Cancelled,
-                        "The pause action owner is stopping.");
-                }
-            }
-
-            public OperationResult<IDisposable> InterceptExit(
-                Func<WorldPauseExitContext, WorldPauseExitDecision> interceptor)
-            {
-                return OperationResult<IDisposable>.Failure(
-                    ModErrorCode.Unavailable,
-                    "The lifecycle fixture does not need an exit interceptor.");
-            }
-
-            public bool Invoke(string id)
-            {
-                return actions.TryGetValue(id, out var registration) && registration.Invoke();
-            }
-
-            private sealed class PauseRegistration : IDisposable
-            {
-                private readonly string id;
-                private Action? callback;
-                private Action<string>? release;
-                private IDisposable? lifetimeLease;
-
-                public PauseRegistration(string id, Action callback, Action<string> release)
-                {
-                    this.id = id;
-                    this.callback = callback;
-                    this.release = release;
-                }
-
-                public void AttachLifetimeLease(IDisposable lease)
-                {
-                    lifetimeLease = lease;
-                }
-
-                public bool Invoke()
-                {
-                    var active = callback;
-                    if (active == null)
-                    {
-                        return false;
-                    }
-
-                    active();
-                    return true;
-                }
-
-                public void Dispose()
-                {
-                    callback = null;
-                    var releaseNow = Interlocked.Exchange(ref release, null);
-                    try
-                    {
-                        releaseNow?.Invoke(id);
-                    }
-                    finally
-                    {
-                        Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
-                    }
-                }
             }
         }
     }

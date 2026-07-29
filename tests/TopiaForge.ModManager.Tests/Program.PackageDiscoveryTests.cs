@@ -46,6 +46,31 @@ namespace TopiaForge.ModManager.Tests
             Assert(!epsilon[0].IsValid && epsilon[0].Errors.Count > 0, "the broken package should carry its error");
         }
 
+        private static void TestScanRecoversDevToolAsDisabled(string root)
+        {
+            var paths = NewPaths(root, "scan-devtool-default");
+            var state = new ManagerState();
+            var package = Path.Combine(root, "scan-devtool.topiaforgemod");
+            CreatePackage(
+                package,
+                "scan.devtool",
+                "Scan DevTool",
+                "1.0.0",
+                "ScanDevTool.dll",
+                "ScanDevTool.Entry",
+                category: "DevTool");
+            Assert(new PackageInstaller().Install(package, paths, state, restartRequired: false).Ok,
+                "DevTool package should install before recovery test");
+            state.Remove("scan.devtool");
+
+            var recovered = new ModRegistry().Scan(paths, state)
+                .Single(candidate => candidate.Manifest?.Id == "scan.devtool");
+
+            Assert(state.Find("scan.devtool")?.Enabled == false,
+                "state recovery must recreate DevTool packages disabled");
+            Assert(!recovered.IsEnabled, "recovered DevTool package must remain inactive");
+        }
+
         private static void TestScanSelectsDependencyCompatibleProviderVersion(string root)
         {
             var paths = NewPaths(root, "scan-compatible-provider");

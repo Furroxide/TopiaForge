@@ -48,12 +48,7 @@ namespace TopiaForge.ModManager
             ManagerFileLogger logger,
             ManifestValidationContext? validationContext,
             IModLoadObserver? loadObserver)
-            : this(
-                paths,
-                logger,
-                validationContext,
-                loadObserver,
-                new CoreGameplayServices())
+            : this(paths, logger, validationContext, loadObserver, null)
         {
         }
 
@@ -62,7 +57,7 @@ namespace TopiaForge.ModManager
             IModRuntimeLogger logger,
             ManifestValidationContext? validationContext,
             IModLoadObserver? loadObserver,
-            IRuntimeGameplayHost coreGameplayServices)
+            IRuntimeGameplayHost? coreGameplayServices)
         {
             // The runtime itself owns lifecycle dispatch, so establish the thread invariant here even when a
             // non-Unity gameplay host is supplied (for example by integration tests or a future host adapter).
@@ -87,10 +82,9 @@ namespace TopiaForge.ModManager
             // Manager-owned framework service: scene-transition arbitration is available to every mod from
             // the first OnLoad and cannot be shadowed or removed through the public mod registry.
             sceneCoordinator = new SceneCoordinator(logger.Info);
-            this.coreGameplayServices = coreGameplayServices
-                ?? throw new ArgumentNullException(nameof(coreGameplayServices));
-            coreGameplayServices.FixedUpdate += DispatchFixedUpdate;
-            coreGameplayServices.LateUpdate += DispatchLateUpdate;
+            this.coreGameplayServices = coreGameplayServices ?? new CoreGameplayServices(sceneCoordinator);
+            this.coreGameplayServices.FixedUpdate += DispatchFixedUpdate;
+            this.coreGameplayServices.LateUpdate += DispatchLateUpdate;
             pluginAssemblyPath = Path.GetDirectoryName(typeof(ModRuntime).Assembly.Location) ?? string.Empty;
             loadedModIdsView = loadedModIds.AsReadOnly();
             AppDomain.CurrentDomain.AssemblyResolve += ResolveAssembly;

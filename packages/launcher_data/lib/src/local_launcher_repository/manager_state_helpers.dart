@@ -151,7 +151,8 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
         id: manifest.id,
         name: manifest.name,
         version: manifest.version,
-        enabled: (stateItem?['enabled'] as bool?) ?? true,
+        enabled:
+            (stateItem?['enabled'] as bool?) ?? _isEnabledByDefault(manifest),
         restartRequired: (stateItem?['restartRequired'] as bool?) ?? false,
         uninstallPending: (stateItem?['uninstallPending'] as bool?) ?? false,
         installedAtUtc: (stateItem?['installedAtUtc'] as String?) ?? '',
@@ -199,7 +200,11 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
           id: (stateItem?['id'] as String?) ?? first.id,
           name: (stateItem?['name'] as String?) ?? first.name,
           version: requestedVersion,
-          enabled: (stateItem?['enabled'] as bool?) ?? true,
+          enabled:
+              (stateItem?['enabled'] as bool?) ??
+              (first.manifest == null
+                  ? true
+                  : _isEnabledByDefault(first.manifest!)),
           restartRequired: (stateItem?['restartRequired'] as bool?) ?? false,
           uninstallPending: (stateItem?['uninstallPending'] as bool?) ?? false,
           packagePath: p.join(p.dirname(first.packagePath), requestedVersion),
@@ -327,6 +332,7 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
     }
 
     final now = DateTime.now().toUtc().toIso8601String();
+    final isNew = item == null;
     if (item == null) {
       item = {'id': manifest.id, 'installedAtUtc': now};
       mods.add(item);
@@ -336,7 +342,8 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
     item['name'] = manifest.name;
     item['version'] = manifest.version;
     item['enabled'] = preserveExistingEnabled
-        ? existingEnabled ?? enabled
+        ? existingEnabled ??
+              (isNew && !_isEnabledByDefault(manifest) ? false : enabled)
         : enabled;
     item['restartRequired'] = restartRequired;
     item['uninstallPending'] = false;
@@ -344,6 +351,9 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
     state['mods'] = mods;
   }
 }
+
+bool _isEnabledByDefault(ModManifest manifest) =>
+    manifest.category.toLowerCase() != 'devtool';
 
 const _maxLauncherManifestBytes = 1024 * 1024;
 

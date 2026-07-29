@@ -82,7 +82,7 @@ namespace TopiaForge.ModManager.Tests
             var lightingInstanceId = sceneLifecycle[0].SceneInstanceId;
             Assert(context.Scenes.ActiveScene == "PuzzleRoom"
                 && sceneTransitions.Count == 1
-                && !sceneTransitions[0].IsAuthoritativeReplacement
+                && !sceneTransitions[0].IsWorldReplacement
                 && sceneLifecycle.Count == 1
                 && lightingInstanceId > 0
                 && sceneLifecycle[0].Phase == SceneLifecyclePhase.Loaded
@@ -92,21 +92,21 @@ namespace TopiaForge.ModManager.Tests
                 && context.Scenes.ActiveScene == "Lighting"
                 && sceneTransitions.Count == 2
                 && sceneTransitions[1].Mode == SceneLoadMode.Additive
-                && sceneTransitions[1].IsAuthoritativeReplacement
+                && sceneTransitions[1].IsWorldReplacement
                 && sceneLifecycle.Count == 2
                 && sceneLifecycle[1].SceneInstanceId == lightingInstanceId
                 && sceneLifecycle[1].Phase == SceneLifecyclePhase.Activated,
-                "explicit additive activation emits a detail-only authoritative transition");
+                "explicit additive activation emits a detail-only world-replacement transition");
             Assert(context.Scenes.Activate("PuzzleRoom")
                 && sceneTransitions.Count == 3
                 && sceneTransitions[2].Mode == SceneLoadMode.Single
                 && legacySceneTransitions == 1
-                && sceneTransitions[2].IsAuthoritativeReplacement,
+                && sceneTransitions[2].IsWorldReplacement,
                 "activation preserves the scene's original load mode without replaying legacy load events");
             Assert(!new SceneLoadEvent("StreamingLoader", SceneLoadMode.Additive, isActive: true)
-                    .IsAuthoritativeReplacement
+                    .IsWorldReplacement
                 && new SceneLoadEvent("StreamingLoader", SceneLoadMode.Single, isActive: true)
-                    .IsAuthoritativeReplacement,
+                    .IsWorldReplacement,
                 "temporary active additive loader scenes do not reset gameplay providers, while single loads do");
 
             var duplicateStart = sceneLifecycle.Count;

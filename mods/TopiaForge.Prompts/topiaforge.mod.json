@@ -1,29 +1,35 @@
 {
   "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "name": "io.github.furroxide.topiaforge.prompts",
   "displayName": "TopiaForge Prompts",
-  "version": "1.0.0",
+  "version": "1.0.0-rc.1",
   "author": {
     "name": "TopiaForge"
   },
-  "description": "Framework SDK service for prompt override registration, deterministic effective override resolution, owner cleanup, disposable registrations, and conflict diagnostics.",
+  "description": "Framework SDK service for prompt override registration, deterministic resolution, owner cleanup, conflict diagnostics, and guarded global robot-directive composition.",
   "entryAssembly": "TopiaForge.Prompts.dll",
   "entryType": "TopiaForge.Prompts.PromptsMod",
   "dependencies": {},
-  "supportedGameVersionRange": "0.0.2227",
-  "supportedLoaderVersionRange": ">=1.0.0 <2.0.0",
-  "supportedSdkVersionRange": ">=1.0.0 <2.0.0",
+  "supportedGameVersionRange": "0.0.2309",
+  "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
   "category": "Framework",
   "tags": [
     "prompts",
     "overrides",
+    "robot-directives",
     "conflicts",
     "framework",
     "sdk"
   ],
-  "license": "NOASSERTION",
+  "license": "MIT",
+  "licenseFiles": [
+    "LICENSE"
+  ],
   "capabilities": [
-    "prompt-overrides"
+    "prompt-overrides",
+    "unsafe-native",
+    "harmony-patch"
   ]
 }

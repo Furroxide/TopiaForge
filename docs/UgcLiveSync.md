@@ -35,9 +35,9 @@ Snapshots, URLs, paths, and remote documents are untrusted input. The provider b
 collections, strings, decompression, network responses, and update frequency. A rejected patch
 leaves the last known-good preview intact and raises a structured `UgcSyncError`.
 
-Do not drive authoritative Robotopia story/save state from a live authoring document. Store
-mod-owned state through `Context.Storage`, and publish immutable bundle content for Robotopia
-players.
+Do not drive shared Robotopia world/save state from a live authoring document. Use
+`Context.LocalStorage` only for installation-local mod state, and publish immutable bundle content
+for Robotopia players. Future shared or save-scoped state belongs in its own authoritative service.
 
 ## Asset overrides
 

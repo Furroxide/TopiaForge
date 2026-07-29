@@ -5,6 +5,8 @@ namespace TopiaForge.GravityGun
     /// <summary>TopiaForge Gravity Gun entry point.</summary>
     public sealed class GravityGunMod : TopiaForgeMod
     {
+        // GravityGunConfig is ISelfNormalizingConfig, so the config service bounds every stored document
+        // before it reaches the controller. No per-mod validator is needed to make that happen.
         private static readonly ConfigDefinition<GravityGunConfig> Config =
             new ConfigDefinition<GravityGunConfig>(1, CreateConfig);
 
@@ -26,9 +28,7 @@ namespace TopiaForge.GravityGun
 
         private static GravityGunConfig CreateConfig()
         {
-            var config = new GravityGunConfig();
-            config.Normalize();
-            return config;
+            return new GravityGunConfig();
         }
     }
 }

@@ -1,9 +1,9 @@
 {
-  "capturedUtc": "2026-07-13T22:17:19.6032760Z",
-  "extractorVersion": "1.1.0",
-  "gameCodeMvid": "c0574085-fa71-412e-9e95-20fd0d7fe46f",
-  "gameVersion": "0.0.2227",
-  "gameVersionLabel": "build 2227",
+  "capturedUtc": "2026-07-28T19:17:18.4229594Z",
+  "extractorVersion": "1.1.0-rc.1",
+  "gameCodeMvid": "b8ed3429-6de2-4b89-b303-1d20b5981528",
+  "gameVersion": "0.0.2309",
+  "gameVersionLabel": "build 2309",
   "referenceSet": [
     "02 City Streets 0.0.0.0",
     "AcidChamber 0.0.0.0",
@@ -13,6 +13,10 @@
     "BehaviorDesignerRuntime 0.0.0.0",
     "BlackBox.Runtime 0.0.0.0",
     "CaseConverter 2.0.1.0",
+    "ClockworkLabs.Motion 0.0.0.0",
+    "ClockworkLabs.Rish 0.0.0.0",
+    "ClockworkLabs.Roots 0.0.0.0",
+    "ClockworkLabs.Sappy 0.0.0.0",
     "Collector 0.0.0.0",
     "ConstructionYard 0.0.0.0",
     "CubePuzzle 0.0.0.0",
@@ -37,11 +41,13 @@
     "Microsoft.CSharp 4.0.0.0",
     "Microsoft.Win32.Registry 5.0.0.0",
     "Mono.Security 4.0.0.0",
+    "Mono.Unix 7.1.0.0",
     "NWaves 0.9.6.0",
     "Namotion.Reflection 3.2.0.0",
     "Newtonsoft.Json 13.0.0.0",
     "OilInTheBasement 0.0.0.0",
     "PostHog 0.0.0.0",
+    "RoboUI 0.0.0.0",
     "SampleScene 0.0.0.0",
     "SchvetFart 0.0.0.0",
     "Sentry 4.13.0.0",
@@ -56,6 +62,7 @@
     "Sentry.System.Text.Json 6.0.0.0",
     "Sentry.System.Threading.Tasks.Extensions 4.2.0.1",
     "Sentry.Unity 2.4.0.0",
+    "Sentry.Unity.Native 2.4.0.0",
     "Sentry.Unity.iOS 2.4.0.0",
     "Sirenix.OdinInspector.Attributes 1.0.0.0",
     "Sirenix.Serialization 1.0.0.0",
@@ -112,6 +119,7 @@
     "Unity.InputSystem 1.11.2.0",
     "Unity.InputSystem.ForUI 0.0.0.0",
     "Unity.Mathematics 0.0.0.0",
+    "Unity.MemoryProfiler 0.0.0.0",
     "Unity.Multiplayer.Center.Common 0.0.0.0",
     "Unity.Polybrush 0.0.0.0",
     "Unity.ProBuilder 0.0.0.0",
@@ -119,6 +127,7 @@
     "Unity.ProBuilder.KdTree 0.0.0.0",
     "Unity.ProBuilder.Poly2Tri 0.0.0.0",
     "Unity.ProBuilder.Stl 0.0.0.0",
+    "Unity.Profiling.Core 0.0.0.0",
     "Unity.Recorder 0.0.0.0",
     "Unity.Recorder.Base 0.0.0.0",
     "Unity.RenderPipelines.Core.Runtime 0.0.0.0",
@@ -135,6 +144,7 @@
     "Unity.VisualEffectGraph.Runtime 0.0.0.0",
     "UnityEngine 0.0.0.0",
     "UnityEngine.AIModule 0.0.0.0",
+    "UnityEngine.AMDModule 0.0.0.0",
     "UnityEngine.ARModule 0.0.0.0",
     "UnityEngine.AccessibilityModule 0.0.0.0",
     "UnityEngine.AndroidJNIModule 0.0.0.0",
@@ -164,6 +174,7 @@
     "UnityEngine.LocalizationModule 0.0.0.0",
     "UnityEngine.MarshallingModule 0.0.0.0",
     "UnityEngine.MultiplayerModule 0.0.0.0",
+    "UnityEngine.NVIDIAModule 0.0.0.0",
     "UnityEngine.ParticleSystemModule 0.0.0.0",
     "UnityEngine.PerformanceReportingModule 0.0.0.0",
     "UnityEngine.Physics2DModule 0.0.0.0",
@@ -226,20 +237,17 @@
     "GameCode|FirstPersonController": 1,
     "GameCode|Health": 1,
     "GameCode|Killed": 2,
-    "GameCode|LLMAgent": 1,
     "GameCode|LevelSettingsApplier": 1,
-    "GameCode|LocomotionController": 1,
     "GameCode|Pathfinder": 1,
     "GameCode|PerformanceLogger": 1,
     "GameCode|PlayerController": 1,
     "GameCode|PooledSpawner": 1,
     "GameCode|PostHogUtils": 1,
     "GameCode|RobotBody": 1,
-    "GameCode|RobotBodyPart": 1,
     "GameCode|SentryRuntimeConfiguration": 1,
     "GameCode|SettingsScreen": 1
   },
-  "surfaceContentHash": "779f0ed05cdc96621fd93db803920223e007285e8c68fd79462266c4bbb92ddb",
+  "surfaceContentHash": "ded8678112496a9331e2a6a72ae79c76c4b055f23105381df23f847e866fbbc3",
   "types": {
     "GameCode|ActionTarget": {
       "assembly": "GameCode",
@@ -1155,6 +1163,168 @@
       "status": "Resolved",
       "typeKey": "GameCode|DamageType"
     },
+    "GameCode|EquippableItemEntry": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "ValueType",
+        "Object"
+      ],
+      "constructors": [],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "bodyParts",
+          "type": "EquippableBodyPart[]"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "equipAnimation",
+          "type": "EquipAnimation"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "worldItemPrefab",
+          "type": "UnityEngine.GameObject"
+        }
+      ],
+      "fullName": "EquippableItemEntry",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [],
+      "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "WorldItemName",
+          "type": "System.String"
+        }
+      ],
+      "simpleName": "EquippableItemEntry",
+      "status": "Resolved",
+      "typeKey": "GameCode|EquippableItemEntry"
+    },
+    "GameCode|EquippableItemRegistry": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "ScriptableObject",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "InstanceSuffixRegex",
+          "type": "System.Text.RegularExpressions.Regex"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "_byBodyPartId",
+          "type": "System.Collections.Generic.Dictionary<System.Int32, EquippableItemEntry>"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "_byWorldItemName",
+          "type": "System.Collections.Generic.Dictionary<System.String, EquippableItemEntry>"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "_instance",
+          "type": "EquippableItemRegistry"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "entries",
+          "type": "EquippableItemEntry[]"
+        }
+      ],
+      "fullName": "EquippableItemRegistry",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "BuildLookups",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "IterEntries",
+          "parameters": [],
+          "returnType": "System.Collections.Generic.IEnumerable<EquippableItemEntry>"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnEnable",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "TryGetEntryByBodyPart",
+          "parameters": [
+            "UnityEngine.GameObject",
+            "EquippableItemEntry&"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "TryGetEntryByWorldItem",
+          "parameters": [
+            "UnityEngine.GameObject",
+            "EquippableItemEntry&"
+          ],
+          "returnType": "System.Boolean"
+        }
+      ],
+      "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "ByBodyPartId",
+          "type": "System.Collections.Generic.Dictionary<System.Int32, EquippableItemEntry>"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "ByWorldItemName",
+          "type": "System.Collections.Generic.Dictionary<System.String, EquippableItemEntry>"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "Instance",
+          "type": "EquippableItemRegistry"
+        }
+      ],
+      "simpleName": "EquippableItemRegistry",
+      "status": "Resolved",
+      "typeKey": "GameCode|EquippableItemRegistry"
+    },
     "GameCode|FirstPersonController": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [
@@ -1994,6 +2164,12 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "cancelAction",
+          "type": "UnityEngine.InputSystem.InputActionReference"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "checkpointAssets",
           "type": "CheckpointAsset[]"
         },
@@ -2078,6 +2254,12 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "navigateAction",
+          "type": "UnityEngine.InputSystem.InputActionReference"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "oldDropAction",
           "type": "ActionAsset"
         },
@@ -2104,6 +2286,12 @@
           "isStatic": false,
           "name": "sideQuestMarkerPrefab",
           "type": "UnityEngine.GameObject"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "submitAction",
+          "type": "UnityEngine.InputSystem.InputActionReference"
         },
         {
           "isPublic": false,
@@ -2140,6 +2328,12 @@
         }
       ],
       "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "CancelAction",
+          "type": "UnityEngine.InputSystem.InputAction"
+        },
         {
           "canRead": true,
           "canWrite": false,
@@ -2233,6 +2427,12 @@
         {
           "canRead": true,
           "canWrite": false,
+          "name": "NavigateAction",
+          "type": "UnityEngine.InputSystem.InputAction"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
           "name": "OldDropAction",
           "type": "ActionAsset"
         },
@@ -2259,6 +2459,12 @@
           "canWrite": false,
           "name": "SideQuestMarkerPrefab",
           "type": "UnityEngine.GameObject"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "SubmitAction",
+          "type": "UnityEngine.InputSystem.InputAction"
         },
         {
           "canRead": true,
@@ -4253,6 +4459,12 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "spawnedFromPool",
+          "type": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "sprintingSpeed",
           "type": "System.Single"
         },
@@ -4361,7 +4573,7 @@
         {
           "isPublic": false,
           "isStatic": false,
-          "name": "<WaitTransformSync>g__CloseEnough|149_0",
+          "name": "<WaitTransformSync>g__CloseEnough|150_0",
           "parameters": [],
           "returnType": "System.Boolean"
         },
@@ -4653,6 +4865,13 @@
             "UnityEngine.ContactPoint",
             "System.Single"
           ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "SnapRagdollToAnimatedPose",
+          "parameters": [],
           "returnType": "System.Void"
         },
         {
@@ -5076,6 +5295,296 @@
       "simpleName": "PerformanceLogger",
       "status": "Resolved",
       "typeKey": "GameCode|PerformanceLogger"
+    },
+    "GameCode|PersonalityAsset": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "ScriptableObject",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "analysisModel",
+          "type": "ModelAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "bios",
+          "type": "UnityEngine.TextAsset[]"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "crits",
+          "type": "CritAsset[]"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "exampleQuotes",
+          "type": "FactMapAsset[]"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "hardCommands",
+          "type": "System.Collections.Generic.List<HardCommand>"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "hints",
+          "type": "HintAsset[]"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "knowledge",
+          "type": "LoreAsset[]"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "maxAutoContinues",
+          "type": "System.UInt32"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "maxExampleQuoteTokens",
+          "type": "System.UInt32"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "minStatusCertainty",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "model",
+          "type": "ModelAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "onBoot",
+          "type": "GameEventAsset"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "scenePrompt",
+          "type": "UnityEngine.TextAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "statusFactCount",
+          "type": "System.UInt32"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "temperature",
+          "type": "System.Single"
+        }
+      ],
+      "fullName": "PersonalityAsset",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "CopyTemplateFields",
+          "parameters": [
+            "PersonalityAsset"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": true,
+          "name": "CreateHacked",
+          "parameters": [
+            "PersonalityAsset",
+            "UnityEngine.TextAsset[]"
+          ],
+          "returnType": "PersonalityAsset"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "IterGlobalFacts",
+          "parameters": [],
+          "returnType": "System.Collections.Generic.IEnumerable<Fact>"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "IterPrivateFacts",
+          "parameters": [],
+          "returnType": "System.Collections.Generic.IEnumerable<Fact>"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "Precompile",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "SetBio",
+          "parameters": [
+            "UnityEngine.TextAsset"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "SetExampleQuotes",
+          "parameters": [
+            "FactMapAsset"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "SetKnowledge",
+          "parameters": [
+            "LoreAsset[]"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "SetTemperature",
+          "parameters": [
+            "System.Single"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": true,
+          "name": "ValidateBios",
+          "parameters": [
+            "UnityEngine.TextAsset[]"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "isPublic": true,
+          "isStatic": true,
+          "name": "ValidateIsPublic",
+          "parameters": [
+            "ModelAsset"
+          ],
+          "returnType": "System.Boolean"
+        }
+      ],
+      "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "AnalysisModel",
+          "type": "ModelAsset"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "Bios",
+          "type": "System.Collections.Generic.IEnumerable<UnityEngine.TextAsset>"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "Crits",
+          "type": "System.Collections.Generic.IEnumerable<CritAsset>"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "HardCommands",
+          "type": "System.Collections.Generic.List<HardCommand>"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "Hints",
+          "type": "System.Collections.Generic.IEnumerable<HintAsset>"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "Knowledge",
+          "type": "System.Collections.Generic.IEnumerable<LoreAsset>"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "MaxAutoInvokes",
+          "type": "System.UInt32"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "MaxExampleQuoteTokens",
+          "type": "System.UInt32"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "MinStatusCertainty",
+          "type": "System.Single"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "Model",
+          "type": "ModelAsset"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "OnBoot",
+          "type": "GameEventAsset"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "StatusFactCount",
+          "type": "System.UInt32"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "Temperature",
+          "type": "System.Single"
+        }
+      ],
+      "simpleName": "PersonalityAsset",
+      "status": "Resolved",
+      "typeKey": "GameCode|PersonalityAsset"
     },
     "GameCode|PlayerController": {
       "assembly": "GameCode",
@@ -6337,6 +6846,73 @@
       "status": "Resolved",
       "typeKey": "GameCode|ReflectionProbeManager"
     },
+    "GameCode|RoboAPI.Agent+PlanRequest": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": [
+            "ModelAsset",
+            "AgentEnvironment",
+            "System.Collections.Generic.IReadOnlyList<System.String>",
+            "System.Collections.Generic.IReadOnlyList<System.String>",
+            "System.Single",
+            "System.String"
+          ]
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "bioTemplates",
+          "type": "System.Collections.Generic.IReadOnlyList<System.String>"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "critStatusTemplates",
+          "type": "System.Collections.Generic.IReadOnlyList<System.String>"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "environment",
+          "type": "AgentEnvironment"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "modelName",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "systemPromptOverride",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "temperature",
+          "type": "System.Single"
+        }
+      ],
+      "fullName": "RoboAPI.Agent+PlanRequest",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [],
+      "properties": [],
+      "simpleName": "PlanRequest",
+      "status": "Resolved",
+      "typeKey": "GameCode|RoboAPI.Agent+PlanRequest"
+    },
     "GameCode|RoboPath.Goal": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [
@@ -7218,191 +7794,6 @@
       "status": "Resolved",
       "typeKey": "GameCode|RobotBody"
     },
-    "GameCode|RobotBodyPart": {
-      "assembly": "GameCode",
-      "baseChainSimpleNames": [
-        "MonoBehaviour",
-        "Behaviour",
-        "Component",
-        "Object",
-        "Object"
-      ],
-      "constructors": [
-        {
-          "isPublic": true,
-          "parameters": []
-        }
-      ],
-      "enumMembers": {},
-      "fields": [
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "activeWhenDetached",
-          "type": "UnityEngine.Behaviour[]"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "body",
-          "type": "RobotBody"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "deleteAfterDetach",
-          "type": "System.Single"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "detachEvent",
-          "type": "GameEventAsset"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "detachImpulse",
-          "type": "System.Single"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "installEvent",
-          "type": "GameEventAsset"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "part",
-          "type": "RobotBody+PartType"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "placeholder",
-          "type": "System.Boolean"
-        }
-      ],
-      "fullName": "RobotBodyPart",
-      "isAbstract": false,
-      "isEnum": false,
-      "isInterface": false,
-      "methods": [
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "<Start>b__26_0",
-          "parameters": [
-            "System.Threading.CancellationToken"
-          ],
-          "returnType": "Cysharp.Threading.Tasks.UniTask"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "<Start>b__26_1",
-          "parameters": [
-            "IInteractable"
-          ],
-          "returnType": "System.Void"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "IInteractable.CanInteract",
-          "parameters": [
-            "UnityEngine.Transform"
-          ],
-          "returnType": "System.Boolean"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "IInteractable.OnInteractAttempt",
-          "parameters": [
-            "UnityEngine.Transform",
-            "System.Threading.CancellationToken"
-          ],
-          "returnType": "Cysharp.Threading.Tasks.UniTask"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "IRobotBodyConfigurationChanged.OnBodyConfigurationChanged",
-          "parameters": [
-            "RobotBody"
-          ],
-          "returnType": "System.Void"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "Start",
-          "parameters": [],
-          "returnType": "System.Void"
-        }
-      ],
-      "properties": [
-        {
-          "canRead": true,
-          "canWrite": false,
-          "name": "Body",
-          "type": "RobotBody"
-        },
-        {
-          "canRead": true,
-          "canWrite": false,
-          "name": "DeleteAfterDetach",
-          "type": "System.Single"
-        },
-        {
-          "canRead": true,
-          "canWrite": false,
-          "name": "DetachEvent",
-          "type": "GameEventAsset"
-        },
-        {
-          "canRead": true,
-          "canWrite": false,
-          "name": "DetachImpulse",
-          "type": "System.Single"
-        },
-        {
-          "canRead": true,
-          "canWrite": false,
-          "name": "InstallEvent",
-          "type": "GameEventAsset"
-        },
-        {
-          "canRead": true,
-          "canWrite": false,
-          "name": "IsRemovable",
-          "type": "System.Boolean"
-        },
-        {
-          "canRead": true,
-          "canWrite": false,
-          "name": "PartName",
-          "type": "System.String"
-        },
-        {
-          "canRead": true,
-          "canWrite": false,
-          "name": "Placeholder",
-          "type": "System.Boolean"
-        },
-        {
-          "canRead": true,
-          "canWrite": false,
-          "name": "Type",
-          "type": "RobotBody+PartType"
-        }
-      ],
-      "simpleName": "RobotBodyPart",
-      "status": "Resolved",
-      "typeKey": "GameCode|RobotBodyPart"
-    },
     "GameCode|SceneUtil": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [
@@ -7697,6 +8088,114 @@
       "simpleName": "SettingsScreen",
       "status": "Resolved",
       "typeKey": "GameCode|SettingsScreen"
+    },
+    "GameCode|UgcEnvironmentPrefabMap": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "ScriptableObject",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "entries",
+          "type": "UgcEnvironmentPrefabMap+Entry[]"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "index",
+          "type": "System.Collections.Generic.Dictionary<System.String, UnityEngine.GameObject>"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "runtimeOverrides",
+          "type": "System.Collections.Generic.Dictionary<System.String, UnityEngine.GameObject>"
+        }
+      ],
+      "fullName": "UgcEnvironmentPrefabMap",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "BuildIndex",
+          "parameters": [],
+          "returnType": "System.Collections.Generic.Dictionary<System.String, UnityEngine.GameObject>"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "SetRuntimeOverride",
+          "parameters": [
+            "System.String",
+            "UnityEngine.GameObject"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "TryGetPrefab",
+          "parameters": [
+            "System.String",
+            "UnityEngine.GameObject&"
+          ],
+          "returnType": "System.Boolean"
+        }
+      ],
+      "properties": [],
+      "simpleName": "UgcEnvironmentPrefabMap",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcEnvironmentPrefabMap"
+    },
+    "GameCode|UgcEnvironmentPrefabMap+Entry": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "prefab",
+          "type": "UnityEngine.GameObject"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "presetKey",
+          "type": "System.String"
+        }
+      ],
+      "fullName": "UgcEnvironmentPrefabMap+Entry",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [],
+      "properties": [],
+      "simpleName": "Entry",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcEnvironmentPrefabMap+Entry"
     },
     "GameCode|UgcExportLoader": {
       "assembly": "GameCode",
@@ -9090,6 +9589,101 @@
       "status": "Resolved",
       "typeKey": "GameCode|UgcPlayLauncherLastRun"
     },
+    "GameCode|UgcPrefabAssetMap": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "ScriptableObject",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "entries",
+          "type": "UgcPrefabAssetMap+Entry[]"
+        }
+      ],
+      "fullName": "UgcPrefabAssetMap",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "SetEntries",
+          "parameters": [
+            "UgcPrefabAssetMap+Entry[]"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "TryResolve",
+          "parameters": [
+            "System.String",
+            "UnityEngine.GameObject&",
+            "UnityEngine.Vector3&"
+          ],
+          "returnType": "System.Boolean"
+        }
+      ],
+      "properties": [],
+      "simpleName": "UgcPrefabAssetMap",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcPrefabAssetMap"
+    },
+    "GameCode|UgcPrefabAssetMap+Entry": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "assetUri",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "localPositionOffset",
+          "type": "UnityEngine.Vector3"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "prefab",
+          "type": "UnityEngine.GameObject"
+        }
+      ],
+      "fullName": "UgcPrefabAssetMap+Entry",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [],
+      "properties": [],
+      "simpleName": "Entry",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcPrefabAssetMap+Entry"
+    },
     "GameCode|UgcProjectDiffer": {
       "assembly": "GameCode",
       "baseChainSimpleNames": [
@@ -9210,6 +9804,12 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "materialMap",
+          "type": "UgcMaterialMap"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "robotPartMap",
           "type": "UgcRobotPartMap"
         },
@@ -9218,6 +9818,12 @@
           "isStatic": false,
           "name": "runtimeOverrides",
           "type": "System.Collections.Generic.Dictionary<System.String, UgcRuntimeAssetConfig+RuntimeOverride>"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "voiceMap",
+          "type": "UgcVoiceMap"
         }
       ],
       "fullName": "UgcRuntimeAssetConfig",
@@ -9294,8 +9900,20 @@
         {
           "canRead": true,
           "canWrite": false,
+          "name": "MaterialMap",
+          "type": "UgcMaterialMap"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
           "name": "RobotPartMap",
           "type": "UgcRobotPartMap"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "name": "VoiceMap",
+          "type": "UgcVoiceMap"
         }
       ],
       "simpleName": "UgcRuntimeAssetConfig",

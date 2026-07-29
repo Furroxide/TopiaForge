@@ -113,6 +113,22 @@ namespace TopiaForge.ModManager
                         ReleaseSurfaceId);
                     nativeRoot = null;
                 }
+                else if (request.Kind == UiSurfaceKind.FullscreenTool)
+                {
+                    var tool = host.FullscreenTool(request.Id, request.Title, TopiaForgeScheme.Paper);
+                    nativeRoot = tool;
+                    var scroll = tool.Content.Scroll(TopiaForgeGap.Sm, TopiaForgeGap.None).Flex(1f, 1f);
+                    var body = scroll.Content.Label(request.Body, TopiaForgeTextStyle.Body);
+                    surface = UnityUiSurface.ForFullscreen(
+                        request.Id,
+                        tool,
+                        body,
+                        scroll.Content,
+                        lifetime,
+                        logger,
+                        ReleaseSurfaceId);
+                    nativeRoot = null;
+                }
                 else
                 {
                     var layer = host.HudLayer(request.Id);

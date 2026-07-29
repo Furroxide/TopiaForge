@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
 using TopiaForge.ModPackageValidator;
@@ -6,7 +7,7 @@ namespace TopiaForge.ModPackageValidator.Tests;
 
 internal static class Program
 {
-    private const string SdkVersion = "1.0.0";
+    private const string SdkVersion = "1.0.0-rc.1";
 
     private static int Main()
     {
@@ -23,6 +24,7 @@ internal static class Program
         Run("bounded installed versions", TestBoundedInstalledVersions);
         Run("bounded receipt metadata", TestBoundedReceiptMetadata);
         Run("duplicate nested lock metadata", TestDuplicateNestedLockMetadata);
+        Run("session package requires canonical multiplayer lock", TestSessionPackageRequiresCanonicalLock);
         Console.WriteLine("Release scaffold validator tests passed.");
         return 0;
     }
@@ -59,7 +61,7 @@ internal static class Program
         File.WriteAllText(
             Path.Combine(project, "Example.csproj"),
             "<Project><ItemGroup><ProjectReference Include=\"contracts\\Example.Api\\Example.Api.csproj\" />" +
-            "<PackageReference Include=\"TopiaForge.Mods.Abstractions\" Version=\"1.0.0\" />" +
+            "<PackageReference Include=\"TopiaForge.Mods.Abstractions\" Version=\"" + SdkVersion + "\" />" +
             "</ItemGroup></Project>");
         AssertNoErrors(ReleaseScaffoldValidator.Validate(project, Array.Empty<string>()));
     }
@@ -96,7 +98,7 @@ internal static class Program
         File.WriteAllText(
             Path.Combine(project, "Example.csproj"),
             "<Project><ItemGroup><ProjectReference Include=\"bin/linked/Outside.csproj\" />" +
-            "<PackageReference Include=\"TopiaForge.Mods.Abstractions\" Version=\"1.0.0\" />" +
+            "<PackageReference Include=\"TopiaForge.Mods.Abstractions\" Version=\"" + SdkVersion + "\" />" +
             "</ItemGroup></Project>");
         AssertContains(
             ReleaseScaffoldValidator.Validate(project, Array.Empty<string>()),
@@ -123,7 +125,7 @@ internal static class Program
         var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath)).RootElement;
         WriteJson(manifestPath, new
         {
-            schemaVersion = 4,
+            schemaVersion = 5,
             name = "../../outside",
             displayName = manifest.GetProperty("displayName").GetString(),
             version = "1.0.0",
@@ -230,6 +232,74 @@ internal static class Program
             "duplicate JSON field 'resolved'");
     }
 
+    private static void TestSessionPackageRequiresCanonicalLock(string root)
+    {
+        const string lockPath = "topiaforge.multiplayer.lock.json";
+        var packageRoot = Path.Combine(root, "handcrafted-session-package");
+        var contentRoot = Path.Combine(packageRoot, "Content");
+        Directory.CreateDirectory(contentRoot);
+        var synchronizedContent = "{\"difficulty\":8}"u8.ToArray();
+        var contractLock =
+            "{\"schemaVersion\":2,\"protocolVersion\":\"1.0.0\",\"contracts\":[]}"u8.ToArray();
+        File.WriteAllBytes(Path.Combine(contentRoot, "gameplay-rules.json"), synchronizedContent);
+        File.WriteAllBytes(Path.Combine(packageRoot, lockPath), contractLock);
+        File.WriteAllBytes(Path.Combine(packageRoot, "Example.dll"), "managed fixture"u8.ToArray());
+        WriteJson(Path.Combine(packageRoot, "topiaforge.mod.json"), new
+        {
+            schemaVersion = 5,
+            name = "example.handcrafted-session",
+            displayName = "Handcrafted session",
+            version = "1.0.0",
+            author = new { name = "TopiaForge Tests" },
+            entryAssembly = "Example.dll",
+            entryType = "Example.Mod",
+            supportedGameVersionRange = "*",
+            supportedLoaderVersionRange = "*",
+            supportedSdkVersionRange = "*",
+            hashes = new Dictionary<string, string>
+            {
+                ["Content/gameplay-rules.json"] = Sha256(synchronizedContent),
+                [lockPath] = Sha256(contractLock),
+            },
+            multiplayer = new
+            {
+                mode = "session",
+                presence = "required",
+                protocol = new { version = "1.0.0" },
+                synchronizedFiles = new[] { "Content/gameplay-rules.json" },
+            },
+        });
+
+        var validatorProgram = typeof(ReleaseScaffoldValidator).Assembly.GetType(
+            "TopiaForge.ModPackageValidator.Program",
+            throwOnError: true)!;
+        var validatorMain = validatorProgram.GetMethod(
+            "Main",
+            BindingFlags.Public | BindingFlags.Static) ??
+            throw new InvalidOperationException("Could not locate the package validator entry point.");
+        var previousError = Console.Error;
+        using var error = new StringWriter();
+        int exitCode;
+        try
+        {
+            Console.SetError(error);
+            exitCode = (int)(validatorMain.Invoke(null, new object[] { new[] { packageRoot } }) ?? -1);
+        }
+        finally
+        {
+            Console.SetError(previousError);
+        }
+
+        if (exitCode != 1)
+        {
+            throw new InvalidOperationException(
+                "Package validator accepted a session package with an undeclared contract lock.");
+        }
+        AssertContains(
+            error.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries),
+            "canonical generated contract lock '" + lockPath + "'");
+    }
+
     private static string WriteProjectFixture(string root)
     {
         var project = Path.Combine(root, "project");
@@ -249,7 +319,7 @@ internal static class Program
         File.WriteAllText(Path.Combine(project, "topiaforge.dev.props"), "<Project />");
         WriteJson(Path.Combine(project, "topiaforge.mod.json"), new
         {
-            schemaVersion = 4,
+            schemaVersion = 5,
             name = "example.scaffold",
             displayName = "Example scaffold",
             version = "1.0.0",

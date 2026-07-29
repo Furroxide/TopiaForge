@@ -99,6 +99,7 @@ LauncherSnapshot _singleRecoveryInstallSnapshot() {
 LauncherSnapshot _readySnapshot({
   bool needsRepair = false,
   List<RegistryMod> registryMods = const [],
+  List<InstalledMod> installedMods = const [],
   List<LauncherProfile>? profiles,
   String selectedProfileId = 'default',
 }) {
@@ -111,7 +112,7 @@ LauncherSnapshot _readySnapshot({
     ),
     profiles: profiles ?? [LauncherProfile.defaultProfile()],
     selectedProfileId: selectedProfileId,
-    installedMods: const [],
+    installedMods: installedMods,
     registryMods: registryMods,
     packageSources: const [],
     worldCatalog: WorldCatalog.fallback(),
@@ -167,17 +168,37 @@ LauncherSnapshot _updateSnapshot({
   );
 }
 
-ModManifest _manifest(String id, {required String version}) {
+ModManifest _manifest(
+  String id, {
+  required String version,
+  String name = 'Timer Mod',
+  String category = '',
+  List<ModDependency> dependencies = const [],
+}) {
   return ModManifest(
-    schemaVersion: 4,
+    schemaVersion: 5,
     id: id,
-    name: 'Timer Mod',
+    name: name,
     version: version,
     author: const ModAuthor(name: 'TopiaForge'),
     entryAssembly: 'Timer.dll',
     entryType: 'Timer.Entry',
+    category: category,
+    dependencies: dependencies,
   );
 }
+
+InstalledMod _installedMod(ModManifest manifest, {bool enabled = false}) =>
+    InstalledMod(
+      id: manifest.id,
+      name: manifest.name,
+      version: manifest.version,
+      enabled: enabled,
+      restartRequired: false,
+      uninstallPending: false,
+      packagePath: 'C:\\Games\\Robotopia\\BepInEx\\TopiaForge',
+      manifest: manifest,
+    );
 
 LauncherSnapshot _discoverySnapshot({bool developerMode = false}) {
   return LauncherSnapshot(
@@ -205,7 +226,7 @@ LauncherSnapshot _discoverySnapshot({bool developerMode = false}) {
 RegistryMod _registryMod(String id, String name, String category) {
   return RegistryMod(
     manifest: ModManifest(
-      schemaVersion: 4,
+      schemaVersion: 5,
       id: id,
       name: name,
       version: '1.0.0',

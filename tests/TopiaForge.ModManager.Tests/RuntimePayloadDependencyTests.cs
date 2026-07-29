@@ -82,7 +82,7 @@ namespace TopiaForge.ModManager.Tests
 
             AssertProfileResolves(metadata, available);
             AssertProfileResolves(immutable, available);
-            Console.WriteLine("RuntimePayloadDependencyTests passed (12-DLL payload; Unity profile closure verified).");
+            Console.WriteLine("RuntimePayloadDependencyTests passed (13-DLL payload; Unity profile closure verified).");
         }
 
         private static void AssertProfileResolves(
@@ -169,7 +169,7 @@ namespace TopiaForge.ModManager.Tests
                 .Single(attribute => attribute.Key == "TopiaForge.RobotopiaManagedDir")
                 .Value;
             Assert(!string.IsNullOrWhiteSpace(value) && Directory.Exists(value),
-                "TopiaForge.RobotopiaManagedDir must identify the restored build-2227 Managed directory.");
+                "TopiaForge.RobotopiaManagedDir must identify the restored build-2309 Managed directory.");
             return Path.GetFullPath(value!);
         }
 

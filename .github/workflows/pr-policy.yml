@@ -88,14 +88,35 @@ jobs:
           fi
 
       - name: Check out the exact policy-sensitive head
-        if: >-
-          github.base_ref == 'main' ||
-          (github.base_ref == 'dev' && startsWith(github.head_ref, 'sync/main-v'))
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Enforce DCO after the rc.1 cutover
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --force --no-tags origin "$BASE_SHA"
+          git fetch --force origin \
+            refs/tags/v1.0.0-rc.1:refs/tags/v1.0.0-rc.1 2>/dev/null || true
+          if ! git rev-parse --verify refs/tags/v1.0.0-rc.1 >/dev/null 2>&1; then
+            echo 'DCO cutover tag does not exist yet; existing history is grandfathered.'
+            exit 0
+          fi
+          failures=0
+          while IFS= read -r commit; do
+            if ! git show -s --format=%B "$commit" |
+              grep -Eiq '^Signed-off-by:[[:space:]].+<[^<>[:space:]]+@[^<>[:space:]]+>[[:space:]]*$'; then
+              echo "::error::Commit $commit is missing a valid Signed-off-by trailer."
+              failures=1
+            fi
+          done < <(git rev-list --reverse "$BASE_SHA..$HEAD_SHA")
+          exit "$failures"
 
       - name: Validate release source against the product version
         if: github.base_ref == 'main'

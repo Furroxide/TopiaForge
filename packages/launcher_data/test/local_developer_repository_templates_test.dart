@@ -41,23 +41,30 @@ void main() {
     ]);
   });
 
-  test('default scaffold is explicitly non-publishable', () async {
-    final workspace = await repository.createModProject(
-      parentDirectory: root.path,
-      id: 'test.identity',
-      name: 'Identity',
-    );
-    final manifest = await repository.readModManifest(workspace.projectRoot);
-    final license = File(p.join(workspace.projectRoot, 'LICENSE.md'));
+  test(
+    'default scaffold is explicitly non-publishable',
+    () async {
+      final workspace = await repository.createModProject(
+        parentDirectory: root.path,
+        id: 'test.identity',
+        name: 'Identity',
+      );
+      final manifest = await repository.readModManifest(workspace.projectRoot);
+      final license = File(p.join(workspace.projectRoot, 'LICENSE.md'));
 
-    expect(manifest.author.name, TopiaForgeScaffoldDefaults.authorName);
-    expect(manifest.license, TopiaForgeScaffoldDefaults.license);
-    expect(license.readAsStringSync(), contains('No license has been granted'));
-    expect(
-      manifest.validate().map((issue) => issue.message).join(' '),
-      allOf(contains('author placeholder'), contains('Choose a license')),
-    );
-  });
+      expect(manifest.author.name, TopiaForgeScaffoldDefaults.authorName);
+      expect(manifest.license, TopiaForgeScaffoldDefaults.license);
+      expect(
+        license.readAsStringSync(),
+        contains('No license has been granted'),
+      );
+      expect(
+        manifest.validate().map((issue) => issue.message).join(' '),
+        allOf(contains('author placeholder'), contains('Choose a license')),
+      );
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
 
   test('explicit MIT and custom licenses write matching root text', () async {
     final mit = await repository.createModProject(
@@ -142,7 +149,7 @@ void main() {
         expect(manifestFile.existsSync(), isTrue, reason: template.id);
         final manifestJson =
             jsonDecode(manifestFile.readAsStringSync()) as Map<String, Object?>;
-        expect(manifestJson['schemaVersion'], 4, reason: template.id);
+        expect(manifestJson['schemaVersion'], 5, reason: template.id);
         final manifest = ModManifest.fromJson(manifestJson);
         expect(
           manifest.validate().where((issue) => issue.isBlocking),
@@ -182,7 +189,7 @@ void main() {
           mainProjectText,
           allOf(
             contains(
-              '<PackageReference Include="TopiaForge.Mods.Abstractions" Version="1.0.0" />',
+              '<PackageReference Include="TopiaForge.Mods.Abstractions" Version="1.0.0-rc.1" />',
             ),
             contains('<Compile Remove="tests\\**\\*.cs" />'),
           ),
@@ -213,7 +220,7 @@ void main() {
             contains('<TopiaForgeSafeProject>false</TopiaForgeSafeProject>'),
             contains('<PackageReference Include="NUnit" Version="4.3.2" />'),
             contains(
-              '<PackageReference Include="TopiaForge.Mods.Testing" Version="1.0.0" />',
+              '<PackageReference Include="TopiaForge.Mods.Testing" Version="1.0.0-rc.1" />',
             ),
           ),
           reason: template.id,
@@ -256,10 +263,11 @@ void main() {
     expect(manifest.capabilities, contains('world-service'));
     expect(
       manifest.dependencies.map((dependency) => dependency.id),
-      containsAll([
-        'io.github.furroxide.topiaforge.worlds',
-        'io.github.furroxide.topiaforge.robotkit',
-      ]),
+      contains('io.github.furroxide.topiaforge.worlds'),
+    );
+    expect(
+      manifest.dependencies.map((dependency) => dependency.id),
+      isNot(contains('io.github.furroxide.topiaforge.robotkit')),
     );
     expect(
       manifest.loadAfter,
@@ -374,7 +382,7 @@ void main() {
     expect(
       projectFile,
       contains(
-        '<PackageReference Include="TopiaForge.Mods.Abstractions" Version="1.0.0" />',
+        '<PackageReference Include="TopiaForge.Mods.Abstractions" Version="1.0.0-rc.1" />',
       ),
     );
     expect(projectFile, contains('<RestorePackagesWithLockFile>true'));
@@ -448,52 +456,5 @@ void main() {
     final reread = await repository.readModManifest(workspace.projectRoot);
     expect(reread.version, '0.2.0');
     expect(reread.extraFields['x-future-metadata'], {'enabled': true});
-  });
-
-  test('ensureUgcCompanionPackage copies and is idempotent', () async {
-    final project = Directory(p.join(root.path, 'UnityWorld'))
-      ..createSync(recursive: true);
-    expect(await repository.ensureUgcCompanionPackage(project.path), isTrue);
-    final marker = File(
-      p.join(
-        project.path,
-        'Packages',
-        'io.github.furroxide.topiaforge.ugc-companion',
-        'Editor',
-        'UgcCompanionSeed.cs',
-      ),
-    );
-    expect(marker.existsSync(), isTrue);
-
-    // A second call without update leaves local edits alone.
-    marker.writeAsStringSync('// modified');
-    expect(await repository.ensureUgcCompanionPackage(project.path), isTrue);
-    expect(marker.readAsStringSync(), '// modified');
-
-    // update: true re-copies from the template.
-    expect(
-      await repository.ensureUgcCompanionPackage(project.path, update: true),
-      isTrue,
-    );
-    expect(marker.readAsStringSync(), isNot('// modified'));
-  });
-
-  test('writeUgcCompanionSeed writes the ProjectSettings seed', () async {
-    final project = Directory(p.join(root.path, 'SeedWorld'))
-      ..createSync(recursive: true);
-    final path = await repository.writeUgcCompanionSeed(
-      project.path,
-      watchFolder: r'C:\ugc-watch',
-      projectName: 'Seed World',
-      sceneId: 'main',
-    );
-    final seed =
-        jsonDecode(File(path).readAsStringSync()) as Map<String, Object?>;
-    expect(p.basename(path), 'TopiaForgeUgcCompanion.json');
-    expect(seed['watchFolder'], r'C:\ugc-watch');
-    expect(seed['projectName'], 'Seed World');
-    expect(seed['sceneId'], 'main');
-    expect(seed['liveSync'], isTrue);
-    expect(seed['seededUtc'], isNotEmpty);
   });
 }

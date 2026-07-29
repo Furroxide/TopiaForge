@@ -322,7 +322,7 @@ class ModTemplateInfo {
 
 /// Everything `new mod` can customize at scaffold time: the template plus per-field manifest overrides. A null
 /// scalar / empty list means "not specified — keep the template's default".
-/// `hashes` (pack-time) and `schemaVersion` (pinned to 4) are deliberately not
+/// `hashes` (pack-time) and `schemaVersion` (pinned to 5) are deliberately not
 /// scaffoldable.
 class ModScaffoldOptions {
   const ModScaffoldOptions({

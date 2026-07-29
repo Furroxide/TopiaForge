@@ -54,14 +54,23 @@ namespace TopiaForge.ModManager.Core
 
             var errors = new List<string>();
 
+            if (manifest.SchemaVersion == 4)
+            {
+                errors.Add(
+                    "schemaVersion 4 was retired before TopiaForge 1.0; migrate this manifest to " +
+                    "schemaVersion 5 with 'topiaforge migrate-manifest --project <path>'. " +
+                    "The multiplayer field is optional for standalone-only mods.");
+                return errors;
+            }
+            else if (manifest.SchemaVersion != ModManifest.ManifestV5SchemaVersion)
+            {
+                errors.Add("schemaVersion must be 5.");
+                return errors;
+            }
+
             foreach (var field in manifest.UnsupportedFieldNames())
             {
                 errors.Add(field + " is not supported by the TopiaForge manifest contract.");
-            }
-
-            if (manifest.SchemaVersion != 4)
-            {
-                errors.Add("schemaVersion must be 4.");
             }
 
             ValidateStringLength(manifest.SchemaUrl, "$schema", 0, 512, required: false, errors);
@@ -177,8 +186,126 @@ namespace TopiaForge.ModManager.Core
             ValidateHashes(manifest.Hashes, errors);
             ValidateWorldGamemodes(manifest.WorldGamemodes, errors);
             ValidateBuiltWith(manifest.BuiltWith, errors);
+            ValidateMultiplayer(manifest, errors);
 
             return errors;
+        }
+
+        private static void ValidateMultiplayer(ModManifest manifest, List<string> errors)
+        {
+            if (manifest.SchemaVersion != ModManifest.CurrentSchemaVersion)
+            {
+                return;
+            }
+
+            var multiplayer = manifest.Multiplayer;
+            if (multiplayer == null)
+            {
+                return;
+            }
+
+            var isClientLocal = string.Equals(
+                multiplayer.Mode,
+                ModMultiplayerMetadata.ClientLocalMode,
+                StringComparison.Ordinal);
+            var isServerOnly = string.Equals(
+                multiplayer.Mode,
+                ModMultiplayerMetadata.ServerOnlyMode,
+                StringComparison.Ordinal);
+            var isSession = string.Equals(
+                multiplayer.Mode,
+                ModMultiplayerMetadata.SessionMode,
+                StringComparison.Ordinal);
+            if (!isClientLocal && !isServerOnly && !isSession)
+            {
+                errors.Add("multiplayer.mode must be client-local, server-only, or session.");
+            }
+
+            if (!isSession)
+            {
+                if (multiplayer.PresenceWasPresent || !string.IsNullOrEmpty(multiplayer.Presence))
+                {
+                    errors.Add("multiplayer.presence is only valid when multiplayer.mode is session.");
+                }
+
+                if (multiplayer.Protocol != null)
+                {
+                    errors.Add("multiplayer.protocol is only valid when multiplayer.mode is session.");
+                }
+
+                if (multiplayer.SynchronizedFilesWasPresent ||
+                    (multiplayer.SynchronizedFiles?.Count ?? 0) != 0)
+                {
+                    errors.Add("multiplayer.synchronizedFiles is only valid when multiplayer.mode is session.");
+                }
+
+                return;
+            }
+
+            if (!string.Equals(multiplayer.Presence, ModMultiplayerMetadata.RequiredPresence, StringComparison.Ordinal) &&
+                !string.Equals(multiplayer.Presence, ModMultiplayerMetadata.OptionalPresence, StringComparison.Ordinal))
+            {
+                errors.Add("multiplayer.presence must be required or optional when multiplayer.mode is session.");
+            }
+
+            var protocol = multiplayer.Protocol;
+            if (protocol == null)
+            {
+                errors.Add("multiplayer.protocol is required when multiplayer.mode is session.");
+            }
+            else
+            {
+                ValidateStringLength(
+                    protocol.Version,
+                    "multiplayer.protocol.version",
+                    1,
+                    256,
+                    required: true,
+                    errors);
+                if (!VersionUtil.TryParse(protocol.Version, out _))
+                {
+                    errors.Add("multiplayer.protocol.version must be an exact semantic version.");
+                }
+
+                if (protocol.PeerVersionRangeWasPresent || !string.IsNullOrEmpty(protocol.PeerVersionRange))
+                {
+                    ValidateStringLength(
+                        protocol.PeerVersionRange,
+                        "multiplayer.protocol.peerVersionRange",
+                        1,
+                        256,
+                        required: true,
+                        errors);
+                    if (!VersionUtil.TryParseRange(protocol.PeerVersionRange))
+                    {
+                        errors.Add("multiplayer.protocol.peerVersionRange must be a valid semantic version range.");
+                    }
+                }
+            }
+
+            var synchronizedFiles = (multiplayer.SynchronizedFiles ?? new List<string>()).ToList();
+            ValidateCount(
+                synchronizedFiles,
+                "multiplayer.synchronizedFiles",
+                ModMultiplayerMetadata.MaxSynchronizedFiles,
+                errors);
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var path in synchronizedFiles)
+            {
+                ValidatePortablePath(
+                    path,
+                    "multiplayer.synchronizedFiles",
+                    required: true,
+                    requireDll: false,
+                    seen,
+                    errors);
+                if (string.Equals(path, "topiaforge.mod.json", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(path, PackageInstallReceipt.FileName, StringComparison.OrdinalIgnoreCase))
+                {
+                    errors.Add(
+                        "multiplayer.synchronizedFiles cannot include generated package metadata '" + path + "'.");
+                }
+            }
         }
 
         private static void ValidateGameCompatibility(

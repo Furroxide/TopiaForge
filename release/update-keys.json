@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.update-keys.schema.json",
+  "formatVersion": 1,
+  "keys": [
+    {
+      "id": "ed25519:26229e3d2b54e81c",
+      "algorithm": "Ed25519",
+      "publicKey": "JyrRg0k51FD4FrygRL0WHx78g1tVqTPy/Y28TbC7ccg="
+    }
+  ]
+}

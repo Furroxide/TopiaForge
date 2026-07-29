@@ -4,11 +4,11 @@ import 'package:test/test.dart';
 void main() {
   group('RobotopiaGameVersion', () {
     test('maps launcher build ids to the canonical SemVer namespace', () {
-      expect(RobotopiaGameVersion.tryFromBuildId(2227), '0.0.2227');
-      expect(RobotopiaGameVersion.tryFromBuildId('2227'), '0.0.2227');
-      expect(RobotopiaGameVersion.tryFromBuildLabel('Build 2227'), '0.0.2227');
-      expect(RobotopiaGameVersion.tryBuildId('0.0.2227'), 2227);
-      expect(RobotopiaGameVersion.tryBuildLabel('0.0.2227'), 'build 2227');
+      expect(RobotopiaGameVersion.tryFromBuildId(2309), '0.0.2309');
+      expect(RobotopiaGameVersion.tryFromBuildId('2309'), '0.0.2309');
+      expect(RobotopiaGameVersion.tryFromBuildLabel('Build 2309'), '0.0.2309');
+      expect(RobotopiaGameVersion.tryBuildId('0.0.2309'), 2309);
+      expect(RobotopiaGameVersion.tryBuildLabel('0.0.2309'), 'build 2309');
     });
 
     test('rejects noncanonical or out-of-range build provenance', () {
@@ -19,8 +19,8 @@ void main() {
         -1,
         1.5,
         '',
-        '02227',
-        ' 2227',
+        '02309',
+        ' 2309',
         '22.27',
         2147483648,
         '999999999999999999999999999999999999999',
@@ -32,11 +32,11 @@ void main() {
         );
       }
       for (final value in [
-        '1.0.2227',
-        '0.1.2227',
+        '1.0.2309',
+        '0.1.2309',
         '0.0.0',
-        '0.0.2227-preview',
-        '0.0.2227+local',
+        '0.0.2309-preview',
+        '0.0.2309+local',
         '0.0.2147483648',
       ]) {
         expect(RobotopiaGameVersion.tryBuildId(value), isNull, reason: value);

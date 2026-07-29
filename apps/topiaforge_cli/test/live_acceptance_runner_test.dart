@@ -102,7 +102,7 @@ void main() {
           if (arguments.first == 'pack') {
             packedPath = p.join(
               fixture.output.path,
-              'dev.topiaforge.sdk-acceptance-1.0.0.topiaforgemod',
+              'dev.topiaforge.sdk-acceptance-1.0.0-rc.1.topiaforgemod',
             );
             File(packedPath)
               ..createSync(recursive: true)

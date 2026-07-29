@@ -60,7 +60,7 @@ namespace TopiaForge.Zombies
 
         private void AdvanceEnemies(float worldDelta)
         {
-            if (!context.Player.TryGetSnapshot(out var player) || player == null
+            if (!context.LocalPlayer.TryGetSnapshot(out var player) || player == null
                 || (playerEntity?.IsAlive != true && !usingPositionalPlayerFallback))
             {
                 return;

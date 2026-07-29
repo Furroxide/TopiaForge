@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using TopiaForge.ModManager.Core;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Testing;
 
@@ -19,6 +20,8 @@ namespace TopiaForge.ModManager.Tests
             typeof(IRobotAgentService).Assembly,
             typeof(IWorldGamemodeService).Assembly,
             typeof(ITimeControlService).Assembly,
+            typeof(ICreatorContentService).Assembly,
+            typeof(IMultiplayerSession).Assembly,
             typeof(IPromptOverrideRegistry).Assembly,
             typeof(IUgcLiveSyncService).Assembly,
             typeof(FakeModContext).Assembly
@@ -28,6 +31,8 @@ namespace TopiaForge.ModManager.Tests
         {
             "src/TopiaForge.Mods.Abstractions/TopiaForge.Mods.Abstractions.csproj",
             "src/TopiaForge.Mods.Chronos/TopiaForge.Mods.Chronos.csproj",
+            "src/TopiaForge.Mods.CreatorContent/TopiaForge.Mods.CreatorContent.csproj",
+            "src/TopiaForge.Mods.Multiplayer/TopiaForge.Mods.Multiplayer.csproj",
             "src/TopiaForge.Mods.Prompts/TopiaForge.Mods.Prompts.csproj",
             "src/TopiaForge.Mods.RobotKit/TopiaForge.Mods.RobotKit.csproj",
             "src/TopiaForge.Mods.Ugc/TopiaForge.Mods.Ugc.csproj",
@@ -75,6 +80,10 @@ namespace TopiaForge.ModManager.Tests
                     .Select(File.ReadAllText));
             ValidateAcceptanceProbeMappings(acceptanceCases, acceptanceSource);
             ValidateProviderAcceptanceProbe(
+                acceptanceCases,
+                acceptanceSource,
+                acceptanceManifestPath);
+            ValidateMultiplayerAcceptanceProbe(
                 acceptanceCases,
                 acceptanceSource,
                 acceptanceManifestPath);
@@ -188,6 +197,7 @@ namespace TopiaForge.ModManager.Tests
             AssertContainsAll(body, caseId, new[]
             {
                 "Context.Extensions.GetAll<ITimeControlService>()",
+                "Context.Extensions.GetAll<ICreatorContentService>()",
                 "Context.Extensions.GetAll<IUgcLiveSyncService>()",
                 "Context.Extensions.GetAll<IMissingOptionalProvider>()",
                 "ModErrorCode.Conflict",
@@ -251,6 +261,7 @@ namespace TopiaForge.ModManager.Tests
                     "chronos-leases",
                     "prompt-overrides",
                     "robot-targets",
+                    "creator-sessions",
                     "ugc-asset-overrides",
                     "world-registrations"
                 }), caseId + " resourceFamilies must exactly describe the automatable live cycle coverage");
@@ -274,6 +285,7 @@ namespace TopiaForge.ModManager.Tests
                 "RegisterCycleExtension(resources, cycle)",
                 "RegisterCyclePrompt(resources, cycle)",
                 "RegisterCycleRobotTarget(resources, player, cycle)",
+                "RegisterCycleCreatorSession(resources, cycle)",
                 "RegisterCycleWorlds(resources, out world, out gamemode, out menu)",
                 "LoadCycleAssetsAsync(resources, player, cycle)",
                 "WaitForCycleCallbacksAsync(counters, cycle)",
@@ -317,7 +329,7 @@ namespace TopiaForge.ModManager.Tests
             });
             ValidateProbeMethod(source, "ProbePlayerControl", new[]
             {
-                "Context.Player.AcquireControl",
+                "Context.LocalPlayer.AcquireControl",
                 "first.IsActive",
                 "second.IsActive"
             });
@@ -413,6 +425,72 @@ namespace TopiaForge.ModManager.Tests
                 "resources.Pop().Dispose()",
                 "first ??= exception"
             });
+        }
+
+        private static void ValidateMultiplayerAcceptanceProbe(
+            IReadOnlyList<JsonElement> cases,
+            string source,
+            string manifestPath)
+        {
+            const string caseId = "integration.multiplayer-loopback";
+            const string providerId = "io.github.furroxide.topiaforge.multiplayer";
+            var acceptanceCase = cases.Single(value =>
+                string.Equals(RequiredText(value, "id"), caseId, StringComparison.Ordinal));
+            var body = ExtractMethodBody(source, RequiredText(acceptanceCase, "probeMethod"));
+            AssertContainsAll(body, caseId, new[]
+            {
+                "Context.TryGetMultiplayer(out var multiplayer)",
+                "MultiplayerSessionState.Ready",
+                "MultiplayerProcessKind.Interactive",
+                "MultiplayerExecutionSide.Client | MultiplayerExecutionSide.Server",
+                "session.HasPresentation",
+                "participant.IsConnected",
+                "participant.IsLocal",
+                "BindMultiplayer(multiplayer)",
+                "SubmitProbeLoopbackAsync",
+                // The submitted command is asynchronous by contract, so the probe drains it per frame rather
+                // than waiting on it (see TF1008). The drain stays inside the probe so this canonical case
+                // still reports its own outcome.
+                "loopbackConfirmation.IsCompleted",
+                "confirmation.WasPredicted",
+                "multiplayerProbeState.Value.Value",
+                "multiplayerPresentedValue"
+            });
+
+            AssertContainsAll(source, caseId, new[]
+            {
+                "[MultiplayerContract(",
+                "[ReplicatedState(",
+                "[MultiplayerCommand(",
+                "[PresentationEvent("
+            });
+
+            using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
+            Assert(manifest.RootElement.GetProperty("dependencies").TryGetProperty(providerId, out _),
+                "the live loopback probe must declare the multiplayer provider dependency");
+            var multiplayer = manifest.RootElement.GetProperty("multiplayer");
+            Assert(multiplayer.GetProperty("mode").GetString() == "session"
+                   && multiplayer.GetProperty("presence").GetString() == "required"
+                   && multiplayer.GetProperty("protocol").GetProperty("version").GetString() == "1.0.0",
+                "the live loopback probe must declare its required session protocol");
+
+            var projectPath = Path.Combine(
+                Path.GetDirectoryName(manifestPath)!,
+                "TopiaForge.SdkAcceptanceMod.csproj");
+            var project = File.ReadAllText(projectPath);
+            Assert(project.Contains("TopiaForge.Mods.Multiplayer.Generators", StringComparison.Ordinal)
+                   && project.Contains("OutputItemType=\"Analyzer\"", StringComparison.Ordinal)
+                   && project.Contains("ReferenceOutputAssembly=\"false\"", StringComparison.Ordinal),
+                "the live loopback probe must compile through the multiplayer source generator");
+
+            var lockPath = Path.Combine(
+                Path.GetDirectoryName(manifestPath)!,
+                ModMultiplayerMetadata.ContractLockFileName);
+            using var contractLock = JsonDocument.Parse(File.ReadAllText(lockPath));
+            var contracts = contractLock.RootElement.GetProperty("contracts").EnumerateArray().ToArray();
+            Assert(contracts.Length == 1
+                   && contracts[0].GetProperty("id").GetString() == "dev.topiaforge.sdk-acceptance.loopback",
+                "the live loopback probe must commit its generated contract lock");
         }
 
         private static void ValidateProbeMethod(

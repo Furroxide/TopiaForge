@@ -6,9 +6,20 @@ namespace TopiaForge.ModManager.Tests
     {
         public static void Run()
         {
+            TestBepInExPluginVersion();
             TestStrictSemanticVersions();
             TestPrereleasePrecedence();
             TestRangeParity();
+        }
+
+        private static void TestBepInExPluginVersion()
+        {
+            Assert(System.Version.TryParse(TopiaForgeVersions.BepInExPluginVersion, out var pluginVersion),
+                "BepInEx plugin metadata must use a System.Version-compatible value");
+            Assert(VersionUtil.TryParse(TopiaForgeVersions.LoaderVersion, out var loaderVersion),
+                "the TopiaForge loader version must remain valid SemVer");
+            Assert(pluginVersion == loaderVersion,
+                "the BepInEx plugin version must match the core of the semantic loader version");
         }
 
         private static void TestStrictSemanticVersions()
