@@ -97,6 +97,37 @@ jobs:
         with:
           sdk: "3.12.2"
 
+      - name: Install managed-reference archive dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y p7zip-full
+
+      - name: Resolve Robotopia refs cache key
+        id: world-refs-cache
+        shell: pwsh
+        env:
+          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
+        run: >-
+          dotnet run
+          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
+          -c Release -- --source public --cache-key-only
+
+      - name: Cache Robotopia managed refs
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/robotopia-managed-refs-cache
+          key: ${{ steps.world-refs-cache.outputs.key }}
+
+      - name: Restore exact Robotopia managed refs
+        shell: pwsh
+        env:
+          ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
+          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
+        run: >-
+          dotnet run
+          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
+          -c Release -- --source public --require-latest
+
       - name: Scaffold smoke world project
         shell: bash
         working-directory: apps/topiaforge_cli
@@ -246,7 +277,7 @@ jobs:
           dotnet build TopiaForge.slnx -c Release --no-restore
 
           loader=src/TopiaForge.ModManager/bin/Release/netstandard2.1
-          test "$(find "$loader" -maxdepth 1 -type f -name '*.dll' | wc -l | tr -d ' ')" = 13
+          test "$(find "$loader" -maxdepth 1 -type f -name '*.dll' | wc -l | tr -d ' ')" = 14
           test "$(sha256sum "$loader/System.Collections.Immutable.dll" | awk '{print $1}')" = \
             98de9f34c748b709f26c07fd4df54b2509218511dfaf741fa61aa2adb74e8c8c
           test "$(sha256sum "$loader/System.Reflection.Metadata.dll" | awk '{print $1}')" = \
