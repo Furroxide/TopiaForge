@@ -480,6 +480,7 @@ const _releaseToolStateNames = {
   '.npmrc',
   '.tools',
   '.vs',
+  'bin',
   'build',
   'builds',
   'library',
@@ -492,4 +493,4 @@ const _releaseToolStateNames = {
   'usersettings',
 };
 
-const _generatedTemplateStateNames = {..._releaseToolStateNames, 'bin'};
+const _generatedTemplateStateNames = _releaseToolStateNames;
