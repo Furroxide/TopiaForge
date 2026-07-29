@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>TopiaForge.Mods.RobotKit</AssemblyName>
+    <RootNamespace>TopiaForge.Mods</RootNamespace>
+    <Version>1.0.0-rc.1</Version>
+    <PackageVersion>1.0.0-rc.1</PackageVersion>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <InformationalVersion>1.0.0-rc.1</InformationalVersion>
+    <Description>Unity-free TopiaForge robot, objective, dialogue, voice, and brain contracts.</Description>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <WarningsAsErrors>$(WarningsAsErrors);CS1591;CS1574</WarningsAsErrors>
+    <ProduceReferenceAssembly>true</ProduceReferenceAssembly>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
+    <Compile Include="..\TopiaForge.Mods.Abstractions\BrainQuery.cs" Link="BrainQuery.cs" />
+    <Compile Include="..\TopiaForge.Mods.Abstractions\Dialogue.cs" Link="Dialogue.cs" />
+    <Compile Include="..\TopiaForge.Mods.Abstractions\RobotAgent.cs" Link="RobotAgent.cs" />
+    <Compile Include="..\TopiaForge.Mods.Abstractions\RobotColor.cs" Link="RobotColor.cs" />
+    <Compile Include="..\TopiaForge.Mods.Abstractions\RobotControl.cs" Link="RobotControl.cs" />
+    <Compile Include="..\TopiaForge.Mods.Abstractions\RobotEnums.cs" Link="RobotEnums.cs" />
+    <Compile Include="..\TopiaForge.Mods.Abstractions\RobotInteractions.cs" Link="RobotInteractions.cs" />
+    <Compile Include="..\TopiaForge.Mods.Abstractions\RobotEditing.cs" Link="RobotEditing.cs" />
+    <Compile Include="..\TopiaForge.Mods.Abstractions\RobotObjectives.cs" Link="RobotObjectives.cs" />
+    <Compile Include="..\TopiaForge.Mods.Abstractions\RobotSpawning.cs" Link="RobotSpawning.cs" />
+    <Compile Include="..\TopiaForge.Mods.Abstractions\RobotTargetFacts.cs" Link="RobotTargetFacts.cs" />
+    <Compile Include="..\TopiaForge.Mods.Abstractions\TextInputBuffer.cs" Link="TextInputBuffer.cs" />
+  </ItemGroup>
+  <Import Project="..\TopiaForge.Mods.ReferenceOnlyPack.targets" />
+</Project>

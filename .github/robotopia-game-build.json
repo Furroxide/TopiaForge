@@ -1,0 +1,16 @@
+{
+  "buildId": 2309,
+  "baseUrl": "https://builds.tomatocake.dev",
+  "manifestUrl": "https://builds.tomatocake.dev/latest-build.json",
+  "sourcePlatform": "windows",
+  "archives": {
+    "windows": {
+      "path": "Robotopia-v02309-Win64.7z",
+      "sha256": "da7056cc90d0fb29e94c10f5b79cd0235a416e5e9af835580423019fee63bd0d"
+    },
+    "mac": {
+      "path": "Robotopia-v02309-Mac.7z",
+      "sha256": "e3396e755e74f8e1593fbd8fb7f2d8dc6a2eaf0630b3f49beff433215537be79"
+    }
+  }
+}

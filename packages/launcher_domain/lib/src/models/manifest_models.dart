@@ -1,95 +1,5 @@
 part of '../models.dart';
 
-class RobotopiaRuntimeVersions {
-  static const loaderVersion = '0.2.0';
-  static const sdkVersion = '0.1.0';
-}
-
-class ModDependency {
-  const ModDependency({
-    required this.id,
-    this.versionRange = const VersionRange.any(),
-    this.optional = false,
-  });
-
-  final String id;
-  final VersionRange versionRange;
-  final bool optional;
-
-  factory ModDependency.fromJson(Map<String, Object?> json) {
-    return ModDependency(
-      id: (json['id'] as String?) ?? '',
-      versionRange: VersionRange.parse(
-        (json['versionRange'] as String?) ?? (json['version'] as String?),
-      ),
-      optional: (json['optional'] as bool?) ?? false,
-    );
-  }
-
-  Map<String, Object?> toJson() => {
-    'id': id,
-    'versionRange': versionRange.toString(),
-    if (optional) 'optional': true,
-  };
-}
-
-class ModAuthor {
-  const ModAuthor({this.name = '', this.email = '', this.url = ''});
-
-  final String name;
-  final String email;
-  final String url;
-
-  bool get isEmpty =>
-      name.trim().isEmpty && email.trim().isEmpty && url.trim().isEmpty;
-
-  factory ModAuthor.fromJson(Object? value) {
-    if (value is String) {
-      return ModAuthor(name: value);
-    }
-    final json = _objectMap(value);
-    return ModAuthor(
-      name: (json['name'] as String?) ?? '',
-      email: (json['email'] as String?) ?? '',
-      url: (json['url'] as String?) ?? '',
-    );
-  }
-
-  Map<String, Object?> toJson() => {
-    'name': name,
-    if (email.isNotEmpty) 'email': email,
-    if (url.isNotEmpty) 'url': url,
-  };
-}
-
-class ModConflict {
-  const ModConflict({
-    required this.id,
-    this.versionRange = const VersionRange.any(),
-    this.reason = '',
-  });
-
-  final String id;
-  final VersionRange versionRange;
-  final String reason;
-
-  factory ModConflict.fromJson(Map<String, Object?> json) {
-    return ModConflict(
-      id: (json['id'] as String?) ?? '',
-      versionRange: VersionRange.parse(
-        (json['versionRange'] as String?) ?? (json['version'] as String?),
-      ),
-      reason: (json['reason'] as String?) ?? '',
-    );
-  }
-
-  Map<String, Object?> toJson() => {
-    'id': id,
-    'versionRange': versionRange.toString(),
-    if (reason.isNotEmpty) 'reason': reason,
-  };
-}
-
 class ModManifest {
   const ModManifest({
     required this.schemaVersion,
@@ -98,6 +8,7 @@ class ModManifest {
     required this.version,
     this.schemaUrl = '',
     this.author = const ModAuthor(),
+    this.authorIsObject = true,
     this.description = '',
     this.entryAssembly = '',
     this.entryType = '',
@@ -105,9 +16,13 @@ class ModManifest {
     this.optionalDependencies = const [],
     this.conflicts = const [],
     this.loadAfter = const [],
+    this.loadBefore = const [],
     this.gameVersionRange = const VersionRange.any(),
     this.loaderVersionRange = const VersionRange.any(),
     this.sdkVersionRange = const VersionRange.any(),
+    this.gameVersionRangeIsPresent = true,
+    this.loaderVersionRangeIsPresent = true,
+    this.sdkVersionRangeIsPresent = true,
     this.category = '',
     this.tags = const [],
     this.icon = '',
@@ -115,19 +30,36 @@ class ModManifest {
     this.homepage = '',
     this.source = '',
     this.license = '',
+    this.licenseFiles = const [],
     this.hashes = const {},
-    this.permissions = const [],
+    this.capabilities = const [],
+    this.platforms = const [],
+    this.architectures = const [],
+    this.contentTargets = const [],
+    this.builtWith,
     this.worldGamemodes = const [],
     this.apiAssemblies = const [],
-    this.legacyFolders = const {},
-    this.legacyFiles = const {},
-    this.legacyPackages = const [],
-  });
+    this.multiplayer,
+    bool? multiplayerIsPresent,
+    this.extraFields = const {},
+    List<String> structuralIssues = const [],
+  }) : multiplayerIsPresent = multiplayerIsPresent ?? multiplayer != null,
+       _structuralIssues = structuralIssues;
 
   /// Canonical URL for the manifest JSON schema, used by editors for
-  /// autocomplete and validation of `robotopia.mod.json`.
+  /// autocomplete and validation of `topiaforge.mod.json`.
   static const canonicalSchemaUrl =
-      'https://raw.githubusercontent.com/furroxide/quantum-works/main/schemas/robotopia.mod.schema.json';
+      'https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json';
+  static const manifestV5SchemaVersion = 5;
+  static const currentSchemaVersion = manifestV5SchemaVersion;
+
+  static bool isValidId(String id) {
+    if (!_modIdPattern.hasMatch(id)) {
+      return false;
+    }
+    final normalized = id.toLowerCase();
+    return !_retiredEcosystemIdPrefixes.any(normalized.startsWith);
+  }
 
   final int schemaVersion;
   final String schemaUrl;
@@ -135,6 +67,7 @@ class ModManifest {
   final String name;
   final String version;
   final ModAuthor author;
+  final bool authorIsObject;
   final String description;
   final String entryAssembly;
   final String entryType;
@@ -142,9 +75,13 @@ class ModManifest {
   final List<ModDependency> optionalDependencies;
   final List<ModConflict> conflicts;
   final List<String> loadAfter;
+  final List<String> loadBefore;
   final VersionRange gameVersionRange;
   final VersionRange loaderVersionRange;
   final VersionRange sdkVersionRange;
+  final bool gameVersionRangeIsPresent;
+  final bool loaderVersionRangeIsPresent;
+  final bool sdkVersionRangeIsPresent;
   final String category;
   final List<String> tags;
   final String icon;
@@ -152,62 +89,78 @@ class ModManifest {
   final String homepage;
   final String source;
   final String license;
+  final List<String> licenseFiles;
   final Map<String, String> hashes;
-  final List<String> permissions;
+  final List<String> capabilities;
+  final List<String> platforms;
+  final List<String> architectures;
+  final List<String> contentTargets;
+  final ModBuildMetadata? builtWith;
   final List<GamemodeDefinition> worldGamemodes;
   final List<String> apiAssemblies;
-  final Map<String, String> legacyFolders;
-  final Map<String, String> legacyFiles;
-  final List<String> legacyPackages;
+
+  /// Optional multiplayer admission metadata. Its absence means the mod is
+  /// standalone-only.
+  final ModMultiplayerMetadata? multiplayer;
+
+  /// Distinguishes a missing value from a malformed non-object value so the
+  /// validator can report the correct version-specific contract error.
+  final bool multiplayerIsPresent;
+
+  /// Namespaced `x-*` extension fields survive a read/edit/write cycle.
+  /// Retired aliases and invalid unknown fields remain visible so validation
+  /// can reject them explicitly.
+  final Map<String, Object?> extraFields;
+  final List<String> _structuralIssues;
 
   List<ModDependency> get allDependencies => [
     ...dependencies,
     ...optionalDependencies,
   ];
 
+  /// Decodes a V5 manifest after rejecting other schema versions before any
+  /// version-specific fields are interpreted.
   factory ModManifest.fromJson(Map<String, Object?> json) {
-    final parsedDependencies = [
-      ..._vpmDependencyList(json['vpmDependencies']),
-      ..._dependencyList(json['dependencies']),
-    ];
-    final requiredDependencies = parsedDependencies
-        .where((dependency) => !dependency.optional)
-        .toList(growable: false);
-    final optionalDependencies = [
-      ...parsedDependencies.where((dependency) => dependency.optional),
-      ..._dependencyList(json['optionalDependencies']),
-    ];
+    switch (_dispatchManifestSchema(json)) {
+      case _ManifestSchemaContract.v5:
+        return ModManifest._fromV5Json(json);
+    }
+  }
 
+  factory ModManifest._fromV5Json(Map<String, Object?> json) {
     return ModManifest(
       schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 0,
       schemaUrl: (json[r'$schema'] as String?) ?? '',
-      id: (json['name'] as String?) ?? (json['id'] as String?) ?? '',
-      name:
-          (json['displayName'] as String?) ??
-          (json['title'] as String?) ??
-          (json['id'] == null ? '' : (json['name'] as String?) ?? ''),
+      id: (json['name'] as String?) ?? '',
+      name: (json['displayName'] as String?) ?? '',
       version: (json['version'] as String?) ?? '',
       author: ModAuthor.fromJson(json['author']),
+      authorIsObject: json['author'] is Map,
       description: (json['description'] as String?) ?? '',
       entryAssembly: (json['entryAssembly'] as String?) ?? '',
       entryType: (json['entryType'] as String?) ?? '',
-      dependencies: requiredDependencies,
-      optionalDependencies: optionalDependencies,
+      dependencies: _dependencyMapList(json['dependencies']),
+      optionalDependencies: _dependencyMapList(
+        json['optionalDependencies'],
+        optional: true,
+      ),
       conflicts: _conflictList(json['conflicts']),
       loadAfter: _stringList(json['loadAfter']),
+      loadBefore: _stringList(json['loadBefore']),
       gameVersionRange: VersionRange.parse(
-        (json['supportedGameVersionRange'] as String?) ??
-            (json['gameVersionRange'] as String?) ??
-            (json['gameVersion'] as String?),
+        json['supportedGameVersionRange'] as String?,
       ),
       loaderVersionRange: VersionRange.parse(
-        (json['supportedLoaderVersionRange'] as String?) ??
-            (json['loaderVersionRange'] as String?),
+        json['supportedLoaderVersionRange'] as String?,
       ),
       sdkVersionRange: VersionRange.parse(
-        (json['supportedSdkVersionRange'] as String?) ??
-            (json['sdkVersionRange'] as String?),
+        json['supportedSdkVersionRange'] as String?,
       ),
+      gameVersionRangeIsPresent: json.containsKey('supportedGameVersionRange'),
+      loaderVersionRangeIsPresent: json.containsKey(
+        'supportedLoaderVersionRange',
+      ),
+      sdkVersionRangeIsPresent: json.containsKey('supportedSdkVersionRange'),
       category: (json['category'] as String?) ?? '',
       tags: _stringList(json['tags']),
       icon: (json['icon'] as String?) ?? '',
@@ -215,19 +168,29 @@ class ModManifest {
       homepage: (json['homepage'] as String?) ?? '',
       source: (json['source'] as String?) ?? '',
       license: (json['license'] as String?) ?? '',
-      hashes: _stringMap(json['hashes'] ?? json['packageHashes']),
-      permissions: _stringList(json['permissions']),
-      worldGamemodes: _gamemodeList(
-        json['worldGamemodes'] ?? json['gamemodes'],
-      ),
+      licenseFiles: _stringList(json['licenseFiles']),
+      hashes: _stringMap(json['hashes']),
+      capabilities: _stringList(json['capabilities']),
+      platforms: _stringList(json['platforms']),
+      architectures: _stringList(json['architectures']),
+      contentTargets: _stringList(json['contentTargets']),
+      builtWith: json['builtWith'] == null
+          ? null
+          : ModBuildMetadata.fromJson(json['builtWith']),
+      worldGamemodes: _gamemodeList(json['worldGamemodes']),
       apiAssemblies: _stringList(json['apiAssemblies']),
-      legacyFolders: _stringMap(json['legacyFolders']),
-      legacyFiles: _stringMap(json['legacyFiles']),
-      legacyPackages: _stringList(json['legacyPackages']),
+      multiplayer: ModMultiplayerMetadata.tryFromJson(json['multiplayer']),
+      multiplayerIsPresent: json.containsKey('multiplayer'),
+      structuralIssues: _manifestStructuralIssues(json),
+      extraFields: Map<String, Object?>.unmodifiable(
+        Map<String, Object?>.of(json)
+          ..removeWhere((key, _) => _knownManifestJsonKeys.contains(key)),
+      ),
     );
   }
 
   Map<String, Object?> toJson() => {
+    ...extraFields,
     if (schemaUrl.isNotEmpty) r'$schema': schemaUrl,
     'schemaVersion': schemaVersion,
     'name': id,
@@ -238,22 +201,21 @@ class ModManifest {
     if (entryAssembly.isNotEmpty) 'entryAssembly': entryAssembly,
     if (entryType.isNotEmpty) 'entryType': entryType,
     if (dependencies.isNotEmpty)
-      'vpmDependencies': {
+      'dependencies': {
         for (final item in dependencies) item.id: item.versionRange.toString(),
       },
     if (optionalDependencies.isNotEmpty)
-      'optionalDependencies': optionalDependencies
-          .map((item) => item.toJson())
-          .toList(),
+      'optionalDependencies': {
+        for (final item in optionalDependencies)
+          item.id: item.versionRange.toString(),
+      },
     if (conflicts.isNotEmpty)
       'conflicts': conflicts.map((item) => item.toJson()).toList(),
     if (loadAfter.isNotEmpty) 'loadAfter': loadAfter,
-    if (!gameVersionRange.isAny)
-      'supportedGameVersionRange': gameVersionRange.toString(),
-    if (!loaderVersionRange.isAny)
-      'supportedLoaderVersionRange': loaderVersionRange.toString(),
-    if (!sdkVersionRange.isAny)
-      'supportedSdkVersionRange': sdkVersionRange.toString(),
+    if (loadBefore.isNotEmpty) 'loadBefore': loadBefore,
+    'supportedGameVersionRange': gameVersionRange.toString(),
+    'supportedLoaderVersionRange': loaderVersionRange.toString(),
+    'supportedSdkVersionRange': sdkVersionRange.toString(),
     if (category.isNotEmpty) 'category': category,
     if (tags.isNotEmpty) 'tags': tags,
     if (icon.isNotEmpty) 'icon': icon,
@@ -261,39 +223,67 @@ class ModManifest {
     if (homepage.isNotEmpty) 'homepage': homepage,
     if (source.isNotEmpty) 'source': source,
     if (license.isNotEmpty) 'license': license,
+    if (licenseFiles.isNotEmpty) 'licenseFiles': licenseFiles,
     if (hashes.isNotEmpty) 'hashes': hashes,
-    if (permissions.isNotEmpty) 'permissions': permissions,
+    if (capabilities.isNotEmpty) 'capabilities': capabilities,
+    if (platforms.isNotEmpty) 'platforms': platforms,
+    if (architectures.isNotEmpty) 'architectures': architectures,
+    if (contentTargets.isNotEmpty) 'contentTargets': contentTargets,
+    if (builtWith != null) 'builtWith': builtWith!.toJson(),
     if (worldGamemodes.isNotEmpty)
       'worldGamemodes': worldGamemodes.map((item) => item.toJson()).toList(),
     if (apiAssemblies.isNotEmpty) 'apiAssemblies': apiAssemblies,
-    if (legacyFolders.isNotEmpty) 'legacyFolders': legacyFolders,
-    if (legacyFiles.isNotEmpty) 'legacyFiles': legacyFiles,
-    if (legacyPackages.isNotEmpty) 'legacyPackages': legacyPackages,
+    if (multiplayerIsPresent && multiplayer != null)
+      'multiplayer': multiplayer!.toJson(),
   };
 
   List<LauncherIssue> validate() {
+    if (schemaVersion == 4) {
+      return const [
+        LauncherIssue(
+          severity: IssueSeverity.error,
+          message:
+              'schemaVersion 4 was retired before TopiaForge 1.0; migrate to schemaVersion 5. The multiplayer field is optional for standalone-only mods.',
+        ),
+      ];
+    }
+    if (schemaVersion != manifestV5SchemaVersion) {
+      return const [
+        LauncherIssue(
+          severity: IssueSeverity.error,
+          message: 'schemaVersion must be 5.',
+        ),
+      ];
+    }
+
     final issues = <LauncherIssue>[];
-    final idPattern = RegExp(r'^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$');
-    _validateRequiredFields(issues, idPattern);
+    _validateRequiredFields(issues);
     _validateDependencies(issues);
     _validateConflicts(issues);
+    _validateOrderHints(issues);
     _validateApiAssemblies(issues);
-    _validateMigrationHints(issues);
-    _validatePermissions(issues);
-    _validateLicense(issues);
-    return issues;
-  }
-
-  void _validateRequiredFields(List<LauncherIssue> issues, RegExp idPattern) {
-    if (schemaVersion != 2) {
+    _validateManifestWorldGamemodes(this, issues);
+    _validateUnsupportedAliases(issues);
+    _validateUnknownFields(issues);
+    for (final message in _structuralIssues) {
       issues.add(
-        const LauncherIssue(
+        LauncherIssue(
           severity: IssueSeverity.error,
-          message: 'schemaVersion must be 2.',
+          subjectId: id,
+          message: message,
         ),
       );
     }
-    if (!idPattern.hasMatch(id)) {
+    _validateManifestConstraints(this, issues);
+    _validateManifestMultiplayer(this, issues);
+    _validateLicense(issues);
+    _validateManifestLicenseFiles(this, issues);
+    _validateScaffoldPlaceholders(this, issues);
+    return issues;
+  }
+
+  void _validateRequiredFields(List<LauncherIssue> issues) {
+    if (!ModManifest.isValidId(id)) {
       issues.add(
         const LauncherIssue(
           severity: IssueSeverity.error,
@@ -310,6 +300,14 @@ class ModManifest {
         ),
       );
     }
+    if (!authorIsObject) {
+      issues.add(
+        const LauncherIssue(
+          severity: IssueSeverity.error,
+          message: 'author must be an object with a name field.',
+        ),
+      );
+    }
     if (author.name.trim().isEmpty) {
       issues.add(
         const LauncherIssue(
@@ -322,7 +320,7 @@ class ModManifest {
       issues.add(
         const LauncherIssue(
           severity: IssueSeverity.error,
-          message: 'version must be parseable as a semantic version.',
+          message: 'version must be a valid SemVer 2.0.0 string.',
         ),
       );
     }
@@ -333,11 +331,13 @@ class ModManifest {
           message: 'entryAssembly is required for C# mods.',
         ),
       );
-    } else if (_isUnsafeRelativePath(entryAssembly)) {
+    } else if (_portableManifestPathCollisionKey(entryAssembly) == null ||
+        !entryAssembly.toLowerCase().endsWith('.dll')) {
       issues.add(
         const LauncherIssue(
           severity: IssueSeverity.error,
-          message: 'entryAssembly must be a relative file path in the package.',
+          message:
+              'entryAssembly must be a relative file path in the package and name a safe portable .dll.',
         ),
       );
     }
@@ -349,16 +349,32 @@ class ModManifest {
         ),
       );
     }
+    for (final requirement in <(bool, String)>[
+      (gameVersionRangeIsPresent, 'supportedGameVersionRange'),
+      (loaderVersionRangeIsPresent, 'supportedLoaderVersionRange'),
+      (sdkVersionRangeIsPresent, 'supportedSdkVersionRange'),
+    ]) {
+      if (!requirement.$1) {
+        issues.add(
+          LauncherIssue(
+            severity: IssueSeverity.error,
+            message: '${requirement.$2} is required for publishable manifests.',
+          ),
+        );
+      }
+    }
   }
 
   void _validateDependencies(List<LauncherIssue> issues) {
     final seenDependencies = <String>{};
-    for (final dependency in dependencies) {
-      if (dependency.id.trim().isEmpty) {
+    for (final dependency in allDependencies) {
+      if (!ModManifest.isValidId(dependency.id)) {
         issues.add(
-          const LauncherIssue(
+          LauncherIssue(
             severity: IssueSeverity.error,
-            message: 'dependencies entries must include id.',
+            subjectId: dependency.id,
+            message:
+                'dependencies id ${dependency.id} must use the safe mod id format.',
           ),
         );
       } else if (!seenDependencies.add(dependency.id.toLowerCase())) {
@@ -375,13 +391,35 @@ class ModManifest {
 
   void _validateConflicts(List<LauncherIssue> issues) {
     for (final conflict in conflicts) {
-      if (conflict.id.trim().isEmpty) {
+      if (!ModManifest.isValidId(conflict.id)) {
         issues.add(
-          const LauncherIssue(
+          LauncherIssue(
             severity: IssueSeverity.error,
-            message: 'conflicts entries must include id.',
+            subjectId: conflict.id,
+            message:
+                'conflicts id ${conflict.id} must use the safe mod id format.',
           ),
         );
+      }
+    }
+  }
+
+  void _validateOrderHints(List<LauncherIssue> issues) {
+    for (final hint in <(String, List<String>)>[
+      ('loadAfter', loadAfter),
+      ('loadBefore', loadBefore),
+    ]) {
+      for (final dependencyId in hint.$2) {
+        if (!ModManifest.isValidId(dependencyId)) {
+          issues.add(
+            LauncherIssue(
+              severity: IssueSeverity.error,
+              subjectId: dependencyId,
+              message:
+                  '${hint.$1} id $dependencyId must use the safe mod id format.',
+            ),
+          );
+        }
       }
     }
   }
@@ -389,18 +427,18 @@ class ModManifest {
   void _validateApiAssemblies(List<LauncherIssue> issues) {
     final seen = <String>{};
     for (final assembly in apiAssemblies) {
-      if (assembly.trim().isEmpty || _isUnsafeRelativePath(assembly)) {
+      if (_portableManifestPathCollisionKey(assembly) == null ||
+          !assembly.toLowerCase().endsWith('.dll')) {
         issues.add(
           const LauncherIssue(
             severity: IssueSeverity.error,
-            message:
-                'apiAssemblies entries must be safe relative package paths.',
+            message: 'apiAssemblies entries must be safe portable .dll paths.',
           ),
         );
       } else if (!seen.add(assembly.toLowerCase())) {
         issues.add(
           LauncherIssue(
-            severity: IssueSeverity.warning,
+            severity: IssueSeverity.error,
             message: 'apiAssemblies contains duplicate path $assembly.',
           ),
         );
@@ -408,13 +446,15 @@ class ModManifest {
     }
   }
 
-  void _validateMigrationHints(List<LauncherIssue> issues) {
-    for (final path in [...legacyFolders.keys, ...legacyFiles.keys]) {
-      if (path.trim().isEmpty || _isUnsafeRelativePath(path)) {
+  void _validateUnsupportedAliases(List<LauncherIssue> issues) {
+    for (final field in _unsupportedManifestFields) {
+      if (extraFields.containsKey(field)) {
         issues.add(
-          const LauncherIssue(
-            severity: IssueSeverity.warning,
-            message: 'legacy migration hints should use relative paths.',
+          LauncherIssue(
+            severity: IssueSeverity.error,
+            subjectId: id,
+            message:
+                '$field is not supported by the TopiaForge manifest contract.',
           ),
         );
       }
@@ -439,68 +479,18 @@ class ModManifest {
     }
   }
 
-  void _validatePermissions(List<LauncherIssue> issues) {
-    for (final permission in permissions) {
-      if (!_knownPermissions.contains(permission)) {
+  void _validateUnknownFields(List<LauncherIssue> issues) {
+    for (final field in extraFields.keys) {
+      if (!_unsupportedManifestFields.contains(field) &&
+          !RegExp(r'^x-[A-Za-z0-9_.-]{1,64}$').hasMatch(field)) {
         issues.add(
           LauncherIssue(
-            severity: IssueSeverity.warning,
+            severity: IssueSeverity.error,
             subjectId: id,
-            message: 'permissions contains unknown value $permission.',
+            message: 'Unknown manifest field $field; extensions must use x-*.',
           ),
         );
       }
     }
   }
-}
-
-const _knownPermissions = {
-  'ai',
-  'asset-bundles',
-  'filesystem',
-  'filesystem-watch',
-  'harmony-patch',
-  'hud',
-  'input',
-  'navigation',
-  'network',
-  'particles',
-  'physics',
-  'physics-settings',
-  'player-control',
-  'prompt-overrides',
-  'quality-settings',
-  'render-settings',
-  'robot-spawning',
-  'scene-management',
-  'time',
-  'ugc-livesync',
-  'world-service',
-};
-
-List<ModDependency> _vpmDependencyList(Object? value) {
-  if (value is! Map) {
-    return const [];
-  }
-
-  return value.entries
-      .map(
-        (entry) => ModDependency(
-          id: entry.key.toString(),
-          versionRange: VersionRange.parse(entry.value?.toString()),
-        ),
-      )
-      .toList(growable: false);
-}
-
-List<GamemodeDefinition> _gamemodeList(Object? value) {
-  if (value is! List) {
-    return const [];
-  }
-
-  return value
-      .whereType<Map>()
-      .map((item) => GamemodeDefinition.fromJson(_objectMap(item)))
-      .where((item) => item.id.trim().isNotEmpty && item.name.trim().isNotEmpty)
-      .toList(growable: false);
 }

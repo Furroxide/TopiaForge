@@ -1,0 +1,10 @@
+{
+  "name": "TopiaForge.WorldCompanion.Editor",
+  "rootNamespace": "TopiaForge.WorldCompanion.Editor",
+  "references": [
+    "Unity.RenderPipelines.HighDefinition.Runtime"
+  ],
+  "includePlatforms": ["Editor"],
+  "excludePlatforms": [],
+  "autoReferenced": true
+}

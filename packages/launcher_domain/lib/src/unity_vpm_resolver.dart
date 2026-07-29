@@ -19,14 +19,26 @@ class UnityVpmResolver {
     // earlier dependent's range.
     final ranges = <String, List<String>>{};
     final conflicted = <String>{};
+    final packages = _validatedCatalogPackages(catalog, issues);
+    _validateLockedManifestState(manifest, issues);
 
-    final queue = <MapEntry<String, String>>[...manifest.dependencies.entries];
+    final queue = <MapEntry<String, String>>[];
+    for (final entry in manifest.dependencies.entries) {
+      if (!VpmPackageId.isValid(entry.key) || entry.value.trim().isEmpty) {
+        _addIssue(
+          issues,
+          'VPM manifest contains an invalid dependency: "${entry.key}".',
+        );
+        continue;
+      }
+      queue.add(entry);
+    }
     while (queue.isNotEmpty) {
       final entry = queue.removeAt(0);
       final id = entry.key;
       final range = entry.value;
 
-      final versions = catalog.packages[id];
+      final versions = packages[id];
       if (versions == null || versions.isEmpty) {
         _addIssue(
           issues,
@@ -77,6 +89,68 @@ class UnityVpmResolver {
       packages: _topoSort(resolved, graph, issues),
       issues: issues,
     );
+  }
+
+  Map<String, Map<String, VpmPackageInfo>> _validatedCatalogPackages(
+    VpmListing catalog,
+    List<LauncherIssue> issues,
+  ) {
+    final valid = <String, Map<String, VpmPackageInfo>>{};
+    for (final packageEntry in catalog.packages.entries) {
+      final id = packageEntry.key;
+      if (!VpmPackageId.isValid(id)) {
+        _addIssue(issues, 'VPM listing contains an invalid package id: "$id".');
+        continue;
+      }
+      final versions = <String, VpmPackageInfo>{};
+      for (final versionEntry in packageEntry.value.entries) {
+        final info = versionEntry.value;
+        final invalidDependencies = info.vpmDependencies.entries.where(
+          (dependency) =>
+              !VpmPackageId.isValid(dependency.key) ||
+              dependency.value.trim().isEmpty,
+        );
+        if (!VpmPackageId.isValid(info.name) ||
+            info.name != id ||
+            invalidDependencies.isNotEmpty) {
+          _addIssue(
+            issues,
+            'VPM listing drops invalid package version '
+            '"$id@${versionEntry.key}".',
+          );
+          continue;
+        }
+        versions[versionEntry.key] = info;
+      }
+      if (versions.isNotEmpty) {
+        valid[id] = versions;
+      }
+    }
+    return valid;
+  }
+
+  void _validateLockedManifestState(
+    VpmManifest manifest,
+    List<LauncherIssue> issues,
+  ) {
+    for (final entry in manifest.locked.entries) {
+      if (!VpmPackageId.isValid(entry.key)) {
+        _addIssue(
+          issues,
+          'VPM manifest contains an invalid locked package id: "${entry.key}".',
+        );
+      }
+      for (final dependency in entry.value.dependencies.entries) {
+        if (!VpmPackageId.isValid(dependency.key) ||
+            dependency.value.trim().isEmpty) {
+          _addIssue(
+            issues,
+            'VPM manifest locked package "${entry.key}" contains an invalid '
+            'dependency: "${dependency.key}".',
+          );
+        }
+      }
+    }
   }
 
   // Highest version satisfying EVERY accumulated range (the constraint intersection).
@@ -174,14 +248,13 @@ bool vpmRangeAllows(String range, String version) {
 }
 
 SemanticVersion _caretMax(SemanticVersion base) {
-  if (base.major > 0) {
-    return SemanticVersion(base.major + 1, 0, 0);
+  if (base.majorNumber.isPositive) {
+    return base.incrementMajor();
   }
-  if (base.minor > 0) {
-    return SemanticVersion(0, base.minor + 1, 0);
+  if (base.minorNumber.isPositive) {
+    return base.incrementMinor();
   }
-  return SemanticVersion(0, 0, base.patch + 1);
+  return base.incrementPatch();
 }
 
-SemanticVersion _tildeMax(SemanticVersion base) =>
-    SemanticVersion(base.major, base.minor + 1, 0);
+SemanticVersion _tildeMax(SemanticVersion base) => base.incrementMinor();

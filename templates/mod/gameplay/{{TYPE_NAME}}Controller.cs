@@ -1,36 +1,61 @@
-using System;
-using Robotopia.Mods;
+using TopiaForge.Mods;
 
 namespace {{ASSEMBLY_NAME}}
 {
-    /// <summary>
-    /// Per-frame gameplay logic, kept out of the mod entry class so it is easy to test and dispose. Read input,
-    /// drive physics/HUD state here.
-    /// </summary>
-    internal sealed class {{TYPE_NAME}}Controller : IDisposable
+    /// <summary>Reads a named action and reports the entity under the player's center-screen aim ray.</summary>
+    internal sealed class {{TYPE_NAME}}Controller
     {
+        internal const string ScanActionName = "scan-aim-target";
+
+        private readonly IModContext context;
         private readonly {{TYPE_NAME}}Config config;
-        private readonly IModLogger logger;
+        private readonly IInputAction? scanAction;
 
-        public {{TYPE_NAME}}Controller({{TYPE_NAME}}Config config, IModLogger logger)
+        public bool IsActive => scanAction != null;
+
+        public {{TYPE_NAME}}Controller(IModContext context, {{TYPE_NAME}}Config config)
         {
+            this.context = context;
             this.config = config;
-            this.logger = logger;
+            var registered = context.Input.RegisterAction(new InputActionDefinition(
+                ScanActionName,
+                "Scan aim target",
+                new[] { InputBinding.Key(config.ActionKey) }));
+            if (!registered.TryGetValue(out scanAction))
+            {
+                context.Logger.Error(
+                    "Input registration failed (" + registered.ErrorCode + "): " + registered.ErrorMessage);
+                return;
+            }
+
+            context.Events.SubscribeUpdate(OnUpdate);
         }
 
-        public void Update(float deltaTime)
+        private void OnUpdate(float deltaTime)
         {
-            // Called every frame while the mod is loaded.
-        }
+            if (scanAction?.WasPressed != true)
+            {
+                return;
+            }
 
-        public void OnSceneLoaded(string sceneName)
-        {
-            logger.Debug("{{DISPLAY_NAME}}: scene loaded " + sceneName);
-        }
+            if (!context.LocalPlayer.TryGetSnapshot(out var player) || player == null)
+            {
+                context.Ui.ShowToast("The player camera is not available yet.", UiTone.Warning);
+                return;
+            }
 
-        public void Dispose()
-        {
-            // Release any scene objects or handlers acquired in Update.
+            if (!context.Physics.TryRaycast(
+                    player.AimRay,
+                    config.MaximumRange,
+                    out var hit) || hit == null)
+            {
+                context.Ui.ShowToast("Nothing is under the crosshair.");
+                return;
+            }
+
+            var message = "Aimed at " + hit.Entity.Name + " (" + hit.Distance.ToString("0.0") + "m).";
+            context.Logger.Info(message);
+            context.Ui.ShowToast(message, UiTone.Success);
         }
     }
 }

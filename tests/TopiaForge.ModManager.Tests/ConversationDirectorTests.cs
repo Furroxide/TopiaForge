@@ -1,0 +1,158 @@
+using System;
+using TopiaForge.Mods;
+using TopiaForge.Zombies;
+
+namespace TopiaForge.ModManager.Tests
+{
+    // Unit tests for the Unity-free Zombies JACK-IN director: decision parsing, the engine-owned persuasion meter
+    // (seed/nudge/threshold), and the request framing (hostile vs ally renegotiation). Compiled into the net8.0 test
+    // assembly via the csproj Compile include, like OverrideDecision.
+    internal static class ConversationDirectorTests
+    {
+        public static void Run()
+        {
+            TestDecisionParsing();
+            TestSeedFavoursSuggestible();
+            TestSeedNeverStartsAboveTheConvertLine();
+            TestNudgeMovesAndClamps();
+            TestConvertThresholdScalesWithResistance();
+            TestRequestFramingHostileVsAlly();
+            Console.WriteLine("All conversation-director tests passed.");
+        }
+
+        private static void TestDecisionParsing()
+        {
+            Assert(ConversationDirector.Parse("CONVERT") == ConversationDecision.Convert, "CONVERT parses");
+            Assert(ConversationDirector.Parse(" stand_down ") == ConversationDecision.StandDown, "stand_down parses, trims/cases");
+            Assert(ConversationDirector.Parse("flee") == ConversationDecision.Flee, "flee parses");
+            Assert(ConversationDirector.Parse("REFUSE") == ConversationDecision.Refuse, "refuse parses");
+            Assert(ConversationDirector.Parse("banana") == ConversationDecision.Unknown, "junk → Unknown");
+            Assert(ConversationDirector.Parse(null) == ConversationDecision.Unknown, "null → Unknown");
+        }
+
+        private static void TestSeedFavoursSuggestible()
+        {
+            var tuning = Tuning();
+            // Suggestible, disloyal, low resistance → higher starting disposition.
+            var open = new RobotMind(0.9f, 0.05f, 0.2f, 0f);
+            // Loyal, low suggestibility → near zero.
+            var stubborn = new RobotMind(0.1f, 0.9f, 0.2f, 0f);
+            var openSeed = ConversationDirector.SeedDisposition(open, 0f, tuning);
+            var stubbornSeed = ConversationDirector.SeedDisposition(stubborn, 0f, tuning);
+            Assert(openSeed > stubbornSeed, "a suggestible, disloyal robot should seed more persuadable");
+            Assert(openSeed >= 0f && openSeed <= 1f && stubbornSeed >= 0f && stubbornSeed <= 1f, "seed stays in 0..1");
+            Assert(openSeed < ConversationDirector.ConvertThreshold(0f, tuning),
+                "even the most persuadable robot must start below its own CONVERT line");
+        }
+
+        private static void TestSeedNeverStartsAboveTheConvertLine()
+        {
+            // The engine, not the language model, owns whether a CONVERT lands. That guarantee is only real if the
+            // disposition meter starts below the line for every robot the game can actually produce — otherwise the
+            // first CONVERT the model emits converts a robot the player never persuaded.
+            var config = new ZombiesConfig();
+            config.Normalize();
+            var roster = new ZombieRoster(config);
+            var tuning = new ConversationTuning(
+                config.ConvSeedBias,
+                config.ConvertThreshold,
+                config.ConvertResistanceWeight,
+                config.ConvertNudge,
+                config.StandDownNudge,
+                config.FleeNudge,
+                config.RefuseNudge,
+                config.EnrageDispositionFloor);
+
+            var kinds = new[] { ZombieKind.Grunt, ZombieKind.Sprinter, ZombieKind.Brute, ZombieKind.Runt };
+            var checkedCombinations = 0;
+            foreach (var kind in kinds)
+            {
+                var archetype = roster.Get(kind);
+                var threshold = ConversationDirector.ConvertThreshold(archetype.BaseResistance, tuning);
+                for (var wave = 1; wave <= 20; wave++)
+                {
+                    // Sweep the corners of every configured mind range rather than sampling, so this cannot pass by
+                    // luck of the seed.
+                    foreach (var suggestibility in new[] { config.SuggestibilityMin, config.SuggestibilityMax })
+                    {
+                        foreach (var loyalty in new[] { config.LoyaltyMin, config.LoyaltyMax })
+                        {
+                            foreach (var bias in new[] { -config.BiasAmplitude, config.BiasAmplitude })
+                            {
+                                var corruption = config.CorruptionBase + (config.CorruptionPerWave * wave);
+                                var mind = new RobotMind(suggestibility, loyalty, corruption, bias);
+                                var seed = ConversationDirector.SeedDisposition(
+                                    mind,
+                                    archetype.BaseResistance,
+                                    tuning);
+                                Assert(seed >= 0f && seed <= 1f, "seed stays in 0..1 for " + kind);
+                                Assert(seed < threshold,
+                                    "a " + kind + " on wave " + wave
+                                    + " must start below its CONVERT line, but seeded " + seed
+                                    + " against a threshold of " + threshold);
+                                checkedCombinations++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            Assert(checkedCombinations == 4 * 20 * 8, "the sweep must cover every archetype/wave/mind corner");
+        }
+
+        private static void TestNudgeMovesAndClamps()
+        {
+            var tuning = Tuning();
+            Assert(ConversationDirector.Nudge(0.5f, ConversationDecision.Convert, tuning) > 0.5f, "CONVERT raises disposition");
+            Assert(ConversationDirector.Nudge(0.5f, ConversationDecision.Refuse, tuning) < 0.5f, "REFUSE lowers disposition");
+            Assert(ConversationDirector.Nudge(0.99f, ConversationDecision.Convert, tuning) <= 1f, "nudge clamps at 1");
+            Assert(ConversationDirector.Nudge(0.01f, ConversationDecision.Refuse, tuning) >= 0f, "nudge clamps at 0");
+            Assert(Math.Abs(ConversationDirector.Nudge(0.5f, ConversationDecision.Unknown, tuning) - 0.5f) < 1e-6f, "Unknown leaves disposition unchanged");
+        }
+
+        private static void TestConvertThresholdScalesWithResistance()
+        {
+            var tuning = Tuning();
+            var easy = ConversationDirector.ConvertThreshold(0.15f, tuning); // Runt
+            var hard = ConversationDirector.ConvertThreshold(0.70f, tuning); // Brute
+            Assert(hard > easy, "a more resistant archetype needs a higher persuasion to convert");
+            Assert(hard <= 0.97f, "the threshold is capped below 1 so conversion is never impossible");
+        }
+
+        private static void TestRequestFramingHostileVsAlly()
+        {
+            var mind = new RobotMind(0.4f, 0.4f, 0.3f, 0f);
+            var hostile = ConversationDirector.BuildRequest("Brute", mind, 3, 0.8f, recentlyShot: true, isAlly: false, loyalty: 0f, temperature: 0.7f, maxTurns: 3);
+            Assert(hostile.DecisionOptions.Count == 4, "four decision options");
+            Assert(hostile.SystemFrame.Contains("infected"), "hostile frame casts the robot as infected");
+            Assert(hostile.GroundTruthFacts != null && hostile.GroundTruthFacts.ContainsKey("the-human-just-shot-you"), "ground truth carries the just-shot fact");
+            Assert(hostile.GroundTruthFacts!["the-human-just-shot-you"] == "yes", "recentlyShot is injected as ground truth");
+
+            var ally = ConversationDirector.BuildRequest("Grunt", mind, 5, 1f, recentlyShot: false, isAlly: true, loyalty: 0.2f, temperature: 0.7f, maxTurns: 3);
+            Assert(ally.SystemFrame.Contains("switched sides") || ally.SystemFrame.Contains("FOR a lone human"), "ally frame is a loyalty check-in");
+            Assert(ally.GroundTruthFacts != null && ally.GroundTruthFacts.ContainsKey("your-loyalty"), "ally ground truth carries loyalty");
+            Assert(ally.Usage == "zombies-renegotiate", "ally usage label distinguishes a renegotiation");
+        }
+
+        private static ConversationTuning Tuning()
+        {
+            return new ConversationTuning(
+                seedBias: 0.35f,
+                convertThreshold: 0.72f,
+                resistanceWeight: 0.3f,
+                convertNudge: 0.3f,
+                standDownNudge: 0.16f,
+                fleeNudge: 0.06f,
+                refuseNudge: -0.14f,
+                enrageFloor: 0.12f);
+        }
+
+        private static void Assert(bool condition, string message)
+        {
+            if (!condition)
+            {
+                throw new InvalidOperationException(message);
+            }
+        }
+    }
+}

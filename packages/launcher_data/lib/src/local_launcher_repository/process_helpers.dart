@@ -11,12 +11,8 @@ extension _ProcessHelpers on LocalLauncherRepository {
       return const LaunchResult(
         started: false,
         message:
-            'Robotopia runtime is missing or stale. Repair Runtime before launch.',
+            'TopiaForge runtime is missing or stale. Repair Runtime before launch.',
       );
-    }
-
-    if (profile.launchSettings.safeMode) {
-      await disableAllMods(refreshed);
     }
 
     final layout = GameLayout.resolve(refreshed.path);
@@ -27,62 +23,90 @@ extension _ProcessHelpers on LocalLauncherRepository {
       );
     }
 
-    if (layout.kind == GameInstallLayout.linuxProton) {
-      return _startGameProton(layout, profile, message: message);
+    ProfileLaunchConfiguration configuration;
+    try {
+      configuration = ProfileLaunchConfiguration.fromProfile(profile);
+    } on FormatException catch (error) {
+      return LaunchResult(started: false, message: error.message.toString());
     }
 
-    final process = await Process.start(
-      layout.executablePath,
-      profile.launchSettings.extraArguments,
-      workingDirectory: layout.gameRoot,
-      // On macOS this injects the doorstop DYLD variables; empty elsewhere.
-      environment: layout.launchEnvironment(),
-      mode: ProcessStartMode.detached,
+    final selectionError = await _profileSelectionError(
+      refreshed,
+      configuration,
     );
-    await _appendLauncherLog('$message pid=${process.pid}');
-    return LaunchResult(
-      started: true,
-      message: message,
-      processId: process.pid,
-    );
-  }
+    if (selectionError != null) {
+      return LaunchResult(started: false, message: selectionError);
+    }
 
-  /// Proton/Wine installs: the launcher cannot guess the right Proton prefix
-  /// or runtime, so by default it defers to the user's own game launcher. A
-  /// `wineCommand` launcher setting (e.g. `wine` or a proton wrapper script)
-  /// opts into direct launching.
-  Future<LaunchResult> _startGameProton(
-    GameLayout layout,
-    LauncherProfile profile, {
-    required String message,
-  }) async {
-    final settings = await _loadSettings();
-    final wineCommand = (settings['wineCommand'] as String?)?.trim() ?? '';
-    if (wineCommand.isEmpty) {
+    var executable = layout.executablePath;
+    var arguments = profile.launchSettings.extraArguments;
+    var logSuffix = '';
+    if (layout.kind == GameInstallLayout.linuxProton) {
+      final settings = await _loadSettings();
+      final wineCommand = (settings['wineCommand'] as String?)?.trim() ?? '';
+      if (wineCommand.isEmpty) {
+        return const LaunchResult(
+          started: false,
+          message:
+              'Mods are installed. Launch Robotopia through your usual '
+              'launcher (Tomato Cake/Steam/Proton) with '
+              'WINEDLLOVERRIDES="winhttp=n,b" so the mod loader injects. '
+              'Alternatively set "wineCommand" in the launcher settings to '
+              'launch directly.',
+        );
+      }
+      executable = wineCommand;
+      arguments = [
+        layout.executablePath,
+        ...profile.launchSettings.extraArguments,
+      ];
+      logSuffix = ' via configured Wine/Proton command';
+    }
+
+    final launchFile = await _writeProfileLaunchConfiguration(
+      refreshed,
+      configuration,
+    );
+    late final Map<String, String> environment;
+    try {
+      environment = _profileLaunchEnvironment(layout, profile, launchFile.path);
+    } on Object catch (error) {
+      await _deleteProfileLaunchConfiguration(launchFile);
+      return LaunchResult(started: false, message: error.toString());
+    }
+
+    final int processId;
+    try {
+      processId = await _gameProcessStarter(
+        GameProcessRequest(
+          executable: executable,
+          arguments: arguments,
+          workingDirectory: layout.gameRoot,
+          environment: environment,
+        ),
+      );
+    } on Object catch (error) {
+      await _deleteProfileLaunchConfiguration(launchFile);
+      try {
+        await _appendLauncherLogBestEffort(
+          'Game process start failed (${error.runtimeType}).',
+        );
+      } on Object {
+        // Launch failure is already represented by the returned result.
+      }
       return const LaunchResult(
         started: false,
-        message:
-            'Mods are installed. Launch Robotopia through your usual '
-            'launcher (Tomato Cake/Steam/Proton) with '
-            'WINEDLLOVERRIDES="winhttp=n,b" so the mod loader injects. '
-            'Alternatively set "wineCommand" in the launcher settings to '
-            'launch directly.',
+        message: 'TopiaForge could not be started. No mod state was changed.',
       );
     }
 
-    final process = await Process.start(
-      wineCommand,
-      [layout.executablePath, ...profile.launchSettings.extraArguments],
-      workingDirectory: layout.gameRoot,
-      environment: layout.launchEnvironment(),
-      mode: ProcessStartMode.detached,
-    );
-    await _appendLauncherLog('$message (via $wineCommand) pid=${process.pid}');
-    return LaunchResult(
-      started: true,
-      message: message,
-      processId: process.pid,
-    );
+    try {
+      await _appendLauncherLogBestEffort('$message$logSuffix pid=$processId');
+    } on Object {
+      // The detached process owns the one-shot file now; logging must not turn
+      // a successful start into a failure or delete its launch configuration.
+    }
+    return LaunchResult(started: true, message: message, processId: processId);
   }
 
   Future<bool> _stopGameIfRunning(GameInstall install) async {
@@ -90,28 +114,28 @@ extension _ProcessHelpers on LocalLauncherRepository {
       return _stopGameUnix(install);
     }
 
-    final result = await Process.run('powershell.exe', [
+    final result = await runBoundedProcess('powershell.exe', [
       '-NoProfile',
       '-NonInteractive',
       '-ExecutionPolicy',
       'Bypass',
       '-Command',
-      _stopRobotopiaScript,
+      _stopTopiaForgeScript,
       install.executablePath,
-    ]);
+    ], timeout: const Duration(seconds: 15));
 
     if (result.exitCode == 0) {
-      await _appendLauncherLog('Stopped Robotopia before restart.');
+      await _appendLauncherLogBestEffort('Stopped TopiaForge before restart.');
       return true;
     }
     if (result.exitCode == 2) {
-      await _appendLauncherLog('No running Robotopia process found.');
+      await _appendLauncherLogBestEffort('No running Robotopia process found.');
       return false;
     }
 
     final detail = '${result.stdout}\n${result.stderr}'.trim();
     throw StateError(
-      detail.isEmpty ? 'Unable to stop Robotopia before restart.' : detail,
+      detail.isEmpty ? 'Unable to stop TopiaForge before restart.' : detail,
     );
   }
 
@@ -121,44 +145,55 @@ extension _ProcessHelpers on LocalLauncherRepository {
   /// when a process refused to exit — the same contract as the Windows path.
   Future<bool> _stopGameUnix(GameInstall install) async {
     final layout = GameLayout.resolve(install.path);
-    // Wine reports the exe with a Windows-style command line, so match the
-    // basename there; on macOS the full bundle-executable path is unambiguous.
-    final pattern = layout?.kind == GameInstallLayout.macAppBundle
-        ? layout!.executablePath
-        : 'Robotopia.exe';
-
-    Future<List<String>> matchingPids() async {
-      final result = await Process.run('pgrep', ['-f', pattern]);
-      if (result.exitCode != 0) {
-        return const [];
-      }
-      return (result.stdout as String)
-          .split('\n')
-          .map((line) => line.trim())
-          .where((line) => line.isNotEmpty)
-          .toList();
+    if (layout == null) {
+      throw StateError('Unable to resolve the Robotopia executable to stop.');
     }
+
+    Future<List<int>> matchingPids() =>
+        findUnixGameProcessIds(layout.executablePath);
 
     final pids = await matchingPids();
     if (pids.isEmpty) {
-      await _appendLauncherLog('No running Robotopia process found.');
+      await _appendLauncherLogBestEffort('No running Robotopia process found.');
       return false;
     }
 
-    await Process.run('kill', pids);
+    final terminated = await runBoundedProcess(
+      'kill',
+      ['--', ...pids.map((processId) => '$processId')],
+      timeout: const Duration(seconds: 5),
+      maxStdoutBytes: 64 * 1024,
+      maxStderrBytes: 64 * 1024,
+    );
+    if (terminated.exitCode != 0) {
+      throw StateError('Unable to stop the matching Robotopia process.');
+    }
     final deadline = DateTime.now().add(const Duration(seconds: 5));
     while (DateTime.now().isBefore(deadline)) {
       await Future<void>.delayed(const Duration(milliseconds: 200));
       if ((await matchingPids()).isEmpty) {
-        await _appendLauncherLog('Stopped Robotopia before restart.');
+        await _appendLauncherLogBestEffort(
+          'Stopped TopiaForge before restart.',
+        );
         return true;
       }
     }
-    throw StateError('Robotopia did not exit before the restart timeout.');
+    throw StateError('TopiaForge did not exit before the restart timeout.');
   }
 }
 
-const String _stopRobotopiaScript = r'''
+Future<int> _startDetachedGameProcess(GameProcessRequest request) async {
+  final process = await Process.start(
+    request.executable,
+    request.arguments,
+    workingDirectory: request.workingDirectory,
+    environment: request.environment,
+    mode: ProcessStartMode.detached,
+  );
+  return process.pid;
+}
+
+const String _stopTopiaForgeScript = r'''
 param([string]$TargetPath)
 
 $target = [System.IO.Path]::GetFullPath($TargetPath)
@@ -193,7 +228,7 @@ do {
 } while ($remaining.Count -gt 0 -and (Get-Date) -lt $deadline)
 
 if ($remaining.Count -gt 0) {
-  Write-Error "Robotopia did not exit before the restart timeout."
+  Write-Error "TopiaForge did not exit before the restart timeout."
   exit 4
 }
 

@@ -1,97 +1,87 @@
-using Robotopia.Mods;
+using TopiaForge.Mods;
 
 namespace {{ASSEMBLY_NAME}}
 {
-    /// <summary>
-    /// Registers the "{{DISPLAY_NAME}}" gamemode with the Worlds service so it appears in the game's
-    /// level-select menu, and runs its session loop while a session is active. Requires the robotopia.worlds
-    /// and robotopia.robotkit framework mods (declared in robotopia.mod.json).
-    /// </summary>
-    public sealed class {{TYPE_NAME}}Mod : IRobotopiaMod
+    /// <summary>Registers a lifetime-owned gamemode and runs one controller per active session.</summary>
+    public sealed class {{TYPE_NAME}}Mod : TopiaForgeMod
     {
         public const string GamemodeId = "{{MOD_ID}}.mode";
 
-        private IModContext? context;
-        private IWorldGamemodeService? worlds;
-        private WorldSession? session;
+        private GamemodeHost<{{TYPE_NAME}}Session>? host;
 
-        public void OnLoad(IModContext context)
+        protected override void OnLoad()
+        {
+            // GamemodeHost owns registration rollback, the session subscription and its lifetime-deferred
+            // unsubscribe, replay of a session that is already running, one-controller-per-session, and teardown.
+            var hosted = GamemodeHost<{{TYPE_NAME}}Session>.Create(
+                Context,
+                Context.RequireExtension<IWorldGamemodeService>(),
+                GamemodeId,
+                session => new {{TYPE_NAME}}Session(Context, session),
+                new GamemodeDefinition(
+                    GamemodeId,
+                    "{{DISPLAY_NAME}}",
+                    "Custom gamemode scaffolded from the gamemode template."),
+                new GamemodeMenuEntry(
+                    "{{MOD_ID}}.menu",
+                    "{{DISPLAY_NAME}}",
+                    "Custom gamemode scaffolded from the gamemode template.",
+                    GamemodeId,
+                    WellKnownWorldIds.OpenSandboxWorld));
+            if (!hosted.TryGetValue(out var gamemodeHost))
+            {
+                Context.Logger.Warn("{{DISPLAY_NAME}} could not register: " + hosted.ErrorMessage);
+                return;
+            }
+
+            host = gamemodeHost;
+
+            // Actions are re-registered for every session, so this is declared once here rather than per session.
+            host.AddPauseAction(new WorldPauseAction(
+                "{{MOD_ID}}.restart",
+                "RESTART ROUND",
+                () => host?.Controller?.Restart(),
+                destructive: true));
+
+            Context.Logger.Info("{{DISPLAY_NAME}} gamemode registered.");
+        }
+    }
+
+    /// <summary>Runs one round. Created when a session starts, disposed when it ends.</summary>
+    internal sealed class {{TYPE_NAME}}Session : System.IDisposable
+    {
+        private readonly IModContext context;
+        private readonly WorldSession session;
+        private readonly System.IDisposable updateSubscription;
+
+        public {{TYPE_NAME}}Session(IModContext context, WorldSession session)
         {
             this.context = context;
-            worlds = context.GetService<IWorldGamemodeService>();
-            if (worlds == null)
-            {
-                context.Logger.Warn("Robotopia Worlds service is not available; {{DISPLAY_NAME}} cannot register its gamemode.");
-                return;
-            }
+            this.session = session;
 
-            worlds.RegisterGamemode(new GamemodeDefinition(
-                GamemodeId,
-                "{{DISPLAY_NAME}}",
-                "Custom gamemode scaffolded from the gamemode template."));
-            worlds.RegisterMenuEntry(new GamemodeMenuEntry(
-                "{{MOD_ID}}.menu",
-                "{{DISPLAY_NAME}}",
-                "Custom gamemode scaffolded from the gamemode template.",
-                GamemodeId,
-                worldId: string.Empty));
-
-            worlds.SessionChanged += OnSessionChanged;
-            worlds.SessionEnded += OnSessionEnded;
-            context.Update += OnUpdate;
-            context.Logger.Info("{{DISPLAY_NAME}} gamemode registered.");
+            // Subscribing here means the loop only runs during a session, and stops when this object is disposed.
+            updateSubscription = context.Events.SubscribeUpdate(OnUpdate);
+            context.Logger.Info("{{DISPLAY_NAME}} session started in world " + session.WorldId + ".");
         }
 
-        public void OnUnload()
+        public OperationResult<string> Restart()
         {
-            if (worlds != null)
-            {
-                worlds.SessionChanged -= OnSessionChanged;
-                worlds.SessionEnded -= OnSessionEnded;
-            }
-
-            if (context != null)
-            {
-                context.Update -= OnUpdate;
-            }
-
-            session = null;
-            worlds = null;
-            context = null;
+            // Reset round state here.
+            context.Ui.ShowToast("Round restarted.", UiTone.Warning);
+            return OperationResult<string>.Success("Round restarted.");
         }
 
-        private void OnSessionChanged(WorldSession newSession)
+        public void Dispose()
         {
-            if (newSession.GamemodeId != GamemodeId)
-            {
-                session = null;
-                return;
-            }
-
-            session = newSession;
-            context?.Logger.Info("{{DISPLAY_NAME}} session started in world " + newSession.WorldId + ".");
-            // Spawn agents via context.GetService<IRobotAgentService>() and set up the round here.
-        }
-
-        private void OnSessionEnded(WorldSessionEnd end)
-        {
-            if (session == null)
-            {
-                return;
-            }
-
-            session = null;
-            context?.Logger.Info("{{DISPLAY_NAME}} session ended.");
+            updateSubscription.Dispose();
+            context.Logger.Info("{{DISPLAY_NAME}} session ended.");
         }
 
         private void OnUpdate(float deltaTime)
         {
-            if (session == null)
-            {
-                return;
-            }
-
-            // Per-frame gamemode logic (wave timers, win conditions, HUD updates) goes here.
+            // Per-round logic (wave timers, win conditions, HUD updates) goes here.
+            // To spawn or command robots, run `topiaforge mod add robotkit` — it adds the package reference and
+            // the manifest dependency together — then resolve Context.RequireExtension<IRobotAgentService>().
         }
     }
 }

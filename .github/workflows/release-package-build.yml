@@ -1,0 +1,647 @@
+name: Unsigned release package dry-run build
+
+on:
+  workflow_call:
+    inputs:
+      source_sha:
+        description: "Exact commit to package."
+        required: true
+        type: string
+      fail_on_missing_refs:
+        description: "Fail when public managed references are unavailable."
+        required: false
+        type: boolean
+        default: true
+      artifact_retention_days:
+        description: "Number of days to retain package artifacts."
+        required: false
+        type: number
+        default: 14
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build-launchers:
+    name: Build Flutter launcher artifacts
+    uses: ./.github/workflows/flutter-launcher-builds.yml
+    with:
+      artifact_retention_days: ${{ inputs.artifact_retention_days }}
+      source_sha: ${{ inputs.source_sha }}
+
+  preflight:
+    name: Verify release package inputs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      refs_available: ${{ steps.refs.outputs.available }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.source_sha }}
+          lfs: true
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: "10.0.301"
+
+      - name: Probe Robotopia managed refs
+        id: refs
+        shell: pwsh
+        env:
+          FAIL_ON_MISSING_REFS: ${{ inputs.fail_on_missing_refs }}
+          ROBOTOPIA_REFS_SOURCE: public
+          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
+        run: |
+          $failOnMissing = [System.Convert]::ToBoolean($env:FAIL_ON_MISSING_REFS)
+          try {
+            dotnet run `
+              --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj `
+              -c Release -- --probe --require-latest
+            if ($LASTEXITCODE -ne 0) {
+              throw "Managed-reference probe failed with exit code $LASTEXITCODE."
+            }
+            "available=true" >> $env:GITHUB_OUTPUT
+          }
+          catch {
+            "available=false" >> $env:GITHUB_OUTPUT
+            if ($failOnMissing) {
+              throw
+            }
+            Write-Warning "Public Robotopia refs are unavailable; skipping the release dry run. $($_.Exception.Message)"
+          }
+
+  canonical-ecosystem:
+    name: Build deterministic mod and VPM payload once
+    needs: preflight
+    if: needs.preflight.outputs.refs_available == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout exact source with LFS payloads
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.source_sha }}
+          lfs: true
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: "10.0.301"
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
+        with:
+          sdk: "3.12.2"
+
+      - name: Install archive dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y p7zip-full unzip
+
+      - name: Resolve Robotopia refs cache key
+        id: refs-cache
+        shell: pwsh
+        env:
+          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
+        run: >-
+          dotnet run
+          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
+          -c Release -- --source public --cache-key-only
+
+      - name: Cache Robotopia managed refs
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/robotopia-managed-refs-cache
+          key: ${{ steps.refs-cache.outputs.key }}
+
+      - name: Restore latest pinned Robotopia refs
+        shell: pwsh
+        env:
+          ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
+          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
+        run: >-
+          dotnet run
+          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
+          -c Release -- --source public --require-latest
+
+      - name: Validate 12 SDK packages and all 7 C# harnesses
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore TopiaForge.slnx
+          dotnet build TopiaForge.slnx -c Release --no-restore
+          bash tools/verify-csharp-release-surface.sh
+
+      - name: Build two independent ecosystem payloads
+        shell: bash
+        working-directory: apps/topiaforge_cli
+        run: |
+          set -euo pipefail
+          test "$(dotnet --version)" = 10.0.301
+          dart pub get --enforce-lockfile
+          dotnet build \
+            "$GITHUB_WORKSPACE/src/TopiaForge.ModPackageValidator/TopiaForge.ModPackageValidator.csproj" \
+            -c Release --nologo
+          for output in "$RUNNER_TEMP/ecosystem-a" "$RUNNER_TEMP/ecosystem-b"; do
+            dart run bin/topiaforge.dart pack --all --output "$output" --configuration Release
+            dart run bin/topiaforge.dart pack \
+              --project "$GITHUB_WORKSPACE/mods/TopiaForge.CreatorTools" \
+              --output "$output" --configuration Release
+            dart run bin/topiaforge.dart unity pack-packages --output "$output/vpm"
+            shopt -s nullglob
+            packages=("$output"/*.topiaforgemod)
+            vpm_packages=("$output/vpm"/*.zip)
+            multiplayer_packages=(
+              "$output"/io.github.furroxide.topiaforge.multiplayer-*.topiaforgemod
+            )
+            creator_tools_packages=(
+              "$output"/io.github.furroxide.topiaforge.creatortools-*.topiaforgemod
+            )
+            ui_gallery_packages=(
+              "$output"/io.github.furroxide.topiaforge.uigallery-*.topiaforgemod
+            )
+            test "${#packages[@]}" -eq 15
+            test "${#vpm_packages[@]}" -eq 3
+            test "${#multiplayer_packages[@]}" -eq 1
+            test "${#creator_tools_packages[@]}" -eq 1
+            test "${#ui_gallery_packages[@]}" -eq 0
+            for package in "${packages[@]}"; do
+              dart run bin/topiaforge.dart check package "$package"
+            done
+          done
+
+      - name: Prove byte-for-byte deterministic ecosystem output
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest() {
+            local root=$1 output=$2
+            (
+              cd "$root"
+              find . -type f -print0 | sort -z | xargs -0 sha256sum
+            ) >"$output"
+          }
+          manifest "$RUNNER_TEMP/ecosystem-a" "$RUNNER_TEMP/ecosystem-a.sha256"
+          manifest "$RUNNER_TEMP/ecosystem-b" "$RUNNER_TEMP/ecosystem-b.sha256"
+          diff -u "$RUNNER_TEMP/ecosystem-a.sha256" "$RUNNER_TEMP/ecosystem-b.sha256"
+          tar -cf "$RUNNER_TEMP/ecosystem-dist.tar" -C "$RUNNER_TEMP/ecosystem-a" .
+
+      - name: Reject retired names in deterministic ecosystem payloads
+        shell: bash
+        run: >-
+          python3 .github/scripts/check_topiaforge_residue.py
+          --include "$RUNNER_TEMP/ecosystem-a"
+          --include "$RUNNER_TEMP/ecosystem-b"
+
+      - name: Upload canonical ecosystem payload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ecosystem-dist
+          path: ${{ runner.temp }}/ecosystem-dist.tar
+          if-no-files-found: error
+          retention-days: ${{ inputs.artifact_retention_days }}
+
+      - name: Upload canonical registry packages
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mod-packages
+          path: ${{ runner.temp }}/ecosystem-a/*.topiaforgemod
+          if-no-files-found: error
+          retention-days: ${{ inputs.artifact_retention_days }}
+
+  macos-cli-x64:
+    name: Build macOS x64 CLI
+    needs: preflight
+    if: needs.preflight.outputs.refs_available == 'true'
+    runs-on: macos-15-intel
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
+        with:
+          sdk: "3.12.2"
+
+      - name: Build x64 CLI
+        working-directory: apps/topiaforge_cli
+        run: |
+          dart pub get --enforce-lockfile
+          dart compile exe bin/topiaforge.dart -o "$RUNNER_TEMP/topiaforge-macos-x64"
+          chmod +x "$RUNNER_TEMP/topiaforge-macos-x64"
+
+      - name: Upload x64 CLI
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: topiaforge-macos-x64
+          path: ${{ runner.temp }}/topiaforge-macos-x64
+          if-no-files-found: error
+          retention-days: ${{ inputs.artifact_retention_days }}
+
+  build:
+    name: Build ${{ matrix.platform }} package
+    needs:
+      - preflight
+      - canonical-ecosystem
+      - macos-cli-x64
+      - build-launchers
+    if: needs.preflight.outputs.refs_available == 'true'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            runner: windows-latest
+            asset: TopiaForge-windows-x64.zip
+          - platform: linux
+            runner: ubuntu-latest
+            asset: TopiaForge-linux-x64.zip
+          - platform: macos
+            runner: macos-15
+            asset: TopiaForge-macos-universal.zip
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.source_sha }}
+          lfs: true
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: "10.0.301"
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
+        with:
+          sdk: "3.12.2"
+
+      - name: Install Linux archive dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zip unzip p7zip-full
+
+      - name: Install Windows archive dependencies
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          if (!(Get-Command 7z -ErrorAction SilentlyContinue) -and
+              !(Test-Path -LiteralPath (Join-Path $env:ProgramFiles "7-Zip/7z.exe"))) {
+            choco install 7zip -y --no-progress
+          }
+
+      - name: Install macOS archive dependencies
+        if: matrix.platform == 'macos'
+        run: |
+          command -v 7z >/dev/null 2>&1 || command -v 7zz >/dev/null 2>&1 || brew install p7zip
+
+      - name: Resolve Robotopia refs cache key
+        id: refs-cache
+        shell: pwsh
+        env:
+          ROBOTOPIA_REFS_SOURCE: public
+          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
+          ROBOTOPIA_REFS_URL: ${{ secrets.ROBOTOPIA_REFS_URL }}
+          ROBOTOPIA_REFS_SHA256: ${{ secrets.ROBOTOPIA_REFS_SHA256 }}
+        run: >-
+          dotnet run
+          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
+          -c Release -- --cache-key-only
+
+      - name: Cache Robotopia managed refs
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/robotopia-managed-refs-cache
+          key: ${{ steps.refs-cache.outputs.key }}
+
+      - name: Restore Robotopia managed refs
+        shell: pwsh
+        env:
+          ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
+          ROBOTOPIA_REFS_SOURCE: public
+          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
+          ROBOTOPIA_REFS_URL: ${{ secrets.ROBOTOPIA_REFS_URL }}
+          ROBOTOPIA_REFS_SHA256: ${{ secrets.ROBOTOPIA_REFS_SHA256 }}
+          ROBOTOPIA_REFS_TOKEN: ${{ secrets.ROBOTOPIA_REFS_TOKEN }}
+        run: >-
+          dotnet run
+          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
+          -c Release -- --require-latest
+
+      - name: Download macOS x64 CLI
+        if: matrix.platform == 'macos'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: topiaforge-macos-x64
+          path: ${{ runner.temp }}/macos-x64-cli
+
+      - name: Prepare architecture-dispatched macOS CLI
+        if: matrix.platform == 'macos'
+        shell: bash
+        working-directory: apps/topiaforge_cli
+        run: |
+          set -euo pipefail
+          dart pub get --enforce-lockfile
+          cli_dir="$RUNNER_TEMP/topiaforge-macos-cli"
+          mkdir -p "$cli_dir"
+          dart compile exe bin/topiaforge.dart -o "$cli_dir/topiaforge-arm64"
+          cp "$RUNNER_TEMP/macos-x64-cli/topiaforge-macos-x64" \
+            "$cli_dir/topiaforge-x64"
+          chmod +x "$cli_dir/topiaforge-arm64" "$cli_dir/topiaforge-x64"
+          test "$(lipo -archs "$cli_dir/topiaforge-arm64")" = "arm64"
+          test "$(lipo -archs "$cli_dir/topiaforge-x64")" = "x86_64"
+          arm_help="$("$cli_dir/topiaforge-arm64" --help)"
+          x64_help="$(arch -x86_64 "$cli_dir/topiaforge-x64" --help)"
+          grep -Fq 'TopiaForge CLI' <<< "$arm_help"
+          grep -Fq 'TopiaForge CLI' <<< "$x64_help"
+
+      - name: Download launcher artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: launcher-${{ matrix.platform }}
+          path: ${{ runner.temp }}/launcher-artifact
+
+      - name: Extract launcher artifact
+        shell: bash
+        env:
+          LAUNCHER_PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          temp="${RUNNER_TEMP//\\//}"
+          mkdir -p "$temp/prebuilt-launcher"
+          if [ "$RUNNER_OS" = Windows ]; then
+            tar --force-local -xf "$temp/launcher-artifact/launcher-$LAUNCHER_PLATFORM.tar" \
+              -C "$temp/prebuilt-launcher"
+          else
+            tar -xf "$temp/launcher-artifact/launcher-$LAUNCHER_PLATFORM.tar" \
+              -C "$temp/prebuilt-launcher"
+          fi
+
+      - name: Download canonical ecosystem payload
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ecosystem-dist
+          path: ${{ runner.temp }}/ecosystem-artifact
+
+      - name: Extract canonical ecosystem payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          temp="${RUNNER_TEMP//\\//}"
+          mkdir -p "$temp/prebuilt-dist"
+          if [ "$RUNNER_OS" = Windows ]; then
+            tar --force-local -xf "$temp/ecosystem-artifact/ecosystem-dist.tar" \
+              -C "$temp/prebuilt-dist"
+          else
+            tar -xf "$temp/ecosystem-artifact/ecosystem-dist.tar" \
+              -C "$temp/prebuilt-dist"
+          fi
+
+      - name: Build release package
+        shell: bash
+        working-directory: apps/topiaforge_cli
+        run: |
+          set -euo pipefail
+          workspace="${GITHUB_WORKSPACE//\\//}"
+          temp="${RUNNER_TEMP//\\//}"
+          dart pub get --enforce-lockfile
+          args=(
+            release build-package
+            --platform "${{ matrix.platform }}"
+            --output "$workspace/release-artifacts"
+            --configuration Release
+            --prebuilt-launcher "$temp/prebuilt-launcher"
+            --prebuilt-dist "$temp/prebuilt-dist"
+          )
+          if [ "${{ matrix.platform }}" = "macos" ]; then
+            args+=(--prebuilt-cli "$temp/topiaforge-macos-cli")
+          fi
+          dart run bin/topiaforge.dart "${args[@]}"
+
+      - name: Smoke test release package
+        shell: bash
+        working-directory: apps/topiaforge_cli
+        run: |
+          set -euo pipefail
+          workspace="${GITHUB_WORKSPACE//\\//}"
+          args=(
+            release test-package
+            --platform "${{ matrix.platform }}"
+            --zip "$workspace/release-artifacts/${{ matrix.asset }}"
+            --run-embedded-cli
+          )
+          if [ "${{ matrix.platform }}" = "macos" ]; then
+            args+=(--require-mac-universal)
+          fi
+          dart run bin/topiaforge.dart "${args[@]}"
+
+      - name: Exercise signed packaged update and forced rollback
+        shell: bash
+        working-directory: packages/launcher_data
+        run: |
+          set -euo pipefail
+          workspace="${GITHUB_WORKSPACE//\\//}"
+          temp="${RUNNER_TEMP//\\//}"
+          suffix=''
+          if [ "$RUNNER_OS" = Windows ]; then
+            suffix='.exe'
+          fi
+          dart pub get
+          dart compile exe tool/update_health_fixture.dart \
+            -o "$temp/topiaforge-update-health-fixture$suffix"
+          dart compile exe tool/update_no_health_fixture.dart \
+            -o "$temp/topiaforge-update-no-health-fixture$suffix"
+          dart run tool/launcher_update_e2e.dart \
+            --platform "${{ matrix.platform }}" \
+            --archive "$workspace/release-artifacts/${{ matrix.asset }}" \
+            --health-fixture "$temp/topiaforge-update-health-fixture$suffix" \
+            --no-health-fixture "$temp/topiaforge-update-no-health-fixture$suffix"
+
+      # This is the clean-machine modder acceptance path: use the executable,
+      # templates, and local NuGet feed from the archive itself. Projects live
+      # outside the extraction and continue after the entire extraction is removed.
+      - name: Exercise all packaged mod templates
+        shell: bash
+        env:
+          TOPIAFORGE_DATA_ROOT: ${{ runner.temp }}/release-template-data
+          NUGET_PACKAGES: ${{ runner.temp }}/release-template-nuget
+          DOTNET_CLI_HOME: ${{ runner.temp }}/release-template-dotnet-home
+        run: |
+          set -euo pipefail
+          workspace="${GITHUB_WORKSPACE//\\//}"
+          archive="$workspace/release-artifacts/${{ matrix.asset }}"
+          temp="${RUNNER_TEMP//\\//}"
+          extracted="$temp/release-template-extracted"
+          projects="$temp/release-template-projects"
+          packages="$temp/release-template-packages"
+          fake_game="$temp/release-template-game"
+          installed_packages="$fake_game/BepInEx/TopiaForge/packages"
+          rm -rf "$extracted" "$projects" "$packages" "$fake_game"
+          mkdir -p "$extracted" "$projects" "$packages" \
+            "$fake_game/Robotopia_Data/Managed"
+          printf 'game fixture\n' >"$fake_game/Robotopia.exe"
+          printf 'managed fixture\n' >"$fake_game/Robotopia_Data/Managed/UnityEngine.dll"
+          printf '{"id":"2309"}\n' >"$fake_game/installed-build.json"
+          game_for_cli="$fake_game"
+          if [ "${{ matrix.platform }}" = "windows" ]; then
+            game_for_cli="$(cygpath -w "$fake_game")"
+          fi
+          export ROBOTOPIA_GAME_DIR="$game_for_cli"
+          if command -v 7z >/dev/null 2>&1; then
+            seven_zip=7z
+          elif command -v 7zz >/dev/null 2>&1; then
+            seven_zip=7zz
+          else
+            seven_zip="/c/Program Files/7-Zip/7z.exe"
+          fi
+          "$seven_zip" x -y "$archive" "-o$extracted" >/dev/null
+
+          payload="$extracted"
+          cli="$extracted/topiaforge"
+          if [ "${{ matrix.platform }}" = "windows" ]; then
+            cli="$extracted/topiaforge.exe"
+          elif [ "${{ matrix.platform }}" = "macos" ]; then
+            payload="$extracted/TopiaForge.app/Contents/Resources/TopiaForge"
+          fi
+          if [ "${{ matrix.platform }}" != "windows" ]; then
+            chmod +x "$cli"
+          fi
+          if [ "${{ matrix.platform }}" = "macos" ]; then
+            chmod +x "$payload/topiaforge" \
+              "$payload/topiaforge-arm64" "$payload/topiaforge-x64"
+          fi
+
+          templates=(minimal gameplay gamemode service ui asset world)
+          for template in "${templates[@]}"; do
+            "$cli" new mod "release.$template" --template "$template" \
+              --name "Release $template" --author "TopiaForge CI" \
+              --license MIT --dir "$projects"
+            "$cli" restore --project "$projects/release.$template"
+            "$cli" check scaffold "$projects/release.$template" \
+              --forbid "$extracted" --forbid "$workspace"
+          done
+
+          # World and gamemode scaffolds declare these runtime providers. Seed
+          # them from the canonical payload so installs remain fully offline.
+          for dependency_id in \
+            io.github.furroxide.topiaforge.robotkit \
+            io.github.furroxide.topiaforge.worlds; do
+            dependency_package=''
+            dependency_count=0
+            while IFS= read -r candidate; do
+              dependency_package="$candidate"
+              dependency_count=$((dependency_count + 1))
+            done < <(
+              find "$temp/prebuilt-dist" -type f \
+                -name "$dependency_id-*.topiaforgemod" | sort
+            )
+            test "$dependency_count" -eq 1
+            "$cli" install "$dependency_package"
+          done
+
+          for template in "${templates[@]}"; do
+            project="$projects/release.$template"
+            entry=$(find "$project" -maxdepth 1 -name '*.csproj' -print -quit)
+            test -n "$entry"
+            dotnet build "$entry" -c Release --no-restore --nologo
+            test_count=0
+            while IFS= read -r test_project; do
+              test_count=$((test_count + 1))
+              dotnet test "$test_project" -c Release --no-restore --nologo
+            done < <(find "$project" -name '*.Tests.csproj' \
+              -not -path '*/bin/*' -not -path '*/obj/*' | sort)
+            test "$test_count" -gt 0
+            package=$("$cli" pack --project "$project" \
+              --output "$packages/$template" | tail -1)
+            "$cli" check package "$package"
+            "$cli" install "$package"
+            "$cli" check scaffold "$project" \
+              --forbid "$extracted" --forbid "$workspace" \
+              --package "$package" \
+              --installed-packages "$installed_packages"
+          done
+
+          # Force a real rebuild of every entry, contract, and test project
+          # after the archive's CLI, templates, SDK feed, and tools are gone.
+          rm -rf "$extracted"
+          test ! -e "$extracted"
+          for template in "${templates[@]}"; do
+            project="$projects/release.$template"
+            project_count=0
+            while IFS= read -r project_file; do
+              project_count=$((project_count + 1))
+              dotnet build "$project_file" -c Release --no-restore \
+                --nologo -t:Rebuild
+            done < <(find "$project" -name '*.csproj' \
+              -not -path '*/bin/*' -not -path '*/obj/*' | sort)
+            test "$project_count" -gt 1
+          done
+
+      - name: Reject retired names in release package
+        shell: bash
+        run: |
+          set -euo pipefail
+          workspace="${GITHUB_WORKSPACE//\\//}"
+          python_command=python3
+          command -v "$python_command" >/dev/null 2>&1 || python_command=python
+          "$python_command" .github/scripts/check_topiaforge_residue.py \
+            --include "$workspace/release-artifacts/${{ matrix.asset }}"
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ matrix.asset }}
+          path: release-artifacts/${{ matrix.asset }}
+          if-no-files-found: error
+          retention-days: ${{ inputs.artifact_retention_days }}
+
+  required-release-build:
+    name: Required / Complete release build
+    if: always()
+    needs:
+      - build-launchers
+      - preflight
+      - canonical-ecosystem
+      - macos-cli-x64
+      - build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Enforce all applicable release jobs
+        env:
+          FAIL_ON_MISSING_REFS: ${{ inputs.fail_on_missing_refs }}
+          REFS_AVAILABLE: ${{ needs.preflight.outputs.refs_available }}
+          LAUNCHERS_RESULT: ${{ needs.build-launchers.result }}
+          PREFLIGHT_RESULT: ${{ needs.preflight.result }}
+          ECOSYSTEM_RESULT: ${{ needs.canonical-ecosystem.result }}
+          MACOS_CLI_RESULT: ${{ needs.macos-cli-x64.result }}
+          PACKAGE_RESULT: ${{ needs.build.result }}
+        run: |
+          set -euo pipefail
+          test "$LAUNCHERS_RESULT" = success
+          test "$PREFLIGHT_RESULT" = success
+          if [[ "$REFS_AVAILABLE" != true ]]; then
+            [[ "$FAIL_ON_MISSING_REFS" == false ]] || exit 1
+            echo 'Managed refs unavailable; optional package legs were skipped.'
+            exit 0
+          fi
+          test "$ECOSYSTEM_RESULT" = success
+          test "$MACOS_CLI_RESULT" = success
+          test "$PACKAGE_RESULT" = success

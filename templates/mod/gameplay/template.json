@@ -1,11 +1,11 @@
 {
   "id": "gameplay",
   "label": "Gameplay mod",
-  "description": "Input-driven gameplay feature with a per-frame controller (modeled on the Gravity Gun mod).",
+  "description": "Named-input aim scanner using safe player, physics, logging, and UI services.",
   "manifestDefaults": {
     "category": "Gameplay",
     "description": "Gameplay feature for Robotopia.",
     "tags": ["gameplay"],
-    "permissions": ["input", "physics", "hud"]
+    "capabilities": ["input", "physics", "hud"]
   }
 }

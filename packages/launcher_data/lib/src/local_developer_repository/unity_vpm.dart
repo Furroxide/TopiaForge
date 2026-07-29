@@ -3,102 +3,15 @@ part of '../local_developer_repository.dart';
 /// Unity-side VPM: the launcher-driven resolver + listing/repo management. Reads a project's
 /// `Packages/vpm-manifest.json`, resolves it against the subscribed listings (reusing the Unity-free
 /// [UnityVpmResolver]), and downloads + extracts the resolved packages into `Packages/`. Mirrors the existing
-/// `.robotopiamod` source model: the built-in listing is derived from `dist/vpm/index.json`, drift-proof.
+/// `.topiaforgemod` source model: the built-in listing is derived from `dist/vpm/index.json`, drift-proof.
 extension LocalDeveloperUnityVpm on LocalDeveloperRepository {
+  static const _vpmSourceFormatVersion = 2;
+
   File get _vpmSourcesFile => File(p.join(_dataRoot.path, 'vpm_sources.json'));
 
-  /// Native Dart port of the retired tools/pack-unity-packages.ps1: zips every
-  /// shipped `com.robotopia.*` Unity package under `templates/` (package.json
-  /// at the zip root) and writes the VPM `index.json` listing beside them.
-  /// Returns human-readable summary lines.
-  Future<List<String>> packUnityPackages({String outputDir = ''}) async {
-    final output = Directory(
-      outputDir.isEmpty
-          ? p.join(_repositoryRoot.path, 'dist', 'vpm')
-          : outputDir,
-    )..createSync(recursive: true);
-    final templatesDir = Directory(p.join(_repositoryRoot.path, 'templates'));
-    final summary = <String>[];
-    final packages = <String, Object?>{};
-
-    if (templatesDir.existsSync()) {
-      final packageJsons = templatesDir
-          .listSync(recursive: true)
-          .whereType<File>()
-          .where((file) => p.basename(file.path) == 'package.json')
-          .where(
-            (file) =>
-                !file.path.contains('Samples~') &&
-                !file.path.contains('Robotopia.UnityPackageTemplate'),
-          );
-      for (final packageJson in packageJsons) {
-        final manifest =
-            jsonDecode(packageJson.readAsStringSync()) as Map<String, Object?>;
-        final id = manifest['name'] as String?;
-        if (id == null || !id.startsWith('com.robotopia.')) {
-          continue;
-        }
-        final version = (manifest['version'] as String?) ?? '0.0.0';
-        final packageDir = packageJson.parent;
-        final safeId = id.replaceAll(RegExp('[^A-Za-z0-9_.-]'), '_');
-
-        // Exactly one current zip per id.
-        for (final stale in output.listSync().whereType<File>()) {
-          final name = p.basename(stale.path);
-          if (name.startsWith('$safeId-') && name.endsWith('.zip')) {
-            stale.deleteSync();
-          }
-        }
-
-        final zipFileName = '$safeId-$version.zip';
-        final archive = Archive();
-        for (final file
-            in packageDir.listSync(recursive: true).whereType<File>()) {
-          final relative = p.relative(file.path, from: packageDir.path);
-          archive.addFile(
-            ArchiveFile.bytes(
-              p.posix.joinAll(p.split(relative)),
-              file.readAsBytesSync(),
-            ),
-          );
-        }
-        final zipBytes = ZipEncoder().encode(archive);
-        File(p.join(output.path, zipFileName)).writeAsBytesSync(zipBytes);
-        final sha = sha256.convert(zipBytes).toString();
-
-        // The version entry is the full package.json plus url + zipSHA256
-        // (VPM listing shape).
-        final entry = <String, Object?>{
-          ...manifest,
-          'url': zipFileName,
-          'zipSHA256': sha,
-        };
-        final versions =
-            ((packages[id] ??= <String, Object?>{'versions': <String, Object?>{}})
-                    as Map<String, Object?>)['versions']
-                as Map<String, Object?>;
-        versions[version] = entry;
-        summary.add('Packed $id $version -> ${p.join(output.path, zipFileName)}');
-      }
-    }
-
-    final indexFile = File(p.join(output.path, 'index.json'));
-    indexFile.writeAsStringSync(
-      _prettyJson({
-        'name': 'QuantumWorks Local',
-        'id': 'com.robotopia.repos.local',
-        'author': 'QuantumWorks',
-        'url': 'index.json',
-        'packages': packages,
-      }),
-    );
-    summary.add('Wrote ${indexFile.path} (${packages.length} package(s)).');
-    return summary;
-  }
-
   PackageSource _defaultVpmSource() => PackageSource(
-    id: 'robotopia.vpm.local',
-    name: 'QuantumWorks (local)',
+    id: 'io.github.furroxide.topiaforge.vpm.local',
+    name: 'TopiaForge (local)',
     url: p.join(_repositoryRoot.path, 'dist', 'vpm', 'index.json'),
     builtIn: true,
   );
@@ -106,16 +19,35 @@ extension LocalDeveloperUnityVpm on LocalDeveloperRepository {
   Future<List<PackageSource>> _loadVpmSources() async {
     final defaultSource = _defaultVpmSource();
     final sources = <PackageSource>[];
+    _recoverDeveloperAtomicBackupIfMissing(_vpmSourcesFile);
     if (_vpmSourcesFile.existsSync()) {
       try {
-        final decoded = jsonDecode(await _vpmSourcesFile.readAsString());
-        final list = decoded is Map ? decoded['sources'] : null;
-        if (list is List) {
-          sources.addAll(
-            list.whereType<Map>().map(
-              (item) => PackageSource.fromJson(item.cast<String, Object?>()),
+        final decoded = jsonDecode(
+          utf8.decode(
+            await _readDeveloperFileBounded(
+              _vpmSourcesFile,
+              maxBytes: _maxDeveloperCatalogBytes,
+              label: 'VPM sources',
             ),
-          );
+          ),
+        );
+        final list =
+            decoded is Map &&
+                decoded['formatVersion'] == _vpmSourceFormatVersion
+            ? decoded['sources']
+            : null;
+        if (list is List) {
+          final parsed = list
+              .whereType<Map>()
+              .map(
+                (item) => PackageSource.fromJson(item.cast<String, Object?>()),
+              )
+              .toList();
+          if (parsed.length != list.length ||
+              parsed.any((source) => !PackageSourceId.isValid(source.id))) {
+            throw const FormatException('Invalid VPM source id.');
+          }
+          sources.addAll(parsed);
         }
       } on Object {
         // ignore a malformed file
@@ -136,24 +68,42 @@ extension LocalDeveloperUnityVpm on LocalDeveloperRepository {
   }
 
   Future<void> _saveVpmSources(List<PackageSource> sources) async {
+    if (sources.any((source) => !PackageSourceId.isValid(source.id))) {
+      throw StateError(
+        'VPM source ids must use the safe TopiaForge source id format.',
+      );
+    }
     if (!_dataRoot.existsSync()) {
       _dataRoot.createSync(recursive: true);
     }
     final json = _prettyJson({
+      'formatVersion': _vpmSourceFormatVersion,
       'sources': sources.map((source) => source.toJson()).toList(),
     });
-    final temp = File('${_vpmSourcesFile.path}.tmp');
-    await temp.writeAsString(json);
-    if (_vpmSourcesFile.existsSync()) {
-      await _vpmSourcesFile.delete();
-    }
-    await temp.rename(_vpmSourcesFile.path);
+    _writeDeveloperTextAtomic(_vpmSourcesFile, json);
   }
 
   Future<List<PackageSource>> _addVpmSource(String url, String name) async {
     final trimmed = url.trim();
     if (trimmed.isEmpty) {
       throw StateError('A VPM repository url is required.');
+    }
+    final uri = Uri.tryParse(trimmed);
+    if (!_isWindowsPathLike(trimmed) &&
+        uri != null &&
+        uri.hasScheme &&
+        uri.scheme != 'https' &&
+        uri.scheme != 'file') {
+      throw StateError(
+        'Unsupported VPM repository scheme: ${uri.scheme}. '
+        'Use HTTPS or a local path.',
+      );
+    }
+    if (uri?.scheme == 'https' &&
+        (uri!.host.isEmpty || uri.userInfo.isNotEmpty)) {
+      throw StateError(
+        'VPM repository URLs must be absolute and contain no credentials.',
+      );
     }
     final sources = await _loadVpmSources();
     // Content-derived id (sha256) avoids the collisions a 32-bit hashCode could produce — otherwise two distinct
@@ -205,34 +155,103 @@ extension LocalDeveloperUnityVpm on LocalDeveloperRepository {
 
   VpmManifest _readVpmManifest(String root) {
     final file = File(p.join(root, 'Packages', 'vpm-manifest.json'));
-    if (!file.existsSync()) {
+    _recoverDeveloperAtomicBackupIfMissing(file);
+    if (FileSystemEntity.typeSync(file.path, followLinks: false) ==
+        FileSystemEntityType.notFound) {
       return const VpmManifest();
     }
     try {
-      return VpmManifest.fromJson(
-        jsonDecode(file.readAsStringSync()) as Map<String, Object?>,
+      final bytes = _readDeveloperFileBoundedSync(
+        file,
+        maxBytes: _maxDeveloperManifestBytes,
+        label: 'Packages/vpm-manifest.json',
       );
-    } on Object {
-      return const VpmManifest();
+      final decoded = jsonDecode(utf8.decode(bytes, allowMalformed: false));
+      if (decoded is! Map<String, Object?>) {
+        throw const FormatException('root must be a JSON object');
+      }
+      _validateVpmManifestShape(decoded);
+      return VpmManifest.fromJson(decoded);
+    } on FormatException catch (error) {
+      throw StateError('Invalid Packages/vpm-manifest.json: ${error.message}.');
+    }
+  }
+
+  void _validateVpmManifestShape(Map<String, Object?> json) {
+    _validateVpmStringMap(json['dependencies'], 'dependencies');
+    final locked = json['locked'];
+    if (locked == null) {
+      return;
+    }
+    if (locked is! Map) {
+      throw const FormatException('"locked" must be a JSON object');
+    }
+    for (final entry in locked.entries) {
+      if (entry.key is! String || entry.value is! Map) {
+        throw const FormatException(
+          'each "locked" entry must be a JSON object',
+        );
+      }
+      final packageId = entry.key as String;
+      if (!VpmPackageId.isValid(packageId)) {
+        throw FormatException('invalid locked package id: "$packageId"');
+      }
+      final diagnosticId = packageId.length <= 80
+          ? packageId
+          : '${packageId.substring(0, 80)}…';
+      final value = entry.value as Map;
+      final version = value['version'];
+      if (version is! String || version.trim().isEmpty) {
+        throw FormatException(
+          'locked package "$diagnosticId" must have an exact version',
+        );
+      }
+      _validateVpmStringMap(
+        value['dependencies'],
+        'locked package "$diagnosticId" dependencies',
+      );
+    }
+  }
+
+  void _validateVpmStringMap(Object? value, String label) {
+    if (value == null) {
+      return;
+    }
+    if (value is! Map) {
+      throw FormatException('"$label" must be a JSON object');
+    }
+    for (final entry in value.entries) {
+      if (entry.key is! String ||
+          !VpmPackageId.isValid(entry.key as String) ||
+          entry.value is! String ||
+          (entry.value as String).trim().isEmpty) {
+        throw FormatException('"$label" values must be non-empty strings');
+      }
     }
   }
 
   void _writeVpmManifest(String root, VpmManifest manifest) {
     final dir = Directory(p.join(root, 'Packages'))
       ..createSync(recursive: true);
-    File(
-      p.join(dir.path, 'vpm-manifest.json'),
-    ).writeAsStringSync(_prettyJson(manifest.toJson()));
+    _writeDeveloperTextAtomic(
+      File(p.join(dir.path, 'vpm-manifest.json')),
+      _prettyJson(manifest.toJson()),
+    );
   }
 
   String _installedVpmVersion(String root, String id) {
     final file = File(p.join(root, 'Packages', id, 'package.json'));
-    if (!file.existsSync()) {
-      return '';
-    }
     try {
-      final decoded = jsonDecode(file.readAsStringSync());
-      if (decoded is Map && decoded['version'] is String) {
+      final bytes = _readDeveloperFileBoundedSync(
+        file,
+        maxBytes: _maxDeveloperManifestBytes,
+        label: 'VPM package $id package.json',
+      );
+      final decoded = jsonDecode(utf8.decode(bytes, allowMalformed: false));
+      if (decoded is Map &&
+          decoded['name'] == id &&
+          decoded['version'] is String &&
+          (decoded['version'] as String).trim().isNotEmpty) {
         return decoded['version'] as String;
       }
     } on Object {
@@ -259,52 +278,6 @@ extension LocalDeveloperUnityVpm on LocalDeveloperRepository {
       throw StateError(blocking.map((issue) => issue.message).join(' '));
     }
 
-    if (restore) {
-      // Prune packages that were managed (previously locked) but are no longer in the resolution.
-      final resolvedIds = resolution.packages.map((pkg) => pkg.id).toSet();
-      for (final lockedId in manifest.locked.keys) {
-        if (!resolvedIds.contains(lockedId)) {
-          final orphan = Directory(p.join(root, 'Packages', lockedId));
-          if (orphan.existsSync()) {
-            orphan.deleteSync(recursive: true);
-          }
-        }
-      }
-
-      for (final package in resolution.packages) {
-        if (_installedVpmVersion(root, package.id) == package.version) {
-          continue; // already at the resolved version
-        }
-        if (package.url.isEmpty) {
-          continue;
-        }
-        final bytes = await _fetchVpmBytes(package.url);
-        if (package.zipSha256.isNotEmpty) {
-          final actual = sha256.convert(bytes).toString().toLowerCase();
-          if (actual != package.zipSha256.toLowerCase()) {
-            throw StateError(
-              'SHA-256 mismatch for ${package.id} ${package.version}.',
-            );
-          }
-        }
-        final target = Directory(p.join(root, 'Packages', package.id));
-        if (target.existsSync()) {
-          target.deleteSync(recursive: true);
-        }
-        _extractVpmZip(bytes, target);
-      }
-
-      // Point the embedded resolver at the same listings so a cloned copy self-heals.
-      final repos = (await _loadVpmSources())
-          .where((s) => s.enabled)
-          .map((s) => s.url)
-          .toList();
-      File(
-        p.join(root, 'Packages', 'vpm-resolver-repos.json'),
-      ).writeAsStringSync(_prettyJson(repos));
-    }
-
-    // Write resolved (locked) versions back into the manifest.
     final resolvedVersions = {
       for (final package in resolution.packages) package.id: package.version,
     };
@@ -319,7 +292,17 @@ extension LocalDeveloperUnityVpm on LocalDeveloperRepository {
           },
         ),
     };
-    _writeVpmManifest(root, manifest.copyWith(locked: locked));
+    final updatedManifest = manifest.copyWith(locked: locked);
+    if (restore) {
+      await _restoreVpmPackages(
+        root,
+        manifest,
+        resolution.packages,
+        updatedManifest,
+      );
+    } else {
+      _writeVpmManifest(root, updatedManifest);
+    }
     return resolution.packages;
   }
 
@@ -328,14 +311,26 @@ extension LocalDeveloperUnityVpm on LocalDeveloperRepository {
     String id,
     String range,
   ) async {
+    if (!VpmPackageId.isValid(id)) {
+      throw StateError(
+        'Unity package id must use the safe TopiaForge VPM id format.',
+      );
+    }
     final root = _requireUnityProjectRoot(projectPath);
+    final manifestFile = File(p.join(root, 'Packages', 'vpm-manifest.json'));
+    final before = _DeveloperFileSnapshot.capture(manifestFile);
     final manifest = _readVpmManifest(root);
     final dependencies = {
       ...manifest.dependencies,
       id: range.trim().isEmpty ? '*' : range.trim(),
     };
-    _writeVpmManifest(root, manifest.copyWith(dependencies: dependencies));
-    return _resolveUnityProject(root, restore: true);
+    try {
+      _writeVpmManifest(root, manifest.copyWith(dependencies: dependencies));
+      return await _resolveUnityProject(root, restore: true);
+    } on Object {
+      before.restore();
+      rethrow;
+    }
   }
 
   Future<List<VpmResolvedPackage>> _removeUnityPackage(
@@ -343,20 +338,17 @@ extension LocalDeveloperUnityVpm on LocalDeveloperRepository {
     String id,
   ) async {
     final root = _requireUnityProjectRoot(projectPath);
+    final manifestFile = File(p.join(root, 'Packages', 'vpm-manifest.json'));
+    final before = _DeveloperFileSnapshot.capture(manifestFile);
     final manifest = _readVpmManifest(root);
     final dependencies = {...manifest.dependencies}..remove(id);
-    final locked = {...manifest.locked}..remove(id);
-    _writeVpmManifest(
-      root,
-      manifest.copyWith(dependencies: dependencies, locked: locked),
-    );
-    final installed = Directory(p.join(root, 'Packages', id));
-    if (installed.existsSync()) {
-      installed.deleteSync(recursive: true);
+    try {
+      _writeVpmManifest(root, manifest.copyWith(dependencies: dependencies));
+      return await _resolveUnityProject(root, restore: true);
+    } on Object {
+      before.restore();
+      rethrow;
     }
-    // Re-resolve WITH restore so a still-required transitive dependency is re-extracted (its folder was just
-    // deleted if it was the removed package) and orphaned packages are pruned.
-    return _resolveUnityProject(root, restore: true);
   }
 
   Future<List<VpmPackageInfo>> _listAvailableUnityPackages() async {
@@ -386,8 +378,9 @@ extension LocalDeveloperUnityVpm on LocalDeveloperRepository {
     return va.compareTo(vb) > 0;
   }
 
-  Future<String> _fetchVpmText(String url) async =>
-      utf8.decode(await _fetchVpmBytes(url));
+  Future<String> _fetchVpmText(String url) async => utf8.decode(
+    await _fetchVpmBytes(url, maxBytes: _maxDeveloperCatalogBytes),
+  );
 
   void _resolveVpmListingUrls(
     Map<String, Object?> listingJson,
@@ -413,117 +406,6 @@ extension LocalDeveloperUnityVpm on LocalDeveloperRepository {
         if (rawUrl is String) {
           versionValue['url'] = _resolveVpmPackageUrl(rawUrl, sourceUrl);
         }
-      }
-    }
-  }
-
-  String _resolveVpmPackageUrl(String rawUrl, String sourceUrl) {
-    final trimmed = rawUrl.trim();
-    if (trimmed.isEmpty || p.isAbsolute(trimmed)) {
-      return trimmed;
-    }
-    final uri = Uri.tryParse(trimmed);
-    if (uri != null && uri.hasScheme) {
-      return trimmed;
-    }
-
-    final source = sourceUrl.trim();
-    if (source.startsWith('http://') || source.startsWith('https://')) {
-      return Uri.parse(source).resolve(trimmed).toString();
-    }
-    final sourcePath = source.startsWith('file://')
-        ? Uri.parse(source).toFilePath(windows: Platform.isWindows)
-        : source;
-    return p.normalize(p.join(p.dirname(sourcePath), trimmed));
-  }
-
-  Future<List<int>> _fetchVpmBytes(String url) async {
-    final trimmed = url.trim();
-    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-      final client = HttpClient();
-      try {
-        final request = await client.getUrl(Uri.parse(trimmed));
-        final response = await request.close();
-        if (response.statusCode != 200) {
-          throw StateError('HTTP ${response.statusCode} for $trimmed');
-        }
-        final bytes = <int>[];
-        await for (final chunk in response) {
-          bytes.addAll(chunk);
-        }
-        return bytes;
-      } finally {
-        client.close(force: true);
-      }
-    }
-    final path = trimmed.startsWith('file://')
-        ? Uri.parse(trimmed).toFilePath()
-        : trimmed;
-    return File(path).readAsBytesSync();
-  }
-
-  // Scaffolds a com.* VPM package from templates/Robotopia.UnityPackageTemplate, stamping the chosen id + name
-  // into package.json. The package-maker (vpm-package-maker analog).
-  Future<String> _createUnityPackage(
-    String parentDirectory,
-    String id,
-    String name,
-  ) async {
-    final templateDir = Directory(
-      p.join(
-        _repositoryRoot.path,
-        'templates',
-        'Robotopia.UnityPackageTemplate',
-      ),
-    );
-    if (!templateDir.existsSync()) {
-      throw StateError(
-        'Unity package template not found at ${templateDir.path}.',
-      );
-    }
-    final root = Directory(p.join(parentDirectory, _safeName(id)));
-    if (root.existsSync()) {
-      throw StateError('Package already exists: ${root.path}');
-    }
-    _copyDirectory(templateDir, root);
-
-    // Stamp the id + displayName into package.json.
-    final packageFile = File(p.join(root.path, 'package.json'));
-    if (packageFile.existsSync()) {
-      try {
-        final json =
-            jsonDecode(packageFile.readAsStringSync()) as Map<String, Object?>;
-        json['name'] = id;
-        json['displayName'] = name.isEmpty ? id : name;
-        packageFile.writeAsStringSync(_prettyJson(json));
-      } on Object {
-        // ignore — leave the template values
-      }
-    }
-    return root.path;
-  }
-
-  void _extractVpmZip(List<int> bytes, Directory target) {
-    target.createSync(recursive: true);
-    final archive = ZipDecoder().decodeBytes(bytes);
-    for (final file in archive.files) {
-      // Reject any path-traversal segment outright (defense-in-depth alongside the isWithin check below).
-      if (p.split(file.name).any((segment) => segment == '..')) {
-        throw StateError(
-          'Zip entry has a path-traversal segment: ${file.name}',
-        );
-      }
-      final outputPath = p.normalize(p.join(target.path, file.name));
-      // Zip-slip guard: never write outside the target.
-      if (!p.isWithin(target.path, outputPath)) {
-        throw StateError('Zip entry escapes the target: ${file.name}');
-      }
-      if (file.isFile) {
-        File(outputPath)
-          ..createSync(recursive: true)
-          ..writeAsBytesSync(file.content as List<int>);
-      } else {
-        Directory(outputPath).createSync(recursive: true);
       }
     }
   }

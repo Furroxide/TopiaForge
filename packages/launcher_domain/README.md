@@ -1,39 +1,40 @@
-<!-- 
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
+# TopiaForge launcher domain
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/tools/pub/writing-package-pages). 
+Framework-independent models and planning rules shared by the TopiaForge
+launcher, CLI, and data adapters. This package owns serialized launcher
+contracts, SemVer and version-range handling, dependency resolution, profile
+launch configuration, registry models, and developer-project planning. It does
+not access the filesystem, start processes, perform network requests, or import
+Flutter.
 
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/to/develop-packages). 
--->
+## Use
 
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
-
-## Features
-
-TODO: List what your package can do. Maybe include images, gifs, or videos.
-
-## Getting started
-
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
-
-## Usage
-
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder. 
+The package is private to this repository. Use its public barrel rather than
+importing files under `lib/src`:
 
 ```dart
-const like = 'sample';
+import 'package:launcher_domain/launcher_domain.dart';
+
+final resolution = const DependencyPlanner().resolveInstalled(
+  installedMods,
+  gameVersion: '0.0.2309',
+  requireKnownGameVersion: true,
+);
+if (resolution.hasBlockingIssues) {
+  for (final issue in resolution.issues) {
+    print(issue.message);
+  }
+}
 ```
 
-## Additional information
+TopiaForge launcher build `N` maps to the canonical game version `0.0.N` when
+manifest compatibility ranges are evaluated. Missing compatibility ranges mean
+`*`; production callers should require a known game build for constrained mods.
 
-TODO: Tell users more about the package: where to find more information, how to 
-contribute to the package, how to file issues, what response they can expect 
-from the package authors, and more.
+Run `dart analyze` and `dart test` from this directory after contract changes.
+Breaking serialized changes must increment their discriminator across every
+C# and Dart consumer.
+
+See the [compatibility policy](https://docs.topiaforge.dev/reference/compatibility/)
+and [SDK overview](https://docs.topiaforge.dev/reference/sdk-overview/) for
+ecosystem-facing policy.

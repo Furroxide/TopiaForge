@@ -1,0 +1,374 @@
+# TopiaForge.Mods.RobotKit public API baseline
+# Format version: 2
+# Regenerate with: dotnet run --project tests/TopiaForge.ModManager.Tests -c Release -- --print-sdk-api-baseline topiaforge.mods.robotkit
+# Review every change. Breaking changes require explicit V1 compatibility approval.
+
+assembly TopiaForge.Mods.RobotKit, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null
+target-framework .NETStandard,Version=v2.1
+
+type public enum TopiaForge.Mods.BrainFieldType : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.BrainFieldType Boolean = 2 (Boolean)
+  field const TopiaForge.Mods.BrainFieldType Number = 1 (Number)
+  field const TopiaForge.Mods.BrainFieldType String = 0 (String)
+
+type public sealed class TopiaForge.Mods.BrainOutputField : System.Object
+  constructor .ctor(System.String name, System.String description, TopiaForge.Mods.BrainFieldType type = 0 (String), System.Collections.Generic.IReadOnlyList<System.String>? allowedStrings = null)
+  property System.Collections.Generic.IReadOnlyList<System.String>? AllowedStrings { get; }
+  property System.String Description { get; }
+  property System.String Name { get; }
+  property TopiaForge.Mods.BrainFieldType Type { get; }
+
+type public sealed class TopiaForge.Mods.BrainQueryRequest : System.Object
+  constructor .ctor(System.String prompt, System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.BrainOutputField> outputs, System.String usage = "robot-brain-query", System.String? successDescription = null, System.Single temperature = 0.7, System.Boolean useReasoning = false)
+  property System.Boolean UseReasoning { get; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.BrainOutputField> Outputs { get; }
+  property System.Single Temperature { get; }
+  property System.String Prompt { get; }
+  property System.String Usage { get; }
+  property System.String? SuccessDescription { get; }
+
+type public sealed class TopiaForge.Mods.BrainQueryResult : System.Object
+  constructor .ctor(System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> values)
+  method System.Boolean TryGet(System.String name, out System.String value)
+  property System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> Values { get; }
+
+type public interface TopiaForge.Mods.IPlayerDialogueInputService
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IVoiceCapture> BeginVoiceCapture()
+  property System.Boolean IsVoiceAvailable { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IRobotAgent : System.IDisposable, TopiaForge.Mods.IEntity
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> ApplyDamage(System.Single amount, TopiaForge.Mods.RobotDamageType type, System.String source)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Chase(TopiaForge.Mods.IEntity target)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> ConfigureMovement(TopiaForge.Mods.RobotMovementSettings settings)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Despawn()
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Kill(TopiaForge.Mods.RobotDamageType type, System.String source)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Knockback(TopiaForge.Mods.Vec3 impulse)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> MoveTo(TopiaForge.Mods.Vec3 position)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Ragdoll()
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> SetBrainMode(TopiaForge.Mods.RobotBrainMode mode)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> SetEmote(System.String emojiShortcode)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> SetInteraction(TopiaForge.Mods.RobotInteractionOptions options)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> SetName(System.String name)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> SetScale(System.Single scale)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> SetTint(TopiaForge.Mods.RobotColor color)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Stop()
+  property System.Boolean HasReachedTarget { get [abstract,virtual,newslot]; }
+  property System.Boolean IsMoving { get [abstract,virtual,newslot]; }
+  property System.Single MoveSpeed { get [abstract,virtual,newslot]; }
+  property System.Single StopDistance { get [abstract,virtual,newslot]; }
+  property System.Single TurnSpeed { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.RobotBrainMode BrainMode { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.RobotGait Gait { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.Vec3 HeadPosition { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IRobotAgentService
+  method [abstract,virtual,newslot] System.Boolean TryGetRobot(TopiaForge.Mods.IEntity entity, out TopiaForge.Mods.IRobotAgent? agent)
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.ReachableSpawnResult>> FindReachableSpawnAsync(TopiaForge.Mods.ReachableSpawnRequest request, System.Threading.CancellationToken cancellationToken = null)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IRobotAgent> Spawn(TopiaForge.Mods.RobotAgentSpawnRequest request)
+  property System.Boolean IsAvailable { get [abstract,virtual,newslot]; }
+  property System.Boolean IsNavigationAvailable { get [abstract,virtual,newslot]; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.IRobotAgent> ActiveAgents { get [abstract,virtual,newslot]; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.RobotTypeDescriptor> RobotTypes { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IRobotBrainQueryService
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.BrainQueryResult>> QueryAsync(TopiaForge.Mods.BrainQueryRequest request, System.Threading.CancellationToken cancellationToken = null)
+  property System.Boolean IsAvailable { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IRobotConversation : System.IDisposable
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.RobotConversationTurnResult>> SubmitAsync(System.String playerText, System.Threading.CancellationToken cancellationToken = null)
+  property System.Boolean IsEnded { get [abstract,virtual,newslot]; }
+  property System.Int32 MaxTurns { get [abstract,virtual,newslot]; }
+  property System.Int32 TurnCount { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IRobotConversationService
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IRobotConversation> BeginConversation(TopiaForge.Mods.RobotConversationRequest request)
+  property System.Boolean IsAvailable { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IRobotEditLease : System.IDisposable
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> PreviewBrainMode(TopiaForge.Mods.RobotBrainMode mode)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> PreviewPersonality(TopiaForge.Mods.RobotPersonalityDraft personality)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Restore()
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.TransformState> PreviewTransform(TopiaForge.Mods.TransformState transform)
+  property System.Boolean IsActive { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IRobotEditTarget Target { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IRobotEditTarget
+  method [abstract,virtual,newslot] System.Boolean TryGetTransform(out TopiaForge.Mods.TransformState transform)
+  property System.Boolean IsAlive { get [abstract,virtual,newslot]; }
+  property System.Boolean IsNativeSceneObject { get [abstract,virtual,newslot]; }
+  property System.String DisplayName { get [abstract,virtual,newslot]; }
+  property System.String Id { get [abstract,virtual,newslot]; }
+  property System.String SceneName { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IRobotObjectiveHandle : System.IDisposable
+  property System.Boolean IsActive { get [abstract,virtual,newslot]; }
+  property System.Int32 WaypointIndex { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.RobotObjective Objective { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.RobotObjectiveState State { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IRobotObjectiveService
+  event System.Action<TopiaForge.Mods.RobotProgramDelivery>? ProgramDelivered { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
+  method [abstract,virtual,newslot] System.Boolean TryGetObjective(TopiaForge.Mods.IRobotAgent agent, out TopiaForge.Mods.IRobotObjectiveHandle? objective)
+  method [abstract,virtual,newslot] System.Boolean TryGetTargetInfo(System.String name, out TopiaForge.Mods.RobotTargetInfo info)
+  method [abstract,virtual,newslot] System.Boolean TryResolveTarget(System.String name, out TopiaForge.Mods.RobotTargetSnapshot snapshot)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> ClearObjective(TopiaForge.Mods.IRobotAgent agent)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IRobotObjectiveHandle> SetObjective(TopiaForge.Mods.IRobotAgent agent, TopiaForge.Mods.RobotObjective objective)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IRobotTargetRegistration> RegisterTarget(System.String name, TopiaForge.Mods.RobotTargetKind kind, System.Func<System.Nullable<TopiaForge.Mods.RobotTargetSnapshot>> resolve)
+  property System.Boolean IsAvailable { get [abstract,virtual,newslot]; }
+  property System.Collections.Generic.IReadOnlyList<System.String> TargetNames { get [abstract,virtual,newslot]; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.RobotTargetInfo> Targets { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IRobotPlayerEntitySource
+  method [abstract,virtual,newslot] System.Boolean TryGetPlayerEntity(out TopiaForge.Mods.IEntity? entity)
+
+type public interface TopiaForge.Mods.IRobotSceneEditorService
+  method [abstract,virtual,newslot] System.Boolean TryResolve(TopiaForge.Mods.IRobotAgent agent, out TopiaForge.Mods.IRobotEditTarget? target)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IRobotEditLease> BeginTemporaryEdit(TopiaForge.Mods.IRobotEditTarget target)
+  property System.Boolean IsAvailable { get [abstract,virtual,newslot]; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.IRobotEditTarget> Targets { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IRobotTargetRegistration : System.IDisposable
+  property System.Boolean IsActive { get [abstract,virtual,newslot]; }
+  property System.String Name { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.RobotTargetKind Kind { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IVoiceCapture : System.IDisposable
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.VoiceTranscriptResult>> StopAsync(System.Threading.CancellationToken cancellationToken = null)
+  property System.Boolean IsRecording { get [abstract,virtual,newslot]; }
+
+type public sealed class TopiaForge.Mods.ReachableSpawnRequest : System.Object
+  constructor .ctor(TopiaForge.Mods.Vec3 origin, System.Nullable<TopiaForge.Mods.Vec3> reachableFrom = null, System.Single minRadius = 8, System.Single maxRadius = 24, System.Int32 maxCandidates = 16, System.Single verticalScan = 3, System.Single groundProbeDepth = 12, System.Single heightOffset = 0.25)
+  property System.Int32 MaxCandidates { get; }
+  property System.Nullable<TopiaForge.Mods.Vec3> ReachableFrom { get; }
+  property System.Single GroundProbeDepth { get; }
+  property System.Single HeightOffset { get; }
+  property System.Single MaxRadius { get; }
+  property System.Single MinRadius { get; }
+  property System.Single VerticalScan { get; }
+  property TopiaForge.Mods.Vec3 Origin { get; }
+
+type public sealed class TopiaForge.Mods.ReachableSpawnResult : System.Object
+  constructor .ctor(TopiaForge.Mods.Vec3 position)
+  property TopiaForge.Mods.Vec3 Position { get; }
+
+type public static class TopiaForge.Mods.RobotAgentServiceExtensions : System.Object
+  method extension [static] System.Boolean TryGetPlayerEntity(TopiaForge.Mods.IRobotAgentService service, out TopiaForge.Mods.IEntity? entity)
+
+type public sealed class TopiaForge.Mods.RobotAgentSpawnRequest : System.Object
+  constructor .ctor(TopiaForge.Mods.Vec3 position, System.Nullable<TopiaForge.Mods.Vec3> facing = null, TopiaForge.Mods.RobotBrainMode brainMode = 0 (Dormant), TopiaForge.Mods.RobotGait gait = 1 (Run), System.Single moveSpeed = 0, System.Single turnSpeed = 0, System.Single stopDistance = 0, System.Nullable<TopiaForge.Mods.RobotColor> tint = null, System.String? name = null, System.Single scale = 1, TopiaForge.Mods.RobotInteractionOptions? interaction = null, System.String? robotTypeId = null)
+  property System.Nullable<TopiaForge.Mods.RobotColor> Tint { get; }
+  property System.Nullable<TopiaForge.Mods.Vec3> Facing { get; }
+  property System.Single MoveSpeed { get; }
+  property System.Single Scale { get; }
+  property System.Single StopDistance { get; }
+  property System.Single TurnSpeed { get; }
+  property System.String? Name { get; }
+  property System.String? RobotTypeId { get; }
+  property TopiaForge.Mods.RobotBrainMode BrainMode { get; }
+  property TopiaForge.Mods.RobotGait Gait { get; }
+  property TopiaForge.Mods.RobotInteractionOptions Interaction { get; }
+  property TopiaForge.Mods.Vec3 Position { get; }
+
+type public enum TopiaForge.Mods.RobotBrainMode : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.RobotBrainMode Autonomous = 1 (Autonomous)
+  field const TopiaForge.Mods.RobotBrainMode Dormant = 0 (Dormant)
+
+type public readonly struct TopiaForge.Mods.RobotColor : System.ValueType, System.IEquatable<TopiaForge.Mods.RobotColor>
+  constructor .ctor(System.Single r, System.Single g, System.Single b, System.Single a = 1)
+  method [virtual,final,newslot] System.Boolean Equals(TopiaForge.Mods.RobotColor other)
+  method [virtual] System.Boolean Equals(System.Object? obj)
+  method [virtual] System.Int32 GetHashCode()
+  method [virtual] System.String ToString()
+  property System.Single A { get; }
+  property System.Single B { get; }
+  property System.Single G { get; }
+  property System.Single R { get; }
+  property static TopiaForge.Mods.RobotColor White { get [static]; }
+
+type public sealed class TopiaForge.Mods.RobotConversationRequest : System.Object
+  constructor .ctor(System.String systemFrame, System.Collections.Generic.IReadOnlyList<System.String> decisionOptions, System.Collections.Generic.IReadOnlyDictionary<System.String, System.String>? groundTruthFacts = null, System.Func<System.Collections.Generic.IReadOnlyDictionary<System.String, System.String>?>? liveFacts = null, System.Int32 maxTurns = 3, System.Single temperature = 0.7, System.String usage = "robot-conversation", System.String? replyGuidance = null, System.String? decisionGuidance = null, System.Int32 maxReplyChars = 200, System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.BrainOutputField>? extraOutputs = null)
+  property System.Collections.Generic.IReadOnlyDictionary<System.String, System.String>? GroundTruthFacts { get; }
+  property System.Collections.Generic.IReadOnlyList<System.String> DecisionOptions { get; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.BrainOutputField>? ExtraOutputs { get; }
+  property System.Func<System.Collections.Generic.IReadOnlyDictionary<System.String, System.String>?>? LiveFacts { get; }
+  property System.Int32 MaxReplyChars { get; }
+  property System.Int32 MaxTurns { get; }
+  property System.Single Temperature { get; }
+  property System.String SystemFrame { get; }
+  property System.String Usage { get; }
+  property System.String? DecisionGuidance { get; }
+  property System.String? ReplyGuidance { get; }
+
+type public sealed class TopiaForge.Mods.RobotConversationTurnResult : System.Object
+  constructor .ctor(System.String reply, System.String decision, System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> values)
+  property System.Collections.Generic.IReadOnlyDictionary<System.String, System.String> Values { get; }
+  property System.String Decision { get; }
+  property System.String Reply { get; }
+
+type public sealed class TopiaForge.Mods.RobotCustomInteraction : System.Object
+  constructor .ctor(System.String prompt, System.Action<TopiaForge.Mods.RobotInteractionContext>? interact = null, System.Single distance = 3, System.Single screenRectExpansion = 0, System.Func<TopiaForge.Mods.RobotInteractionContext, System.Boolean>? canInteract = null)
+  property System.Action<TopiaForge.Mods.RobotInteractionContext>? Interact { get; }
+  property System.Func<TopiaForge.Mods.RobotInteractionContext, System.Boolean>? CanInteract { get; }
+  property System.Single Distance { get; }
+  property System.Single ScreenRectExpansion { get; }
+  property System.String Prompt { get; }
+
+type public enum TopiaForge.Mods.RobotDamageType : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.RobotDamageType Electricity = 2 (Electricity)
+  field const TopiaForge.Mods.RobotDamageType Fire = 1 (Fire)
+  field const TopiaForge.Mods.RobotDamageType Normal = 0 (Normal)
+  field const TopiaForge.Mods.RobotDamageType Poison = 3 (Poison)
+  field const TopiaForge.Mods.RobotDamageType Water = 4 (Water)
+
+type public enum TopiaForge.Mods.RobotDecision : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.RobotDecision Comply = 0 (Comply)
+  field const TopiaForge.Mods.RobotDecision Flee = 2 (Flee)
+  field const TopiaForge.Mods.RobotDecision Freeze = 1 (Freeze)
+  field const TopiaForge.Mods.RobotDecision Resist = 3 (Resist)
+  field const TopiaForge.Mods.RobotDecision Unknown = 4 (Unknown)
+
+type public enum TopiaForge.Mods.RobotGait : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.RobotGait Run = 1 (Run)
+  field const TopiaForge.Mods.RobotGait Sprint = 2 (Sprint)
+  field const TopiaForge.Mods.RobotGait Walk = 0 (Walk)
+
+type public sealed class TopiaForge.Mods.RobotInteractionContext : System.Object
+  constructor .ctor(TopiaForge.Mods.IRobotAgent agent, TopiaForge.Mods.Vec3 agentPosition, TopiaForge.Mods.Vec3 handPosition, System.Single distance)
+  property System.Single Distance { get; }
+  property TopiaForge.Mods.IRobotAgent Agent { get; }
+  property TopiaForge.Mods.Vec3 AgentPosition { get; }
+  property TopiaForge.Mods.Vec3 HandPosition { get; }
+
+type public sealed class TopiaForge.Mods.RobotInteractionOptions : System.Object
+  method TopiaForge.Mods.RobotInteractionOptions Clone()
+  method [static] TopiaForge.Mods.RobotInteractionOptions Custom(TopiaForge.Mods.RobotCustomInteraction interaction)
+  method [static] TopiaForge.Mods.RobotInteractionOptions DisableNativeTalk()
+  method [static] TopiaForge.Mods.RobotInteractionOptions NativeTalk()
+  method [static] TopiaForge.Mods.RobotInteractionOptions NativeTalkAtDistance(System.Single distance)
+  property System.Single NativeTalkDistance { get; }
+  property TopiaForge.Mods.RobotCustomInteraction? CustomInteraction { get; }
+  property TopiaForge.Mods.RobotNativeTalkMode NativeTalkMode { get; }
+
+type public sealed class TopiaForge.Mods.RobotMovementSettings : System.Object
+  constructor .ctor(TopiaForge.Mods.RobotGait gait = 1 (Run), System.Single moveSpeed = 0, System.Single turnSpeed = 0, System.Single stopDistance = 0)
+  property System.Single MoveSpeed { get; }
+  property System.Single StopDistance { get; }
+  property System.Single TurnSpeed { get; }
+  property TopiaForge.Mods.RobotGait Gait { get; }
+
+type public enum TopiaForge.Mods.RobotNativeTalkMode : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.RobotNativeTalkMode Disabled = 1 (Disabled)
+  field const TopiaForge.Mods.RobotNativeTalkMode Enabled = 0 (Enabled)
+
+type public sealed class TopiaForge.Mods.RobotObjective : System.Object
+  method System.String Describe()
+  method [static] TopiaForge.Mods.RobotObjective Flee(System.String targetName, TopiaForge.Mods.RobotObjectiveOptions? options = null)
+  method [static] TopiaForge.Mods.RobotObjective Follow(System.String targetName, TopiaForge.Mods.RobotObjectiveOptions? options = null)
+  method [static] TopiaForge.Mods.RobotObjective GoTo(System.String targetName, TopiaForge.Mods.RobotObjectiveOptions? options = null)
+  method [static] TopiaForge.Mods.RobotObjective GoTo(TopiaForge.Mods.Vec3 point, TopiaForge.Mods.RobotObjectiveOptions? options = null)
+  method [static] TopiaForge.Mods.RobotObjective Idle(TopiaForge.Mods.RobotObjectiveOptions? options = null)
+  method [static] TopiaForge.Mods.RobotObjective Patrol(System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.Vec3> waypoints, TopiaForge.Mods.RobotObjectiveOptions? options = null)
+  method [static] TopiaForge.Mods.RobotObjective PatrolTo(System.String targetName, TopiaForge.Mods.RobotObjectiveOptions? options = null)
+  method [static] TopiaForge.Mods.RobotObjective Reprogram(System.String targetRobotName, TopiaForge.Mods.RobotObjective payload, TopiaForge.Mods.RobotObjectiveOptions? options = null)
+  method [static] TopiaForge.Mods.RobotObjective Wander(System.String targetName, TopiaForge.Mods.RobotObjectiveOptions? options = null)
+  method [static] TopiaForge.Mods.RobotObjective Wander(TopiaForge.Mods.RobotObjectiveOptions? options = null)
+  method [static] TopiaForge.Mods.RobotObjective Wander(TopiaForge.Mods.Vec3 home, TopiaForge.Mods.RobotObjectiveOptions? options = null)
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.Vec3>? Waypoints { get; }
+  property System.Nullable<TopiaForge.Mods.Vec3> TargetPoint { get; }
+  property System.Single ArriveDistance { get; }
+  property System.Single DwellSeconds { get; }
+  property System.Single FleeDistance { get; }
+  property System.Single WanderRadius { get; }
+  property System.String? TargetName { get; }
+  property TopiaForge.Mods.RobotGait Gait { get; }
+  property TopiaForge.Mods.RobotObjective? Payload { get; }
+  property TopiaForge.Mods.RobotObjectiveKind Kind { get; }
+
+type public enum TopiaForge.Mods.RobotObjectiveKind : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.RobotObjectiveKind Flee = 5 (Flee)
+  field const TopiaForge.Mods.RobotObjectiveKind Follow = 2 (Follow)
+  field const TopiaForge.Mods.RobotObjectiveKind GoTo = 1 (GoTo)
+  field const TopiaForge.Mods.RobotObjectiveKind Idle = 0 (Idle)
+  field const TopiaForge.Mods.RobotObjectiveKind Patrol = 3 (Patrol)
+  field const TopiaForge.Mods.RobotObjectiveKind Reprogram = 6 (Reprogram)
+  field const TopiaForge.Mods.RobotObjectiveKind Wander = 4 (Wander)
+
+type public sealed class TopiaForge.Mods.RobotObjectiveOptions : System.Object
+  constructor .ctor(System.Single arriveDistance = 1.5, System.Single dwellSeconds = 1, TopiaForge.Mods.RobotGait gait = 1 (Run), System.Single wanderRadius = 8, System.Single fleeDistance = 8)
+  property System.Single ArriveDistance { get; }
+  property System.Single DwellSeconds { get; }
+  property System.Single FleeDistance { get; }
+  property System.Single WanderRadius { get; }
+  property TopiaForge.Mods.RobotGait Gait { get; }
+  property static TopiaForge.Mods.RobotObjectiveOptions Default { get [static]; }
+
+type public enum TopiaForge.Mods.RobotObjectiveState : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.RobotObjectiveState Arrived = 2 (Arrived)
+  field const TopiaForge.Mods.RobotObjectiveState Cancelled = 5 (Cancelled)
+  field const TopiaForge.Mods.RobotObjectiveState Delivered = 6 (Delivered)
+  field const TopiaForge.Mods.RobotObjectiveState Dwelling = 3 (Dwelling)
+  field const TopiaForge.Mods.RobotObjectiveState Idle = 0 (Idle)
+  field const TopiaForge.Mods.RobotObjectiveState Seeking = 1 (Seeking)
+  field const TopiaForge.Mods.RobotObjectiveState TargetMissing = 4 (TargetMissing)
+
+type public sealed class TopiaForge.Mods.RobotPersonalityDraft : System.Object
+  constructor .ctor(System.String displayName, System.String instructions, System.Single temperature = 0.7)
+  property System.Single Temperature { get; }
+  property System.String DisplayName { get; }
+  property System.String Instructions { get; }
+
+type public sealed class TopiaForge.Mods.RobotProgramDelivery : System.Object
+  constructor .ctor(TopiaForge.Mods.IRobotAgent sender, TopiaForge.Mods.IRobotAgent recipient, TopiaForge.Mods.RobotObjective payload)
+  property TopiaForge.Mods.IRobotAgent Recipient { get; }
+  property TopiaForge.Mods.IRobotAgent Sender { get; }
+  property TopiaForge.Mods.RobotObjective Payload { get; }
+
+type public static class TopiaForge.Mods.RobotTargetFacts : System.Object
+  method [static] System.String Describe(TopiaForge.Mods.RobotTargetInfo info, System.Nullable<TopiaForge.Mods.RobotTargetSnapshot> snapshot, TopiaForge.Mods.Vec3 observerPosition)
+  method [static] System.String Describe(TopiaForge.Mods.RobotTargetInfo info, System.Nullable<TopiaForge.Mods.RobotTargetSnapshot> snapshot, TopiaForge.Mods.Vec3 observerPosition, System.String? activity)
+  method [static] System.String DirectionAndDistance(TopiaForge.Mods.Vec3 from, TopiaForge.Mods.Vec3 to)
+
+type public sealed class TopiaForge.Mods.RobotTargetInfo : System.Object
+  constructor .ctor(System.String name, TopiaForge.Mods.RobotTargetKind kind, System.String? description = null)
+  property System.String Name { get; }
+  property System.String? Description { get; }
+  property TopiaForge.Mods.RobotTargetKind Kind { get; }
+
+type public enum TopiaForge.Mods.RobotTargetKind : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.RobotTargetKind Custom = 0 (Custom)
+  field const TopiaForge.Mods.RobotTargetKind Marker = 4 (Marker)
+  field const TopiaForge.Mods.RobotTargetKind Player = 1 (Player)
+  field const TopiaForge.Mods.RobotTargetKind Prop = 3 (Prop)
+  field const TopiaForge.Mods.RobotTargetKind Robot = 2 (Robot)
+
+type public readonly struct TopiaForge.Mods.RobotTargetSnapshot : System.ValueType
+  constructor .ctor(TopiaForge.Mods.Vec3 position, TopiaForge.Mods.IEntity? entity = null)
+  property TopiaForge.Mods.IEntity? Entity { get; }
+  property TopiaForge.Mods.Vec3 Position { get; }
+
+type public sealed class TopiaForge.Mods.RobotTypeDescriptor : System.Object
+  constructor .ctor(System.String id, System.String displayName)
+  property System.String DisplayName { get; }
+  property System.String Id { get; }
+
+type public sealed class TopiaForge.Mods.TextInputBuffer : System.Object
+  constructor .ctor(System.Int32 maxChars = 200)
+  method System.Boolean ConsumeSubmit()
+  method System.Void Append(System.String? inputString)
+  method System.Void Backspace()
+  method System.Void Clear()
+  property System.Int32 Length { get; }
+  property System.String Text { get; }
+
+type public sealed class TopiaForge.Mods.VoiceTranscriptResult : System.Object
+  constructor .ctor(System.String text)
+  property System.String Text { get; }

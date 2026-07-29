@@ -1,6 +1,6 @@
 {
   "transport": "automerge",
-  "watchFolder": "C:\\Robotopia\\ugc-watch",
+  "watchFolder": "C:\\TopiaForge\\ugc-watch",
   "editorUrl": "",
   "documentUrl": "automerge:captured-doc",
   "syncServerUrl": "https://automerge-repo-sync-server-main.onrender.com",

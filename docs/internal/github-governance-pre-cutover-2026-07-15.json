@@ -1,0 +1,123 @@
+{
+  "capturedAt": "2026-07-15T17:42:19Z",
+  "repository": "furroxide/TopiaForge",
+  "repositoryId": 1286508212,
+  "owner": {
+    "login": "furroxide",
+    "databaseId": 221987073,
+    "type": "User"
+  },
+  "defaultBranch": "main",
+  "branchHeads": {
+    "main": "e954e17bdb07c302786b33145782da49fe46734a",
+    "dev": "620dc5d1bf862e8d7b2def181a2d4f54b9683e18"
+  },
+  "rulesets": [
+    {
+      "id": 18533888,
+      "name": "protected-release-flow",
+      "historyVersion": 42109971,
+      "etag": "W/\"7ee9f0dbc9624560781f93fde8ef12c32377afbbedc95e53db805c6c3bfac232\"",
+      "enforcement": "active",
+      "targets": ["main", "dev", "release/*"],
+      "administratorBypass": "always",
+      "requiredApprovals": 1,
+      "requireCodeOwnerReview": true,
+      "requireLinearHistory": true,
+      "requiredChecks": [
+        "Analyze and test Dart packages (packages/launcher_domain)",
+        "Analyze and test Dart packages (packages/launcher_data)",
+        "Analyze and test Dart packages (apps/\u0072obotopia_cli)",
+        "Template minimal",
+        "Template gameplay",
+        "Template gamemode",
+        "Template service",
+        "Template ui",
+        "Template asset",
+        "Template world"
+      ]
+    },
+    {
+      "id": 18533946,
+      "name": "admin-only-release-branches",
+      "historyVersion": 42107352,
+      "etag": "W/\"2175714b5e00af3ea90144d29d46d4193df124e5f885f43231aced8c6d7bf436\"",
+      "enforcement": "active",
+      "target": "release/*",
+      "rules": ["creation"]
+    },
+    {
+      "id": 18533949,
+      "name": "admin-only-version-tags",
+      "historyVersion": 42107358,
+      "etag": "W/\"449e261fc697a8e32ee85affff99dd042606815d56d690328e8cb53a8314af57\"",
+      "enforcement": "active",
+      "target": "v*",
+      "rules": ["creation", "update", "deletion"]
+    }
+  ],
+  "githubActions": {
+    "enabled": true,
+    "allowedActions": "all",
+    "shaPinningRequired": false,
+    "defaultWorkflowPermissions": "read",
+    "canApprovePullRequestReviews": false,
+    "forkPullRequestApprovalPolicy": "first_time_contributors",
+    "artifactAndLogRetentionDays": 90,
+    "repositorySecrets": 0,
+    "repositoryVariables": 0,
+    "selfHostedRunners": 0
+  },
+  "mergeSettings": {
+    "allowMergeCommit": true,
+    "allowSquashMerge": true,
+    "allowRebaseMerge": true,
+    "allowAutoMerge": false,
+    "allowUpdateBranch": false,
+    "deleteBranchOnMerge": false,
+    "webCommitSignoffRequired": false
+  },
+  "security": {
+    "dependencyGraph": "enabled",
+    "dependabotAlerts": "disabled",
+    "dependabotSecurityUpdates": "disabled",
+    "automatedSecurityFixes": "disabled",
+    "codeqlDefaultSetup": "not-configured",
+    "secretScanning": "enabled",
+    "secretScanningPushProtection": "enabled",
+    "secretScanningNonProviderPatterns": "disabled-unavailable-on-personal-repository",
+    "secretScanningValidityChecks": "disabled-unavailable-on-personal-repository",
+    "privateVulnerabilityReporting": "enabled"
+  },
+  "environments": {
+    "copilot": {
+      "id": 17678817250,
+      "protectionRules": []
+    },
+    "github-pages": {
+      "id": 17679021501,
+      "canAdminsBypass": true,
+      "deploymentBranchPolicyId": 53829367,
+      "deploymentBranch": "main"
+    },
+    "release": null,
+    "unity-validation": null,
+    "game-acceptance": null
+  },
+  "immutableReleases": {
+    "enabled": false,
+    "enforcedByOwner": false,
+    "etag": "W/\"8bbd21532cf4e89fff9534bc7e70f286d62f5781e0c006d7360e2a1c8d5354fd\""
+  },
+  "repositorySurfaces": {
+    "wiki": "enabled-empty",
+    "issues": "enabled",
+    "projects": "enabled",
+    "pagesHttps": "enabled"
+  },
+  "notes": [
+    "This snapshot contains configuration metadata only and no credential values.",
+    "Ruleset history versions are retained as the documented rollback baseline.",
+    "Environment administrator bypass and the five-ref push policy require signed-in UI changes."
+  ]
+}

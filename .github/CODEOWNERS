@@ -1,2 +1,49 @@
-# Community registry submissions always get maintainer review.
+# These paths define public trust, release, update, and package contracts.
+# Ownership is advisory while TopiaForge has one maintainer. Repository rules
+# begin requiring an independent CODEOWNER review only after a second trusted
+# maintainer is available.
+/.github/ @furroxide
+/.gitattributes @furroxide
+/.github/CODEOWNERS @furroxide
+/.github/workflows/ @furroxide
+/.github/dependabot.yml @furroxide
+/.github/repository-governance.json @furroxide
+/.github/robotopia-game-build.json @furroxide
+/.github/scripts/audit_repository_governance.py @furroxide
+/.github/scripts/test_audit_repository_governance.py @furroxide
+/CONTRIBUTING.md @furroxide
+/SECURITY.md @furroxide
+/docs/RepositoryGovernance.md @furroxide
+/docs/internal/github-governance-* @furroxide
+/release/ @furroxide
+/schemas/ @furroxide
 /registry/ @furroxide
+
+# Release/publishing executables and their CLI contract.
+/tools/*release* @furroxide
+/tools/package-distribution.ps1 @furroxide
+/tools/restore-robotopia-managed-refs.ps1 @furroxide
+/tools/test-restore-robotopia-managed-refs.ps1 @furroxide
+/tools/publish-release-draft.sh @furroxide
+/tools/verify-release-tag.sh @furroxide
+/tools/test-publish-release-draft.sh @furroxide
+/tools/test-verify-release-tag.sh @furroxide
+/tools/test-support/fake-gh-release.sh @furroxide
+/tools/TopiaForge.ManagedRefs/ @furroxide
+/tests/TopiaForge.ManagedRefs.Tests/ @furroxide
+/src/TopiaForge.ModPackageValidator/ @furroxide
+/tests/TopiaForge.ModPackageValidator.Tests/ @furroxide
+/apps/topiaforge_cli/bin/topiaforge_release_commands.dart @furroxide
+/apps/topiaforge_cli/bin/topiaforge_check_commands.dart @furroxide
+/apps/topiaforge_cli/bin/topiaforge_package_validation.dart @furroxide
+/apps/topiaforge_cli/bin/topiaforge_scaffold_validation.dart @furroxide
+/apps/topiaforge_cli/lib/src/release_*.dart @furroxide
+
+# Release-payload identity gates and their regression coverage.
+/.github/scripts/check_topiaforge_residue.py @furroxide
+/.github/scripts/test_check_topiaforge_residue.py @furroxide
+
+# Platform signing and sandbox authority.
+/apps/topiaforge_launcher_flutter/macos/Runner/*.entitlements @furroxide
+/apps/topiaforge_launcher_flutter/macos/Runner/Configs/Release.xcconfig @furroxide
+/apps/topiaforge_launcher_flutter/macos/Runner.xcodeproj/project.pbxproj @furroxide

@@ -4,8 +4,13 @@ import 'models.dart';
 abstract interface class LauncherRepository {
   String get dataRoot;
 
+  /// Releases repository-owned processes, subscriptions, and stream
+  /// controllers. Implementations must make repeated calls safe.
+  Future<void> dispose();
+
   Future<LauncherSnapshot> loadSnapshot();
 
+  /// Compatibility shim returning the highest-precedence discovered install.
   Future<GameInstall?> detectKnownInstall();
 
   Future<GameInstall> selectGameDirectory(String path);
@@ -29,11 +34,22 @@ abstract interface class LauncherRepository {
     String packagePath,
     GameInstall install, {
     String expectedSha256 = '',
+    String sourceId = '',
   });
 
   Future<List<PackageSource>> savePackageSources(List<PackageSource> sources);
 
-  Future<List<InstalledMod>> installInboxPackages(GameInstall install);
+  /// Safely preflights, selects, installs, and consumes package-inbox files.
+  /// Expected candidate failures are returned as structured issues and the
+  /// rejected bytes remain available for inspection.
+  Future<PackageInboxInstallOutcome> installInboxPackages(GameInstall install);
+
+  /// Atomically reinstalls a damaged installed version from a matching
+  /// integrity-pinned registry entry or verified package cache entry.
+  Future<List<InstalledMod>> repairInstalledMod(
+    GameInstall install,
+    InstalledMod mod,
+  );
 
   Future<List<InstalledMod>> setModEnabled(
     GameInstall install,
@@ -50,11 +66,20 @@ abstract interface class LauncherRepository {
     String selectedProfileId,
   );
 
+  /// Writes one portable profile document to a user-selected path.
+  Future<void> exportProfile(LauncherProfile profile, String path);
+
+  /// Reads one portable profile document from a user-selected path.
+  Future<LauncherProfile> importProfile(String path);
+
+  /// Starts [install] with [profile] as a process-scoped snapshot. Profile mod
+  /// enablement, version pins, safe mode, arguments, and environment must not
+  /// be persisted into the manager's global state when launch fails or exits.
   Future<LaunchResult> launch(GameInstall install, LauncherProfile profile);
 
+  /// Stops the matching game process, then follows the same process-scoped
+  /// profile contract as [launch].
   Future<LaunchResult> restart(GameInstall install, LauncherProfile profile);
-
-  Future<List<LegacyMod>> detectLegacyMods(GameInstall install);
 
   Future<DiagnosticBundle> createDiagnosticBundle(
     GameInstall install,
@@ -65,26 +90,84 @@ abstract interface class LauncherRepository {
 
   Future<void> openPath(String path);
 
+  /// Opens the directory containing a filesystem item. Path interpretation
+  /// belongs to the repository so Bloc and widgets remain IO-independent.
+  Future<void> openContainingFolder(String path);
+
+  Future<void> ensureDirectory(String path);
+
   /// Persists the opt-in developer mode flag (off by default; reveals the launcher's Developer tab).
   Future<void> setDeveloperMode(bool enabled);
 
   /// Persists launcher self-update settings such as automatic checks and release channel.
   Future<void> saveLauncherUpdateSettings(LauncherUpdateSettings settings);
 
-  /// Writes the UGC live-sync runtime config (`config/robotopia.ugc.livesync.json`) into the install so the
-  /// `Robotopia.UgcLiveSync` mod picks it up on next launch. Returns the written file path.
+  /// Writes the UGC live-sync runtime config (`config/topiaforge.ugc.livesync.json`) into the install so the
+  /// `TopiaForge.UgcLiveSync` mod picks it up on next launch. Returns the written file path.
   Future<String> deployUgcLiveSyncConfig(
     GameInstall install,
     UgcLiveSyncSettings settings,
   );
 
-  /// Reads the UGC live-sync status handshake the mod writes (`config/robotopia.ugc.livesync.status.json`) so the
-  /// cockpit can auto-detect the game's default watch folder and show live state. Null when absent/unreadable.
+  /// Stops the active UGC live-sync loop and clears transient connection state.
+  /// Durable preferences come from the deployed runtime config when readable;
+  /// [fallbackSettings] is used only when no valid config has been deployed.
+  Future<UgcLiveSyncCleanupReport> cleanupUgcLiveSync(
+    GameInstall install,
+    UgcLiveSyncSettings fallbackSettings,
+  );
+
+  /// Sidecar lifecycle events emitted by the repository-owned publisher.
+  Stream<UgcPublisherEvent> get ugcPublisherEvents;
+
+  bool get isUgcPublisherRunning;
+
+  Future<UgcPublisherStartResult> startUgcPublisher(
+    UgcLiveSyncSettings settings,
+  );
+
+  /// Stops a repository-owned sidecar. This does not revoke a detached
+  /// publisher lease owned by another launcher or CLI process.
+  Future<void> stopUgcPublisher({bool waitForExit = false});
+
+  /// Explicitly revokes the shared publisher lease, independent of installs.
+  Future<void> revokeUgcPublisherSession();
+
+  /// Reads the UGC live-sync status handshake the mod writes (`config/topiaforge.ugc.livesync.status.json`) so the
+  /// cockpit can auto-detect the game's default watch folder and show live state. Null only when absent; malformed
+  /// or unsafe files throw so callers can surface the failure.
   Future<UgcLiveSyncStatusSnapshot?> readUgcLiveSyncStatus(GameInstall install);
 
-  /// Parses the newest exported project file (`*.json`/`*.json.gz`) in [watchFolder] and returns its scenes, so
-  /// the cockpit can offer a scene dropdown instead of a free-text field. Empty when the folder has no snapshot.
-  Future<List<UgcSceneRef>> listWatchFolderScenes(String watchFolder);
+  /// Inspects the deterministic newest exported project snapshot and returns
+  /// its scenes, source provenance, and structured validation issues.
+  Future<UgcSceneInspectionResult> inspectWatchFolderScenes(String watchFolder);
+}
+
+abstract interface class LauncherUpdateRepository {
+  Stream<LauncherUpdateStatus> get statuses;
+
+  Future<LauncherUpdateStatus> checkForUpdate({
+    required String currentVersion,
+    required LauncherUpdateChannel channel,
+    bool force = false,
+  });
+
+  Future<LauncherUpdateStatus> stageUpdate(LauncherUpdateCandidate candidate);
+
+  Future<void> applyStagedUpdate(LauncherUpdateStatus staged);
+
+  Future<void> recoverPendingUpdate();
+
+  Future<void> dispose();
+}
+
+/// Optional launcher-repository capability for enumerating multiple installs.
+///
+/// Consumers must continue to support a plain [LauncherRepository] by falling
+/// back to [LauncherRepository.detectKnownInstall].
+abstract interface class GameInstallDiscoveryRepository
+    implements LauncherRepository {
+  Future<List<GameInstallCandidate>> discoverGameInstalls();
 }
 
 abstract interface class DeveloperRepository {
@@ -104,23 +187,23 @@ abstract interface class DeveloperRepository {
   /// least the built-in `minimal` template, so scaffolding works in synthetic environments without a repo.
   Future<List<ModTemplateInfo>> listModTemplates();
 
-  /// Reads the project's `robotopia.mod.json`. Throws when the project or manifest is missing.
+  /// Reads the project's `topiaforge.mod.json`. Throws when the project or manifest is missing.
   Future<ModManifest> readModManifest(String projectPath);
 
-  /// Overwrites the project's `robotopia.mod.json` with [manifest] and returns its validation issues.
+  /// Overwrites the project's `topiaforge.mod.json` with [manifest] and returns its validation issues.
   Future<List<LauncherIssue>> updateModManifest(
     String projectPath,
     ModManifest manifest,
   );
 
-  /// Ensures `Packages/com.robotopia.ugc-companion` exists in a Unity project, copying it from the repo template
+  /// Ensures `Packages/io.github.furroxide.topiaforge.ugc-companion` exists in a Unity project, copying it from the repo template
   /// when missing (or when [update] is true). Returns true when the package is present afterwards.
   Future<bool> ensureUgcCompanionPackage(
     String projectPath, {
     bool update = false,
   });
 
-  /// Writes `ProjectSettings/RobotopiaUgcCompanion.json` — the seed the companion's editor bootstrap reads to
+  /// Writes `ProjectSettings/TopiaForgeUgcCompanion.json` — the seed the companion's editor bootstrap reads to
   /// configure the UGC Live Sync window (watch folder, scene, live-sync on) on next project load. Returns the
   /// written file path.
   Future<String> writeUgcCompanionSeed(
@@ -150,11 +233,6 @@ abstract interface class DeveloperRepository {
   /// launcher's Developer tab so both behave identically.
   Future<DeveloperSetupResult> runSetup();
 
-  Future<LegacyMigrationResult> migrateLegacyMods(
-    String gamePath,
-    String outputRoot,
-  );
-
   Future<ModManifest> checkPackage(String packagePath);
 
   Future<DeveloperProject> addProjectPackageSource(
@@ -178,7 +256,7 @@ abstract interface class DeveloperRepository {
     String configuration = 'Release',
   });
 
-  /// Persists UGC live-sync settings into the project's `robotopia.project.json` (under `unityCompanion`).
+  /// Persists UGC live-sync settings into the project's `topiaforge.project.json` (under `unityCompanion`).
   Future<DeveloperProject> updateUgcLiveSync(
     String projectPath,
     UgcLiveSyncSettings settings,
@@ -208,8 +286,8 @@ abstract interface class DeveloperRepository {
   /// Detects installed Unity editors via Unity Hub (detect-only; never installs Unity).
   Future<List<UnityEditor>> listUnityEditors();
 
-  /// Opens [projectPath] in the Unity editor matching its `ProjectSettings/ProjectVersion.txt` (or the newest
-  /// installed editor when no exact match). Returns the launched editor path. Throws when no editor is found.
+  /// Opens [projectPath] in the exact TopiaForge Unity authoring editor. Throws
+  /// when the project pin or installed editor does not match.
   Future<String> openProjectInUnity(String projectPath);
 
   /// Resolves a Unity project's `Packages/vpm-manifest.json` against the subscribed VPM listings; when [restore]
@@ -252,7 +330,7 @@ abstract interface class DeveloperRepository {
     String name,
   });
 
-  /// Reads the world-authoring pairing config (`robotopia.world.json`) from a Unity project root, or null
+  /// Reads the world-authoring pairing config (`topiaforge.world.json`) from a Unity project root, or null
   /// when the project has none.
   Future<WorldAuthoringConfig?> readWorldAuthoringConfig(
     String unityProjectPath,

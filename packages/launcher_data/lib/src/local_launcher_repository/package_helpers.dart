@@ -5,12 +5,13 @@ extension _PackageHelpers on LocalLauncherRepository {
     String packageReference, {
     String expectedSha256 = '',
   }) async {
+    requireCanonicalTopiaForgePackageReference(packageReference);
     final reference = await _resolvePackageReference(
       packageReference,
       expectedSha256: expectedSha256,
     );
     final bytes = reference.bytes;
-    if (bytes.length > 512 * 1024 * 1024) {
+    if (bytes.length > _maxPackageBytes) {
       throw StateError('Package is larger than the 512 MB launcher limit.');
     }
     final actualSha = sha256.convert(bytes).toString();
@@ -21,25 +22,33 @@ extension _PackageHelpers on LocalLauncherRepository {
       );
     }
 
-    final archive = ZipDecoder().decodeBytes(bytes);
-    for (final file in archive.files) {
-      _safeArchivePath(file.name);
-    }
+    final archive = SafeZipArchive.decode(bytes, label: 'Package');
 
-    final manifestFile = archive.files.firstWhereOrNull(
-      (file) => file.name.replaceAll('\\', '/') == 'robotopia.mod.json',
-    );
+    final manifestFile = archive.entryNamed('topiaforge.mod.json');
     if (manifestFile == null || !manifestFile.isFile) {
-      throw StateError('Package is missing robotopia.mod.json.');
+      throw StateError('Package is missing topiaforge.mod.json.');
+    }
+    if (manifestFile.size > _maxManifestBytes) {
+      throw StateError('topiaforge.mod.json exceeds the 1 MB manifest limit.');
     }
 
     final manifest = ModManifest.fromJson(
-      jsonDecode(utf8.decode(manifestFile.content as List<int>))
+      jsonDecode(
+            utf8.decode(
+              manifestFile.readBytes(
+                maxBytes: _maxManifestBytes,
+                label: 'topiaforge.mod.json',
+              ),
+            ),
+          )
           as Map<String, Object?>,
     );
-    final entryAssembly = manifest.entryAssembly.replaceAll('\\', '/');
-    final hasEntryAssembly = archive.files.any(
-      (file) => file.isFile && file.name.replaceAll('\\', '/') == entryAssembly,
+    final entryAssembly = portableArchivePath(
+      manifest.entryAssembly,
+      label: 'Package entryAssembly',
+    );
+    final hasEntryAssembly = archive.entries.any(
+      (file) => file.isFile && file.name == entryAssembly,
     );
     if (!hasEntryAssembly) {
       throw StateError(
@@ -52,6 +61,9 @@ extension _PackageHelpers on LocalLauncherRepository {
       manifest: manifest,
       sha256Hex: actualSha,
       reference: reference.reference,
+      trust: expectedSha256.trim().isEmpty
+          ? _localUnverifiedPackageTrust
+          : _sha256VerifiedPackageTrust,
     );
   }
 
@@ -59,6 +71,13 @@ extension _PackageHelpers on LocalLauncherRepository {
     String packageReference, {
     required String expectedSha256,
   }) async {
+    final normalizedSha = expectedSha256.trim().toLowerCase();
+    if (normalizedSha.isNotEmpty &&
+        !RegExp(r'^[0-9a-f]{64}$').hasMatch(normalizedSha)) {
+      throw StateError(
+        'Expected package SHA-256 must be exactly 64 hex digits.',
+      );
+    }
     if (RegExp(r'^[A-Za-z]:[\\/]').hasMatch(packageReference) ||
         packageReference.startsWith(r'\\')) {
       return _readPackageFile(packageReference, packageReference);
@@ -71,24 +90,41 @@ extension _PackageHelpers on LocalLauncherRepository {
     }
 
     if (uri != null && uri.scheme == 'https') {
-      if (expectedSha256.trim().isEmpty) {
+      if (normalizedSha.isEmpty) {
         throw StateError(
           'Remote packages require a SHA-256 hash before install or preview.',
         );
       }
       final cached = File(
-        p.join(
-          _packageCache.path,
-          '${expectedSha256.toLowerCase()}.robotopiamod',
-        ),
+        p.join(_packageCache.path, '$normalizedSha.topiaforgemod'),
       );
       if (cached.existsSync()) {
-        return _readPackageFile(cached.path, packageReference);
+        try {
+          final cachedBytes = await _readLauncherFileBounded(
+            cached,
+            _maxPackageBytes,
+          );
+          if (sha256.convert(cachedBytes).toString() == normalizedSha) {
+            return _PackageReferenceBytes(
+              reference: packageReference,
+              bytes: cachedBytes,
+            );
+          }
+        } on StateError {
+          // Invalid cache entries are removed below and fetched afresh.
+        }
+        await cached.delete();
       }
 
       final bytes = await _downloadBytes(uri);
-      await cached.create(recursive: true);
-      await cached.writeAsBytes(bytes);
+      final downloadedSha = sha256.convert(bytes).toString();
+      if (downloadedSha != normalizedSha) {
+        throw StateError(
+          'Package SHA-256 mismatch for ${_safePackageReference(packageReference)}. '
+          'Expected $normalizedSha but got $downloadedSha.',
+        );
+      }
+      await _writePackageCacheAtomic(cached, bytes, normalizedSha);
       return _PackageReferenceBytes(reference: packageReference, bytes: bytes);
     }
 
@@ -99,54 +135,142 @@ extension _PackageHelpers on LocalLauncherRepository {
     return _readPackageFile(packageReference, packageReference);
   }
 
+  Future<void> _writePackageCacheAtomic(
+    File cached,
+    List<int> bytes,
+    String expectedSha,
+  ) async {
+    final targetType = FileSystemEntity.typeSync(
+      cached.path,
+      followLinks: false,
+    );
+    if (targetType == FileSystemEntityType.link) {
+      throw StateError('Package cache entry cannot be a symbolic link.');
+    }
+    if (targetType != FileSystemEntityType.notFound &&
+        targetType != FileSystemEntityType.file) {
+      throw StateError('Package cache entry is not a regular file.');
+    }
+    final token = '$pid-${DateTime.now().microsecondsSinceEpoch}';
+    final temp = File('${cached.path}.$token.tmp');
+    await temp.create(recursive: true);
+    try {
+      await temp.writeAsBytes(bytes, flush: true);
+      try {
+        await temp.rename(cached.path);
+      } on FileSystemException {
+        if (!await cached.exists()) {
+          rethrow;
+        }
+        final existing = await _readLauncherFileBounded(
+          cached,
+          _maxPackageBytes,
+        );
+        if (sha256.convert(existing).toString() == expectedSha) {
+          return;
+        }
+        await cached.delete();
+        await temp.rename(cached.path);
+      }
+    } finally {
+      await _deleteFileBestEffort(temp);
+    }
+  }
+
   Future<_PackageReferenceBytes> _readPackageFile(
     String path,
     String reference,
   ) async {
     final file = File(path);
-    if (!file.existsSync()) {
+    if (FileSystemEntity.typeSync(file.path, followLinks: false) ==
+        FileSystemEntityType.notFound) {
       throw StateError('Package file does not exist: $path');
     }
     return _PackageReferenceBytes(
       reference: reference,
-      bytes: await file.readAsBytes(),
+      bytes: await _readLauncherFileBounded(file, _maxPackageBytes),
     );
   }
 
+  String _safePackageReference(String reference) {
+    final uri = Uri.tryParse(reference);
+    if (uri == null || !uri.hasScheme) {
+      return reference.replaceAll(RegExp(r'[\r\n]+'), ' ');
+    }
+    return uri.replace(query: '', fragment: '', userInfo: '').toString();
+  }
+
   Future<List<int>> _downloadBytes(Uri uri) async {
-    final client = HttpClient();
-    try {
-      final request = await client.getUrl(uri);
-      final response = await request.close();
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw StateError(
-          'Download failed for $uri with HTTP ${response.statusCode}.',
-        );
-      }
-      final bytes = <int>[];
-      await for (final chunk in response) {
-        bytes.addAll(chunk);
-        if (bytes.length > 512 * 1024 * 1024) {
-          throw StateError('Package is larger than the 512 MB launcher limit.');
-        }
-      }
-      return bytes;
-    } finally {
-      client.close(force: true);
+    final result = await fetchHttpsBytes(
+      uri,
+      maxBytes: _maxPackageBytes,
+      label: 'Package download',
+      totalTimeout: const Duration(minutes: 10),
+    );
+    return result.bytes;
+  }
+}
+
+const _maxPackageBytes = 512 * 1024 * 1024;
+const _maxManifestBytes = 1024 * 1024;
+
+class _BoundedArchiveOutput extends OutputStream {
+  _BoundedArchiveOutput(
+    this._output, {
+    required this.maxBytes,
+    required this.entryName,
+  }) : super(byteOrder: _output.byteOrder);
+
+  final OutputStream _output;
+  final int maxBytes;
+  final String entryName;
+
+  @override
+  int get length => _output.length;
+
+  void _requireCapacity(int count) {
+    if (count < 0 || length > maxBytes - count) {
+      throw StateError(
+        'Package entry exceeds its $maxBytes-byte expanded limit: $entryName.',
+      );
     }
   }
 
-  String _safeArchivePath(String rawPath) {
-    final normalized = rawPath.replaceAll('\\', '/');
-    final parts = normalized.split('/');
-    if (normalized.startsWith('/') ||
-        RegExp(r'^[A-Za-z]:/').hasMatch(normalized) ||
-        parts.any((part) => part == '..')) {
-      throw StateError(
-        'Package contains a path outside the install directory: $rawPath',
-      );
-    }
-    return normalized;
+  @override
+  void clear() => _output.clear();
+
+  @override
+  Future<void> close() => _output.close();
+
+  @override
+  void closeSync() => _output.closeSync();
+
+  @override
+  void flush() => _output.flush();
+
+  @override
+  bool get isOpen => _output.isOpen;
+
+  @override
+  Uint8List subset(int start, [int? end]) => _output.subset(start, end);
+
+  @override
+  void writeByte(int value) {
+    _requireCapacity(1);
+    _output.writeByte(value);
+  }
+
+  @override
+  void writeBytes(List<int> bytes, {int? length}) {
+    final count = length ?? bytes.length;
+    _requireCapacity(count);
+    _output.writeBytes(bytes, length: count);
+  }
+
+  @override
+  void writeStream(InputStream stream) {
+    _requireCapacity(stream.length);
+    _output.writeStream(stream);
   }
 }
 
@@ -156,12 +280,14 @@ class _PackageReadResult {
     required this.manifest,
     required this.sha256Hex,
     required this.reference,
+    required this.trust,
   });
 
-  final Archive archive;
+  final SafeZipArchive archive;
   final ModManifest manifest;
   final String sha256Hex;
   final String reference;
+  final String trust;
 }
 
 class _PackageReferenceBytes {
@@ -176,15 +302,6 @@ extension _FirstOrNull<T> on Iterable<T> {
     final iterator = this.iterator;
     if (iterator.moveNext()) {
       return iterator.current;
-    }
-    return null;
-  }
-
-  T? firstWhereOrNull(bool Function(T item) test) {
-    for (final item in this) {
-      if (test(item)) {
-        return item;
-      }
     }
     return null;
   }

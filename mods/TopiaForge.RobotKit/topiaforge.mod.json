@@ -1,0 +1,53 @@
+{
+  "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+  "schemaVersion": 5,
+  "name": "io.github.furroxide.topiaforge.robotkit",
+  "displayName": "TopiaForge RobotKit",
+  "version": "1.0.0-rc.1",
+  "author": {
+    "name": "TopiaForge"
+  },
+  "description": "Framework SDK service for spawning standard-agent robots that come up native (body, animation, native locomotion) and are driven by the game's own pathing, then overridden for behaviour and visuals. Also publishes a structured robot brain-query service, a multi-turn robot conversation service, a player dialogue-input service (typed text + push-to-talk voice via /agent/stt), and a robot objective service (persistent go-to/follow/patrol/wander/flee programs over named world targets, plus robot-to-robot reprogramming: a courier robot walks a payload program over to another robot and applies it on arrival, with a delivery event mods can react to) — the network services proxied through the game's own RoboAPI backend, mirroring how the base game lets you talk to robots.",
+  "entryAssembly": "TopiaForge.RobotKit.dll",
+  "entryType": "TopiaForge.RobotKit.RobotKitMod",
+  "dependencies": {},
+  "optionalDependencies": {
+    "io.github.furroxide.topiaforge.prompts": ">=1.0.0-rc.1 <2.0.0"
+  },
+  "loadAfter": [
+    "io.github.furroxide.topiaforge.prompts"
+  ],
+  "supportedGameVersionRange": "0.0.2309",
+  "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "category": "Framework",
+  "tags": [
+    "robots",
+    "agents",
+    "navigation",
+    "pathfinding",
+    "sdk",
+    "framework",
+    "ai",
+    "brain",
+    "llm",
+    "conversation",
+    "voice",
+    "stt",
+    "objectives"
+  ],
+  "license": "MIT",
+  "licenseFiles": [
+    "LICENSE"
+  ],
+  "capabilities": [
+    "robot-spawning",
+    "navigation",
+    "physics",
+    "network",
+    "remote-ai",
+    "player-token",
+    "microphone",
+    "speech-to-text"
+  ]
+}

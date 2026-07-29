@@ -64,23 +64,69 @@ extension LocalLauncherRuntimeRepair on LocalLauncherRepository {
     }
 
     try {
-      await _repairBepInEx(layout, actions, issues);
-      _repairLoader(install, actions, issues);
+      await _withRuntimeRepairLock(Directory(layout.gameRoot), () async {
+        final transaction = await _RuntimeRepairTransaction.begin(
+          Directory(layout.gameRoot),
+        );
+        var completed = false;
+        try {
+          await _stageBepInEx(layout, transaction, issues);
+          await _stageLoader(install, transaction, issues);
+          if (issues.any((issue) => issue.isBlocking)) {
+            return;
+          }
+          await transaction.prepare();
+          await transaction.commit(hook: _runtimeRepairCommitHook);
+          await _restoreExecutableBits(layout);
+          for (final directory in [
+            _managerRoot(install),
+            _packageInbox(install),
+            _managerConfig(install),
+            _managerData(install),
+            _managerLogs(install),
+          ]) {
+            _ensureRuntimeDirectory(Directory(layout.gameRoot), directory);
+          }
+          await transaction.complete();
+          completed = true;
+          actions.add('Installed or repaired BepInEx $_bepInExVersion.');
+          actions.add(
+            'Installed or repaired TopiaForge loader $_loaderVersion.',
+          );
+          if (layout.kind == GameInstallLayout.linuxProton) {
+            actions.add(
+              'Reminder: run the game under Proton/Wine with '
+              'WINEDLLOVERRIDES="winhttp=n,b" so the mod loader injects.',
+            );
+          }
+        } finally {
+          if (!completed && transaction.root.existsSync()) {
+            await transaction.rollback();
+          }
+        }
+      });
     } on FileSystemException catch (error) {
       issues.add(
         LauncherIssue(severity: IssueSeverity.error, message: error.message),
+      );
+    } on StateError catch (error) {
+      issues.add(
+        LauncherIssue(
+          severity: IssueSeverity.error,
+          message: error.message.toString(),
+        ),
       );
     }
 
     final refreshed = await _validateGameDirectory(install.path);
     issues.addAll(refreshed.issues.where((issue) => issue.isBlocking));
-    await _appendLauncherLog('Repair actions: ${actions.join('; ')}');
+    await _appendLauncherLogBestEffort('Repair actions: ${actions.join('; ')}');
     return RepairReport(actions: actions, issues: issues);
   }
 
-  Future<void> _repairBepInEx(
+  Future<void> _stageBepInEx(
     GameLayout layout,
-    List<String> actions,
+    _RuntimeRepairTransaction transaction,
     List<LauncherIssue> issues,
   ) async {
     final source = Directory(
@@ -91,27 +137,47 @@ extension LocalLauncherRuntimeRepair on LocalLauncherRepository {
         layout.bepInExBundleDirName,
       ),
     );
-    if (!source.existsSync()) {
+    if (FileSystemEntity.typeSync(source.path, followLinks: false) !=
+        FileSystemEntityType.directory) {
       issues.add(
         LauncherIssue(
           severity: IssueSeverity.error,
           message:
-              'Bundled BepInEx ${LocalLauncherRepository._bepInExVersion} '
+              'Bundled BepInEx $_bepInExVersion '
               '(${layout.bepInExBundleDirName}) was not found.',
         ),
       );
       return;
     }
-
-    _copyRuntimeDirectory(source, Directory(layout.gameRoot));
-    await _restoreExecutableBits(layout);
-    actions.add(
-      'Installed or repaired BepInEx ${LocalLauncherRepository._bepInExVersion}.',
+    _requireRuntimeDirectory(
+      _repositoryRoot,
+      source,
+      label: 'Bundled BepInEx source',
     );
-    if (layout.kind == GameInstallLayout.linuxProton) {
-      actions.add(
-        'Reminder: run the game under Proton/Wine with '
-        'WINEDLLOVERRIDES="winhttp=n,b" so the mod loader injects.',
+
+    final entities = source.listSync(recursive: true, followLinks: false)
+      ..sort((left, right) => left.path.compareTo(right.path));
+    if (entities.length > _maxRuntimeSourceEntries) {
+      throw StateError('Bundled BepInEx exceeds the runtime entry limit.');
+    }
+    for (final entity in entities) {
+      final type = FileSystemEntity.typeSync(entity.path, followLinks: false);
+      if (type == FileSystemEntityType.directory) {
+        _requireRuntimeDirectory(
+          source,
+          Directory(entity.path),
+          label: 'Bundled BepInEx source',
+        );
+        continue;
+      }
+      if (type != FileSystemEntityType.file) {
+        throw StateError(
+          'Bundled BepInEx contains a symbolic link or special file.',
+        );
+      }
+      await transaction.addSource(
+        File(entity.path),
+        p.relative(entity.path, from: source.path),
       );
     }
   }
@@ -125,62 +191,77 @@ extension LocalLauncherRuntimeRepair on LocalLauncherRepository {
     }
     for (final relative in layout.executableRuntimeFiles) {
       final target = p.join(layout.gameRoot, relative);
-      if (File(target).existsSync()) {
-        await Process.run('chmod', ['+x', target]);
+      _requireRuntimeDirectory(
+        Directory(layout.gameRoot),
+        File(target).parent,
+        label: 'Executable runtime path',
+      );
+      final targetType = FileSystemEntity.typeSync(target, followLinks: false);
+      if (targetType == FileSystemEntityType.link) {
+        throw StateError('Executable runtime path is a symbolic link: $target');
+      }
+      if (targetType == FileSystemEntityType.file) {
+        final result = await runBoundedProcess(
+          'chmod',
+          ['+x', target],
+          timeout: const Duration(seconds: 10),
+          maxStdoutBytes: 64 * 1024,
+          maxStderrBytes: 64 * 1024,
+        );
+        if (result.exitCode != 0) {
+          throw StateError('Could not restore executable permission: $target');
+        }
       }
     }
   }
 
-  void _repairLoader(
+  Future<void> _stageLoader(
     GameInstall install,
-    List<String> actions,
+    _RuntimeRepairTransaction transaction,
     List<LauncherIssue> issues,
-  ) {
+  ) async {
     final loaderSource = Directory(
       p.join(
         _repositoryRoot.path,
         'src',
-        'Robotopia.ModManager',
+        'TopiaForge.ModManager',
         'bin',
         'Release',
         'netstandard2.1',
       ),
     );
-    final loaderDlls = [
-      'Robotopia.ModManager.dll',
-      'Robotopia.ModManager.Core.dll',
-      'Robotopia.Mods.Abstractions.dll',
-      'Robotopia.Mods.UnityUi.dll',
-    ];
-    if (!loaderDlls.every(
-      (dll) => File(p.join(loaderSource.path, dll)).existsSync(),
-    )) {
+    if (FileSystemEntity.typeSync(loaderSource.path, followLinks: false) !=
+            FileSystemEntityType.directory ||
+        !topiaForgeRuntimeLoaderDlls.every(
+          (dll) =>
+              FileSystemEntity.typeSync(
+                p.join(loaderSource.path, dll),
+                followLinks: false,
+              ) ==
+              FileSystemEntityType.file,
+        )) {
       issues.add(
         const LauncherIssue(
           severity: IssueSeverity.error,
           message:
-              'Built loader DLLs were not found. Run dotnet build RobotopiaModManager.slnx -c Release.',
+              'Built loader DLLs were not found. Run dotnet build TopiaForge.slnx -c Release.',
         ),
       );
       return;
     }
-
-    final pluginDir = Directory(
-      p.join(install.path, 'BepInEx', 'plugins', 'RobotopiaModManager'),
-    )..createSync(recursive: true);
-    for (final dll in loaderDlls) {
-      File(
-        p.join(loaderSource.path, dll),
-      ).copySync(p.join(pluginDir.path, dll));
-    }
-    _managerRoot(install).createSync(recursive: true);
-    _packageInbox(install).createSync(recursive: true);
-    _managerConfig(install).createSync(recursive: true);
-    _managerData(install).createSync(recursive: true);
-    _managerLogs(install).createSync(recursive: true);
-    actions.add(
-      'Installed or repaired Robotopia loader ${LocalLauncherRepository._loaderVersion}.',
+    _requireRuntimeDirectory(
+      _repositoryRoot,
+      loaderSource,
+      label: 'Built loader source',
     );
+
+    for (final dll in topiaForgeRuntimeLoaderDlls) {
+      final source = File(p.join(loaderSource.path, dll));
+      await transaction.addSource(
+        source,
+        p.posix.join('BepInEx', 'plugins', 'TopiaForge.ModManager', dll),
+      );
+    }
   }
 
   Future<void> _openPath(String path) async {

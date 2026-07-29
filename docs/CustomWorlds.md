@@ -1,116 +1,109 @@
-# Custom Worlds — ship your own Blender/Unity world as a playable Robotopia world
+---
+title: Custom Robotopia worlds and gamemodes
+description: Register bundle-backed Robotopia worlds and modes through the safe Worlds module.
+---
 
-A mod can register a **fully custom world** — geometry modeled in Blender (or anywhere), assembled in
-Unity, shipped as a prefab in an AssetBundle. Launching it loads the game's clean play stage (a real
-player spawns natively), places your world at the player spawn, and tears it down when the session
-ends. Custom worlds appear in the in-game **GAMEMODES** menu and work with the Sandbox gamemode's
-spawn menu out of the box.
+# Custom Robotopia worlds and gamemodes
 
-```
-Blender (.fbx/.gltf)  →  Unity world project  →  world prefab  →  AssetBundle  →  .robotopiamod
-                          (robotopia new           Assets/World/     AssetBundles/     installed via the
-                           unity-world)            World.prefab      <name>.bundle     launcher / CLI
-                                                                         │
-                                        game: UgcPlay scene + native player spawn + your world
-```
+The Worlds module is TopiaForge's safe authoring boundary for custom Robotopia worlds and gamemodes.
+It owns mod-defined worlds, gamemodes, menu entries, scene transitions, pause actions, shops, and
+one current `WorldSession`. Consumer mods never coordinate scenes or global teardown directly.
 
-## Prerequisites
+## Start from a compiled scaffold
 
-- `robotopia doctor` — .NET SDK 8+ (build/pack) and, for bundle builds, a **Unity 6000.0.x editor
-  with patch ≤ 31** (the game player is 6000.0.31f1; bundles from newer editor streams may not load).
-  Doctor warns when your installed editors don't qualify and prints the Hub install hint.
-
-## Scaffold and pair (once)
-
-```powershell
-robotopia new mod my.world --template world          # the C# mod that ships + registers the world
-robotopia new unity-world MyWorld --mod ..\my.world  # the Unity authoring project, paired
+```sh
+topiaforge new mod example.world --template world --name "Example World" --author "You" --license MIT --version 1.0.0
+topiaforge restore --project example.world
 ```
 
-Pairing writes `robotopia.world.json` at the Unity project root (`worldId`, `bundleName`,
-`worldPrefab`, `modPath`). Pair an existing project instead with
-`robotopia world link --project <unityProj> --mod <modDir>`. The scaffolded mod is a single
-registration call:
+The world template uses `TopiaForge.Mods.Worlds`, the core asset service, `BundleWorldContent`, and
+lifetime-owned `IWorldRegistration` handles. The gamemode template adds session events and a
+per-frame Robotopia gameplay loop. Both have NUnit lifecycle tests and are built, packed, relocated, and validated
+from the extracted release in CI.
+
+## Authoring flow
+
+1. Build a Robotopia-compatible prefab bundle for a declared `contentTargets` value.
+2. Place it under the mod's `AssetBundles/` content root.
+3. Register a `WorldDefinition` and `ICustomWorldContent` through `IWorldGamemodeService`.
+4. Register a `GamemodeMenuEntry` that pairs the world with a gamemode.
+5. Test create, session start/end, unload, and reload with `TopiaForge.Mods.Testing`.
+
+`BundleWorldContent.CreateAsync()` loads and spawns through opaque asset/entity handles. Returned
+content and registrations are released automatically after session teardown, unload, or failed load.
+
+**Never block on `CreateAsync()`.** It is driven by the game's own asynchronous asset loader, so the
+task completes on the main thread. Calling `.Result`, `.Wait()`, or `.GetAwaiter().GetResult()` from
+the main thread stops the frame loop that would have completed it, and the game hangs with no
+recovery. Drive it with `PendingOperation<IWorldContent>` and poll that from your per-frame update;
+it also hands back content that arrives after a cancel or timeout so you can release it. The analyzer
+reports a blocking wait as [TF1008](Diagnostics.md#tf1008). The same rule applies to every
+`IAssetService` load.
+
+## Hosting a gamemode
+
+`GamemodeHost<TController>` owns the wiring between a Worlds gamemode and the object that runs one round
+of it, so an entry point keeps only the parts that are about the gamemode:
 
 ```csharp
-context.RegisterWorldFromBundle(worlds, new BundleWorldOptions
+var hosted = GamemodeHost<MyRound>.Create(
+    Context,
+    Context.RequireExtension<IWorldGamemodeService>(),
+    GamemodeId,
+    session => new MyRound(Context, session),
+    new GamemodeDefinition(GamemodeId, "My Mode", "..."),
+    new GamemodeMenuEntry(MenuId, "My Mode", "...", GamemodeId));
+if (hosted.TryGetValue(out var host))
 {
-    Id = "my.world.world",
-    Name = "My World",
-    BundleRelativePath = "AssetBundles/my-world.bundle",
-    // Content = new CustomWorldOptions { SpawnPointName = "SpawnPoint", KillPlaneDepth = 100f, ... }
-});
+    host.AddPauseAction(new WorldPauseAction(
+        "restart", "RESTART ROUND", () => host.Controller?.Restart(), destructive: true));
+}
 ```
 
-and `UnregisterWorld` + `UnloadOwner` on unload. Manifest: `vpmDependencies` on `robotopia.worlds
->= 0.5.0` and `robotopia.assets`, `supportedSdkVersionRange >= 0.1.1`.
+It registers the gamemode and menu entry and rolls the first back if the second fails, subscribes to
+session changes and defers the unsubscribe onto the mod lifetime, **replays a session that is already
+running** (omitting that is why a hot reload mid-session leaves a mod that never wakes up), keeps exactly
+one controller alive, and re-registers pause actions for every session. Pass `null` for the definition and
+menu entry to attach to a gamemode the provider already offers, as Sandbox does with the built-in sandbox.
 
-## Author the world (Blender → Unity)
+A throwing controller factory is treated as a failed session — partial controller disposed, diagnostic
+reported, session ended as `LoadFailed` — rather than leaving the player in a broken world.
 
-Full crib sheet: the template's `Assets/World/README.md`. The contract, in short — one prefab
-(default `Assets/World/World.prefab`) where:
+Related contracts worth knowing: `IWorldPauseMenuService` adds actions to the vanilla pause menu and
+`InterceptExit`/`WorldPauseExitDecision` decide what the vanilla exit-to-menu option does during your
+session; `GameScenes.MainMenuSceneName` and `IsNonGameplayScene` identify non-gameplay scenes;
+`ShopItem`, `IShopWallet`/`ShopWallet`, and `ShopTransactions.TryPurchase` provide a purchase arbiter with
+a stable rule order so a shop UI and game logic cannot disagree.
 
-- a descendant named **`SpawnPoint`** marks where the player stands (≥ 1 m above walkable ground);
-- **no custom MonoBehaviours** — the game cannot resolve modder scripts inside content bundles; only
-  native Unity/HDRP components survive (colliders, lights, Volumes, reflection probes, audio, LODs);
-- **colliders on all walkable geometry** (MeshCollider for Blender imports);
-- optionally a **global HDRP Volume** child (suggested name `Environment`) with your own
-  sky/exposure — its presence suppresses the framework's default gradient sky + sun;
-- no cameras/event systems (the game's play scene owns those).
+## Holding gameplay for modal UI
 
-`Robotopia → Validate World Prefab` checks all of this in-editor; the build runs the same validation.
+A shop, inventory, dialogue, or game-over screen needs gameplay to stop. `GameplayPause` does that in one
+place instead of per surface:
 
-## Build the bundle
+```csharp
+pause = new GameplayPause(Context, "mymod-shop", time.AsPauseSource(), "MYMOD_SHOP_PAUSE_FAILED");
 
-- In-editor: **Robotopia → Build World Bundle** (from `com.robotopia.world-companion`, preinstalled
-  in the template).
-- Headless: `robotopia world build [--project <path|name>] [--mod <dir>] [--bundle <name>]
-  [--unity <Unity.exe>] [--dry-run]` — locates an eligible editor (explicit → `UNITY_EDITOR_PATH` →
-  Unity Hub scan), runs `-batchmode -executeMethod
-  Robotopia.WorldCompanion.Editor.WorldBundleBuilder.Build`, and verifies the bundle landed at
-  `<mod>/AssetBundles/<name>.bundle` (with a provenance `.manifest.json`: sha256, editor version,
-  asset list). Failures print the tail of `Logs/robotopia-world-build.log`.
-
-## Play
-
-```powershell
-robotopia world play        # build → pack → install → launch, one command
+void OpenShop()  => pause.Request();
+void CloseShop() => pause.Release();
+void OnUpdate(float _) => pause.Tick(Context.Time.Frame.UnscaledDeltaTime);
 ```
 
-or compose the steps yourself (`world build`, `pack`, `install`, `launch` / `dev-install`). In-game,
-the world shows up under **GAMEMODES** (paired with the Sandbox gamemode by default — Q spawn menu,
-props, robots all work inside your world).
+It prefers a Chronos world freeze, degrades to suspending player control when Chronos is absent or its
+hooks are unresolved, reports a total failure once rather than every frame, and reacquires a hold the host
+takes away mid-session. Tick it with an **unscaled** delta — a scaled clock stops while the world is frozen,
+which would freeze the retry loop too. `Kind` reports whether an actual world freeze or only the
+player-control fallback is holding.
 
-## Runtime semantics (what the Worlds framework does)
+## Pause and save behavior
 
-- The bundle prefab is loaded lazily on the world's first launch (via robotopia.assets, cached).
-- Content is created **before** the scene switch, so a broken bundle fails the launch with a clear
-  message while you are still on the menu.
-- The world is moved so its `SpawnPoint` coincides with the native player spawn (no player teleport).
-- A fall more than `KillPlaneDepth` (default 100 m) below the spawn respawns the player at the spawn.
-- Session end (pause-menu exit, another launch superseding, mod unload) destroys the world content;
-  `UnregisterWorld` during a live session ends it cleanly.
-- Placement failure falls back to the generated sandbox arena rather than stranding the player.
+World pause actions are registered through the Worlds provider and remain owner-bound.
+`Context.LocalStorage` is suitable only for installation-local settings and progress that does not
+need to follow a save or synchronize between peers. Shared/save-scoped story state requires a
+future authoritative world-state service. End the current session with an explicit
+`WorldSessionEndReason`; do not infer teardown from arbitrary scene polling.
 
-## Command reference
+Live acceptance for custom Robotopia worlds is Windows/Proton-only for V1. Other Robotopia code mods
+remain portable when their manifest constraints and content are portable.
 
-| Command | What it does |
-|---|---|
-| `robotopia new unity-world <name> [--dir Path]` | Scaffold the Unity authoring project (add `--mod <modDir>` to pair it in the same step). |
-| `robotopia world link --project <unityProj> --mod <modDir> [--bundle name] [--prefab assetPath]` | Pair an existing Unity project with the mod that ships its bundle (writes `robotopia.world.json`). |
-| `robotopia world build [--project <unityProj\|name>] [--mod <modDir>] [--bundle name] [--unity Unity.exe] [--dry-run]` | Headless bundle build into `<mod>/AssetBundles/`; `--dry-run` prints the resolved project/mod/bundle/editor without launching Unity. |
-| `robotopia world play [--project <unityProj\|name>] [--mod <modDir>] [--configuration cfg]` | Build → pack → install → launch, one command. |
-
-Ready to ship the world to other players? See [PublishingYourMod.md](PublishingYourMod.md).
-
-## Troubleshooting
-
-- **"No eligible Unity editor"** — install 6000.0.31f1 (Hub → Installs → Archive, or headless:
-  `"Unity Hub.exe" -- --headless install --version 6000.0.31f1 --changeset a206c360e2a8`).
-- **Validation: custom component** — a script from your project/package is on the prefab; replace it
-  with native components or move behaviour into the mod's C# (attach at runtime).
-- **World loads but looks washed out** — no global Volume and `ApplyDefaultEnvironment = false`; use
-  the default environment or ship your own Volume.
-- **Player falls through the floor** — missing colliders on the imported meshes.
-- **`manager.log` says the bundle has N prefabs** — pin `PrefabAssetName` in `BundleWorldOptions` or
-  keep exactly one prefab in the bundle.
+See [Specialist modules](Modules.md#worlds), [Manifest V5](ManifestV5.md#package-contract),
+and [Test a mod](TestingMods.md).

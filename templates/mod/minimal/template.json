@@ -1,9 +1,9 @@
 {
   "id": "minimal",
   "label": "Minimal mod",
-  "description": "Hello-world mod that logs load, scene, and update events.",
+  "description": "Beginner utility mod with validated config, migration, logging, and a command.",
   "manifestDefaults": {
     "category": "Utility",
-    "description": "Minimal Robotopia SDK mod."
+    "description": "Minimal TopiaForge SDK mod for Robotopia."
   }
 }

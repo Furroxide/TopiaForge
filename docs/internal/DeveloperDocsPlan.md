@@ -1,4 +1,4 @@
-# Robotopia Developer Docs — Decision Document
+# TopiaForge Developer Docs — Decision Document
 
 Status: Proposed · Date: 2026-06-29 · Owner: docs/platform · Repo: repository root
 
@@ -7,7 +7,7 @@ Status: Proposed · Date: 2026-06-29 · Owner: docs/platform · Repo: repository
 ## 1. TL;DR / Recommendation
 
 - **Site generator:** **Astro Starlight** for the hand-written portal (Tutorials, How-to, Explanation, manifest tables). Built-in Pagefind search, lighter/faster than Docusaurus, one fewer thing to wire.
-- **C# API reference:** **DocFX** over `Robotopia.Mods.Abstractions`, output deployed at `/api/csharp/` — *gated on adding `///` comments first*.
+- **C# API reference:** **DocFX** over `TopiaForge.Mods.Abstractions`, output deployed at `/api/csharp/` — *gated on adding `///` comments first*.
 - **Dart API reference:** **dartdoc** (`dart doc`) per `launcher_*` package, output at `/api/dart/`, **strongly de-emphasized** (Contributing/Internals only — these packages are internal, and the audience is C# modders). *Decision point: this tree may not earn its place in the unified search index — see §3.3.*
 - **Hosting + CI:** **GitHub Pages** via a **GitHub Actions** workflow (build DocFX + dartdoc + Starlight on a runner, stitch into one publish dir). Single vendor, $0 on public repos.
 - **Search:** **Pagefind** — Starlight ships it for the portal; one extra post-build pass over the *merged* HTML extends it across portal + C# API (+ Dart API, if kept).
@@ -25,7 +25,7 @@ Status: Proposed · Date: 2026-06-29 · Owner: docs/platform · Repo: repository
 ## 2. Goals & Audiences
 
 **Goals (in priority order):**
-1. Serve **external C# mod developers** an end-to-end path from SDK → built `.robotopiamod` → installed → iterating.
+1. Serve **external C# mod developers** an end-to-end path from SDK → built `.topiaforgemod` → installed → iterating.
 2. **Low long-term maintenance** for a solo/small team — auto-generate the rot-prone API surface; hand-write only stable prose; keep the toolchain count as low as the goals allow.
 3. **Credibility** at least matching the legacy RoboPatch wiki's content surface (clean-room — mirror topics, never copy).
 4. **$0 hosting, Windows-first authoring**, good full-text search, Markdown authoring.
@@ -35,7 +35,7 @@ Status: Proposed · Date: 2026-06-29 · Owner: docs/platform · Repo: repository
 
 | Priority | Audience | Core need |
 |---|---|---|
-| **1 (primary)** | External C# mod developers | Reference SDK → implement `IRobotopiaMod` → manifest → `robotopia pack` → install → services (assets, prompts, Worlds) → publish. Needs the restart-required/Mono-no-unload model explained. |
+| **1 (primary)** | External C# mod developers | Reference SDK → derive from `TopiaForgeMod` → manifest → `topiaforge dev` → services/modules → publish. Needs the restart-required/Mono-no-unload model explained. |
 | 2 | End users (launcher) | Install/detect game, install/enable/disable mods, dependency/conflict plans, diagnostics. Mostly *user* docs; overlaps dev docs only at the package-format boundary. |
 | 3 | Internal contributors | Architecture map, `AGENTS.md` rules (Bloc, 500-line Dart cap, clean-room, Core free of Unity), verification matrix, where the manifest schema *actually* lives (Dart `launcher_domain`). |
 
@@ -114,7 +114,7 @@ Status: Proposed · Date: 2026-06-29 · Owner: docs/platform · Repo: repository
 ```
 Published site (one GitHub Pages artifact, served at /)
 ├── /                      Starlight portal (hand-written: Tutorials, How-to, Explanation, manifest tables)
-├── /api/csharp/           DocFX output of Robotopia.Mods.Abstractions   (generated, prominent in modder nav)
+├── /api/csharp/           DocFX output of TopiaForge.Mods.Abstractions   (generated, prominent in modder nav)
 ├── /api/dart/             dartdoc output (generated, Contributing/Internals only — optional in search)
 │   ├── launcher_domain/
 │   ├── launcher_data/
@@ -143,10 +143,10 @@ Section type in brackets (loose Diátaxis check). **Legend:** 🟢 exists today 
 | Page | Type | Source | Status |
 |---|---|---|---|
 | Home / Overview (loader vs launcher, by-audience start) | — | hand | ⚪ |
-| **Getting Started (Modders)** — template → build → `robotopia pack` → install → F10 → logs | Tutorial | hand, snippets from CI-built template | 🟡 (README + Modding.md fragments) |
-| Your First Mod (full walkthrough) | Tutorial | hand + `robotopia new mod` scaffold (`templates\mod\*`) | 🟢 (docs/YourFirstMod.md) |
-| Mod Anatomy (`.robotopiamod` layout, what `robotopia pack` includes/strips) | Reference | hand | ⚪ |
-| **Manifest Reference (`robotopia.mod.json`)** | Reference | hand-maintained, **CI-validated** against `ModManifest`/`ModDependency`/`ModConflict` (see §7) | 🟡 (Modding.md lists most fields; missing `worldGamemodes`, dependency version-range object, key aliases) |
+| **Getting Started (Modders)** — template → build → `topiaforge pack` → install → F10 → logs | Tutorial | hand, snippets from CI-built template | 🟡 (README + Modding.md fragments) |
+| Your First Mod (full walkthrough) | Tutorial | hand + `topiaforge new mod` scaffold (`templates\mod\*`) | 🟢 (docs/YourFirstMod.md) |
+| Mod Anatomy (`.topiaforgemod` layout, what `topiaforge pack` includes/strips) | Reference | hand | ⚪ |
+| **Manifest Reference (`topiaforge.mod.json`)** | Reference | hand-maintained, **CI-validated** against `ModManifest`/`ModDependency`/`ModConflict` (see §7) | 🟡 (Modding.md lists most fields; verify `worldGamemodes` and dependency version-range objects) |
 | Mod Lifecycle & Context (`OnLoad/OnUnload`, `IModContext`, restart-required/Mono no-unload) | Explanation+Ref | hand | 🟡 |
 | Configuration (`LoadConfig/SaveConfig`, `[DataContract]`, `ModPaths`, `IModFileService`) | How-to | hand | ⚪ |
 | Services Overview (`GetService<T>`, additive contract, `IModServiceRegistry`) | Reference | hand | ⚪ |
@@ -154,12 +154,12 @@ Section type in brackets (loose Diátaxis check). **Legend:** 🟢 exists today 
 | Prompt Override Guide (`IPromptOverrideRegistry`, priority, `PromptConflict`) | How-to | hand | ⚪ |
 | Worlds & Gamemodes Guide (`IWorldGamemodeService`, `WorldDefinition`…) | How-to | hand | ⚪ |
 | Logging & Debugging (`IModLogger`, BepInEx console/log locations) | How-to | hand | ⚪ |
-| Worked Examples (GravityGun, Zombies→Worlds, Worlds, NoFeedbackUrl) | Tutorial/Expl | hand → existing mods | ⚪ |
+| Worked Examples (GravityGun, Zombies→Worlds, Worlds, NoFeedbackUrl) | Tutorial/Expl | hand → existing mods | 🟡 (Zombies complete) |
 | **C# API Reference** | Reference | 🤖 **DocFX** | ⚪ (gated on §7) |
 | Security & Trust Model (in-process code exec, permissions descriptive-only) | Explanation | hand | 🟡 (README) |
 | Versioning & Compatibility (`supportedGameVersionRange`/loader range) | Explanation | hand | ⚪ |
 | Troubleshooting / FAQ | How-to | hand | ⚪ |
-| Launcher User Guide (install/detect, enable/disable, plans, migration, diagnostics) | Tutorial/How-to | hand | ⚪ |
+| Launcher User Guide (install/detect, enable/disable, plans, diagnostics) | Tutorial/How-to | hand | ⚪ |
 | Contributing (Internal) — architecture, `AGENTS.md` rules, verification matrix, links to dartdoc | Explanation | hand + 🤖 **dartdoc** | 🟡 (AGENTS.md) |
 
 **Ship-first priority:** Quickstart → Your First Mod → Manifest Reference → SDK (C#) Reference → Packaging/Mod Anatomy → Troubleshooting. Explanation + Contributing follow.
@@ -171,15 +171,15 @@ Section type in brackets (loose Diátaxis check). **Legend:** 🟢 exists today 
 > Effort below is split into **generator/CI setup** vs **prose authoring**, because authoring is the real cost. Authoring estimates assume one writer; treat them as the long pole.
 
 ### Phase 0 — Stop the bleed (in-repo Markdown) · setup ~0.5 day · authoring ~0.5–1 day
-- Expand `docs\Modding.md` into a real end-to-end Quickstart (template → build → `robotopia pack` → install → F10).
-- Add `docs\Manifest.md` documenting the **actual** field superset — cross-check against `manifest_models.dart`: include `worldGamemodes` (alias `gamemodes`), `vpmDependencies`, optional dependency objects, and Robotopia extensions, plus `schemaVersion == 2` and the VPM `name` id rule (`^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$`, i.e. 2–64 chars).
+- Expand `docs\Modding.md` into a real end-to-end Quickstart (template → build → `topiaforge pack` → install → F10).
+- `docs/ManifestV5.md` documents the canonical schema-V5 field set: ID-to-range `dependencies` and `optionalDependencies`, `loadBefore`/`loadAfter`, compatibility and host constraints, capabilities, bounded `x-*` metadata, build provenance, optional multiplayer metadata, and the safe mod-id rule.
 - Add `CONTRIBUTING.md` with the one-line content-routing rule + PR checklist.
-- **Done when:** a new modder can ship a `.robotopiamod` using only in-repo Markdown.
+- **Done when:** a new modder can ship a `.topiaforgemod` using only in-repo Markdown.
 
 ### Phase 1 — Portal + core hand-written docs · setup ~1–1.5 days · authoring ~4–6 days
 - Scaffold Starlight under `website/`; wire task-oriented nav.
 - Author the ~9 core pages: Getting Started, Your First Mod, Mod Anatomy, Manifest Reference, Lifecycle/Context, Config, Services Overview, Security & Trust, Troubleshooting. **Budget ~half a day each for good technical prose** — this dominates the phase.
-- Source tutorial code snippets from the **CI-scaffolded** `robotopia new mod` output (the release workflow scaffolds and packs one on every OS) so they can't drift.
+- Source tutorial code snippets from the **CI-scaffolded** `topiaforge new mod` output (the release workflow scaffolds and packs one on every OS) so they can't drift.
 - GitHub Actions: build Starlight → deploy to Pages. Add `markdownlint-cli2` + `lychee` link-check on PRs. (Starlight's Pagefind covers portal search out of the box.)
 - **Done when:** a credible public site is live at the Pages URL with the modder happy-path complete, portal search working, link-check green in CI.
 
@@ -192,7 +192,7 @@ Section type in brackets (loose Diátaxis check). **Legend:** 🟢 exists today 
 
 ### Phase 3 — Polish & optional versioning · as-needed
 - Add `rossjrw/pr-preview-action` (or move deploy to Cloudflare Pages) for PR previews.
-- Add Vale with a Robotopia term list (`mod` vs `plugin`, `.robotopiamod`, `robotopia.mod.json`) **only if** terminology drift becomes a real problem at >~15 pages — it's optional polish, not a default.
+- Add Vale with a TopiaForge term list (`mod` vs `plugin`, `.topiaforgemod`, `topiaforge.mod.json`) **only if** terminology drift becomes a real problem at >~15 pages — it's optional polish, not a default.
 - Introduce versioning **only when a breaking SDK change lands**: enable `starlight-versions` (or switch to Docusaurus if its maturity is needed), snapshot `latest`, add the version switcher; tie versions to `supportedGameVersionRange`/loader range.
 - **Done when:** previews on PRs, (optional) terminology enforced, versioning available if/when needed.
 
@@ -203,9 +203,9 @@ Section type in brackets (loose Diátaxis check). **Legend:** 🟢 exists today 
 The generated C# API tier is **worthless until comments exist** — this is the single highest-leverage task and blocks Phase 2.
 
 **C# (the public modder surface — do this):**
-- In `src\Robotopia.Mods.Abstractions\Robotopia.Mods.Abstractions.csproj` add `<GenerateDocumentationFile>true</GenerateDocumentationFile>`. For coverage, prefer a **CI doc-coverage report** (warn on `CS1591`) over a hard `<WarningsAsErrors>CS1591</WarningsAsErrors>` build gate: for a solo dev the hard gate breaks the build on every new undocumented public member, which is friction without much payoff at this stage. Flip to the hard gate later if the SDK formalizes. (`Directory.Build.props` sets `TreatWarningsAsErrors=false`, so either approach is a per-project opt-in; other projects keep `<NoWarn>1591</NoWarn>`.)
+- In `src\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj` add `<GenerateDocumentationFile>true</GenerateDocumentationFile>`. For coverage, prefer a **CI doc-coverage report** (warn on `CS1591`) over a hard `<WarningsAsErrors>CS1591</WarningsAsErrors>` build gate: for a solo dev the hard gate breaks the build on every new undocumented public member, which is friction without much payoff at this stage. Flip to the hard gate later if the SDK formalizes. (`Directory.Build.props` sets `TreatWarningsAsErrors=false`, so either approach is a per-project opt-in; other projects keep `<NoWarn>1591</NoWarn>`.)
 - Write `/// <summary>` (and `<param>`/`<returns>` where constructors/methods take arguments) for the public surface across **two files, ~17–18 public types**:
-  - `IRobotopiaMod.cs` (currently **zero** `///`): `IRobotopiaMod`, `IModContext`, `IModServiceRegistry`, `IModLogger`, `ModPaths`, `ModServiceRegistration`, `IModFileService`, `IAssetBundleService`, `IPromptOverrideRegistry`, plus `PromptOverride`/`PromptConflict`.
+  - V1 authoring contracts: `TopiaForgeMod`, `IModContext`, lifetime-owned services, `OperationResult<T>`, and the optional module contracts. All public members are covered by XML documentation.
   - `Worlds.cs` (only ~3 summaries today): `IWorldGamemodeService`, `GamemodeMenuEntry`, `WorldDefinition`, `GamemodeDefinition`, `WorldLoadRequest`, `WorldSession`, `WorldLoadResult`.
 - **Realistic effort:** ~half a day for terse one-line summaries across the SDK; budget **~1 full day** to do the Worlds API (the most complex surface, multi-arg constructors) properly with `<param>`/`<returns>`.
 
@@ -214,11 +214,11 @@ The generated C# API tier is **worthless until comments exist** — this is the 
 
 **Docs-as-code guardrails (Phase 1):**
 - `docs/CONTRIBUTING.md` with the content-routing rule + PR checklist.
-- GitHub Actions job: `markdownlint-cli2` + `lychee` (fail on broken links) + **scaffold and build a sample mod** (`robotopia new mod`, as the release workflow already does) so snippets sourced from it can't drift. (RoboPatch's published sample has the classic `api = api` self-assignment bug — exactly what CI-built snippets prevent.)
+- GitHub Actions job: `markdownlint-cli2` + `lychee` (fail on broken links) + **scaffold and build a sample mod** (`topiaforge new mod`, as the release workflow already does) so snippets sourced from it can't drift. (RoboPatch's published sample has the classic `api = api` self-assignment bug — exactly what CI-built snippets prevent.)
 
 **Manifest single-source-of-truth (corrected):** the validator lives in Dart (`launcher_domain`, hand-written classes — **no annotations, no `build_runner`/`json_serializable`, and Dart has no usable AOT runtime reflection**, so there is *no* cheap "reflect over `manifest_models.dart`" path). Two workable options, pick one:
-1. **Hand-maintain the Manifest Reference table + a CI parse test** (recommended now): a small test asserts every documented key (and its aliases) still parses through `ModManifest.fromJson`/`ModDependency`/`ModConflict`, and fails CI if a documented key stops being accepted or a new required field appears.
-2. **Author a JSON Schema for `robotopia.mod.json`** as the single source of truth, render the doc table from it, and validate real manifests against it in CI on **both** the Dart and C# sides. Stronger no-drift guarantee; more upfront work — defer to Phase 3 unless schema-validation is wanted anyway.
+1. **Hand-maintain the Manifest Reference table + a CI parse test** (recommended now): a small test asserts every documented canonical key still parses through `ModManifest.fromJson`/`ModDependency`/`ModConflict`, and fails CI if a documented key stops being accepted or a new required field appears.
+2. **Author a JSON Schema for `topiaforge.mod.json`** as the single source of truth, render the doc table from it, and validate real manifests against it in CI on **both** the Dart and C# sides. Stronger no-drift guarantee; more upfront work — defer to Phase 3 unless schema-validation is wanted anyway.
 
 ---
 
@@ -250,8 +250,8 @@ The generated C# API tier is **worthless until comments exist** — this is the 
 ## 9. Immediate Next Steps (start within a day)
 
 1. **Decide the two forks** (§8): commit to versioning now (→ Docusaurus) or defer (→ Starlight, recommended); and whether to minimize toolchains (DocFX-whole-site / Writerside) or keep best-of-breed (recommended).
-2. **C# prerequisite kickoff:** add `<GenerateDocumentationFile>` to `Robotopia.Mods.Abstractions.csproj` and a CI doc-coverage (CS1591) **report**; start writing `///` summaries in `IRobotopiaMod.cs`, then `Worlds.cs`.
-3. **Phase 0 Markdown:** expand `docs\Modding.md` into a full Quickstart; add `docs\Manifest.md` covering the true field superset incl. VPM-shaped `name`/`displayName`, `schemaVersion == 2`, and the package id regex (verify against `manifest_models.dart`); add `CONTRIBUTING.md` with the content-routing rule.
+2. **C# prerequisite kickoff (completed for V1):** every safe contract project generates XML documentation and treats CS1591 as an error; DocFX publishes the approved public API baselines.
+3. **Phase 0 Markdown (completed):** `docs/Modding.md` is the quickstart, `docs/ManifestV5.md` covers the strict V5 contract and package-id regex, and `CONTRIBUTING.md` defines content routing.
 4. **CI seed:** add a GitHub Actions job with `markdownlint-cli2` + `lychee` link-check **and a manifest-key parse test** (§7) on PRs.
 5. **Scaffold the portal** (chosen generator) under `website/` and wire a deploy-to-Pages workflow with a placeholder home page to lock in hosting/URL early.
 
@@ -259,15 +259,15 @@ The generated C# API tier is **worthless until comments exist** — this is the 
 
 ## 10. UGC Live Content Sync (added)
 
-The UGC live-sync feature (`IUgcLiveSyncService`, the `Robotopia.UgcLiveSync` mod, and the
-`com.robotopia.ugc-companion` Unity package) slots into the existing phases:
+The UGC live-sync feature (`IUgcLiveSyncService`, the `TopiaForge.UgcLiveSync` mod, and the
+`io.github.furroxide.topiaforge.ugc-companion` Unity package) slots into the existing phases:
 
 - **Phase 0 (now):** `docs/UgcLiveSync.md` is the canonical guide + the pinned export-JSON schema contract; it is
   cross-linked from `docs/Modding.md`. The shared contract is regression-pinned by the .NET fixture test
   (`tests/fixtures/ugc/sample-project.json`) and the Dart `UgcLiveSyncSettings` contract test (cross-language keys).
 - **§7 prerequisite:** `IUgcLiveSyncService` and its DTOs carry full `///` doc comments, so they flow into the
   Phase-2 DocFX API tier with no extra work.
-- **Shipped:** `robotopia doctor` verifies the companion package + watch-folder writability; the Flutter launcher
+- **Shipped:** `topiaforge doctor` verifies the companion package + watch-folder writability; the Flutter launcher
   Developer view has a "UGC Live Sync" panel (edit settings, deploy the runtime config to the install, open the
   watch folder, start/stop the Automerge publisher); and the Automerge writer ships as the
-  [`tools/ugc-automerge-sidecar`](../tools/ugc-automerge-sidecar) Node sidecar driven by `robotopia ugc`.
+  [`tools/ugc-automerge-sidecar`](../../tools/ugc-automerge-sidecar) Node sidecar driven by `topiaforge ugc`.

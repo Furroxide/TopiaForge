@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 2,
+  "protocolVersion": "1.0.0",
+  "contracts": [
+    {
+      "id": "io.github.furroxide.topiaforge.samples.drone",
+      "wireFormatRevision": 1,
+      "schemaSha256": "2cd24dd61a0e2207ccc314108c1d066ec2e76939eacad31c9d320ad808dd36e6",
+      "stateIds": [],
+      "commandIds": [],
+      "objectTypeIds": [
+        "io.github.furroxide.topiaforge.samples.drone/drone"
+      ],
+      "eventIds": []
+    }
+  ]
+}

@@ -1,107 +1,107 @@
-# Publishing Your Mod
+---
+title: Publish a mod
+description: Validate, pack, host, and publish an immutable self-hosted package source.
+---
 
-End-to-end: from a working mod to an entry players install from the launcher. The official registry is a
-folder of entry files in `furroxide/quantum-works` — **you host the package file**, the registry records
-where it lives and what its bytes hash to. Prefer running your own source? See
-[RegistryFormat.md](RegistryFormat.md) — both can coexist.
+# Publish a mod
 
-The bar to clear: the official registry requires a **zero-finding manifest** — errors *and warnings*.
-`robotopia registry add-entry` refuses a package with any validation finding, and CI re-checks on the PR.
-Ids with reserved prefixes (`robotopia.*`, `sample.*`, `quantumworks.*`) or colliding with a first-party id
-are rejected.
+End-to-end: from a working mod for Robotopia to a registry that players can add to the TopiaForge launcher. Community submissions to the
+TopiaForge official registry are **closed for the initial release** while namespace ownership, moderation, malware
+response, revocation, appeals, and installed-user response are defined. A merge to `registry/**` does not publish a
+community package. Do not describe a package as officially reviewed or endorsed.
+
+Self-hosting uses the same format-version-2 contracts, HTTPS/integrity rules, and zero-finding publication bar planned
+for the official service. You host both the package and static index; players add the index URL as a package source.
 
 ## 1. Validate to zero findings
 
 ```sh
-robotopia check package .
+topiaforge check package .
 ```
 
-Fix every line it prints — warnings included. Typical last-mile fixes: an SPDX-style `license`, only known
-[permission values](Modding.md#permissions), a real semver `version`. If your mod has dependencies, add
+Fix every line it prints — warnings included. Typical last-mile fixes are a valid SPDX expression and declared license
+file, only known [capability values](ManifestV5.md#package-contract), explicit author identity, and a real SemVer `version`.
+If your mod has dependencies, add
 `--resolve` to dry-run resolution against your configured sources.
 
 ## 2. Pack
 
 ```sh
-robotopia pack
+topiaforge pack
 ```
 
-Builds the project and writes `dist/<id>-<version>.robotopiamod`
+Builds the project and writes `dist/<id>-<version>.topiaforgemod`
 ([ModPackaging.md](ModPackaging.md) documents exactly what goes in).
 
 ## 3. Verify the package
 
 ```sh
-robotopia check package dist/yourname.firstmod-1.0.0.robotopiamod
+topiaforge check package dist/yourname.firstmod-1.0.0.topiaforgemod
 ```
 
 Validates the packed manifest and prints `sha256=<hex> (<size> MB)` — the hash the registry will pin.
 
 ## 4. Host the file
 
-Upload the `.robotopiamod` to a **stable https URL**. A GitHub Release asset on your own repo works well.
+Upload the `.topiaforgemod` to a **stable https URL**. A GitHub Release asset on your own repo works well.
 
 **Never replace a published file.** The registry pins its sha256; changed bytes fail every install (and the
 registry CI). Ship fixes as a new version instead.
 
-## 5. Create the registry entry
+## 5. Build the self-hosted registry
 
 ```sh
-robotopia registry add-entry dist/yourname.firstmod-1.0.0.robotopiamod --url https://github.com/you/firstmod/releases/download/v1.0.0/yourname.firstmod-1.0.0.robotopiamod --changelog "Initial release."
+topiaforge registry index --dir dist --output site/registry --base-url https://example.invalid/topiaforge/registry/
 ```
 
-(`--changelog @notes.md` reads from a file; `--output` overrides the target directory.) The command computes
-the sha256, re-validates the manifest against the zero-finding bar, refuses a version that is already
-published (releases are immutable — bump instead), prepends the version to `registry/<id>.json`, and prints
-the fork/PR steps.
+The builder revalidates each package, computes SHA-256 and size, rejects conflicting duplicate id/version pairs, and
+writes a deterministic static index. Replace the example base URL with the HTTPS directory where package assets will
+live. It takes the inline manifest from the packed package, preserving derived synchronized contract-lock metadata;
+do not build registry entries from the source manifest. Local/LAN-only sources can omit `--base-url` and keep the
+generated relative URLs.
 
-## 6. Open the PR
+## 6. Upload and verify
 
-Fork `furroxide/quantum-works`, add your `registry/<id>.json`, and open a pull request against `main`.
+Upload `site/registry` and the exact `.topiaforgemod` bytes to a static HTTPS host. Fetch the published index and package
+from a clean machine, then verify the package again using its public URL and expected hash.
 
-What CI validates on the PR:
+Your publication gate should enforce:
 
-- filename equals the lowercase mod id;
-- the id is not reserved (`robotopia.*`, `sample.*`, `quantumworks.*`) and doesn't collide with a
-  first-party id;
-- the manifest has zero validation findings; the version is semver; the download URL is https;
-- the hosted file's sha256 matches `packageSha256` (downloads capped at 512 MB);
-- the inline `manifest` equals the `robotopia.mod.json` inside the package;
-- every required dependency id resolves in the merged registry.
+- zero schema and semantic findings for every published version;
+- absolute HTTPS URLs with no credentials, query, or fragment;
+- hosted SHA-256, byte length, and inline/package manifest equality;
+- dependency resolution against the complete index;
+- immutable history: never delete or rewrite a published version;
+- conflicting duplicate id/version bytes are rejected.
 
-Preflight the same checks locally:
+Validate the output locally before upload:
 
 ```sh
-robotopia registry validate --only registry/yourname.firstmod.json
-robotopia check package dist/yourname.firstmod-1.0.0.robotopiamod --entry registry/yourname.firstmod.json
+topiaforge registry validate --offline site/registry/index.json
+topiaforge check package dist/yourname.firstmod-1.0.0.topiaforgemod
 ```
 
-(`registry validate --offline` skips the download and checks structure only.)
-
-## 7. Merge = live
-
-A Pages deploy runs on every `registry/**` push to `main`, so your entry is live in the official index the
-moment the PR merges — no release tag needed. Launcher users see the mod under the official source
-(`robotopia.official`).
+Add the resulting HTTPS index under **Settings → Package Sources** and exercise install, update, dependency preview,
+hash failure, and rollback before sharing it.
 
 ## Updating a published mod
 
 Releases are immutable — an update is a new version:
 
 ```sh
-robotopia mod bump minor        # or major | patch — validated increment
-robotopia pack
-robotopia check package dist/yourname.firstmod-1.1.0.robotopiamod
+topiaforge mod bump minor        # or major | patch — validated increment
+topiaforge pack
+topiaforge check package dist/yourname.firstmod-1.1.0.topiaforgemod
 # host the new file at its own URL, then:
-robotopia registry add-entry dist/yourname.firstmod-1.1.0.robotopiamod --url <new url> --changelog "..."
+topiaforge registry add-entry dist/yourname.firstmod-1.1.0.topiaforgemod --url <new url> --changelog "..."
 ```
 
-Open a PR with the updated `registry/<id>.json` — the new version is prepended and older versions remain in
-the entry's history. (`mod bump` drops any pre-release/build suffix, with a note.)
+Rebuild and atomically replace the static index only after the new package is available. Keep all older version
+records and bytes reachable; never overwrite an existing asset. (`mod bump` drops any prerelease/build suffix, with a
+note.)
 
-## Self-hosting as an alternative (or in addition)
+## Official submissions
 
-You don't need the official registry to distribute a mod: build an index with
-`robotopia registry index --dir packages`, host it on any static host, and have players add the URL as a
-package source. [RegistryFormat.md](RegistryFormat.md) has the walkthrough and the format spec. The
-launcher merges all configured sources and keeps the highest version per mod id.
+The repository retains entry-validation and append-only history tooling so governance can be implemented without
+changing the wire format. Until the project publishes an ownership/moderation policy and explicitly reopens submissions, do
+not open a community registry PR; it will be rejected with a submissions-closed diagnostic.

@@ -1,20 +1,20 @@
-# Robotopia Standalone Launcher Implementation Prompt
+# TopiaForge Standalone Launcher Implementation Prompt
 
-Use this prompt as the source of truth for implementing the next-generation Robotopia modding platform. It is intentionally longer than a chat goal so the implementation agent has enough context, constraints, and done criteria.
+Use this prompt as the source of truth for implementing the next-generation TopiaForge modding platform. It is intentionally longer than a chat goal so the implementation agent has enough context, constraints, and done criteria.
 
 ## Short Chat Goal
 
 ```text
-Implement the standalone Robotopia mod launcher/loader described in docs/StandaloneLauncherImplementationPrompt.md. Treat that file as the full source of truth. Build in vertical slices, preserve existing runtime behavior, use Flutter with bloc/cubit for the app, keep licensing clean, and verify with .NET and Flutter tests before final summary.
+Implement the standalone TopiaForge mod launcher/loader described in docs/StandaloneLauncherImplementationPrompt.md. Treat that file as the full source of truth. Build in vertical slices, preserve existing runtime behavior, use Flutter with bloc/cubit for the app, keep licensing clean, and verify with .NET and Flutter tests before final summary.
 ```
 
 ## Full Prompt
 
-You are implementing the next-generation Robotopia modding platform.
+You are implementing the next-generation TopiaForge modding platform.
 
 ### Goal
 
-Pivot the current in-game Robotopia Mod Manager into a standalone, Prism Launcher-quality desktop mod launcher/loader for Robotopia.
+Pivot the current in-game TopiaForge Mod Manager into a standalone, Prism Launcher-quality desktop mod launcher/loader for Robotopia.
 
 Keep BepInEx as the game-side runtime loader where appropriate, but make the primary user experience a polished standalone launcher app that can detect, install, manage, repair, and launch Robotopia with mods. The in-game overlay should become a fallback diagnostics/runtime-status panel only.
 
@@ -26,17 +26,17 @@ Current repo: the repository root.
 
 Existing code includes:
 
-- `src/Robotopia.ModManager.Core`
-- `src/Robotopia.ModManager`
-- `src/Robotopia.Mods.Abstractions`
-- `templates/mod/*` (scaffolding templates for `robotopia new mod`)
+- `src/TopiaForge.ModManager.Core`
+- `src/TopiaForge.ModManager`
+- `src/TopiaForge.Mods.Abstractions`
+- `templates/mod/*` (scaffolding templates for `topiaforge new mod`)
 - `tools/*.ps1`
 - `docs/Modding.md`
 
-Existing manager behavior to preserve or migrate:
+Existing manager behavior to preserve:
 
-- `.robotopiamod` packages
-- `robotopia.mod.json` manifests
+- `.topiaforgemod` packages
+- `topiaforge.mod.json` manifests
 - dependency sorting
 - enable/disable state
 - package inbox install
@@ -53,19 +53,19 @@ Target maturity should be inspired by Prism Launcher: profiles/instances, clean 
 - Add a standalone Flutter desktop app, Windows-first.
 - Use bloc/cubit architecture for app state.
 - Suggested workspace layout:
-  - `apps/robotopia_launcher_flutter/`
+  - `apps/topiaforge_launcher_flutter/`
   - `packages/launcher_domain/`
   - `packages/launcher_data/`
   - `packages/launcher_ui/`
-  - existing `src/Robotopia.*` C# runtime/loader projects
+  - existing `src/TopiaForge.*` C# runtime/loader projects
 - Keep domain logic testable and UI-independent.
 - Use a repository interface for package sources, profiles, installs, diagnostics, and launch orchestration.
 - Use Serverpod only if a backend is actually needed. Default v1 to no backend: use a local/static mod index JSON model behind a repository interface so Serverpod can be added later without rewriting the app.
-- Keep BepInEx and the Robotopia runtime loader as the injected game-side component.
+- Keep BepInEx and the TopiaForge runtime loader as the injected game-side component.
 - Make the standalone launcher responsible for:
   - detecting Robotopia installs
   - installing and repairing BepInEx
-  - installing and updating the Robotopia loader
+  - installing and updating the TopiaForge loader
   - installing, updating, rolling back, and uninstalling mods
   - enabling and disabling mods
   - resolving dependencies and conflicts
@@ -81,7 +81,7 @@ Target maturity should be inspired by Prism Launcher: profiles/instances, clean 
 - Allow manual game-folder selection.
 - Validate `Robotopia.exe`.
 - Validate Unity Mono and BepInEx compatibility as far as practical.
-- Offer one-click setup or repair for BepInEx and the Robotopia loader.
+- Offer one-click setup or repair for BepInEx and the TopiaForge loader.
 - Explain that C# mods are trusted code and execute inside the game process.
 - Avoid making the warning feel hostile; make it clear and actionable.
 
@@ -104,7 +104,7 @@ Target maturity should be inspired by Prism Launcher: profiles/instances, clean 
 
 #### Package and Mod Management
 
-- Preserve `.robotopiamod` support.
+- Preserve `.topiaforgemod` support.
 - Extend the manifest schema for:
   - dependency version ranges
   - optional dependencies
@@ -126,18 +126,15 @@ Target maturity should be inspired by Prism Launcher: profiles/instances, clean 
 - Support update checks, changelogs, rollback to a previous installed version, and uninstall cleanup.
 - Support modpack/profile export and import.
 
-#### RoboPatch Compatibility
+#### Clean-room compatibility boundaries
 
-- Detect existing `Robotopia/Mods` RoboPatch-style mods.
-- Display them as legacy/RoboPatch-compatible mods.
-- Provide an import or migration path into `.robotopiamod` where possible.
 - Clean-room reimplement equivalent SDK conveniences:
   - AssetBundle loading
   - `SpawnAsset`
   - prompt override
   - prompt conflict diagnostics
   - mod file helpers
-- Avoid breaking existing `.robotopiamod` mods.
+- Do not copy RoboPatch code.
 
 #### UX and UI
 
@@ -262,7 +259,6 @@ Add focused tests for:
 - registry parsing
 - install/update/uninstall
 - zip path traversal
-- legacy RoboPatch import
 
 Run Flutter analysis and tests.
 
@@ -287,11 +283,10 @@ The task is done when a user can:
 - detect or select Robotopia
 - install or repair the loader
 - create and select a profile
-- install `.robotopiamod` packages
+- install `.topiaforgemod` packages
 - view dependency and conflict status
 - enable and disable mods
 - launch Robotopia
-- detect legacy RoboPatch mods
 - generate diagnostics
 
 Also required:

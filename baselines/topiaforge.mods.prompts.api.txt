@@ -1,0 +1,41 @@
+# TopiaForge.Mods.Prompts public API baseline
+# Format version: 2
+# Regenerate with: dotnet run --project tests/TopiaForge.ModManager.Tests -c Release -- --print-sdk-api-baseline topiaforge.mods.prompts
+# Review every change. Breaking changes require explicit V1 compatibility approval.
+
+assembly TopiaForge.Mods.Prompts, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null
+target-framework .NETStandard,Version=v2.1
+
+type public interface TopiaForge.Mods.IPromptOverrideHandle : System.IDisposable
+  property System.Boolean IsDisposed { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.PromptOverride Override { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IPromptOverrideRegistry
+  method [abstract,virtual,newslot] System.Boolean TryGetEffectiveOverride(System.String promptId, out TopiaForge.Mods.PromptOverride? promptOverride)
+  method [abstract,virtual,newslot] System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.PromptConflict> GetConflicts()
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IPromptOverrideHandle> Register(TopiaForge.Mods.PromptOverrideRequest request)
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.PromptOverride> Overrides { get [abstract,virtual,newslot]; }
+
+type public sealed class TopiaForge.Mods.PromptConflict : System.Object
+  constructor .ctor(System.String promptId, System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.PromptOverride> overrides, TopiaForge.Mods.PromptOverride? effectiveOverride)
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.PromptOverride> Overrides { get; }
+  property System.String PromptId { get; }
+  property TopiaForge.Mods.PromptOverride? EffectiveOverride { get; }
+
+type public sealed class TopiaForge.Mods.PromptOverride : System.Object
+  constructor .ctor(System.String sourceId, System.String promptId, System.String replacementText, System.Int32 priority = 0, System.String description = "")
+  property System.Int32 Priority { get; }
+  property System.String Description { get; }
+  property System.String PromptId { get; }
+  property System.String ReplacementText { get; }
+  property System.String SourceId { get; }
+
+type public sealed class TopiaForge.Mods.PromptOverrideRequest : System.Object
+  constructor .ctor(System.String promptId, System.String replacementText, System.Int32 priority = 0, System.String description = "")
+  property System.Int32 Priority { get; }
+  property System.String Description { get; }
+  property System.String PromptId { get; }
+  property System.String ReplacementText { get; }
+
+type public static class TopiaForge.Mods.WellKnownPromptIds : System.Object
+  field const System.String GlobalRobotDirective = "topiaforge.robot.global-directive"

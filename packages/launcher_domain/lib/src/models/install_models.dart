@@ -13,6 +13,13 @@ class InstalledMod {
     this.installedAtUtc = '',
     this.updatedAtUtc = '',
     this.errors = const [],
+    this.versionPinned = false,
+    this.requestedVersion = '',
+    this.selectionReason = '',
+    this.installedVersions = const [],
+    this.sourceSha256 = '',
+    this.trust = '',
+    this.repairable = false,
   });
 
   final String id;
@@ -26,8 +33,29 @@ class InstalledMod {
   final String installedAtUtc;
   final String updatedAtUtc;
   final List<String> errors;
+  final bool versionPinned;
+  final String requestedVersion;
+  final String selectionReason;
+  final List<InstalledModVersionStatus> installedVersions;
+  final String sourceSha256;
+  final String trust;
+  final bool repairable;
 
   bool get isValid => manifest != null && errors.isEmpty;
+
+  String? get repairableVersion {
+    for (final status in installedVersions) {
+      if (status.repairable &&
+          status.errors.isNotEmpty &&
+          (status.selected || status.version == requestedVersion)) {
+        return status.version;
+      }
+    }
+    for (final status in installedVersions.reversed) {
+      if (status.repairable && status.errors.isNotEmpty) return status.version;
+    }
+    return !isValid && repairable ? version : null;
+  }
 
   InstalledMod copyWith({
     bool? enabled,
@@ -47,8 +75,37 @@ class InstalledMod {
       installedAtUtc: installedAtUtc,
       updatedAtUtc: DateTime.now().toUtc().toIso8601String(),
       errors: errors,
+      versionPinned: versionPinned,
+      requestedVersion: requestedVersion,
+      selectionReason: selectionReason,
+      installedVersions: installedVersions,
+      sourceSha256: sourceSha256,
+      trust: trust,
+      repairable: repairable,
     );
   }
+}
+
+class InstalledModVersionStatus {
+  const InstalledModVersionStatus({
+    required this.version,
+    required this.packagePath,
+    required this.errors,
+    required this.selected,
+    this.sourceSha256 = '',
+    this.trust = '',
+    this.repairable = false,
+  });
+
+  final String version;
+  final String packagePath;
+  final List<String> errors;
+  final bool selected;
+  final String sourceSha256;
+  final String trust;
+  final bool repairable;
+
+  bool get isValid => errors.isEmpty;
 }
 
 enum ComponentState { missing, partial, ready }
@@ -98,6 +155,7 @@ class CompatFinding {
 class GameCompatStatus {
   const GameCompatStatus({
     required this.status,
+    this.gameVersion,
     this.gameVersionLabel = '',
     this.surfaceHash = '',
     this.gameCodeSha = '',
@@ -106,6 +164,9 @@ class GameCompatStatus {
   });
 
   final String status;
+
+  /// Canonical SemVer reported by the extractor, or `null` when unavailable.
+  final String? gameVersion;
   final String gameVersionLabel;
   final String surfaceHash;
   final String gameCodeSha;
@@ -126,6 +187,7 @@ class GameCompatStatus {
 
   Map<String, Object?> toJson() => {
     'status': status,
+    if (gameVersion != null) 'gameVersion': gameVersion,
     'gameVersionLabel': gameVersionLabel,
     'surfaceHash': surfaceHash,
     'gameCodeSha': gameCodeSha,
@@ -136,6 +198,7 @@ class GameCompatStatus {
   factory GameCompatStatus.fromJson(Map<String, Object?> json) =>
       GameCompatStatus(
         status: (json['status'] as String?) ?? 'unknown',
+        gameVersion: _canonicalOptionalGameVersion(json['gameVersion']),
         gameVersionLabel: (json['gameVersionLabel'] as String?) ?? '',
         surfaceHash: (json['surfaceHash'] as String?) ?? '',
         gameCodeSha: (json['gameCodeSha'] as String?) ?? '',
@@ -145,6 +208,13 @@ class GameCompatStatus {
             .map(CompatFinding.fromJson)
             .toList(),
       );
+}
+
+String? _canonicalOptionalGameVersion(Object? value) {
+  if (value is! String || value.trim().isEmpty) {
+    return null;
+  }
+  return SemanticVersion.tryParse(value.trim())?.toString();
 }
 
 // The extractor prints severities Title-cased (Info/Warning/Error); map to the domain enum.
@@ -172,6 +242,9 @@ class GameInstall {
     required this.bepInExStatus,
     required this.loaderStatus,
     this.layout = GameInstallLayout.windowsNative,
+    this.architecture = '',
+    this.gameVersion,
+    this.gameVersionLabel = '',
     this.issues = const [],
     this.compatStatus,
   });
@@ -181,6 +254,20 @@ class GameInstall {
   final ComponentState bepInExStatus;
   final ComponentState loaderStatus;
   final GameInstallLayout layout;
+
+  /// Architecture reported by the selected game executable (`x64` or
+  /// `arm64`). An empty value means the executable could not be identified and
+  /// architecture-constrained packages must fail closed.
+  final String architecture;
+
+  /// Canonical SemVer used for manifest compatibility checks. Robotopia game
+  /// build `N` is represented as `0.0.N`; `null` means the launcher could not
+  /// safely establish the installed build.
+  final String? gameVersion;
+
+  /// Human-readable provenance corresponding to [gameVersion], normally
+  /// `build N`. This remains independent of the optional reflection audit.
+  final String gameVersionLabel;
   final List<LauncherIssue> issues;
 
   /// Informational game-compatibility status. Deliberately separate from [issues] so it can never affect
@@ -192,12 +279,20 @@ class GameInstall {
       bepInExStatus != ComponentState.ready ||
       loaderStatus != ComponentState.ready;
 
-  GameInstall copyWith({GameCompatStatus? compatStatus}) => GameInstall(
+  GameInstall copyWith({
+    GameCompatStatus? compatStatus,
+    String? gameVersion,
+    bool clearGameVersion = false,
+    String? gameVersionLabel,
+  }) => GameInstall(
     path: path,
     executablePath: executablePath,
     bepInExStatus: bepInExStatus,
     loaderStatus: loaderStatus,
     layout: layout,
+    architecture: architecture,
+    gameVersion: clearGameVersion ? null : gameVersion ?? this.gameVersion,
+    gameVersionLabel: gameVersionLabel ?? this.gameVersionLabel,
     issues: issues,
     compatStatus: compatStatus ?? this.compatStatus,
   );
@@ -245,24 +340,6 @@ class RegistryMod {
   }
 }
 
-class LegacyMod {
-  const LegacyMod({
-    required this.id,
-    required this.name,
-    required this.path,
-    required this.kind,
-    this.canMigrate = false,
-    this.details = '',
-  });
-
-  final String id;
-  final String name;
-  final String path;
-  final String kind;
-  final bool canMigrate;
-  final String details;
-}
-
 class RepairReport {
   const RepairReport({required this.actions, required this.issues});
 
@@ -292,9 +369,9 @@ class LauncherSnapshot {
     required this.registryMods,
     required this.packageSources,
     required this.worldCatalog,
-    required this.legacyMods,
     required this.recentLog,
     this.gameInstall,
+    this.gameInstallCandidates = const [],
     this.launcherUpdates = const LauncherUpdateSettings(),
     this.developerMode = false,
     this.sourceStatuses = const [],
@@ -302,13 +379,13 @@ class LauncherSnapshot {
   });
 
   final GameInstall? gameInstall;
+  final List<GameInstallCandidate> gameInstallCandidates;
   final List<LauncherProfile> profiles;
   final String selectedProfileId;
   final List<InstalledMod> installedMods;
   final List<RegistryMod> registryMods;
   final List<PackageSource> packageSources;
   final WorldCatalog worldCatalog;
-  final List<LegacyMod> legacyMods;
   final String recentLog;
   final LauncherUpdateSettings launcherUpdates;
 

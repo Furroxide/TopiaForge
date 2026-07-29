@@ -1,0 +1,6 @@
+<Project>
+  <Target Name="TopiaForgeValidateTargetFramework" BeforeTargets="CoreCompile"
+          Condition="'$(TopiaForgeSafeProject)' != 'false' and '$(IsTestProject)' != 'true' and '$(TargetFramework)' != 'netstandard2.1'">
+    <Error Code="TF0004" Text="TopiaForge V1 safe mod projects must target netstandard2.1." />
+  </Target>
+</Project>

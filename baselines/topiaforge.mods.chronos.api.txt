@@ -1,0 +1,83 @@
+# TopiaForge.Mods.Chronos public API baseline
+# Format version: 2
+# Regenerate with: dotnet run --project tests/TopiaForge.ModManager.Tests -c Release -- --print-sdk-api-baseline topiaforge.mods.chronos
+# Review every change. Breaking changes require explicit V1 compatibility approval.
+
+assembly TopiaForge.Mods.Chronos, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null
+target-framework .NETStandard,Version=v2.1
+
+type public interface TopiaForge.Mods.ITimeControlService
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Step(System.Single seconds)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> StepFixed(System.Int32 ticks)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.ITimeLease> ExemptPlayer(System.String usage)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.ITimeLease> Freeze(System.String usage, System.Boolean suspendPlayer = false)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.ITimeLease> SetDriver(System.String usage, TopiaForge.Mods.ITimeDriver driver)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.ITimeLease> Slow(System.String usage, System.Single scale)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.ITurnScheduler> BeginTurnBased(System.String usage, TopiaForge.Mods.TurnSchedulerOptions options)
+  property System.Boolean IsAvailable { get [abstract,virtual,newslot]; }
+  property System.Boolean IsFrozen { get [abstract,virtual,newslot]; }
+  property System.Single ControlDeltaTime { get [abstract,virtual,newslot]; }
+  property System.Single ControlTime { get [abstract,virtual,newslot]; }
+  property System.Single WorldDeltaTime { get [abstract,virtual,newslot]; }
+  property System.Single WorldScale { get [abstract,virtual,newslot]; }
+  property System.Single WorldTime { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.TimeMode Mode { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.ITimeDriver
+  method [abstract,virtual,newslot] System.Single ComputeScale(in TopiaForge.Mods.TimeSignal signal)
+
+type public interface TopiaForge.Mods.ITimeLease : System.IDisposable, TopiaForge.Mods.IGameplayLease
+  method [abstract,virtual,newslot] System.Void Release()
+
+type public interface TopiaForge.Mods.ITurnScheduler : System.IDisposable
+  method [abstract,virtual,newslot] System.Void Tick(System.Single controlDeltaTime)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> BeginAction()
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> EndAction()
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Register(TopiaForge.Mods.TurnActorId actor, System.Single speed)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Unregister(TopiaForge.Mods.TurnActorId actor)
+  property System.Int32 ActorCount { get [abstract,virtual,newslot]; }
+  property System.Nullable<TopiaForge.Mods.TurnActorId> CurrentActor { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.TurnState State { get [abstract,virtual,newslot]; }
+
+type public sealed class TopiaForge.Mods.SuperhotTimeDriver : System.Object, TopiaForge.Mods.ITimeDriver
+  constructor .ctor(System.Single idleScale = 0.03, System.Single moveThreshold = 0.05, System.Single actionRate = 14, System.Single moveRate = 9, System.Single easeDownRate = 4)
+  method System.Single ComputeScale(in TopiaForge.Mods.TimeSignal signal)
+  property System.Single IdleScale { get; }
+
+type public static class TopiaForge.Mods.TimeControlPauseExtensions : System.Object
+  method extension [static] System.Func<System.String, TopiaForge.Mods.OperationResult<TopiaForge.Mods.IGameplayLease>> AsPauseSource(TopiaForge.Mods.ITimeControlService? service, System.Boolean suspendPlayer = true)
+
+type public enum TopiaForge.Mods.TimeMode : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.TimeMode Paused = 2 (Paused)
+  field const TopiaForge.Mods.TimeMode Realtime = 0 (Realtime)
+  field const TopiaForge.Mods.TimeMode Slowed = 1 (Slowed)
+  field const TopiaForge.Mods.TimeMode TurnBased = 3 (TurnBased)
+
+type public readonly struct TopiaForge.Mods.TimeSignal : System.ValueType
+  constructor .ctor(System.Single controlDeltaTime, System.Single currentScale, System.Single playerInputMagnitude, System.Boolean playerActing)
+  property System.Boolean PlayerActing { get; }
+  property System.Single ControlDeltaTime { get; }
+  property System.Single CurrentScale { get; }
+  property System.Single PlayerInputMagnitude { get; }
+
+type public readonly struct TopiaForge.Mods.TurnActorId : System.ValueType, System.IEquatable<TopiaForge.Mods.TurnActorId>
+  constructor .ctor(System.String value)
+  method [static] System.Boolean op_Equality(TopiaForge.Mods.TurnActorId left, TopiaForge.Mods.TurnActorId right)
+  method [static] System.Boolean op_Inequality(TopiaForge.Mods.TurnActorId left, TopiaForge.Mods.TurnActorId right)
+  method [virtual,final,newslot] System.Boolean Equals(TopiaForge.Mods.TurnActorId other)
+  method [virtual] System.Boolean Equals(System.Object? obj)
+  method [virtual] System.Int32 GetHashCode()
+  method [virtual] System.String ToString()
+  property System.String Value { get; }
+
+type public sealed class TopiaForge.Mods.TurnSchedulerOptions : System.Object
+  constructor .ctor(System.Single energyPerTurn = 1, System.Single maxActionSeconds = 8)
+  property System.Single EnergyPerTurn { get; }
+  property System.Single MaxActionSeconds { get; }
+
+type public enum TopiaForge.Mods.TurnState : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.TurnState Acting = 2 (Acting)
+  field const TopiaForge.Mods.TurnState AwaitingAction = 1 (AwaitingAction)
+  field const TopiaForge.Mods.TurnState Idle = 0 (Idle)

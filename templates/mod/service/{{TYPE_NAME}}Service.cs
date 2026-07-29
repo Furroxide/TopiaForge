@@ -1,4 +1,4 @@
-using Robotopia.Mods;
+using TopiaForge.Mods;
 
 namespace {{ASSEMBLY_NAME}}
 {
@@ -13,6 +13,7 @@ namespace {{ASSEMBLY_NAME}}
 
         public string Ping(string message)
         {
+            message ??= string.Empty;
             logger.Debug("{{DISPLAY_NAME}} ping: " + message);
             return message;
         }

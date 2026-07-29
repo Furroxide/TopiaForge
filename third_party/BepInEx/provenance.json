@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 2,
+  "project": "BepInEx",
+  "version": "5.4.23.5",
+  "sourceRepository": "https://github.com/BepInEx/BepInEx",
+  "releaseUrl": "https://github.com/BepInEx/BepInEx/releases/tag/v5.4.23.5",
+  "bundledAssets": [
+    {
+      "file": "BepInEx_win_x64_5.4.23.5.zip",
+      "sourceUrl": "https://github.com/BepInEx/BepInEx/releases/download/v5.4.23.5/BepInEx_win_x64_5.4.23.5.zip",
+      "size": 639118,
+      "sha256": "82f9878551030f54657792c0740d9d51a09500eeae1fba21106b0c441e6732c4",
+      "extractedDirectory": "win_x64_5.4.23.5",
+      "treeManifest": "win_x64_5.4.23.5.tree.json"
+    },
+    {
+      "file": "BepInEx_macos_universal_5.4.23.5.zip",
+      "sourceUrl": "https://github.com/BepInEx/BepInEx/releases/download/v5.4.23.5/BepInEx_macos_universal_5.4.23.5.zip",
+      "size": 658168,
+      "sha256": "01c2ae782eb016dfd6c345a18dbd2dcafffb3d9d318449d6486689f426b4a323",
+      "extractedDirectory": "macos_universal_5.4.23.5",
+      "treeManifest": "macos_universal_5.4.23.5.tree.json"
+    }
+  ],
+  "correspondingSource": [
+    {
+      "component": "UnityDoorstop",
+      "version": "4.5.0",
+      "commit": "33dab9a6733862eb81869ff08431d9478b28784b",
+      "file": "UnityDoorstop-4.5.0-source-33dab9a6733862eb81869ff08431d9478b28784b.zip",
+      "sourceUrl": "https://github.com/NeighTools/UnityDoorstop/archive/33dab9a6733862eb81869ff08431d9478b28784b.zip",
+      "size": 114921,
+      "sha256": "a71789ffcb359f6a37c6d2c7bbdd0527231e9db00bf46637693cff88ba7ffb80",
+      "licenseFile": "LICENSES/UnityDoorstop-LGPL-2.1.txt"
+    }
+  ]
+}

@@ -1,11 +1,29 @@
 part of '../local_developer_repository.dart';
 
 extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
+  /// Registry mods from configured sources, or the bundled local source.
+  /// Failed sources mirror [resolveDeveloperProject]'s non-blocking behavior.
+  /// Deliberately not on [DeveloperRepository] yet — the CLI consumes the
+  /// concrete type, and widening the interface breaks external fakes.
+  Future<List<RegistryMod>> loadConfiguredRegistryMods({
+    String? projectPath,
+  }) async {
+    final root = _findProjectRoot(projectPath ?? Directory.current.path);
+    var sources = [_localSource()];
+    if (root != null) {
+      final project = await _readProject(root.path);
+      if (project.packageSources.isNotEmpty) {
+        sources = project.packageSources;
+      }
+    }
+    return (await _loadRegistryModsGuarded(sources)).mods;
+  }
+
   PackageSource _localSource() {
     return PackageSource(
-      id: 'robotopia.local',
+      id: 'io.github.furroxide.topiaforge.local',
       name: 'Bundled Local Packages',
-      // Derived from the built .robotopiamod packages in dist/, not a hand-maintained file.
+      // Derived from the built .topiaforgemod packages in dist/, not a hand-maintained file.
       url: Uri.file(p.join(_repositoryRoot.path, 'dist')).toString(),
       builtIn: true,
     );
@@ -41,7 +59,7 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
   }
 
   Future<List<RegistryMod>> _loadRegistrySource(PackageSource source) async {
-    // A local source can point at a DIRECTORY of .robotopiamod packages: derive the catalog
+    // A local source can point at a DIRECTORY of .topiaforgemod packages: derive the catalog
     // straight from the packages (manifest + sha read from each file) so there is no separate
     // metadata file that can drift out of sync with the packages on disk.
     final directory = _resolveDirectorySource(source);
@@ -51,10 +69,36 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
 
     final document = await _readSourceDocument(source);
     final decoded = jsonDecode(document.content) as Map<String, Object?>;
-    return [
+    final mods = [
       ..._flatRegistryMods(decoded, source, document.baseUri),
       ..._packageRegistryMods(decoded, source, document.baseUri),
     ];
+    _validateRegistryTrust(source, mods);
+    return mods;
+  }
+
+  void _validateRegistryTrust(PackageSource source, List<RegistryMod> mods) {
+    final remoteSource = source.url.trim().toLowerCase().startsWith('https://');
+    for (final mod in mods) {
+      final uri = Uri.tryParse(mod.downloadUrl.trim());
+      if (uri == null || !uri.hasScheme) {
+        throw StateError('${mod.manifest.id} has no absolute package URL.');
+      }
+      if (uri.scheme == 'file') {
+        if (remoteSource) {
+          throw StateError(
+            '${mod.manifest.id} from a remote source points at a local file.',
+          );
+        }
+        continue;
+      }
+      if (!isPublicHttpsUri(uri)) {
+        throw StateError('${mod.manifest.id} package URL must use HTTPS.');
+      }
+      if (!RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(mod.packageSha256.trim())) {
+        throw StateError('${mod.manifest.id} requires a valid SHA-256 hash.');
+      }
+    }
   }
 
   Directory? _resolveDirectorySource(PackageSource source) {
@@ -92,7 +136,7 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
 
     final latestById = <String, RegistryMod>{};
     final packageFiles = directory.listSync().whereType<File>().where(
-      (file) => file.path.toLowerCase().endsWith('.robotopiamod'),
+      (file) => file.path.toLowerCase().endsWith('.topiaforgemod'),
     );
     for (final file in packageFiles) {
       try {
@@ -139,48 +183,50 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
 
   Future<_SourceDocument> _readSourceDocument(PackageSource source) async {
     if (_isWindowsPathLike(source.url)) {
+      final bytes = await _readDeveloperFileBounded(
+        File(source.url),
+        maxBytes: _maxDeveloperCatalogBytes,
+        label: 'Package source',
+      );
       return _SourceDocument(
-        content: await File(source.url).readAsString(),
+        content: utf8.decode(bytes),
         baseUri: Uri.file(p.dirname(source.url)),
       );
     }
     final uri = Uri.tryParse(source.url);
     if (uri != null && uri.scheme == 'file') {
       final path = uri.toFilePath(windows: Platform.isWindows);
+      final bytes = await _readDeveloperFileBounded(
+        File(path),
+        maxBytes: _maxDeveloperCatalogBytes,
+        label: 'Package source',
+      );
       return _SourceDocument(
-        content: await File(path).readAsString(),
+        content: utf8.decode(bytes),
         baseUri: Uri.file(p.dirname(path)),
       );
     }
     if (uri != null && uri.scheme == 'https') {
-      // Bounded so a hung host can never stall resolve/restore — a dead
-      // source degrades to a non-blocking workspace issue instead.
-      final client = HttpClient()
-        ..connectionTimeout = const Duration(seconds: 15);
-      try {
-        final response = await (await client.getUrl(
-          uri,
-        )).close().timeout(const Duration(seconds: 30));
-        if (response.statusCode < 200 || response.statusCode >= 300) {
-          throw StateError(
-            'HTTP ${response.statusCode} while reading ${source.url}.',
-          );
-        }
-        return _SourceDocument(
-          content: await utf8
-              .decodeStream(response)
-              .timeout(const Duration(seconds: 30)),
-          baseUri: uri,
-        );
-      } finally {
-        client.close(force: true);
-      }
+      final fetched = await fetchHttpsBytes(
+        uri,
+        maxBytes: _maxDeveloperCatalogBytes,
+        label: 'Package source ${source.id}',
+      );
+      return _SourceDocument(
+        content: utf8.decode(fetched.bytes),
+        baseUri: fetched.effectiveUri,
+      );
     }
     if (uri != null && uri.hasScheme) {
       throw StateError('Unsupported package source scheme: ${uri.scheme}');
     }
+    final bytes = await _readDeveloperFileBounded(
+      File(source.url),
+      maxBytes: _maxDeveloperCatalogBytes,
+      label: 'Package source',
+    );
     return _SourceDocument(
-      content: await File(source.url).readAsString(),
+      content: utf8.decode(bytes),
       baseUri: Uri.file(p.dirname(source.url)),
     );
   }
@@ -190,11 +236,26 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
     PackageSource source,
     Uri baseUri,
   ) {
-    return (decoded['mods'] as List? ?? const []).whereType<Map>().map((item) {
+    if (!decoded.containsKey('mods')) {
+      return const <RegistryMod>[];
+    }
+    if (decoded['formatVersion'] != ModRegistryFormat.indexFormatVersion) {
+      throw FormatException(
+        'TopiaForge registry indexes must use formatVersion '
+        '${ModRegistryFormat.indexFormatVersion}.',
+      );
+    }
+    final entries = decoded['mods'];
+    if (entries is! List) {
+      throw const FormatException('Registry index mods must be a JSON array.');
+    }
+    return entries.whereType<Map>().map((item) {
       final json = item.map((key, value) => MapEntry(key.toString(), value));
       final parsed = RegistryMod.fromJson(json);
       final localPath = json['localPath'] as String?;
-      final packageBaseUri = localPath != null && source.id == 'robotopia.local'
+      final packageBaseUri =
+          localPath != null &&
+              source.id == 'io.github.furroxide.topiaforge.local'
           ? Uri.file(_repositoryRoot.path)
           : baseUri;
       return RegistryMod(
@@ -232,7 +293,7 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
                 versionEntry.key,
                 versionJson,
               )
-            : _normalizeManifestAliases(manifestJson);
+            : manifestJson;
         final rawUrl =
             (versionJson['downloadUrl'] as String?) ??
             (versionJson['url'] as String?) ??
@@ -267,84 +328,42 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
     String version,
     Map<String, Object?> versionJson,
   ) {
-    return _normalizeManifestAliases({
+    final manifest = <String, Object?>{
       ...versionJson,
-      'schemaVersion': versionJson['schemaVersion'] ?? 2,
+      'schemaVersion':
+          versionJson['schemaVersion'] ?? ModManifest.currentSchemaVersion,
       'name': versionJson['name'] ?? packageId,
       'displayName':
           versionJson['displayName'] ?? packageJson['displayName'] ?? packageId,
       'version': versionJson['version'] ?? version,
-    });
-  }
-
-  Map<String, Object?> _normalizeManifestAliases(Map<String, Object?> json) {
-    return json;
-  }
-
-  Future<DeveloperLock> _restoreLockedPackages(
-    String root,
-    DeveloperLock lock,
-  ) async {
-    final restored = <LockedPackage>[];
-    for (final package in lock.packages) {
-      final result = await _readPackage(
-        package.packageUrl,
-        expectedSha256: package.packageSha256,
-      );
-      final packageRoot = Directory(
-        p.join(root, '.robotopia', 'packages', package.id, package.version),
-      )..createSync(recursive: true);
-      final packageFile = File(
-        p.join(
-          packageRoot.path,
-          '${package.id}-${package.version}.robotopiamod',
-        ),
-      );
-      await packageFile.writeAsBytes(result.bytes);
-      final extracted = Directory(p.join(packageRoot.path, 'extracted'));
-      if (extracted.existsSync()) {
-        extracted.deleteSync(recursive: true);
-      }
-      extracted.createSync(recursive: true);
-      for (final file in result.archive.files) {
-        final safePath = _safeArchivePath(file.name);
-        final outputPath = p.join(extracted.path, safePath);
-        if (file.isFile) {
-          File(outputPath)
-            ..createSync(recursive: true)
-            ..writeAsBytesSync(file.content as List<int>);
-        } else {
-          Directory(outputPath).createSync(recursive: true);
-        }
-      }
-      restored.add(
-        LockedPackage(
-          id: package.id,
-          name: package.name,
-          version: package.version,
-          packageUrl: package.packageUrl,
-          packageSha256: result.sha256Hex,
-          sourceId: package.sourceId,
-          sourceName: package.sourceName,
-          dependencies: package.dependencies,
-          apiAssemblies: package.apiAssemblies,
-          cachePath: p.relative(packageFile.path, from: root),
-        ),
-      );
+    };
+    // Registry transport metadata belongs to the source document, not the
+    // strict V5 manifest synthesized from a VPM-style version entry.
+    for (final field in const <String>{
+      'manifest',
+      'downloadUrl',
+      'url',
+      'zipUrl',
+      'packageSha256',
+      'sha256',
+      'zipSHA256',
+      'changelog',
+      'changelogUrl',
+    }) {
+      manifest.remove(field);
     }
-    return DeveloperLock(
-      schemaVersion: lock.schemaVersion,
-      projectId: lock.projectId,
-      resolvedAtUtc: lock.resolvedAtUtc,
-      packages: restored,
-      dependencyGraph: lock.dependencyGraph,
-    );
+    return manifest;
   }
 
   Future<_PackageReadResult> _readPackage(
     String packageReference, {
     required String expectedSha256,
   }) async {
+    requireCanonicalTopiaForgePackageReference(packageReference);
+    final packageUri = Uri.tryParse(packageReference);
+    if (packageUri?.scheme == 'https' && expectedSha256.trim().isEmpty) {
+      throw StateError('Remote packages require a SHA-256 hash.');
+    }
     final bytes = await _readPackageBytes(packageReference);
     final actualSha = sha256.convert(bytes).toString();
     if (expectedSha256.trim().isNotEmpty &&
@@ -353,18 +372,39 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
         'Package SHA-256 mismatch for $packageReference. Expected $expectedSha256 but got $actualSha.',
       );
     }
-    final archive = ZipDecoder().decodeBytes(bytes);
-    for (final file in archive.files) {
-      _safeArchivePath(file.name);
-    }
-    final manifestFile = archive.files.firstWhere(
-      (file) => file.name.replaceAll('\\', '/') == 'robotopia.mod.json',
-      orElse: () => throw StateError('Package is missing robotopia.mod.json.'),
+    final archive = _decodeDeveloperArchive(bytes, label: 'Package');
+    final manifestFile = archive.entries.firstWhere(
+      (file) =>
+          file.isFile &&
+          file.name.replaceAll('\\', '/') == 'topiaforge.mod.json',
+      orElse: () => throw StateError('Package is missing topiaforge.mod.json.'),
+    );
+    final manifestBytes = _readDeveloperArchiveEntryBounded(
+      manifestFile,
+      maxBytes: _maxDeveloperManifestBytes,
+      label: 'topiaforge.mod.json',
     );
     final manifest = ModManifest.fromJson(
-      jsonDecode(utf8.decode(manifestFile.content as List<int>))
-          as Map<String, Object?>,
+      jsonDecode(utf8.decode(manifestBytes)) as Map<String, Object?>,
     );
+    final manifestIssues = manifest
+        .validate()
+        .where((issue) => issue.isBlocking)
+        .toList(growable: false);
+    if (manifestIssues.isNotEmpty) {
+      throw StateError(
+        'Package manifest is invalid: '
+        '${manifestIssues.map((issue) => issue.message).join(' ')}',
+      );
+    }
+    final entryAssembly = manifest.entryAssembly.replaceAll('\\', '/');
+    if (!archive.entries.any(
+      (file) => file.isFile && file.name.replaceAll('\\', '/') == entryAssembly,
+    )) {
+      throw StateError(
+        'entryAssembly was not found in package: ${manifest.entryAssembly}',
+      );
+    }
     return _PackageReadResult(
       archive: archive,
       manifest: manifest,
@@ -374,27 +414,38 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
   }
 
   Future<List<int>> _readPackageBytes(String packageReference) async {
+    if (_isWindowsPathLike(packageReference)) {
+      return _readDeveloperFileBounded(
+        File(packageReference),
+        maxBytes: _maxDeveloperArchiveBytes,
+        label: 'Package',
+      );
+    }
     final uri = Uri.tryParse(packageReference);
     if (uri != null && uri.scheme == 'file') {
-      return File(uri.toFilePath(windows: Platform.isWindows)).readAsBytes();
+      return _readDeveloperFileBounded(
+        File(uri.toFilePath(windows: Platform.isWindows)),
+        maxBytes: _maxDeveloperArchiveBytes,
+        label: 'Package',
+      );
     }
     if (uri != null && uri.scheme == 'https') {
-      final client = HttpClient();
-      try {
-        final response = await (await client.getUrl(uri)).close();
-        if (response.statusCode < 200 || response.statusCode >= 300) {
-          throw StateError('Download failed with HTTP ${response.statusCode}.');
-        }
-        final bytes = <int>[];
-        await for (final chunk in response) {
-          bytes.addAll(chunk);
-        }
-        return bytes;
-      } finally {
-        client.close(force: true);
-      }
+      final fetched = await fetchHttpsBytes(
+        uri,
+        maxBytes: _maxDeveloperArchiveBytes,
+        label: 'Package download',
+        totalTimeout: const Duration(minutes: 10),
+      );
+      return fetched.bytes;
     }
-    return File(packageReference).readAsBytes();
+    if (uri != null && uri.hasScheme) {
+      throw StateError('Unsupported package URL scheme: ${uri.scheme}');
+    }
+    return _readDeveloperFileBounded(
+      File(packageReference),
+      maxBytes: _maxDeveloperArchiveBytes,
+      label: 'Package',
+    );
   }
 
   String _resolvePackageUrl(String rawUrl, Uri baseUri) {
@@ -403,7 +454,13 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
     }
     final uri = Uri.tryParse(rawUrl);
     if (uri != null && uri.hasScheme) {
-      return rawUrl;
+      if (isPublicHttpsUri(uri)) {
+        return uri.toString();
+      }
+      if (uri.scheme == 'file' && baseUri.scheme == 'file') {
+        return uri.toString();
+      }
+      throw StateError('Unsupported or unsafe package URL: $rawUrl');
     }
     if (baseUri.scheme == 'file') {
       return Uri.file(
@@ -412,45 +469,10 @@ extension LocalDeveloperSourceHelpers on LocalDeveloperRepository {
         ),
       ).toString();
     }
-    return baseUri.resolve(rawUrl).toString();
-  }
-
-  String _safeArchivePath(String rawPath) {
-    final normalized = rawPath.replaceAll('\\', '/');
-    final parts = normalized.split('/');
-    if (normalized.startsWith('/') ||
-        RegExp(r'^[A-Za-z]:/').hasMatch(normalized) ||
-        parts.any((part) => part == '..')) {
-      throw StateError('Package contains an unsafe path: $rawPath');
+    final resolved = baseUri.resolve(rawUrl);
+    if (!isPublicHttpsUri(resolved)) {
+      throw StateError('Remote package URLs must resolve to HTTPS.');
     }
-    return normalized;
+    return resolved.toString();
   }
-}
-
-class _SourceDocument {
-  const _SourceDocument({required this.content, required this.baseUri});
-
-  final String content;
-  final Uri baseUri;
-}
-
-class _PackageReadResult {
-  const _PackageReadResult({
-    required this.archive,
-    required this.manifest,
-    required this.bytes,
-    required this.sha256Hex,
-  });
-
-  final Archive archive;
-  final ModManifest manifest;
-  final List<int> bytes;
-  final String sha256Hex;
-}
-
-Map<String, Object?> _objectMap(Object? value) {
-  if (value is! Map) {
-    return const {};
-  }
-  return value.map((key, mapValue) => MapEntry(key.toString(), mapValue));
 }

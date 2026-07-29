@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 1,
+  "requiredLifecycleCycles": 10,
+  "markerPrefix": "TF-ACCEPT",
+  "creatorAcceptance": {
+    "gameBuild": "2309",
+    "evidenceMode": "manual-required",
+    "minimumLifecycleCycles": 10,
+    "description": "Creator workbench checks require an authorized interactive build-2309 run. They are recorded separately from automatic TF-ACCEPT markers so synthetic or source-only tests cannot claim native game coverage.",
+    "cases": [
+      {
+        "id": "creator.f5-routing-and-session",
+        "description": "F5 opens Sandbox while the Sandbox gamemode owns routing and opens CreatorTools only during stable standalone gameplay. Hide releases player controls while preserving the creator session; F5 reopens the same session."
+      },
+      {
+        "id": "creator.catalog-items-ugc-and-robots",
+        "description": "The catalog spawns curated build-2309 items, UGC props, and every RobotKit robot type; search, kind filters, duplicate, transform, remove, undo, and End Session cleanup remain usable."
+      },
+      {
+        "id": "creator.personality-and-location-restore",
+        "description": "A native robot's location, autonomous personality, and brain mode can be previewed and are restored exactly when the session ends, without retaining native runtime handles in a project."
+      },
+      {
+        "id": "creator.custom-character-and-vehicle-sources",
+        "description": "A test mod's authenticated character and validated self-contained vehicle factories spawn and unload safely. When no native vehicle adapter exists, the native vehicle source is visibly empty or degraded instead of inventing support."
+      },
+      {
+        "id": "creator.persistence-isolation",
+        "description": "Global mutation requires one explicit acknowledgement and a validated isolation lease. Save and checkpoint state are byte-for-byte unchanged after End Session; unavailable or revoked isolation fails closed and restores temporary changes."
+      },
+      {
+        "id": "creator.event-graph-and-rollback",
+        "description": "A local visual event project loads, resolves its content, runs deterministic bounded branches, and Stop restores graph-owned spawns and edits while leaving unrelated manual session spawns intact."
+      },
+      {
+        "id": "creator.scene-transition-cleanup",
+        "description": "Scene replacement, a Worlds transition or session, remote multiplayer admission, and mod unload close the global workbench and restore owned content, temporary native edits, controls, conversations, audio, and mutation isolation."
+      },
+      {
+        "id": "creator.source-unload-cleanup",
+        "description": "Unloading a custom content source removes its catalog entries and every produced instance exactly once in LIFO order; the open workbench prunes stale roster entries without crashing."
+      },
+      {
+        "id": "creator.ten-lifecycle-cycles",
+        "description": "Ten open, spawn, edit, hide, reopen, graph run/stop, and End Session cycles complete with no retained objects, leases, bindings, input actions, UI surfaces, interactions, conversations, audio, callbacks, or save-state changes.",
+        "minimumCycles": 10
+      }
+    ]
+  },
+  "cases": [
+    {
+      "id": "lifecycle.initial-scene",
+      "probeMethod": "TryPassInitialScene",
+      "description": "The initial active scene and its first scene-delivery callback are observed on the main thread."
+    },
+    {
+      "id": "lifecycle.frame-fixed-late",
+      "probeMethod": "RegisterEvents",
+      "description": "Frame, fixed, and late callbacks are each delivered without cross-subscriber failure propagation."
+    },
+    {
+      "id": "input.devices-and-focus",
+      "probeMethod": "ObserveInput",
+      "description": "Named keyboard, mouse, and gamepad actions report pressed, held, released, axes, conflicts, rebinding, and UI-focus suppression."
+    },
+    {
+      "id": "player.health-and-control",
+      "probeMethod": "ObservePlayerAndWorld",
+      "description": "Player/camera aim, health damage/heal, and nested control leases operate and restore controls."
+    },
+    {
+      "id": "world.physics-entities-items-interactions",
+      "probeMethod": "ObservePlayerAndWorld",
+      "description": "Ray/shape queries, entity transforms and motion, held-item operations, and native interaction prompts/callbacks operate through safe handles."
+    },
+    {
+      "id": "content.prefab-spawn-destroy",
+      "probeMethod": "RunAsyncChecks",
+      "description": "A package bundle and prefab load asynchronously, spawn through an opaque handle, and are destroyed without leaks."
+    },
+    {
+      "id": "content.audio",
+      "probeMethod": "ObservePlayerAndWorld",
+      "description": "Non-positional and positional framework audio cues play and release through lifetime-owned handles."
+    },
+    {
+      "id": "authoring.config-storage-localization-commands",
+      "probeMethod": "RunAuthoringChecks",
+      "description": "Validated config migration, installation-local typed storage, localization, commands, and diagnostics survive a reload."
+    },
+    {
+      "id": "ui.accessibility-and-focus",
+      "probeMethod": "RunUiChecks",
+      "description": "HUD, window, modal, toast, high contrast, UI scale, reduced motion, focus, and teardown use TopiaForgeUi."
+    },
+    {
+      "id": "worlds.session-teardown",
+      "probeMethod": "RegisterProviderChecks",
+      "description": "Scene/world/gamemode registration, loading, pause actions, session lifecycle, and save-aware teardown complete cleanly."
+    },
+    {
+      "id": "robots.objectives-dialogue-voice",
+      "probeMethod": "TryPassRobotAcceptance",
+      "description": "Robot spawn/body/health/movement, targets, objectives, dialogue, brain query, voice input, and custom interaction run without consumer native APIs."
+    },
+    {
+      "id": "integration.multiplayer-loopback",
+      "probeMethod": "RunMultiplayerLoopbackChecks",
+      "description": "The declared multiplayer module resolves through the extension boundary, binds generated state/command/event codecs, and executes them canonically through a ready interactive client-plus-server standalone loopback session."
+    },
+    {
+      "id": "integration.provider-scope",
+      "probeMethod": "RunProviderContractChecks",
+      "description": "Declared required providers and the installed optional UGC provider resolve exactly once; an absent optional dependency does not block the consumer; singleton conflicts, multiple-provider ordering, deterministic selection, and early release are enforced.",
+      "behaviors": [
+        "required-provider-singletons",
+        "optional-present-provider",
+        "optional-absent-nonblocking",
+        "singleton-conflict",
+        "multiple-cardinality",
+        "deterministic-selection",
+        "early-release"
+      ]
+    },
+    {
+      "id": "compat.graceful-unavailable",
+      "probeMethod": "RunAsyncChecks",
+      "description": "Unavailable or drifted game bindings return stable results and reasons without crashing the mod or startup."
+    },
+    {
+      "id": "lifecycle.ten-cycles",
+      "probeMethod": "RunLifetimeCyclesAsync",
+      "description": "Automatable core and noninteractive module resource families, including Creator Content sessions, complete ten in-session acquisition/release/reacquisition cycles with callback-stop and inactive-handle assertions. Hardware-, dialogue-, robot-, pause-, and session-specific handles are exercised by their dedicated live cases; offline lifecycle tests cover load/unload/reload and partial-load failure.",
+      "minimumCycles": 10,
+      "resourceFamilies": [
+        "explicit-lifetime",
+        "event-subscriptions",
+        "scheduler-operations",
+        "input-actions",
+        "player-control-leases",
+        "asset-bundle-prefab-entity",
+        "interactions",
+        "audio-playback",
+        "ui-surfaces-modals",
+        "localization",
+        "commands",
+        "extensions",
+        "chronos-leases",
+        "prompt-overrides",
+        "robot-targets",
+        "creator-sessions",
+        "ugc-asset-overrides",
+        "world-registrations"
+      ]
+    }
+  ]
+}

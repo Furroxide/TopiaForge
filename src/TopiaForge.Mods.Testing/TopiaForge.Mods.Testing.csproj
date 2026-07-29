@@ -1,0 +1,85 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>TopiaForge.Mods.Testing</AssemblyName>
+    <RootNamespace>TopiaForge.Mods.Testing</RootNamespace>
+    <Version>1.0.0-rc.1</Version>
+    <PackageVersion>1.0.0-rc.1</PackageVersion>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <InformationalVersion>1.0.0-rc.1</InformationalVersion>
+    <PackageId>TopiaForge.Mods.Testing</PackageId>
+    <Authors>TopiaForge</Authors>
+    <Description>Runner-neutral fakes and lifecycle helpers for TopiaForge V1 mods.</Description>
+    <PackageTags>topiaforge;modding;testing;fakes</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <WarningsAsErrors>$(WarningsAsErrors);CS1591;CS1574</WarningsAsErrors>
+    <ProduceReferenceAssembly>true</ProduceReferenceAssembly>
+    <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <!-- The package intentionally uses ref/ for PackageReference compilation and a broader lib/
+         runtime inventory for test execution; legacy packages.config reference groups do not apply. -->
+    <NoWarn>$(NoWarn);NU5131</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
+    <ProjectReference Include="..\TopiaForge.Mods.Chronos\TopiaForge.Mods.Chronos.csproj" />
+    <ProjectReference Include="..\TopiaForge.Mods.CreatorContent\TopiaForge.Mods.CreatorContent.csproj" />
+    <ProjectReference Include="..\TopiaForge.Mods.Multiplayer\TopiaForge.Mods.Multiplayer.csproj" />
+    <ProjectReference Include="..\TopiaForge.Mods.Prompts\TopiaForge.Mods.Prompts.csproj" />
+    <ProjectReference Include="..\TopiaForge.Mods.RobotKit\TopiaForge.Mods.RobotKit.csproj" />
+    <ProjectReference Include="..\TopiaForge.Mods.Ugc\TopiaForge.Mods.Ugc.csproj" />
+    <ProjectReference Include="..\TopiaForge.Mods.Worlds\TopiaForge.Mods.Worlds.csproj" />
+    <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Include="..\TopiaForge.Mods.Package.props"
+          Pack="true" PackagePath="build\$(PackageId).props" />
+    <None Include="..\TopiaForge.Mods.Package.targets"
+          Pack="true" PackagePath="build\$(PackageId).targets" />
+    <None Include="..\TopiaForge.Mods.Package.props"
+          Pack="true" PackagePath="buildTransitive\$(PackageId).props" />
+    <None Include="..\TopiaForge.Mods.Package.targets"
+          Pack="true" PackagePath="buildTransitive\$(PackageId).targets" />
+    <!-- NuGet selects ref/ for compilation and lib/ only at test runtime. This lets ordinary
+         PackageReference-based tests execute while every standalone contract package remains ref-only. -->
+    <None Include="$(IntermediateOutputPath)ref\$(AssemblyName).dll"
+          Pack="true" PackagePath="ref\$(TargetFramework)\$(AssemblyName).dll" />
+    <None Include="$(TargetDir)$(AssemblyName).xml"
+          Pack="true" PackagePath="ref\$(TargetFramework)\$(AssemblyName).xml" />
+    <None Include="..\TopiaForge.Mods.Abstractions\bin\$(Configuration)\netstandard2.1\TopiaForge.Mods.Abstractions.dll"
+          Pack="true" PackagePath="lib\netstandard2.1\TopiaForge.Mods.Abstractions.dll" />
+    <None Include="..\TopiaForge.Mods.Chronos\bin\$(Configuration)\netstandard2.1\TopiaForge.Mods.Chronos.dll"
+          Pack="true" PackagePath="lib\netstandard2.1\TopiaForge.Mods.Chronos.dll" />
+    <None Include="..\TopiaForge.Mods.CreatorContent\bin\$(Configuration)\netstandard2.1\TopiaForge.Mods.CreatorContent.dll"
+          Pack="true" PackagePath="lib\netstandard2.1\TopiaForge.Mods.CreatorContent.dll" />
+    <None Include="..\TopiaForge.Mods.Multiplayer\bin\$(Configuration)\netstandard2.1\TopiaForge.Mods.Multiplayer.dll"
+          Pack="true" PackagePath="lib\netstandard2.1\TopiaForge.Mods.Multiplayer.dll" />
+    <None Include="..\TopiaForge.Mods.Prompts\bin\$(Configuration)\netstandard2.1\TopiaForge.Mods.Prompts.dll"
+          Pack="true" PackagePath="lib\netstandard2.1\TopiaForge.Mods.Prompts.dll" />
+    <None Include="..\TopiaForge.Mods.RobotKit\bin\$(Configuration)\netstandard2.1\TopiaForge.Mods.RobotKit.dll"
+          Pack="true" PackagePath="lib\netstandard2.1\TopiaForge.Mods.RobotKit.dll" />
+    <None Include="..\TopiaForge.Mods.Ugc\bin\$(Configuration)\netstandard2.1\TopiaForge.Mods.Ugc.dll"
+          Pack="true" PackagePath="lib\netstandard2.1\TopiaForge.Mods.Ugc.dll" />
+    <None Include="..\TopiaForge.Mods.Worlds\bin\$(Configuration)\netstandard2.1\TopiaForge.Mods.Worlds.dll"
+          Pack="true" PackagePath="lib\netstandard2.1\TopiaForge.Mods.Worlds.dll" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <TopiaForgeTestingRuntimeProject Include="..\TopiaForge.Mods.Chronos\TopiaForge.Mods.Chronos.csproj" />
+    <TopiaForgeTestingRuntimeProject Include="..\TopiaForge.Mods.CreatorContent\TopiaForge.Mods.CreatorContent.csproj" />
+    <TopiaForgeTestingRuntimeProject Include="..\TopiaForge.Mods.Multiplayer\TopiaForge.Mods.Multiplayer.csproj" />
+    <TopiaForgeTestingRuntimeProject Include="..\TopiaForge.Mods.Prompts\TopiaForge.Mods.Prompts.csproj" />
+    <TopiaForgeTestingRuntimeProject Include="..\TopiaForge.Mods.RobotKit\TopiaForge.Mods.RobotKit.csproj" />
+    <TopiaForgeTestingRuntimeProject Include="..\TopiaForge.Mods.Ugc\TopiaForge.Mods.Ugc.csproj" />
+    <TopiaForgeTestingRuntimeProject Include="..\TopiaForge.Mods.Worlds\TopiaForge.Mods.Worlds.csproj" />
+  </ItemGroup>
+
+  <Target Name="BuildTopiaForgeTestingRuntimeSupport" BeforeTargets="GenerateNuspec">
+    <MSBuild Projects="@(TopiaForgeTestingRuntimeProject)"
+             Targets="Build"
+             BuildInParallel="true"
+             Properties="Configuration=$(Configuration)" />
+  </Target>
+</Project>

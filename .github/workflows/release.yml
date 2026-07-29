@@ -1,23 +1,15 @@
-name: Build release packages
+name: Prepare signed release draft
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
-    inputs:
-      tag:
-        description: "Release tag to create/update when running manually"
-        required: true
-        type: string
 
 permissions:
-  contents: write
-  pages: write
-  id-token: write
+  contents: read
 
+# Publication is globally serialized. A release must be dispatched from the
+# already-created protected annotated tag, never from a branch or PR event.
 concurrency:
-  group: release-${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
+  group: topiaforge-release-publication
   cancel-in-progress: false
 
 env:
@@ -25,298 +17,217 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
-  macos-cli-x64:
-    name: Build macOS x64 CLI
-    runs-on: macos-15-intel
+  verify-candidate:
+    name: Verify protected release evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      checks: read
+      contents: read
+      pull-requests: read
+    outputs:
+      version: ${{ steps.metadata.outputs.version }}
+      tag: ${{ steps.metadata.outputs.tag }}
+      prerelease: ${{ steps.metadata.outputs.prerelease }}
+      target_sha: ${{ steps.metadata.outputs.target_sha }}
+      notes_file: ${{ steps.metadata.outputs.notes_file }}
+      release_head_sha: ${{ steps.evidence.outputs.release_head_sha }}
+      release_pr_number: ${{ steps.evidence.outputs.release_pr_number }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Reject non-tag dispatches
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_TYPE" = tag
+          [[ "$GITHUB_REF" == refs/tags/v* ]]
+
+      - name: Checkout exact protected tag
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          lfs: true
+          persist-credentials: false
+          ref: ${{ github.ref }}
 
       - name: Set up Dart
-        uses: dart-lang/setup-dart@v1
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
         with:
-          sdk: stable
-
-      - name: Build x64 CLI
-        working-directory: apps/robotopia_cli
-        run: |
-          dart pub get
-          dart compile exe bin/robotopia.dart -o "$RUNNER_TEMP/robotopia-macos-x64"
-          chmod +x "$RUNNER_TEMP/robotopia-macos-x64"
-
-      - name: Upload x64 CLI
-        uses: actions/upload-artifact@v4
-        with:
-          name: robotopia-macos-x64
-          path: ${{ runner.temp }}/robotopia-macos-x64
-          if-no-files-found: error
-
-  build:
-    name: Build ${{ matrix.platform }} package
-    needs: macos-cli-x64
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: windows
-            runner: windows-latest
-            asset: QuantumWorks-windows-x64.zip
-          - platform: linux
-            runner: ubuntu-latest
-            asset: QuantumWorks-linux-x64.zip
-          - platform: macos
-            runner: macos-15
-            asset: QuantumWorks-macos-universal.zip
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+          sdk: "3.12.2"
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: "10.0.301"
 
-      - name: Set up Dart
-        uses: dart-lang/setup-dart@v1
-        with:
-          sdk: stable
+      - name: Restore release validator
+        working-directory: apps/topiaforge_cli
+        run: dart pub get --enforce-lockfile
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Install Linux desktop dependencies
-        if: matrix.platform == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev zip unzip
-
-      - name: Restore Robotopia managed refs
-        shell: pwsh
-        env:
-          ROBOTOPIA_REFS_URL: ${{ secrets.ROBOTOPIA_REFS_URL }}
-          ROBOTOPIA_REFS_SHA256: ${{ secrets.ROBOTOPIA_REFS_SHA256 }}
-          ROBOTOPIA_REFS_TOKEN: ${{ secrets.ROBOTOPIA_REFS_TOKEN }}
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:ROBOTOPIA_REFS_URL)) {
-            throw "ROBOTOPIA_REFS_URL secret is required."
-          }
-          if ([string]::IsNullOrWhiteSpace($env:ROBOTOPIA_REFS_SHA256)) {
-            throw "ROBOTOPIA_REFS_SHA256 secret is required."
-          }
-
-          $archive = Join-Path $env:RUNNER_TEMP "robotopia-managed-refs.zip"
-          $headers = @{}
-          if (![string]::IsNullOrWhiteSpace($env:ROBOTOPIA_REFS_TOKEN)) {
-            $headers["Authorization"] = "Bearer $env:ROBOTOPIA_REFS_TOKEN"
-          }
-          Invoke-WebRequest -Uri $env:ROBOTOPIA_REFS_URL -Headers $headers -OutFile $archive
-
-          $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-          $expected = $env:ROBOTOPIA_REFS_SHA256.Trim().ToLowerInvariant()
-          if ($actual -ne $expected) {
-            throw "Robotopia refs SHA-256 mismatch. Expected $expected but got $actual."
-          }
-
-          $extract = Join-Path $env:RUNNER_TEMP "robotopia-managed-refs"
-          Expand-Archive -LiteralPath $archive -DestinationPath $extract -Force
-          $unity = Get-ChildItem -LiteralPath $extract -Recurse -Filter "UnityEngine.dll" -File |
-            Select-Object -First 1
-          if ($null -eq $unity) {
-            throw "Reference archive did not contain UnityEngine.dll."
-          }
-          $managed = Split-Path $unity.FullName -Parent
-          "RobotopiaManagedDir=$managed" >> $env:GITHUB_ENV
-          Write-Host "RobotopiaManagedDir=$managed"
-
-      # Proves the Dart-native scaffold + pack pipeline works on every OS before it feeds the release payload.
-      # Scaffolds inside the checkout (not RUNNER_TEMP) so the generated ProjectReference to
-      # src/Robotopia.Mods.Abstractions stays a same-drive relative path on Windows runners.
-      - name: Smoke test CLI scaffold and pack
-        shell: bash
-        working-directory: apps/robotopia_cli
-        run: |
-          dart pub get
-          dart run bin/robotopia.dart new mod ci.smoke --name "CI Smoke" --dir ../../.pack-smoke
-          dart run bin/robotopia.dart pack --project ../../.pack-smoke/ci.smoke --output "$RUNNER_TEMP/pack-smoke"
-
-      - name: Prepare macOS universal CLI
-        if: matrix.platform == 'macos'
-        uses: actions/download-artifact@v4
-        with:
-          name: robotopia-macos-x64
-          path: ${{ runner.temp }}/macos-x64-cli
-
-      - name: Combine macOS CLI architectures
-        if: matrix.platform == 'macos'
-        shell: bash
-        working-directory: apps/robotopia_cli
-        run: |
-          dart pub get
-          dart compile exe bin/robotopia.dart -o "$RUNNER_TEMP/robotopia-macos-arm64"
-          chmod +x "$RUNNER_TEMP/robotopia-macos-arm64"
-          chmod +x "$RUNNER_TEMP/macos-x64-cli/robotopia-macos-x64"
-          lipo -create \
-            "$RUNNER_TEMP/macos-x64-cli/robotopia-macos-x64" \
-            "$RUNNER_TEMP/robotopia-macos-arm64" \
-            -output "$RUNNER_TEMP/robotopia-macos-universal"
-          chmod +x "$RUNNER_TEMP/robotopia-macos-universal"
-          lipo -archs "$RUNNER_TEMP/robotopia-macos-universal"
-
-      - name: Build release package
-        shell: pwsh
-        env:
-          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
-          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-          MACOS_DEVELOPER_ID_APPLICATION: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION }}
-          MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
-          MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
-          MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
-        run: |
-          $args = @(
-            "-Platform", "${{ matrix.platform }}",
-            "-OutputRoot", (Join-Path $env:GITHUB_WORKSPACE "release-artifacts"),
-            "-Configuration", "Release"
-          )
-          if ("${{ matrix.platform }}" -eq "macos") {
-            $args += @("-PrebuiltCli", (Join-Path $env:RUNNER_TEMP "robotopia-macos-universal"))
-          }
-          & ./tools/package-distribution.ps1 @args
-
-      - name: Smoke test release package
-        shell: pwsh
-        run: |
-          $args = @(
-            "-Platform", "${{ matrix.platform }}",
-            "-ZipPath", (Join-Path (Join-Path $env:GITHUB_WORKSPACE "release-artifacts") "${{ matrix.asset }}")
-          )
-          if ("${{ matrix.platform }}" -eq "macos") {
-            $args += "-RequireMacUniversal"
-          }
-          & ./tools/test-release-package.ps1 @args
-
-      - name: Upload package artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.asset }}
-          path: release-artifacts/${{ matrix.asset }}
-          if-no-files-found: error
-
-      # One canonical byte-set for the mod registry: per-platform packs are
-      # byte-different, so only the linux leg's dist/ feeds the release assets
-      # the registry index hashes and links.
-      - name: Upload mod packages artifact
-        if: matrix.platform == 'linux'
-        uses: actions/upload-artifact@v4
-        with:
-          name: mod-packages
-          path: dist/*.robotopiamod
-          if-no-files-found: error
-
-  publish-release:
-    name: Publish GitHub Release assets
-    needs: build
-    runs-on: ubuntu-latest
-    outputs:
-      tag: ${{ steps.release-tag.outputs.tag }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Resolve release tag
-        id: release-tag
+      - name: Resolve exact catalog entry
+        id: metadata
         shell: bash
         run: |
-          tag="${GITHUB_REF_NAME}"
-          if [[ "${GITHUB_REF_TYPE}" != "tag" ]]; then
-            tag="${{ inputs.tag }}"
-          fi
-          if [[ -z "$tag" ]]; then
-            echo "Release tag is required." >&2
-            exit 1
-          fi
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          version=$(jq -er '.versioning.productVersion' release/release-policy.json)
+          entry=$(jq -ec \
+            --arg version "$version" \
+            '[.releases[] | select(.version == $version)] |
+             select(length == 1) | .[0]' release/catalog.json)
+          tag=$(jq -er '.tag' <<<"$entry")
+          prerelease=$(jq -er '.prerelease | select(type == "boolean")' <<<"$entry")
+          notes_file=$(jq -er '.notesFile' <<<"$entry")
+          target_sha=$(git rev-parse HEAD)
+          test "$tag" = "$GITHUB_REF_NAME"
+          test -s "$notes_file"
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "prerelease=$prerelease"
+            echo "target_sha=$target_sha"
+            echo "notes_file=$notes_file"
+          } >>"$GITHUB_OUTPUT"
 
-      - name: Download release packages
-        uses: actions/download-artifact@v4
-        with:
-          path: release-assets
-          pattern: QuantumWorks-*.zip
-          merge-multiple: true
+      - name: Enforce complete release policy and provenance
+        working-directory: apps/topiaforge_cli
+        run: >-
+          dart run topiaforge release validate-policy
+          --version "${{ steps.metadata.outputs.version }}"
 
-      - name: Download mod packages
-        uses: actions/download-artifact@v4
-        with:
-          name: mod-packages
-          path: mod-packages
+      - name: Require the pinned game build to still be latest
+        shell: pwsh
+        run: >-
+          dotnet run
+          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
+          -c Release -- --source public --probe --require-latest
 
-      - name: Create or update GitHub Release
+      - name: Verify tag, release PR, and exact-SHA gates
+        id: evidence
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.release-tag.outputs.tag }}
-        run: |
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --title "$TAG" --notes "QuantumWorks release $TAG"
-          fi
-          gh release upload "$TAG" release-assets/*.zip --clobber
-          # Standalone mod packages back the registry index's download URLs.
-          gh release upload "$TAG" mod-packages/*.robotopiamod --clobber
+        run: >-
+          ./tools/verify-release-candidate.sh
+          "$GITHUB_REPOSITORY"
+          "${{ steps.metadata.outputs.tag }}"
+          "${{ steps.metadata.outputs.version }}"
+          "${{ steps.metadata.outputs.target_sha }}"
 
-  deploy-index:
-    name: Deploy launcher update + mod registry indexes
-    needs: publish-release
+  build-packages:
+    name: Build signed release candidates
+    needs: verify-candidate
+    permissions:
+      contents: read
+    uses: ./.github/workflows/release-signed-package-build.yml
+    with:
+      source_sha: ${{ needs.verify-candidate.outputs.target_sha }}
+      artifact_retention_days: 30
+
+  prepare-draft:
+    name: Attest and reconcile release draft
+    needs: [verify-candidate, build-packages]
     runs-on: ubuntu-latest
-    # A Pages deploy replaces the whole site, so every deploy (here and in
-    # deploy-launcher-updates.yml) must build BOTH indexes, and the two
-    # workflows serialize on the shared "pages" group.
-    concurrency:
-      group: pages
-      cancel-in-progress: false
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      attestations: write
+      contents: write
+      id-token: write
     environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      name: release
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
+      - name: Checkout exact release commit
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          lfs: true
+          persist-credentials: false
+          ref: ${{ needs.verify-candidate.outputs.target_sha }}
 
       - name: Set up Dart
-        uses: dart-lang/setup-dart@v1
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
         with:
-          sdk: stable
+          sdk: "3.12.2"
 
-      - name: Restore CLI packages
-        working-directory: apps/robotopia_cli
-        run: dart pub get
+      - name: Restore release metadata builder
+        working-directory: apps/topiaforge_cli
+        run: dart pub get --enforce-lockfile
 
-      - name: Build launcher update index
-        working-directory: apps/robotopia_cli
+      - name: Download signed platform archives
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: release-assets
+          pattern: TopiaForge-*.zip
+          merge-multiple: true
+
+      - name: Download canonical mod packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: mod-packages
+          path: release-assets
+
+      - name: Download platform trust evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: platform-trust
+          pattern: platform-trust-*
+          merge-multiple: true
+
+      - name: Generate signed update metadata and release evidence
+        working-directory: apps/topiaforge_cli
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LAUNCHER_UPDATE_BASE_URL: ${{ vars.LAUNCHER_UPDATE_BASE_URL }}
-        run: dart run robotopia updates index --repository "$GITHUB_REPOSITORY" --output "../../_site"
+          TOPIAFORGE_UPDATE_ED25519_PRIVATE_KEY_B64: ${{ secrets.TOPIAFORGE_UPDATE_ED25519_PRIVATE_KEY_B64 }}
+        run: |
+          set -euo pipefail
+          jq -s '
+            map({
+              key: (
+                if .platform == "windows" then "windows-x64"
+                elif .platform == "linux" then "linux-x64"
+                elif .platform == "macos" then "macos-universal"
+                else error("unsupported platform")
+                end
+              ),
+              value: {
+                status: .status,
+                exceptionApplied: .exceptionApplied
+              }
+            }) | from_entries
+          ' ../../platform-trust/platform-trust-*.json \
+            >../../release-assets/.platform-trust-evidence.json
+          dart run topiaforge release build-update-metadata \
+            --version "${{ needs.verify-candidate.outputs.version }}" \
+            --assets ../../release-assets
+          dart run topiaforge release verify-update-metadata \
+            --version "${{ needs.verify-candidate.outputs.version }}" \
+            --assets ../../release-assets
+          dart run topiaforge release build-metadata \
+            --version "${{ needs.verify-candidate.outputs.version }}" \
+            --target-sha "${{ needs.verify-candidate.outputs.target_sha }}" \
+            --assets ../../release-assets
+          dart run topiaforge release verify-metadata \
+            --version "${{ needs.verify-candidate.outputs.version }}" \
+            --target-sha "${{ needs.verify-candidate.outputs.target_sha }}" \
+            --assets ../../release-assets
+          rm ../../release-assets/.platform-trust-evidence.json
 
-      - name: Build mod registry index
-        working-directory: apps/robotopia_cli
+      - name: Attest all release assets
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: release-assets/*
+
+      - name: Create or resume matching draft without tag mutation
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >-
-          dart run robotopia registry index
-          --repository "$GITHUB_REPOSITORY"
-          --entries ../../registry
-          --changelogs ../../mods
-          --output ../../_site/registry
+          ./tools/publish-release-draft.sh
+          "$GITHUB_REPOSITORY"
+          "${{ needs.verify-candidate.outputs.tag }}"
+          "${{ needs.verify-candidate.outputs.target_sha }}"
+          "TopiaForge ${{ needs.verify-candidate.outputs.version }}"
+          "${{ needs.verify-candidate.outputs.notes_file }}"
+          release-assets
+          "${{ needs.verify-candidate.outputs.prerelease }}"
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Explain the manual publication boundary
+        run: |
+          echo 'A signed, attested, verified draft was prepared from the protected tag.'
+          echo 'An authorized owner must inspect the draft and publish it manually.'
+          echo 'Immutable releases lock the tag and assets at publication.'

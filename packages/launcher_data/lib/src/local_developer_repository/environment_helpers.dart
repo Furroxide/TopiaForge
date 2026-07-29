@@ -10,16 +10,16 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
           ? 'Developer project found at ${workspace.projectRoot}.'
           : 'Developer project not found.',
     );
-    final dotnet = await _which('dotnet');
-    if (dotnet.isEmpty) {
+    try {
+      final dotnet = await _dotnetSdkResolver(_repositoryRoot);
+      messages.add('.NET SDK ${dotnet.version} found at ${dotnet.executable}.');
+    } on Object catch (error) {
       issues.add(
-        const LauncherIssue(
+        LauncherIssue(
           severity: IssueSeverity.error,
-          message: '.NET SDK was not found on PATH.',
+          message: _dotnetDiscoveryMessage(error),
         ),
       );
-    } else {
-      messages.add('.NET SDK found at $dotnet.');
     }
 
     final unityHub = await _findUnityHub();
@@ -59,7 +59,7 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
         workspace.projectRoot,
         'unity-companion',
         'Packages',
-        'com.robotopia.ugc-companion',
+        'io.github.furroxide.topiaforge.ugc-companion',
         'package.json',
       ),
     );
@@ -71,8 +71,8 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
           severity: IssueSeverity.warning,
           message:
               'UGC companion package missing. Re-scaffold with '
-              '`robotopia new mod --unity-companion` or copy '
-              'unity-companion/Packages/com.robotopia.ugc-companion into the project.',
+              '`topiaforge new mod --unity-companion` or copy '
+              'unity-companion/Packages/io.github.furroxide.topiaforge.ugc-companion into the project.',
         ),
       );
     }
@@ -89,7 +89,7 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
 
     try {
       final dir = Directory(watchFolder)..createSync(recursive: true);
-      final probe = File(p.join(dir.path, '.robotopia-doctor-probe'));
+      final probe = File(p.join(dir.path, '.topiaforge-doctor-probe'));
       probe.writeAsStringSync('ok');
       probe.deleteSync();
       messages.add('UGC watch folder is writable: $watchFolder');
@@ -107,30 +107,30 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
     final checks = <ToolCheck>[];
 
     // .NET SDK — required to build and pack mods.
-    final dotnet = await _which('dotnet');
-    if (dotnet.isEmpty) {
-      checks.add(
-        const ToolCheck(
-          name: '.NET SDK',
-          status: ToolStatus.missing,
-          purpose: ToolPurpose.develop,
-          detail: 'Not found on PATH.',
-          remediation:
-              'Install the .NET SDK 8.0 or newer to build and pack mods.',
-          url: 'https://dotnet.microsoft.com/download',
-        ),
-      );
-    } else {
-      final version = await _toolVersion('dotnet', const ['--version']);
-      final major = _majorVersion(version);
+    try {
+      final dotnet = await _dotnetSdkResolver(_repositoryRoot);
+      final major = _majorVersion(dotnet.version);
       final outdated = major != null && major < 8;
       checks.add(
         ToolCheck(
           name: '.NET SDK',
           status: outdated ? ToolStatus.outdated : ToolStatus.ok,
           purpose: ToolPurpose.develop,
-          detail: version.isEmpty ? dotnet : 'v$version',
+          detail: 'v${dotnet.version} (${dotnet.executable})',
           remediation: outdated ? 'Upgrade to the .NET SDK 8.0 or newer.' : '',
+          url: 'https://dotnet.microsoft.com/download',
+        ),
+      );
+    } on Object catch (error) {
+      checks.add(
+        ToolCheck(
+          name: '.NET SDK',
+          status: ToolStatus.missing,
+          purpose: ToolPurpose.develop,
+          detail: _dotnetDiscoveryMessage(error),
+          remediation:
+              'Install the exact SDK pinned by global.json or set '
+              'TOPIAFORGE_DOTNET_PATH to a compatible dotnet executable.',
           url: 'https://dotnet.microsoft.com/download',
         ),
       );
@@ -140,20 +140,20 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
     final node = await _which('node');
     if (node.isEmpty) {
       checks.add(
-        const ToolCheck(
+        ToolCheck(
           name: 'Node.js',
           status: ToolStatus.missing,
           purpose: ToolPurpose.ugcAutomerge,
           detail: 'Not found (optional).',
           remediation:
-              'Install Node.js 20+ only if you publish via the UGC Automerge live-sync channel.',
+              'Install ${UgcNodeVersionPolicy.requirement} only if '
+              'you publish via the UGC Automerge live-sync channel.',
           url: 'https://nodejs.org/',
         ),
       );
     } else {
       final version = await _toolVersion('node', const ['--version']);
-      final major = _majorVersion(version);
-      final outdated = major != null && major < 20;
+      final outdated = !UgcNodeVersionPolicy.supports(version);
       checks.add(
         ToolCheck(
           name: 'Node.js',
@@ -161,7 +161,8 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
           purpose: ToolPurpose.ugcAutomerge,
           detail: version.isEmpty ? node : version,
           remediation: outdated
-              ? 'Upgrade to Node.js 20+ for the Automerge sidecar.'
+              ? 'Upgrade to ${UgcNodeVersionPolicy.requirement} for the '
+                    'Automerge sidecar.'
               : '',
           url: 'https://nodejs.org/',
         ),
@@ -169,34 +170,30 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
     }
 
     // Unity — only needed to author UGC content in the companion or build custom-world bundles.
-    final unityEditor = await _findUnityEditor(null);
     final unityHub = await _findUnityHub();
-    // World/UI bundle builds additionally need an editor from the game player's Unity stream
-    // (6000.0.x, patch <= 31): a newer editor's bundles may not load in the shipped player.
+    // World/UI bundle builds must use the exact game-player editor.
     final editors = await _scanUnityEditors();
-    final hasBundleBuildEditor = editors.any(
-      (editor) => WorldBundleEditorGate.isEligible(editor.version),
-    );
+    final unityEditor = RobotopiaGameUnityCompatibility.selectEditor(editors);
     final ToolStatus unityStatus;
     final String unityDetail;
     final String unityRemediation;
-    if (unityEditor.isEmpty) {
+    if (editors.isEmpty) {
       unityStatus = ToolStatus.missing;
       unityDetail = unityHub.isEmpty
           ? 'Unity not detected (optional).'
           : 'Hub found, editor not detected: $unityHub';
       unityRemediation =
           'Install Unity via Unity Hub only if you author UGC content or custom worlds.';
-    } else if (!hasBundleBuildEditor) {
+    } else if (unityEditor == null) {
       unityStatus = ToolStatus.warning;
       unityDetail =
           'Found ${editors.map((editor) => editor.version).join(', ')} — none can build '
-          'world/UI bundles (needs 6000.0.x, patch <= ${WorldBundleEditorGate.maxPatch}; '
-          'the game player is 6000.0.31f1).';
+          'world/UI bundles (needs Unity '
+          '${RobotopiaGameUnityCompatibility.requiredEditorDisplay}).';
       unityRemediation = WorldBundleEditorGate.installHint;
     } else {
       unityStatus = ToolStatus.ok;
-      unityDetail = unityEditor;
+      unityDetail = unityEditor.path;
       unityRemediation = '';
     }
     checks.add(
@@ -228,9 +225,13 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
 
   Future<String> _toolVersion(String executable, List<String> args) async {
     try {
-      final result = await Process.run(executable, args, runInShell: true);
+      final result = await runBoundedProcess(
+        executable,
+        args,
+        timeout: const Duration(seconds: 10),
+      );
       if (result.exitCode == 0) {
-        return (result.stdout as String).trim().split('\n').first.trim();
+        return result.stdout.trim().split('\n').first.trim();
       }
     } on Object {
       // Probe is best-effort; absence is reported by the caller via _which.
@@ -241,6 +242,34 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
   int? _majorVersion(String version) {
     final match = RegExp(r'(\d+)').firstMatch(version.replaceFirst('v', ''));
     return match == null ? null : int.tryParse(match.group(1)!);
+  }
+
+  String _dotnetDiscoveryMessage(Object error) {
+    if (error case StateError(:final message)) return message.toString();
+    return 'The .NET SDK could not be validated (${error.runtimeType}).';
+  }
+
+  Future<({String action, LauncherIssue? issue})> _installSidecarDeps(
+    String sidecarDir,
+  ) async {
+    try {
+      final sidecar = TrustedUgcSidecar.inspectDirectory(Directory(sidecarDir));
+      await sidecar.ensureDependencies();
+      return (
+        action: 'Verified lockfile-backed UGC sidecar dependencies.',
+        issue: null,
+      );
+    } on Object catch (error) {
+      return (
+        action: 'Could not run npm.',
+        issue: LauncherIssue(
+          severity: IssueSeverity.warning,
+          message:
+              'Could not complete npm ci (${error.runtimeType}). '
+              'Install ${UgcNodeVersionPolicy.requirement} and retry.',
+        ),
+      );
+    }
   }
 
   Future<DeveloperSetupResult> _runSetup() async {
@@ -270,14 +299,10 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
         );
       } else {
         final sidecarDir = File(sidecar).parent.path;
-        if (Directory(p.join(sidecarDir, 'node_modules')).existsSync()) {
-          actions.add('UGC Automerge sidecar dependencies already present.');
-        } else {
-          final result = await _installSidecarDeps(sidecarDir);
-          actions.add(result.action);
-          if (result.issue != null) {
-            issues.add(result.issue!);
-          }
+        final result = await _installSidecarDeps(sidecarDir);
+        actions.add(result.action);
+        if (result.issue != null) {
+          issues.add(result.issue!);
         }
       }
     } else {

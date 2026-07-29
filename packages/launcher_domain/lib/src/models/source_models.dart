@@ -71,21 +71,30 @@ class PackageInstallAction {
     required this.modId,
     required this.name,
     required this.version,
+    required this.expectedManifest,
     required this.packageUrl,
     required this.packageSha256,
     this.sourceId = '',
     this.sourceName = '',
     this.root = false,
+    this.enableOnly = false,
   });
 
   final String modId;
   final String name;
   final String version;
+
+  /// Exact manifest advertised by the source and approved by the install
+  /// planner. Downloaded package bytes must contain the same canonical V5
+  /// manifest before they can be staged.
+  final ModManifest expectedManifest;
+
   final String packageUrl;
   final String packageSha256;
   final String sourceId;
   final String sourceName;
   final bool root;
+  final bool enableOnly;
 
-  bool get isRemote => packageUrl.startsWith('https://');
+  bool get isRemote => packageUrl.trim().toLowerCase().startsWith('https://');
 }

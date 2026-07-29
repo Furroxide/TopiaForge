@@ -1,17 +1,25 @@
 #!/bin/sh
-# Robotopia commit-msg hook: keep AI co-author trailers out of commits.
+# TopiaForge commit-msg hook: keep AI co-author trailers out of commits.
 #
 # Enabled per clone with:
 #   git config core.hooksPath .githooks
 
-set -e
+set -eu
 msg_file="$1"
 [ -f "$msg_file" ] || exit 0
 
 tmp="${msg_file}.coauthor.tmp"
 
 # Drop AI co-author trailers and trim trailing blank lines left behind.
-grep -Evi '^[[:space:]]*co-authored-by:[[:space:]]*(claude|chatgpt|codex|openai|anthropic)' "$msg_file" > "$tmp" 2>/dev/null || cp "$msg_file" "$tmp"
+if grep -Evi '^[[:space:]]*co-authored-by:[[:space:]]*(claude|chatgpt|codex|openai|anthropic)' "$msg_file" > "$tmp" 2>/dev/null; then
+  :
+else
+  status=$?
+  if [ "$status" -gt 1 ]; then
+    rm -f "$tmp"
+    exit "$status"
+  fi
+fi
 awk 'NF{last=NR} {line[NR]=$0} END{for (i = 1; i <= last; i++) print line[i]}' "$tmp" > "$msg_file"
 
 rm -f "$tmp"

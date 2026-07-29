@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 2,
+  "protocolVersion": "1.0.0",
+  "contracts": [
+    {
+      "id": "io.github.furroxide.topiaforge.samples.counter",
+      "wireFormatRevision": 1,
+      "schemaSha256": "0b00aafb8221222eea5e4120adaea20674a23a19dc0492c47cdd07a11dc1937b",
+      "stateIds": [
+        "io.github.furroxide.topiaforge.samples.counter/counter"
+      ],
+      "commandIds": [
+        "io.github.furroxide.topiaforge.samples.counter/increment"
+      ],
+      "objectTypeIds": [],
+      "eventIds": [
+        "io.github.furroxide.topiaforge.samples.counter/increment-accepted"
+      ]
+    }
+  ]
+}

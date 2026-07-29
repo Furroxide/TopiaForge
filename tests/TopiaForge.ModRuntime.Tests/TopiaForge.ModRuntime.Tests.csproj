@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>TopiaForge.ModRuntime.Tests</AssemblyName>
+    <RootNamespace>TopiaForge.ModRuntime.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TopiaForge.ModManager\TopiaForge.ModManager.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.ModManager.Core\TopiaForge.ModManager.Core.csproj" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
+    <ProjectReference Include="..\TopiaForge.ValidTestMod\TopiaForge.ValidTestMod.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="BepInEx" HintPath="$(BepInExCoreDir)\BepInEx.dll" Private="true" />
+    <Reference Include="0Harmony" HintPath="$(BepInExCoreDir)\0Harmony.dll" Private="true" />
+    <Reference Include="UnityEngine" HintPath="$(RobotopiaManagedDir)\UnityEngine.dll" Private="true" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.CoreModule.dll" Private="true" />
+    <Reference Include="UnityEngine.AssetBundleModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.AssetBundleModule.dll" Private="true" />
+    <Reference Include="UnityEngine.InputLegacyModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.InputLegacyModule.dll" Private="true" />
+    <Reference Include="UnityEngine.PhysicsModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.PhysicsModule.dll" Private="true" />
+    <Reference Include="UnityEngine.TextRenderingModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.TextRenderingModule.dll" Private="true" />
+    <Reference Include="UnityEngine.UI" HintPath="$(RobotopiaManagedDir)\UnityEngine.UI.dll" Private="true" />
+    <Reference Include="UnityEngine.UIModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.UIModule.dll" Private="true" />
+  </ItemGroup>
+
+  <Target Name="CopySyntheticMod" AfterTargets="Build">
+    <Copy SourceFiles="..\TopiaForge.ValidTestMod\bin\$(Configuration)\netstandard2.1\TopiaForge.ValidTestMod.dll"
+          DestinationFolder="$(OutDir)" />
+  </Target>
+</Project>

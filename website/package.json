@@ -1,0 +1,38 @@
+{
+  "name": "topiaforge-developer-docs",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.16.0",
+    "npm": ">=9.6.5"
+  },
+  "scripts": {
+    "docs:prepare": "node scripts/prepare-docs.mjs",
+    "dev": "npm run docs:prepare && astro dev",
+    "build": "npm run docs:prepare && astro build",
+    "build:reference": "node scripts/build-reference.mjs",
+    "build:dart-reference": "node scripts/build-dart-reference.mjs",
+    "build:search": "node scripts/build-search.mjs",
+    "build:all": "npm run build && npm run build:reference && npm run build:dart-reference && npm run build:search && npm run check:built-links",
+    "pages:assemble": "node scripts/assemble-pages.mjs",
+    "check:content": "node scripts/prepare-docs.mjs --check",
+    "check:markdown-links": "node scripts/check-markdown-links.mjs",
+    "check:repository-data": "node scripts/check-repository-data.mjs",
+    "check:built-links": "node scripts/check-built-links.mjs",
+    "test": "node --test",
+    "check": "npm test && npm run docs:prepare && npm run check:markdown-links && astro check && astro build && npm run build:reference && npm run build:dart-reference && npm run build:search && npm run check:built-links",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "0.41.3",
+    "astro": "7.1.5",
+    "sharp": "0.35.3"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.9",
+    "pagefind": "1.5.2",
+    "typescript": "6.0.3",
+    "yaml": "2.9.0"
+  }
+}
