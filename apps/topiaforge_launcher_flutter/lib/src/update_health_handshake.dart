@@ -1,12 +1,16 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:path/path.dart' as p;
+
+typedef UpdateHealthFrameScheduler = void Function(FrameCallback callback);
 
 void scheduleUpdateHealthHandshake(
   List<String> arguments, {
   required String dataRoot,
+  UpdateHealthFrameScheduler? frameScheduler,
 }) {
   final nonce = _option(arguments, '--topiaforge-update-health-nonce');
   final path = _option(arguments, '--topiaforge-update-health-file');
@@ -28,7 +32,9 @@ void scheduleUpdateHealthHandshake(
     throw StateError('Launcher update health marker path is unsafe.');
   }
   _requireSafeHealthParents(markerPath, allowedRoot);
-  WidgetsBinding.instance.addPostFrameCallback((_) {
+  final scheduleFrame =
+      frameScheduler ?? WidgetsBinding.instance.addPostFrameCallback;
+  scheduleFrame((_) {
     _requireSafeHealthParents(markerPath, allowedRoot);
     if (FileSystemEntity.typeSync(markerPath, followLinks: false) !=
         FileSystemEntityType.notFound) {

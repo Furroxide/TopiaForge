@@ -1,17 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:topiaforge_launcher_flutter/src/update_health_handshake.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
-
-  testWidgets('writes a bounded health marker after the first frame', (
-    tester,
-  ) async {
+  test('writes a bounded health marker after the scheduled frame', () async {
     final root = await Directory.systemTemp.createTemp('topiaforge-health-');
     addTearDown(() => root.delete(recursive: true));
     const transactionId = '0123456789abcdef0123456789abcdef';
@@ -20,15 +16,23 @@ void main() {
     )..createSync(recursive: true);
     final marker = File(p.join(transaction.path, 'health.json'));
     final nonce = List.filled(64, 'a').join();
+    FrameCallback? frameCallback;
 
-    scheduleUpdateHealthHandshake([
-      '--topiaforge-update-health-nonce',
-      nonce,
-      '--topiaforge-update-health-file',
-      marker.path,
-    ], dataRoot: root.path);
-    await tester.pumpWidget(const SizedBox());
-    await tester.pump();
+    scheduleUpdateHealthHandshake(
+      [
+        '--topiaforge-update-health-nonce',
+        nonce,
+        '--topiaforge-update-health-file',
+        marker.path,
+      ],
+      dataRoot: root.path,
+      frameScheduler: (callback) {
+        frameCallback = callback;
+      },
+    );
+    expect(marker.existsSync(), isFalse);
+    expect(frameCallback, isNotNull);
+    frameCallback!(Duration.zero);
 
     final decoded = jsonDecode(marker.readAsStringSync()) as Map;
     expect(decoded['formatVersion'], 1);
