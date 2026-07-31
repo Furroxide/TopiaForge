@@ -1635,8 +1635,15 @@ fi
         $stageSourceSha = (& git -C $stageRepository rev-parse HEAD).Trim()
         $stageAsset = Join-Path $stageAssets "asset.bin"
         Set-Content -LiteralPath $stageAsset -Value "exact asset" -Encoding ascii
-        $stageGh = Join-Path $fakeBin "stage-gh.cmd"
-        $stageDart = Join-Path $fakeBin "stage-dart.cmd"
+        $stageGhName = if ($IsWindows) { "stage-gh.cmd" } else { "stage-gh" }
+        $stageDartName = if ($IsWindows) {
+            "stage-dart.cmd"
+        }
+        else {
+            "stage-dart"
+        }
+        $stageGh = Join-Path $fakeBin $stageGhName
+        $stageDart = Join-Path $fakeBin $stageDartName
         $stageLog = Join-Path $testRoot "stage-gh.log"
         $stageDeleteMarker = Join-Path $testRoot "stage-delete.marker"
         $stageUploadMarker = Join-Path $testRoot "stage-upload.marker"
@@ -1665,7 +1672,8 @@ fi
                 author = [ordered]@{ login = "admin" }
             } | ConvertTo-Json -Compress
         )
-        @'
+        if ($IsWindows) {
+            @'
 @echo off
 setlocal EnableExtensions
 echo gh %*>>"%FAKE_STAGE_LOG%"
@@ -1707,11 +1715,68 @@ if "%~1"=="api" if "%~2"=="repos/furroxide/TopiaForge/releases/assets/123" (
 )
 exit /b 64
 '@ | Set-Content -LiteralPath $stageGh -Encoding ascii
-        @'
+            @'
 @echo off
 echo dart %*>>"%FAKE_STAGE_LOG%"
 exit /b 0
 '@ | Set-Content -LiteralPath $stageDart -Encoding ascii
+        }
+        else {
+            @'
+#!/usr/bin/env bash
+printf 'gh %s\n' "$*" >>"$FAKE_STAGE_LOG"
+if [[ ${1:-} == auth ]]; then
+  exit 0
+fi
+if [[ ${1:-} == release && ${2:-} == view ]]; then
+  printf '%s\n' "$FAKE_STAGE_RELEASE_JSON"
+  exit 0
+fi
+if [[ ${1:-} == release && ${2:-} == upload ]]; then
+  [[ -f "$FAKE_STAGE_DELETE_MARKER" ]] || exit 61
+  printf 'uploaded\n' >"$FAKE_STAGE_UPLOAD_MARKER"
+  exit 0
+fi
+if [[ ${1:-} == api && ${2:-} == --method ]]; then
+  [[ ${3:-} == DELETE ]] || exit 62
+  [[ ${4:-} == repos/furroxide/TopiaForge/releases/assets/123 ]] || exit 63
+  printf 'deleted\n' >"$FAKE_STAGE_DELETE_MARKER"
+  exit 0
+fi
+if [[ ${1:-} == api && ${2:-} == repos/furroxide/TopiaForge ]]; then
+  printf 'true\n'
+  exit 0
+fi
+if [[ ${1:-} == api && ${2:-} == user ]]; then
+  printf 'admin\n'
+  exit 0
+fi
+if [[ ${1:-} == api &&
+      ${2:-} == repos/furroxide/TopiaForge/collaborators/admin/permission ]]; then
+  printf 'admin\n'
+  exit 0
+fi
+if [[ ${1:-} == api &&
+      ${2:-} == repos/furroxide/TopiaForge/releases/tags/v1.0.0-rc.1 ]]; then
+  printf '%s\n' "$FAKE_STAGE_ASSET_JSON"
+  exit 0
+fi
+if [[ ${1:-} == api &&
+      ${2:-} == repos/furroxide/TopiaForge/releases/assets/123 ]]; then
+  printf 'starter\n'
+  exit 0
+fi
+exit 64
+'@ | Set-Content -LiteralPath $stageGh -Encoding utf8NoBOM
+            @'
+#!/usr/bin/env bash
+printf 'dart %s\n' "$*" >>"$FAKE_STAGE_LOG"
+'@ | Set-Content -LiteralPath $stageDart -Encoding utf8NoBOM
+            & chmod +x $stageGh $stageDart
+            if ($LASTEXITCODE -ne 0) {
+                throw "Could not mark fake staging tools executable."
+            }
+        }
 
         $originalRepositoryRoot = $script:repositoryRoot
         $originalStateDirectory = $script:stateDirectory
