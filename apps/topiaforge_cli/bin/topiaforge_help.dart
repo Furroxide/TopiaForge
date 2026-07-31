@@ -256,6 +256,9 @@ extension _HelpCommand on _TopiaForgeCli {
       '  topiaforge release validate-policy ... Check catalog, pins, licensing, and provenance.',
     );
     stdout.writeln(
+      '  topiaforge release validate-readiness ... Check exact-SHA human decision gates.',
+    );
+    stdout.writeln(
       '  topiaforge release build-metadata ...  Build deterministic BOM, SBOM, and checksums.',
     );
     stdout.writeln(
@@ -263,6 +266,16 @@ extension _HelpCommand on _TopiaForgeCli {
     );
     stdout.writeln(
       '  topiaforge release verify-update-metadata ... Verify update signature and archive inventory.',
+    );
+    stdout.writeln(
+      '  topiaforge release build-platform-bundle ... Record a locally built, signed platform handoff.',
+    );
+    stdout.writeln(
+      '  topiaforge release build-handoff ...      Assemble the policy-derived maintainer handoff.',
+    );
+    stdout.writeln(
+      '  topiaforge release verify-handoff ...     Verify local release bytes; use '
+      '--verify-embedded-ecosystem to recompute canonical payload identity.',
     );
     stdout.writeln('');
     stdout.writeln(

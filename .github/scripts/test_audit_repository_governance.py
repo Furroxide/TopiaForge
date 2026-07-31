@@ -10,6 +10,7 @@ import subprocess
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 
 SCRIPT = Path(__file__).with_name("audit_repository_governance.py")
@@ -96,6 +97,21 @@ def compliant_snapshot(policy: dict[str, Any]) -> dict[str, Any]:
         "repository_administrators": copy.deepcopy(
             policy["repository_administrators"]
         ),
+        "repository_collaborators": [
+            {
+                "login": policy["release_staging_principal"]["login"],
+                "id": policy["release_staging_principal"]["actor_id"],
+                "type": policy["release_staging_principal"]["type"],
+                "role_name": "admin",
+                "permissions": {
+                    "pull": True,
+                    "triage": True,
+                    "push": True,
+                    "maintain": True,
+                    "admin": True,
+                },
+            }
+        ],
         "rulesets": [
             ruleset_fixture(ruleset, policy["github_actions_integration_id"])
             for ruleset in policy["rulesets"]
@@ -132,6 +148,28 @@ class RepositoryGovernanceAuditTests(unittest.TestCase):
             scrubbed,
         )
 
+    def test_collaborator_snapshot_keeps_only_identity_and_permissions(self) -> None:
+        scrubbed = AUDIT.scrub_collaborator_data(
+            {
+                "login": "reader",
+                "id": 123,
+                "type": "User",
+                "role_name": "read",
+                "email": "must-not-be-snapshotted@example.invalid",
+                "permissions": {
+                    "pull": True,
+                    "triage": False,
+                    "push": False,
+                    "maintain": False,
+                    "admin": False,
+                    "custom_secret": True,
+                },
+            }
+        )
+
+        self.assertNotIn("email", scrubbed)
+        self.assertNotIn("custom_secret", scrubbed["permissions"])
+
     def test_json_enabled_probe_supports_json_and_legacy_404(self) -> None:
         client = AUDIT.GitHubClient()
         responses = iter(
@@ -155,6 +193,29 @@ class RepositoryGovernanceAuditTests(unittest.TestCase):
 
         with self.assertRaises(AUDIT.AuditError):
             client.json_enabled_probe("/malformed")
+
+    def test_github_client_honors_configured_cli_executable(self) -> None:
+        configured_cli = r"C:\Program Files\GitHub CLI\gh.exe"
+        completed = subprocess.CompletedProcess([], 0, "{}", "")
+
+        with mock.patch.dict(
+            AUDIT.os.environ,
+            {"TOPIAFORGE_GH_CLI": configured_cli},
+            clear=False,
+        ), mock.patch.object(
+            AUDIT.subprocess,
+            "run",
+            return_value=completed,
+        ) as run:
+            result = AUDIT.GitHubClient()._request("/repos/furroxide/TopiaForge")
+
+        self.assertIs(completed, result)
+        invocation = run.call_args.args[0]
+        self.assertEqual(configured_cli, invocation[0])
+        self.assertEqual(
+            ["api", "/repos/furroxide/TopiaForge"],
+            invocation[1:3],
+        )
 
     def test_always_bypass_and_stale_context_are_reported(self) -> None:
         main = next(
@@ -191,6 +252,28 @@ class RepositoryGovernanceAuditTests(unittest.TestCase):
         self.assertTrue(any("sha_pinning_required" in failure for failure in failures))
         self.assertTrue(any("environment release.branch_policies" in failure for failure in failures))
 
+    def test_only_active_privileged_environments_are_desired(self) -> None:
+        environment_names = {
+            environment["name"] for environment in self.policy["environments"]
+        }
+
+        self.assertEqual({"release", "github-pages"}, environment_names)
+        self.assertNotIn(
+            "game-ci/unity-builder@*",
+            self.policy["actions"]["selected_actions"]["patterns_allowed"],
+        )
+
+    def test_rc1_codeql_languages_match_the_shipped_platform_scope(self) -> None:
+        self.assertEqual(
+            [
+                "actions",
+                "c-cpp",
+                "csharp",
+                "javascript-typescript",
+            ],
+            self.policy["security"]["codeql_default_setup"]["languages"],
+        )
+
     def test_obsolete_active_ruleset_is_reported(self) -> None:
         self.snapshot["rulesets"].append(
             {"name": "protected-release-flow", "enforcement": "active", "rules": []}
@@ -207,6 +290,94 @@ class RepositoryGovernanceAuditTests(unittest.TestCase):
 
         self.assertTrue(
             any("repository_administrators" in failure for failure in failures)
+        )
+
+    def test_write_or_maintain_collaborator_is_reported(self) -> None:
+        self.snapshot["repository_collaborators"].append(
+            {
+                "login": "unexpected-writer",
+                "id": 999,
+                "type": "User",
+                "role_name": "maintain",
+                "permissions": {
+                    "pull": True,
+                    "triage": True,
+                    "push": True,
+                    "maintain": True,
+                    "admin": False,
+                },
+            }
+        )
+
+        failures = AUDIT.evaluate_snapshot(self.snapshot, self.policy)
+
+        self.assertTrue(
+            any("write-capable collaborator" in failure for failure in failures)
+        )
+
+    def test_read_and_triage_collaborators_are_allowed(self) -> None:
+        for role_name, triage in (("read", False), ("triage", True)):
+            self.snapshot["repository_collaborators"].append(
+                {
+                    "login": f"{role_name}-only",
+                    "id": 1000 + len(self.snapshot["repository_collaborators"]),
+                    "type": "User",
+                    "role_name": role_name,
+                    "permissions": {
+                        "pull": True,
+                        "triage": triage,
+                        "push": False,
+                        "maintain": False,
+                        "admin": False,
+                    },
+                }
+            )
+
+        self.assertEqual([], AUDIT.evaluate_snapshot(self.snapshot, self.policy))
+
+    def test_unknown_collaborator_role_fails_closed(self) -> None:
+        self.snapshot["repository_collaborators"].append(
+            {
+                "login": "custom-role-user",
+                "id": 2000,
+                "type": "User",
+                "role_name": "custom-read-maybe",
+                "permissions": {
+                    "pull": True,
+                    "triage": False,
+                    "push": False,
+                    "maintain": False,
+                    "admin": False,
+                },
+            }
+        )
+
+        failures = AUDIT.evaluate_snapshot(self.snapshot, self.policy)
+
+        self.assertTrue(
+            any("unrecognized role" in failure for failure in failures)
+        )
+
+    def test_staging_principal_actor_id_is_immutable(self) -> None:
+        self.snapshot["repository_collaborators"][0]["id"] = 999
+
+        failures = AUDIT.evaluate_snapshot(self.snapshot, self.policy)
+
+        self.assertTrue(
+            any("release-staging principal.identity" in failure for failure in failures)
+        )
+
+    def test_policy_cannot_repin_release_mutation_principals(self) -> None:
+        self.policy["release_staging_principal"]["actor_id"] = 999
+        self.policy["release_workflow_principal"]["login"] = "other-bot"
+
+        failures = AUDIT.evaluate_snapshot(self.snapshot, self.policy)
+
+        self.assertTrue(
+            any("policy.release_staging_principal" in failure for failure in failures)
+        )
+        self.assertTrue(
+            any("policy.release_workflow_principal" in failure for failure in failures)
         )
 
     def test_policy_has_exact_common_contexts_and_no_branch_flow_bypass(self) -> None:

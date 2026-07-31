@@ -3,10 +3,19 @@
 Use this checklist from a clean, frozen release candidate. A checked box requires a command log, artifact, or reviewed
 QA record from the exact candidate SHA. Warnings, failures, and unavailable checks need an explicit disposition; they
 are never silently waived. Candidate-specific open items are in [`LaunchBlockers.md`](LaunchBlockers.md).
+Machine setup and the resumable command sequence are in
+[`AdminRelease.md`](AdminRelease.md).
 
 ## 1. Scope, policy, and ownership
 
 - [x] Product version is `1.0.0-rc.1`; components/mods version independently; initial release has no rollback target.
+- [ ] `release/release-readiness.json` is committed on the frozen candidate,
+      matches that exact version and SHA, approves every P0 gate, and either
+      approves or records an allowed manually reviewed accepted-risk decision
+      for every P1 gate. Its `evidenceIds` are attestation references, not
+      machine-resolved evidence: the protected release approver must verify
+      their existence and reviewer authorization. The catalog remains
+      `blocked` before that decision.
 - [x] RC discovery is GitHub Releases only; stable Pages/manual and official registry feeds exclude prereleases.
 - [x] The stale `release/0.1.1` line is retired and is neither reused nor deleted during RC preparation.
 - [x] Robotopia support is build `2309` only (`0.0.2309`); public-latest drift is release-fatal.
@@ -32,9 +41,14 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
 - [ ] Review and commit the remediation without discarding unrelated user work; freeze one candidate SHA.
 - [ ] Create a protected, annotated `v1.0.0-rc.1` tag on that SHA through the approved administrator process.
 - [ ] Confirm `global.json` resolves exactly .NET SDK `10.0.301` with roll-forward disabled and runtime `10.0.9`.
-- [ ] Confirm Dart `3.12.2`, Flutter `3.44.6`, Node `24.16.0`, and Unity `6000.0.23f1` on every applicable runner.
+- [ ] Confirm Dart `3.12.2`, Flutter `3.44.6`, and Node `24.18.0` in each
+      applicable production environment, plus Unity `6000.0.23f1` on the
+      Windows production builder.
 - [ ] Probe the public latest-build manifest and verify both pinned build-2309 archive paths and SHA-256 values.
 - [ ] Confirm all LFS objects, immutable BepInEx inputs, UnityDoorstop source, and managed references are present.
+- [ ] Git LFS is installed on Windows and in Ubuntu; `git lfs fsck` succeeds
+      and every tracked LFS path is materialized in both the admin checkout and
+      the exact-SHA WSL clone.
 
 ## 3. Source, contracts, and tests
 
@@ -125,7 +139,8 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
 
 ## 7. Exact Unity validation
 
-- [ ] Invoke only `/Applications/Unity/Hub/Editor/6000.0.23f1/Unity.app/Contents/MacOS/Unity` locally.
+- [ ] Invoke only `C:\Program Files\Unity\Hub\Editor\6000.0.23f1\Editor\Unity.exe` on the administrator-controlled
+      Windows workstation.
 - [ ] Rebuild TopiaForgeUi twice; bytes, embedded manifest, editor provenance, hashes, neutral font names, assets, and docs agree.
 - [ ] Rebuild a representative world twice; target, world manifest, companion tooling, VPM inputs, and bytes agree.
 - [ ] Run repeated TopiaForgeUi create/dispose and scene-transition lifecycle smoke; all allocator/subscription state returns
@@ -134,27 +149,31 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
       destructive modal, toast, scale, contrast, and reduced-motion states.
 - [ ] Authorized Robotopia/profiler QA validates all 16 source-mod flows, every declared GameCompat binding, lifecycle isolation, save behavior,
       TopiaForgeUi usage, accessibility propagation, and zero steady-state allocation regressions.
-- [ ] The full `game-sdk-acceptance.yml` matrix passes from the frozen SHA on both Windows and Linux/Proton with
-      all canonical markers, main-thread assertions, ten resource cycles, exact package hashes, and uploaded evidence.
+- [ ] Local Windows acceptance passes from the frozen SHA with all canonical markers, main-thread assertions, ten
+      resource cycles, exact package hashes, and a scrubbed validation summary.
+- [ ] The separate local Windows Creator-workbench descriptor covers every required interactive build-2309 case,
+      records at least ten lifecycle cycles and unchanged save/checkpoint state, and matches its retained evidence
+      bundle and exact Windows archive (launcher, CLI, and GameCompat extractor
+      Authenticode-signed and RFC 3161 timestamped by the pinned certificate).
+- [ ] The same-host WSL2/WSLg Proton evidence bundle matches the exact Linux archive digest and covers real
+      discovery, path/process, repair, custom-world, runtime, and uninstall behavior with Proton `10.0-4`.
+      Metadata records that this RC1 evidence is non-independent; build output without the actual game run is not
+      accepted.
 - [ ] An independent clean-machine author with only Robotopia, the release archive, and its pinned .NET SDK creates
       and launches a working safe code mod in at most five commands, without a source checkout or Unity installation.
 
 ## 8. Platform release archives
 
-- [ ] Build Windows x64, Linux x64, and macOS universal independently with `fail-fast: false` from the frozen SHA.
+- [ ] On clean checkouts of the same frozen SHA, build Windows x64 on the administrator workstation and Linux x64 in
+      Ubuntu 24.04 under WSL2 on that same physical host.
+- [ ] Build the canonical ecosystem twice byte-identically before distribution and prove every platform archive
+      contains that exact ecosystem digest.
 - [ ] Directly inspect final extracted archives for missing/extra/duplicate/linked entries, case collisions, modes,
       executability, hashes, notices, runtime assets, nested payload equality, secrets, and update metadata.
-- [ ] Windows executables have approved Authenticode SHA-256 signatures and
-      HTTPS RFC 3161 timestamps and pass `signtool verify /pa /all /tw`, or the
-      BOM records `unsigned` under the exact `1.0.0-rc.1` exception with a
-      prominent SmartScreen warning. No other version may use the exception.
-- [ ] macOS launcher, GameCompat, and frameworks are universal; Dart AOT ships separate runnable arm64/x64 executables
-      behind the dispatcher (never `lipo` Dart AOT executables).
-- [ ] Every macOS Mach-O is Developer ID/expected-Team signed; the app is
-      notarized, stapled, quarantined, and passes deep/strict codesign,
-      `stapler validate`, and Gatekeeper, or the BOM records `ad-hoc` under the
-      exact `1.0.0-rc.1` exception with a prominent Gatekeeper warning. No
-      other version may use the exception.
+- [ ] RC1's Windows CLI, GameCompat extractor, and launcher all have valid
+      Authenticode signatures from the exact reviewed leaf-certificate
+      SHA-256 pin and valid HTTPS RFC 3161 timestamps. Unsigned, partly signed,
+      untimestamped, expired-at-signing, mismatched, or invalid output fails.
 - [ ] Linux executable modes, native launcher/CLI, and discovery/path/process/repair/custom-world assumptions for
       Robotopia's Windows build under Proton pass on a clean host.
 - [ ] Clean-machine install, repair, profiles, dependency preview, normal/safe-mode launch, failure recovery,
@@ -165,6 +184,22 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
 
 ## 9. Release metadata and protected publication
 
+- [ ] Each platform emits a deterministic `release-platform-bundle-v1` manifest, and the administrator stages one
+      `release-handoff-v1` manifest binding version, source SHA, platform asset digests/sizes, canonical ecosystem
+      digest, pinned toolchains, signing state, validation results, and scrubbed QA evidence digests.
+- [ ] The administrator stages `release-handoff-v1.json.p7s`, a detached CMS
+      signature over the exact handoff bytes from the same pinned Windows
+      code-signing certificate. It contains exactly one cryptographically
+      verified RFC 3161 timestamp; the signer and TSA chains, EKUs, and
+      validity at the timestamp instant all verify. Hosted verification checks
+      and digest-binds those exact P7S bytes before trusting any platform
+      archive.
+- [ ] A credential-free `VerifyOnly` rerun succeeds after the local PFX,
+      password, and timestamp URL are removed, while a new signing operation
+      still rejects missing credentials.
+- [ ] Public deterministic metadata contains no usernames, hostnames, local
+      paths, machine/run-specific timestamps, credentials, or raw game logs.
+      Standards-required fixed epoch values remain allowed when deterministic.
 - [ ] Generate deterministic `release-bom.json`, SPDX 2.3 SBOM, and `SHA256SUMS` for the candidate SHA and exact assets.
 - [ ] Generate `topiaforge-update-v1.json` and its Ed25519 sidecar from the
       exact uploaded archive bytes; independently verify signature, key ID,
@@ -174,18 +209,60 @@ are never silently waived. Candidate-specific open items are in [`LaunchBlockers
       independent verification passes.
 - [ ] `manual-releases.json` format 2 is `manualOnly: true` and contains only absolute credential-free HTTPS release
       and artifact URLs, SHA-256, size, and platform.
-- [ ] Required contexts protect the candidate: `Required / CI validation`, `Required / Release packages`,
-      `Required / Registry validation`, and trusted-candidate `Required / Unity validation`.
-- [ ] Fork PR validation is secretless. Release, signing, Unity-license, attestation, and Pages privileges exist only in
-      protected trusted workflows/environments with required reviewers.
+- [ ] Required contexts protect the candidate: `Required / CI validation`,
+      `Required / PR policy`, `Required / Dependency review`,
+      `Required / Release packages`, `Required / Registry validation`, and
+      `Required / Unity source validation`; local production evidence is
+      verified by the protected finalizer instead of a credentialed hosted
+      Unity/game check.
+- [ ] Required hosted checks resolve to the exact checked-in workflow IDs/paths,
+      expected event and `release/<version>` head ref/SHA, and successful current
+      run attempt; same-name checks with different provenance are rejected.
+- [ ] Fork PR validation is secretless. The GitHub-held update-signing key, attestation, publication, and Pages
+      privileges exist only in protected workflows/environments with required reviewers; platform-signing, Unity,
+      and Robotopia credentials remain only on administrator-controlled machines.
+- [ ] The protected `release` environment contains a dedicated read-only
+      `TOPIAFORGE_GOVERNANCE_AUDIT_TOKEN`, scoped only to this repository and
+      `Administration: read` plus `Actions: read`; its implicit Metadata read
+      covers the remaining audited endpoints. It has no write permission of
+      any kind.
+- [ ] The protected update-signing seed has been independently recovery-tested,
+      and every plaintext local duplicate has been removed without exposing or
+      rotating the verified GitHub-held value.
 - [ ] Pages builds in an unprivileged temporary tree; the no-checkout deploy job has only Pages/OIDC write authority.
-- [ ] Publication validates everything before creating/resuming an exact matching draft; same-name/different-digest
-      assets fail; exact reruns are no-ops; no clobber/tag creation/tag mutation/automatic publication exists.
-- [ ] GitHub reports every uploaded size/digest/state complete; an authorized owner reviews notes, BOM/SBOM, checksums,
-      signatures, notarization, native and Robotopia-runtime QA, and all blocker dispositions before manually publishing.
+- [ ] The administrator flow validates everything before creating/resuming an exact matching draft; a
+      same-name/different-digest asset fails, and the workflow never creates or mutates a tag.
+- [ ] Protected release-environment approval is the final human checkpoint. GitHub verifies rather than builds,
+      generates the signed update metadata and custom verifier attestation, rechecks every asset, and publishes
+      automatically. Exact reruns verify without mutation; published-byte or metadata mismatches fail closed.
+- [ ] `release-admin dispatch` has persisted its unique request ID and exact
+      tag/SHA-matched GitHub run ID in phase `dispatch-requested`; `resume`
+      verifies its repository-scoped REST record names the exact
+      `.github/workflows/release.yml` path, then watches that run or reruns that
+      same failed/cancelled run ID. Phase
+      `published` is recorded only after run success and exact immutable
+      prerelease verification. No replacement workflow dispatch was started
+      manually.
+- [ ] Every workflow-dispatch attempt was journaled before the remote call. If
+      an attempted request had no stored run ID, `resume` exhausted the bounded
+      registration grace first, bound any matching run without duplication,
+      or failed closed for a later resume. It never automatically redispatched
+      a journaled request.
+- [ ] A stranded-finalizer rehearsal accepts only policy-declared generated
+      metadata from the pinned Actions bot/App, recomputes exact bytes, repairs
+      only an Actions-owned generated starter, and publishes without replacing
+      any complete or admin-staged asset.
+- [ ] Admin preflight and the protected finalizer both prove immutable releases,
+      exact `furroxide` release review with admin bypass disabled and only `v*`
+      tags allowed, and active release/version-tag lifecycle rules.
+- [ ] Complete a non-publishing two-platform rehearsal before deleting the obsolete live `unity-validation` and
+      `game-acceptance` environments.
 
 ## 10. Final decision
 
+- [ ] Re-run `release validate-readiness` against the frozen target SHA
+      immediately before tag creation and again after protected-environment
+      approval; the exact committed decision and BOM binding remain ready.
 - [ ] Rerun [`LaunchBlockers.md`](LaunchBlockers.md) against the frozen SHA: every P0 closed, every P1 closed or given a
       dated owner disposition, zero critical/high defects, zero unexplained warnings/failures/flakes, and zero skips.
 - [ ] Record an explicit **SHIP** decision by the project owner and release manager. Until then, the decision is

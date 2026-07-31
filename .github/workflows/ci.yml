@@ -314,11 +314,19 @@ jobs:
         run: |
           bash tools/test-verify-release-tag.sh
           bash tools/test-verify-release-candidate.sh
+          bash tools/test-verify-release-governance.sh
+          pwsh -NoProfile -File tools/release/test-verify-robotopia-install.ps1
+          pwsh -NoProfile -File tools/release/test-handoff-signature.ps1
 
       - name: Test release tag and draft publication safety
         run: |
           bash tools/test-verify-release-tag.sh
           bash tools/test-publish-release-draft.sh
+          bash tools/test-verify-release-attestation.sh
+
+      - name: Test admin release orchestration
+        shell: pwsh
+        run: ./tools/test-release-admin.ps1
 
       - name: Set up Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6

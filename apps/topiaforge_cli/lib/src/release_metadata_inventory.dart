@@ -29,7 +29,7 @@ class ReleaseMetadataInventoryBuilder {
     required TopiaForgeReleaseCatalogEntry release,
     required Directory assets,
   }) async {
-    final ecosystem = await _ecosystemInventory(release, assets);
+    final ecosystem = await _ecosystemInventory(policy, release, assets);
     final provenance = await _provenanceInventory(repositoryRoot, policy);
     final legal = await _legalInventory(repositoryRoot, policy);
     return ReleaseMetadataInventory(
@@ -40,6 +40,7 @@ class ReleaseMetadataInventoryBuilder {
   }
 
   Future<Map<String, Object?>> _ecosystemInventory(
+    TopiaForgeReleasePolicy policy,
     TopiaForgeReleaseCatalogEntry release,
     Directory assets,
   ) async {
@@ -58,11 +59,7 @@ class ReleaseMetadataInventoryBuilder {
     };
     final platformCopies = <Map<String, Object?>>[];
     Map<String, Map<String, Object?>>? canonical;
-    for (final archiveName
-        in release.artifacts
-            .where((name) => name.startsWith('TopiaForge-'))
-            .toList()
-          ..sort()) {
+    for (final archiveName in policy.platformArchives.toList()..sort()) {
       final archive = File(p.join(assets.path, archiveName));
       final copy = await _readEcosystemFromArchive(
         archive,
@@ -79,8 +76,9 @@ class ReleaseMetadataInventoryBuilder {
         'identitySha256': _jsonSha256(copy),
       });
     }
-    if (platformCopies.length != 3 || canonical == null) {
-      throw StateError('All three platform archives are required in the BOM.');
+    if (platformCopies.length != policy.targetPlatforms.length ||
+        canonical == null) {
+      throw StateError('Every policy target archive is required in the BOM.');
     }
     for (final name in expectedMods) {
       final standalone = File(p.join(assets.path, name));

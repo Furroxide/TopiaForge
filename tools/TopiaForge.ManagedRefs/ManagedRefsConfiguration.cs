@@ -8,13 +8,19 @@ using System.Text.RegularExpressions;
 namespace TopiaForge.ManagedRefs;
 
 internal sealed record PublicArchive(string Platform, string Path, string Sha256);
+internal sealed record PublicFilesManifest(
+    string Path,
+    string Sha256,
+    int FileCount,
+    string GameExecutableSha256);
 
 internal sealed record PublicBuildConfiguration(
     int BuildId,
     string BaseUrl,
     string ManifestUrl,
     string SourcePlatform,
-    IReadOnlyDictionary<string, PublicArchive> Archives)
+    IReadOnlyDictionary<string, PublicArchive> Archives,
+    PublicFilesManifest? WindowsFilesManifest)
 {
     private const int MaxConfigurationBytes = 64 * 1024;
     private static readonly HashSet<string> AllowedRootProperties = new(StringComparer.Ordinal)
@@ -23,6 +29,7 @@ internal sealed record PublicBuildConfiguration(
         "baseUrl",
         "manifestUrl",
         "sourcePlatform",
+        "windowsFilesManifest",
         "archives",
     };
 
@@ -137,7 +144,58 @@ internal sealed record PublicBuildConfiguration(
             throw new InvalidDataException($"No archive entry named '{sourcePlatform}' exists in {sourceName}.");
         }
 
-        return new PublicBuildConfiguration(buildId, baseUrl, manifestUrl, sourcePlatform, archives);
+        PublicFilesManifest? windowsFilesManifest = null;
+        if (root.TryGetProperty("windowsFilesManifest", out var filesManifestElement))
+        {
+            RequireObject(filesManifestElement, "Windows files manifest");
+            var expectedProperties = new HashSet<string>(StringComparer.Ordinal)
+            {
+                "path",
+                "sha256",
+                "fileCount",
+                "gameExecutableSha256",
+            };
+            ValidatePropertySet(
+                filesManifestElement,
+                expectedProperties,
+                "Windows files manifest",
+                exact: true);
+            var filesManifestPath = ReadRequiredString(
+                filesManifestElement,
+                "path",
+                "Windows files manifest");
+            var filesManifestSha256 = ReadRequiredString(
+                filesManifestElement,
+                "sha256",
+                "Windows files manifest").ToLowerInvariant();
+            Sha256Value.Validate(
+                filesManifestSha256,
+                "Windows files manifest has an invalid SHA-256.");
+            var fileCount = ReadPositiveInt(
+                filesManifestElement,
+                "fileCount",
+                "Windows files manifest");
+            var gameExecutableSha256 = ReadRequiredString(
+                filesManifestElement,
+                "gameExecutableSha256",
+                "Windows files manifest").ToLowerInvariant();
+            Sha256Value.Validate(
+                gameExecutableSha256,
+                "Windows files manifest has an invalid Robotopia.exe SHA-256.");
+            windowsFilesManifest = new PublicFilesManifest(
+                filesManifestPath,
+                filesManifestSha256,
+                fileCount,
+                gameExecutableSha256);
+        }
+
+        return new PublicBuildConfiguration(
+            buildId,
+            baseUrl,
+            manifestUrl,
+            sourcePlatform,
+            archives,
+            windowsFilesManifest);
     }
 
     internal PublicArchive SelectArchive(string commandLinePlatform, string environmentPlatform, string sourceName)

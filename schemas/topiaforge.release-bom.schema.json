@@ -5,25 +5,26 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schemaVersion", "version", "tag", "targetSha", "distributable", "blockingReasons",
+    "schemaVersion", "version", "tag", "targetSha", "distributable", "blockingReasons", "readiness",
     "rollback", "gameBuild", "gameArchives", "toolchains", "license", "codeSigning", "components",
     "vpmPackages", "mods", "excludedDeveloperMods", "expectedArtifactSet", "artifacts",
     "ecosystem", "provenance", "legalInventory"
   ],
   "properties": {
     "$schema": { "type": "string", "format": "uri" },
-    "schemaVersion": { "const": 2 },
+    "schemaVersion": { "const": 3 },
     "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
     "tag": { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
-    "targetSha": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+    "targetSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
     "distributable": { "type": "boolean" },
     "blockingReasons": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "readiness": { "$ref": "#/definitions/readiness" },
     "rollback": { "type": "string", "minLength": 1 },
     "gameBuild": { "type": "integer", "minimum": 1 },
     "gameArchives": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["windows", "mac"],
+      "required": ["windows"],
       "properties": {
         "windows": { "$ref": "#/definitions/gameArchive" },
         "mac": { "$ref": "#/definitions/gameArchive" }
@@ -50,7 +51,7 @@
         "platforms": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["windows-x64", "linux-x64", "macos-universal"],
+          "required": ["windows-x64", "linux-x64"],
           "properties": {
             "windows-x64": { "$ref": "#/definitions/codeSigningStatus" },
             "linux-x64": { "$ref": "#/definitions/codeSigningStatus" },
@@ -82,7 +83,7 @@
         "identitySha256": { "$ref": "#/definitions/sha256" },
         "files": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/pathInventory" } },
         "platformCopies": {
-          "type": "array", "minItems": 3, "maxItems": 3,
+          "type": "array", "minItems": 2, "maxItems": 3,
           "items": {
             "type": "object", "additionalProperties": false,
             "required": ["archive", "identitySha256"],
@@ -131,6 +132,158 @@
   },
   "definitions": {
     "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "readiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding", "path", "schemaPath", "status", "blobSha256", "summary"],
+      "properties": {
+        "binding": { "const": "git-blob-at-target-sha" },
+        "path": { "const": "release/release-readiness.json" },
+        "schemaPath": { "const": "schemas/topiaforge.release-readiness-v1.schema.json" },
+        "status": { "enum": ["blocked", "ready", "unavailable"] },
+        "blobSha256": {
+          "oneOf": [
+            { "$ref": "#/definitions/sha256" },
+            { "type": "null" }
+          ]
+        },
+        "summary": {
+          "oneOf": [
+            { "$ref": "#/definitions/readinessSummary" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "status": { "const": "unavailable" } },
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {
+              "blobSha256": { "type": "null" },
+              "summary": { "type": "null" }
+            }
+          },
+          "else": {
+            "properties": {
+              "blobSha256": { "$ref": "#/definitions/sha256" },
+              "summary": { "$ref": "#/definitions/readinessSummary" }
+            }
+          }
+        }
+      ]
+    },
+    "readinessSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "releaseVersion",
+        "targetSha",
+        "readinessBlobSha256",
+        "status",
+        "gates"
+      ],
+      "properties": {
+        "schema": { "const": "topiaforge-release-readiness-summary-v1" },
+        "releaseVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+        },
+        "targetSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "readinessBlobSha256": { "$ref": "#/definitions/sha256" },
+        "status": { "enum": ["blocked", "ready"] },
+        "gates": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "items": { "$ref": "#/definitions/readinessGate" }
+        }
+      }
+    },
+    "readinessGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "priority", "status", "reviewerRoles", "evidenceIds"],
+      "properties": {
+        "id": {
+          "enum": [
+            "P0-CRED-01",
+            "P0-IP-01",
+            "P0-PRIV-01",
+            "P0-TRUST-01",
+            "P1-E2E-01",
+            "P1-SUPPORT-01",
+            "P1-UX-01"
+          ]
+        },
+        "priority": { "enum": ["P0", "P1"] },
+        "status": { "enum": ["accepted-risk", "approved", "blocked"] },
+        "reasonCode": {
+          "enum": [
+            "acceptance-evidence-missing",
+            "approval-evidence-missing",
+            "independent-evidence-missing",
+            "ownership-evidence-missing",
+            "rotation-evidence-missing"
+          ]
+        },
+        "reviewerRoles": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "accessibility-reviewer",
+              "backend-owner",
+              "credential-owner",
+              "external-author-reviewer",
+              "external-player-reviewer",
+              "incident-owner",
+              "ip-trademark-counsel",
+              "native-qa",
+              "privacy-legal",
+              "product-owner",
+              "project-owner",
+              "registry-owner",
+              "release-owner",
+              "robotopia-owner",
+              "security-intake-owner",
+              "security-owner",
+              "support-owner"
+            ]
+          }
+        },
+        "evidenceIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^EVID-(P0|P1)-[A-Z0-9]+(?:-[A-Z0-9]+)*-[0-9]{4}$"
+          }
+        },
+        "acceptedRisk": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scope", "decisionEvidenceId"],
+          "properties": {
+            "scope": {
+              "enum": [
+                "rc1-independent-player-author-e2e",
+                "rc1-native-ux-accessibility",
+                "rc1-support-incident-ownership"
+              ]
+            },
+            "decisionEvidenceId": {
+              "type": "string",
+              "pattern": "^EVID-P1-[A-Z0-9]+(?:-[A-Z0-9]+)*-[0-9]{4}$"
+            }
+          }
+        }
+      }
+    },
     "safeName": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$" },
     "versionMap": {
       "type": "object", "minProperties": 1,

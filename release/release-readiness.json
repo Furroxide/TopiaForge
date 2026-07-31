@@ -1,0 +1,100 @@
+{
+  "$schema": "../schemas/topiaforge.release-readiness-v1.schema.json",
+  "schemaVersion": 1,
+  "releaseVersion": "1.0.0-rc.1",
+  "candidateBinding": {
+    "mode": "git-blob-at-target-sha",
+    "path": "release/release-readiness.json",
+    "schemaPath": "schemas/topiaforge.release-readiness-v1.schema.json"
+  },
+  "status": "blocked",
+  "gates": [
+    {
+      "id": "P0-IP-01",
+      "priority": "P0",
+      "status": "blocked",
+      "reasonCode": "approval-evidence-missing",
+      "reviewerRoles": [
+        "ip-trademark-counsel",
+        "project-owner",
+        "robotopia-owner"
+      ],
+      "evidenceIds": []
+    },
+    {
+      "id": "P0-PRIV-01",
+      "priority": "P0",
+      "status": "blocked",
+      "reasonCode": "approval-evidence-missing",
+      "reviewerRoles": [
+        "backend-owner",
+        "privacy-legal",
+        "product-owner",
+        "robotopia-owner",
+        "security-owner"
+      ],
+      "evidenceIds": []
+    },
+    {
+      "id": "P0-TRUST-01",
+      "priority": "P0",
+      "status": "blocked",
+      "reasonCode": "approval-evidence-missing",
+      "reviewerRoles": [
+        "product-owner",
+        "registry-owner",
+        "release-owner",
+        "security-owner"
+      ],
+      "evidenceIds": []
+    },
+    {
+      "id": "P0-CRED-01",
+      "priority": "P0",
+      "status": "blocked",
+      "reasonCode": "rotation-evidence-missing",
+      "reviewerRoles": [
+        "credential-owner",
+        "security-owner"
+      ],
+      "evidenceIds": []
+    },
+    {
+      "id": "P1-UX-01",
+      "priority": "P1",
+      "status": "blocked",
+      "reasonCode": "acceptance-evidence-missing",
+      "reviewerRoles": [
+        "accessibility-reviewer",
+        "native-qa",
+        "product-owner"
+      ],
+      "evidenceIds": []
+    },
+    {
+      "id": "P1-E2E-01",
+      "priority": "P1",
+      "status": "blocked",
+      "reasonCode": "independent-evidence-missing",
+      "reviewerRoles": [
+        "external-author-reviewer",
+        "external-player-reviewer",
+        "release-owner"
+      ],
+      "evidenceIds": []
+    },
+    {
+      "id": "P1-SUPPORT-01",
+      "priority": "P1",
+      "status": "blocked",
+      "reasonCode": "ownership-evidence-missing",
+      "reviewerRoles": [
+        "incident-owner",
+        "release-owner",
+        "security-intake-owner",
+        "support-owner"
+      ],
+      "evidenceIds": []
+    }
+  ]
+}
