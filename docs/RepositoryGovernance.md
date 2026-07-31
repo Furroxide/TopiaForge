@@ -211,8 +211,9 @@ read-only, and the Pages/OIDC deployment job neither checks out nor executes rep
 The desired live settings are:
 
 - Default `GITHUB_TOKEN` permission is read-only; Actions cannot approve pull requests.
-- All Actions are pinned to a full commit SHA. GitHub-owned Actions are allowed, plus only
-  `dart-lang/setup-dart` and `subosito/flutter-action`.
+- All external Actions are pinned to a full commit SHA. GitHub-owned Actions are allowed, plus only
+  `dart-lang/setup-dart`. Flutter installs through the repository-owned setup action from exact official SDK
+  archive URLs with checked-in SHA-256 digests; its raw download cache also uses a full-SHA-pinned GitHub action.
 - Workflow approval is required for every external contributor.
 - Dependency graph and Dependabot vulnerability alerts are enabled. Automated Dependabot security-update PRs remain
   disabled because they target default `main`; maintainers turn alerts into controlled patch-release branches.

@@ -262,6 +262,10 @@ class RepositoryGovernanceAuditTests(unittest.TestCase):
             "game-ci/unity-builder@*",
             self.policy["actions"]["selected_actions"]["patterns_allowed"],
         )
+        self.assertNotIn(
+            "subosito/flutter-action@*",
+            self.policy["actions"]["selected_actions"]["patterns_allowed"],
+        )
 
     def test_rc1_codeql_languages_match_the_shipped_platform_scope(self) -> None:
         self.assertEqual(

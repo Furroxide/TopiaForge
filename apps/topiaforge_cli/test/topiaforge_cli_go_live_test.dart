@@ -26,7 +26,11 @@ void main() {
         workingDirectory: packageRoot,
         environment: environment,
       );
-      expect(created.exitCode, 0, reason: '${created.stdout}\n${created.stderr}');
+      expect(
+        created.exitCode,
+        0,
+        reason: '${created.stdout}\n${created.stderr}',
+      );
       final project = p.join(temp.path, 't.golive');
       final setup = await Process.run(
         Platform.resolvedExecutable,
@@ -58,7 +62,10 @@ void main() {
       );
 
       expect(result.exitCode, 1);
-      expect(result.stderr.toString(), contains('No active Automerge publisher'));
+      expect(
+        result.stderr.toString(),
+        contains('No active Automerge publisher'),
+      );
       expect(result.stderr.toString(), isNot(contains('No Robotopia install')));
     },
     timeout: const Timeout(Duration(minutes: 1)),
