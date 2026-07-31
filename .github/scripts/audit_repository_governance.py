@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -17,6 +18,21 @@ from urllib.parse import quote
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_POLICY = ROOT / ".github" / "repository-governance.json"
 API_VERSION = "2026-03-10"
+EXPECTED_POLICY_SCHEMA_VERSION = 2
+PINNED_RELEASE_STAGING_PRINCIPAL = {
+    "login": "furroxide",
+    "actor_id": 221987073,
+    "type": "User",
+}
+PINNED_RELEASE_WORKFLOW_PRINCIPAL = {
+    "login": "github-actions[bot]",
+    "actor_id": 41898282,
+    "type": "Bot",
+}
+PINNED_GITHUB_ACTIONS_INTEGRATION_ID = 15368
+COLLABORATOR_PERMISSION_FIELDS = ("pull", "triage", "push", "maintain", "admin")
+KNOWN_COLLABORATOR_ROLES = {"read", "triage", "write", "maintain", "admin"}
+WRITE_CAPABLE_COLLABORATOR_ROLES = {"write", "maintain", "admin"}
 REPOSITORY_SNAPSHOT_FIELDS = {
     "allow_auto_merge",
     "allow_merge_commit",
@@ -46,10 +62,11 @@ class GitHubClient:
     """Minimal read-only wrapper around the authenticated GitHub CLI."""
 
     def _request(self, path: str) -> subprocess.CompletedProcess[str]:
+        gh_command = os.environ.get("TOPIAFORGE_GH_CLI") or "gh"
         try:
             return subprocess.run(
                 [
-                    "gh",
+                    gh_command,
                     "api",
                     path,
                     "-H",
@@ -63,7 +80,10 @@ class GitHubClient:
                 text=True,
             )
         except FileNotFoundError as error:
-            raise AuditError("The governance audit requires the `gh` CLI.") from error
+            raise AuditError(
+                f"The governance audit requires the configured GitHub CLI: "
+                f"{gh_command!r}."
+            ) from error
 
     @staticmethod
     def _status(result: subprocess.CompletedProcess[str]) -> int | None:
@@ -137,6 +157,24 @@ def scrub_repository_data(repository: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def scrub_collaborator_data(collaborator: dict[str, Any]) -> dict[str, Any]:
+    """Retain only identity and effective repository-role evidence."""
+
+    permissions = collaborator.get("permissions")
+    if not isinstance(permissions, dict):
+        permissions = {}
+    return {
+        "login": collaborator.get("login"),
+        "id": collaborator.get("id"),
+        "type": collaborator.get("type"),
+        "role_name": collaborator.get("role_name"),
+        "permissions": {
+            field: permissions.get(field)
+            for field in COLLABORATOR_PERMISSION_FIELDS
+        },
+    }
+
+
 def collect_snapshot(repository: str, client: GitHubClient | None = None) -> dict[str, Any]:
     """Read every API surface used by the desired-state assertions."""
 
@@ -146,9 +184,16 @@ def collect_snapshot(repository: str, client: GitHubClient | None = None) -> dic
 
     repository_data = scrub_repository_data(github.get_json(base))
     collaborators = github.get_json(f"{base}/collaborators?affiliation=all&per_page=100")
+    repository_collaborators = sorted(
+        (scrub_collaborator_data(collaborator) for collaborator in collaborators),
+        key=lambda collaborator: (
+            str(collaborator["login"]),
+            str(collaborator["id"]),
+        ),
+    )
     repository_administrators = sorted(
         collaborator["login"]
-        for collaborator in collaborators
+        for collaborator in repository_collaborators
         if collaborator.get("permissions", {}).get("admin") is True
     )
     ruleset_summaries = github.get_json(
@@ -188,6 +233,7 @@ def collect_snapshot(repository: str, client: GitHubClient | None = None) -> dic
         "api_version": API_VERSION,
         "repository": repository_data,
         "repository_administrators": repository_administrators,
+        "repository_collaborators": repository_collaborators,
         "rulesets": rulesets,
         "actions": {
             "permissions": action_permissions,
@@ -470,6 +516,120 @@ def check_environments(
         )
 
 
+def check_release_mutation_authority(
+    failures: list[str], snapshot: dict[str, Any], policy: dict[str, Any]
+) -> None:
+    add_mismatch(
+        failures,
+        "policy.schema_version",
+        policy.get("schema_version"),
+        EXPECTED_POLICY_SCHEMA_VERSION,
+    )
+    add_mismatch(
+        failures,
+        "policy.release_staging_principal",
+        policy.get("release_staging_principal"),
+        PINNED_RELEASE_STAGING_PRINCIPAL,
+    )
+    add_mismatch(
+        failures,
+        "policy.release_workflow_principal",
+        policy.get("release_workflow_principal"),
+        PINNED_RELEASE_WORKFLOW_PRINCIPAL,
+    )
+    add_mismatch(
+        failures,
+        "policy.github_actions_integration_id",
+        policy.get("github_actions_integration_id"),
+        PINNED_GITHUB_ACTIONS_INTEGRATION_ID,
+    )
+
+    collaborators = snapshot.get("repository_collaborators")
+    if not isinstance(collaborators, list):
+        failures.append("repository_collaborators: missing or not a list")
+        return
+
+    principal_matches: list[dict[str, Any]] = []
+    for index, collaborator in enumerate(collaborators):
+        label = f"repository_collaborators[{index}]"
+        if not isinstance(collaborator, dict):
+            failures.append(f"{label}: expected an object")
+            continue
+        identity = {
+            "login": collaborator.get("login"),
+            "actor_id": collaborator.get("id"),
+            "type": collaborator.get("type"),
+        }
+        if (
+            identity["login"] == PINNED_RELEASE_STAGING_PRINCIPAL["login"]
+            or identity["actor_id"]
+            == PINNED_RELEASE_STAGING_PRINCIPAL["actor_id"]
+        ):
+            principal_matches.append(collaborator)
+
+        role_name = collaborator.get("role_name")
+        if role_name not in KNOWN_COLLABORATOR_ROLES:
+            failures.append(f"{label}.role_name: unrecognized role {role_name!r}")
+
+        permissions = collaborator.get("permissions")
+        if not isinstance(permissions, dict):
+            failures.append(f"{label}.permissions: missing or not an object")
+            continue
+        malformed_permissions = [
+            field
+            for field in COLLABORATOR_PERMISSION_FIELDS
+            if not isinstance(permissions.get(field), bool)
+        ]
+        if malformed_permissions:
+            failures.append(
+                f"{label}.permissions: non-boolean fields "
+                f"{sorted(malformed_permissions)!r}"
+            )
+            continue
+
+        write_capable = (
+            role_name in WRITE_CAPABLE_COLLABORATOR_ROLES
+            or permissions["push"]
+            or permissions["maintain"]
+            or permissions["admin"]
+        )
+        if write_capable and identity != PINNED_RELEASE_STAGING_PRINCIPAL:
+            failures.append(
+                f"{label}: write-capable collaborator is not the pinned "
+                "release-staging principal"
+            )
+
+    if len(principal_matches) != 1:
+        failures.append(
+            "release-staging principal: expected exactly one collaborator "
+            "matching the pinned login or actor ID"
+        )
+        return
+    principal = principal_matches[0]
+    add_mismatch(
+        failures,
+        "release-staging principal.identity",
+        {
+            "login": principal.get("login"),
+            "actor_id": principal.get("id"),
+            "type": principal.get("type"),
+        },
+        PINNED_RELEASE_STAGING_PRINCIPAL,
+    )
+    add_mismatch(
+        failures,
+        "release-staging principal.role_name",
+        principal.get("role_name"),
+        "admin",
+    )
+    add_mismatch(
+        failures,
+        "release-staging principal.permissions.admin",
+        (principal.get("permissions") or {}).get("admin"),
+        True,
+    )
+
+
 def evaluate_snapshot(snapshot: dict[str, Any], policy: dict[str, Any]) -> list[str]:
     """Return every desired-state mismatch in a collected or offline snapshot."""
 
@@ -527,6 +687,7 @@ def evaluate_snapshot(snapshot: dict[str, Any], policy: dict[str, Any]) -> list[
         snapshot.get("immutable_releases"),
         policy.get("immutable_releases", {}),
     )
+    check_release_mutation_authority(failures, snapshot, policy)
     check_rulesets(failures, snapshot, policy)
     check_environments(failures, snapshot, policy)
     return failures

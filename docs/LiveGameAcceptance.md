@@ -2,26 +2,48 @@
 
 The safe SDK has an instrumented, non-distributable acceptance mod under
 `tests/TopiaForge.SdkAcceptanceMod`. It uses only public V1 contracts and writes machine-readable
-`TF-ACCEPT|PASS|case-id|detail` markers to the attributed manager log. The canonical case list is
+`TF-ACCEPT|PASS|challenge|case-id|detail` markers to the attributed manager log. The canonical case list is
 `tests/live-game-acceptance.json`.
 
-## External-only launch gate
+## Administrator-controlled launch gates
 
-This is an external launch gate, not an offline test. A valid pass requires an authorized native
-Windows or Linux/Proton host running the supported Robotopia build with real keyboard, mouse,
-gamepad, audio, microphone, and rendering paths. Source-only CI, unit tests, synthetic runtime
-tests, and the static capability audit verify the harness and mappings, but they cannot mark a live
-case as passed or waive missing Robotopia evidence.
+This is a native launch gate, not an offline or GitHub-hosted test. The administrator-controlled
+Windows workstation runs the complete Windows matrix as part of `release-admin.ps1`. For RC1, the
+same workstation's Ubuntu 24.04 WSL2 environment runs the Proton matrix through WSLg against the
+exact staged Linux archive. Both runs require the supported Robotopia build with real keyboard,
+mouse, gamepad, audio, microphone, and rendered output. Source-only CI, a WSL build without the
+actual WSLg/Proton game run, unit tests, synthetic runtime tests, and the static capability audit
+cannot mark a live case as passed or waive missing Robotopia evidence. RC1 metadata explicitly
+records that the WSL2/WSLg Proton run is same-host and non-independent.
 
 Acceptance evidence is valid only for the exact frozen candidate package hashes recorded by the
-harness in `acceptance-result.json` and `last-run.json`. Until both platform jobs retain that
-evidence, the V1 gate remains blocked. Custom-world live acceptance remains scoped to the existing
-Windows/Proton hosts. Mods execute as [trusted full-process code](PrivacyAndCapabilities.md); the
-capability declarations checked here are disclosure, not a sandbox.
+harness in `acceptance-result.json` and `last-run.json`. The local Windows Creator evidence bundle
+and orchestrator-produced Proton evidence must also bind the source SHA, release version, platform
+archive SHA-256 and size, canonical ecosystem digest, Robotopia build, full case inventory, pinned
+Proton runtime identity, `WINEDLLOVERRIDES`, execution environment, result, and scrubbed evidence
+digests. Until the automated Windows result, complete Creator descriptor/bundle, and same-host
+Proton evidence match the candidate, the V1 gate remains blocked.
+Custom-world live acceptance remains scoped to authorized Windows/Proton hosts. Mods execute as
+[trusted full-process code](PrivacyAndCapabilities.md); the capability declarations checked here
+are disclosure, not a sandbox.
 
-Both workflow runners must carry `topiaforge-game-build-2309`; the Linux host also carries
-`proton`. These labels are reserved for authorized machines with the pinned Robotopia installation and
-acceptance peripherals, not general-purpose self-hosted runners.
+Raw game logs remain on the QA hosts. Only bounded validation summaries and evidence digests enter
+the deterministic `release-platform-bundle-v1` and aggregate `release-handoff-v1` manifests. Those
+public manifests exclude usernames, hostnames, local paths, timestamps, credentials, and raw logs.
+GitHub verifies this evidence as part of finalization; it does not execute Robotopia.
+
+Each automatic run creates a cryptographically unpredictable 256-bit challenge before launch. The
+non-distributable acceptance config displays it in-game and the acceptance mod includes it in every
+counted result marker. The harness accepts a marker only when `ManagerFileLogger` attributes the
+exact structured line to `dev.topiaforge.sdk-acceptance`; substring matches and messages from other
+mods do not count. The generated-journey load marker must likewise be an exact attributed message
+from the generated package ID.
+
+`acceptance-result.json` schema 2 records that challenge, the exact manager
+`lastRunSessionId`, and the acceptance and generated-journey package receipts. A pass requires each
+`last-run.json` `sourceSha256` and ordered critical-file digest inventory to match the bytes of the
+package the harness actually installed. Stale sessions, replayed challenges, spoofed logger
+sources, and different package bytes fail closed.
 
 Run the complete launch-blocking matrix on an authorized Robotopia build-2309 host (all cases are
 required by default):
@@ -32,8 +54,8 @@ dart run bin/topiaforge.dart acceptance run --game-dir C:\Games\Robotopia
 ```
 
 While it runs, a tester supplies keyboard, mouse, gamepad, modal, held-item, world-session, and
-robot/dialogue/voice interactions. `--all` is retained as an explicit CI assertion and is
-equivalent to the default:
+robot/dialogue/voice interactions. `--all` is retained as an explicit completeness assertion and
+is equivalent to the default:
 
 ```powershell
 dart run bin/topiaforge.dart acceptance run --game-dir C:\Games\Robotopia --all --timeout-seconds 1800
@@ -83,11 +105,17 @@ On an authorized build-2309 host, complete all of these checks:
 Do not mark this matrix complete from the Unity-free lifecycle suite alone. That suite protects the
 same ownership and rollback policies, but the native build-2309 evidence remains mandatory.
 
-The Windows and Linux/Proton workflow also builds an extracted candidate developer payload, uses
-only its packaged CLI to create a fresh minimal mod outside the extraction, and passes that project
-to the harness. The harness runs `topiaforge dev --launch --no-tail`; success additionally requires
-the unique package to be `valid` and `loaded` in the fresh run plus its exact attributed `OnLoad`
-marker. This proves the promised `new mod` → `dev` journey in two authoring commands.
+Creator pass publication is currently disabled. There is not yet a native CreatorTools collector
+that can tie explicit per-case UI outcomes to the one-run challenge, exact last-run session,
+package receipts, candidate archive, and case inventory. The legacy script that inferred `pass`
+from case-directory files, a manual cycle count, and identical state blobs now exits with an error,
+and the release orchestrator rejects legacy Creator evidence. Do not hand-author a replacement.
+
+The local Windows and same-host WSL2/Proton runs also extract their candidate developer payload,
+use only its packaged CLI to create a fresh minimal mod outside the extraction, and pass that
+project to the harness. The harness runs `topiaforge dev --launch --no-tail`; success additionally
+requires the unique package to be `valid` and `loaded` in the fresh run plus its exact attributed
+`OnLoad` marker. This proves the promised `new mod` → `dev` journey in two authoring commands.
 
 The optional extracted-release journey is configured with `--dev-cli`, `--dev-project`,
 `--required-loaded-package`, and `--required-log-marker`. The options must be supplied together.

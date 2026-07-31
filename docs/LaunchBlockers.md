@@ -1,6 +1,6 @@
 # Initial release blocker register
 
-Last audited: 2026-07-28. Product candidate: `1.0.0-rc.1`. Recommendation: **NO-SHIP**.
+Last audited: 2026-07-31. Product candidate: `1.0.0-rc.1`. Recommendation: **NO-SHIP**.
 
 A first-party mod audit on 2026-07-27 found and fixed one critical and two high-severity engineering defects that
 the prior remediation had missed (see [First-party mod audit](#first-party-mod-audit-2026-07-27) below). No further
@@ -33,46 +33,42 @@ check is silently skipped.
 | Gate family | Result | Retained evidence |
 | --- | --- | --- |
 | Whole-repository component and contract inventory | PASS | All source, app, package, mod, template, tool, schema, test, documentation, and workflow surfaces are mapped in `ArchitectureInventory.md`. |
-| C# Release solution | PASS | The current 47-project solution builds on SDK `10.0.301` / runtime `10.0.9` with zero warnings and errors. Exact-SHA hosted evidence must still be regenerated after the candidate freezes. |
+| C# Release solution | PASS | The current 47-project solution builds on SDK `10.0.301` / runtime `10.0.9` with zero warnings and errors. Exact-SHA hosted CI and administrator-built release evidence must still be regenerated after the candidate freezes. |
 | C# regression harness | PASS | The complete ModManager, ModRuntime, analyzer, multiplayer-generator, and multiplayer test executables pass, including the current RobotKit/Creator and public-API baselines. |
 | C# boundaries and public SDK surface | PASS | Unity-free Core, Unity/BepInEx runtime isolation, strict audit, generated API baselines, bounded production-read scans, and the current SDK package surface pass with Creator Content included. |
 | Dart formatting and analyzers | PASS | All tracked Dart sources were formatted; domain, data, UI, app, and CLI analyzers report no issues and every non-generated file is at most 500 lines. |
-| Dart domain/data tests | PASS | 200 domain and 362 data tests passed (four environment-specific data cases skipped), including Manifest V5 dispatch, multiplayer admission, signed launcher updates, deterministic package-inbox planning, runtime repair, and receipt provenance/repair behavior. |
+| Dart domain/data tests | PASS | 203 domain and 362 data tests passed (four environment-specific data cases skipped), including Manifest V5 dispatch, multiplayer admission, signed launcher updates, deterministic package-inbox planning, runtime repair, and receipt provenance/repair behavior. |
 | Flutter UI/app tests | PASS | 3 shared-UI and 66 launcher tests passed in isolated Windows test processes, including BLoC lifecycle, all signed-update states, scaling, contrast, focus, install/repair confirmation, safe mode, recovery, health handshake, and Xcode payload/logging configuration. |
-| CLI tests | PASS | All 173 CLI tests passed with Dart `3.12.2` (four environment-specific cases skipped), including V4-to-V5 migration, packaging, registry, Unity probing, UGC, signed release metadata, final-archive validation, and the relocated seven-template lifecycle. |
+| CLI tests | PASS | All 190 CLI tests passed with Dart `3.12.2` (four platform-capability cases skipped), including V4-to-V5 migration, packaging, registry, Unity probing, UGC, signed release metadata, final-archive and handoff validation, and the relocated seven-template lifecycle. |
 | C#/Dart contract parity | PASS | Manifest V5, V4 retirement, SemVer 2.0, build mapping, multiplayer admission, canonical fields, unknown fields, dependencies, pins, conflicts, load order, and state fixtures agree. |
-| Sidecar install/runtime/security | PASS | Lockfile `npm ci`, syntax checks, 23 tests, production dependency tree, and audit passed with zero vulnerabilities. |
+| Sidecar install/runtime/security | PASS | Lockfile `npm ci`, syntax checks, 24 tests (22 passed and two Windows signal-delivery cases skipped), production dependency tree, and audit passed with zero vulnerabilities. |
 | Archive, UGC, diagnostic, repair, and process hardening | PASS | Adversarial traversal/link/collision/size/race/rollback/redaction/timeout regressions passed. Transaction recovery passes interruptions before and after every phase on all three layouts; the real Windows archive also passed a locally signed `rc.1` → synthetic `rc.2` swap and forced-health-failure rollback. |
 | First-party mods | NEEDS RERUN | Repeat deterministic packing and managed-assembly validation for all 16 source mods, the 14-package normal non-DevTool output, and the 15-package release payload with Creator Tools added explicitly; UiGallery remains excluded. |
 | C# author templates | PASS | All seven template families scaffolded from a release-like payload, restored, relocated, built, tested, packed, validated, installed with full receipt checks, and rebuilt after extraction removal; each real platform-archive job repeats that lifecycle. Defaults remain deliberately non-publishable. |
 | VPM and canonical ecosystem payload | NEEDS RERUN | The retained ecosystem evidence predates Creator Content and Creator Tools. Rebuild and compare two independent three-VPM plus 15-mod release trees from the frozen candidate. |
 | Exact-Unity TopiaForgeUi build | PASS | Unity `6000.0.23f1`; two builds matched SHA-256 `3cc6624f2a3a5fabc83c4fde49b32f859869e1d1e202afdaf91a888089f9fedb`. |
 | Exact-Unity representative world build | PASS | Two current-tree builds matched SHA-256 `afa3e9195e8e03199b414f8a5c9002e9f89831041a63c7e1c9b8eef173d9057d`; manifests, editor provenance, and companion/VPM inputs matched. |
-| Exact-Unity lifecycle smoke | NEEDS RERUN | A current-tree Unity `6000.0.23f1` run executed the managed validator and all 16 lifecycle cycles successfully with zero retained-resource delta. The protected workflow invokes and uploads the same evidence, but it must still be regenerated from the frozen candidate. |
+| Exact-Unity lifecycle smoke | NEEDS RERUN | A current-tree Unity `6000.0.23f1` run executed the managed validator and all 16 lifecycle cycles successfully with zero retained-resource delta. The administrator-controlled Windows release flow must regenerate and scrub that evidence from the frozen candidate. |
 | Robotopia compatibility | PASS | Build `2309`; 219 bindings, 198 verifiable offline, 21 explicitly uncheckable offline, zero errors, warnings, or indeterminate findings; safe GravityGun, OppositeDay, Sandbox, and Zombies have no native binding declarations. |
-| Public build freshness | PASS | A fresh 2026-07-28 public probe confirms both platform records identify build `2309`; CI/release fail if the public latest manifest changes. |
+| Public build freshness | PASS | A fresh 2026-07-31 public probe confirms both public platform records identify build `2309`; CI/release fail if the public latest manifest changes. |
 | BepInEx/UnityDoorstop provenance | PASS | Pinned BepInEx `5.4.23.5` archives and extracted trees, UnityDoorstop commit/source, hashes, modes, and notices validate. |
-| Local macOS package structure | NEEDS RERUN | The retained universal-package record predates the V1 CLI, SDK, runtime, and canonical 15-mod release payload. Rebuild and validate the frozen V1 archive on macOS. |
-| Local macOS launch and Xcode development | NEEDS RERUN | A scrubbed debug build passed with Flutter `3.44.6`, Dart `3.12.2`, and CocoaPods `1.16.2`, with no tracked native-project drift. Launch and repeat the build from the frozen candidate before release. |
-| Local macOS runtime repair | NEEDS RERUN | The recorded repair targeted the retired pre-V1 loader and package set. Repeat with loader `1.0.0-rc.1` and the canonical 15-mod release payload; package-inbox ingestion remains part of authorized Robotopia acceptance. |
+| macOS release package | OUT OF RC1 | Generic packaging remains in source, but macOS is not in RC1 policy, catalog, update metadata, handoff, or public assets. It requires a separately reviewed future release. |
 | Release-policy/BOM/SBOM/checksum machinery | PASS | Strict policy and metadata regressions cover MIT, actual platform trust, signed update metadata/sidecar, checksums, BOM, SBOM, and immutable asset inventory. |
-| Repository and CI hygiene | PASS | actionlint `1.7.7`, PSScriptAnalyzer `1.25.0`, PowerShell/bash syntax, repository-owned shellcheck, 157 JSON/YAML files, 113 Markdown files, 1,706 built HTML links, LFS, action pins, conflict markers, LF policy, and the Dart line cap passed. |
+| Repository and CI hygiene | PASS | actionlint `1.7.7`, PowerShell/bash parsing, 164 JSON/YAML files, 118 Markdown files, 1,943 built HTML links, action pins, conflict markers, LF policy, and the 381-file non-generated Dart line cap passed. PSScriptAnalyzer `1.25.0` is rerun after every release-script edit. |
 | Credential exposure containment | BLOCKED | The affected workspace DerivedData and launcher build logs were removed, and a scrubbed exact-toolchain sentinel build passed; 13 newly produced Xcode activity logs contained no credential-shaped variable names. Credential owners must still rotate the previously exposed values and confirm revocation. See `P0-CRED-01`. |
-| Strict distributable-release policy | PASS | The owned-surface MIT inventory, first-party package licenses, ready catalog, third-party notices, and rc.1-only signing exception validate. |
-| Production macOS trust | CONDITIONAL | Developer ID/notarization remains preferred. Only `1.0.0-rc.1` may use the policy-encoded ad-hoc exception, which must be recorded in the BOM and release warnings; see `P0-MAC-01`. |
-| Windows x64 signed package and clean-host run | BLOCKED | Requires a Windows runner, Authenticode identity, RFC 3161 timestamp service, and clean-machine QA; see `P0-WIN-01`. |
-| Linux x64 package and Proton run | BLOCKED | Flutter desktop builds are host-specific; requires Linux/Proton runners and gameplay QA; see `P0-LINUX-01`. |
-| Signed macOS arm64 and Intel clean-host runs | BLOCKED | Requires Apple credentials and quarantined clean hosts; see `P0-MAC-01`. |
+| Strict distributable-release policy | NEEDS RERUN | RC1 policy is scoped to Windows and Linux, forbids signing exceptions, and requires an exact nonzero Windows certificate SHA-256 pin plus an authenticated detached CMS handoff. |
+| Windows x64 RC1 package and clean-host run | BLOCKED | Requires a reviewed code-signing certificate/PFX, RFC 3161 timestamp service, a frozen clean candidate, exact timestamped-signature verification, Unity/Robotopia evidence, and clean-machine QA; see `P0-WIN-01`. |
+| Linux x64 package and Proton run | BLOCKED | Firmware virtualization is currently disabled and no Ubuntu WSL2 distribution or Proton runtime exists on the current host. Enable virtualization, install the pinned environment, then produce candidate-bound WSL2/WSLg Proton evidence; see `P0-LINUX-01`. |
 | Authorized Robotopia build-2309 acceptance | BLOCKED | A local Windows startup smoke passed on 2026-07-28: BepInEx loaded TopiaForge, detected `0.0.2309`, consumed all 16 staged packages, loaded every enabled first-party mod, initialized the native prompt/performance/UI bridges, and left Robotopia responsive. The complete dynamic-binding, reload, recovery, multiplayer, and profiler matrix still requires retained evidence from the frozen candidate; see `P0-GAME-01`. |
 | Native UX/accessibility acceptance | BLOCKED | Screen Recording permission prevented screenshot comparison; screen-reader and native-platform manual QA remain; see `P1-UX-01`. |
 | Project license and OSS redistribution inventory | PASS | TopiaForge-owned surfaces use MIT, DCO 1.1 governs post-cutover contributions, and third-party licenses/notices remain unchanged and mechanically verified. IP/brand authority remains tracked separately in `P0-IP-01`. |
 | Privacy/backend authorization and package trust policy | BLOCKED | Remote features default off, but owner approval is still required; see `P0-PRIV-01` and `P0-TRUST-01`. |
 | GitHub rulesets, environments, secrets, tag, and attestations | BLOCKED | Repository administration and credential owners must configure and prove the trusted path; see `P0-HOST-01`. |
-| Frozen candidate hosted matrix and reviewed release record | BLOCKED | This audit intentionally leaves uncommitted changes and creates no tag/release; see `P0-CAND-01`. |
+| Frozen candidate admin matrix and reviewed release record | BLOCKED | This audit intentionally leaves uncommitted changes and creates no tag/release; see `P0-CAND-01`. |
 | Independent player/author clean-machine acceptance | BLOCKED | Requires external participants and supported native hosts; see `P1-E2E-01`. |
 
-Recompute matrix totals from the frozen release SHA after the remaining hosted,
-live-game, native UX, and owner-evidence gates run.
+Recompute matrix totals from the frozen release SHA after the remaining
+administrator-orchestrated, live-game, native UX, and owner-evidence gates run.
 
 The remaining informational exceptions are explained, not waived:
 `dotnet format` reports expected workspace-loader
@@ -196,38 +192,32 @@ automated tests cannot close Unity object lifetime.
   revoked, how installed users are warned/recovered, and who may authorize an official payload. Do not market
   capability declarations as containment.
 
-- [ ] **P0-MAC-01 — Produce and validate the final macOS archive.**
-
-  Owner: macOS signing owner and release QA.
-
-  Exit criteria: prefer Developer ID/Team ID signing, hardened runtime,
-  notarization, stapling, deep/strict codesign, and Gatekeeper on clean Apple
-  Silicon and Intel hosts. If those credentials are unavailable,
-  `1.0.0-rc.1` alone may use the policy-encoded ad-hoc exception with actual
-  trust recorded in the BOM and prominent Gatekeeper warnings. Run install,
-  repair, launch, confirmed update, forced rollback, diagnostics, and
-  uninstall. `rc.2` and every other version require normal trusted signing.
-
 - [ ] **P0-WIN-01 — Produce and validate the Windows x64 archive.**
 
-  Owner: Windows signing owner and release QA.
+  Owner: Windows release QA.
 
-  Exit criteria: build from the frozen SHA on Windows and prefer SHA-256
-  Authenticode signatures with HTTPS RFC 3161 timestamps. If credentials are
-  unavailable, `1.0.0-rc.1` alone may use the policy-encoded unsigned
-  exception with actual trust recorded in the BOM and prominent SmartScreen
-  warnings. Inspect hashes, links, modes/notices, and runtime assets; exercise
-  clean install/repair/profile/safe-mode/failure/diagnostics/confirmed update,
-  forced rollback, and uninstall journeys. `rc.2` and every other version
-  require normal trusted signing.
+  Exit criteria: build from the frozen SHA on the administrator Windows
+  workstation. Require the CLI, GameCompat extractor, and launcher to have
+  valid Authenticode signatures from the exact reviewed leaf-certificate
+  SHA-256 pin and valid HTTPS RFC 3161 timestamps; reject unsigned, partly
+  signed, untimestamped, expired-at-signing, mismatched, or invalid output.
+  Inspect hashes, links, modes/notices, and runtime assets;
+  exercise clean install/repair/profile/safe-mode/failure/diagnostics/confirmed
+  update, forced rollback, and uninstall journeys.
 
 - [ ] **P0-LINUX-01 — Produce and validate Linux x64 and Proton behavior.**
 
   Owner: Linux/Proton release QA.
 
-  Exit criteria: build on Linux from the frozen SHA; inspect final ZIP executable modes, links, checksums, notices,
-  and bundled payloads; run native launcher/CLI flows; exercise discovery, path translation, process launch,
-  runtime repair, custom-world, recovery, and uninstall paths for Robotopia's Windows build under Proton.
+  Exit criteria: enable firmware virtualization; install Ubuntu 24.04 as WSL2,
+  WSLg, pinned Linux toolchains, and Proton `10.0-4`; then build Linux x64 from the frozen SHA;
+  inspect final ZIP executable modes, links, checksums, notices, and bundled
+  payloads. The same-host environment must run the actual Robotopia build-2309
+  matrix through WSLg/Proton with `WINEDLLOVERRIDES=winhttp=n,b`, exercise the
+  native Linux launcher/CLI, discovery, path translation, process launch,
+  runtime repair, custom-world, recovery, and uninstall flows, and return a
+  scrubbed evidence bundle tied to the exact archive digest. Record
+  `independentQa:false`; a build-only WSL run does not pass.
 
 - [ ] **P0-GAME-01 — Complete authorized build-2309 runtime and first-party-mod acceptance.**
 
@@ -238,19 +228,30 @@ automated tests cannot close Unity object lifetime.
   all 16 source-mod flows, TopiaForgeUi-only UI, dirty updates, and resource teardown. Verify every declared GameCompat binding and
   record profiler evidence of no steady-state allocation regressions or task/callback leaks.
 
-- [ ] **P0-HOST-01 — Configure and prove the protected hosted release path.**
+- [ ] **P0-HOST-01 — Configure and prove the protected verifier/publisher path.**
 
   Owner: GitHub administrator, security, and credential owners.
 
-  Current state: the checked-in desired-state policy defines separate `main`, `dev`, `release/*`, and `v*` rulesets
-  plus the four protected environments. The 2026-07-22 live read-only audit could not inspect collaborators because
-  the available GitHub credential lacks push/admin access (HTTP 403); no hosted protection is therefore attested.
+  Current state: the protected `release` environment has the required reviewer,
+  a `v*` deployment restriction, and the GitHub-held Ed25519 update key. The
+  dedicated protected `TOPIAFORGE_GOVERNANCE_AUDIT_TOKEN` is not configured,
+  and a plaintext duplicate of the update-signing seed remains on the
+  administrator workstation pending independently verified recovery/removal.
+  The local GitHub CLI is authenticated with repository-admin permission. The
+  replacement path still needs a non-publishing rehearsal and
+  immutable-release verification.
 
-  Exit criteria: configure required aggregate contexts (`Required / CI validation`, `Required / Release packages`,
-  `Required / Registry validation`, and trusted-candidate `Required / Unity validation`); protect release and Unity
-  environments with reviewers; inventory and scope Apple, Windows, Unity, managed-reference, Pages, and attestation
-  credentials; prove fork PRs are secretless; enable reviewed Pages and immutable-release policy; protect creation of
-  the annotated `v1.0.0-rc.1` tag while forbidding mutation/deletion; retain an administrator-reviewed dry run.
+  Exit criteria: configure required aggregate contexts (`Required / CI validation`,
+  `Required / PR policy`, `Required / Dependency review`,
+  `Required / Release packages`, `Required / Registry validation`, and
+  `Required / Unity source validation`); protect the release environment with
+  a reviewer; keep the GitHub Ed25519 update key plus a repository-scoped,
+  read-only governance-audit token there; prove fork PRs are secretless;
+  independently recovery-test the protected update seed and remove plaintext
+  local duplicates; enable reviewed Pages and immutable-release policy; protect creation of the annotated
+  `v1.0.0-rc.1` tag while forbidding mutation/deletion; retain an administrator-reviewed dry run. Complete one
+  non-publishing two-platform rehearsal before deleting the obsolete live `unity-validation` and
+  `game-acceptance` environments.
 
 - [ ] **P0-CRED-01 — Rotate credentials exposed through the local Xcode build log.**
 
@@ -268,7 +269,7 @@ automated tests cannot close Unity object lifetime.
 
   Exit criteria: revoke and rotate every credential present in the affected audit/Xcode log; remove the affected
   local DerivedData and task logs under the applicable retention policy; confirm the old credentials no longer work;
-  review hosted secrets for least privilege; and retain a sentinel build proving a sanitized Xcode launch does not
+  review local and GitHub secrets for least privilege; and retain a sentinel build proving a sanitized Xcode launch does not
   expose credentials.
 
 - [ ] **P0-CAND-01 — Freeze and attest one candidate SHA.**
@@ -282,10 +283,11 @@ automated tests cannot close Unity object lifetime.
 
   Exit criteria: integrate the topic through `dev`, cut and stabilize `release/1.0.0-rc.1`, merge it to `main`, and
   approve the release notes; create the protected annotated `v1.0.0-rc.1` tag on the exact verified `main` SHA through
-  the authorized process; run every hosted/native/Unity gate without unexplained
+  the authorized process; run every local/native/Unity gate without unexplained
   warnings or skips; generate and independently verify the candidate BOM, SPDX SBOM, `SHA256SUMS`, nested digests,
-  sizes, signatures, provenance, and manual-release index. The workflow may prepare only a matching draft and must
-  never create/mutate the tag, replace assets, or publish automatically.
+  sizes, signatures, provenance, platform manifests, handoff manifest, and manual-release index. The administrator
+  may stage only a matching draft, and GitHub may publish it automatically only after protected release-environment
+  approval and exact-byte verification. Neither path may create/mutate the tag or replace mismatched assets.
 
 ## P1 acceptance gates
 

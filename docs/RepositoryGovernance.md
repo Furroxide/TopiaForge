@@ -58,8 +58,14 @@ development, or unknown scope. License and notice validation is
 release-blocking. DCO enforcement is grandfathered through the immutable
 `v1.0.0-rc.1` cutover and applies to every commit introduced afterward.
 
-CodeQL is an independent ruleset gate at high-or-critical severity. Default setup covers Actions, C/C++, C#,
-JavaScript/TypeScript, and Swift with the default query suite on a weekly schedule. Dart remains covered by analyzer
+CodeQL is an independent ruleset gate at high-or-critical severity. For the
+Windows/Linux-only RC1, default setup covers Actions, C/C++, C#, and
+JavaScript/TypeScript with the default query suite on a weekly schedule. Swift
+default setup cannot create Flutter's generated Xcode inputs and is therefore
+out of the RC1 release scope together with the macOS archive. Before a macOS
+release, replace this scope with an advanced Swift CodeQL workflow that runs
+Flutter dependency generation and a real Xcode build, then add Swift back to
+the reviewed governance policy. Dart remains covered by analyzer
 and test CI.
 
 ## Ruleset contract
@@ -77,8 +83,23 @@ Reference lifecycle is intentionally separate from branch updates:
 - `v*` updates and deletions are prohibited by a separate no-bypass ruleset. A failed version is never moved or reused.
 
 GitHub exposes the lifecycle actor as the repository-administrator role rather than an individual user on a personal
-repository. The governance audit therefore requires `furroxide` to be the only administrator; granting another account
-administrator access is a governance change that must update this contract first.
+repository. The governance manifest pins the sole human release-staging
+principal as `furroxide` / actor ID `221987073` / type `User`. The full audit
+requires that exact identity to be the sole collaborator with `push`,
+`maintain`, or `admin` capability, whether capability appears through the
+effective permission booleans or the built-in role name. Known `read` and
+`triage` collaborators may remain, but cannot author a release or upload any
+release asset. Unknown/custom collaborator roles fail closed because the audit
+cannot prove that they are read-only.
+
+Protected finalizer uploads are a separate, narrowly classified authority:
+only names declared as workflow-generated metadata may be uploaded by
+`github-actions[bot]` / actor ID `41898282` / type `Bot`. When the release
+asset API exposes the performing GitHub App, its ID must be the pinned GitHub
+Actions integration `15368`. Every catalog artifact, platform/aggregate
+handoff manifest, and locally produced detached handoff signature remains
+bound to the human staging principal. The release author is always that same
+pinned human identity.
 
 Applicable GitHub rulesets compose, so classic branch protection must not duplicate these rules. The checked-in
 desired-state manifest is `.github/repository-governance.json`, and the read-only audit command is:
@@ -125,36 +146,65 @@ because there is one maintainer.
 
 | Environment | Allowed ref | Purpose |
 | --- | --- | --- |
-| `release` | `v*` tags | Signing, notarization, managed-reference, attestation, and release preparation credentials |
-| `unity-validation` | protected `main` | Unity licensing and exact-SHA trusted build validation |
-| `game-acceptance` | protected `main` | Dedicated Robotopia host variables and live-game acceptance |
+| `release` | `v*` tags | Update-metadata signing, verification attestation, and automatic release publication |
 | `github-pages` | published `v*` tags | Deployment of release-derived Pages content |
 
-Every job that can read signing, notarization, managed-reference, publication, Unity, or live-host credentials declares
-its protected environment directly. An ungated caller never forwards those secrets into a reusable workflow. PR
-workflows are read-only and secretless.
+Every GitHub job that can read the update-signing key, read the protected
+governance-audit token, or mutate a release declares the protected `release`
+environment directly. An ungated caller never forwards those secrets into a
+reusable workflow. PR workflows, the unsigned release dry-run, registry
+validation, Pages build, and Unity source validation are read-only and
+secretless.
 
-Live-game acceptance is manual, checks out an explicit SHA from `main`, and reports `Required / Game SDK acceptance`.
-It is not an ordinary PR gate. Release readiness remains blocked until dedicated self-hosted runners are registered;
-those hosts are reset or reimaged between trusted runs.
+`TOPIAFORGE_GOVERNANCE_AUDIT_TOKEN` is a dedicated, repository-scoped,
+read-only fine-grained PAT with `Administration: read` and `Actions: read`;
+Metadata read is implicit. It is used only for the protected live-governance
+checks after approval and immediately before publication, because those
+repository administration, ruleset, environment, Actions-policy,
+immutable-release, and security-feature reads are separate from publication.
+The workflow's short-lived `GITHUB_TOKEN` remains the candidate verifier,
+attester, and publisher. The audit credential has no write permission of any
+kind. The broad interactive maintainer token is never stored in the
+environment. A future GitHub App design must store the App identity/key and
+mint a fresh installation token in-workflow; an expiring installation token is
+not a durable environment secret.
+
+Unity and Robotopia credentials remain only on the administrator-controlled workstation. Future production signing
+credentials also remain off GitHub. They are represented to GitHub by deterministic, scrubbed handoff manifests
+rather than Actions secrets or self-hosted runners. The retired `unity-validation` and `game-acceptance`
+environments must remain live until one non-publishing two-platform rehearsal proves the replacement flow; delete
+them only after that rehearsal, then rerun the governance audit.
 
 ## Release sequence
 
 1. Merge the fully green release PR into `main` with a merge commit.
-2. Run trusted Unity validation and full Windows/Linux-Proton game acceptance against that exact `main` SHA.
-3. Create a verified, signed, annotated `v<semver>` tag on that SHA. Never use a lightweight tag.
-4. Dispatch production release preparation from the protected tag.
-5. Before an environment approval unlocks credentials, verify the associated release PR and release-head check, both
-   exact-main-SHA gate runs, tag object/type/signature/target, release policy, catalog, and artifact inventory.
-6. Build platform assets, generate and verify exact-byte Ed25519 update
-   metadata, project SBOM/BOM/checksums, and GitHub artifact attestations, then
-   create or resume only the matching draft release.
-7. Inspect and publish manually. Immutable releases then lock the tag and assets; verify with `gh release verify` and
-   asset verification.
+2. On an administrator-controlled Windows workstation, run `release-admin.ps1`. It requires clean `main` equal to
+   `origin/main`, repository-administrator GitHub authentication, live immutable-release/environment/ref governance
+   matching the checked-in release controls, and every applicable pinned toolchain.
+3. Build the canonical ecosystem twice byte-identically, then build and validate Windows locally, Linux x64 in
+   Ubuntu 24.04 under WSL2 on the same physical host.
+4. Run exact Unity and Robotopia acceptance on Windows, attach the same-host Creator evidence bundle, and let the
+   orchestrator run the exact Linux archive through pinned Proton under WSLg. The public evidence identifies this
+   RC1 Proton result as same-host and non-independent.
+5. After every local gate passes, create and push the signed annotated `v<semver>` tag, create or resume the exact
+   matching draft, upload all 17 catalog assets plus the two
+   `release-platform-bundle-v1` manifests and one `release-handoff-v1`
+   manifest and its detached CMS signature, and dispatch the finalizer.
+6. After protected-environment approval unlocks the update key and publication authority, GitHub verifies live
+   governance, the tag, `main`, release PR, each hosted check's exact workflow ID/path, event, head ref/SHA and current
+   successful run attempt, draft inventory, the release author and per-asset
+   uploader identities, the exact timestamped Authenticode trust state, the
+   exact-SHA readiness decision, and all evidence.
+7. GitHub signs update metadata, deterministically produces BOM/SBOM/checksums, records a custom verification
+   attestation that names GitHub as verifier rather than platform-archive builder, rechecks governance and every byte,
+   and publishes automatically.
+   Exact reruns are verification-only no-ops; any mismatch fails closed. Verify the immutable result with
+   `gh release verify` and asset verification.
 
-The unsigned release dry run is secretless and executes on every `release/*` update. Production signing is a separate,
-environment-gated entrypoint. Pages builds from published immutable releases only; its build phase is read-only, and
-the Pages/OIDC deployment job neither checks out nor executes repository code.
+The unsigned hosted release dry run is secretless and executes on every `release/*` update. Production building
+happens only on the administrator-controlled workstation and its WSL2 environment; GitHub's protected `release` job
+is the verifier, attester, and publisher. Pages builds from published immutable releases only; its build phase is
+read-only, and the Pages/OIDC deployment job neither checks out nor executes repository code.
 
 ## Repository security settings
 
@@ -162,7 +212,7 @@ The desired live settings are:
 
 - Default `GITHUB_TOKEN` permission is read-only; Actions cannot approve pull requests.
 - All Actions are pinned to a full commit SHA. GitHub-owned Actions are allowed, plus only
-  `dart-lang/setup-dart`, `subosito/flutter-action`, and `game-ci/unity-builder`.
+  `dart-lang/setup-dart` and `subosito/flutter-action`.
 - Workflow approval is required for every external contributor.
 - Dependency graph and Dependabot vulnerability alerts are enabled. Automated Dependabot security-update PRs remain
   disabled because they target default `main`; maintainers turn alerts into controlled patch-release branches.

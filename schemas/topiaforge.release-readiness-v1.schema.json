@@ -1,0 +1,286 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.release-readiness-v1.schema.json",
+  "title": "TopiaForge exact-SHA release readiness decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "releaseVersion",
+    "candidateBinding",
+    "status",
+    "gates"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "../schemas/topiaforge.release-readiness-v1.schema.json"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "releaseVersion": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$"
+    },
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "path",
+        "schemaPath"
+      ],
+      "properties": {
+        "mode": {
+          "const": "git-blob-at-target-sha"
+        },
+        "path": {
+          "const": "release/release-readiness.json"
+        },
+        "schemaPath": {
+          "const": "schemas/topiaforge.release-readiness-v1.schema.json"
+        }
+      }
+    },
+    "status": {
+      "enum": [
+        "blocked",
+        "ready"
+      ]
+    },
+    "gates": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": {
+        "$ref": "#/definitions/gate"
+      }
+    }
+  },
+  "definitions": {
+    "reviewerRole": {
+      "enum": [
+        "accessibility-reviewer",
+        "backend-owner",
+        "credential-owner",
+        "external-author-reviewer",
+        "external-player-reviewer",
+        "incident-owner",
+        "ip-trademark-counsel",
+        "native-qa",
+        "privacy-legal",
+        "product-owner",
+        "project-owner",
+        "registry-owner",
+        "release-owner",
+        "robotopia-owner",
+        "security-intake-owner",
+        "security-owner",
+        "support-owner"
+      ]
+    },
+    "evidenceId": {
+      "type": "string",
+      "pattern": "^EVID-(P0|P1)-[A-Z0-9]+(?:-[A-Z0-9]+)*-[0-9]{4}$"
+    },
+    "acceptedRisk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "decisionEvidenceId"
+      ],
+      "properties": {
+        "scope": {
+          "enum": [
+            "rc1-independent-player-author-e2e",
+            "rc1-native-ux-accessibility",
+            "rc1-support-incident-ownership"
+          ]
+        },
+        "decisionEvidenceId": {
+          "$ref": "#/definitions/evidenceId"
+        }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "priority",
+        "status",
+        "reviewerRoles",
+        "evidenceIds"
+      ],
+      "properties": {
+        "id": {
+          "enum": [
+            "P0-CRED-01",
+            "P0-IP-01",
+            "P0-PRIV-01",
+            "P0-TRUST-01",
+            "P1-E2E-01",
+            "P1-SUPPORT-01",
+            "P1-UX-01"
+          ]
+        },
+        "priority": {
+          "enum": [
+            "P0",
+            "P1"
+          ]
+        },
+        "status": {
+          "enum": [
+            "accepted-risk",
+            "approved",
+            "blocked"
+          ]
+        },
+        "reasonCode": {
+          "enum": [
+            "acceptance-evidence-missing",
+            "approval-evidence-missing",
+            "independent-evidence-missing",
+            "ownership-evidence-missing",
+            "rotation-evidence-missing"
+          ]
+        },
+        "reviewerRoles": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/definitions/reviewerRole"
+          }
+        },
+        "evidenceIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/definitions/evidenceId"
+          }
+        },
+        "acceptedRisk": {
+          "$ref": "#/definitions/acceptedRisk"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "priority": {
+                "const": "P0"
+              }
+            },
+            "required": [
+              "priority"
+            ]
+          },
+          "then": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "approved",
+                  "blocked"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "blocked"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "required": [
+              "reasonCode"
+            ],
+            "properties": {
+              "evidenceIds": {
+                "maxItems": 0
+              }
+            },
+            "not": {
+              "required": [
+                "acceptedRisk"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "approved"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "evidenceIds": {
+                "minItems": 1
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "acceptedRisk"
+                  ]
+                },
+                {
+                  "required": [
+                    "reasonCode"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "accepted-risk"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "required": [
+              "acceptedRisk"
+            ],
+            "properties": {
+              "priority": {
+                "const": "P1"
+              },
+              "evidenceIds": {
+                "minItems": 1
+              }
+            },
+            "not": {
+              "required": [
+                "reasonCode"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
