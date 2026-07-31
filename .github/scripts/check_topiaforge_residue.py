@@ -49,7 +49,30 @@ TOPIAFORGE_PACKAGE_TOOL_PATH = re.compile(
     r"|(?:TopiaForge-macos-universal/)?TopiaForge\.app/Contents/Resources/"
     r"TopiaForge/tools/"
     r")"
+    r"(?:"
     r"(?:restore-robotopia-managed-refs|test-restore-robotopia-managed-refs)\.ps1"
+    r"|release/(?:test-)?verify-robotopia-install\.ps1"
+    r")"
+)
+
+TOPIAFORGE_PACKAGE_CONTENT_PREFIXES = (
+    "TopiaForge-windows-x64/",
+    "TopiaForge-linux-x64/",
+    "TopiaForge.app/Contents/Resources/TopiaForge/",
+    "TopiaForge-macos-universal/TopiaForge.app/Contents/Resources/TopiaForge/",
+)
+
+TOPIAFORGE_MACOS_CODE_RESOURCES_PATH = re.compile(
+    r"(?:TopiaForge-macos-universal/)?"
+    r"TopiaForge\.app/Contents/_CodeSignature/CodeResources"
+)
+
+TOPIAFORGE_MACOS_CODE_RESOURCES_GAME_TOOL = re.compile(
+    r"(?<![A-Za-z0-9_./\\-])"
+    r"Resources/TopiaForge/tools/release/(?:test-)?"
+    r"verify-robotopia-install\.ps1"
+    r"(?![A-Za-z0-9_./\\-])",
+    re.IGNORECASE,
 )
 
 FORBIDDEN_PATH = re.compile(
@@ -228,8 +251,23 @@ def parse_args() -> argparse.Namespace:
 
 def allowed_lowercase_span(path: str, text: str, start: int, end: int) -> bool:
     normalized_path = path.replace("\\", "/")
-    if normalized_path in ROBOTOPIA_GAME_INTEGRATION_CONTENT_ALLOWLIST:
+    policy_paths = [normalized_path]
+    for prefix in TOPIAFORGE_PACKAGE_CONTENT_PREFIXES:
+        if normalized_path.startswith(prefix):
+            policy_paths.append(normalized_path.removeprefix(prefix))
+            break
+    if any(
+        policy_path in ROBOTOPIA_GAME_INTEGRATION_CONTENT_ALLOWLIST
+        for policy_path in policy_paths
+    ):
         return True
+
+    if TOPIAFORGE_MACOS_CODE_RESOURCES_PATH.fullmatch(normalized_path):
+        if any(
+            match.start() <= start and end <= match.end()
+            for match in TOPIAFORGE_MACOS_CODE_RESOURCES_GAME_TOOL.finditer(text)
+        ):
+            return True
 
     for pattern in LOWERCASE_ROBOTOPIA_ALLOWLIST:
         if any(match.start() <= start and end <= match.end() for match in pattern.finditer(text)):
