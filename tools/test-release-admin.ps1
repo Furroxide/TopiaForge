@@ -706,7 +706,10 @@ fi
                 release/notes/v1.0.0-rc.1.md `
                 tests/live-game-acceptance.json
             $testTree = (& git -C $repositoryRootForTest write-tree).Trim()
-            $sourceSha = (& git -C $repositoryRootForTest commit-tree `
+            $sourceSha = (& git -C $repositoryRootForTest `
+                    -c "user.name=Release test" `
+                    -c "user.email=release-test@example.invalid" `
+                    commit-tree `
                     $testTree -p HEAD -m "release-admin source fixture").Trim()
         }
         finally {
