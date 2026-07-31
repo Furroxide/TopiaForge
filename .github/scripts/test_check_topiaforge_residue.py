@@ -278,6 +278,119 @@ class GeneratedPayloadAuditTests(unittest.TestCase):
             failures,
         )
 
+    def test_release_game_install_verifier_paths_are_allowed_under_package_roots(
+        self,
+    ) -> None:
+        game_name = "robo" + "topia"
+        package_roots = (
+            "TopiaForge-windows-x64",
+            "TopiaForge-linux-x64",
+            "TopiaForge.app/Contents/Resources/TopiaForge",
+            (
+                "TopiaForge-macos-universal/TopiaForge.app/Contents/"
+                "Resources/TopiaForge"
+            ),
+        )
+
+        for package_root in package_roots:
+            path = (
+                f"{package_root}/tools/release/"
+                f"verify-{game_name}-install.ps1"
+            )
+            with self.subTest(path=path):
+                self.assertEqual([], self.scan_path(path))
+
+    def test_packaged_release_admin_game_fields_are_allowed(self) -> None:
+        game_name = "robo" + "topia"
+        package_path = (
+            "TopiaForge.app/Contents/Resources/TopiaForge/"
+            "tools/release-admin.ps1"
+        )
+        failures = self.scan_text(
+            package_path,
+            "$" + game_name + " = @{}\n",
+        )
+
+        self.assertEqual([], failures)
+
+    def test_packaged_release_admin_allowlist_rejects_unknown_root(self) -> None:
+        game_name = "robo" + "topia"
+        package_path = "payload/TopiaForge-linux-x64/tools/release-admin.ps1"
+        failures = self.scan_text(
+            package_path,
+            "$" + game_name + " = @{}\n",
+        )
+
+        self.assertTrue(
+            any(
+                "lowercase/unallowlisted Robotopia token" in failure
+                for failure in failures
+            ),
+            failures,
+        )
+
+    def test_macos_code_resources_allows_exact_game_verifier_entries(self) -> None:
+        game_name = "robo" + "topia"
+        policy_path = "TopiaForge.app/Contents/_CodeSignature/CodeResources"
+        resource = (
+            "Resources/TopiaForge/tools/release/"
+            f"test-verify-{game_name}-install.ps1"
+        )
+        failures = self.scan_text(policy_path, f"<key>{resource}</key>")
+
+        self.assertEqual([], failures)
+
+    def test_macos_code_resources_rejects_prefixed_game_verifier_entry(self) -> None:
+        game_name = "robo" + "topia"
+        policy_path = "TopiaForge.app/Contents/_CodeSignature/CodeResources"
+        resource = (
+            "payload/Resources/TopiaForge/tools/release/"
+            f"test-verify-{game_name}-install.ps1"
+        )
+        failures = self.scan_text(policy_path, f"<key>{resource}</key>")
+
+        self.assertTrue(
+            any(
+                "lowercase/unallowlisted Robotopia token" in failure
+                for failure in failures
+            ),
+            failures,
+        )
+
+    def test_packaged_macos_game_integration_payload_passes(self) -> None:
+        game_name = "robo" + "topia"
+        app_root = "TopiaForge.app/Contents"
+        resource_root = f"{app_root}/Resources/TopiaForge"
+        verifier = (
+            f"{resource_root}/tools/release/"
+            f"verify-{game_name}-install.ps1"
+        )
+        code_resource = (
+            "Resources/TopiaForge/tools/release/"
+            f"verify-{game_name}-install.ps1"
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            archive = Path(temporary_directory) / "TopiaForge-macos-universal.zip"
+            archive.write_bytes(
+                zip_bytes(
+                    {
+                        f"{resource_root}/tools/release-admin.ps1": (
+                            "$" + game_name + " = @{}\n"
+                        ).encode(),
+                        verifier: (
+                            'schema = "' + game_name + '-official-install-v1"\n'
+                        ).encode(),
+                        f"{app_root}/_CodeSignature/CodeResources": (
+                            f"<key>{code_resource}</key>"
+                        ).encode(),
+                    }
+                )
+            )
+
+            result = self.run_audit(archive)
+
+        self.assertEqual(0, result.returncode, result.stderr)
+
     def test_retired_manager_still_fails_inside_allowed_integration_file(
         self,
     ) -> None:
