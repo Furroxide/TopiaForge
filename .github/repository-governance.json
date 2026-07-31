@@ -47,8 +47,7 @@
       "github_owned_allowed": true,
       "verified_allowed": false,
       "patterns_allowed": [
-        "dart-lang/setup-dart@*",
-        "subosito/flutter-action@*"
+        "dart-lang/setup-dart@*"
       ]
     },
     "workflow_permissions": {

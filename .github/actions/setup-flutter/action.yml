@@ -1,0 +1,20 @@
+name: Set up pinned Flutter
+description: Install the repository-pinned Flutter SDK from a verified official archive.
+
+runs:
+  using: composite
+  steps:
+    - name: Cache the pinned Flutter archive
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: ${{ runner.temp }}/topiaforge-flutter-archives
+        key: >-
+          topiaforge-flutter-archive-v1-${{ runner.os }}-${{ runner.arch }}-3.44.6-${{
+          hashFiles('.github/actions/setup-flutter/releases.json') }}
+
+    - name: Install and verify the pinned Flutter SDK
+      shell: pwsh
+      env:
+        TOPIAFORGE_FLUTTER_ARCHIVE_DIRECTORY: ${{ runner.temp }}/topiaforge-flutter-archives
+        TOPIAFORGE_FLUTTER_INSTALL_DIRECTORY: ${{ runner.temp }}/topiaforge-flutter-sdk
+      run: '& "$env:GITHUB_ACTION_PATH/install-flutter.ps1"'

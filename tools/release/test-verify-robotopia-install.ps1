@@ -30,7 +30,7 @@ function Assert-ThrowsMatch {
 
 $verifier = Join-Path $PSScriptRoot "verify-robotopia-install.ps1"
 $root = Join-Path ([System.IO.Path]::GetTempPath()) (
-    "topiaforge-robotopia-verifier-" + [Guid]::NewGuid().ToString("N")
+    "topiaforge-game-verifier-" + [Guid]::NewGuid().ToString("N")
 )
 $launcher = Join-Path $root "launcher"
 $game = Join-Path $launcher "Robotopia"
