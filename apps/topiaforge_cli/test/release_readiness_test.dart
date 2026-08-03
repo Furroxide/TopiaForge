@@ -29,12 +29,17 @@ void main() {
     expect(decision.releaseVersion, '1.0.0-rc.1');
     expect(decision.status, 'blocked');
     expect(decision.isReady, isFalse);
-    expect(decision.gates, hasLength(7));
+    expect(decision.gates, hasLength(12));
     expect(decision.gates.map((gate) => gate.id), [
       'P0-IP-01',
       'P0-PRIV-01',
       'P0-TRUST-01',
       'P0-CRED-01',
+      'P0-WIN-01',
+      'P0-LINUX-01',
+      'P0-GAME-01',
+      'P0-HOST-01',
+      'P0-CAND-01',
       'P1-UX-01',
       'P1-E2E-01',
       'P1-SUPPORT-01',
@@ -66,6 +71,81 @@ void main() {
     ]) {
       expect(encoded, isNot(contains('"$forbidden"')));
     }
+  });
+
+  test('readiness and BOM schemas define exactly the same gate contract', () {
+    // The gate contract is duplicated: once in the readiness schema the
+    // candidate is validated against, and once in the BOM schema the published
+    // summary is validated against. A change applied to only one copy makes a
+    // decision that validates at signing time fail at publication, so pin them
+    // to each other here rather than relying on both being remembered.
+    final readinessSchema = _jsonFile(
+      p.join(repositoryRoot, releaseReadinessSchemaPath),
+    );
+    final bomSchema = _jsonFile(
+      p.join(repositoryRoot, 'schemas', 'topiaforge.release-bom.schema.json'),
+    );
+
+    final readinessGate = _at(readinessSchema, ['definitions', 'gate']);
+    final bomGate = _at(bomSchema, ['definitions', 'readinessGate']);
+
+    for (final field in const ['id', 'reasonCode', 'status', 'priority']) {
+      expect(
+        _at(bomGate, ['properties', field])['enum'],
+        _at(readinessGate, ['properties', field])['enum'],
+        reason:
+            'Gate "$field" enum differs between the readiness and BOM '
+            'schemas.',
+      );
+    }
+
+    expect(
+      _at(bomGate, ['properties', 'reviewerRoles', 'items'])['enum'],
+      _at(readinessSchema, ['definitions', 'reviewerRole'])['enum'],
+      reason: 'Reviewer roles differ between the readiness and BOM schemas.',
+    );
+
+    // The accepted-risk block is duplicated too. If the allowed scopes drift, a
+    // P1 disposition could validate at signing time and fail BOM validation at
+    // publication, which is the same split this test exists to prevent.
+    final readinessRisk = _at(readinessSchema, ['definitions', 'acceptedRisk']);
+    final bomRisk = _at(bomGate, ['properties', 'acceptedRisk']);
+    expect(
+      _at(bomRisk, ['properties', 'scope'])['enum'],
+      _at(readinessRisk, ['properties', 'scope'])['enum'],
+      reason:
+          'Accepted-risk scopes differ between the readiness and BOM '
+          'schemas.',
+    );
+    expect(
+      bomRisk['required'],
+      readinessRisk['required'],
+      reason:
+          'Accepted-risk required fields differ between the readiness and '
+          'BOM schemas.',
+    );
+
+    final readinessGates = _at(readinessSchema, ['properties', 'gates']);
+    final bomGates = _at(bomSchema, [
+      'definitions',
+      'readinessSummary',
+      'properties',
+      'gates',
+    ]);
+    for (final bound in const ['minItems', 'maxItems']) {
+      expect(
+        bomGates[bound],
+        readinessGates[bound],
+        reason:
+            'Gate count "$bound" differs between the readiness and BOM '
+            'schemas.',
+      );
+    }
+    expect(
+      readinessGates['minItems'],
+      readinessGates['maxItems'],
+      reason: 'The readiness gate set must be an exact count.',
+    );
   });
 
   test('P0 requires approval and P1 permits scoped accepted risk', () {
@@ -230,7 +310,7 @@ void main() {
         expect(metadataReadiness.status, 'blocked');
         expect(metadataReadiness.blobSha256, decision.readinessBlobSha256);
         expect(metadataReadiness.summary, decision.toPublicSummary());
-        expect(metadataReadiness.blockingReasons, hasLength(7));
+        expect(metadataReadiness.blockingReasons, hasLength(12));
         final bomSchema = _readinessBomSchema(repositoryRoot);
         final bomSchemaResult = bomSchema.validate(
           metadataReadiness.toBomJson(),
@@ -354,6 +434,26 @@ ReleaseReadinessDecision _parseJson(
 
 Map<String, Object?> _readinessJson(List<int> bytes) {
   return (jsonDecode(utf8.decode(bytes)) as Map).cast<String, Object?>();
+}
+
+Map<String, Object?> _jsonFile(String path) =>
+    (jsonDecode(File(path).readAsStringSync()) as Map).cast<String, Object?>();
+
+Map<String, Object?> _at(Map<String, Object?> root, List<String> path) {
+  var current = root;
+  for (var depth = 0; depth < path.length; depth++) {
+    final value = current[path[depth]];
+    if (value is! Map) {
+      // Name the exact path that broke. Without this the caller sees a bare
+      // TypeError and has to rediscover which schema drifted.
+      throw StateError(
+        'Schema path "${path.take(depth + 1).join('.')}" is missing or is not '
+        'an object; the readiness and BOM schemas have drifted apart.',
+      );
+    }
+    current = value.cast<String, Object?>();
+  }
+  return current;
 }
 
 JsonSchema _readinessBomSchema(String repositoryRoot) {
