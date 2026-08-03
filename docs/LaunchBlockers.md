@@ -70,6 +70,15 @@ check is silently skipped.
 Recompute matrix totals from the frozen release SHA after the remaining
 administrator-orchestrated, live-game, native UX, and owner-evidence gates run.
 
+Every open gate below that is closed by a reviewed record has a matching entry in
+[`release/release-readiness.json`](../release/release-readiness.json), validated
+against its schema at the exact candidate SHA. The readiness decision previously
+carried only the four owner-decision P0 gates and the three P1 gates, which left
+`P0-WIN-01`, `P0-LINUX-01`, `P0-GAME-01`, `P0-HOST-01`, and `P0-CAND-01`
+release-fatal here but invisible to the machine decision. They are now recorded
+gates, so the computed status cannot reach `ready` while any of them is
+unresolved.
+
 The remaining informational exceptions are explained, not waived:
 `dotnet format` reports expected workspace-loader
 diagnostics for the intentional Unity compile/reference split while finding no formatting changes; Flutter reports newer
