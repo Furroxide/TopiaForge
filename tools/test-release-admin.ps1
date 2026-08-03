@@ -216,6 +216,8 @@ foreach ($requiredSource in @(
         "verify-release-governance.sh",
         ".github/scripts/audit_repository_governance.py",
         "Invoke-ReleaseGovernanceAudit",
+        "function Resolve-Jq",
+        '$jqCli = Resolve-Jq',
         "Require-Command git-lfs",
         "lfs fsck",
         "Every tracked Git LFS object must be materialized",
@@ -449,6 +451,11 @@ exit /b 0
 '@ | Set-Content -LiteralPath (
             Join-Path $fakeBin "python-too-old.cmd"
         ) -Encoding ascii
+
+        @'
+@echo off
+exit /b 0
+'@ | Set-Content -LiteralPath (Join-Path $fakeBin "jq.cmd") -Encoding ascii
     }
     else {
         @'
@@ -495,10 +502,15 @@ fi
 '@ | Set-Content -LiteralPath (
             Join-Path $fakeBin "python-too-old"
         ) -Encoding utf8NoBOM
+
+        @'
+#!/usr/bin/env bash
+exit 0
+'@ | Set-Content -LiteralPath (Join-Path $fakeBin "jq") -Encoding utf8NoBOM
         & chmod +x (Join-Path $fakeBin "gh") (Join-Path $fakeBin "wsl") `
             (Join-Path $fakeBin "python") (
                 Join-Path $fakeBin "python-too-old"
-            )
+            ) (Join-Path $fakeBin "jq")
         if ($LASTEXITCODE -ne 0) {
             throw "Could not mark fake orchestration tools executable."
         }
@@ -645,6 +657,27 @@ fi
             Assert-True (
                 (Resolve-GitHubCli) -ceq $fallbackGh
             ) "Resolve-GitHubCli did not use the Program Files fallback."
+            # Resolve-Jq also searches LOCALAPPDATA and ProgramData, where the
+            # winget and Chocolatey shims live. Point every searched root at the
+            # empty test tree so this asserts the fallback, not the host.
+            $oldLocalAppData = $env:LOCALAPPDATA
+            $oldProgramData = $env:ProgramData
+            $env:LOCALAPPDATA = $fallbackProgramFiles
+            $env:ProgramData = $fallbackProgramFiles
+            Assert-ThrowsMatch -Action {
+                Resolve-Jq
+            } -Pattern "winget install jqlang.jq" `
+                -Message "A missing jq did not report an actionable install step."
+            $fallbackJq = Join-Path $fallbackProgramFiles "jq/jq.exe"
+            New-Item -ItemType Directory -Force -Path (
+                Split-Path -Parent $fallbackJq
+            ) | Out-Null
+            Set-Content -LiteralPath $fallbackJq -Value "test" -Encoding ascii
+            Assert-True (
+                (Resolve-Jq) -ceq $fallbackJq
+            ) "Resolve-Jq did not use the Program Files fallback."
+            $env:LOCALAPPDATA = $oldLocalAppData
+            $env:ProgramData = $oldProgramData
             $env:PATH = "$fakeBin$([System.IO.Path]::PathSeparator)$oldPath"
             $env:ProgramFiles = $oldProgramFiles
         }
