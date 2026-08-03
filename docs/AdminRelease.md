@@ -29,9 +29,11 @@ platform validation summary binds both values.
 The machine-readable ship decision is
 `release/release-readiness.json`. It is read from the exact target commit,
 validated against the schema from that same commit, and bound into the BOM by
-digest and gate summary. Every P0 gate must be `approved`. Each P1 gate must be
-either `approved` or `accepted-risk` with an allowed RC1 scope and evidence
-identifier. A blocked, missing, malformed, working-tree-only, or wrong-version
+digest and gate summary. It carries one entry for each of the twelve
+release-fatal gates in [`LaunchBlockers.md`](LaunchBlockers.md), so no gate that
+can stop a release is tracked only in prose. Every P0 gate must be `approved`.
+Each P1 gate must be either `approved` or `accepted-risk` with an allowed RC1
+scope and evidence identifier. A blocked, missing, malformed, working-tree-only, or wrong-version
 decision stops preflight, staging, and the protected finalizer. The catalog
 must remain `blocked` until the reviewed decision is committed. The CLI treats
 the `evidenceIds` as manually reviewed attestation references: it validates
