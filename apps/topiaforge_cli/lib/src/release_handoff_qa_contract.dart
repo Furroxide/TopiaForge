@@ -318,7 +318,12 @@ void _validateCreatorQa(
   _ReleaseQaCaseInventory inventory,
 ) {
   final qa = (value as Map).cast<String, Object?>();
-  for (final field in const ['descriptorSha256', 'evidenceSha256']) {
+  for (final field in const [
+    'descriptorSha256',
+    'evidenceSha256',
+    'acceptanceChallenge',
+    'acceptanceResultSha256',
+  ]) {
     _requireQaDigest(qa, field, 'Windows Creator QA');
   }
   if (qa['result'] != 'pass' ||
@@ -329,6 +334,27 @@ void _validateCreatorQa(
       qa['checkpointStateUnchanged'] != true ||
       bundle.validations['creator']!.evidenceSha256 != qa['descriptorSha256']) {
     throw StateError('Windows Creator QA is incomplete or invalid.');
+  }
+  // v2 binds the run to the exact interactive session and loaded payload, so
+  // a descriptor cannot be replayed from a different run or a different build
+  // of CreatorTools.
+  final sessionId = qa['lastRunSessionId'];
+  if (sessionId is! String ||
+      sessionId.trim().isEmpty ||
+      sessionId.length > 256) {
+    throw StateError('Windows Creator QA has no bound last-run session.');
+  }
+  final receipt = qa['creatorPackageReceipt'];
+  if (receipt is! Map) {
+    throw StateError('Windows Creator QA has no CreatorTools package receipt.');
+  }
+  final receiptMap = receipt.cast<String, Object?>();
+  final criticalFiles = receiptMap['criticalFiles'];
+  _requireQaDigest(receiptMap, 'sourceSha256', 'Windows Creator QA receipt');
+  if (criticalFiles is! List || criticalFiles.isEmpty) {
+    throw StateError(
+      'Windows Creator QA receipt has no critical-file digests.',
+    );
   }
   _requireQaCases(
     qa,
