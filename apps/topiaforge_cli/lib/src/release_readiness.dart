@@ -133,6 +133,15 @@ final class ReleaseReadinessDecision {
     }
 
     final rawGates = readiness['gates']! as List;
+    if (rawGates.length != _gateContracts.length) {
+      // The schema pins the gate count and this list pins each gate's identity.
+      // If they ever disagree, positional lookup below would either crash with a
+      // RangeError or silently drop a contract, so refuse the decision instead.
+      throw StateError(
+        'Release readiness declares ${rawGates.length} gates but the release '
+        'contract defines ${_gateContracts.length}.',
+      );
+    }
     final gates = <ReleaseReadinessGateDecision>[];
     final evidenceIds = <String>{};
     for (var index = 0; index < rawGates.length; index++) {
@@ -322,6 +331,40 @@ const _gateContracts = [
     priority: 'P0',
     blockedReasonCode: 'rotation-evidence-missing',
     reviewerRoles: ['credential-owner', 'security-owner'],
+  ),
+  _GateContract(
+    id: 'P0-WIN-01',
+    priority: 'P0',
+    blockedReasonCode: 'platform-evidence-missing',
+    reviewerRoles: ['release-owner', 'windows-release-qa'],
+  ),
+  _GateContract(
+    id: 'P0-LINUX-01',
+    priority: 'P0',
+    blockedReasonCode: 'platform-evidence-missing',
+    reviewerRoles: ['linux-release-qa', 'release-owner'],
+  ),
+  _GateContract(
+    id: 'P0-GAME-01',
+    priority: 'P0',
+    blockedReasonCode: 'acceptance-evidence-missing',
+    reviewerRoles: ['robotopia-owner', 'runtime-mod-qa'],
+  ),
+  _GateContract(
+    id: 'P0-HOST-01',
+    priority: 'P0',
+    blockedReasonCode: 'host-evidence-missing',
+    reviewerRoles: [
+      'credential-owner',
+      'github-administrator',
+      'security-owner',
+    ],
+  ),
+  _GateContract(
+    id: 'P0-CAND-01',
+    priority: 'P0',
+    blockedReasonCode: 'candidate-evidence-missing',
+    reviewerRoles: ['project-owner', 'release-manager'],
   ),
   _GateContract(
     id: 'P1-UX-01',

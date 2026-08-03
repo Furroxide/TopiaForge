@@ -29,9 +29,11 @@ platform validation summary binds both values.
 The machine-readable ship decision is
 `release/release-readiness.json`. It is read from the exact target commit,
 validated against the schema from that same commit, and bound into the BOM by
-digest and gate summary. Every P0 gate must be `approved`. Each P1 gate must be
-either `approved` or `accepted-risk` with an allowed RC1 scope and evidence
-identifier. A blocked, missing, malformed, working-tree-only, or wrong-version
+digest and gate summary. It carries one entry for each of the twelve
+release-fatal gates in [`LaunchBlockers.md`](LaunchBlockers.md), so no gate that
+can stop a release is tracked only in prose. Every P0 gate must be `approved`.
+Each P1 gate must be either `approved` or `accepted-risk` with an allowed RC1
+scope and evidence identifier. A blocked, missing, malformed, working-tree-only, or wrong-version
 decision stops preflight, staging, and the protected finalizer. The catalog
 must remain `blocked` until the reviewed decision is committed. The CLI treats
 the `evidenceIds` as manually reviewed attestation references: it validates
@@ -54,14 +56,25 @@ The checkout must be a clean `main` exactly equal to `origin/main`. Configure:
   authenticated GitHub administrator;
 - .NET `10.0.301`, Flutter `3.44.6`, Dart `3.12.2`, Node `24.18.0`,
   Unity `6000.0.23f1`, MSVC `14.51.36231`, Windows SDK
-  `10.0.26100.0`, Python 3.11 or newer, Git LFS, 7-Zip, tar, WSL, and
-  GitHub CLI;
+  `10.0.26100.0`, Python 3.11 or newer, Git LFS, 7-Zip, tar, `jq`, `bash`
+  (Git for Windows), WSL, and GitHub CLI;
 - an activated local Unity license and the Robotopia build-2309 installation.
 
 On Windows systems where `python` resolves to the nonfunctional Microsoft
 Store alias, set `TOPIAFORGE_PYTHON` (or pass `-PythonPath`) to an absolute,
 working Python 3.11-or-newer executable. Preflight executes a version probe; a
 path existing on disk is not sufficient.
+
+The shell release verifiers parse GitHub API responses with `jq` and stop
+without it. `release-admin.ps1` resolves `jq` before any transaction phase
+begins, so a missing `jq` fails immediately instead of part-way through a
+release. If `jq` is not on `PATH`, the installation directories used by
+`winget`, Chocolatey, and `%ProgramFiles%\jq` are searched, and the resolved
+directory is prepended to `PATH` for the shell verifiers only. Install it with:
+
+```powershell
+winget install jqlang.jq
+```
 
 RC1 and every later production release require Authenticode. Before freezing
 the release commit, pin the reviewed leaf certificate SHA-256 in
@@ -118,6 +131,66 @@ are required for the real Robotopia run. Preflight runs `git lfs fsck` and
 rejects pointer-file checkouts on both Windows and WSL. All platform pins live
 in `release/platform-toolchains.json`.
 
+### Obtaining the exact pinned Proton build
+
+`Proton 10.0-4` is pinned by Steam provenance, not by display name.
+`tools/release/test-proton.sh` requires all of the following, and the display
+name alone satisfies none of them:
+
+| Pin | Value | Where it is checked |
+| --- | --- | --- |
+| Steam app id | `3658110` | `appid` in `steamapps/appmanifest_3658110.acf` |
+| Steam build id | `21617411` | `buildid` in the same appmanifest |
+| Depot id | `3658111` | depot block in the same appmanifest |
+| Depot manifest id | `5413949673798237105` | `manifest` inside that depot block |
+| Reported version | contains `10.0-4` | `proton --version` |
+| Runtime tree | canonical SHA-256 | hashed before and after acceptance; it must not change |
+
+Each appmanifest key must appear exactly once, the file must be a regular file
+rather than a symbolic link, and the Proton executable must be the launcher at
+the root of `steamapps/common/<installdir>` named by that same appmanifest.
+
+The deterministic procedure is:
+
+1. In the WSLg Steam client, enable Steam Play compatibility tools and install
+   `Proton 10.0`. Installing through Steam is what writes the appmanifest; a
+   bare depot download does not produce one.
+2. Before using it, read `steamapps/appmanifest_3658110.acf` and confirm every
+   value in the table above.
+3. Run the preflight from inside the WSL distribution. It checks the same values,
+   plus the WSL2/WSLg environment, without launching the game:
+
+```bash
+tools/release/test-proton.sh --preflight-only --repo "$repo" --source-sha "$sha" --version 1.0.0-rc.1 --game-dir "$gameDir" --game-build-id 2309 --proton-executable "$proton" --steam-root "$steamRoot" --compat-data-root "$compatData"
+```
+
+If Steam has moved `Proton 10.0` to a newer build, the appmanifest will carry a
+different `buildid` and depot `manifest`. That is a stop condition: report it and
+do not proceed. A newer runtime under the same display name is not equivalent,
+because the recorded evidence claims this exact tree.
+
+To recover the exact historical depot for comparison, use `steamcmd`:
+
+```bash
+steamcmd +login <account> +download_depot 3658110 3658111 5413949673798237105 +quit
+```
+
+That yields the pinned depot content under
+`steamapps/content/app_3658110/depot_3658111` for a canonical-digest comparison
+against the installed tree. It does not create an appmanifest, so it supplements
+the Steam install rather than replacing it.
+
+Never hand-edit the appmanifest to make the check pass. The `.acf` is plain text,
+so an edited `buildid` or `manifest` would satisfy every assertion above while the
+installed bytes remain a different runtime — which defeats the entire pin and
+makes the recorded Linux evidence false.
+
+`protonSourceCommit` (`e2becb87430ca3ff510d949d9e75fa9b401da489`) is verified as a
+policy pin, not against the installed tree; it identifies the reviewed
+Proton source revision for audit.
+
+### WSL paths
+
 Configure absolute paths inside the WSL distribution:
 
 ```powershell
@@ -141,33 +214,63 @@ The scripted Windows run verifies the installed build-2309 marker, Unity
 lifecycle, canonical live markers, and packaged `new mod` to `dev` journey.
 The nine interactive Creator workbench cases cannot be inferred from those
 markers, screenshots, artifact-directory presence, a manually supplied cycle
-number, or two identical arbitrary files.
+number, or two identical arbitrary files. They require an authorized
+interactive build-2309 session driven by the acceptance harness.
 
-Release is therefore deliberately blocked at this gate. The former
-`new-windows-creator-evidence.ps1` pass synthesizer has been retired and now
-fails closed. `release-admin.ps1` also rejects its legacy descriptor/bundle
-schema, even if an internally consistent pair is supplied.
+### Producing the evidence
 
-The gate may be re-enabled only after CreatorTools itself provides a bounded
-native in-game result collector. That collector must generate an unpredictable
-one-run challenge before launch, display and log it through the attributed
-CreatorTools logger, and emit an explicit structured result for every
-source-SHA case. Every result must bind:
+Run the harness from the frozen candidate checkout, then perform the nine
+workbench workflows in-game while it tails the manager log:
+
+```
+topiaforge acceptance creator --creator-package <CreatorTools .topiaforgemod> --all
+```
+
+The harness issues an unpredictable 64-hex one-run challenge and writes it into
+the CreatorTools config before launch. `CreatorAcceptanceRecorder` is inert
+unless that challenge is present, so an ordinary play session cannot emit
+evidence. Each case emits `TF-CREATOR|PASS|<challenge>|<case>` only when every
+required workbench transition was actually observed; a case whose transitions
+did not all occur simply never passes. The harness digests the real
+`player_data.json.gz` save document before and after End Session — decompressed
+first, because a gzip header embeds an mtime that would otherwise read as a
+change — and digests the checkpoint cursor and `<id>_reached` flags separately.
+
+Convert the resulting `creator-acceptance-result.json` and retained state
+pre-images into the release descriptor and bundle:
+
+```
+tools/release/new-windows-creator-evidence.ps1 -AcceptanceResult <result.json> `
+  -StateDirectory <output>/state -CaseEvidenceDirectory <case artifacts> `
+  -SourceSha <sha> -Version <version> -WindowsArchive <zip> `
+  -CanonicalEcosystemSha256 <sha> -OutputBundle <bundle> -OutputDescriptor <json>
+```
+
+The generator derives every claim from the acceptance result rather than from
+artifact presence, and refuses any result that is incomplete, short of the
+required cycles, or shows changed save or checkpoint bytes.
+
+### What the release validator enforces
+
+`release-admin.ps1` accepts only `release-windows-creator-evidence-v2` and
+re-derives the embedded acceptance result's claims rather than trusting the
+public descriptor. A descriptor is rejected unless it binds:
 
 - the challenge and exact `lastRunSessionId`;
-- the acceptance and generated-journey package `sourceSha256` values and
-  ordered critical-file receipts;
+- the CreatorTools package `sourceSha256` and ordered critical-file receipts;
+- the `acceptanceResultSha256` of the acceptance result embedded in the bundle;
 - the source SHA, version, Windows archive digest/size, canonical ecosystem
   digest, Robotopia build, and exact case-inventory digest;
-- bounded typed evidence produced by the native action, not arbitrary file
-  presence;
-- measured lifecycle transitions and before/after save and checkpoint
-  receipts from that same session.
+- typed per-case evidence produced by the native action, not file presence;
+- the measured lifecycle cycle count and unchanged before/after save and
+  checkpoint receipts from that same session.
 
-Until that collector and its spoof, replay, wrong-session, wrong-challenge,
-wrong-package, and arbitrary-file tests exist, a first prerelease cannot claim
-the Creator acceptance gate. Completed unsigned build work may be retained,
-but no Creator pass descriptor, handoff, tag, or release may be produced.
+The bundle additionally carries the declared persistence layout, so a future
+game build that relocates or renames its persisted state fails closed instead of
+silently reporting "unchanged". `tools/test-release-admin.ps1` fails the run if
+spoofed-challenge, spoofed-session, spoofed-result-digest, wrong-package-receipt,
+replayed prior-run, missing-case, extra-case, short-cycle, mutated-save, or
+mutated-checkpoint evidence is accepted.
 
 ## Same-host WSL2/WSLg Proton evidence
 

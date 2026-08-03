@@ -4,6 +4,8 @@ const releasePlatformQaLinuxSchema = 'release-platform-qa-linux-v1';
 const releasePlatformQaWindowsSchema = 'release-platform-qa-windows-v1';
 const releaseWindowsQaSummarySchema = 'release-windows-qa-summary-v1';
 const releaseProtonEvidenceSchema = 'release-proton-evidence-v1';
+const releaseWindowsCreatorEvidenceSchema =
+    'release-windows-creator-evidence-v2';
 
 Map<String, Object?> buildReleasePlatformQa({
   required String platform,

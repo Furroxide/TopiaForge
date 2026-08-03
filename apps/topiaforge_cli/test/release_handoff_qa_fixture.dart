@@ -128,6 +128,22 @@ void writeReleaseQaFixtures({
     'creator': {
       'result': 'pass',
       'suite': 'creator-full',
+      'acceptanceChallenge': _digest('windows-x64:creator-challenge'),
+      'lastRunSessionId': 'creator-session-fixture',
+      'creatorPackageReceipt': {
+        'sourceSha256': _digest('windows-x64:creator-package'),
+        'criticalFiles': [
+          {
+            'path': 'TopiaForge.CreatorTools.dll',
+            'sha256': _digest('windows-x64:creator-assembly'),
+          },
+          {
+            'path': 'topiaforge.mod.json',
+            'sha256': _digest('windows-x64:creator-manifest'),
+          },
+        ],
+      },
+      'acceptanceResultSha256': _digest('windows-x64:creator-result'),
       'caseInventorySha256': inventorySha,
       'requiredCases': creatorCases,
       'requiredCasesSha256': _caseSetSha(creatorCases),
