@@ -225,6 +225,35 @@ function Resolve-Bash {
     throw "Required command 'bash' was not found on PATH or in Git for Windows."
 }
 
+function Resolve-Jq {
+    $resolved = Get-Command jq -CommandType Application -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($null -ne $resolved) {
+        return $resolved.Source
+    }
+    if ($IsWindows) {
+        foreach ($root in @($env:ProgramFiles, $env:LOCALAPPDATA, $env:ProgramData)) {
+            if ([string]::IsNullOrWhiteSpace($root)) {
+                continue
+            }
+            foreach ($relative in @(
+                    "jq\jq.exe",
+                    "Microsoft\WinGet\Links\jq.exe",
+                    "chocolatey\bin\jq.exe"
+                )) {
+                $installed = Join-Path $root $relative
+                if (Test-Path -LiteralPath $installed -PathType Leaf) {
+                    return $installed
+                }
+            }
+        }
+    }
+    throw "Required command 'jq' was not found on PATH or in a known " +
+        "installation directory. The shell release verifiers parse GitHub " +
+        "API responses with jq and stop without it. Install it with " +
+        "'winget install jqlang.jq' and reopen the terminal."
+}
+
 function Resolve-Python {
     param(
         [AllowEmptyString()]
@@ -540,13 +569,22 @@ function Get-GitBlobBytes {
 
 $gitHubCli = Resolve-GitHubCli
 $bashCli = Resolve-Bash
+$jqCli = Resolve-Jq
 
 function Invoke-ReleaseGovernanceAudit {
     $pythonCli = Resolve-Python
     $hadOverride = Test-Path Env:TOPIAFORGE_GH_CLI
     $previousOverride = $env:TOPIAFORGE_GH_CLI
+    # The shell verifiers invoke jq by name. Prepend its resolved directory so a
+    # jq that exists only in a known installation directory still satisfies their
+    # own 'command -v jq' guard.
+    $previousPath = $env:PATH
+    $jqDirectory = Split-Path -Parent $jqCli
     try {
         $env:TOPIAFORGE_GH_CLI = $gitHubCli
+        if (-not [string]::IsNullOrWhiteSpace($jqDirectory)) {
+            $env:PATH = "$jqDirectory$([System.IO.Path]::PathSeparator)$previousPath"
+        }
         Invoke-Checked $bashCli @(
             "./tools/verify-release-governance.sh",
             $Repository
@@ -559,6 +597,7 @@ function Invoke-ReleaseGovernanceAudit {
         )
     }
     finally {
+        $env:PATH = $previousPath
         if ($hadOverride) {
             $env:TOPIAFORGE_GH_CLI = $previousOverride
         }

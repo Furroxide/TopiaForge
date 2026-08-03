@@ -108,7 +108,7 @@ Machine setup and the resumable command sequence are in
 
 ## 5. Sidecar and repository hygiene
 
-- [ ] Sidecar `npm ci`, every-module syntax check, 23 tests, production dependency tree, and `npm audit` pass.
+- [ ] Sidecar `npm ci`, every-module syntax check, 24 tests, production dependency tree, and `npm audit` pass.
 - [ ] actionlint passes every workflow; all external actions are pinned to full commit SHA values.
 - [ ] PSScriptAnalyzer `1.25.0`, PowerShell parser, bash syntax, and shellcheck pass for repository-owned scripts.
 - [ ] JSON, YAML, JSON Schema, Markdown-link, Git LFS, binary-attribute, conflict-marker, and LF audits pass.
