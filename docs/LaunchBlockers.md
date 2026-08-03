@@ -4,10 +4,17 @@ Last audited: 2026-07-31. Product candidate: `1.0.0-rc.1`. Recommendation: **NO-
 
 A first-party mod audit on 2026-07-27 found and fixed one critical and two high-severity engineering defects that
 the prior remediation had missed (see [First-party mod audit](#first-party-mod-audit-2026-07-27) below). No further
-local critical- or high-severity engineering defect is known as of that audit. The release remains blocked by
+local critical- or high-severity engineering *product* defect is known as of that audit. The release remains blocked by
 decisions, credentials, protected-host configuration, and native Robotopia-runtime acceptance that cannot be supplied
 by source changes. The strict publication gates intentionally continue to reject the candidate until those items are
 closed.
+
+One blocker was an exception to that framing because it was supplied by a source change: the native CreatorTools
+evidence collector. That collector, its challenge-bound acceptance runner, the `release-windows-creator-evidence-v2`
+descriptor, and the three real verifiers now exist, so `release-admin.ps1` no longer refuses to build. It is tracked as
+`P0-CREATOR-01` below and remains open only for the same reason as its neighbours: it now waits on an external input,
+an authorized interactive Robotopia build-2309 session, whose evidence must come from the frozen candidate SHA. Every
+release gate is therefore implemented and waits only on an external input.
 
 This register records a pre-freeze working-tree preflight on the date above. It does not attest a future commit or a
 release candidate SHA. Close an item only with evidence from the frozen candidate SHA; do not treat an unavailable
@@ -59,6 +66,7 @@ check is silently skipped.
 | Strict distributable-release policy | NEEDS RERUN | RC1 policy is scoped to Windows and Linux, forbids signing exceptions, and requires an exact nonzero Windows certificate SHA-256 pin plus an authenticated detached CMS handoff. |
 | Windows x64 RC1 package and clean-host run | BLOCKED | Requires a reviewed code-signing certificate/PFX, RFC 3161 timestamp service, a frozen clean candidate, exact timestamped-signature verification, Unity/Robotopia evidence, and clean-machine QA; see `P0-WIN-01`. |
 | Linux x64 package and Proton run | BLOCKED | Firmware virtualization is currently disabled and no Ubuntu WSL2 distribution or Proton runtime exists on the current host. Enable virtualization, install the pinned environment, then produce candidate-bound WSL2/WSLg Proton evidence; see `P0-LINUX-01`. |
+| Native CreatorTools evidence collector | BLOCKED | Implemented, not yet attested. `CreatorAcceptanceRecorder` emits challenge-bound per-case markers from observed workbench transitions for all nine `creator.*` cases, `topiaforge acceptance creator` binds them to the exact `last-run.json` session and CreatorTools package receipt, and the three `Assert-WindowsCreator*` verifiers in `tools/release-admin.ps1` now perform real `release-windows-creator-evidence-v2` verification instead of throwing. Save and checkpoint bytes are compared across End Session from the real `player_data.json.gz` document. The gate stays BLOCKED because no evidence has been produced from an authorized interactive build-2309 session at the frozen candidate SHA; see `P0-CREATOR-01`. |
 | Authorized Robotopia build-2309 acceptance | BLOCKED | A local Windows startup smoke passed on 2026-07-28: BepInEx loaded TopiaForge, detected `0.0.2309`, consumed all 16 staged packages, loaded every enabled first-party mod, initialized the native prompt/performance/UI bridges, and left Robotopia responsive. The complete dynamic-binding, reload, recovery, multiplayer, and profiler matrix still requires retained evidence from the frozen candidate; see `P0-GAME-01`. |
 | Native UX/accessibility acceptance | BLOCKED | Screen Recording permission prevented screenshot comparison; screen-reader and native-platform manual QA remain; see `P1-UX-01`. |
 | Project license and OSS redistribution inventory | PASS | TopiaForge-owned surfaces use MIT, DCO 1.1 governs post-cutover contributions, and third-party licenses/notices remain unchanged and mechanically verified. IP/brand authority remains tracked separately in `P0-IP-01`. |
@@ -70,14 +78,23 @@ check is silently skipped.
 Recompute matrix totals from the frozen release SHA after the remaining
 administrator-orchestrated, live-game, native UX, and owner-evidence gates run.
 
-Every gate below whose exit criteria are met by a reviewed record has a matching
-entry in [`release/release-readiness.json`](../release/release-readiness.json),
-validated against its schema at the exact candidate SHA. The readiness decision previously
+Every open gate below that is closed by a reviewed record has a matching entry in
+[`release/release-readiness.json`](../release/release-readiness.json), validated
+against its schema at the exact candidate SHA. The readiness decision previously
 carried only the four owner-decision P0 gates and the three P1 gates, which left
 `P0-WIN-01`, `P0-LINUX-01`, `P0-GAME-01`, `P0-HOST-01`, and `P0-CAND-01`
 release-fatal here but invisible to the machine decision. They are now recorded
 gates, so the computed status cannot reach `ready` while any of them is
 unresolved.
+
+`P0-CREATOR-01` is deliberately not a readiness entry. The code it required now
+exists, but it is still not closed by an attestation: it is closed by evidence
+that only an authorized interactive build-2309 session can produce, and that
+evidence is already enforced more strictly than a recorded decision could be.
+The verifiers reject any descriptor whose challenge, `last-run.json` session,
+CreatorTools package receipt, acceptance-result digest, case set, cycle count,
+or save/checkpoint bytes do not match the exact candidate. Recording it as an
+approvable gate would make it weaker, not stronger.
 
 The remaining informational exceptions are explained, not waived:
 `dotnet format` reports expected workspace-loader
@@ -236,6 +253,30 @@ automated tests cannot close Unity object lifetime.
   dependency order, package inbox, collision isolation, partial failures, restart-required state, save compatibility,
   all 16 source-mod flows, TopiaForgeUi-only UI, dirty updates, and resource teardown. Verify every declared GameCompat binding and
   record profiler evidence of no steady-state allocation regressions or task/callback leaks.
+
+- [ ] **P0-CREATOR-01 — Attest the native CreatorTools evidence collector from a live build-2309 run.**
+
+  Owner: runtime/SDK engineering.
+
+  Current state: the collector is implemented and the source work is complete; the gate is open only for want of a
+  live run. `CreatorAcceptanceRecorder` in `mods/Shared/CreatorTools` emits `TF-CREATOR|PASS|<challenge>|<case>`
+  markers for all nine `creator.*` cases, and each case passes only when every one of its required workbench
+  transitions was actually observed, so partial instrumentation fails closed rather than reporting a false pass. The
+  recorder is inert unless a 64-hex challenge was provisioned into the CreatorTools config, so ordinary play cannot
+  emit evidence. `topiaforge acceptance creator` issues that challenge, tails `manager.log`, and binds the result to
+  the exact `last-run.json` session and CreatorTools package receipt. Save and checkpoint state are compared across
+  End Session from the real `player_data.json.gz` document — decompressed before hashing, since a gzip header
+  embeds an mtime that would otherwise read as a spurious change — with the checkpoint cursor and `<id>_reached`
+  flags digested separately from the rest of the save. The three `Assert-WindowsCreator*` verifiers perform real
+  `release-windows-creator-evidence-v2` verification, and `new-windows-creator-evidence.ps1` derives evidence from
+  the challenge-bound acceptance result instead of from artifact presence.
+
+  Exit criteria: retained evidence from an authorized interactive build-2309 session at the frozen candidate SHA in
+  which all nine cases pass, at least ten clean lifecycle cycles complete, and save and checkpoint bytes are
+  unchanged. Adversarial rejection is already proven by `tools/test-release-admin.ps1`, which fails the run if
+  spoofed-challenge, spoofed-session, spoofed-result-digest, wrong-package-receipt, replayed prior-run,
+  missing-case, extra-case, short-cycle, mutated-save, or mutated-checkpoint evidence is accepted. Producing the
+  live evidence belongs to `P0-GAME-01`.
 
 - [ ] **P0-HOST-01 — Configure and prove the protected verifier/publisher path.**
 
