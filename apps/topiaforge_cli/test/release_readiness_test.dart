@@ -83,11 +83,7 @@ void main() {
       p.join(repositoryRoot, releaseReadinessSchemaPath),
     );
     final bomSchema = _jsonFile(
-      p.join(
-        repositoryRoot,
-        'schemas',
-        'topiaforge.release-bom.schema.json',
-      ),
+      p.join(repositoryRoot, 'schemas', 'topiaforge.release-bom.schema.json'),
     );
 
     final readinessGate = _at(readinessSchema, ['definitions', 'gate']);
@@ -97,7 +93,8 @@ void main() {
       expect(
         _at(bomGate, ['properties', field])['enum'],
         _at(readinessGate, ['properties', field])['enum'],
-        reason: 'Gate "$field" enum differs between the readiness and BOM '
+        reason:
+            'Gate "$field" enum differs between the readiness and BOM '
             'schemas.',
       );
     }
@@ -116,13 +113,15 @@ void main() {
     expect(
       _at(bomRisk, ['properties', 'scope'])['enum'],
       _at(readinessRisk, ['properties', 'scope'])['enum'],
-      reason: 'Accepted-risk scopes differ between the readiness and BOM '
+      reason:
+          'Accepted-risk scopes differ between the readiness and BOM '
           'schemas.',
     );
     expect(
       bomRisk['required'],
       readinessRisk['required'],
-      reason: 'Accepted-risk required fields differ between the readiness and '
+      reason:
+          'Accepted-risk required fields differ between the readiness and '
           'BOM schemas.',
     );
 
@@ -137,7 +136,8 @@ void main() {
       expect(
         bomGates[bound],
         readinessGates[bound],
-        reason: 'Gate count "$bound" differs between the readiness and BOM '
+        reason:
+            'Gate count "$bound" differs between the readiness and BOM '
             'schemas.',
       );
     }
