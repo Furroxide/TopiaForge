@@ -51,8 +51,8 @@
     },
     "gates": {
       "type": "array",
-      "minItems": 7,
-      "maxItems": 7,
+      "minItems": 12,
+      "maxItems": 12,
       "items": {
         "$ref": "#/definitions/gate"
       }
@@ -66,18 +66,23 @@
         "credential-owner",
         "external-author-reviewer",
         "external-player-reviewer",
+        "github-administrator",
         "incident-owner",
         "ip-trademark-counsel",
+        "linux-release-qa",
         "native-qa",
         "privacy-legal",
         "product-owner",
         "project-owner",
         "registry-owner",
+        "release-manager",
         "release-owner",
         "robotopia-owner",
+        "runtime-mod-qa",
         "security-intake-owner",
         "security-owner",
-        "support-owner"
+        "support-owner",
+        "windows-release-qa"
       ]
     },
     "evidenceId": {
@@ -117,10 +122,15 @@
       "properties": {
         "id": {
           "enum": [
+            "P0-CAND-01",
             "P0-CRED-01",
+            "P0-GAME-01",
+            "P0-HOST-01",
             "P0-IP-01",
+            "P0-LINUX-01",
             "P0-PRIV-01",
             "P0-TRUST-01",
+            "P0-WIN-01",
             "P1-E2E-01",
             "P1-SUPPORT-01",
             "P1-UX-01"
@@ -143,8 +153,11 @@
           "enum": [
             "acceptance-evidence-missing",
             "approval-evidence-missing",
+            "candidate-evidence-missing",
+            "host-evidence-missing",
             "independent-evidence-missing",
             "ownership-evidence-missing",
+            "platform-evidence-missing",
             "rotation-evidence-missing"
           ]
         },
