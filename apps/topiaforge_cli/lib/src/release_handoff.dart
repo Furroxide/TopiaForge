@@ -14,6 +14,7 @@ import 'release_policy.dart';
 part 'release_handoff_contract.dart';
 part 'release_handoff_ecosystem.dart';
 part 'release_handoff_qa_contract.dart';
+part 'release_handoff_qa_inventory.dart';
 
 class ReleaseHandoffVerification {
   const ReleaseHandoffVerification({

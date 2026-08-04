@@ -203,6 +203,7 @@ MAX_ARCHIVE_DEPTH = 8
 MAX_ARCHIVE_UNCOMPRESSED_BYTES = 8 * 1024 * 1024 * 1024
 
 LOWERCASE_LITERAL_ALLOWLIST = {
+    "apps/topiaforge_cli/lib/src/creator_persistence_probe.dart",
     "packages/launcher_data/lib/src/local_launcher_repository/game_layout.dart",
     "packages/launcher_data/lib/src/local_launcher_repository/game_runtime_helpers.dart",
     "packages/launcher_data/test/game_layout_test.dart",
