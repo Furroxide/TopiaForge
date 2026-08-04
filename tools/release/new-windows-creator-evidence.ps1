@@ -337,6 +337,11 @@ try {
                 [System.IO.Compression.CompressionLevel]::NoCompression
             )
             $entry.LastWriteTime = $epoch
+            # Pin the external attributes. On Unix .NET otherwise records the
+            # host file mode here, so the same inputs would produce a different
+            # bundle per platform and the verifier would reject it as
+            # non-deterministic.
+            $entry.ExternalAttributes = 0
             $entryStream = $entry.Open()
             try {
                 $entryStream.Write($bytes, 0, $bytes.Length)
