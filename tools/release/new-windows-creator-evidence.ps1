@@ -198,14 +198,22 @@ foreach ($caseId in $expectedCaseIds) {
         throw "Creator case evidence is missing for $caseId."
     }
     $artifacts = @()
-    $files = @(
-        Get-ChildItem -LiteralPath $caseDirectory -File -Recurse |
-            Sort-Object -Property FullName
-    )
+    $files = @(Get-ChildItem -LiteralPath $caseDirectory -File -Recurse)
     if ($files.Count -eq 0) {
         throw "Every Creator case must retain at least one evidence artifact."
     }
+    # Order ordinally, matching the ZIP entry ordering below. Sort-Object
+    # compares using the current culture, so the manifest this order produces
+    # would otherwise differ between hosts whose culture orders these names
+    # differently, and the manifest is digested.
+    $orderedFullNames = [string[]]@($files | ForEach-Object { $_.FullName })
+    [Array]::Sort($orderedFullNames, [StringComparer]::Ordinal)
+    $filesByFullName = @{}
     foreach ($file in $files) {
+        $filesByFullName[$file.FullName] = $file
+    }
+    foreach ($fullName in $orderedFullNames) {
+        $file = $filesByFullName[$fullName]
         $relative = $file.FullName.Substring($caseDirectory.Length).
             TrimStart([char]92, [char]47).Replace("\", "/")
         $entryName = "artifacts/$caseId/$relative"

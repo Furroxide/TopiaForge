@@ -105,6 +105,26 @@ void main() {
       reason: 'Reviewer roles differ between the readiness and BOM schemas.',
     );
 
+    // The accepted-risk block is duplicated too. If the allowed scopes drift, a
+    // P1 disposition could validate at signing time and fail BOM validation at
+    // publication, which is the same split this test exists to prevent.
+    final readinessRisk = _at(readinessSchema, ['definitions', 'acceptedRisk']);
+    final bomRisk = _at(bomGate, ['properties', 'acceptedRisk']);
+    expect(
+      _at(bomRisk, ['properties', 'scope'])['enum'],
+      _at(readinessRisk, ['properties', 'scope'])['enum'],
+      reason:
+          'Accepted-risk scopes differ between the readiness and BOM '
+          'schemas.',
+    );
+    expect(
+      bomRisk['required'],
+      readinessRisk['required'],
+      reason:
+          'Accepted-risk required fields differ between the readiness and '
+          'BOM schemas.',
+    );
+
     final readinessGates = _at(readinessSchema, ['properties', 'gates']);
     final bomGates = _at(bomSchema, [
       'definitions',
@@ -421,8 +441,17 @@ Map<String, Object?> _jsonFile(String path) =>
 
 Map<String, Object?> _at(Map<String, Object?> root, List<String> path) {
   var current = root;
-  for (final key in path) {
-    current = (current[key]! as Map).cast<String, Object?>();
+  for (var depth = 0; depth < path.length; depth++) {
+    final value = current[path[depth]];
+    if (value is! Map) {
+      // Name the exact path that broke. Without this the caller sees a bare
+      // TypeError and has to rediscover which schema drifted.
+      throw StateError(
+        'Schema path "${path.take(depth + 1).join('.')}" is missing or is not '
+        'an object; the readiness and BOM schemas have drifted apart.',
+      );
+    }
+    current = value.cast<String, Object?>();
   }
   return current;
 }
