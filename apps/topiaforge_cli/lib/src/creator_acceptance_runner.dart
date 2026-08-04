@@ -261,7 +261,12 @@ final class CreatorAcceptanceRunner {
         );
       }
     }
-    return List.unmodifiable({...requiredCases});
+    // Sort deterministically. The release producer and validator compare this
+    // list against the lexicographically sorted inventory with an order
+    // sensitive Compare-Object, and the inventory is not stored in sorted
+    // order, so emitting spec order would have the producer reject real
+    // evidence. passedCases is already sorted for the same reason.
+    return List.unmodifiable({...requiredCases}.toList()..sort());
   }
 
   Future<void> _runCliStage(List<String> arguments) async {

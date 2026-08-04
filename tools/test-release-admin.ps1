@@ -662,22 +662,29 @@ exit 0
             # empty test tree so this asserts the fallback, not the host.
             $oldLocalAppData = $env:LOCALAPPDATA
             $oldProgramData = $env:ProgramData
-            $env:LOCALAPPDATA = $fallbackProgramFiles
-            $env:ProgramData = $fallbackProgramFiles
-            Assert-ThrowsMatch -Action {
-                Resolve-Jq
-            } -Pattern "winget install jqlang.jq" `
-                -Message "A missing jq did not report an actionable install step."
-            $fallbackJq = Join-Path $fallbackProgramFiles "jq/jq.exe"
-            New-Item -ItemType Directory -Force -Path (
-                Split-Path -Parent $fallbackJq
-            ) | Out-Null
-            Set-Content -LiteralPath $fallbackJq -Value "test" -Encoding ascii
-            Assert-True (
-                (Resolve-Jq) -ceq $fallbackJq
-            ) "Resolve-Jq did not use the Program Files fallback."
-            $env:LOCALAPPDATA = $oldLocalAppData
-            $env:ProgramData = $oldProgramData
+            try {
+                $env:LOCALAPPDATA = $fallbackProgramFiles
+                $env:ProgramData = $fallbackProgramFiles
+                Assert-ThrowsMatch -Action {
+                    Resolve-Jq
+                } -Pattern "winget install jqlang.jq" `
+                    -Message "A missing jq did not report an actionable install step."
+                $fallbackJq = Join-Path $fallbackProgramFiles "jq/jq.exe"
+                New-Item -ItemType Directory -Force -Path (
+                    Split-Path -Parent $fallbackJq
+                ) | Out-Null
+                Set-Content -LiteralPath $fallbackJq -Value "test" -Encoding ascii
+                Assert-True (
+                    (Resolve-Jq) -ceq $fallbackJq
+                ) "Resolve-Jq did not use the Program Files fallback."
+            }
+            finally {
+                # Restore on the failure path too: a leaked LOCALAPPDATA or
+                # ProgramData would make every later host-tool lookup resolve
+                # against the empty test tree and report a misleading failure.
+                $env:LOCALAPPDATA = $oldLocalAppData
+                $env:ProgramData = $oldProgramData
+            }
             $env:PATH = "$fakeBin$([System.IO.Path]::PathSeparator)$oldPath"
             $env:ProgramFiles = $oldProgramFiles
         }

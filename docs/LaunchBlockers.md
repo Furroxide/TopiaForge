@@ -78,7 +78,7 @@ check is silently skipped.
 Recompute matrix totals from the frozen release SHA after the remaining
 administrator-orchestrated, live-game, native UX, and owner-evidence gates run.
 
-Every open gate below that is closed by a reviewed record has a matching entry in
+Every gate below whose exit criteria are met by a reviewed record has a matching entry in
 [`release/release-readiness.json`](../release/release-readiness.json), validated
 against its schema at the exact candidate SHA. The readiness decision previously
 carried only the four owner-decision P0 gates and the three P1 gates, which left
