@@ -127,6 +127,10 @@ Map<String, Object?> _qaCreator(Object? value) {
   const fields = {
     'result',
     'suite',
+    'acceptanceChallenge',
+    'lastRunSessionId',
+    'creatorPackageReceipt',
+    'acceptanceResultSha256',
     'caseInventorySha256',
     'requiredCases',
     'requiredCasesSha256',
@@ -144,6 +148,25 @@ Map<String, Object?> _qaCreator(Object? value) {
   return {
     'result': _qaString(json, 'result', 'Windows qa.creator'),
     'suite': _qaString(json, 'suite', 'Windows qa.creator'),
+    'acceptanceChallenge': _qaString(
+      json,
+      'acceptanceChallenge',
+      'Windows qa.creator',
+    ),
+    'lastRunSessionId': _qaString(
+      json,
+      'lastRunSessionId',
+      'Windows qa.creator',
+    ),
+    'creatorPackageReceipt': _qaPackageReceipt(
+      json['creatorPackageReceipt'],
+      'Windows qa.creator.creatorPackageReceipt',
+    ),
+    'acceptanceResultSha256': _qaString(
+      json,
+      'acceptanceResultSha256',
+      'Windows qa.creator',
+    ),
     'caseInventorySha256': _qaString(
       json,
       'caseInventorySha256',
@@ -194,6 +217,39 @@ Map<String, Object?> _qaCreator(Object? value) {
     ),
     'evidenceSha256': _qaString(json, 'evidenceSha256', 'Windows qa.creator'),
     'evidenceSize': _qaPositiveInt(json, 'evidenceSize', 'Windows qa.creator'),
+  };
+}
+
+/// Normalizes one exact installed-package receipt carried in QA evidence.
+///
+/// The receipt binds Creator evidence to the exact CreatorTools payload the
+/// manager actually loaded, so a descriptor cannot be replayed against a
+/// different build of the mod.
+Map<String, Object?> _qaPackageReceipt(Object? value, String label) {
+  final json = _qaObject(value, label);
+  _qaExactKeys(json, const {'sourceSha256', 'criticalFiles'}, label);
+  final rawFiles = json['criticalFiles'];
+  if (rawFiles is! List || rawFiles.isEmpty || rawFiles.length > 8192) {
+    throw StateError('$label.criticalFiles is invalid.');
+  }
+  final files = <Map<String, Object?>>[];
+  String? previousPath;
+  for (final rawFile in rawFiles) {
+    final file = _qaObject(rawFile, '$label.criticalFiles');
+    _qaExactKeys(file, const {'path', 'sha256'}, '$label.criticalFiles');
+    final path = _qaString(file, 'path', '$label.criticalFiles');
+    if (previousPath != null && previousPath.compareTo(path) >= 0) {
+      throw StateError('$label.criticalFiles is not ordered or is duplicated.');
+    }
+    previousPath = path;
+    files.add({
+      'path': path,
+      'sha256': _qaString(file, 'sha256', '$label.criticalFiles'),
+    });
+  }
+  return {
+    'sourceSha256': _qaString(json, 'sourceSha256', label),
+    'criticalFiles': files,
   };
 }
 
