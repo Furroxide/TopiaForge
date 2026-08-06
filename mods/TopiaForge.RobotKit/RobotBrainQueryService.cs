@@ -10,6 +10,10 @@ namespace TopiaForge.RobotKit
 {
     // Async owner-cancellable adapter over the game's brain backend. No Task or native transport handle crosses
     // the public contract; consumers receive a stable OperationResult and the runtime supplies lifetime cancellation.
+    //
+    // Reaches Tomato Cake's RoboAPI, which TopiaForge has no authorization for and no control over; they may restrict
+    // or withdraw it at any time. Off by default, and every consumer must stay fully playable on the unavailable
+    // result. See the warning on RoboApiClient and the P0-PRIV-01 gate.
     internal sealed class RobotBrainQueryService : IRobotBrainQueryService,
         IOwnerBoundExtensionFactory, IDisposable
     {

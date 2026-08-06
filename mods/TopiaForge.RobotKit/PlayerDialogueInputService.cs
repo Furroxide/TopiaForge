@@ -16,6 +16,11 @@ namespace TopiaForge.RobotKit
     // thread at Stop(); the HTTP transcription runs off-thread and its result is marshalled back on the service Tick,
     // same idiom as the brain-query service. Typed text is handled by the consumer's UI with the shared
     // TopiaForge.Mods.TextInputBuffer; this service is the voice half.
+    //
+    // Sends captured microphone audio to Tomato Cake's RoboAPI, which TopiaForge has no authorization for and no
+    // control over; they may restrict or withdraw it at any time. Off by default, capture requires an explicit
+    // push-to-talk action, and failure must always fall back to typed input. See the warning on RoboApiClient and
+    // the P0-PRIV-01 gate.
     internal sealed class PlayerDialogueInputService : IPlayerDialogueInputService,
         IOwnerBoundExtensionFactory, IDisposable
     {
