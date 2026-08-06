@@ -43,15 +43,22 @@ third-party artwork. The robot replaced a previously bundled `robot.webp` taken 
 bundle; it is defined as a checked-in pixel grid rather than a raster file so its provenance is
 unambiguous.
 
-TopiaForge launcher UI bundles the Quicksand font copied from the Robotopia web bundle into `packages/launcher_ui/fonts`.
+TopiaForge bundles the Quicksand font for body typography in the launcher UI and Unity brand bundle.
 
 - Project: Quicksand
-- Source file: `https://robotopia.gg/assets/Quicksand-VariableFont_wght-DE2wFU7n.ttf`
+- Source file: `https://github.com/google/fonts/raw/main/ofl/quicksand/Quicksand%5Bwght%5D.ttf`
 - Upstream: https://fonts.google.com/specimen/Quicksand
-- License: Open Font License according to Google Fonts at the time this notice was added.
-- Local changes: none known; filename was normalized for launcher packaging.
-- SHA-256: `8b3a3842cc4b666fde454446e28d1bacde30a0ac861e90cbb0bd77b02ecb9dae`
+- License: SIL Open Font License 1.1
+- Bundled at: `packages/launcher_ui/fonts` and `tools/unity-ui-bundle/Assets/Fonts`
+- Local changes: none; filename was normalized for launcher and Unity packaging.
+- SHA-256: `39c9b64223561f56aaff6062a6f04063c4fc86809ad6768722c06614d977e1cc`
 - License text: `packages/launcher_ui/fonts/Quicksand-OFL.txt` (also copied into the Unity UI bundle source)
+
+  This file was previously copied from the Robotopia web bundle
+  (`https://robotopia.gg/assets/Quicksand-VariableFont_wght-DE2wFU7n.ttf`, SHA-256
+  `8b3a3842cc4b666fde454446e28d1bacde30a0ac861e90cbb0bd77b02ecb9dae`). That copy was not
+  byte-identical to upstream, so both bundled copies were replaced with the Google Fonts release
+  above to give the font a verifiable first-hand provenance.
 
 TopiaForge bundles the Audiowide font for display typography in the launcher UI and Unity brand bundle.
 
