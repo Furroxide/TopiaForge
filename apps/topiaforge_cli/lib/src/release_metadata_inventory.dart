@@ -235,6 +235,7 @@ class ReleaseMetadataInventoryBuilder {
         p.relative(entity.path, from: root),
       'packages/launcher_ui/fonts/Audiowide-OFL.txt',
       'packages/launcher_ui/fonts/Quicksand-OFL.txt',
+      'tools/unity-ui-bundle/Assets/TextMesh Pro/Fonts/LiberationSans - OFL.txt',
       if (policy.licenseFile != null) policy.licenseFile!,
     };
     if (paths.length < 9 || paths.length > 32) {
