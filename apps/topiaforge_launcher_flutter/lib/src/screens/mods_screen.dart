@@ -121,7 +121,7 @@ class _ModList extends StatelessWidget {
               title: 'No installed mods',
               message:
                   'Install a .topiaforgemod package or process the package inbox.',
-              brandAsset: TopiaForgeBrandAssets.robot,
+              brandArt: TopiaForgePixelRobot(),
             )
           : ListView.separated(
               itemCount: state.filteredMods.length,

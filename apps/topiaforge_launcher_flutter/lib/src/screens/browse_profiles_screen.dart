@@ -27,7 +27,7 @@ class BrowseScreen extends StatelessWidget {
                       title: 'No local packages',
                       message:
                           'Build mod packages into dist/ (topiaforge pack --all) to list them here.',
-                      brandAsset: TopiaForgeBrandAssets.robot,
+                      brandArt: TopiaForgePixelRobot(),
                     )
                   : ListView.separated(
                       itemCount: registryMods.length,
