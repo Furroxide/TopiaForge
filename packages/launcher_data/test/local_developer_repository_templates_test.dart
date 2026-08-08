@@ -42,7 +42,7 @@ void main() {
   });
 
   test(
-    'default scaffold is explicitly non-publishable',
+    'default scaffold adopts the project license but keeps author unset',
     () async {
       final workspace = await repository.createModProject(
         parentDirectory: root.path,
@@ -53,14 +53,40 @@ void main() {
       final license = File(p.join(workspace.projectRoot, 'LICENSE.md'));
 
       expect(manifest.author.name, TopiaForgeScaffoldDefaults.authorName);
-      expect(manifest.license, TopiaForgeScaffoldDefaults.license);
+      expect(manifest.license, 'AGPL-3.0-or-later');
+      expect(
+        license.readAsStringSync(),
+        contains('GNU AFFERO GENERAL PUBLIC LICENSE'),
+      );
+      final messages = manifest.validate().map((i) => i.message).join(' ');
+      expect(messages, contains('author placeholder'));
+      expect(messages, isNot(contains('Choose a license')));
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  test(
+    'explicit NOASSERTION still yields the no-grant notice',
+    () async {
+      final workspace = await repository.createModProject(
+        parentDirectory: root.path,
+        id: 'test.unlicensed',
+        name: 'Unlicensed',
+        options: const ModScaffoldOptions(
+          license: TopiaForgeScaffoldDefaults.unresolvedLicense,
+        ),
+      );
+      final manifest = await repository.readModManifest(workspace.projectRoot);
+      final license = File(p.join(workspace.projectRoot, 'LICENSE.md'));
+
+      expect(manifest.license, TopiaForgeScaffoldDefaults.unresolvedLicense);
       expect(
         license.readAsStringSync(),
         contains('No license has been granted'),
       );
       expect(
-        manifest.validate().map((issue) => issue.message).join(' '),
-        allOf(contains('author placeholder'), contains('Choose a license')),
+        manifest.validate().map((i) => i.message).join(' '),
+        contains('Choose a license'),
       );
     },
     timeout: const Timeout(Duration(minutes: 2)),

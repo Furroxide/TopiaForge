@@ -1,20 +1,14 @@
-Copyright (C) 2026 furroxide
+// GENERATED FILE - DO NOT EDIT.
+//
+// Verbatim text of the GNU Affero General Public License version 3, retrieved
+// from https://www.gnu.org/licenses/agpl-3.0.txt and reproduced unmodified.
+//
+// Everyone is permitted to copy and distribute verbatim copies of this license
+// document, but changing it is not allowed.
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-----------------------------------------------------------------------
-
+/// Verbatim GNU AGPL-3.0 license text written into scaffolded mod projects
+/// that declare `AGPL-3.0-or-later`.
+const agpl30LicenseText = r'''
                     GNU AFFERO GENERAL PUBLIC LICENSE
                        Version 3, 19 November 2007
 
@@ -676,3 +670,4 @@ specific requirements.
 if any, to sign a "copyright disclaimer" for the program, if necessary.
 For more information on this, and how to apply and follow the GNU AGPL, see
 <https://www.gnu.org/licenses/>.
+''';

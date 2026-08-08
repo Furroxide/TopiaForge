@@ -8,6 +8,7 @@ import 'package:crypto/crypto.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 
+import 'agpl_3_0_text.g.dart';
 import 'bounded_process.dart';
 import 'data_root.dart';
 import 'dotnet_sdk.dart';

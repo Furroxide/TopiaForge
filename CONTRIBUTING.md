@@ -1,8 +1,11 @@
 # Contributing to TopiaForge
 
-TopiaForge accepts contributions under the MIT License. Third-party materials
-keep their original licenses and must be identified in `THIRD_PARTY_NOTICES.md`
-with source, license, and modified-file details.
+TopiaForge accepts contributions under the GNU Affero General Public License,
+version 3 or later (`AGPL-3.0-or-later`). Inbound terms match outbound terms:
+by signing off a contribution you license it under the same terms the project
+distributes. Third-party materials keep their original licenses and must be
+identified in `THIRD_PARTY_NOTICES.md` with source, license, and modified-file
+details.
 
 ## Developer Certificate of Origin
 

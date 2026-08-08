@@ -69,8 +69,8 @@ from the fourteen-package normal non-DevTool payload and the fifteen-package rel
 - Three first-party VPM packages/listings generated and validated by the CLI.
 
 Templates are release inputs, not documentation snippets: every template is scaffolded, built, packed twice, and
-validated from its resulting archive. Default scaffolds are deliberately non-publishable until author and license
-identity are supplied.
+validated from its resulting archive. Default scaffolds adopt the project license and stay non-publishable until
+author identity is supplied.
 
 ## Compatibility, registry, and repository support data
 
