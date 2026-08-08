@@ -13,7 +13,7 @@
     <Description>Runner-neutral fakes and lifecycle helpers for TopiaForge V1 mods.</Description>
     <PackageTags>topiaforge;modding;testing;fakes</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <WarningsAsErrors>$(WarningsAsErrors);CS1591;CS1574</WarningsAsErrors>
     <ProduceReferenceAssembly>true</ProduceReferenceAssembly>

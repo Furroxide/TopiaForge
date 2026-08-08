@@ -42,7 +42,7 @@ cancellation with the lifetime stopping token.
 
 ```sh
 topiaforge list templates
-topiaforge new mod example.my-mod --template gameplay --name "My Mod" --author "You" --license MIT --version 1.0.0
+topiaforge new mod example.my-mod --template gameplay --name "My Mod" --author "You" --license AGPL-3.0-or-later --version 1.0.0
 ```
 
 | Template | Demonstrates |

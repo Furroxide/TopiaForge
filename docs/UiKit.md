@@ -15,7 +15,7 @@ hotkey.
 Start with the compiled `ui` template:
 
 ```sh
-topiaforge new mod example.ui --template ui --name "Example UI" --author "You" --license MIT --version 1.0.0
+topiaforge new mod example.ui --template ui --name "Example UI" --author "You" --license AGPL-3.0-or-later --version 1.0.0
 ```
 
 The template source lives at `templates/mod/ui/` and is built, tested, packed, and validated in CI.

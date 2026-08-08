@@ -87,22 +87,41 @@ Map<String, Object?> buildReleaseSpdxSbom({
     ...release.mods.entries,
     MapEntry('BepInEx', policy.bepInExVersion),
   ]..sort((left, right) => left.key.compareTo(right.key));
+  // First-party surfaces carry the approved project license; third-party
+  // entries keep NOASSERTION because the project does not conclude on their
+  // behalf. BepInEx declares its own upstream terms.
+  final ownedLicense = policy.hasApprovedLicense
+      ? policy.licenseExpression
+      : 'NOASSERTION';
+  final ownedCopyright = policy.hasApprovedLicense
+      ? _ownedCopyrightText
+      : 'NOASSERTION';
   final packages = <Map<String, Object?>>[
     _spdxPackage(
       name: 'TopiaForge',
       version: release.version,
       spdxId: rootId,
-      license: policy.hasApprovedLicense
-          ? policy.licenseExpression
-          : 'NOASSERTION',
+      license: ownedLicense,
+      licenseConcluded: ownedLicense,
+      copyrightText: ownedCopyright,
     ),
     for (final entry in packageEntries)
-      _spdxPackage(
-        name: entry.key,
-        version: entry.value,
-        spdxId: _spdxId('Package', entry.key),
-        license: entry.key == 'BepInEx' ? 'MIT' : 'NOASSERTION',
-      ),
+      if (entry.key == 'BepInEx')
+        _spdxPackage(
+          name: entry.key,
+          version: entry.value,
+          spdxId: _spdxId('Package', entry.key),
+          license: 'MIT',
+        )
+      else
+        _spdxPackage(
+          name: entry.key,
+          version: entry.value,
+          spdxId: _spdxId('Package', entry.key),
+          license: ownedLicense,
+          licenseConcluded: ownedLicense,
+          copyrightText: ownedCopyright,
+        ),
   ];
   final files = <Map<String, Object?>>[
     for (final artifact in artifacts)
@@ -112,8 +131,8 @@ Map<String, Object?> buildReleaseSpdxSbom({
         'checksums': [
           {'algorithm': 'SHA256', 'checksumValue': artifact['sha256']},
         ],
-        'licenseConcluded': 'NOASSERTION',
-        'copyrightText': 'NOASSERTION',
+        'licenseConcluded': ownedLicense,
+        'copyrightText': ownedCopyright,
       },
   ];
   final relationships = <Map<String, Object?>>[
@@ -169,16 +188,21 @@ Map<String, Object?> _spdxPackage({
   required String version,
   required String spdxId,
   required String license,
+  String licenseConcluded = 'NOASSERTION',
+  String copyrightText = 'NOASSERTION',
 }) => {
   'name': name,
   'SPDXID': spdxId,
   'versionInfo': version,
   'downloadLocation': 'NOASSERTION',
   'filesAnalyzed': false,
-  'licenseConcluded': 'NOASSERTION',
+  'licenseConcluded': licenseConcluded,
   'licenseDeclared': license,
-  'copyrightText': 'NOASSERTION',
+  'copyrightText': copyrightText,
 };
+
+/// Copyright line recorded for TopiaForge-owned SPDX packages and files.
+const _ownedCopyrightText = 'Copyright (C) 2026 furroxide';
 
 String _spdxId(String kind, String value) {
   final safe = value.replaceAll(RegExp(r'[^A-Za-z0-9.-]'), '-');

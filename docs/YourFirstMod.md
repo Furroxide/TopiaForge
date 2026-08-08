@@ -21,7 +21,7 @@ loader state. Follow its remediation if a required row is not ready.
 ## 2. Create a project
 
 ```sh
-topiaforge new mod example.first-mod --name "First Mod" --author "You" --license MIT --version 1.0.0
+topiaforge new mod example.first-mod --name "First Mod" --author "You" --license AGPL-3.0-or-later --version 1.0.0
 cd example.first-mod
 ```
 

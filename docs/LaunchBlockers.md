@@ -55,17 +55,17 @@ check is silently skipped.
 | Local macOS package structure | NEEDS RERUN | The retained universal-package record predates the V1 CLI, SDK, runtime, and canonical 15-mod release payload. Rebuild and validate the frozen V1 archive on macOS. |
 | Local macOS launch and Xcode development | NEEDS RERUN | A scrubbed debug build passed with Flutter `3.44.6`, Dart `3.12.2`, and CocoaPods `1.16.2`, with no tracked native-project drift. Launch and repeat the build from the frozen candidate before release. |
 | Local macOS runtime repair | NEEDS RERUN | The recorded repair targeted the retired pre-V1 loader and package set. Repeat with loader `1.0.0-rc.1` and the canonical 15-mod release payload; package-inbox ingestion remains part of authorized Robotopia acceptance. |
-| Release-policy/BOM/SBOM/checksum machinery | PASS | Strict policy and metadata regressions cover MIT, actual platform trust, signed update metadata/sidecar, checksums, BOM, SBOM, and immutable asset inventory. |
+| Release-policy/BOM/SBOM/checksum machinery | PASS | Strict policy and metadata regressions cover AGPL-3.0-or-later, actual platform trust, signed update metadata/sidecar, checksums, BOM, SBOM, and immutable asset inventory. |
 | Repository and CI hygiene | PASS | actionlint `1.7.7`, PSScriptAnalyzer `1.25.0`, PowerShell/bash syntax, repository-owned shellcheck, 157 JSON/YAML files, 113 Markdown files, 1,706 built HTML links, LFS, action pins, conflict markers, LF policy, and the Dart line cap passed. |
 | Credential exposure containment | BLOCKED | The affected workspace DerivedData and launcher build logs were removed, and a scrubbed exact-toolchain sentinel build passed; 13 newly produced Xcode activity logs contained no credential-shaped variable names. Credential owners must still rotate the previously exposed values and confirm revocation. See `P0-CRED-01`. |
-| Strict distributable-release policy | PASS | The owned-surface MIT inventory, first-party package licenses, ready catalog, third-party notices, and rc.1-only signing exception validate. |
+| Strict distributable-release policy | PASS | The owned-surface AGPL-3.0-or-later inventory, first-party package licenses, ready catalog, third-party notices, and rc.1-only signing exception validate. |
 | Production macOS trust | CONDITIONAL | Developer ID/notarization remains preferred. Only `1.0.0-rc.1` may use the policy-encoded ad-hoc exception, which must be recorded in the BOM and release warnings; see `P0-MAC-01`. |
 | Windows x64 signed package and clean-host run | BLOCKED | Requires a Windows runner, Authenticode identity, RFC 3161 timestamp service, and clean-machine QA; see `P0-WIN-01`. |
 | Linux x64 package and Proton run | BLOCKED | Flutter desktop builds are host-specific; requires Linux/Proton runners and gameplay QA; see `P0-LINUX-01`. |
 | Signed macOS arm64 and Intel clean-host runs | BLOCKED | Requires Apple credentials and quarantined clean hosts; see `P0-MAC-01`. |
 | Authorized Robotopia build-2309 acceptance | BLOCKED | A local Windows startup smoke passed on 2026-07-28: BepInEx loaded TopiaForge, detected `0.0.2309`, consumed all 16 staged packages, loaded every enabled first-party mod, initialized the native prompt/performance/UI bridges, and left Robotopia responsive. The complete dynamic-binding, reload, recovery, multiplayer, and profiler matrix still requires retained evidence from the frozen candidate; see `P0-GAME-01`. |
 | Native UX/accessibility acceptance | BLOCKED | Screen Recording permission prevented screenshot comparison; screen-reader and native-platform manual QA remain; see `P1-UX-01`. |
-| Project license and OSS redistribution inventory | PASS | TopiaForge-owned surfaces use MIT, DCO 1.1 governs post-cutover contributions, and third-party licenses/notices remain unchanged and mechanically verified. IP/brand authority remains tracked separately in `P0-IP-01`. |
+| Project license and OSS redistribution inventory | PASS | TopiaForge-owned surfaces use AGPL-3.0-or-later, DCO 1.1 governs post-cutover contributions, and third-party licenses/notices remain unchanged and mechanically verified. IP/brand authority remains tracked separately in `P0-IP-01`. |
 | Privacy/backend authorization and package trust policy | BLOCKED | Remote features default off, but owner approval is still required; see `P0-PRIV-01` and `P0-TRUST-01`. |
 | GitHub rulesets, environments, secrets, tag, and attestations | BLOCKED | Repository administration and credential owners must configure and prove the trusted path; see `P0-HOST-01`. |
 | Frozen candidate hosted matrix and reviewed release record | BLOCKED | This audit intentionally leaves uncommitted changes and creates no tag/release; see `P0-CAND-01`. |
@@ -139,14 +139,15 @@ automated tests cannot close Unity object lifetime.
 
 ## P0 blockers
 
-- [x] **P0-LIC-01 — License owned surfaces under MIT and adopt DCO 1.1.**
+- [x] **P0-LIC-01 — License owned surfaces under AGPL-3.0-or-later and adopt DCO 1.1.**
 
   Owner: project owner.
 
   Current state: root and independently distributed TopiaForge-owned surfaces
-  use MIT with `Copyright (c) 2026 furroxide`; release policy is approved,
-  first-party mod and VPM packages carry the text, and DCO 1.1 is checked in.
-  Author-owned scaffolds still require an explicit author license choice.
+  use AGPL-3.0-or-later with `Copyright (C) 2026 furroxide`; release policy is
+  approved, first-party mod and VPM packages carry the text, and DCO 1.1 is
+  checked in. Author-owned scaffolds default to the same terms. This supersedes
+  the earlier MIT declaration.
 
   Evidence: [`ReleaseLicenseInventory.md`](ReleaseLicenseInventory.md),
   `LICENSE`, `DCO`, `CONTRIBUTING.md`, strict release policy, package, registry,
