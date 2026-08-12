@@ -115,6 +115,21 @@ GitHub CLI token for the audit secret.
 The preflight opens the exact Unity project in batch mode to prove that the
 local activation is usable. It never needs Unity email/password credentials.
 
+> **Out of `1.0.0-rc.1`.** Linux is descoped from RC1 and returns in `1.0.0-rc.2`, so
+> everything from here to the end of *Same-host WSL2/WSLg Proton evidence* is inert for
+> this candidate. `release-admin.ps1` reads `release/release-policy.json` and skips the
+> WSL build, the Proton acceptance, and their preflight checks whenever
+> `TopiaForge-linux-x64.zip` is absent from `platformArchives`; re-adding it turns the
+> whole path back on unchanged. The instructions are retained for rc.2.
+>
+> Note for rc.2: WSL2 on this host cannot reach a GPU Vulkan implementation. NVIDIA
+> ships no Vulkan ICD for WSL2 and Ubuntu does not package Mesa's Dozen driver, so only
+> software lavapipe is available, while Robotopia's Direct3D 12 renderer needs Vulkan
+> through VKD3D. A venue that provides real Vulkan is required before Linux acceptance
+> can be recorded; if it is not this Windows workstation, the `wsl2-wslg` execution
+> environment in the evidence contract and the WSL-driven collection below must be
+> reworked first.
+
 Firmware virtualization must be enabled manually. Then install WSL2 and the
 named distribution from an elevated terminal, rebooting when Windows asks:
 
