@@ -29,7 +29,6 @@
   },
   "artifactPolicy": {
     "platformArchives": [
-      "TopiaForge-linux-x64.zip",
       "TopiaForge-windows-x64.zip"
     ],
     "generatedMetadata": [

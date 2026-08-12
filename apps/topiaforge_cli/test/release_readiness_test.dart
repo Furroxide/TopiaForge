@@ -29,14 +29,13 @@ void main() {
     expect(decision.releaseVersion, '1.0.0-rc.1');
     expect(decision.status, 'blocked');
     expect(decision.isReady, isFalse);
-    expect(decision.gates, hasLength(12));
+    expect(decision.gates, hasLength(11));
     expect(decision.gates.map((gate) => gate.id), [
       'P0-IP-01',
       'P0-PRIV-01',
       'P0-TRUST-01',
       'P0-CRED-01',
       'P0-WIN-01',
-      'P0-LINUX-01',
       'P0-GAME-01',
       'P0-HOST-01',
       'P0-CAND-01',
@@ -310,7 +309,7 @@ void main() {
         expect(metadataReadiness.status, 'blocked');
         expect(metadataReadiness.blobSha256, decision.readinessBlobSha256);
         expect(metadataReadiness.summary, decision.toPublicSummary());
-        expect(metadataReadiness.blockingReasons, hasLength(12));
+        expect(metadataReadiness.blockingReasons, hasLength(11));
         final bomSchema = _readinessBomSchema(repositoryRoot);
         final bomSchemaResult = bomSchema.validate(
           metadataReadiness.toBomJson(),

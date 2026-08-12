@@ -51,8 +51,8 @@
     },
     "gates": {
       "type": "array",
-      "minItems": 12,
-      "maxItems": 12,
+      "minItems": 11,
+      "maxItems": 11,
       "items": {
         "$ref": "#/definitions/gate"
       }
@@ -127,7 +127,6 @@
             "P0-GAME-01",
             "P0-HOST-01",
             "P0-IP-01",
-            "P0-LINUX-01",
             "P0-PRIV-01",
             "P0-TRUST-01",
             "P0-WIN-01",
