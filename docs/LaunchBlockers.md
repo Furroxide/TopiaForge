@@ -92,9 +92,11 @@ release-fatal here but invisible to the machine decision. They are now recorded
 gates, so the computed status cannot reach `ready` while any of them is
 unresolved.
 
-The decision carries **eleven** gates for RC1. `P0-LINUX-01` is deliberately absent
+The decision carries **twelve** gates for RC1. `P0-LINUX-01` is deliberately absent
 because Linux is out of this candidate; restoring it belongs to `1.0.0-rc.2`
-alongside the policy archive entry and both schema gate contracts.
+alongside the policy archive entry and both schema gate contracts. `P0-OSS-01` is
+present: it was re-opened on 2026-08-06 and the readiness contract must be able to
+carry it rather than infer it from the legal inventory passing.
 
 `P0-CREATOR-01` is deliberately not a readiness entry. The code it required now
 exists, but it is still not closed by an attestation: it is closed by evidence
@@ -271,7 +273,7 @@ automated tests cannot close Unity object lifetime.
   rather than weakened.
 
   RC1 consequences: `release/release-policy.json` targets Windows x64 only, the readiness
-  and BOM gate contracts carry eleven gates instead of twelve, and the orchestrator's WSL
+  and BOM gate contracts drop `P0-LINUX-01`, and the orchestrator's WSL
   build, Proton acceptance, and their preflight checks are gated on the policy rather than
   removed. Linux support is untouched in the source tree.
 
