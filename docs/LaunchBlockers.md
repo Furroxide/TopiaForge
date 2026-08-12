@@ -69,7 +69,7 @@ check is silently skipped.
 | Native CreatorTools evidence collector | BLOCKED | Implemented, not yet attested. `CreatorAcceptanceRecorder` emits challenge-bound per-case markers from observed workbench transitions for all nine `creator.*` cases, `topiaforge acceptance creator` binds them to the exact `last-run.json` session and CreatorTools package receipt, and the three `Assert-WindowsCreator*` verifiers in `tools/release-admin.ps1` now perform real `release-windows-creator-evidence-v2` verification instead of throwing. Save and checkpoint bytes are compared across End Session from the real `player_data.json.gz` document. The gate stays BLOCKED because no evidence has been produced from an authorized interactive build-2309 session at the frozen candidate SHA; see `P0-CREATOR-01`. |
 | Authorized Robotopia build-2309 acceptance | BLOCKED | A local Windows startup smoke passed on 2026-07-28: BepInEx loaded TopiaForge, detected `0.0.2309`, consumed all 16 staged packages, loaded every enabled first-party mod, initialized the native prompt/performance/UI bridges, and left Robotopia responsive. The complete dynamic-binding, reload, recovery, multiplayer, and profiler matrix still requires retained evidence from the frozen candidate; see `P0-GAME-01`. |
 | Native UX/accessibility acceptance | BLOCKED | Screen Recording permission prevented screenshot comparison; screen-reader and native-platform manual QA remain; see `P1-UX-01`. |
-| Project license and OSS redistribution inventory | PASS | TopiaForge-owned surfaces use MIT, DCO 1.1 governs post-cutover contributions, and third-party licenses/notices remain unchanged and mechanically verified. IP/brand authority remains tracked separately in `P0-IP-01`. |
+| Project license and OSS redistribution inventory | FAIL | TopiaForge-owned surfaces use MIT and DCO 1.1 governs post-cutover contributions, but the notice inventory was a fixed allowlist that never covered the Unity TextMesh Pro directory. EmojiOne shipped with no redistribution grant, Liberation Sans shipped with no notice, and Quicksand was sourced from the Robotopia web bundle. All fixed; see the re-opened `P0-OSS-01`. IP/brand authority remains tracked separately in `P0-IP-01`. |
 | Privacy/backend authorization and package trust policy | BLOCKED | Remote features default off, but owner approval is still required; see `P0-PRIV-01` and `P0-TRUST-01`. |
 | GitHub rulesets, environments, secrets, tag, and attestations | BLOCKED | Repository administration and credential owners must configure and prove the trusted path; see `P0-HOST-01`. |
 | Frozen candidate admin matrix and reviewed release record | BLOCKED | This audit intentionally leaves uncommitted changes and creates no tag/release; see `P0-CAND-01`. |
@@ -183,13 +183,24 @@ automated tests cannot close Unity object lifetime.
   icons, fonts, and custom-world content. Remove or replace any item that lacks a distributable rights basis and
   record provenance, transformation, hash, license, and approver for retained assets.
 
-- [x] **P0-OSS-01 — Complete the third-party redistribution audit.**
+- [ ] **P0-OSS-01 — Complete the third-party redistribution audit.** *(re-opened 2026-08-06)*
 
   Owner: open-source compliance/legal and release engineering.
 
-  Current state: BepInEx, Harmony, MonoMod, Cecil, UnityDoorstop, .NET, MetadataLoadContext, Flutter/Dart, SPDX data,
-  and font provenance/notices are mechanically verified. UnityDoorstop corresponding source and neutral renamed TMP
-  derivatives are bundled.
+  Current state: BepInEx, Harmony, MonoMod, Cecil, UnityDoorstop, .NET, MetadataLoadContext, Flutter/Dart, and SPDX
+  data remain mechanically verified. UnityDoorstop corresponding source is bundled.
+
+  This gate was previously marked complete on the strength of "font provenance/notices are mechanically verified".
+  That claim did not hold. The legal inventory in `release_metadata_inventory.dart` is a fixed allowlist of licence
+  texts, and it named only the two launcher fonts. It therefore never reached
+  `tools/unity-ui-bundle/Assets/TextMesh Pro/`, and three defects shipped in the release archives undetected:
+  the EmojiOne sprite sheet with no redistribution grant, Liberation Sans with no notice entry at all, and a
+  Quicksand copy taken from the Robotopia web bundle that was not byte-identical to upstream. All three are fixed,
+  and the Liberation licence text is now in the inventory.
+
+  The structural limitation remains and must be closed before this gate is signed: the check verifies that *listed*
+  licence files exist, not that every redistributed asset *has* a licence. A newly added unlicensed asset would still
+  pass — which is precisely how EmojiOne survived, since it carried an attribution text rather than a licence file.
 
   Exit criteria: the source inventory verifies the LGPL corresponding-source
   method, OFL derivative/font treatment, notice placement, and original license

@@ -25,7 +25,6 @@ flutter:
 
   assets:
     - assets/brand/baby-stitch.webp
-    - assets/brand/robot.webp
     - assets/brand/topiaforge-city-header.webp
     - assets/brand/topiaforge-icon.png
     - assets/brand/topiaforge-wordmark.png

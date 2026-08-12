@@ -17,6 +17,18 @@ namespace TopiaForge.RobotKit
     // Hardening: a hard per-call timeout, single shared HttpClient, the token cached until a 401 invalidates it, and
     // every returned string clamped by RoboApiProtocol. Never throws — failures resolve to an unavailable result so a
     // consumer's deterministic fallback always stands.
+    //
+    // UNAPPROVED THIRD-PARTY DEPENDENCY. This endpoint belongs to Tomato Cake, not to TopiaForge. As of the
+    // 1.0.0-rc.1 candidate no authorization for these mod-layer calls has been obtained from them, and their
+    // retention, training-use, geographic-processing, account-linkage, rate-limit, abuse-handling, and cost policies
+    // are unknown to this repository. Do not document or imply otherwise. See docs/PrivacyAndCapabilities.md and the
+    // P0-PRIV-01 gate in docs/LaunchBlockers.md.
+    //
+    // Consequences to design for: Tomato Cake may restrict, rate-limit, charge for, authenticate differently, or
+    // withdraw this integration at any time, with no notice and no obligation to TopiaForge. Treat every call as
+    // best-effort. Keep the deterministic fallback path the supported behavior and this the optional enhancement —
+    // never the reverse. Every first-party feature built on this stays off by default and must remain fully playable
+    // when the endpoint returns nothing.
     internal sealed class RoboApiClient
     {
         private const string DefaultBackendRoot = "https://api.tomatocake.dev/v1";
