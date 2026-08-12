@@ -22,6 +22,17 @@
       "evidenceIds": []
     },
     {
+      "id": "P0-OSS-01",
+      "priority": "P0",
+      "status": "blocked",
+      "reasonCode": "approval-evidence-missing",
+      "reviewerRoles": [
+        "ip-trademark-counsel",
+        "release-owner"
+      ],
+      "evidenceIds": []
+    },
+    {
       "id": "P0-PRIV-01",
       "priority": "P0",
       "status": "blocked",

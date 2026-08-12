@@ -303,6 +303,16 @@ const _gateContracts = [
     blockedReasonCode: 'approval-evidence-missing',
     reviewerRoles: ['ip-trademark-counsel', 'project-owner', 'robotopia-owner'],
   ),
+  // Re-opened 2026-08-06. The legal inventory is a fixed allowlist that proves
+  // the licence texts it names exist, not that every redistributed asset has a
+  // licence, so the readiness decision must carry the gate rather than infer it
+  // from the inventory passing. See P0-OSS-01 in docs/LaunchBlockers.md.
+  _GateContract(
+    id: 'P0-OSS-01',
+    priority: 'P0',
+    blockedReasonCode: 'approval-evidence-missing',
+    reviewerRoles: ['ip-trademark-counsel', 'release-owner'],
+  ),
   _GateContract(
     id: 'P0-PRIV-01',
     priority: 'P0',
