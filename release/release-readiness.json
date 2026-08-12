@@ -71,17 +71,6 @@
       "evidenceIds": []
     },
     {
-      "id": "P0-LINUX-01",
-      "priority": "P0",
-      "status": "blocked",
-      "reasonCode": "platform-evidence-missing",
-      "reviewerRoles": [
-        "linux-release-qa",
-        "release-owner"
-      ],
-      "evidenceIds": []
-    },
-    {
       "id": "P0-GAME-01",
       "priority": "P0",
       "status": "blocked",

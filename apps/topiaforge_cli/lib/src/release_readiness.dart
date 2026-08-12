@@ -338,12 +338,9 @@ const _gateContracts = [
     blockedReasonCode: 'platform-evidence-missing',
     reviewerRoles: ['release-owner', 'windows-release-qa'],
   ),
-  _GateContract(
-    id: 'P0-LINUX-01',
-    priority: 'P0',
-    blockedReasonCode: 'platform-evidence-missing',
-    reviewerRoles: ['linux-release-qa', 'release-owner'],
-  ),
+  // P0-LINUX-01 is intentionally absent: Linux is descoped from 1.0.0-rc.1 and
+  // returns in rc.2. Restore this entry, the schema's gate count and id enum,
+  // and the policy platform archives together when it does.
   _GateContract(
     id: 'P0-GAME-01',
     priority: 'P0',
