@@ -52,6 +52,26 @@ namespace TopiaForge.ModManager.Tests
                     "an explicit invalid backend override must disable the client even when a valid token exists");
                 Assert(logger.DebugCount == 1,
                     "a disabled backend must not read token material or attempt a production fallback");
+
+                // RuntimeCapabilityProbe evaluates IsAvailable on every mod load and scene change. Probing must
+                // answer from file existence alone, never by parsing and caching the player's bearer token,
+                // otherwise installing RobotKit materialises the credential with every consumer feature off.
+                Environment.SetEnvironmentVariable("ROBOAPI_BACKEND_ROOT", null);
+                var probePath = Path.Combine(root, "probe-robo-token.json");
+                File.WriteAllBytes(probePath, new byte[RoboApiClient.MaxTokenFileBytes + 1]);
+                var probeLogger = new RecordingLogger();
+                var probe = new RoboApiClient(probePath, "test-session", probeLogger);
+                Assert(probe.HasTokenFile,
+                    "an availability probe should report a present credential without validating it");
+                Assert(probeLogger.DebugCount == 0,
+                    "an availability probe must not read or parse token material");
+                Assert(!probe.HasToken,
+                    "the request guard must still reject an oversized token file");
+                Assert(probeLogger.DebugCount == 1,
+                    "only the request guard should read token material");
+
+                var absent = new RoboApiClient(Path.Combine(root, "no-such-robo-token.json"), "s", probeLogger);
+                Assert(!absent.HasTokenFile, "a missing credential file must probe as unavailable");
             }
             finally
             {

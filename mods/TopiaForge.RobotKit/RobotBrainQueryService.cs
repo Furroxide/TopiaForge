@@ -41,7 +41,9 @@ namespace TopiaForge.RobotKit
             client = new RoboApiClient(tokenPath, Guid.NewGuid().ToString("N"), logger);
         }
 
-        public bool IsAvailable => !disposed && client.HasToken;
+        // Probed by RuntimeCapabilityProbe on every load and scene change, so this must not read or cache the
+        // player's credential. See the note on RoboApiClient.HasTokenFile.
+        public bool IsAvailable => !disposed && client.HasTokenFile;
 
         public async Task<OperationResult<BrainQueryResult>> QueryAsync(
             BrainQueryRequest request,
