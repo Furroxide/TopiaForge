@@ -9,7 +9,34 @@ The entry point is:
 
 ```powershell
 ./tools/release-admin.ps1 preflight
-./tools/release-admin.ps1 build `
+./tools/release-admin.ps1 build
+```
+
+**`build` is expected to stop on its first pass**, and this is by design rather
+than a failure. The Creator evidence descriptor is bound to the Windows archive
+by digest, so it cannot be produced until `build` has created that archive.
+`build` therefore runs to `platforms-built`, retains everything, and then stops
+at the Creator-evidence check with "Builds are retained; provide
+-WindowsCreatorEvidence and run resume."
+
+Note also that `build` contains a mandatory interactive window: the live
+`TF-ACCEPT` acceptance run needs roughly 30 minutes at the keyboard with a
+gamepad and microphone. See [`LiveGameAcceptance.md`](LiveGameAcceptance.md).
+
+At that point run the Creator session, convert its result, and continue:
+
+```powershell
+topiaforge acceptance creator --creator-package <CreatorTools .topiaforgemod> --all
+
+./tools/release/new-windows-creator-evidence.ps1 `
+  -AcceptanceResult <result.json> -StateDirectory <output>/state `
+  -CaseEvidenceDirectory <case artifacts> -SourceSha <sha> -Version 1.0.0-rc.1 `
+  -WindowsArchive .release-local\1.0.0-rc.1\assets\TopiaForge-windows-x64.zip `
+  -CanonicalEcosystemSha256 <sha> `
+  -OutputBundle C:\release-qa\windows-creator-evidence.zip `
+  -OutputDescriptor C:\release-qa\windows-creator-evidence.json
+
+./tools/release-admin.ps1 resume `
   -WindowsCreatorEvidence C:\release-qa\windows-creator-evidence.json `
   -WindowsCreatorEvidenceBundle C:\release-qa\windows-creator-evidence.zip
 ./tools/release-admin.ps1 stage
@@ -17,7 +44,9 @@ The entry point is:
 ```
 
 `resume` continues from the durable local state and `all` runs every remaining
-phase. Add `-Rehearsal` to `all` for a verified, non-publishing two-platform
+phase. Passing the two evidence flags to `build` or `all` up front works only
+when a valid descriptor for that exact archive already exists — on a fresh
+candidate it will not, so expect the two-step sequence above. Add `-Rehearsal` to `all` for a verified, non-publishing two-platform
 rehearsal. Local state and raw evidence live under `.release-local/`, which is
 ignored by Git.
 

@@ -19,14 +19,18 @@ Include the affected component/version, impact, reproduction steps, proof-of-con
 mitigation. Reports involving archive traversal, signature/hash bypass, unsafe process launch, registry compromise,
 credential exposure, loader privilege boundaries, or remote UGC sessions are especially useful.
 
-Maintainers should acknowledge a private report, agree on disclosure timing, prepare fixes for supported release lines,
-and publish an advisory after users have a reasonable update window. Security fixes must not be disclosed through a
-public pull request before coordinated release.
+TopiaForge is maintained by one person on a best-effort basis, with no guaranteed response time. The intent is to
+acknowledge a private report, agree disclosure timing with the reporter, and publish an advisory once users have had a
+reasonable update window. Whether a fix ships, and how quickly, depends on severity and on maintainer capacity; for a
+low-severity issue the outcome may be an advisory and a documented workaround rather than a patch. Security fixes must
+not be disclosed through a public pull request before coordinated release.
 
 ## Supported versions
 
-Before the first stable release, only the current `main` branch is eligible for security fixes. After release, the
-latest stable line is supported; older lines are supported only when a published advisory says otherwise.
+Before the first stable release, only the current `main` branch is eligible for security fixes. After release, only the
+latest stable line is considered, on the same best-effort basis; older lines are not supported unless a published
+advisory says otherwise. Backporting to any earlier line is not promised. This is a single-maintainer project and does
+not offer long-term support.
 
 Third-party vulnerabilities in BepInEx, UnityDoorstop, HarmonyX, MonoMod, Mono.Cecil, Flutter, Dart, Node packages, or
 Unity should also be reported upstream, while Robotopia-specific packaging or integration impact should be reported
