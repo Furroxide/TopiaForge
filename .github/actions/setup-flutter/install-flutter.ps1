@@ -94,13 +94,9 @@ $installDirectory = Get-RequiredEnvironmentPath `
 New-Item -ItemType Directory -Path $archiveDirectory -Force | Out-Null
 
 if (Test-Path -LiteralPath $installDirectory) {
-    if (@(Get-ChildItem -LiteralPath $installDirectory -Force).Count -ne 0) {
-        throw "Flutter install directory '$installDirectory' must be empty."
-    }
+    Remove-Item -LiteralPath $installDirectory -Recurse -Force
 }
-else {
-    New-Item -ItemType Directory -Path $installDirectory | Out-Null
-}
+New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
 
 $archiveName = [System.IO.Path]::GetFileName($downloadUri.AbsolutePath)
 $archivePath = Join-Path $archiveDirectory $archiveName
