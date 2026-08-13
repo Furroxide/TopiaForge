@@ -1,0 +1,67 @@
+name: Upload GitHub Pages artifact
+description: >-
+  Archive a static site directory and upload it as the Pages deployment
+  artifact using a fully SHA-pinned uploader.
+
+# actions/upload-pages-artifact references actions/upload-artifact@v4 by tag.
+# GitHub resolves nested composite steps during job setup, so that unpinned
+# transitive reference is rejected while this repository requires full-length
+# commit SHA pins. This action mirrors the upstream behaviour and contract and
+# pins the uploader instead.
+
+inputs:
+  name:
+    description: Artifact name.
+    required: false
+    default: github-pages
+  path:
+    description: Path of the directory containing the static assets.
+    required: true
+    default: _site/
+  retention-days:
+    description: Duration after which the artifact expires, in days.
+    required: false
+    default: "1"
+
+outputs:
+  artifact_id:
+    description: The ID of the artifact that was uploaded.
+    value: ${{ steps.upload-artifact.outputs.artifact-id }}
+
+runs:
+  using: composite
+  steps:
+    # Upstream branches on the runner OS to pick a GNU tar. Pages publication
+    # in this repository only ever runs on Linux, so require that explicitly
+    # rather than silently producing an archive with different semantics.
+    - name: Require a Linux runner
+      shell: bash
+      run: |
+        if test "$RUNNER_OS" != Linux; then
+          echo "::error::Pages artifacts must be archived on a Linux runner."
+          exit 1
+        fi
+
+    - name: Archive artifact
+      shell: bash
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+      run: |
+        echo ::group::Archive artifact
+        tar \
+          --dereference --hard-dereference \
+          --directory "$INPUT_PATH" \
+          -cvf "$RUNNER_TEMP/artifact.tar" \
+          --exclude=.git \
+          --exclude=.github \
+          .
+        echo ::endgroup::
+
+    - name: Upload artifact
+      id: upload-artifact
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: ${{ inputs.name }}
+        path: ${{ runner.temp }}/artifact.tar
+        retention-days: ${{ inputs.retention-days }}
+        if-no-files-found: error
