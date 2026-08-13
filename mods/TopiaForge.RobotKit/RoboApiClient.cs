@@ -74,7 +74,32 @@ namespace TopiaForge.RobotKit
 
         // True when a usable token is resolvable. Reads the token file at most once (until invalidated), so polling
         // this per frame does not hit disk repeatedly.
+        // Request guard: validates and caches the credential, so an oversized or malformed token file reports
+        // false rather than failing mid-request.
         public bool HasToken => backendEnabled && TryGetToken(out _);
+
+        // Availability probe. RuntimeCapabilityProbe evaluates IsAvailable on every mod load and every scene
+        // change, so routing that through HasToken meant the player's bearer token was parsed and cached in
+        // process memory merely because RobotKit was installed - with every consumer feature off and no request
+        // ever made. A probe only needs to know whether a credential could be obtained, which existence answers
+        // without materialising the secret. Validity is still enforced at the request guard above.
+        public bool HasTokenFile
+        {
+            get
+            {
+                if (!backendEnabled) return false;
+                if (tokenLoaded) return cachedToken != null;
+                try
+                {
+                    return File.Exists(tokenFilePath);
+                }
+                catch (Exception ex)
+                {
+                    logger.Debug("RoboAPI token probe failed: " + ex.Message);
+                    return false;
+                }
+            }
+        }
 
         // Run one /agent/check3 call. Returns an unavailable result (never throws) when there is no token, the call
         // times out, the network fails, or the gateway rejects the token (401, which also invalidates the cache).
