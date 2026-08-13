@@ -168,7 +168,7 @@ if ($embeddedDartVersion -cne $manifest.dartVersion) {
         "'$($manifest.dartVersion)'."
 }
 
-git config --global --add safe.directory $flutterRoot
+git config --global --add safe.directory "$flutterRoot"
 if ($LASTEXITCODE -ne 0) {
     throw "Could not mark the verified Flutter SDK as a safe Git directory."
 }
