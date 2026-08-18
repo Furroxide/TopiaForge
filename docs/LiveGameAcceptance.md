@@ -131,7 +131,7 @@ Do not hand-author a replacement — use the collector above.
 Ordering note: the descriptor requires `-WindowsArchive`, which only exists after the Windows build.
 So `release-admin.ps1 build` is expected to stop at the Creator-evidence check on its first pass;
 produce the evidence, then continue with `resume -WindowsCreatorEvidence … -WindowsCreatorEvidenceBundle …`.
-See [`AdminRelease.md`](AdminRelease.md).
+The full sequence is in `docs/AdminRelease.md` in the repository.
 
 The local Windows and same-host WSL2/Proton runs also extract their candidate developer payload,
 use only its packaged CLI to create a fresh minimal mod outside the extraction, and pass that
