@@ -35,19 +35,23 @@ namespace TopiaForge.ModManager.Tests
                     "every explicit invalid backend override must disable remote features: " + invalid);
             }
 
-            var tokenPath = Path.Combine(root, "oversized-robo-token.json");
+            // The client owns the file name and only ever reads it inside the directory it is handed, so each
+            // scenario below gets its own directory rather than its own file name.
+            var tokenDirectory = Path.Combine(root, "robo-token-oversized");
+            Directory.CreateDirectory(tokenDirectory);
+            var tokenPath = Path.Combine(tokenDirectory, RoboApiClient.TokenFileName);
             File.WriteAllBytes(tokenPath, new byte[RoboApiClient.MaxTokenFileBytes + 1]);
             var previousRoot = Environment.GetEnvironmentVariable("ROBOAPI_BACKEND_ROOT");
             try
             {
                 Environment.SetEnvironmentVariable("ROBOAPI_BACKEND_ROOT", null);
-                var client = new RoboApiClient(tokenPath, "test-session", logger);
+                var client = new RoboApiClient(tokenDirectory, "test-session", logger);
                 Assert(!client.HasToken, "oversized token files should be rejected without parsing");
                 Assert(logger.DebugCount == 1, "token read rejection should be observable without exposing token data");
 
                 File.WriteAllText(tokenPath, "{\"agent_token\":\"secret-token\"}");
                 Environment.SetEnvironmentVariable("ROBOAPI_BACKEND_ROOT", "http://attacker.invalid");
-                var disabled = new RoboApiClient(tokenPath, "test-session", logger);
+                var disabled = new RoboApiClient(tokenDirectory, "test-session", logger);
                 Assert(!disabled.HasToken,
                     "an explicit invalid backend override must disable the client even when a valid token exists");
                 Assert(logger.DebugCount == 1,
@@ -57,10 +61,13 @@ namespace TopiaForge.ModManager.Tests
                 // answer from file existence alone, never by parsing and caching the player's bearer token,
                 // otherwise installing RobotKit materialises the credential with every consumer feature off.
                 Environment.SetEnvironmentVariable("ROBOAPI_BACKEND_ROOT", null);
-                var probePath = Path.Combine(root, "probe-robo-token.json");
-                File.WriteAllBytes(probePath, new byte[RoboApiClient.MaxTokenFileBytes + 1]);
+                var probeDirectory = Path.Combine(root, "robo-token-probe");
+                Directory.CreateDirectory(probeDirectory);
+                File.WriteAllBytes(
+                    Path.Combine(probeDirectory, RoboApiClient.TokenFileName),
+                    new byte[RoboApiClient.MaxTokenFileBytes + 1]);
                 var probeLogger = new RecordingLogger();
-                var probe = new RoboApiClient(probePath, "test-session", probeLogger);
+                var probe = new RoboApiClient(probeDirectory, "test-session", probeLogger);
                 Assert(probe.HasTokenFile,
                     "an availability probe should report a present credential without validating it");
                 Assert(probeLogger.DebugCount == 0,
@@ -70,8 +77,31 @@ namespace TopiaForge.ModManager.Tests
                 Assert(probeLogger.DebugCount == 1,
                     "only the request guard should read token material");
 
-                var absent = new RoboApiClient(Path.Combine(root, "no-such-robo-token.json"), "s", probeLogger);
+                var absentDirectory = Path.Combine(root, "robo-token-absent");
+                Directory.CreateDirectory(absentDirectory);
+                var absent = new RoboApiClient(absentDirectory, "s", probeLogger);
                 Assert(!absent.HasTokenFile, "a missing credential file must probe as unavailable");
+
+                // The client composes the path itself, so a caller cannot redirect it at another file, and a
+                // directory it cannot resolve is refused outright rather than silently probing somewhere else.
+                Assert(
+                    RoboApiClient.ResolveTokenPath(probeDirectory) ==
+                        Path.Combine(Path.GetFullPath(probeDirectory), RoboApiClient.TokenFileName),
+                    "the client must read its own file name inside the supplied directory");
+                foreach (var invalid in new[] { string.Empty, "   " })
+                {
+                    var rejected = false;
+                    try
+                    {
+                        RoboApiClient.ResolveTokenPath(invalid);
+                    }
+                    catch (ArgumentException)
+                    {
+                        rejected = true;
+                    }
+
+                    Assert(rejected, "an unusable token directory must be refused, not probed");
+                }
             }
             finally
             {

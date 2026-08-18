@@ -43,8 +43,8 @@ namespace TopiaForge.RobotKit
         public PlayerDialogueInputService(IModLogger logger)
         {
             this.logger = logger;
-            var tokenPath = Path.Combine(Application.persistentDataPath, "robo_token.json");
-            client = new RoboApiClient(tokenPath, Guid.NewGuid().ToString("N"), logger);
+            client = new RoboApiClient(
+                Application.persistentDataPath, Guid.NewGuid().ToString("N"), logger);
         }
 
         // Probed by RuntimeCapabilityProbe on every load and scene change. Uses HasTokenFile so probing never
