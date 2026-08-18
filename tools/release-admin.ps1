@@ -3046,8 +3046,13 @@ function Build-Handoff {
                 "official-game-bytes",
                 "robotopia-acceptance"
             )
-        },
-        @{
+        }
+    )
+    # Linux is descoped from 1.0.0-rc.1, so the handoff platform set follows
+    # the policy instead of assuming both archives exist. Re-adding the Linux
+    # archive to release-policy.json restores this entry. See P0-LINUX-01.
+    if ($targetsLinux) {
+        $platforms += @{
             Name = "linux-x64"
             ValidationPlatform = "linux"
             Archive = "TopiaForge-linux-x64.zip"
@@ -3060,7 +3065,7 @@ function Build-Handoff {
                 "packaged-launcher-health"
             )
         }
-    )
+    }
     foreach ($platform in $platforms) {
         $validationPath = Join-Path $assetsDirectory $platform.Validation
         if (-not (Test-Path -LiteralPath $validationPath -PathType Leaf)) {
@@ -3242,10 +3247,12 @@ function Build-Handoff {
         }
     }
     if ($VerifyOnly) {
-        foreach ($archiveName in @(
-                "TopiaForge-windows-x64.zip",
-                "TopiaForge-linux-x64.zip"
-            )) {
+        # The verification copy mirrors the policy-derived platform set
+        # so a Windows-only RC1 does not demand a Linux archive.
+        $verificationArchives = @(
+            $platforms | ForEach-Object { $_.Archive }
+        )
+        foreach ($archiveName in $verificationArchives) {
             New-Item -ItemType HardLink `
                 -Path (Join-Path $verificationDirectory $archiveName) `
                 -Target (Join-Path $assetsDirectory $archiveName) | Out-Null
