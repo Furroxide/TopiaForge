@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.Mods;
@@ -37,8 +36,8 @@ namespace TopiaForge.RobotKit
         {
             this.logger = logger;
             this.promptRegistryResolver = promptRegistryResolver;
-            var tokenPath = Path.Combine(Application.persistentDataPath, "robo_token.json");
-            client = new RoboApiClient(tokenPath, Guid.NewGuid().ToString("N"), logger);
+            client = new RoboApiClient(
+                Application.persistentDataPath, Guid.NewGuid().ToString("N"), logger);
         }
 
         // Probed by RuntimeCapabilityProbe on every load and scene change, so this must not read or cache the
