@@ -34,6 +34,13 @@ RobotKit contains optional integrations with Robotopia's RoboAPI backend. The bu
 `https://api.tomatocake.dev/v1`; a development override is accepted only when it is an absolute HTTPS origin without
 credentials, query, or fragment. Redirects are disabled.
 
+**What happens with the features off.** The launcher and loader probe provider availability on every mod load and
+scene change so the Diagnostics surface can report why a capability is unavailable. For RobotKit that probe tests
+whether the credential file exists and enumerates microphone device names. It does **not** read, parse, or retain the
+token value, and it does not open an audio stream — parsing happens only on the request path, which is behind the
+consumer opt-in. With every consumer feature off, no request is sent, no token value is loaded, and no audio is
+captured.
+
 | Feature | Data sent | Destination | Authentication | Activation and fallback |
 | --- | --- | --- | --- | --- |
 | Structured robot-brain query | Mod-authored prompt, structured field descriptions, current facts, and a usage label | `/agent/check3` | Bearer value read from the player's bounded `robo_token.json`, plus a random per-session identifier | First-party live-brain features default off. When explicitly enabled, each request is bounded, cancellable, and time-limited. Missing token, offline, timeout, rejection, or malformed output returns an unavailable result; deterministic gameplay must continue. |

@@ -222,7 +222,11 @@ automated tests cannot close Unity object lifetime.
   Owner: backend owner, Robotopia owner, privacy/legal, security, and product.
 
   Current state: canonical descriptive capabilities are present; `remote-ai` is the sole remote-inference label; Zombies live-brain
-  and voice defaults are off; no token, remote-AI, microphone, or STT activity occurs without explicit configuration.
+  and voice defaults are off; no request is sent to the RoboAPI backend, no token value is read, and no audio is
+  captured without explicit configuration. One qualification, corrected on 2026-08-13: RobotKit's availability probe
+  runs on every mod load and scene change, and it tests for the presence of the credential file and enumerates
+  microphone device names. It no longer parses or caches the token — that happens only on the request path, behind the
+  consumer opt-in — and enumerating device names starts no capture.
 
   Exit criteria: authorize the backend use; document destination, purpose, authentication, consent, cost, retention,
   deletion, abuse/rate limits, transcript/history handling, incident response, and jurisdictional requirements; review
