@@ -6,7 +6,7 @@
       "version": "1.0.0-rc.1",
       "tag": "v1.0.0-rc.1",
       "prerelease": true,
-      "status": "ready",
+      "status": "blocked",
       "notesFile": "release/notes/v1.0.0-rc.1.md",
       "components": {
         "launcher": "1.0.0-rc.1",
@@ -49,8 +49,6 @@
         "io.github.furroxide.topiaforge.uigallery": "1.0.0-rc.1"
       },
       "artifacts": [
-        "TopiaForge-linux-x64.zip",
-        "TopiaForge-macos-universal.zip",
         "TopiaForge-windows-x64.zip",
         "io.github.furroxide.topiaforge.chronos-1.0.0-rc.1.topiaforgemod",
         "io.github.furroxide.topiaforge.creatorcontent-1.0.0-rc.1.topiaforgemod",

@@ -1,4 +1,4 @@
-name: Unity PR Artifacts
+name: Unity Source Validation
 
 on:
   pull_request:
@@ -12,12 +12,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: unity-pr-artifacts-${{ github.event.pull_request.number || github.ref_name }}
+  group: unity-source-validation-${{ github.event.pull_request.number || github.ref_name }}
   cancel-in-progress: true
-
-env:
-  DOTNET_NOLOGO: true
-  DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
   audit-artifacts:
@@ -26,7 +22,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -48,12 +44,13 @@ jobs:
     needs: audit-artifacts
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - name: Set up Dart
-        uses: dart-lang/setup-dart@7654d458321ee25acccccfdb86cd48bd95768ff1 # v1.8.0
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
         with:
           sdk: "3.12.2"
 
@@ -64,377 +61,14 @@ jobs:
           dart run bin/topiaforge.dart unity pack-packages --output ../../dist/vpm
 
       - name: Upload VPM listing artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: topiaforge-vpm-index
           path: dist/vpm/**
           if-no-files-found: error
           retention-days: 14
 
-  world-smoke:
-    name: Build Unity world smoke package (manual main only)
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    needs: audit-artifacts
-    if: >-
-      github.event_name == 'workflow_dispatch' &&
-      github.ref == 'refs/heads/main'
-    environment: unity-validation
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-
-      - name: Set up .NET
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          dotnet-version: "10.0.301"
-
-      - name: Set up Dart
-        uses: dart-lang/setup-dart@7654d458321ee25acccccfdb86cd48bd95768ff1 # v1.8.0
-        with:
-          sdk: "3.12.2"
-
-      - name: Install managed-reference archive dependency
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y p7zip-full
-
-      - name: Resolve Robotopia refs cache key
-        id: world-refs-cache
-        shell: pwsh
-        env:
-          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-        run: >-
-          dotnet run
-          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
-          -c Release -- --source public --cache-key-only
-
-      - name: Cache Robotopia managed refs
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ runner.temp }}/robotopia-managed-refs-cache
-          key: ${{ steps.world-refs-cache.outputs.key }}
-
-      - name: Restore exact Robotopia managed refs
-        shell: pwsh
-        env:
-          ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
-          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-        run: >-
-          dotnet run
-          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
-          -c Release -- --source public --require-latest
-
-      - name: Scaffold smoke world project
-        shell: bash
-        working-directory: apps/topiaforge_cli
-        run: |
-          set -euo pipefail
-          workspace="${GITHUB_WORKSPACE//\\//}"
-          dart pub get --enforce-lockfile
-          dart run bin/topiaforge.dart new mod ci.world \
-            --template world \
-            --name "CI World" \
-            --dir "$workspace/.unity-ci"
-          dart run bin/topiaforge.dart new unity-world CiWorld \
-            --dir "$workspace/.unity-ci" \
-            --mod "$workspace/.unity-ci/ci.world"
-
-      - name: Build first world bundle
-        uses: game-ci/unity-builder@d829bfc901f2347c8fe18898f06712b66916ef42 # v5.0.0
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-        with:
-          projectPath: .unity-ci/CiWorld
-          unityVersion: 6000.0.23f1
-          targetPlatform: StandaloneWindows64
-          buildMethod: TopiaForge.WorldCompanion.Editor.WorldBundleBuilder.Build
-          customParameters: >-
-            -topiaforgeModPath /github/workspace/.unity-ci/ci.world
-            -topiaforgeBundleName ci-world
-            -topiaforgeWorldPrefab Assets/World/World.prefab
-          manualExit: true
-          versioning: None
-          allowDirtyBuild: true
-
-      - name: Record first world bundle bytes
-        shell: bash
-        run: |
-          set -euo pipefail
-          find .unity-ci/ci.world/AssetBundles -maxdepth 1 -type f \
-            \( -name '*.bundle' -o -name '*.manifest.json' \) -print0 |
-            sort -z | xargs -0 sha256sum >"$RUNNER_TEMP/world-first.sha256"
-          test -s "$RUNNER_TEMP/world-first.sha256"
-
-      - name: Build second world bundle
-        uses: game-ci/unity-builder@d829bfc901f2347c8fe18898f06712b66916ef42 # v5.0.0
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-        with:
-          projectPath: .unity-ci/CiWorld
-          unityVersion: 6000.0.23f1
-          targetPlatform: StandaloneWindows64
-          buildMethod: TopiaForge.WorldCompanion.Editor.WorldBundleBuilder.Build
-          customParameters: >-
-            -topiaforgeModPath /github/workspace/.unity-ci/ci.world
-            -topiaforgeBundleName ci-world
-            -topiaforgeWorldPrefab Assets/World/World.prefab
-          manualExit: true
-          versioning: None
-          allowDirtyBuild: true
-
-      - name: Require deterministic world bundle bytes
-        run: sha256sum --check --strict "$RUNNER_TEMP/world-first.sha256"
-
-      - name: Pack smoke world mod
-        shell: bash
-        working-directory: apps/topiaforge_cli
-        run: |
-          set -euo pipefail
-          workspace="${GITHUB_WORKSPACE//\\//}"
-          dart run bin/topiaforge.dart pack \
-            --project "$workspace/.unity-ci/ci.world" \
-            --output "$workspace/dist/unity-smoke" \
-            --configuration Release
-
-      - name: Upload smoke world artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: topiaforge-unity-world-smoke
-          path: |
-            dist/unity-smoke/*.topiaforgemod
-            .unity-ci/ci.world/AssetBundles/*.bundle
-            .unity-ci/ci.world/AssetBundles/*.manifest.json
-          if-no-files-found: error
-          retention-days: 14
-
-  unity-ui-smoke:
-    name: Rebuild and compare TopiaForge UI bundle (manual main only)
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    needs: audit-artifacts
-    if: >-
-      github.event_name == 'workflow_dispatch' &&
-      github.ref == 'refs/heads/main'
-    environment: unity-validation
-    steps:
-      - name: Checkout exact TopiaForge UI sources and tracked bundle
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.sha }}
-          lfs: true
-          persist-credentials: false
-
-      - name: Set up exact .NET SDK
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          dotnet-version: "10.0.301"
-
-      - name: Install managed-reference archive dependency
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y p7zip-full
-
-      - name: Resolve Robotopia refs cache key
-        id: ui-refs-cache
-        shell: pwsh
-        env:
-          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-        run: >-
-          dotnet run
-          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
-          -c Release -- --source public --cache-key-only
-
-      - name: Cache Robotopia managed refs
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ runner.temp }}/robotopia-managed-refs-cache
-          key: ${{ steps.ui-refs-cache.outputs.key }}
-
-      - name: Restore exact Robotopia managed refs
-        shell: pwsh
-        env:
-          ROBOTOPIA_REFS_CACHE: ${{ runner.temp }}/robotopia-managed-refs-cache
-          ROBOTOPIA_REFS_SOURCE_PLATFORM: ${{ vars.ROBOTOPIA_REFS_SOURCE_PLATFORM }}
-        run: >-
-          dotnet run
-          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
-          -c Release -- --source public --require-latest
-
-      - name: Build lifecycle runtime prerequisites
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$(dotnet --version)" = 10.0.301
-          dotnet restore TopiaForge.slnx
-          dotnet build TopiaForge.slnx -c Release --no-restore
-
-          loader=src/TopiaForge.ModManager/bin/Release/netstandard2.1
-          test "$(find "$loader" -maxdepth 1 -type f -name '*.dll' | wc -l | tr -d ' ')" = 14
-          test "$(sha256sum "$loader/System.Collections.Immutable.dll" | awk '{print $1}')" = \
-            98de9f34c748b709f26c07fd4df54b2509218511dfaf741fa61aa2adb74e8c8c
-          test "$(sha256sum "$loader/System.Reflection.Metadata.dll" | awk '{print $1}')" = \
-            a0f6273f959a1ae587de408464aaad8cab9b6ae262a650d7b33a87208052ad3b
-
-          evidence=.unity-ci/ui-lifecycle-evidence
-          managed=.unity-ci/ui-smoke-managed
-          mkdir -p "$evidence" "$managed"
-          for assembly in \
-            System.Buffers.dll \
-            System.Memory.dll \
-            System.Runtime.CompilerServices.Unsafe.dll \
-            Unity.InputSystem.dll; do
-            test -f "$RobotopiaManagedDir/$assembly"
-            cp -- "$RobotopiaManagedDir/$assembly" "$managed/$assembly"
-          done
-          (
-            cd "$managed"
-            cat <<'HASHES' | sha256sum --check --strict -
-          762f8fdbe975e05b76be5fe996c53ce7c75e4a2830f2f50b02a5948ef6ba0aeb  System.Buffers.dll
-          c4f030a2cba7da7cdcf493257c24560e203d355904aee490d645a935842f834a  System.Memory.dll
-          c0c628ecea65b4261cb88a1c322a3596bbde1dc2df102b88d63bab8c1a48d57a  System.Runtime.CompilerServices.Unsafe.dll
-          HASHES
-            sha256sum \
-              System.Buffers.dll \
-              System.Memory.dll \
-              System.Runtime.CompilerServices.Unsafe.dll \
-              Unity.InputSystem.dll >"$GITHUB_WORKSPACE/$evidence/runtime-profile.sha256"
-          )
-          (
-            cd "$loader"
-            sha256sum \
-              System.Collections.Immutable.dll \
-              System.Reflection.Metadata.dll \
-              TopiaForge.*.dll | sort > \
-              "$GITHUB_WORKSPACE/$evidence/runtime-payload.sha256"
-          )
-
-      - name: Import TextMesh Pro essentials with the pinned editor
-        uses: game-ci/unity-builder@d829bfc901f2347c8fe18898f06712b66916ef42 # v5.0.0
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-        with:
-          projectPath: tools/unity-ui-bundle
-          unityVersion: 6000.0.23f1
-          targetPlatform: StandaloneWindows64
-          buildMethod: TopiaForge.UiBundleBuilder.ImportEssentials
-          manualExit: true
-          versioning: None
-          allowDirtyBuild: true
-
-      - name: Build first TopiaForge UI bundle with the pinned editor
-        uses: game-ci/unity-builder@d829bfc901f2347c8fe18898f06712b66916ef42 # v5.0.0
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-        with:
-          projectPath: tools/unity-ui-bundle
-          unityVersion: 6000.0.23f1
-          targetPlatform: StandaloneWindows64
-          buildMethod: TopiaForge.UiBundleBuilder.Build
-          manualExit: true
-          versioning: None
-          allowDirtyBuild: true
-
-      - name: Record first TopiaForge UI bundle and provenance
-        shell: bash
-        run: |
-          set -euo pipefail
-          sha256sum \
-            src/TopiaForge.Mods.UnityUi/Assets/topiaforge-ui.bundle \
-            src/TopiaForge.Mods.UnityUi/Assets/topiaforge-ui.manifest.json \
-            tools/unity-ui-bundle/Assets/UiBundleManifest.json \
-            >"$RUNNER_TEMP/unity-ui-first.sha256"
-
-      - name: Build second TopiaForge UI bundle with the pinned editor
-        uses: game-ci/unity-builder@d829bfc901f2347c8fe18898f06712b66916ef42 # v5.0.0
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-        with:
-          projectPath: tools/unity-ui-bundle
-          unityVersion: 6000.0.23f1
-          targetPlatform: StandaloneWindows64
-          buildMethod: TopiaForge.UiBundleBuilder.Build
-          manualExit: true
-          versioning: None
-          allowDirtyBuild: true
-
-      - name: Verify tracked TopiaForge UI bytes and provenance are reproducible
-        shell: bash
-        run: |
-          set -euo pipefail
-          bundle=src/TopiaForge.Mods.UnityUi/Assets/topiaforge-ui.bundle
-          provenance=src/TopiaForge.Mods.UnityUi/Assets/topiaforge-ui.manifest.json
-          sha256sum --check --strict "$RUNNER_TEMP/unity-ui-first.sha256"
-          test -s "$bundle"
-          test "$(jq -er '.editorVersion' "$provenance")" = 6000.0.23f1
-          test "$(jq -er '.editorVersion' tools/unity-ui-bundle/Assets/UiBundleManifest.json)" = 6000.0.23f1
-          test "$(jq -er '.sha256' "$provenance")" = "$(sha256sum "$bundle" | awk '{print $1}')"
-          git diff --exit-code -- \
-            "$bundle" \
-            "$provenance" \
-            tools/unity-ui-bundle/Assets/UiBundleManifest.json \
-            tools/unity-ui-bundle/Assets/FontAssets
-
-      - name: Run 16-cycle UI and validator lifecycle smoke
-        uses: game-ci/unity-builder@d829bfc901f2347c8fe18898f06712b66916ef42 # v5.0.0
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-        with:
-          projectPath: tools/unity-ui-bundle
-          unityVersion: 6000.0.23f1
-          targetPlatform: StandaloneWindows64
-          buildMethod: TopiaForge.UiLifecycleSmoke.Run
-          customParameters: >-
-            -robotopiaManagedDir /github/workspace/.unity-ci/ui-smoke-managed
-            -topiaforgeLifecycleEvidence /github/workspace/.unity-ci/ui-lifecycle-evidence/lifecycle.json
-          manualExit: true
-          versioning: None
-          allowDirtyBuild: true
-
-      - name: Verify exact-editor lifecycle evidence
-        shell: bash
-        run: |
-          set -euo pipefail
-          evidence=.unity-ci/ui-lifecycle-evidence/lifecycle.json
-          test -s "$evidence"
-          jq -e \
-            '.schemaVersion == 1 and
-             .result == "pass" and
-             .editorVersion == "6000.0.23f1" and
-             .cycles == 16 and
-             .validatorSmoke == true and
-             .worldsAssemblyVersion == "1.0.0.0" and
-             .uiAssemblyVersion == "1.0.0.0"' \
-            "$evidence" >/dev/null
-          jq --arg sourceSha "$GITHUB_SHA" '. + {sourceSha: $sourceSha}' \
-            "$evidence" >"$evidence.tmp"
-          mv "$evidence.tmp" "$evidence"
-          rm -rf .unity-ci/ui-smoke-managed
-
-      - name: Upload UI lifecycle evidence
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: topiaforge-unity-ui-lifecycle-smoke
-          path: .unity-ci/ui-lifecycle-evidence/**
-          if-no-files-found: error
-          retention-days: 14
-
-  unity-validation:
+  unity-source-validation:
     name: Required / Unity source validation
     if: always()
     needs: [audit-artifacts, vpm-packages]
@@ -448,24 +82,3 @@ jobs:
         run: |
           test "$AUDIT_RESULT" = success
           test "$VPM_RESULT" = success
-
-  trusted-unity-validation:
-    # `Required / Unity validation` is the exact protected manual release
-    # context. Do not add it to ordinary PR branch protection: credentialed
-    # jobs are intentionally skipped for pull requests and forks.
-    name: Required / Unity validation
-    if: >-
-      always() &&
-      github.event_name == 'workflow_dispatch' &&
-      github.ref == 'refs/heads/main'
-    needs: [world-smoke, unity-ui-smoke]
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Require both protected Unity 6000.0.23f1 builds
-        env:
-          WORLD_RESULT: ${{ needs.world-smoke.result }}
-          UNITY_UI_RESULT: ${{ needs.unity-ui-smoke.result }}
-        run: |
-          test "$WORLD_RESULT" = success
-          test "$UNITY_UI_RESULT" = success

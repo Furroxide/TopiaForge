@@ -7,6 +7,7 @@ extension _TopiaForgeReleaseCommands on _TopiaForgeCli {
       'build-sdk-payload' => _releaseBuildSdkPayload(args.skip(1).toList()),
       'test-package' => _releaseTestPackage(args.skip(1).toList()),
       'validate-policy' => _releaseValidatePolicy(args.skip(1).toList()),
+      'validate-readiness' => _releaseValidateReadiness(args.skip(1).toList()),
       'build-metadata' => _releaseBuildMetadata(args.skip(1).toList()),
       'verify-metadata' => _releaseVerifyMetadata(args.skip(1).toList()),
       'generate-update-key' => _releaseGenerateUpdateKey(args.skip(1).toList()),
@@ -16,8 +17,13 @@ extension _TopiaForgeReleaseCommands on _TopiaForgeCli {
       'verify-update-metadata' => _releaseVerifyUpdateMetadata(
         args.skip(1).toList(),
       ),
+      'build-platform-bundle' => _releaseBuildPlatformBundle(
+        args.skip(1).toList(),
+      ),
+      'build-handoff' => _releaseBuildHandoff(args.skip(1).toList()),
+      'verify-handoff' => _releaseVerifyHandoff(args.skip(1).toList()),
       _ => throw UsageError(
-        'Usage: topiaforge release build-package|build-sdk-payload|test-package|validate-policy|build-metadata|verify-metadata|generate-update-key|build-update-metadata|verify-update-metadata ...',
+        'Usage: topiaforge release build-package|build-sdk-payload|test-package|validate-policy|validate-readiness|build-metadata|verify-metadata|generate-update-key|build-update-metadata|verify-update-metadata|build-platform-bundle|build-handoff|verify-handoff ...',
       ),
     };
   }
@@ -115,6 +121,39 @@ extension _TopiaForgeReleaseCommands on _TopiaForgeCli {
     return 1;
   }
 
+  Future<int> _releaseValidateReadiness(List<String> args) async {
+    final version = _option(args, '--version');
+    final targetSha = _option(args, '--target-sha');
+    if (version == null ||
+        version.trim().isEmpty ||
+        targetSha == null ||
+        targetSha.trim().isEmpty) {
+      throw UsageError(
+        'Usage: topiaforge release validate-readiness '
+        '--version <semver> --target-sha <40-character-sha>',
+      );
+    }
+    final decision = await ReleaseReadinessDecision.loadAtGitSha(
+      repositoryRoot: _releaseRepositoryRoot(),
+      targetSha: targetSha,
+      expectedReleaseVersion: version,
+    );
+    if (!decision.isReady) {
+      for (final gate in decision.gates) {
+        if (!gate.satisfiesRelease) {
+          stderr.writeln(
+            'error: Release readiness gate ${gate.id} is ${gate.status}.',
+          );
+        }
+      }
+      return 1;
+    }
+    stdout.writeln(
+      const JsonEncoder.withIndent('  ').convert(decision.toPublicSummary()),
+    );
+    return 0;
+  }
+
   Future<int> _releaseBuildMetadata(List<String> args) async {
     final root = _releaseRepositoryRoot();
     final version = _requiredReleaseOption(args, '--version');
@@ -193,6 +232,86 @@ extension _TopiaForgeReleaseCommands on _TopiaForgeCli {
     return 0;
   }
 
+  Future<int> _releaseBuildPlatformBundle(List<String> args) async {
+    final version = _requiredHandoffOption(args, '--version');
+    final targetSha = _requiredHandoffOption(args, '--target-sha');
+    final platform = _requiredHandoffOption(args, '--platform');
+    final archive = _requiredHandoffOption(args, '--archive');
+    final canonicalSha = _requiredHandoffOption(
+      args,
+      '--canonical-ecosystem-sha256',
+    );
+    final qa = _requiredHandoffOption(args, '--qa');
+    final output = _requiredHandoffOption(args, '--output');
+    final evidence = <String, String>{};
+    for (final value in _options(args, '--evidence')) {
+      final separator = value.indexOf('=');
+      if (separator <= 0 || separator == value.length - 1) {
+        throw UsageError(
+          'Each --evidence value must be <validation-name>=<sha256>.',
+        );
+      }
+      final name = value.substring(0, separator);
+      final digest = value.substring(separator + 1);
+      if (!RegExp(r'^[a-z][a-z0-9-]*$').hasMatch(name) ||
+          !RegExp(r'^[0-9a-f]{64}$').hasMatch(digest) ||
+          evidence.containsKey(name)) {
+        throw UsageError(
+          'Evidence names must be unique lowercase identifiers and values '
+          'must be lowercase SHA-256 digests.',
+        );
+      }
+      evidence[name] = digest;
+    }
+    final path = await const TopiaForgeReleaseHandoff().buildPlatformBundle(
+      repositoryRoot: _releaseRepositoryRoot(),
+      version: version,
+      targetSha: targetSha,
+      platform: platform,
+      archivePath: archive,
+      canonicalEcosystemSha256: canonicalSha,
+      evidenceSha256: evidence,
+      qaPath: qa,
+      outputPath: output,
+    );
+    stdout.writeln(path);
+    return 0;
+  }
+
+  Future<int> _releaseBuildHandoff(List<String> args) async {
+    final path = await const TopiaForgeReleaseHandoff().buildHandoff(
+      repositoryRoot: _releaseRepositoryRoot(),
+      version: _requiredHandoffOption(args, '--version'),
+      targetSha: _requiredHandoffOption(args, '--target-sha'),
+      assetsDirectory: _requiredHandoffOption(args, '--assets'),
+      outputPath: _option(args, '--output'),
+    );
+    stdout.writeln(path);
+    return 0;
+  }
+
+  Future<int> _releaseVerifyHandoff(List<String> args) async {
+    final trustOutput = _option(args, '--trust-output');
+    if (args.contains('--trust-output') &&
+        (trustOutput == null || trustOutput.trim().isEmpty)) {
+      throw UsageError('--trust-output requires a file path.');
+    }
+    final result = await const TopiaForgeReleaseHandoff().verify(
+      repositoryRoot: _releaseRepositoryRoot(),
+      version: _requiredHandoffOption(args, '--version'),
+      targetSha: _requiredHandoffOption(args, '--target-sha'),
+      assetsDirectory: _requiredHandoffOption(args, '--assets'),
+      trustOutputPath: trustOutput,
+      verifyEmbeddedEcosystem: args.contains('--verify-embedded-ecosystem'),
+    );
+    stdout.writeln(
+      'Verified ${result.platformBundles.length} platform bundles for '
+      '${result.handoff.version} at ${result.handoff.targetSha}.',
+    );
+    if (trustOutput != null) stdout.writeln(File(trustOutput).absolute.path);
+    return 0;
+  }
+
   String _releaseRepositoryRoot() {
     final root = _findRepoRoot();
     if (root == null) {
@@ -210,6 +329,17 @@ extension _TopiaForgeReleaseCommands on _TopiaForgeCli {
         'Usage: topiaforge release build-metadata|verify-metadata '
         '--version <semver> --target-sha <sha> --assets <dir> '
         '[--output|--metadata <dir>] [--allow-unresolved-policy]',
+      );
+    }
+    return value;
+  }
+
+  String _requiredHandoffOption(List<String> args, String option) {
+    final value = _option(args, option);
+    if (value == null || value.trim().isEmpty) {
+      throw UsageError(
+        'Usage: topiaforge release build-platform-bundle|build-handoff|'
+        'verify-handoff --version <semver> --target-sha <sha> ...',
       );
     }
     return value;
@@ -256,7 +386,11 @@ extension _TopiaForgeReleaseCommands on _TopiaForgeCli {
         'Usage: topiaforge release test-package --platform windows|linux|macos '
         '--zip <path> [--require-mac-universal] '
         '[--require-macos-trust] [--expected-mac-team-id id] '
-        '[--require-windows-signature] [--run-embedded-cli]',
+        '[--require-windows-signature] '
+        '[--require-windows-unsigned] '
+        '[--expected-windows-signer-sha256 sha256] [--run-embedded-cli] '
+        '[--expected-canonical-ecosystem-sha256 sha256] '
+        '[--canonical-assets <dir>]',
       );
     }
     await ReleasePackageValidator(
@@ -264,8 +398,14 @@ extension _TopiaForgeReleaseCommands on _TopiaForgeCli {
       zipPath: zip,
       requireMacUniversal: args.contains('--require-mac-universal'),
       requireWindowsSignature: args.contains('--require-windows-signature'),
+      requireWindowsUnsigned: args.contains('--require-windows-unsigned'),
+      expectedWindowsSignerSha256:
+          _option(args, '--expected-windows-signer-sha256') ?? '',
       requireMacTrust: args.contains('--require-macos-trust'),
       expectedMacTeamId: _option(args, '--expected-mac-team-id') ?? '',
+      expectedCanonicalEcosystemSha256:
+          _option(args, '--expected-canonical-ecosystem-sha256') ?? '',
+      canonicalAssetsDirectory: _option(args, '--canonical-assets') ?? '',
       runCliSmoke: args.contains('--run-embedded-cli'),
     ).validate();
     return 0;

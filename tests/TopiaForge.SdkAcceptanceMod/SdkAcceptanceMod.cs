@@ -55,12 +55,18 @@ namespace TopiaForge.SdkAcceptance
         private bool robotVoicePassed;
         private bool acceptanceWorldSessionSeen;
         private bool lifecycleProbeRunning;
+        private string acceptanceChallenge = string.Empty;
 
         protected override void OnLoad()
         {
             mainThreadId = Thread.CurrentThread.ManagedThreadId;
-            Context.Logger.Info(Prefix + "|START|" + Context.Identity.Id + "|" + Context.Identity.Version);
             RunAuthoringChecks();
+            if (acceptanceChallenge.Length == 64)
+            {
+                Context.Logger.Info(
+                    Prefix + "|START|" + acceptanceChallenge + "|"
+                    + Context.Identity.Id + "|" + Context.Identity.Version);
+            }
             RegisterInput();
             RegisterEvents();
             RunUiChecks();
@@ -76,7 +82,8 @@ namespace TopiaForge.SdkAcceptance
 
         protected override void OnUnload()
         {
-            Context.Logger.Info(Prefix + "|STOP|completed=" + completed.Count);
+            Context.Logger.Info(
+                Prefix + "|STOP|" + acceptanceChallenge + "|completed=" + completed.Count);
         }
 
         private void RunAuthoringChecks()
@@ -84,11 +91,13 @@ namespace TopiaForge.SdkAcceptance
             var definition = new ConfigDefinition<AcceptanceConfig>(
                 2,
                 () => new AcceptanceConfig(),
-                value => value.UiScale >= 0.75f && value.UiScale <= 1.5f
+                value => value.UiScale >= 0.75f
+                    && value.UiScale <= 1.5f
+                    && IsLowerHexChallenge(value.AcceptanceChallenge)
                     ? OperationResult<bool>.Success(true)
                     : OperationResult<bool>.Failure(
                         ModErrorCode.InvalidArgument,
-                        "UI scale must be between 0.75 and 1.5."),
+                        "UI scale or the one-run acceptance challenge is invalid."),
                 (_, value) =>
                 {
                     value.MigratedFromSchema1 = true;
@@ -100,6 +109,7 @@ namespace TopiaForge.SdkAcceptance
                 Fail("authoring.config-storage-localization-commands", config.ErrorMessage);
                 return;
             }
+            acceptanceChallenge = value.AcceptanceChallenge;
 
             var state = Context.LocalStorage.Load<AcceptanceState>("acceptance-state");
             var current = state.TryGetValue(out var stored) ? stored : new AcceptanceState();
@@ -260,11 +270,16 @@ namespace TopiaForge.SdkAcceptance
             var surface = Context.Ui.CreateSurface(new UiSurfaceRequest(
                 "live-acceptance",
                 "TOPIAFORGE SDK ACCEPTANCE",
-                "Close the confirmation; press F6, middle mouse, and gamepad A. Hold an item, interact with the acceptance robot, hold F9 to speak, and launch SDK Acceptance World from the Worlds menu.",
+                "Run challenge " + acceptanceChallenge
+                    + ". Close the confirmation; press F6, middle mouse, and gamepad A. "
+                    + "Hold an item, interact with the acceptance robot, hold F9 to speak, "
+                    + "and launch SDK Acceptance World from the Worlds menu.",
                 UiSurfaceKind.Hud,
                 520f,
                 180f));
-            var toast = Context.Ui.ShowToast("SDK live acceptance started", UiTone.Warning);
+            var toast = Context.Ui.ShowToast(
+                "SDK live acceptance started: " + acceptanceChallenge,
+                UiTone.Warning);
             var modal = Context.Ui.ShowModal(
                 new UiModalRequest("SDK ACCEPTANCE", "Confirm that the paper-scheme modal is readable."),
                 confirmed =>
@@ -846,17 +861,21 @@ namespace TopiaForge.SdkAcceptance
 
         private void Pass(string id, string detail = "ok")
         {
-            if (completed.Add(id))
+            if (acceptanceChallenge.Length == 64 && completed.Add(id))
             {
-                Context.Logger.Info(Prefix + "|PASS|" + id + "|" + Sanitize(detail));
+                Context.Logger.Info(
+                    Prefix + "|PASS|" + acceptanceChallenge + "|" + id + "|"
+                    + Sanitize(detail));
             }
         }
 
         private void Fail(string id, string detail)
         {
-            if (failed.Add(id + "|" + detail))
+            if (acceptanceChallenge.Length == 64 && failed.Add(id + "|" + detail))
             {
-                Context.Logger.Error(Prefix + "|FAIL|" + id + "|" + Sanitize(detail));
+                Context.Logger.Error(
+                    Prefix + "|FAIL|" + acceptanceChallenge + "|" + id + "|"
+                    + Sanitize(detail));
             }
         }
 
@@ -875,6 +894,25 @@ namespace TopiaForge.SdkAcceptance
         private static string Sanitize(string value)
         {
             return (value ?? string.Empty).Replace('\r', ' ').Replace('\n', ' ').Replace('|', '/');
+        }
+
+        private static bool IsLowerHexChallenge(string value)
+        {
+            if (value == null || value.Length != 64)
+            {
+                return false;
+            }
+
+            foreach (var character in value)
+            {
+                if ((character < '0' || character > '9')
+                    && (character < 'a' || character > 'f'))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
     }
 }
