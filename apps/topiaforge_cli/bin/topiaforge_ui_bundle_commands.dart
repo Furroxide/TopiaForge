@@ -224,6 +224,8 @@ extension _TopiaForgeUiBundleCommands on _TopiaForgeCli {
         editorPath,
         [
           '-batchmode',
+          '-buildTarget',
+          'StandaloneWindows64',
           '-projectPath',
           projectPath,
           '-executeMethod',

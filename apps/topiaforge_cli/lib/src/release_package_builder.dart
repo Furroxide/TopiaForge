@@ -141,9 +141,15 @@ class ReleasePackageBuilder {
       await _payloadWriter.copyLoaderRuntime(stageRoot.path);
     }
     if (platform == ReleasePackagePlatform.windows) {
+      final expectedSigner = requireWindowsSigning
+          ? TopiaForgeReleasePolicy.load(
+              repositoryRoot,
+            ).windowsCertificateSha256
+          : '';
       await WindowsPackageSigner(
         processRunner: processRunner,
         requireTrustedSignature: requireWindowsSigning,
+        expectedSignerCertificateSha256: expectedSigner,
       ).signIfConfigured(stageRoot.path);
     }
   }

@@ -99,6 +99,10 @@ namespace TopiaForge.CreatorTools.Shared
                 return OperationResult<string>.Failure(ModErrorCode.InvalidArgument, exception.Message);
             }
             var result = SetTransform(entry, transform);
+            if (result.Succeeded)
+            {
+                recorder?.Observe(CreatorObservation.TransformedInstance);
+            }
             return ToText(result, entry.DisplayName + " transform updated.");
         }
 
@@ -156,7 +160,19 @@ namespace TopiaForge.CreatorTools.Shared
                 target = new TransformState(target.Position, current.Rotation, current.Scale);
             }
             var result = SetTransform(entry, target);
-            if (result.Succeeded) SelectRoster(entry.Id);
+            if (result.Succeeded)
+            {
+                SelectRoster(entry.Id);
+                recorder?.Observe(CreatorObservation.TransformedInstance);
+                // Relocating a borrowed native robot is the location half of
+                // creator.personality-and-location-restore; owned spawns are
+                // not restored on End Session because they are removed.
+                if (!entry.Owned && entry.RobotTarget != null)
+                {
+                    recorder?.Observe(
+                        CreatorObservation.PreviewedRobotLocation);
+                }
+            }
             return ToText(result, entry.DisplayName + " moved to the aim point.");
         }
 
@@ -207,7 +223,13 @@ namespace TopiaForge.CreatorTools.Shared
             {
                 return OperationResult<string>.Failure(lease.ErrorCode, lease.ErrorMessage);
             }
-            return ToText(edit.PreviewPersonality(draft), entry.DisplayName + " personality preview applied.");
+            var previewed = edit.PreviewPersonality(draft);
+            if (previewed.Succeeded && !entry.Owned && entry.RobotTarget != null)
+            {
+                recorder?.Observe(
+                    CreatorObservation.PreviewedRobotPersonality);
+            }
+            return ToText(previewed, entry.DisplayName + " personality preview applied.");
         }
 
         private OperationResult<string> SetEmote(string emote)
