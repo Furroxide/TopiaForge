@@ -93,7 +93,7 @@ void main() {
     );
 
     final policy = TopiaForgeReleasePolicy.load(root);
-    expect(policy.targetPlatforms, ['linux-x64', 'windows-x64']);
+    expect(policy.targetPlatforms, ['windows-x64']);
     expect(policy.windowsCertificateSha256, isEmpty);
     expect(policy.requiresWindowsSigningIdentity, isTrue);
     expect(policy.hasConfiguredWindowsSigningIdentity, isFalse);
@@ -198,7 +198,7 @@ void main() {
       );
       expect(
         ((bom['ecosystem'] as Map)['platformCopies'] as List),
-        hasLength(2),
+        hasLength(1),
       );
       expect(
         (bom['provenance'] as Map).keys,
@@ -315,12 +315,12 @@ void main() {
       }
 
       _writePlatformArchive(
-        File(p.join(temp.path, 'TopiaForge-linux-x64.zip')),
+        File(p.join(temp.path, 'TopiaForge-windows-x64.zip')),
         release,
         prefix: 'TopiaForge/',
         changedPath: 'dist/vpm/index.json',
       );
-      _refreshChecksum(temp, 'TopiaForge-linux-x64.zip');
+      _refreshChecksum(temp, 'TopiaForge-windows-x64.zip');
       await expectLater(
         builder.verify(
           repositoryRoot: root,
@@ -391,11 +391,6 @@ void _writeCandidateAssets(
       ..writeAsStringSync('package:${entry.key}:${entry.value}\n');
   }
   _writePlatformArchive(
-    File(p.join(output.path, 'TopiaForge-linux-x64.zip')),
-    release,
-    prefix: 'TopiaForge/',
-  );
-  _writePlatformArchive(
     File(p.join(output.path, 'TopiaForge-windows-x64.zip')),
     release,
     prefix: 'TopiaForge/',
@@ -415,7 +410,6 @@ void _writeCandidateAssets(
     ),
     {
       'windows-x64': {'status': 'trusted', 'exceptionApplied': false},
-      'linux-x64': {'status': 'not-applicable', 'exceptionApplied': false},
     },
   );
 }

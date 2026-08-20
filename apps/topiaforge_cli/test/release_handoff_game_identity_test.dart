@@ -20,7 +20,7 @@ void main() {
   setUp(() {
     root = _repositoryRoot();
     temp = Directory.systemTemp.createTempSync('topiaforge-game-identity-');
-    for (final platform in const ['linux-x64', 'windows-x64']) {
+    for (final platform in const ['windows-x64']) {
       File(
         p.join(temp.path, releaseArchiveForPlatform(platform)),
       ).writeAsStringSync('archive:$platform\n');
@@ -41,20 +41,6 @@ void main() {
   test(
     'rejects QA that is not bound to the pinned official game bytes',
     () async {
-      final linuxQa = File(releaseQaPath(temp, 'linux-x64'));
-      final linux = _readJson(linuxQa)
-        ..['gameExecutableSha256'] =
-            'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc';
-      _writeJson(linuxQa, linux);
-      await _expectGameIdentityFailure('linux-x64', root, temp);
-
-      writeReleaseQaFixtures(
-        repositoryRoot: root,
-        assets: temp,
-        version: version,
-        targetSha: targetSha,
-        ecosystemSha: ecosystemSha,
-      );
       final windowsQa = File(releaseQaPath(temp, 'windows-x64'));
       final windows = _readJson(windowsQa);
       (windows['robotopia'] as Map)['gameFilesManifestSha256'] =
@@ -92,10 +78,7 @@ Future<void> _expectGameIdentityFailure(
       isA<StateError>().having(
         (error) => error.message,
         'message',
-        anyOf(
-          contains('Linux QA runtime claims are invalid'),
-          contains('Windows Robotopia QA is incomplete or invalid'),
-        ),
+        contains('Windows Robotopia QA is incomplete or invalid'),
       ),
     ),
   );
