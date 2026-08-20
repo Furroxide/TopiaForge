@@ -111,7 +111,7 @@ transitions it actually observed, so partial instrumentation fails closed instea
 false pass. The recorder is inert unless a 64-hex challenge has been provisioned into the
 CreatorTools config, so ordinary play emits nothing. Run it with:
 
-```
+```powershell
 topiaforge acceptance creator --creator-package <CreatorTools .topiaforgemod> --all
 ```
 
