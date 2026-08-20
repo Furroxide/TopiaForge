@@ -52,12 +52,15 @@ administrator may manually mutate an approved draft while the finalizer runs.
 2. Classify impact across the loader, launcher, SDK, mods, VPM packages, registries, game compatibility, credentials,
    and user data. Rotate exposed credentials immediately through their owning provider.
 3. If an unpublished candidate is affected, keep it blocked and cut a new RC version after remediation. If a public
-   release is affected, publish a GitHub advisory and a new immutable version; mark affected registry/package entries
-   according to the approved trust policy rather than silently rewriting history.
+   release is affected, publish a GitHub advisory and a new immutable version. Never silently rewrite registry history.
+   Note the current limitation: there is no package revocation mechanism, so an affected package cannot be marked as
+   withdrawn and installed clients cannot be notified through the launcher — the advisory and the replacement version
+   are the only available signals. See `P0-TRUST-01`; revise this step once revocation ships.
 4. Give installed users concrete safe-mode, disable, uninstall, or repair steps and identify whether saves or synced
    multiplayer state are affected.
-5. Attach the timeline, decision owner, evidence, and follow-up work to the release record. Legal/privacy/security
-   incidents require their respective approver before closure.
+5. Attach the timeline, decision owner, evidence, and follow-up work to the release record. For a legal, privacy, or
+   security incident the owner records the applicable determination before closure; where an independent approver for
+   that area exists, obtain their sign-off first.
 
 The first-RC support gate remains open until the owner confirms monitoring and the legal/privacy/trust policies in
 `LaunchBlockers.md` are approved.
