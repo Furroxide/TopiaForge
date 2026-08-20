@@ -112,12 +112,15 @@ namespace TopiaForge.RobotKit
         // process memory merely because RobotKit was installed - with every consumer feature off and no request
         // ever made. A probe only needs to know whether a credential could be obtained, which existence answers
         // without materialising the secret. Validity is still enforced at the request guard above.
+        // The token cache is deliberately not consulted here. Reading it would turn the probe into a validity
+        // check the moment any request had run, so one unchanged file on disk would answer "available" before a
+        // request and "unavailable" after a failed parse - the probe's answer would depend on call history
+        // rather than on the file. Existence is a stat rather than a read, so answering it every time is cheap.
         public bool HasTokenFile
         {
             get
             {
                 if (!backendEnabled) return false;
-                if (tokenLoaded) return cachedToken != null;
                 try
                 {
                     return File.Exists(tokenFilePath);
