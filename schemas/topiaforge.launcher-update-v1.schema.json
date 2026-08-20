@@ -17,7 +17,7 @@
     "platforms": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["windows-x64", "linux-x64", "macos-universal"],
+      "required": ["windows-x64", "linux-x64"],
       "properties": {
         "windows-x64": { "$ref": "#/$defs/artifact" },
         "linux-x64": { "$ref": "#/$defs/artifact" },

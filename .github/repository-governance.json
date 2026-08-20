@@ -1,9 +1,19 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "repository_full_name": "furroxide/TopiaForge",
   "repository_administrators": [
     "furroxide"
   ],
+  "release_staging_principal": {
+    "login": "furroxide",
+    "actor_id": 221987073,
+    "type": "User"
+  },
+  "release_workflow_principal": {
+    "login": "github-actions[bot]",
+    "actor_id": 41898282,
+    "type": "Bot"
+  },
   "github_actions_integration_id": 15368,
   "repository_settings": {
     "default_branch": "main",
@@ -37,9 +47,7 @@
       "github_owned_allowed": true,
       "verified_allowed": false,
       "patterns_allowed": [
-        "dart-lang/setup-dart@*",
-        "game-ci/unity-builder@*",
-        "subosito/flutter-action@*"
+        "dart-lang/setup-dart@*"
       ]
     },
     "workflow_permissions": {
@@ -59,8 +67,7 @@
         "actions",
         "c-cpp",
         "csharp",
-        "javascript-typescript",
-        "swift"
+        "javascript-typescript"
       ],
       "query_suite": "default",
       "schedule": "weekly",
@@ -274,38 +281,6 @@
         {
           "name": "v*",
           "type": "tag"
-        }
-      ]
-    },
-    {
-      "name": "unity-validation",
-      "can_admins_bypass": false,
-      "protected_branches": false,
-      "custom_branch_policies": true,
-      "reviewer_ids": [
-        221987073
-      ],
-      "prevent_self_review": false,
-      "branch_policies": [
-        {
-          "name": "main",
-          "type": "branch"
-        }
-      ]
-    },
-    {
-      "name": "game-acceptance",
-      "can_admins_bypass": false,
-      "protected_branches": false,
-      "custom_branch_policies": true,
-      "reviewer_ids": [
-        221987073
-      ],
-      "prevent_self_review": false,
-      "branch_policies": [
-        {
-          "name": "main",
-          "type": "branch"
         }
       ]
     },

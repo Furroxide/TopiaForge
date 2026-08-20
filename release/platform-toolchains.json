@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "windows": {
+    "msvc": "14.51.36231",
+    "windowsSdk": "10.0.26100.0"
+  },
+  "linux": {
+    "clang": "18.1.3",
+    "cmake": "3.28.3",
+    "ninja": "1.11.1",
+    "gtk": "3.24.41",
+    "proton": "10.0-4",
+    "executionEnvironment": "wsl2-wslg",
+    "protonSteamAppId": "3658110",
+    "protonSteamDepotId": "3658111",
+    "protonSteamManifestId": "5413949673798237105",
+    "protonSteamBuildId": "21617411",
+    "protonSourceCommit": "e2becb87430ca3ff510d949d9e75fa9b401da489"
+  },
+  "macos": {
+    "xcode": "16.4",
+    "macosSdk": "15.5",
+    "appleClang": "17.0.0"
+  }
+}

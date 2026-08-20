@@ -65,11 +65,12 @@ That one command restores exact SDK packages, builds, runs the NUnit project, pa
 installs, launches Robotopia, and tails attributed logs. It stops before install if any earlier
 stage fails.
 
-The launch-blocking hosted Robotopia gate repeats this journey with a clean candidate developer payload
-built from the frozen SHA: its CLI runs `new mod`, then `dev --launch`, and CI requires that unique
-mod's attributed load marker in the same fresh `last-run.json`. The project lives outside that
-payload and requires no Unity installation. The separate final clean-machine release gate repeats
-the journey with the actual extracted platform archive and no source checkout.
+The launch-blocking local Windows and same-host WSL2/Proton acceptance gates repeat this journey with a
+clean candidate developer payload built from the frozen SHA: its CLI runs `new mod`, then
+`dev --launch`, and the release handoff requires that unique mod's attributed load marker in the
+same fresh `last-run.json`. The project lives outside that payload and requires no Unity
+installation. The separate final clean-machine release gate repeats the journey with the actual
+extracted platform archive and no source checkout.
 
 In Robotopia, open the TopiaForge manager with F10. Select **First Mod** to see its log. Run the
 `example.first-mod:greet` command from the manager command console to exercise the scaffolded
