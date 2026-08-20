@@ -3,15 +3,14 @@ name: Unity PR Artifact Comment
 on:
   workflow_run:
     workflows:
-      - Unity PR Artifacts
+      - Unity Source Validation
     types:
       - completed
 
 permissions:
   actions: read
   contents: read
-  issues: write
-  pull-requests: read
+  pull-requests: write
 
 concurrency:
   group: >-

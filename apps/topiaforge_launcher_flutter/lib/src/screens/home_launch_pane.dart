@@ -144,15 +144,7 @@ class _HeroLaunchPane extends StatelessWidget {
         Positioned(
           right: 18,
           top: -34,
-          child: IgnorePointer(
-            child: Image.asset(
-              TopiaForgeBrandAssets.robot,
-              package: TopiaForgeBrandAssets.package,
-              width: 140,
-              fit: BoxFit.contain,
-              filterQuality: FilterQuality.medium,
-            ),
-          ),
+          child: IgnorePointer(child: const TopiaForgePixelRobot(width: 140)),
         ),
       ],
     );

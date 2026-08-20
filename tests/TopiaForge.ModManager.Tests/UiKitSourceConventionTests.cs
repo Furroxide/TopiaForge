@@ -186,7 +186,9 @@ namespace TopiaForge.ModManager.Tests
                          "*.csproj",
                          SearchOption.AllDirectories))
             {
-                if (IsBuildOutput(project) || !unityUiReference.IsMatch(File.ReadAllText(project)))
+                if (IsBuildOutput(project)
+                    || IsOutsideTrackedTree(repositoryRoot, project)
+                    || !unityUiReference.IsMatch(File.ReadAllText(project)))
                 {
                     continue;
                 }
@@ -316,6 +318,32 @@ namespace TopiaForge.ModManager.Tests
         {
             var separator = Path.DirectorySeparatorChar;
             return file.Contains(separator + "obj" + separator) || file.Contains(separator + "bin" + separator);
+        }
+
+        /// <summary>
+        /// Reports whether a path lives outside the tracked source tree.
+        /// </summary>
+        /// <remarks>
+        /// Repository-wide enumeration walks the working directory, not the git
+        /// index, so it also descends into ignored trees. A nested git worktree,
+        /// a vendored dependency, or any ignored scratch copy would otherwise be
+        /// scanned and report the same project twice under a different prefix.
+        /// </remarks>
+        private static bool IsOutsideTrackedTree(string repositoryRoot, string file)
+        {
+            var relative = Path.GetRelativePath(repositoryRoot, file).Replace('\\', '/');
+            foreach (var segment in relative.Split('/'))
+            {
+                if (string.Equals(segment, ".git", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(segment, ".claude", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(segment, "node_modules", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(segment, "third_party", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

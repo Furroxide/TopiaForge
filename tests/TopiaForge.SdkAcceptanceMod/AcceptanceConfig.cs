@@ -5,6 +5,9 @@ namespace TopiaForge.SdkAcceptance
     [DataContract]
     internal sealed class AcceptanceConfig
     {
+        [DataMember(Name = "acceptanceChallenge")]
+        public string AcceptanceChallenge { get; set; } = string.Empty;
+
         [DataMember(Name = "migratedFromSchema1")]
         public bool MigratedFromSchema1 { get; set; }
 

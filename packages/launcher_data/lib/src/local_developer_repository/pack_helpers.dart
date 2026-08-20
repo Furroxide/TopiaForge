@@ -154,14 +154,21 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
       addBytes(name, bytes);
     }
 
-    final sharedFirstPartyLicense = File(p.join(root.parent.path, 'LICENSE'));
-    final ownsFirstPartyNamespace = manifestContract.id.startsWith(
+    // First-party mods declare licenseFiles: ["LICENSE"] but carry no LICENSE of their own - the one
+    // reviewed copy lives at mods/LICENSE and is injected here so sixteen identical files are not
+    // checked in. The id-prefix test is a namespace convention, NOT a provenance check: it grants no
+    // trust, and the file injected is always the packed directory's own parent LICENSE, never this
+    // repository's, unless the mod genuinely sits under mods/. A mod that ships its own LICENSE keeps
+    // it. FirstPartyManifestTests.AssertDeclaredLicenseFilesResolve asserts this actually resolves, so
+    // a moved or renamed mods/LICENSE fails the build instead of shipping a dangling licenseFiles entry.
+    final sharedLicenseBesideMod = File(p.join(root.parent.path, 'LICENSE'));
+    final usesFirstPartyNamespace = manifestContract.id.startsWith(
       'io.github.furroxide.topiaforge.',
     );
-    if (ownsFirstPartyNamespace &&
+    if (usesFirstPartyNamespace &&
         !File(p.join(root.path, 'LICENSE')).existsSync() &&
-        sharedFirstPartyLicense.existsSync()) {
-      addFile('LICENSE', sharedFirstPartyLicense);
+        sharedLicenseBesideMod.existsSync()) {
+      addFile('LICENSE', sharedLicenseBesideMod);
     }
 
     final csprojCandidates =

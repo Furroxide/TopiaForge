@@ -4,7 +4,8 @@ TopiaForge V1 is frozen only when every promised Robotopia modding goal has all 
 
 The offline validator proves that every row is wired to compiled, native-free source and published
 documentation; it does not claim that gameplay worked. Only retained results from the
-[external live-Robotopia gate](LiveGameAcceptance.md#external-only-launch-gate) satisfy the final column.
+[administrator-controlled live-Robotopia gates](LiveGameAcceptance.md#administrator-controlled-launch-gates)
+satisfy the final column.
 
 | Modder goal | Safe API packages | Compiled acceptance | Guide | Testing support | Live evidence |
 |---|---|---|---|---|---|
