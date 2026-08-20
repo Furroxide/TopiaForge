@@ -32,11 +32,11 @@ void main() {
     expect(decision.gates, hasLength(12));
     expect(decision.gates.map((gate) => gate.id), [
       'P0-IP-01',
+      'P0-OSS-01',
       'P0-PRIV-01',
       'P0-TRUST-01',
       'P0-CRED-01',
       'P0-WIN-01',
-      'P0-LINUX-01',
       'P0-GAME-01',
       'P0-HOST-01',
       'P0-CAND-01',

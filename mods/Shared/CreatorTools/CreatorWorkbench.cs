@@ -298,17 +298,28 @@ namespace TopiaForge.CreatorTools.Shared
             var changed = false;
             var removedFromUnloadedSource = 0;
             var removedFromCustomFactory = 0;
-            // The reverse walk is the LIFO order the source-unload case
-            // requires; each entry is disposed exactly once as it is pruned.
+            // Snapshot first, in the reverse/LIFO order the source-unload case requires. runner.Fire below is a
+            // synchronous re-entrant callback into consumer graph nodes, and those can both add to and remove
+            // from `roster` (CreatorWorkbench.ProjectBindings.cs:135 and :150), so any index held across it is
+            // stale afterwards: it either walks off the end or names a different, still-live entry that then gets
+            // disposed and dropped. Everything past the snapshot works by reference, matching the established
+            // pattern in CreatorWorkbench.Operations.cs:389.
+            var dead = new List<CreatorRosterEntry>();
             for (var index = roster.Count - 1; index >= 0; index--)
             {
-                if (roster[index].IsAlive) continue;
-                if (IsFromUnloadedSource(roster[index]))
+                if (!roster[index].IsAlive) dead.Add(roster[index]);
+            }
+
+            foreach (var entry in dead)
+            {
+                // A re-entrant callback from an earlier iteration may already have pruned this one.
+                if (!roster.Contains(entry)) continue;
+                if (IsFromUnloadedSource(entry))
                 {
                     removedFromUnloadedSource++;
-                    if (IsFromCustomFactory(roster[index])) removedFromCustomFactory++;
+                    if (IsFromCustomFactory(entry)) removedFromCustomFactory++;
                 }
-                var projectId = ProjectTargetIdForRoster(roster[index].Id);
+                var projectId = ProjectTargetIdForRoster(entry.Id);
                 if (!string.IsNullOrEmpty(projectId))
                 {
                     DisposeProjectInteractions(projectId);
@@ -316,9 +327,9 @@ namespace TopiaForge.CreatorTools.Shared
                     if (projectBindings.Remove(projectId)) confirmedNativeProjectId = string.Empty;
                     runner?.Fire(CreatorGraphNodeKind.EntityRemoved, projectId);
                 }
-                if (string.Equals(selectedRosterId, roster[index].Id, StringComparison.Ordinal)) selectedRosterId = string.Empty;
-                roster[index].Dispose();
-                roster.RemoveAt(index);
+                if (string.Equals(selectedRosterId, entry.Id, StringComparison.Ordinal)) selectedRosterId = string.Empty;
+                roster.Remove(entry);
+                entry.Dispose();
                 changed = true;
             }
             if (changed && window?.IsVisible == true) RefreshUi();
