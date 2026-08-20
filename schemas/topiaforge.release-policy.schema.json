@@ -64,7 +64,7 @@
       "properties": {
         "platformArchives": {
           "type": "array",
-          "minItems": 2,
+          "minItems": 1,
           "maxItems": 3,
           "uniqueItems": true,
           "items": {
@@ -75,7 +75,6 @@
             ]
           },
           "allOf": [
-            { "contains": { "const": "TopiaForge-linux-x64.zip" } },
             { "contains": { "const": "TopiaForge-windows-x64.zip" } }
           ]
         },

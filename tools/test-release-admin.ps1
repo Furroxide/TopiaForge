@@ -239,6 +239,43 @@ foreach ($requiredSource in @(
     )
 }
 
+# Build-Handoff must derive its platform set and its VerifyOnly hardlink set
+# from the release policy. Seeding either with a literal Linux entry brings
+# back the descoped assumption and breaks a Windows-only RC1. See P0-LINUX-01.
+$buildHandoffAst = $adminAst.Find({
+        param($node)
+        $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+        $node.Name -eq "Build-Handoff"
+    }, $true)
+Assert-True ($null -ne $buildHandoffAst) (
+    "release-admin.ps1 must define Build-Handoff."
+)
+$platformSeed = $buildHandoffAst.Find({
+        param($node)
+        $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and
+        $node.Left.Extent.Text -eq '$platforms' -and
+        $node.Operator -eq "Equals"
+    }, $true)
+Assert-True ($null -ne $platformSeed) (
+    'Build-Handoff must seed a $platforms set.'
+)
+Assert-True (-not $platformSeed.Right.Extent.Text.Contains("linux")) (
+    'Build-Handoff seeded $platforms with a hard-coded Linux entry; the ' +
+    'Linux platform belongs behind the $targetsLinux policy gate.'
+)
+$verificationSeed = $buildHandoffAst.Find({
+        param($node)
+        $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and
+        $node.Left.Extent.Text -eq '$verificationArchives'
+    }, $true)
+Assert-True ($null -ne $verificationSeed) (
+    'Build-Handoff must derive a $verificationArchives list.'
+)
+Assert-True (-not $verificationSeed.Right.Extent.Text.Contains("linux")) (
+    'The VerifyOnly hardlink set must follow the policy-derived platforms ' +
+    'instead of naming the Linux archive outright.'
+)
+
 $releaseWorkflowSource = Get-Content -LiteralPath (
     Join-Path $repositoryRootForTest ".github/workflows/release.yml"
 ) -Raw

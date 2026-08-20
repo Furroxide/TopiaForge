@@ -78,7 +78,6 @@ void main() {
       'unity': '6000.0.23f1',
     });
     expect(_json(trustFile), {
-      'linux-x64': {'status': 'not-applicable', 'exceptionApplied': false},
       'windows-x64': {'status': 'trusted', 'exceptionApplied': false},
     });
 
@@ -284,16 +283,16 @@ void main() {
       targetSha: targetSha,
       ecosystemSha: ecosystemSha,
     );
-    final linuxFile = File(
-      p.join(temp.path, releasePlatformBundleFileName('linux-x64')),
+    final bundleFile = File(
+      p.join(temp.path, releasePlatformBundleFileName('windows-x64')),
     );
-    final linux = _json(linuxFile);
-    linux['canonicalEcosystemSha256'] =
+    final bundle = _json(bundleFile);
+    bundle['canonicalEcosystemSha256'] =
         'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc';
-    ((linux['validations'] as Map)['ecosystem-reproducibility']
+    ((bundle['validations'] as Map)['ecosystem-reproducibility']
             as Map)['evidenceSha256'] =
         'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc';
-    _writeJson(linuxFile, linux);
+    _writeJson(bundleFile, bundle);
     await expectLater(
       const TopiaForgeReleaseHandoff().buildHandoff(
         repositoryRoot: root,
@@ -310,14 +309,14 @@ void main() {
       ),
     );
 
-    linux['canonicalEcosystemSha256'] = ecosystemSha;
-    ((linux['validations'] as Map)['ecosystem-reproducibility']
+    bundle['canonicalEcosystemSha256'] = ecosystemSha;
+    ((bundle['validations'] as Map)['ecosystem-reproducibility']
             as Map)['evidenceSha256'] =
         ecosystemSha;
-    ((linux['validations'] as Map)['ecosystem-reproducibility']
+    ((bundle['validations'] as Map)['ecosystem-reproducibility']
             as Map)['evidenceSha256'] =
         'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
-    _writeJson(linuxFile, linux);
+    _writeJson(bundleFile, bundle);
     const contract = TopiaForgeReleaseHandoff();
     await expectLater(
       contract.buildHandoff(
@@ -334,10 +333,10 @@ void main() {
         ),
       ),
     );
-    ((linux['validations'] as Map)['ecosystem-reproducibility']
+    ((bundle['validations'] as Map)['ecosystem-reproducibility']
             as Map)['evidenceSha256'] =
         ecosystemSha;
-    _writeJson(linuxFile, linux);
+    _writeJson(bundleFile, bundle);
     await contract.buildHandoff(
       repositoryRoot: root,
       version: version,
@@ -345,7 +344,7 @@ void main() {
       assetsDirectory: temp.path,
     );
     File(
-      p.join(temp.path, 'TopiaForge-linux-x64.zip'),
+      p.join(temp.path, 'TopiaForge-windows-x64.zip'),
     ).writeAsStringSync('changed bytes');
     await expectLater(
       contract.verify(
@@ -459,10 +458,7 @@ Future<void> _buildPlatformBundles({
 }
 
 void _writeArchives(Directory assets) {
-  for (final name in const [
-    'TopiaForge-windows-x64.zip',
-    'TopiaForge-linux-x64.zip',
-  ]) {
+  for (final name in const ['TopiaForge-windows-x64.zip']) {
     File(p.join(assets.path, name)).writeAsStringSync('archive:$name\n');
   }
 }

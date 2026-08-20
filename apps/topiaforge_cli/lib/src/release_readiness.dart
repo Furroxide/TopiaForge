@@ -303,6 +303,16 @@ const _gateContracts = [
     blockedReasonCode: 'approval-evidence-missing',
     reviewerRoles: ['ip-trademark-counsel', 'project-owner', 'robotopia-owner'],
   ),
+  // Re-opened 2026-08-06. The legal inventory is a fixed allowlist that proves
+  // the licence texts it names exist, not that every redistributed asset has a
+  // licence, so the readiness decision must carry the gate rather than infer it
+  // from the inventory passing. See P0-OSS-01 in docs/LaunchBlockers.md.
+  _GateContract(
+    id: 'P0-OSS-01',
+    priority: 'P0',
+    blockedReasonCode: 'approval-evidence-missing',
+    reviewerRoles: ['ip-trademark-counsel', 'release-owner'],
+  ),
   _GateContract(
     id: 'P0-PRIV-01',
     priority: 'P0',
@@ -338,12 +348,9 @@ const _gateContracts = [
     blockedReasonCode: 'platform-evidence-missing',
     reviewerRoles: ['release-owner', 'windows-release-qa'],
   ),
-  _GateContract(
-    id: 'P0-LINUX-01',
-    priority: 'P0',
-    blockedReasonCode: 'platform-evidence-missing',
-    reviewerRoles: ['linux-release-qa', 'release-owner'],
-  ),
+  // P0-LINUX-01 is intentionally absent: Linux is descoped from 1.0.0-rc.1 and
+  // returns in rc.2. Restore this entry, the schema's gate count and id enum,
+  // and the policy platform archives together when it does.
   _GateContract(
     id: 'P0-GAME-01',
     priority: 'P0',
