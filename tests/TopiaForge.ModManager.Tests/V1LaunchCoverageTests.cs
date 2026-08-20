@@ -52,7 +52,8 @@ namespace TopiaForge.ModManager.Tests
                 root, "apps", "topiaforge_cli", "lib", "src", "live_acceptance_runner.dart");
             var acceptanceCommandPath = Path.Combine(
                 root, "apps", "topiaforge_cli", "bin", "topiaforge_acceptance_commands.dart");
-            var workflowPath = Path.Combine(root, ".github", "workflows", "game-sdk-acceptance.yml");
+            var retiredWorkflowPath =
+                Path.Combine(root, ".github", "workflows", "game-sdk-acceptance.yml");
             var solution = File.ReadAllText(Path.Combine(root, "TopiaForge.slnx"));
             var docsPublisher = File.ReadAllText(
                 Path.Combine(root, "website", "scripts", "prepare-docs.mjs"));
@@ -98,13 +99,34 @@ namespace TopiaForge.ModManager.Tests
                    && harness.Contains("spec.caseIds", StringComparison.Ordinal)
                    && acceptanceCommand.Contains("'--all'", StringComparison.Ordinal),
                 "live acceptance must require the full canonical matrix by default");
-            var workflow = File.ReadAllText(workflowPath);
-            Assert(workflow.Contains("default: both", StringComparison.Ordinal)
-                   && workflow.Contains("default: full", StringComparison.Ordinal)
-                   && workflow.Contains("runs-on: [self-hosted, Windows", StringComparison.Ordinal)
-                   && workflow.Contains("runs-on: [self-hosted, Linux", StringComparison.Ordinal)
-                   && workflow.Contains("dart run bin/topiaforge.dart @arguments", StringComparison.Ordinal),
-                "live acceptance workflow must default to the full Windows and Linux/Proton gate");
+            Assert(!File.Exists(retiredWorkflowPath),
+                "live Robotopia acceptance must not run on a GitHub Actions self-hosted workflow");
+            var unityBundleCommands = File.ReadAllText(Path.Combine(
+                root, "apps", "topiaforge_cli", "bin", "topiaforge_ui_bundle_commands.dart"));
+            var releaseAdmin = File.ReadAllText(
+                Path.Combine(root, "tools", "release-admin.ps1"));
+            var windowsReleaseBuilder = File.ReadAllText(
+                Path.Combine(root, "tools", "release", "build-windows.ps1"));
+            Assert(
+                Regex.IsMatch(
+                    unityBundleCommands,
+                    "'-buildTarget'\\s*,\\s*'StandaloneWindows64'"),
+                "the UI bundle command must pin Unity to StandaloneWindows64");
+            Assert(
+                Regex.IsMatch(
+                    releaseAdmin,
+                    "\"-buildTarget\"\\s*,\\s*\"StandaloneWindows64\""),
+                "release preflight must pin Unity to StandaloneWindows64");
+            Assert(
+                Regex.IsMatch(
+                    windowsReleaseBuilder,
+                    "\"-buildTarget\"\\s*,\\s*\"StandaloneWindows64\""),
+                "Windows lifecycle validation must pin Unity to StandaloneWindows64");
+            Assert(
+                File.ReadAllText(Path.Combine(root, "tools", "unity-ui-bundle", ".gitignore"))
+                    .Split('\n')
+                    .Any(line => line.TrimEnd('\r') == "/.vsconfig"),
+                "Unity's machine-generated .vsconfig must not dirty release preflight");
             var rows = matrix.RootElement.GetProperty("rows").EnumerateArray().ToArray();
             Assert(rows.Length == 7, "the V1 matrix must contain exactly seven modder-goal rows");
             var rowIds = new HashSet<string>(StringComparer.Ordinal);
@@ -800,10 +822,14 @@ namespace TopiaForge.ModManager.Tests
                 "public capability docs must state that mods are trusted full-process code, not sandboxed");
 
             var live = File.ReadAllText(Path.Combine(root, "docs", "LiveGameAcceptance.md"));
-            Assert(live.Contains("## External-only launch gate", StringComparison.Ordinal)
-                && live.Contains("they cannot mark a live", StringComparison.Ordinal)
+            Assert(live.Contains("## Administrator-controlled launch gates", StringComparison.Ordinal)
+                && live.Contains("cannot mark a live", StringComparison.Ordinal)
                 && live.Contains("exact frozen candidate package hashes", StringComparison.Ordinal),
-                "live acceptance docs must distinguish external evidence from offline/static checks");
+                "live acceptance docs must distinguish real game evidence from offline/static checks");
+            Assert(live.Contains("release-handoff-v1", StringComparison.Ordinal)
+                && live.Contains("WSL2", StringComparison.Ordinal)
+                && live.Contains("same-host and non-independent", StringComparison.Ordinal),
+                "live acceptance docs must bind current-host Proton evidence to the release handoff");
         }
 
         private static bool IsBuildOutput(string path)

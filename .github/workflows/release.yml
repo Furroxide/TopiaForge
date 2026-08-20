@@ -1,7 +1,18 @@
-name: Prepare signed release draft
+name: Finalize verified release
+
+run-name: Finalize ${{ inputs.tag }} (${{ inputs.request_id }})
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing signed annotated version tag to finalize
+        required: true
+        type: string
+      request_id:
+        description: Unique release-admin dispatch request identifier
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -13,15 +24,16 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  DOTNET_NOLOGO: true
-  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DART_SUPPRESS_ANALYTICS: true
+  TOPIAFORGE_VERIFICATION_PREDICATE: https://topiaforge.dev/attestations/release-verification/v1
 
 jobs:
   verify-candidate:
-    name: Verify protected release evidence
-    runs-on: ubuntu-latest
+    name: Verify protected release candidate
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
+      actions: read
       checks: read
       contents: read
       pull-requests: read
@@ -34,12 +46,18 @@ jobs:
       release_head_sha: ${{ steps.evidence.outputs.release_head_sha }}
       release_pr_number: ${{ steps.evidence.outputs.release_pr_number }}
     steps:
-      - name: Reject non-tag dispatches
+      - name: Reject non-version-tag dispatches
         shell: bash
+        env:
+          DISPATCH_TAG: ${{ inputs.tag }}
+          DISPATCH_REQUEST_ID: ${{ inputs.request_id }}
         run: |
           set -euo pipefail
           test "$GITHUB_REF_TYPE" = tag
           [[ "$GITHUB_REF" == refs/tags/v* ]]
+          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
+          test "$DISPATCH_TAG" = "$GITHUB_REF_NAME"
+          [[ "$DISPATCH_REQUEST_ID" =~ ^release-admin-[0-9a-f]{32}$ ]]
 
       - name: Checkout exact protected tag
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -53,11 +71,6 @@ jobs:
         uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
         with:
           sdk: "3.12.2"
-
-      - name: Set up .NET
-        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
-        with:
-          dotnet-version: "10.0.301"
 
       - name: Restore release validator
         working-directory: apps/topiaforge_cli
@@ -78,29 +91,34 @@ jobs:
           notes_file=$(jq -er '.notesFile' <<<"$entry")
           target_sha=$(git rev-parse HEAD)
           test "$tag" = "$GITHUB_REF_NAME"
+          expected_notes_file="release/notes/$tag.md"
+          [[ "$notes_file" != *$'\r'* && "$notes_file" != *$'\n'* ]]
+          [[ "$notes_file" != /* && "$notes_file" != *\\* ]]
+          [[ "/$notes_file/" != *"/../"* && "/$notes_file/" != *"/./"* ]]
+          test "$notes_file" = "$expected_notes_file"
           test -s "$notes_file"
           {
-            echo "version=$version"
-            echo "tag=$tag"
-            echo "prerelease=$prerelease"
-            echo "target_sha=$target_sha"
-            echo "notes_file=$notes_file"
+            printf 'version=%s\n' "$version"
+            printf 'tag=%s\n' "$tag"
+            printf 'prerelease=%s\n' "$prerelease"
+            printf 'target_sha=%s\n' "$target_sha"
+            printf 'notes_file=%s\n' "$notes_file"
           } >>"$GITHUB_OUTPUT"
 
-      - name: Enforce complete release policy and provenance
+      - name: Enforce complete release policy
         working-directory: apps/topiaforge_cli
         run: >-
-          dart run topiaforge release validate-policy
+          dart run bin/topiaforge.dart release validate-policy
           --version "${{ steps.metadata.outputs.version }}"
 
-      - name: Require the pinned game build to still be latest
-        shell: pwsh
+      - name: Verify exact release readiness decision
+        working-directory: apps/topiaforge_cli
         run: >-
-          dotnet run
-          --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
-          -c Release -- --source public --probe --require-latest
+          dart run bin/topiaforge.dart release validate-readiness
+          --version "${{ steps.metadata.outputs.version }}"
+          --target-sha "${{ steps.metadata.outputs.target_sha }}"
 
-      - name: Verify tag, release PR, and exact-SHA gates
+      - name: Verify tag, exact release PR, and hosted checks
         id: evidence
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -111,111 +129,699 @@ jobs:
           "${{ steps.metadata.outputs.version }}"
           "${{ steps.metadata.outputs.target_sha }}"
 
-  build-packages:
-    name: Build signed release candidates
+  verify-platform-bundles:
+    name: Verify ${{ matrix.platform }} production bytes
     needs: verify-candidate
-    permissions:
-      contents: read
-    uses: ./.github/workflows/release-signed-package-build.yml
-    with:
-      source_sha: ${{ needs.verify-candidate.outputs.target_sha }}
-      artifact_retention_days: 30
-
-  prepare-draft:
-    name: Attest and reconcile release draft
-    needs: [verify-candidate, build-packages]
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     permissions:
-      actions: read
-      attestations: write
-      contents: write
-      id-token: write
-    environment:
-      name: release
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            runner: windows-2025
+            archive: TopiaForge-windows-x64.zip
+          - platform: linux
+            runner: ubuntu-24.04
+            archive: TopiaForge-linux-x64.zip
     steps:
       - name: Checkout exact release commit
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          fetch-depth: 0
           lfs: true
           persist-credentials: false
-          ref: ${{ needs.verify-candidate.outputs.target_sha }}
+          ref: ${{ github.ref }}
+
+      - name: Pin the checkout to the approved release commit
+        shell: bash
+        env:
+          TARGET_SHA: ${{ needs.verify-candidate.outputs.target_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+
+      - name: Set up pinned .NET SDK
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: "10.0.301"
 
       - name: Set up Dart
         uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
         with:
           sdk: "3.12.2"
 
-      - name: Restore release metadata builder
+      - name: Restore package verifier
         working-directory: apps/topiaforge_cli
         run: dart pub get --enforce-lockfile
 
-      - name: Download signed platform archives
+      - name: Fetch exact admin-staged release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          bash ./tools/fetch-release-assets.sh
+          "$GITHUB_REPOSITORY"
+          "${{ needs.verify-candidate.outputs.tag }}"
+          "${{ needs.verify-candidate.outputs.target_sha }}"
+          "TopiaForge ${{ needs.verify-candidate.outputs.version }}"
+          "${{ needs.verify-candidate.outputs.notes_file }}"
+          staged-assets
+          "${{ needs.verify-candidate.outputs.prerelease }}"
+
+      - name: Verify authenticated admin handoff
+        shell: pwsh
+        run: |
+          $policy = Get-Content -LiteralPath (
+            Join-Path $env:GITHUB_WORKSPACE "release/release-policy.json"
+          ) -Raw | ConvertFrom-Json
+          if ($policy.publication.PSObject.Properties.Name -contains
+              "codeSigningException") {
+            throw "Production handoffs forbid every code-signing exception."
+          }
+          $expectedSigner = [string](
+            $policy.signingIdentities.windowsCertificateSha256
+          )
+          if ($expectedSigner -cnotmatch "^(?!0{64}$)[0-9a-f]{64}$") {
+            throw "A reviewed Windows signer certificate SHA-256 is required."
+          }
+          & pwsh -NoLogo -NoProfile -NonInteractive -File (
+            Join-Path $env:GITHUB_WORKSPACE
+              "tools/release/handoff-signature.ps1"
+          ) -Mode Verify `
+            -ExpectedCertificateSha256 $expectedSigner `
+            -HandoffPath (
+              Join-Path $env:GITHUB_WORKSPACE
+                "staged-assets/release-handoff-v1.json"
+            ) `
+            -SignaturePath (
+              Join-Path $env:GITHUB_WORKSPACE
+                "staged-assets/release-handoff-v1.json.p7s"
+            )
+          if ($LASTEXITCODE -ne 0) {
+            throw "Authenticated admin handoff verification failed."
+          }
+
+      - name: Verify handoff claims against exact bytes
+        id: handoff
+        working-directory: apps/topiaforge_cli
+        shell: bash
+        run: |
+          set -euo pipefail
+          dart run bin/topiaforge.dart release verify-handoff \
+            --version "${{ needs.verify-candidate.outputs.version }}" \
+            --target-sha "${{ needs.verify-candidate.outputs.target_sha }}" \
+            --assets "$GITHUB_WORKSPACE/staged-assets" \
+            --verify-embedded-ecosystem
+          canonical_sha256=$(jq -er '.canonicalEcosystemSha256' \
+            "$GITHUB_WORKSPACE/staged-assets/release-handoff-v1.json")
+          echo "canonical_sha256=$canonical_sha256" >>"$GITHUB_OUTPUT"
+
+      - name: Verify Windows package trust state
+        if: matrix.platform == 'windows'
+        working-directory: apps/topiaforge_cli
+        env:
+          CANONICAL_ECOSYSTEM_SHA256: ${{ steps.handoff.outputs.canonical_sha256 }}
+        shell: pwsh
+        run: |
+          $policy = Get-Content -LiteralPath (
+            Join-Path $env:GITHUB_WORKSPACE "release/release-policy.json"
+          ) -Raw | ConvertFrom-Json
+          if ($policy.publication.PSObject.Properties.Name -contains
+              "codeSigningException") {
+            throw "Production Windows packages forbid signing exceptions."
+          }
+          $expectedSigner = [string](
+            $policy.signingIdentities.windowsCertificateSha256
+          )
+          if ($expectedSigner -cnotmatch "^(?!0{64}$)[0-9a-f]{64}$") {
+            throw "A reviewed Windows signer certificate SHA-256 is required."
+          }
+          $arguments = @(
+            "run", "bin/topiaforge.dart", "release", "test-package",
+            "--platform", "windows",
+            "--zip",
+              "$env:GITHUB_WORKSPACE/staged-assets/${{ matrix.archive }}",
+            "--expected-canonical-ecosystem-sha256",
+              "$env:CANONICAL_ECOSYSTEM_SHA256",
+            "--canonical-assets", "$env:GITHUB_WORKSPACE/staged-assets",
+            "--run-embedded-cli"
+          )
+          $arguments += @(
+            "--require-windows-signature",
+            "--expected-windows-signer-sha256", $expectedSigner
+          )
+          & dart @arguments
+          if ($LASTEXITCODE -ne 0) {
+            throw "Windows package trust verification failed."
+          }
+
+      - name: Verify Linux package
+        if: matrix.platform == 'linux'
+        working-directory: apps/topiaforge_cli
+        env:
+          CANONICAL_ECOSYSTEM_SHA256: ${{ steps.handoff.outputs.canonical_sha256 }}
+        run: >-
+          dart run bin/topiaforge.dart release test-package
+          --platform linux
+          --zip "$GITHUB_WORKSPACE/staged-assets/${{ matrix.archive }}"
+          --expected-canonical-ecosystem-sha256
+          "$CANONICAL_ECOSYSTEM_SHA256"
+          --canonical-assets "$GITHUB_WORKSPACE/staged-assets"
+          --run-embedded-cli
+
+      - name: Record deterministic hosted verification evidence
+        shell: bash
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          ARCHIVE: ${{ matrix.archive }}
+          TARGET_SHA: ${{ needs.verify-candidate.outputs.target_sha }}
+          VERSION: ${{ needs.verify-candidate.outputs.version }}
+          TAG: ${{ needs.verify-candidate.outputs.tag }}
+        run: |
+          set -euo pipefail
+          sha256_file() {
+            if command -v sha256sum >/dev/null 2>&1; then
+              sha256sum "$1" | awk '{print $1}'
+            else
+              shasum -a 256 "$1" | awk '{print $1}'
+            fi
+          }
+          archive_path="staged-assets/$ARCHIVE"
+          archive_sha=$(sha256_file "$archive_path")
+          archive_size=$(wc -c <"$archive_path" | tr -d ' ')
+          handoff_sha=$(sha256_file staged-assets/release-handoff-v1.json)
+          handoff_signature_sha=$(
+            sha256_file staged-assets/release-handoff-v1.json.p7s
+          )
+          trust_check=$(
+            case "$PLATFORM" in
+              windows) echo authenticode ;;
+              linux) echo not-applicable ;;
+              *) exit 1 ;;
+            esac
+          )
+          jq -S -n \
+            --arg platform "$PLATFORM" \
+            --arg version "$VERSION" \
+            --arg tag "$TAG" \
+            --arg targetSha "$TARGET_SHA" \
+            --arg archiveName "$ARCHIVE" \
+            --arg archiveSha256 "$archive_sha" \
+            --argjson archiveSize "$archive_size" \
+            --arg handoffSha256 "$handoff_sha" \
+            --arg handoffSignatureSha256 "$handoff_signature_sha" \
+            --arg trustCheck "$trust_check" \
+            '{
+              schema: "release-hosted-verification-v1",
+              platform: $platform,
+              version: $version,
+              tag: $tag,
+              targetSha: $targetSha,
+              archive: {
+                name: $archiveName,
+                sha256: $archiveSha256,
+                size: $archiveSize
+              },
+              handoffSha256: $handoffSha256,
+              handoffSignatureSha256: $handoffSignatureSha256,
+              packageValidation: "passed",
+              trustCheck: $trustCheck,
+              result: "passed"
+            }' >"hosted-verification-$PLATFORM.json"
+
+      - name: Preserve hosted verification evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: hosted-verification-${{ matrix.platform }}
+          path: hosted-verification-${{ matrix.platform }}.json
+          if-no-files-found: error
+          retention-days: 7
+
+  finalize:
+    name: Verify, attest, and publish
+    needs: [verify-candidate, verify-platform-bundles]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      attestations: write
+      checks: read
+      contents: write
+      id-token: write
+      pull-requests: read
+      security-events: read
+    environment:
+      name: release
+    steps:
+      - name: Checkout exact release commit
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          lfs: true
+          persist-credentials: false
+          ref: ${{ needs.verify-candidate.outputs.target_sha }}
+
+      - name: Verify critical live release governance after approval
+        env:
+          GH_TOKEN: ${{ secrets.TOPIAFORGE_GOVERNANCE_AUDIT_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN"
+          bash ./tools/verify-release-governance.sh "$GITHUB_REPOSITORY"
+
+      - name: Audit complete live repository governance after approval
+        env:
+          GH_TOKEN: ${{ secrets.TOPIAFORGE_GOVERNANCE_AUDIT_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN"
+          python3 .github/scripts/audit_repository_governance.py \
+            check \
+            --repo "$GITHUB_REPOSITORY"
+
+      - name: Set up pinned .NET SDK
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: "10.0.301"
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
+        with:
+          sdk: "3.12.2"
+
+      - name: Restore release verifier
+        working-directory: apps/topiaforge_cli
+        run: dart pub get --enforce-lockfile
+
+      - name: Revalidate candidate after protected approval
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          ./tools/verify-release-candidate.sh
+          "$GITHUB_REPOSITORY"
+          "${{ needs.verify-candidate.outputs.tag }}"
+          "${{ needs.verify-candidate.outputs.version }}"
+          "${{ needs.verify-candidate.outputs.target_sha }}"
+
+      - name: Revalidate exact release readiness after approval
+        working-directory: apps/topiaforge_cli
+        run: >-
+          dart run bin/topiaforge.dart release validate-readiness
+          --version "${{ needs.verify-candidate.outputs.version }}"
+          --target-sha "${{ needs.verify-candidate.outputs.target_sha }}"
+
+      - name: Fetch exact admin-staged release assets
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          bash ./tools/fetch-release-assets.sh
+          "$GITHUB_REPOSITORY"
+          "${{ needs.verify-candidate.outputs.tag }}"
+          "${{ needs.verify-candidate.outputs.target_sha }}"
+          "TopiaForge ${{ needs.verify-candidate.outputs.version }}"
+          "${{ needs.verify-candidate.outputs.notes_file }}"
+          staged-assets
+          "${{ needs.verify-candidate.outputs.prerelease }}"
+
+      - name: Verify authenticated admin handoff
+        shell: pwsh
+        run: |
+          $policy = Get-Content -LiteralPath (
+            Join-Path $env:GITHUB_WORKSPACE "release/release-policy.json"
+          ) -Raw | ConvertFrom-Json
+          if ($policy.publication.PSObject.Properties.Name -contains
+              "codeSigningException") {
+            throw "Production handoffs forbid every code-signing exception."
+          }
+          $expectedSigner = [string](
+            $policy.signingIdentities.windowsCertificateSha256
+          )
+          if ($expectedSigner -cnotmatch "^(?!0{64}$)[0-9a-f]{64}$") {
+            throw "A reviewed Windows signer certificate SHA-256 is required."
+          }
+          & pwsh -NoLogo -NoProfile -NonInteractive -File (
+            Join-Path $env:GITHUB_WORKSPACE
+              "tools/release/handoff-signature.ps1"
+          ) -Mode Verify `
+            -ExpectedCertificateSha256 $expectedSigner `
+            -HandoffPath (
+              Join-Path $env:GITHUB_WORKSPACE
+                "staged-assets/release-handoff-v1.json"
+            ) `
+            -SignaturePath (
+              Join-Path $env:GITHUB_WORKSPACE
+                "staged-assets/release-handoff-v1.json.p7s"
+            )
+          if ($LASTEXITCODE -ne 0) {
+            throw "Authenticated admin handoff verification failed."
+          }
+
+      - name: Verify local-build handoff and evidence
+        working-directory: apps/topiaforge_cli
+        run: >-
+          dart run bin/topiaforge.dart release verify-handoff
+          --version "${{ needs.verify-candidate.outputs.version }}"
+          --target-sha "${{ needs.verify-candidate.outputs.target_sha }}"
+          --assets "$GITHUB_WORKSPACE/staged-assets"
+          --trust-output "$RUNNER_TEMP/platform-trust-evidence.json"
+          --verify-embedded-ecosystem
+
+      - name: Download hosted platform-verification evidence
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          path: release-assets
-          pattern: TopiaForge-*.zip
+          pattern: hosted-verification-*
+          path: hosted-verification
           merge-multiple: true
 
-      - name: Download canonical mod packages
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: mod-packages
-          path: release-assets
+      - name: Bind hosted verification to the current draft bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(
+            find hosted-verification -mindepth 1 -maxdepth 1 \
+              -type f -name 'hosted-verification-*.json' | wc -l
+          )" -eq 2
+          handoff_sha=$(sha256sum staged-assets/release-handoff-v1.json |
+            awk '{print $1}')
+          handoff_signature_sha=$(
+            sha256sum staged-assets/release-handoff-v1.json.p7s |
+              awk '{print $1}'
+          )
+          windows_trust=authenticode
+          declare -A seen_platforms
+          for evidence in hosted-verification/hosted-verification-*.json; do
+            jq -e \
+              --arg version "${{ needs.verify-candidate.outputs.version }}" \
+              --arg tag "${{ needs.verify-candidate.outputs.tag }}" \
+              --arg targetSha "${{ needs.verify-candidate.outputs.target_sha }}" \
+              --arg handoffSha256 "$handoff_sha" \
+              --arg handoffSignatureSha256 "$handoff_signature_sha" \
+              '.schema == "release-hosted-verification-v1" and
+               .version == $version and
+               .tag == $tag and
+               .targetSha == $targetSha and
+               .handoffSha256 == $handoffSha256 and
+               .handoffSignatureSha256 == $handoffSignatureSha256 and
+               .packageValidation == "passed" and
+               .result == "passed"' "$evidence" >/dev/null
+            platform=$(jq -er '.platform' "$evidence")
+            archive=$(jq -er '.archive.name' "$evidence")
+            trust_check=$(jq -er '.trustCheck' "$evidence")
+            case "$platform:$archive" in
+              windows:TopiaForge-windows-x64.zip)
+                test "$trust_check" = "$windows_trust"
+                ;;
+              linux:TopiaForge-linux-x64.zip)
+                test "$trust_check" = not-applicable
+                ;;
+              *) exit 1 ;;
+            esac
+            [[ -z ${seen_platforms[$platform]+x} ]]
+            seen_platforms[$platform]=1
+            test "$(jq -er '.archive.sha256' "$evidence")" = "$(
+              sha256sum "staged-assets/$archive" | awk '{print $1}'
+            )"
+            test "$(jq -er '.archive.size' "$evidence")" -eq "$(
+              wc -c <"staged-assets/$archive"
+            )"
+          done
+          test "${seen_platforms[windows]:-}" = 1
+          test "${seen_platforms[linux]:-}" = 1
 
-      - name: Download platform trust evidence
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          path: platform-trust
-          pattern: platform-trust-*
-          merge-multiple: true
+      - name: Isolate the exact catalog asset set
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir release-assets
+          jq -er \
+            --arg version "${{ needs.verify-candidate.outputs.version }}" \
+            '.releases[] | select(.version == $version) | .artifacts[]' \
+            release/catalog.json |
+          while IFS= read -r name; do
+            [[ "$name" =~ ^[A-Za-z0-9][A-Za-z0-9._+-]*$ ]]
+            test -f "staged-assets/$name"
+            cp -- "staged-assets/$name" "release-assets/$name"
+          done
+          cp "$RUNNER_TEMP/platform-trust-evidence.json" \
+            release-assets/.platform-trust-evidence.json
 
-      - name: Generate signed update metadata and release evidence
+      - name: Generate and verify signed update metadata
         working-directory: apps/topiaforge_cli
         env:
           TOPIAFORGE_UPDATE_ED25519_PRIVATE_KEY_B64: ${{ secrets.TOPIAFORGE_UPDATE_ED25519_PRIVATE_KEY_B64 }}
         run: |
           set -euo pipefail
-          jq -s '
-            map({
-              key: (
-                if .platform == "windows" then "windows-x64"
-                elif .platform == "linux" then "linux-x64"
-                elif .platform == "macos" then "macos-universal"
-                else error("unsupported platform")
-                end
-              ),
-              value: {
-                status: .status,
-                exceptionApplied: .exceptionApplied
+          dart run bin/topiaforge.dart release build-update-metadata \
+            --version "${{ needs.verify-candidate.outputs.version }}" \
+            --assets "$GITHUB_WORKSPACE/release-assets"
+          dart run bin/topiaforge.dart release verify-update-metadata \
+            --version "${{ needs.verify-candidate.outputs.version }}" \
+            --assets "$GITHUB_WORKSPACE/release-assets"
+
+      - name: Generate and verify deterministic BOM, SBOM, and checksums
+        working-directory: apps/topiaforge_cli
+        run: |
+          set -euo pipefail
+          dart run bin/topiaforge.dart release build-metadata \
+            --version "${{ needs.verify-candidate.outputs.version }}" \
+            --target-sha "${{ needs.verify-candidate.outputs.target_sha }}" \
+            --assets "$GITHUB_WORKSPACE/release-assets"
+          dart run bin/topiaforge.dart release verify-metadata \
+            --version "${{ needs.verify-candidate.outputs.version }}" \
+            --target-sha "${{ needs.verify-candidate.outputs.target_sha }}" \
+            --assets "$GITHUB_WORKSPACE/release-assets"
+          rm "$GITHUB_WORKSPACE/release-assets/.platform-trust-evidence.json"
+
+      - name: Complete and verify final public asset inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          handoff_names=(
+            release-handoff-v1.json
+            release-handoff-v1.json.p7s
+            release-platform-bundle-v1-linux-x64.json
+            release-platform-bundle-v1-windows-x64.json
+          )
+          for name in "${handoff_names[@]}"; do
+            cp -- "staged-assets/$name" "release-assets/$name"
+          done
+          (
+            cd release-assets
+            for name in "${handoff_names[@]}"; do
+              sha256sum "$name"
+            done
+          ) >>release-assets/SHA256SUMS
+          sort -o release-assets/SHA256SUMS release-assets/SHA256SUMS
+          (
+            cd release-assets
+            sha256sum --check --strict SHA256SUMS
+          )
+          {
+            jq -er \
+              --arg version "${{ needs.verify-candidate.outputs.version }}" \
+              '.releases[] | select(.version == $version) | .artifacts[]' \
+              release/catalog.json
+            jq -er '.artifactPolicy.generatedMetadata[]' \
+              release/release-policy.json
+            printf '%s\n' "${handoff_names[@]}"
+          } | sort >"$RUNNER_TEMP/expected-release-assets"
+          find release-assets -mindepth 1 -maxdepth 1 -type f \
+            -printf '%f\n' | sort >"$RUNNER_TEMP/actual-release-assets"
+          diff -u \
+            "$RUNNER_TEMP/expected-release-assets" \
+            "$RUNNER_TEMP/actual-release-assets"
+          test "$(
+            find release-assets -mindepth 1 -maxdepth 1 -type f | wc -l
+          )" -eq "$(
+            wc -l <"$RUNNER_TEMP/expected-release-assets"
+          )"
+
+      - name: Build deterministic verifier predicate and subjects
+        shell: bash
+        run: |
+          set -euo pipefail
+          handoff_sha=$(sha256sum release-assets/release-handoff-v1.json |
+            awk '{print $1}')
+          handoff_signature_sha=$(
+            sha256sum release-assets/release-handoff-v1.json.p7s |
+              awk '{print $1}'
+          )
+          bom_sha=$(sha256sum release-assets/release-bom.json |
+            awk '{print $1}')
+          readiness=$(
+            jq -ecS '
+              .readiness |
+              select(
+                .binding == "git-blob-at-target-sha" and
+                .status == "ready" and
+                (.blobSha256 | test("^[0-9a-f]{64}$")) and
+                .summary.status == "ready"
+              )
+            ' release-assets/release-bom.json
+          )
+          hosted_verification=$(jq -s 'sort_by(.platform)' \
+            hosted-verification/hosted-verification-*.json)
+          jq -S -n \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg tag "${{ needs.verify-candidate.outputs.tag }}" \
+            --arg targetSha "${{ needs.verify-candidate.outputs.target_sha }}" \
+            --arg handoffSha256 "$handoff_sha" \
+            --arg handoffSignatureSha256 "$handoff_signature_sha" \
+            --arg releaseBomSha256 "$bom_sha" \
+            --argjson readiness "$readiness" \
+            --argjson hostedVerification "$hosted_verification" \
+            '{
+              schemaVersion: 1,
+              role: "verifier",
+              verifier: {
+                service: "GitHub Actions",
+                workflow: ".github/workflows/release.yml"
+              },
+              artifactOrigin: {
+                builder: "admin-controlled Windows workstation and its WSL2 environment",
+                githubBuiltPlatformArchives: false
+              },
+              repository: $repository,
+              tag: $tag,
+              targetSha: $targetSha,
+              handoff: {
+                name: "release-handoff-v1.json",
+                sha256: $handoffSha256,
+                signature: {
+                  name: "release-handoff-v1.json.p7s",
+                  sha256: $handoffSignatureSha256,
+                  format: "CMS-detached"
+                }
+              },
+              hostedVerification: $hostedVerification,
+              releaseBomSha256: $releaseBomSha256,
+              readiness: $readiness
+            }' >"$RUNNER_TEMP/release-verification-v1.json"
+          (
+            cd release-assets
+            find . -mindepth 1 -maxdepth 1 -type f -printf '%f\n' |
+              sort |
+              while IFS= read -r name; do
+                sha256sum "$name"
+              done
+          ) >"$RUNNER_TEMP/release-subjects.sha256"
+          jq -Rn '
+            [inputs |
+              capture(
+                "^(?<sha256>[0-9a-f]{64})  (?<name>[A-Za-z0-9][A-Za-z0-9._+-]*)$"
+              ) |
+              {
+                name: .name,
+                digest: {sha256: .sha256}
               }
-            }) | from_entries
-          ' ../../platform-trust/platform-trust-*.json \
-            >../../release-assets/.platform-trust-evidence.json
-          dart run topiaforge release build-update-metadata \
-            --version "${{ needs.verify-candidate.outputs.version }}" \
-            --assets ../../release-assets
-          dart run topiaforge release verify-update-metadata \
-            --version "${{ needs.verify-candidate.outputs.version }}" \
-            --assets ../../release-assets
-          dart run topiaforge release build-metadata \
-            --version "${{ needs.verify-candidate.outputs.version }}" \
-            --target-sha "${{ needs.verify-candidate.outputs.target_sha }}" \
-            --assets ../../release-assets
-          dart run topiaforge release verify-metadata \
-            --version "${{ needs.verify-candidate.outputs.version }}" \
-            --target-sha "${{ needs.verify-candidate.outputs.target_sha }}" \
-            --assets ../../release-assets
-          rm ../../release-assets/.platform-trust-evidence.json
+            ] | sort_by(.name)
+          ' <"$RUNNER_TEMP/release-subjects.sha256" \
+            >"$RUNNER_TEMP/expected-attestation-subjects.json"
 
-      - name: Attest all release assets
-        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
-        with:
-          subject-path: release-assets/*
-
-      - name: Create or resume matching draft without tag mutation
+      - name: Detect an exact existing verifier attestation
+        id: existing-attestation
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if gh attestation verify \
+            release-assets/release-handoff-v1.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+            --predicate-type "$TOPIAFORGE_VERIFICATION_PREDICATE" \
+            --source-digest "${{ needs.verify-candidate.outputs.target_sha }}" \
+            --source-ref "refs/tags/${{ needs.verify-candidate.outputs.tag }}" \
+            --deny-self-hosted-runners \
+            --format json >"$RUNNER_TEMP/existing-attestation.json" 2>/dev/null &&
+            bash ./tools/verify-release-attestation.sh \
+              "$RUNNER_TEMP/existing-attestation.json" \
+              "$RUNNER_TEMP/release-verification-v1.json" \
+              "$RUNNER_TEMP/expected-attestation-subjects.json"; then
+            echo "exists=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Attest GitHub verification, not build provenance
+        if: >-
+          steps.release.outputs.draft == 'true' &&
+          steps.existing-attestation.outputs.exists != 'true'
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4
+        with:
+          subject-checksums: ${{ runner.temp }}/release-subjects.sha256
+          predicate-type: https://topiaforge.dev/attestations/release-verification/v1
+          predicate-path: ${{ runner.temp }}/release-verification-v1.json
+
+      - name: Verify the exact custom attestation
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh attestation verify \
+            release-assets/release-handoff-v1.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+            --predicate-type "$TOPIAFORGE_VERIFICATION_PREDICATE" \
+            --source-digest "${{ needs.verify-candidate.outputs.target_sha }}" \
+            --source-ref "refs/tags/${{ needs.verify-candidate.outputs.tag }}" \
+            --deny-self-hosted-runners \
+            --format json >"$RUNNER_TEMP/verified-attestation.json"
+          bash ./tools/verify-release-attestation.sh \
+            "$RUNNER_TEMP/verified-attestation.json" \
+            "$RUNNER_TEMP/release-verification-v1.json" \
+            "$RUNNER_TEMP/expected-attestation-subjects.json"
+
+      - name: Reaudit complete live repository governance before publication
+        env:
+          GH_TOKEN: ${{ secrets.TOPIAFORGE_GOVERNANCE_AUDIT_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN"
+          python3 .github/scripts/audit_repository_governance.py \
+            check \
+            --repo "$GITHUB_REPOSITORY"
+
+      - name: Revalidate critical governance before publication
+        env:
+          GH_TOKEN: ${{ secrets.TOPIAFORGE_GOVERNANCE_AUDIT_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN"
+          bash ./tools/verify-release-governance.sh "$GITHUB_REPOSITORY"
+
+      - name: Revalidate candidate before publication
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ./tools/verify-release-candidate.sh \
+            "$GITHUB_REPOSITORY" \
+            "${{ needs.verify-candidate.outputs.tag }}" \
+            "${{ needs.verify-candidate.outputs.version }}" \
+            "${{ needs.verify-candidate.outputs.target_sha }}"
+          (
+            cd apps/topiaforge_cli
+            dart run bin/topiaforge.dart release validate-readiness \
+              --version "${{ needs.verify-candidate.outputs.version }}" \
+              --target-sha "${{ needs.verify-candidate.outputs.target_sha }}"
+          )
+          dotnet run \
+            --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj \
+            --configuration Release \
+            -- \
+            --probe \
+            --require-latest
+
+      - name: Publish or verify the exact immutable release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TOPIAFORGE_GOVERNANCE_AUDIT_TOKEN: ${{ secrets.TOPIAFORGE_GOVERNANCE_AUDIT_TOKEN }}
         run: >-
           ./tools/publish-release-draft.sh
           "$GITHUB_REPOSITORY"
@@ -225,9 +831,38 @@ jobs:
           "${{ needs.verify-candidate.outputs.notes_file }}"
           release-assets
           "${{ needs.verify-candidate.outputs.prerelease }}"
+          publish
 
-      - name: Explain the manual publication boundary
+      - name: Re-download and compare every immutable release byte
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
         run: |
-          echo 'A signed, attested, verified draft was prepared from the protected tag.'
-          echo 'An authorized owner must inspect the draft and publish it manually.'
-          echo 'Immutable releases lock the tag and assets at publication.'
+          set -euo pipefail
+          bash ./tools/fetch-release-assets.sh \
+            "$GITHUB_REPOSITORY" \
+            "${{ needs.verify-candidate.outputs.tag }}" \
+            "${{ needs.verify-candidate.outputs.target_sha }}" \
+            "TopiaForge ${{ needs.verify-candidate.outputs.version }}" \
+            "${{ needs.verify-candidate.outputs.notes_file }}" \
+            published-assets \
+            "${{ needs.verify-candidate.outputs.prerelease }}"
+          (
+            cd release-assets
+            find . -mindepth 1 -maxdepth 1 -type f -printf '%f\n' |
+              sort |
+              while IFS= read -r name; do
+                sha256sum "$name"
+              done
+          ) >"$RUNNER_TEMP/local-release-assets.sha256"
+          (
+            cd published-assets
+            find . -mindepth 1 -maxdepth 1 -type f -printf '%f\n' |
+              sort |
+              while IFS= read -r name; do
+                sha256sum "$name"
+              done
+          ) >"$RUNNER_TEMP/published-release-assets.sha256"
+          diff -u \
+            "$RUNNER_TEMP/local-release-assets.sha256" \
+            "$RUNNER_TEMP/published-release-assets.sha256"

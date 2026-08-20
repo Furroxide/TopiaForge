@@ -135,14 +135,14 @@
   <ItemGroup>
     <Compile Include="..\..\mods\TopiaForge.RobotKit\ObjectiveRunner.cs" />
     <Compile Include="..\..\mods\TopiaForge.RobotKit\RobotObjectiveService.cs" />
-    <Compile Include="..\..\mods\TopiaForge.Sandbox\RobotProgramDirector.cs" />
     <Compile Include="..\..\mods\TopiaForge.Sandbox\SandboxConfig.cs" />
     <!-- The shared creator workbench is deliberately Unity-free. Compile the real linked implementation into the
          offline test executable so lifecycle, rollback, and host-eligibility behavior are exercised without the game. -->
     <Compile Include="..\..\mods\Shared\CreatorTools\*.cs" />
-    <Compile Include="..\..\mods\TopiaForge.CreatorTools\CreatorToolsConfig.cs" />
-    <Compile Include="..\..\mods\TopiaForge.CreatorTools\CreatorToolsMultiplayerPolicy.cs" />
-    <Compile Include="..\..\mods\TopiaForge.CreatorTools\GlobalCreatorToolsHost.cs" />
+    <!-- Globbed, not enumerated: CreatorTools is Unity-free, so every file in it compiles offline. The previous
+         by-name list silently left CreatorToolsMod.cs (the entry point) out of test scope, and would have done the
+         same for any file added later. -->
+    <Compile Include="..\..\mods\TopiaForge.CreatorTools\*.cs" />
   </ItemGroup>
 
   <!-- Chronos time-control: lease/logical-state derivation, native-pause ownership, fixedDeltaTime math, and

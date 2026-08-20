@@ -76,10 +76,35 @@ namespace TopiaForge.CreatorTools.Shared
                 new UiText("SPAWN CATALOG", UiTextStyle.Heading),
                 BuildCatalogSourceStatus(),
                 new UiRow(
-                    new UiDropdown("catalog-kind", "Kind", choices, kindFilter, value => { kindFilter = value; RefreshUi(); }),
-                    new UiTextInput("catalog-search", "Search", search, value => { search = value; RefreshUi(); }, "name or description", 128)),
+                    new UiDropdown("catalog-kind", "Kind", choices, kindFilter, value => { ApplyKindFilter(value, visible.Length); RefreshUi(); }),
+                    new UiTextInput("catalog-search", "Search", search, value => { ApplyCatalogSearch(value, visible.Length); RefreshUi(); }, "name or description", 128)),
                 new UiVirtualList("catalog-list", items, id => { selectedCatalogId = id; RefreshUi(); }, selected, 6),
                 new UiButton("spawn-selected", "Spawn selected at aim point", () => Execute(SpawnSelected), enabled: selected != null && CanMutate));
+        }
+
+        /// <summary>
+        /// Applies a catalog search term and records it only when the term
+        /// actually narrowed the visible catalog, so an empty or no-op edit
+        /// cannot satisfy the acceptance case.
+        /// </summary>
+        private void ApplyCatalogSearch(string value, int previousVisibleCount)
+        {
+            search = value;
+            if (FilteredCatalog().Count() < previousVisibleCount)
+            {
+                recorder?.Observe(CreatorObservation.CatalogSearchNarrowed);
+            }
+        }
+
+        /// <summary>Applies a kind filter and records a real narrowing.</summary>
+        private void ApplyKindFilter(string value, int previousVisibleCount)
+        {
+            kindFilter = value;
+            if (!string.Equals(value, "all", StringComparison.Ordinal)
+                && FilteredCatalog().Count() < previousVisibleCount)
+            {
+                recorder?.Observe(CreatorObservation.CatalogKindFilterApplied);
+            }
         }
 
         private UiNode BuildCatalogSourceStatus()

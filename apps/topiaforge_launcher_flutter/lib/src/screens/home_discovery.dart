@@ -211,13 +211,7 @@ class _FindFirstModCard extends StatelessWidget {
         final stacked =
             constraints.maxWidth < 760 ||
             MediaQuery.textScalerOf(context).scale(1) > 1.3;
-        final image = Image.asset(
-          TopiaForgeBrandAssets.robot,
-          package: TopiaForgeBrandAssets.package,
-          width: stacked ? 64 : 84,
-          fit: BoxFit.contain,
-          filterQuality: FilterQuality.medium,
-        );
+        final image = TopiaForgePixelRobot(width: stacked ? 64 : 84);
         final copy = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

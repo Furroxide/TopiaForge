@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import io
 import subprocess
 import sys
@@ -13,6 +14,10 @@ from pathlib import Path
 
 
 AUDIT = Path(__file__).with_name("check_topiaforge_residue.py")
+AUDIT_SPEC = importlib.util.spec_from_file_location("topiaforge_residue_audit", AUDIT)
+assert AUDIT_SPEC is not None and AUDIT_SPEC.loader is not None
+AUDIT_MODULE = importlib.util.module_from_spec(AUDIT_SPEC)
+AUDIT_SPEC.loader.exec_module(AUDIT_MODULE)
 
 
 def zip_bytes(entries: dict[str, bytes]) -> bytes:
@@ -38,6 +43,22 @@ class GeneratedPayloadAuditTests(unittest.TestCase):
             stderr=subprocess.PIPE,
             text=True,
         )
+
+    def scan_text(self, policy_path: str, text: str) -> list[str]:
+        failures: list[str] = []
+        AUDIT_MODULE.scan_content(
+            policy_path,
+            policy_path,
+            text.encode("utf-8"),
+            failures,
+            force_text=True,
+        )
+        return failures
+
+    def scan_path(self, policy_path: str) -> list[str]:
+        failures: list[str] = []
+        AUDIT_MODULE.check_path(policy_path, policy_path, failures)
+        return failures
 
     def test_clean_nested_package_passes(self) -> None:
         package = zip_bytes(
@@ -192,6 +213,225 @@ class GeneratedPayloadAuditTests(unittest.TestCase):
             result = self.run_audit(archive)
 
         self.assertEqual(0, result.returncode, result.stderr)
+
+    def test_release_handoff_game_field_is_allowed_in_exact_integration_file(
+        self,
+    ) -> None:
+        path = "apps/topiaforge_cli/lib/src/release_handoff_qa.dart"
+        game_name = "robo" + "topia"
+        failures = self.scan_text(
+            path,
+            "const evidence = {'" + game_name + "': result};",
+        )
+
+        self.assertEqual([], failures)
+
+    def test_release_game_install_verifier_paths_are_exactly_allowed(self) -> None:
+        game_name = "robo" + "topia"
+        verifier_paths = (
+            f"tools/release/verify-{game_name}-install.ps1",
+            f"tools/release/test-verify-{game_name}-install.ps1",
+        )
+
+        for path in verifier_paths:
+            with self.subTest(path=path):
+                self.assertEqual([], self.scan_path(path))
+
+    def test_exact_release_game_install_verifier_reference_is_allowed(self) -> None:
+        game_name = "robo" + "topia"
+        command = (
+            "pwsh -NoProfile -File "
+            f"tools/release/test-verify-{game_name}-install.ps1"
+        )
+        failures = self.scan_text(".github/workflows/ci.yml", command)
+
+        self.assertEqual([], failures)
+
+    def test_release_game_install_verifier_reference_rejects_path_prefix(
+        self,
+    ) -> None:
+        game_name = "robo" + "topia"
+        command = (
+            "pwsh -NoProfile -File "
+            f"payload/tools/release/test-verify-{game_name}-install.ps1"
+        )
+        failures = self.scan_text(".github/workflows/ci.yml", command)
+
+        self.assertTrue(
+            any(
+                "lowercase/unallowlisted Robotopia token" in failure
+                for failure in failures
+            ),
+            failures,
+        )
+
+    def test_release_game_install_verifier_path_allowlist_rejects_prefix(self) -> None:
+        game_name = "robo" + "topia"
+        path = f"payload/tools/release/verify-{game_name}-install.ps1"
+        failures = self.scan_path(path)
+
+        self.assertTrue(
+            any(
+                "retired " + "Robotopia" + " ecosystem name in path" in failure
+                for failure in failures
+            ),
+            failures,
+        )
+
+    def test_release_game_install_verifier_paths_are_allowed_under_package_roots(
+        self,
+    ) -> None:
+        game_name = "robo" + "topia"
+        package_roots = (
+            "TopiaForge-windows-x64",
+            "TopiaForge-linux-x64",
+            "TopiaForge.app/Contents/Resources/TopiaForge",
+            (
+                "TopiaForge-macos-universal/TopiaForge.app/Contents/"
+                "Resources/TopiaForge"
+            ),
+        )
+
+        for package_root in package_roots:
+            path = (
+                f"{package_root}/tools/release/"
+                f"verify-{game_name}-install.ps1"
+            )
+            with self.subTest(path=path):
+                self.assertEqual([], self.scan_path(path))
+
+    def test_packaged_release_admin_game_fields_are_allowed(self) -> None:
+        game_name = "robo" + "topia"
+        package_path = (
+            "TopiaForge.app/Contents/Resources/TopiaForge/"
+            "tools/release-admin.ps1"
+        )
+        failures = self.scan_text(
+            package_path,
+            "$" + game_name + " = @{}\n",
+        )
+
+        self.assertEqual([], failures)
+
+    def test_packaged_release_admin_allowlist_rejects_unknown_root(self) -> None:
+        game_name = "robo" + "topia"
+        package_path = "payload/TopiaForge-linux-x64/tools/release-admin.ps1"
+        failures = self.scan_text(
+            package_path,
+            "$" + game_name + " = @{}\n",
+        )
+
+        self.assertTrue(
+            any(
+                "lowercase/unallowlisted Robotopia token" in failure
+                for failure in failures
+            ),
+            failures,
+        )
+
+    def test_macos_code_resources_allows_exact_game_verifier_entries(self) -> None:
+        game_name = "robo" + "topia"
+        policy_path = "TopiaForge.app/Contents/_CodeSignature/CodeResources"
+        resource = (
+            "Resources/TopiaForge/tools/release/"
+            f"test-verify-{game_name}-install.ps1"
+        )
+        failures = self.scan_text(policy_path, f"<key>{resource}</key>")
+
+        self.assertEqual([], failures)
+
+    def test_macos_code_resources_rejects_prefixed_game_verifier_entry(self) -> None:
+        game_name = "robo" + "topia"
+        policy_path = "TopiaForge.app/Contents/_CodeSignature/CodeResources"
+        resource = (
+            "payload/Resources/TopiaForge/tools/release/"
+            f"test-verify-{game_name}-install.ps1"
+        )
+        failures = self.scan_text(policy_path, f"<key>{resource}</key>")
+
+        self.assertTrue(
+            any(
+                "lowercase/unallowlisted Robotopia token" in failure
+                for failure in failures
+            ),
+            failures,
+        )
+
+    def test_packaged_macos_game_integration_payload_passes(self) -> None:
+        game_name = "robo" + "topia"
+        app_root = "TopiaForge.app/Contents"
+        resource_root = f"{app_root}/Resources/TopiaForge"
+        verifier = (
+            f"{resource_root}/tools/release/"
+            f"verify-{game_name}-install.ps1"
+        )
+        code_resource = (
+            "Resources/TopiaForge/tools/release/"
+            f"verify-{game_name}-install.ps1"
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            archive = Path(temporary_directory) / "TopiaForge-macos-universal.zip"
+            archive.write_bytes(
+                zip_bytes(
+                    {
+                        f"{resource_root}/tools/release-admin.ps1": (
+                            "$" + game_name + " = @{}\n"
+                        ).encode(),
+                        verifier: (
+                            'schema = "' + game_name + '-official-install-v1"\n'
+                        ).encode(),
+                        f"{app_root}/_CodeSignature/CodeResources": (
+                            f"<key>{code_resource}</key>"
+                        ).encode(),
+                    }
+                )
+            )
+
+            result = self.run_audit(archive)
+
+        self.assertEqual(0, result.returncode, result.stderr)
+
+    def test_retired_manager_still_fails_inside_allowed_integration_file(
+        self,
+    ) -> None:
+        path = "apps/topiaforge_cli/lib/src/release_handoff_qa.dart"
+        game_name = "robo" + "topia"
+        retired_manager = "Robotopia" + "ModManager"
+        failures = self.scan_text(
+            path,
+            "const evidence = {'" + game_name + "': result};\n" + retired_manager,
+        )
+
+        self.assertTrue(
+            any("retired manager name" in failure for failure in failures),
+            failures,
+        )
+
+    def test_retired_sdk_still_fails_inside_allowed_release_script(self) -> None:
+        path = "tools/release-admin.ps1"
+        game_name = "robo" + "topia"
+        retired_interface = "I" + "Robotopia" + "Mod"
+        failures = self.scan_text(
+            path,
+            "$" + game_name + " = @{}\n" + retired_interface,
+        )
+
+        self.assertTrue(
+            any("retired SDK interface" in failure for failure in failures),
+            failures,
+        )
+
+    def test_game_fact_token_allowlist_rejects_suffix_extension(self) -> None:
+        unreviewed_token = "robo" + "topia-owner-extra"
+        failures = self.scan_text("release/release-readiness.json", unreviewed_token)
+
+        self.assertTrue(
+            any(
+                "lowercase/unallowlisted Robotopia token" in failure
+                for failure in failures
+            ),
+            failures,
+        )
 
     def test_target_game_tool_paths_are_allowed_in_extracted_package(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

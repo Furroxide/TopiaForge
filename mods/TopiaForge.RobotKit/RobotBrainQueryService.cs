@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.Mods;
@@ -10,6 +9,10 @@ namespace TopiaForge.RobotKit
 {
     // Async owner-cancellable adapter over the game's brain backend. No Task or native transport handle crosses
     // the public contract; consumers receive a stable OperationResult and the runtime supplies lifetime cancellation.
+    //
+    // Reaches Tomato Cake's RoboAPI, which TopiaForge has no authorization for and no control over; they may restrict
+    // or withdraw it at any time. Off by default, and every consumer must stay fully playable on the unavailable
+    // result. See the warning on RoboApiClient and the P0-PRIV-01 gate.
     internal sealed class RobotBrainQueryService : IRobotBrainQueryService,
         IOwnerBoundExtensionFactory, IDisposable
     {
@@ -33,11 +36,13 @@ namespace TopiaForge.RobotKit
         {
             this.logger = logger;
             this.promptRegistryResolver = promptRegistryResolver;
-            var tokenPath = Path.Combine(Application.persistentDataPath, "robo_token.json");
-            client = new RoboApiClient(tokenPath, Guid.NewGuid().ToString("N"), logger);
+            client = new RoboApiClient(
+                Application.persistentDataPath, Guid.NewGuid().ToString("N"), logger);
         }
 
-        public bool IsAvailable => !disposed && client.HasToken;
+        // Probed by RuntimeCapabilityProbe on every load and scene change, so this must not read or cache the
+        // player's credential. See the note on RoboApiClient.HasTokenFile.
+        public bool IsAvailable => !disposed && client.HasTokenFile;
 
         public async Task<OperationResult<BrainQueryResult>> QueryAsync(
             BrainQueryRequest request,

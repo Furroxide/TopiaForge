@@ -36,7 +36,9 @@ namespace TopiaForge.CreatorTools
                     config.ShowSessionHud,
                     config.ConversationEnabled,
                     config.ChatMaxTurns,
-                    config.ChatTemperature),
+                    config.ChatTemperature,
+                    worldId: string.Empty,
+                    acceptanceChallenge: config.AcceptanceChallenge),
                 content,
                 robots,
                 RequestHide,
@@ -57,10 +59,15 @@ namespace TopiaForge.CreatorTools
             return !(worlds is IWorldTransitionState transition) || !transition.IsTransitionInFlight;
         }
 
-        public OperationResult<bool> Open(CreatorToolOpenContext context) =>
-            CanOpen(context)
-                ? workbench.Open()
-                : OperationResult<bool>.Failure(ModErrorCode.Unavailable, "Global Creator Tools is unavailable in this scene.");
+        public OperationResult<bool> Open(CreatorToolOpenContext context)
+        {
+            if (CanOpen(context)) return workbench.Open();
+            // An observed refusal outside stable standalone gameplay is itself
+            // required evidence for creator.f5-routing-and-session.
+            workbench.Recorder?.Observe(
+                CreatorObservation.BlockedOutsideStandaloneGameplay);
+            return OperationResult<bool>.Failure(ModErrorCode.Unavailable, "Global Creator Tools is unavailable in this scene.");
+        }
 
         public OperationResult<bool> Close(CreatorToolCloseReason reason)
         {
@@ -82,6 +89,11 @@ namespace TopiaForge.CreatorTools
         public void Dispose()
         {
             if (disposed) return;
+            if (workbench.IsSessionActive)
+            {
+                workbench.Recorder?.Observe(
+                    CreatorObservation.ModUnloadClosedWorkbench);
+            }
             disposed = true;
             if (worlds != null) worlds.SessionChanged -= OnWorldSessionChanged;
             multiplayerSubscription?.Dispose();
@@ -101,20 +113,40 @@ namespace TopiaForge.CreatorTools
 
         private void OnWorldSessionChanged(WorldSession session)
         {
-            if (workbench.IsSessionActive) EndSession();
+            if (!workbench.IsSessionActive) return;
+            workbench.Recorder?.Observe(
+                CreatorObservation.WorldsTransitionClosedWorkbench);
+            EndSession();
         }
 
         private void EnforceEligibility()
         {
             if (!workbench.IsSessionActive) return;
             var sceneName = context.Scenes.TryGetActive(out var scene) && scene != null ? scene.Name : string.Empty;
-            if (worlds == null || worlds.CurrentSession != null
-                || worlds is IWorldTransitionState transition && transition.IsTransitionInFlight
-                || string.IsNullOrWhiteSpace(sceneName) || GameScenes.IsNonGameplayScene(sceneName)
-                || HasRemoteMultiplayer())
+            // Attribute the closure to the condition that actually caused it so
+            // scene replacement and remote multiplayer are distinct evidence.
+            var remoteMultiplayer = HasRemoteMultiplayer();
+            var worldsTransition = worlds == null || worlds.CurrentSession != null
+                || worlds is IWorldTransitionState transition && transition.IsTransitionInFlight;
+            var sceneReplaced = string.IsNullOrWhiteSpace(sceneName)
+                || GameScenes.IsNonGameplayScene(sceneName);
+            if (!worldsTransition && !sceneReplaced && !remoteMultiplayer) return;
+            if (remoteMultiplayer)
             {
-                EndSession();
+                workbench.Recorder?.Observe(
+                    CreatorObservation.RemoteMultiplayerClosedWorkbench);
             }
+            else if (sceneReplaced)
+            {
+                workbench.Recorder?.Observe(
+                    CreatorObservation.SceneReplacementClosedWorkbench);
+            }
+            else
+            {
+                workbench.Recorder?.Observe(
+                    CreatorObservation.WorldsTransitionClosedWorkbench);
+            }
+            EndSession();
         }
 
         private bool HasRemoteMultiplayer()
