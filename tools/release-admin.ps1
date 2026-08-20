@@ -38,6 +38,12 @@ if (-not (Test-Path -LiteralPath $platformToolchainsPath -PathType Leaf)) {
 }
 $platformToolchains = Get-Content -LiteralPath $platformToolchainsPath -Raw |
     ConvertFrom-Json
+# Linux is descoped from 1.0.0-rc.1 and returns in rc.2, so the WSL build,
+# Proton acceptance, and their preflight checks are gated on the policy rather
+# than deleted. Re-adding the Linux archive to release-policy.json restores the
+# whole path. See P0-LINUX-01 in docs/LaunchBlockers.md.
+$targetsLinux =
+    @($policy.artifactPolicy.platformArchives) -contains "TopiaForge-linux-x64.zip"
 if ([string]::IsNullOrWhiteSpace($Version)) {
     $Version = [string]$policy.versioning.productVersion
 }
@@ -1166,6 +1172,10 @@ function Invoke-Preflight {
             "SDK; found $foundWindowsSdk."
     }
 
+    # The entire WSL builder and Proton preflight is skipped when Linux is not a
+    # target platform. Re-adding TopiaForge-linux-x64.zip to the policy turns it
+    # back on unchanged.
+    if ($targetsLinux) {
     $wslInventory = Invoke-Checked wsl @("--list", "--verbose") -Capture
     if ($wslInventory -notmatch "(?m)^\s*\*?\s*$([regex]::Escape($WslDistribution))\s+\S+\s+2\s*$") {
         throw "$WslDistribution must be installed and configured as WSL2."
@@ -1278,6 +1288,7 @@ fi
         "--steam-root", $SteamRoot,
         "--compat-data-root", $CompatDataRoot
     )
+    }
 
     New-Item -ItemType Directory -Force -Path $stateDirectory | Out-Null
     $unityLicenseLog = Join-Path $stateDirectory "preflight-unity-license.log"
@@ -3035,8 +3046,13 @@ function Build-Handoff {
                 "official-game-bytes",
                 "robotopia-acceptance"
             )
-        },
-        @{
+        }
+    )
+    # Linux is descoped from 1.0.0-rc.1, so the handoff platform set follows
+    # the policy instead of assuming both archives exist. Re-adding the Linux
+    # archive to release-policy.json restores this entry. See P0-LINUX-01.
+    if ($targetsLinux) {
+        $platforms += @{
             Name = "linux-x64"
             ValidationPlatform = "linux"
             Archive = "TopiaForge-linux-x64.zip"
@@ -3049,7 +3065,7 @@ function Build-Handoff {
                 "packaged-launcher-health"
             )
         }
-    )
+    }
     foreach ($platform in $platforms) {
         $validationPath = Join-Path $assetsDirectory $platform.Validation
         if (-not (Test-Path -LiteralPath $validationPath -PathType Leaf)) {
@@ -3231,10 +3247,12 @@ function Build-Handoff {
         }
     }
     if ($VerifyOnly) {
-        foreach ($archiveName in @(
-                "TopiaForge-windows-x64.zip",
-                "TopiaForge-linux-x64.zip"
-            )) {
+        # The verification copy mirrors the policy-derived platform set
+        # so a Windows-only RC1 does not demand a Linux archive.
+        $verificationArchives = @(
+            $platforms | ForEach-Object { $_.Archive }
+        )
+        foreach ($archiveName in $verificationArchives) {
             New-Item -ItemType HardLink `
                 -Path (Join-Path $verificationDirectory $archiveName) `
                 -Target (Join-Path $assetsDirectory $archiveName) | Out-Null
@@ -3374,10 +3392,12 @@ function Invoke-Build {
                 "-FlutterPath", $sdk.Flutter
             )
 
-            Invoke-WslBuild -SourceSha $sourceSha `
-                -CanonicalArchive $canonicalArchive `
-                -CanonicalEcosystemSha $canonicalSha `
-                -CanonicalArchiveSha $canonicalArchiveSha
+            if ($targetsLinux) {
+                Invoke-WslBuild -SourceSha $sourceSha `
+                    -CanonicalArchive $canonicalArchive `
+                    -CanonicalEcosystemSha $canonicalSha `
+                    -CanonicalArchiveSha $canonicalArchiveSha
+            }
         }
         finally {
             $cleanupWorktrees = @($releaseWorktrees)
@@ -3404,9 +3424,12 @@ function Invoke-Build {
         $state = Read-State
     }
 
-    $linuxArchive = Join-Path $assetsDirectory "TopiaForge-linux-x64.zip"
-    Invoke-WslProtonAcceptance -SourceSha $sourceSha -LinuxArchive $linuxArchive `
-        -CanonicalSha ([string]$state.canonicalSha256)
+    if ($targetsLinux) {
+        $linuxArchive = Join-Path $assetsDirectory "TopiaForge-linux-x64.zip"
+        Invoke-WslProtonAcceptance -SourceSha $sourceSha `
+            -LinuxArchive $linuxArchive `
+            -CanonicalSha ([string]$state.canonicalSha256)
+    }
     $windowsArchive = Join-Path $assetsDirectory "TopiaForge-windows-x64.zip"
     Assert-WindowsCreatorEvidence -SourceSha $sourceSha `
         -WindowsArchive $windowsArchive `

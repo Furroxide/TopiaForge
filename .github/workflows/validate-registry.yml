@@ -35,9 +35,15 @@ jobs:
         working-directory: apps/topiaforge_cli
         run: dart pub get --enforce-lockfile
 
-      # Validate every published version, package hash, packaged manifest,
-      # dependency range, and declared license file. This remains fork-safe:
-      # it receives no secrets and the checkout token is not persisted.
+      # Validates every published version, package hash, packaged manifest,
+      # dependency range, and declared license file IN registry/. Note that
+      # registry/ deliberately holds no entries for v1: community intake is
+      # closed and first-party entries are release-generated at Pages deploy
+      # (see registry/README.md). So today this step passes over an empty set by
+      # design - it is the gate that catches a community entry added by PR, not
+      # a check on the published first-party registry. That one is asserted in
+      # deploy-pages.yml, which compares the served index against the count
+      # generation produced. Fork-safe: no secrets, token not persisted.
       - name: Validate registry entries
         working-directory: apps/topiaforge_cli
         shell: bash
