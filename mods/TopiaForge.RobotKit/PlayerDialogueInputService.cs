@@ -43,11 +43,14 @@ namespace TopiaForge.RobotKit
         public PlayerDialogueInputService(IModLogger logger)
         {
             this.logger = logger;
-            var tokenPath = Path.Combine(Application.persistentDataPath, "robo_token.json");
-            client = new RoboApiClient(tokenPath, Guid.NewGuid().ToString("N"), logger);
+            client = new RoboApiClient(
+                Application.persistentDataPath, Guid.NewGuid().ToString("N"), logger);
         }
 
-        public bool IsVoiceAvailable => !disposed && HasMicrophone() && client.HasToken;
+        // Probed by RuntimeCapabilityProbe on every load and scene change. Uses HasTokenFile so probing never
+        // reads or caches the player's credential; Microphone.devices is a device-name enumeration only and
+        // starts no capture. See the note on RoboApiClient.HasTokenFile.
+        public bool IsVoiceAvailable => !disposed && HasMicrophone() && client.HasTokenFile;
 
         public OperationResult<IVoiceCapture> BeginVoiceCapture()
         {
