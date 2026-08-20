@@ -3,6 +3,11 @@ using System.Collections.Generic;
 using System.Text;
 using TopiaForge.Mods;
 
+// Lives in mods/Shared/CreatorTools so both consumers pick it up from the same glob: the shared workbench
+// (CreatorWorkbench.Conversation) calls it, and Sandbox owns the PROGRAM verb it implements. It previously sat
+// in mods/TopiaForge.Sandbox and was cross-linked out of CreatorTools, which made a Sandbox-local refactor
+// break the CreatorTools build with nothing in that project to explain why. The namespace stays TopiaForge.Sandbox
+// so the move is source-compatible; renaming it is a separate change across the workbench and its tests.
 namespace TopiaForge.Sandbox
 {
     // The "program a robot by talking to it" brain of the sandbox PROGRAM verb: builds the multi-turn conversation
