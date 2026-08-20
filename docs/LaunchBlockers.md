@@ -2,6 +2,11 @@
 
 Last audited: 2026-07-31. Product candidate: `1.0.0-rc.1`. Recommendation: **NO-SHIP**.
 
+Scope change on 2026-08-12: **Linux is out of `1.0.0-rc.1`** and returns in `1.0.0-rc.2`.
+The administrator host cannot reach a GPU Vulkan implementation inside WSL2, and
+Robotopia's Direct3D 12 renderer requires it through VKD3D, so no credible Proton
+acceptance evidence was obtainable. RC1 ships Windows x64 only. See `P0-LINUX-01`.
+
 A first-party mod audit on 2026-07-27 found and fixed one critical and two high-severity engineering defects that
 the prior remediation had missed (see [First-party mod audit](#first-party-mod-audit-2026-07-27) below). No further
 local critical- or high-severity engineering *product* defect is known as of that audit. The release remains blocked by
@@ -63,9 +68,9 @@ check is silently skipped.
 | Release-policy/BOM/SBOM/checksum machinery | PASS | Strict policy and metadata regressions cover MIT, actual platform trust, signed update metadata/sidecar, checksums, BOM, SBOM, and immutable asset inventory. |
 | Repository and CI hygiene | PASS | actionlint `1.7.7`, PowerShell/bash parsing, 164 JSON/YAML files, 118 Markdown files, 1,943 built HTML links, action pins, conflict markers, LF policy, and the 381-file non-generated Dart line cap passed. PSScriptAnalyzer `1.25.0` is rerun after every release-script edit. |
 | Credential exposure containment | BLOCKED | The affected workspace DerivedData and launcher build logs were removed, and a scrubbed exact-toolchain sentinel build passed; 13 newly produced Xcode activity logs contained no credential-shaped variable names. Credential owners must still rotate the previously exposed values and confirm revocation. See `P0-CRED-01`. |
-| Strict distributable-release policy | NEEDS RERUN | RC1 policy is scoped to Windows and Linux, forbids signing exceptions, and requires an exact nonzero Windows certificate SHA-256 pin plus an authenticated detached CMS handoff. |
+| Strict distributable-release policy | NEEDS RERUN | RC1 policy is scoped to Windows x64 only, forbids signing exceptions, and requires an exact nonzero Windows certificate SHA-256 pin plus an authenticated detached CMS handoff. |
 | Windows x64 RC1 package and clean-host run | BLOCKED | Requires a reviewed code-signing certificate/PFX, RFC 3161 timestamp service, a frozen clean candidate, exact timestamped-signature verification, Unity/Robotopia evidence, and clean-machine QA; see `P0-WIN-01`. |
-| Linux x64 package and Proton run | BLOCKED | Firmware virtualization is currently disabled and no Ubuntu WSL2 distribution or Proton runtime exists on the current host. Enable virtualization, install the pinned environment, then produce candidate-bound WSL2/WSLg Proton evidence; see `P0-LINUX-01`. |
+| Linux x64 package and Proton run | OUT OF RC1 | The WSL2 builder is fully provisioned and every pinned Linux toolchain verifies, but no GPU-backed Vulkan implementation is reachable there: NVIDIA ships no Vulkan ICD for WSL2 and Ubuntu does not package Mesa's Dozen driver, leaving only software lavapipe. Robotopia's Direct3D 12 renderer reaches Proton through VKD3D, which requires Vulkan, so the working OpenGL-over-d3d12 path cannot serve it. RC1 is therefore Windows-only; see `P0-LINUX-01`. |
 | Native CreatorTools evidence collector | BLOCKED | Implemented, not yet attested. `CreatorAcceptanceRecorder` emits challenge-bound per-case markers from observed workbench transitions for all nine `creator.*` cases, `topiaforge acceptance creator` binds them to the exact `last-run.json` session and CreatorTools package receipt, and the three `Assert-WindowsCreator*` verifiers in `tools/release-admin.ps1` now perform real `release-windows-creator-evidence-v2` verification instead of throwing. Save and checkpoint bytes are compared across End Session from the real `player_data.json.gz` document. The gate stays BLOCKED because no evidence has been produced from an authorized interactive build-2309 session at the frozen candidate SHA; see `P0-CREATOR-01`. |
 | Authorized Robotopia build-2309 acceptance | BLOCKED | A local Windows startup smoke passed on 2026-07-28: BepInEx loaded TopiaForge, detected `0.0.2309`, consumed all 16 staged packages, loaded every enabled first-party mod, initialized the native prompt/performance/UI bridges, and left Robotopia responsive. The complete dynamic-binding, reload, recovery, multiplayer, and profiler matrix still requires retained evidence from the frozen candidate; see `P0-GAME-01`. |
 | Native UX/accessibility acceptance | BLOCKED | Screen Recording permission prevented screenshot comparison; screen-reader and native-platform manual QA remain; see `P1-UX-01`. |
@@ -82,10 +87,16 @@ Every gate below whose exit criteria are met by a reviewed record has a matching
 [`release/release-readiness.json`](../release/release-readiness.json), validated
 against its schema at the exact candidate SHA. The readiness decision previously
 carried only the four owner-decision P0 gates and the three P1 gates, which left
-`P0-WIN-01`, `P0-LINUX-01`, `P0-GAME-01`, `P0-HOST-01`, and `P0-CAND-01`
+`P0-WIN-01`, `P0-GAME-01`, `P0-HOST-01`, and `P0-CAND-01`
 release-fatal here but invisible to the machine decision. They are now recorded
 gates, so the computed status cannot reach `ready` while any of them is
 unresolved.
+
+The decision carries **twelve** gates for RC1. `P0-LINUX-01` is deliberately absent
+because Linux is out of this candidate; restoring it belongs to `1.0.0-rc.2`
+alongside the policy archive entry and both schema gate contracts. `P0-OSS-01` is
+present: it was re-opened on 2026-08-06 and the readiness contract must be able to
+carry it rather than infer it from the legal inventory passing.
 
 `P0-CREATOR-01` is deliberately not a readiness entry. The code it required now
 exists, but it is still not closed by an attestation: it is closed by evidence
@@ -242,19 +253,41 @@ automated tests cannot close Unity object lifetime.
   exercise clean install/repair/profile/safe-mode/failure/diagnostics/confirmed
   update, forced rollback, and uninstall journeys.
 
-- [ ] **P0-LINUX-01 — Produce and validate Linux x64 and Proton behavior.**
+- **P0-LINUX-01 — Produce and validate Linux x64 and Proton behavior.** *(OUT OF RC1;
+  deferred to `1.0.0-rc.2` on 2026-08-12)*
 
   Owner: Linux/Proton release QA.
 
-  Exit criteria: enable firmware virtualization; install Ubuntu 24.04 as WSL2,
-  WSLg, pinned Linux toolchains, and Proton `10.0-4`; then build Linux x64 from the frozen SHA;
-  inspect final ZIP executable modes, links, checksums, notices, and bundled
-  payloads. The same-host environment must run the actual Robotopia build-2309
-  matrix through WSLg/Proton with `WINEDLLOVERRIDES=winhttp=n,b`, exercise the
-  native Linux launcher/CLI, discovery, path translation, process launch,
-  runtime repair, custom-world, recovery, and uninstall flows, and return a
-  scrubbed evidence bundle tied to the exact archive digest. Record
-  `independentQa:false`; a build-only WSL run does not pass.
+  Why it is deferred: the WSL2 builder is fully provisioned on the administrator host and
+  every pinned Linux toolchain verifies exactly — clang `18.1.3`, CMake `3.28.3`, Ninja
+  `1.11.1`, GTK `3.24.41`, .NET `10.0.301`, Node `24.18.0`, Flutter `3.44.6`, Dart `3.12.2`.
+  The blocker is the graphics stack, not the toolchain. NVIDIA ships no Vulkan ICD for
+  WSL2 and Ubuntu 24.04 does not package Mesa's Dozen (`dzn`) Vulkan-over-D3D12 driver, so
+  the only Vulkan implementation reachable inside WSLg is software lavapipe. Robotopia
+  ships the Direct3D 12 Agility SDK and reaches Proton through VKD3D, which requires
+  Vulkan; the OpenGL path that *does* run on the GPU there (Mesa d3d12,
+  `GALLIUM_DRIVER=d3d12`) cannot serve Direct3D 12 at all. Acceptance could therefore only
+  have been recorded against software rendering, or against a forced non-default renderer
+  no real Proton player would use. This gate explicitly rejects a build-only run, and that
+  bar was written precisely to stop this kind of shortcut, so the platform is deferred
+  rather than weakened.
+
+  RC1 consequences: `release/release-policy.json` targets Windows x64 only, the readiness
+  and BOM gate contracts drop `P0-LINUX-01`, and the orchestrator's WSL
+  build, Proton acceptance, and their preflight checks are gated on the policy rather than
+  removed. Linux support is untouched in the source tree.
+
+  Exit criteria for `1.0.0-rc.2`: restore the Linux archive to the policy, the gate to both
+  schemas, and `P0-LINUX-01` to the readiness decision, then build Linux x64 from the frozen
+  SHA and inspect final ZIP executable modes, links, checksums, notices, and bundled
+  payloads. Run the actual Robotopia build-2309 matrix through Proton with
+  `WINEDLLOVERRIDES=winhttp=n,b` **on a host that can reach a GPU Vulkan implementation**,
+  exercise the native Linux launcher/CLI, discovery, path translation, process launch,
+  runtime repair, custom-world, recovery, and uninstall flows, and return a scrubbed
+  evidence bundle tied to the exact archive digest. A build-only run still does not pass.
+  If that host is not the Windows administrator workstation, the evidence contract's
+  `wsl2-wslg` execution environment and the orchestrator's WSL-driven collection must be
+  reworked first.
 
 - [ ] **P0-GAME-01 — Complete authorized build-2309 runtime and first-party-mod acceptance.**
 
