@@ -11,6 +11,12 @@
   "entryAssembly": "TopiaForge.UgcLiveSync.dll",
   "entryType": "TopiaForge.UgcLiveSync.UgcLiveSyncMod",
   "dependencies": {},
+  "optionalDependencies": {
+    "io.github.furroxide.topiaforge.worlds": ">=1.0.0-rc.1 <2.0.0"
+  },
+  "loadAfter": [
+    "io.github.furroxide.topiaforge.worlds"
+  ],
   "supportedGameVersionRange": "0.0.2309",
   "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
   "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",

@@ -47,6 +47,7 @@ namespace TopiaForge.ModManager.Tests
                     manifest.Id + " must use the approved project license");
                 Assert(manifest.LicenseFiles.SequenceEqual(new[] { "LICENSE" }),
                     manifest.Id + " must include the approved project license in its package");
+                AssertDeclaredLicenseFilesResolve(repoRoot, path, manifest);
                 Assert(!manifest.Capabilities.Contains("ai", StringComparer.OrdinalIgnoreCase),
                     manifest.Id + " must use descriptive capabilities instead of the ambiguous ai alias");
 
@@ -86,9 +87,25 @@ namespace TopiaForge.ModManager.Tests
             Assert(manifests["io.github.furroxide.topiaforge.robotkit"].OptionalDependencies.ContainsKey(
                     "io.github.furroxide.topiaforge.prompts"),
                 "RobotKit must declare its optional Prompts integration");
+            // Sandbox and Creator Tools both host the shared Creator workbench, whose BeginConversation path
+            // (mods/Shared/CreatorTools/CreatorWorkbench.Conversation.cs:78) reaches RobotKit's RoboApiClient and
+            // POSTs player-typed text with the per-user Robotopia bearer token to api.tomatocake.dev. It is
+            // config-gated, not absent, so PrivacyAndCapabilities.md:60 ("declare every capability its behavior
+            // can exercise") requires network/remote-ai/player-token - the same set Zombies declares for its
+            // opt-in JACK IN path. This assertion previously pinned that omission in place. What Sandbox
+            // genuinely must not claim is voice: it has no Microphone or speech path.
             AssertLacksCapabilities(
                 manifests["io.github.furroxide.topiaforge.sandbox"],
-                "network", "remote-ai", "player-token", "microphone", "speech-to-text");
+                "microphone", "speech-to-text");
+            AssertCapabilities(
+                manifests["io.github.furroxide.topiaforge.sandbox"],
+                "network", "remote-ai", "player-token", "player-control");
+            AssertCapabilities(
+                manifests["io.github.furroxide.topiaforge.creatortools"],
+                "network", "remote-ai", "player-token", "player-control", "physics");
+            AssertLacksCapabilities(
+                manifests["io.github.furroxide.topiaforge.creatortools"],
+                "microphone", "speech-to-text");
             Assert(manifests["io.github.furroxide.topiaforge.creatorcontent"].Category == "Framework",
                 "Creator Content must ship as a normal framework dependency");
             Assert(manifests["io.github.furroxide.topiaforge.creatortools"].Category == "DevTool",
@@ -154,6 +171,70 @@ namespace TopiaForge.ModManager.Tests
             }
         }
 
+        /// <summary>
+        /// A manifest that declares licenseFiles is promising those paths exist in the built package. No mod
+        /// directory carries its own LICENSE: packing injects the shared mods/LICENSE for first-party ids
+        /// (pack_helpers.dart, _packModProject). Asserting the declared string alone therefore proves nothing -
+        /// if mods/LICENSE were moved or renamed, every package would ship an unsatisfied licenseFiles entry
+        /// and no test would notice. This asserts the declaration actually resolves to a file on disk.
+        /// </summary>
+        private static void AssertDeclaredLicenseFilesResolve(
+            string repoRoot,
+            string manifestPath,
+            ModManifest manifest)
+        {
+            var modDirectory = Path.GetDirectoryName(manifestPath)!;
+            var sharedLicenseRoot = Path.Combine(repoRoot, "mods");
+            foreach (var declared in manifest.LicenseFiles)
+            {
+                var local = Path.Combine(modDirectory, declared);
+                var shared = Path.Combine(sharedLicenseRoot, declared);
+                Assert(File.Exists(local) || File.Exists(shared),
+                    manifest.Id + " declares licenseFiles entry '" + declared
+                    + "' but neither " + Path.GetRelativePath(repoRoot, local).Replace('\\', '/')
+                    + " nor " + Path.GetRelativePath(repoRoot, shared).Replace('\\', '/')
+                    + " exists, so the packaged manifest would reference a missing file");
+            }
+        }
+
+        /// <summary>
+        /// Every first-party mod must build under exactly the MSBuild contract a community author gets from
+        /// the analyzer package. The two buildTransitive imports carry the CompilerVisibleProperty wiring,
+        /// the topiaforge.mod.json AdditionalFiles entry, and the TF1003 copied-SDK-assembly guard. Dropping
+        /// either import is silent: TF1003 stops running, and without AdditionalFiles the manifest snapshot
+        /// degrades to empty, which disables TF1004 and TF1006 rather than failing. Nothing else catches that,
+        /// so it is asserted here.
+        /// </summary>
+        private static void ValidateAnalyzerContract(ModManifest manifest, XDocument project)
+        {
+            var imports = project.Descendants("Import")
+                .Select(element => ((string?)element.Attribute("Project") ?? string.Empty).Replace('\\', '/'))
+                .ToArray();
+            foreach (var required in new[]
+                     {
+                         "buildTransitive/TopiaForge.Mods.Analyzers.props",
+                         "buildTransitive/TopiaForge.Mods.Analyzers.targets"
+                     })
+            {
+                Assert(imports.Any(import => import.EndsWith(required, StringComparison.OrdinalIgnoreCase)),
+                    manifest.Id + " must import " + required
+                    + " so it builds under the same analyzer contract as a community mod");
+            }
+
+            var analyzerReference = project.Descendants("ProjectReference").SingleOrDefault(reference =>
+                ((string?)reference.Attribute("Include") ?? string.Empty)
+                .EndsWith("TopiaForge.Mods.Analyzers.csproj", StringComparison.OrdinalIgnoreCase));
+            Assert(analyzerReference != null,
+                manifest.Id + " must reference the mod analyzers so TF1001-TF1008 run against it");
+            Assert((string?)analyzerReference!.Attribute("OutputItemType") == "Analyzer",
+                manifest.Id + " must consume TopiaForge.Mods.Analyzers as an analyzer, not as a library");
+            Assert(string.Equals(
+                    (string?)analyzerReference.Attribute("ReferenceOutputAssembly"),
+                    "false",
+                    StringComparison.OrdinalIgnoreCase),
+                manifest.Id + " must not link the analyzer assembly into its own output");
+        }
+
         private static void ValidateProjectAndLifecycleContract(
             string manifestPath,
             ModManifest manifest,
@@ -170,6 +251,7 @@ namespace TopiaForge.ModManager.Tests
                     ((string?)reference.Attribute("Include") ?? string.Empty)
                     .EndsWith("TopiaForge.Mods.Abstractions.csproj", StringComparison.OrdinalIgnoreCase)),
                 manifest.Id + " must compile against the public mod SDK");
+            ValidateAnalyzerContract(manifest, project);
 
             var sourceFiles = Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories)
                 .Where(path => !IsBuildOutput(path))
@@ -201,7 +283,13 @@ namespace TopiaForge.ModManager.Tests
                 || manifest.Id == "io.github.furroxide.topiaforge.creatortools"
                 || manifest.Id == "io.github.furroxide.topiaforge.uigallery")
             {
-                ValidateSafeConsumerSource(manifest, project, source);
+                // Linked sources ship inside the safe consumer's own assembly, so they must clear the same
+                // bar as code that physically lives in the mod directory. mods/Shared/CreatorTools (23 files)
+                // is compiled into both CreatorTools and Sandbox and was previously scanned by neither.
+                ValidateSafeConsumerSource(
+                    manifest,
+                    project,
+                    source + "\n" + ReadLinkedCompileSources(directory, project));
             }
 
             foreach (Match match in Regex.Matches(
@@ -217,6 +305,45 @@ namespace TopiaForge.ModManager.Tests
                         RegexOptions.CultureInvariant),
                     manifest.Id + " loaded config " + configType + " must be a DataContract in checked-in source");
             }
+        }
+
+        /// <summary>
+        /// Reads every source a project pulls in by link, i.e. the &lt;Compile Include="..\..."&gt; items that
+        /// resolve outside the project directory. Supports the literal and single-wildcard forms used under
+        /// mods/ (..\Shared\SafeEvent.cs and ..\Shared\CreatorTools\*.cs).
+        /// </summary>
+        private static string ReadLinkedCompileSources(string projectDirectory, XDocument project)
+        {
+            var linked = new List<string>();
+            foreach (var include in project.Descendants("Compile")
+                         .Select(element => (string?)element.Attribute("Include"))
+                         .Where(value => !string.IsNullOrWhiteSpace(value))
+                         .Select(value => value!.Replace('\\', Path.DirectorySeparatorChar)))
+            {
+                var resolved = Path.GetFullPath(Path.Combine(projectDirectory, include));
+                var directory = Path.GetDirectoryName(resolved);
+                if (directory == null || !Directory.Exists(directory))
+                {
+                    continue;
+                }
+
+                var pattern = Path.GetFileName(resolved);
+                if (pattern.Contains('*'))
+                {
+                    linked.AddRange(Directory.EnumerateFiles(directory, pattern, SearchOption.TopDirectoryOnly));
+                }
+                else if (File.Exists(resolved))
+                {
+                    linked.Add(resolved);
+                }
+            }
+
+            return string.Join(
+                "\n",
+                linked.Where(path => !IsBuildOutput(path))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(path => path, StringComparer.Ordinal)
+                    .Select(File.ReadAllText));
         }
 
         private static void ValidateSafeConsumerSource(
