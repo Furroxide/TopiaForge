@@ -46,7 +46,8 @@ topiaforge acceptance creator --creator-package <CreatorTools .topiaforgemod> --
 `resume` continues from the durable local state and `all` runs every remaining
 phase. Passing the two evidence flags to `build` or `all` up front works only
 when a valid descriptor for that exact archive already exists — on a fresh
-candidate it will not, so expect the two-step sequence above. Add `-Rehearsal` to `all` for a verified, non-publishing two-platform
+candidate it will not, so expect the two-step sequence above.
+Add `-Rehearsal` to `all` for a verified, non-publishing two-platform
 rehearsal. Local state and raw evidence live under `.release-local/`, which is
 ignored by Git.
 

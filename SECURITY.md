@@ -20,10 +20,10 @@ mitigation. Reports involving archive traversal, signature/hash bypass, unsafe p
 credential exposure, loader privilege boundaries, or remote UGC sessions are especially useful.
 
 TopiaForge is maintained by one person on a best-effort basis, with no guaranteed response time. The intent is to
-acknowledge a private report, agree disclosure timing with the reporter, and publish an advisory once users have had a
-reasonable update window. Whether a fix ships, and how quickly, depends on severity and on maintainer capacity; for a
-low-severity issue the outcome may be an advisory and a documented workaround rather than a patch. Security fixes must
-not be disclosed through a public pull request before coordinated release.
+acknowledge a private report, agree on disclosure timing with the reporter, and publish an advisory once users have
+had a reasonable update window. Whether a fix ships, and how quickly, depends on severity and on maintainer capacity;
+for a low-severity issue the outcome may be an advisory and a documented workaround rather than a patch. Security
+fixes must not be disclosed through a public pull request before coordinated release.
 
 ## Supported versions
 
