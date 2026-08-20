@@ -153,7 +153,15 @@ jobs:
           fetch-depth: 0
           lfs: true
           persist-credentials: false
-          ref: ${{ needs.verify-candidate.outputs.target_sha }}
+          ref: ${{ github.ref }}
+
+      - name: Pin the checkout to the approved release commit
+        shell: bash
+        env:
+          TARGET_SHA: ${{ needs.verify-candidate.outputs.target_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
 
       - name: Set up pinned .NET SDK
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
