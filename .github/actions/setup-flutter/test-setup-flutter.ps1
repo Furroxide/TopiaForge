@@ -86,4 +86,78 @@ foreach ($workflowName in @("ci.yml", "deploy-pages.yml", "flutter-launcher-buil
     }
 }
 
+# The installer's ownership guard is only meaningful while the action keeps pointing both
+# directories at their dedicated runner-temp leaves, so pin that decision where it is made.
+if ($action -notmatch
+    ('(?m)^\s+TOPIAFORGE_FLUTTER_INSTALL_DIRECTORY:\s+' +
+        '\$\{\{\s*runner\.temp\s*\}\}/topiaforge-flutter-sdk\s*$')) {
+    throw "The Flutter setup action must install into its dedicated runner-temp directory."
+}
+if ($action -notmatch
+    ('(?m)^\s+TOPIAFORGE_FLUTTER_ARCHIVE_DIRECTORY:\s+' +
+        '\$\{\{\s*runner\.temp\s*\}\}/topiaforge-flutter-archives\s*$')) {
+    throw "The Flutter setup action must cache archives in its dedicated runner-temp directory."
+}
+
+# The installer recursively deletes its install directory, so prove it refuses a directory it
+# does not own, and refuses it before creating anything.
+$installer = Join-Path $PSScriptRoot "install-flutter.ps1"
+$rejectedDirectory = Join-Path ([System.IO.Path]::GetTempPath()) (
+    "topiaforge-flutter-guard-" + [Guid]::NewGuid().ToString("N")
+)
+$guardVariableNames = @(
+    "RUNNER_OS",
+    "RUNNER_ARCH",
+    "TOPIAFORGE_FLUTTER_ARCHIVE_DIRECTORY",
+    "TOPIAFORGE_FLUTTER_INSTALL_DIRECTORY"
+)
+$previousEnvironment = @{}
+foreach ($name in $guardVariableNames) {
+    $previousEnvironment[$name] = [Environment]::GetEnvironmentVariable($name)
+}
+
+# A non-zero child exit must surface as $LASTEXITCODE here, not as a terminating error.
+$restoreNativePreference = Test-Path Variable:PSNativeCommandUseErrorActionPreference
+$previousNativePreference = if ($restoreNativePreference) {
+    $PSNativeCommandUseErrorActionPreference
+} else {
+    $null
+}
+
+try {
+    if ($restoreNativePreference) {
+        $PSNativeCommandUseErrorActionPreference = $false
+    }
+
+    $env:RUNNER_OS = "Linux"
+    $env:RUNNER_ARCH = "X64"
+    $env:TOPIAFORGE_FLUTTER_ARCHIVE_DIRECTORY = Join-Path $rejectedDirectory "archives"
+    $env:TOPIAFORGE_FLUTTER_INSTALL_DIRECTORY = $rejectedDirectory
+    $guardOutput = (& pwsh -NoLogo -NoProfile -NonInteractive -File $installer 2>&1) |
+        Out-String
+    $guardExitCode = $LASTEXITCODE
+    if ($guardExitCode -eq 0) {
+        throw "The Flutter installer must refuse an install directory it does not own."
+    }
+    if ($guardOutput -notmatch "must name a dedicated") {
+        throw "The Flutter installer refused the install directory for the wrong reason: " +
+            $guardOutput
+    }
+}
+finally {
+    # The child is expected to fail, so keep its exit status out of this script's own.
+    $global:LASTEXITCODE = 0
+    if ($restoreNativePreference) {
+        $PSNativeCommandUseErrorActionPreference = $previousNativePreference
+    }
+
+    foreach ($name in $guardVariableNames) {
+        [Environment]::SetEnvironmentVariable($name, $previousEnvironment[$name])
+    }
+}
+
+if (Test-Path -LiteralPath $rejectedDirectory) {
+    throw "The Flutter installer must reject an unowned install directory before creating it."
+}
+
 Write-Host "Pinned Flutter setup contract tests passed."
