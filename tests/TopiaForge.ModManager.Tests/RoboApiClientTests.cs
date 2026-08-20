@@ -76,6 +76,10 @@ namespace TopiaForge.ModManager.Tests
                     "the request guard must still reject an oversized token file");
                 Assert(probeLogger.DebugCount == 1,
                     "only the request guard should read token material");
+                Assert(probe.HasTokenFile,
+                    "the probe must keep answering from file existence after a failed parse, never from the cache");
+                Assert(probeLogger.DebugCount == 1,
+                    "re-probing after a failed parse must not read token material again");
 
                 var absentDirectory = Path.Combine(root, "robo-token-absent");
                 Directory.CreateDirectory(absentDirectory);
