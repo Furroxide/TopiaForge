@@ -49,10 +49,15 @@ namespace TopiaForge.UgcLiveSync
             Context.Config.Save(ConfigContract, config);
 
             var bridge = new UgcGameBridge(Context.Logger);
-            service = new UgcLiveSyncService(bridge, Context.Logger)
+            // Held in a local as well as the field: the runtime drains lifetime-tracked resources AFTER
+            // OnUnload returns (TopiaForgeMod.Unload), and OnUnload nulls `service`. A Defer lambda closing
+            // over the field would therefore dereference null during every single unload and surface as an
+            // AggregateException out of the lifetime drain.
+            var liveService = new UgcLiveSyncService(bridge, Context.Logger)
             {
                 CurrentMaxBytes = config.MaxSnapshotBytes
             };
+            service = liveService;
 
             status = new UgcLiveSyncStatusFile
             {
@@ -60,11 +65,11 @@ namespace TopiaForge.UgcLiveSync
                 Transport = config.UsesAutomerge ? "automerge" : "localFolder",
                 ModVersion = Context.Identity.Version.ToString(),
             };
-            service.SnapshotImported += OnSnapshotApplied;
-            service.PatchApplied += OnSnapshotApplied;
-            Context.Lifetime.Defer(() => service.SnapshotImported -= OnSnapshotApplied);
-            Context.Lifetime.Defer(() => service.PatchApplied -= OnSnapshotApplied);
-            Context.Lifetime.Track(service);
+            liveService.SnapshotImported += OnSnapshotApplied;
+            liveService.PatchApplied += OnSnapshotApplied;
+            Context.Lifetime.Defer(() => liveService.SnapshotImported -= OnSnapshotApplied);
+            Context.Lifetime.Defer(() => liveService.PatchApplied -= OnSnapshotApplied);
+            Context.Lifetime.Track(liveService);
 
             var registration = Context.Extensions.Register<IUgcLiveSyncService>(service);
             if (!registration.Succeeded)

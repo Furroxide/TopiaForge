@@ -51,7 +51,7 @@
         "platforms": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["windows-x64", "linux-x64"],
+          "required": ["windows-x64"],
           "properties": {
             "windows-x64": { "$ref": "#/definitions/codeSigningStatus" },
             "linux-x64": { "$ref": "#/definitions/codeSigningStatus" },
@@ -83,7 +83,7 @@
         "identitySha256": { "$ref": "#/definitions/sha256" },
         "files": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/pathInventory" } },
         "platformCopies": {
-          "type": "array", "minItems": 2, "maxItems": 3,
+          "type": "array", "minItems": 1, "maxItems": 3,
           "items": {
             "type": "object", "additionalProperties": false,
             "required": ["archive", "identitySha256"],
@@ -215,7 +215,7 @@
             "P0-GAME-01",
             "P0-HOST-01",
             "P0-IP-01",
-            "P0-LINUX-01",
+            "P0-OSS-01",
             "P0-PRIV-01",
             "P0-TRUST-01",
             "P0-WIN-01",
