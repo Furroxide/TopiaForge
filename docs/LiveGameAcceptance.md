@@ -105,11 +105,33 @@ On an authorized build-2309 host, complete all of these checks:
 Do not mark this matrix complete from the Unity-free lifecycle suite alone. That suite protects the
 same ownership and rollback policies, but the native build-2309 evidence remains mandatory.
 
-Creator pass publication is currently disabled. There is not yet a native CreatorTools collector
-that can tie explicit per-case UI outcomes to the one-run challenge, exact last-run session,
-package receipts, candidate archive, and case inventory. The legacy script that inferred `pass`
-from case-directory files, a manual cycle count, and identical state blobs now exits with an error,
-and the release orchestrator rejects legacy Creator evidence. Do not hand-author a replacement.
+Creator evidence is collected natively. `CreatorAcceptanceRecorder` in `mods/Shared/CreatorTools`
+emits `TF-CREATOR|PASS|<challenge>|<case>` markers for all nine `creator.*` cases from workbench
+transitions it actually observed, so partial instrumentation fails closed instead of reporting a
+false pass. The recorder is inert unless a 64-hex challenge has been provisioned into the
+CreatorTools config, so ordinary play emits nothing. Run it with:
+
+```powershell
+topiaforge acceptance creator --creator-package <CreatorTools .topiaforgemod> --all
+```
+
+That command issues the challenge itself — you never see or type it — tails `manager.log`, and binds
+the result to the exact `last-run.json` session and CreatorTools package receipt. Save and
+checkpoint bytes are captured before and after End Session from the real `player_data.json.gz`,
+decompressed before hashing so the gzip mtime does not read as a spurious change. Convert the result
+to a release descriptor with `tools/release/new-windows-creator-evidence.ps1`; the three
+`Assert-WindowsCreator*` verifiers in `tools/release-admin.ps1` then perform real
+`release-windows-creator-evidence-v2` verification, re-deriving every claim from the bundle rather
+than trusting the descriptor.
+
+The legacy script that inferred `pass` from case-directory files, a manual cycle count, and identical
+state blobs still exits with an error, and the orchestrator still rejects legacy Creator evidence.
+Do not hand-author a replacement — use the collector above.
+
+Ordering note: the descriptor requires `-WindowsArchive`, which only exists after the Windows build.
+So `release-admin.ps1 build` is expected to stop at the Creator-evidence check on its first pass;
+produce the evidence, then continue with `resume -WindowsCreatorEvidence … -WindowsCreatorEvidenceBundle …`.
+The full sequence is in `docs/AdminRelease.md` in the repository.
 
 The local Windows and same-host WSL2/Proton runs also extract their candidate developer payload,
 use only its packaged CLI to create a fresh minimal mod outside the extraction, and pass that
