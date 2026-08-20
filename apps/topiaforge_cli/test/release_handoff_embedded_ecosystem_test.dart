@@ -67,19 +67,6 @@ void main() {
           (platform, bundle) => MapEntry(platform, bundle.platformToolchains),
         ),
         {
-          'linux-x64': {
-            'clang': '18.1.3',
-            'cmake': '3.28.3',
-            'ninja': '1.11.1',
-            'gtk': '3.24.41',
-            'proton': '10.0-4',
-            'executionEnvironment': 'wsl2-wslg',
-            'protonSteamAppId': '3658110',
-            'protonSteamDepotId': '3658111',
-            'protonSteamManifestId': '5413949673798237105',
-            'protonSteamBuildId': '21617411',
-            'protonSourceCommit': 'e2becb87430ca3ff510d949d9e75fa9b401da489',
-          },
           'windows-x64': {'msvc': '14.51.36231', 'windowsSdk': '10.0.26100.0'},
         },
       );
@@ -89,7 +76,7 @@ void main() {
       _writeEcosystemArchives(
         mismatched,
         ecosystemFiles,
-        changedPlatform: 'linux-x64',
+        changedPlatform: 'windows-x64',
       );
       writeReleaseQaFixtures(
         repositoryRoot: root,
@@ -245,7 +232,6 @@ void _writeEcosystemArchives(
 }) {
   const archives = <String, String>{
     'windows-x64': 'TopiaForge-windows-x64.zip',
-    'linux-x64': 'TopiaForge-linux-x64.zip',
   };
   for (final archiveEntry in archives.entries) {
     final archive = Archive();

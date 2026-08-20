@@ -155,7 +155,7 @@ Machine setup and the resumable command sequence are in
       records at least ten lifecycle cycles and unchanged save/checkpoint state, and matches its retained evidence
       bundle and exact Windows archive (launcher, CLI, and GameCompat extractor
       Authenticode-signed and RFC 3161 timestamped by the pinned certificate).
-- [ ] The same-host WSL2/WSLg Proton evidence bundle matches the exact Linux archive digest and covers real
+- [ ] *(Out of RC1; `1.0.0-rc.2`.)* The Proton evidence bundle matches the exact Linux archive digest and covers real
       discovery, path/process, repair, custom-world, runtime, and uninstall behavior with Proton `10.0-4`.
       Metadata records that this RC1 evidence is non-independent; build output without the actual game run is not
       accepted.
@@ -164,8 +164,8 @@ Machine setup and the resumable command sequence are in
 
 ## 8. Platform release archives
 
-- [ ] On clean checkouts of the same frozen SHA, build Windows x64 on the administrator workstation and Linux x64 in
-      Ubuntu 24.04 under WSL2 on that same physical host.
+- [ ] On a clean checkout of the frozen SHA, build Windows x64 on the administrator workstation. *(Linux x64 in
+      Ubuntu 24.04 under WSL2 is out of RC1 and returns in `1.0.0-rc.2`.)*
 - [ ] Build the canonical ecosystem twice byte-identically before distribution and prove every platform archive
       contains that exact ecosystem digest.
 - [ ] Directly inspect final extracted archives for missing/extra/duplicate/linked entries, case collisions, modes,
@@ -174,8 +174,9 @@ Machine setup and the resumable command sequence are in
       Authenticode signatures from the exact reviewed leaf-certificate
       SHA-256 pin and valid HTTPS RFC 3161 timestamps. Unsigned, partly signed,
       untimestamped, expired-at-signing, mismatched, or invalid output fails.
-- [ ] Linux executable modes, native launcher/CLI, and discovery/path/process/repair/custom-world assumptions for
-      Robotopia's Windows build under Proton pass on a clean host.
+- [ ] *(Out of RC1; `1.0.0-rc.2`.)* Linux executable modes, native launcher/CLI, and
+      discovery/path/process/repair/custom-world assumptions for Robotopia's Windows build under Proton pass on a
+      clean host that can reach a GPU Vulkan implementation.
 - [ ] Clean-machine install, repair, profiles, dependency preview, normal/safe-mode launch, failure recovery,
       diagnostics, confirmed in-app update, forced rollback, manual fallback,
       and uninstall pass for each supported platform.
