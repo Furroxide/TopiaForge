@@ -115,8 +115,7 @@ class ReleasePolicyValidator {
           !policy.targetsWindows ||
           policy.targetsMacOS) {
         issues.add(
-          'Release 1.0.0-rc.1 must target only signed Windows x64 and '
-          'Linux x64 packages.',
+          'Release 1.0.0-rc.1 must target only signed Windows x64 packages.',
         );
       }
     }
@@ -146,10 +145,11 @@ class ReleasePolicyValidator {
         'A configured macOS signing identity is required for this release.',
       );
     }
-    const rc1PlatformArchives = {
-      'TopiaForge-linux-x64.zip',
-      'TopiaForge-windows-x64.zip',
-    };
+    // Linux is descoped from 1.0.0-rc.1 and returns in rc.2. WSLg cannot reach
+    // a GPU Vulkan implementation, and Robotopia's D3D12 renderer needs it
+    // through VKD3D, so no credible Proton acceptance evidence can be produced
+    // on the administrator host. See P0-LINUX-01 in docs/LaunchBlockers.md.
+    const rc1PlatformArchives = {'TopiaForge-windows-x64.zip'};
     final hasSupportedPlatforms = policy.platformArchives.every(
       releasePlatformArchives.containsValue,
     );
