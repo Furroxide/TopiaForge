@@ -167,8 +167,16 @@ namespace TopiaForge.RobotKit
 
         private sealed class Parser
         {
+            // ParseValue -> ParseObject/ParseArray -> ParseValue is mutually recursive, and the input is a
+            // response from a remote endpoint. Without a bound, deeply nested input overflows the stack, and
+            // StackOverflowException cannot be caught - it terminates the process, taking the game with it, so
+            // Deserialize's catch is no protection. 64 is far beyond any real RoboAPI payload; exceeding it
+            // throws FormatException, which that catch already turns into a clean null rejection.
+            private const int MaxDepth = 64;
+
             private readonly string text;
             private int index;
+            private int depth;
 
             public Parser(string text)
             {
@@ -176,6 +184,14 @@ namespace TopiaForge.RobotKit
             }
 
             public bool AtEnd => index >= text.Length;
+
+            private void EnterNested()
+            {
+                if (++depth > MaxDepth)
+                {
+                    throw new System.FormatException("maximum nesting depth exceeded");
+                }
+            }
 
             public object? ParseValue()
             {
@@ -189,9 +205,25 @@ namespace TopiaForge.RobotKit
                 switch (c)
                 {
                     case '{':
-                        return ParseObject();
+                        EnterNested();
+                        try
+                        {
+                            return ParseObject();
+                        }
+                        finally
+                        {
+                            depth--;
+                        }
                     case '[':
-                        return ParseArray();
+                        EnterNested();
+                        try
+                        {
+                            return ParseArray();
+                        }
+                        finally
+                        {
+                            depth--;
+                        }
                     case '"':
                         return ParseString();
                     case 't':

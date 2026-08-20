@@ -93,38 +93,30 @@ final class ReleaseUpdateMetadataBuilder {
 
     final assets = Directory(assetsDirectory);
     final platforms = <String, Object?>{};
-    for (final entry in const {
-      'windows-x64': (
-        asset: 'TopiaForge-windows-x64.zip',
-        layout: 'portable-root',
-      ),
-      'linux-x64': (asset: 'TopiaForge-linux-x64.zip', layout: 'portable-root'),
-      'macos-universal': (
-        asset: 'TopiaForge-macos-universal.zip',
-        layout: 'app-bundle',
-      ),
-    }.entries) {
-      final archive = File(p.join(assets.path, entry.value.asset));
+    for (final platform in policy.targetPlatforms) {
+      final asset = releaseArchiveForPlatform(platform);
+      final layout =
+          releasePlatformInstallLayouts[platform] ??
+          (throw StateError(
+            'No launcher update install layout exists for $platform.',
+          ));
+      final archive = File(p.join(assets.path, asset));
       final bytes = readBoundedRegularFileSync(
         archive,
         maxBytes: ReleaseZipMetadataPolicy.maxCompressedBytes,
       );
       final inspection = const ReleaseZipMetadataPolicy().inspect(bytes);
-      _validateInstallLayout(
-        bytes,
-        platform: entry.key,
-        installLayout: entry.value.layout,
-      );
-      platforms[entry.key] = {
-        'assetName': entry.value.asset,
+      _validateInstallLayout(bytes, platform: platform, installLayout: layout);
+      platforms[platform] = {
+        'assetName': asset,
         'url':
             'https://github.com/furroxide/TopiaForge/releases/download/'
-            '${release.tag}/${entry.value.asset}',
+            '${release.tag}/$asset',
         'sha256': sha256.convert(bytes).toString(),
         'size': bytes.length,
         'entryCount': inspection.entryCount,
         'expandedSize': inspection.expandedSize,
-        'installLayout': entry.value.layout,
+        'installLayout': layout,
       };
     }
 
@@ -172,6 +164,7 @@ final class ReleaseUpdateMetadataBuilder {
     required String version,
     required String assetsDirectory,
   }) async {
+    final policy = TopiaForgeReleasePolicy.load(repositoryRoot);
     final release = TopiaForgeReleaseCatalog.load(
       repositoryRoot,
     ).release(version);
@@ -202,8 +195,13 @@ final class ReleaseUpdateMetadataBuilder {
       signingKeyId: verified.keyId,
       payloadSha256: verified.sha256,
     );
-    if (candidate.version != release.version ||
+    if (policy.productVersion != release.version ||
+        candidate.version != release.version ||
         candidate.tag != release.tag ||
+        !_samePlatformSet(
+          candidate.platforms.keys.toSet(),
+          policy.targetPlatforms.toSet(),
+        ) ||
         candidate.releaseUrl !=
             'https://github.com/furroxide/TopiaForge/releases/tag/'
                 '${release.tag}' ||
@@ -262,6 +260,9 @@ final class ReleaseUpdateMetadataBuilder {
     }
   }
 }
+
+bool _samePlatformSet(Set<String> left, Set<String> right) =>
+    left.length == right.length && left.containsAll(right);
 
 void _validateInstallLayout(
   List<int> bytes, {

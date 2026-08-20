@@ -3,6 +3,12 @@
   "baseUrl": "https://builds.tomatocake.dev",
   "manifestUrl": "https://builds.tomatocake.dev/latest-build.json",
   "sourcePlatform": "windows",
+  "windowsFilesManifest": {
+    "path": "filelist.json",
+    "sha256": "fc4be97d45ef473a8e49fce81802b0e9bded402d4a09a8a19ddbc4857256fb73",
+    "fileCount": 406,
+    "gameExecutableSha256": "fd4cf7926a2f7f82eef0258ab8baa1a963f356a2adeae017e82521231ece6140"
+  },
   "archives": {
     "windows": {
       "path": "Robotopia-v02309-Win64.7z",
