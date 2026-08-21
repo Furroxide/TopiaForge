@@ -1,7 +1,12 @@
 # TopiaForge release license inventory
 
-Status: **owned-surface and redistribution audit complete** for
-`1.0.0-rc.1`.
+Status for `1.0.0-rc.1`: **owned-surface audit complete; redistribution audit
+re-opened.** `P0-OSS-01` was re-opened on 2026-08-06 — see
+[`LaunchBlockers.md`](LaunchBlockers.md). The inventory below is a fixed
+allowlist that proves the licence texts it names exist; it does **not** prove
+every redistributed asset has a licence, which is how the EmojiOne sprite set
+shipped with an attribution note and no redistribution grant. Treat this page as
+a record of what has been reviewed, not as evidence that the surface is closed.
 
 TopiaForge-owned code and content are licensed under the GNU Affero General
 Public License, version 3 or later (`AGPL-3.0-or-later`), with

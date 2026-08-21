@@ -33,6 +33,7 @@ LightingData.asset binary
 *.props        text eol=lf
 *.targets      text eol=lf
 *.dart         text eol=lf
+*.py           text eol=lf
 *.yaml         text eol=lf
 *.yml          text eol=lf
 *.json         text eol=lf

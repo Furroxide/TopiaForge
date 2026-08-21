@@ -158,13 +158,20 @@ class EmptyStatePanel extends StatelessWidget {
     required this.message,
     this.action,
     this.brandAsset,
+    this.brandArt,
   });
 
   final IconData icon;
   final String title;
   final String message;
   final Widget? action;
+
+  /// Raster brand image, resolved from the `launcher_ui` package.
   final String? brandAsset;
+
+  /// Drawn brand mark, used where the theming art is not a raster asset.
+  /// Takes precedence over [brandAsset] when both are supplied.
+  final Widget? brandArt;
 
   @override
   Widget build(BuildContext context) {
@@ -175,7 +182,13 @@ class EmptyStatePanel extends StatelessWidget {
           clipBehavior: Clip.none,
           alignment: Alignment.topCenter,
           children: [
-            if (brandAsset != null)
+            if (brandArt != null)
+              Positioned(
+                top: -100,
+                right: 8,
+                child: IgnorePointer(child: brandArt!),
+              )
+            else if (brandAsset != null)
               Positioned(
                 top: -100,
                 right: 8,

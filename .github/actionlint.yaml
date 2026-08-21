@@ -1,9 +1,6 @@
 self-hosted-runner:
-  # actionlint 1.7.7 predates this GitHub-hosted Intel runner label, and the
-  # live-game gate uses two repository-owned self-hosted runner labels.
+  # actionlint 1.7.7 predates this GitHub-hosted Intel runner label.
   labels:
-    - topiaforge-game-build-2309
-    - proton
     - macos-15-intel
 
 # Configuration variables in array of strings defined in your repository or

@@ -14,8 +14,10 @@ namespace TopiaForge.CreatorTools.Shared
             bool conversationEnabled,
             int chatMaxTurns,
             float chatTemperature,
-            string worldId = "")
+            string worldId = "",
+            string acceptanceChallenge = "")
         {
+            AcceptanceChallenge = acceptanceChallenge ?? string.Empty;
             SurfaceId = surfaceId ?? throw new ArgumentNullException(nameof(surfaceId));
             Title = title ?? throw new ArgumentNullException(nameof(title));
             ProjectScope = projectScope;
@@ -36,5 +38,11 @@ namespace TopiaForge.CreatorTools.Shared
         public int ChatMaxTurns { get; }
         public float ChatTemperature { get; }
         public string WorldId { get; }
+
+        /// <summary>
+        /// One-run acceptance challenge, or empty in ordinary play. When empty
+        /// the workbench creates no acceptance recorder at all.
+        /// </summary>
+        public string AcceptanceChallenge { get; }
     }
 }

@@ -57,8 +57,8 @@ from the fourteen-package normal non-DevTool payload and the fifteen-package rel
 | Registry entry/index | Format 2, append-only published history, HTTPS + SHA-256 | CLI builds/validates; launcher data consumes as untrusted input |
 | UGC config/status/command/session | Explicit schema versions, bounded JSON, atomic writers, unknown fields tolerated where documented | Launcher/CLI/sidecar/`TopiaForge.UgcLiveSync` |
 | World and TopiaForgeUi bundle manifests | Exact Unity `6000.0.23f1`, target, inputs, and SHA-256 provenance | Unity batch builders produce; CLI/package/runtime validate |
-| Release policy/BOM/catalog | Product/component versions, signing trust, and expected artifacts are checked against source metadata; stable Pages metadata remains manual-only | CLI/workflows produce; release gate and human reviewers consume |
-| Launcher update metadata V1 | Ed25519-signed exact UTF-8 payload with immutable GitHub asset URLs, hashes, sizes, entry inventory, and complete install layouts | Release workflow produces; launcher verifies before parsing and reconciles with GitHub |
+| Release policy/BOM/catalog | Product/component versions, signing trust, expected artifacts, and local handoff evidence are checked against source metadata; stable Pages metadata remains manual-only | Admin orchestrator and CLI produce; protected GitHub finalizer verifies |
+| Launcher update metadata V1 | Ed25519-signed exact UTF-8 payload with immutable GitHub asset URLs, hashes, sizes, entry inventory, and complete install layouts | Protected GitHub finalizer signs after verifying admin-built bytes; launcher verifies before parsing and reconciles with GitHub |
 
 ## Templates and authoring surfaces
 
@@ -95,24 +95,34 @@ author identity is supplied.
   pin; proprietary assemblies are never committed or released.
 - Flutter platform registrants, lock files, Unity `.meta` files, bundle manifests, prefab assets, and VPM listings are
   generated artifacts whose source/provenance must agree with their generators.
-- A release candidate consists of one canonical deterministic ecosystem payload plus Windows x64, Linux x64, and
-  macOS universal platform archives. Nested mod/VPM hashes must be identical between platforms.
-- Candidate metadata includes `release-bom.json`, `SHA256SUMS`, SPDX SBOMs, project/third-party notices, BepInEx
-  provenance, signed launcher-update metadata and sidecar, the manual stable
-  release catalog, and checked-in release notes.
+- The RC1 candidate consists of one canonical deterministic ecosystem payload plus Windows x64 and Linux x64
+  platform archives. Nested mod/VPM hashes must be identical between the two archives. Generic macOS packaging
+  remains in source for a later release but is not part of RC1's exact asset inventory.
+- Production Windows bytes are built and validated on the administrator workstation; Linux x64 is built in Ubuntu
+  24.04 under WSL2 on that same workstation. RC1 also runs Robotopia through pinned Proton under WSLg and records that
+  the evidence is same-host and non-independent. `release-platform-bundle-v1` and `release-handoff-v1` bind both
+  outputs and scrubbed QA evidence to one source SHA.
+- Candidate metadata includes `release-bom.json`, `SHA256SUMS`, SPDX SBOMs,
+  project/third-party notices, BepInEx provenance, two platform manifests, the
+  aggregate handoff manifest and its detached pinned-certificate CMS
+  signature, signed launcher-update metadata and sidecar, and checked-in
+  release notes. The manual release catalog is future stable-only Pages output,
+  not an RC1 asset.
 
 ## CI and privilege boundaries
 
-Ten workflows cover general CI, Flutter/native builds, release dry-runs/build/publication, Unity artifacts, registry
-validation, and Pages deployment. Pull-request validation is secretless. Repository code may build a Pages artifact
-with `contents: read`; the separate deploy job has Pages/OIDC write permissions but performs no checkout or arbitrary
-command. Signing, notarization, Unity activation, tag/release mutation, attestations, and Pages deployment are trusted
-candidate operations protected by environments and stable aggregate checks.
+GitHub-hosted workflows cover general CI, unsigned release dry-runs, Unity source/VPM validation, registry validation,
+Pages, and protected release finalization. Pull-request validation is secretless. Repository code may build a Pages
+artifact with `contents: read`; the separate deploy job has Pages/OIDC write permissions but performs no checkout or
+arbitrary command. Production platform building, Unity activation, and Robotopia acceptance stay on
+administrator-controlled machines. GitHub receives deterministic handoff manifests, verifies the staged bytes,
+generates protected update metadata and a verifier attestation, then publishes after release-environment approval.
 
 ## Release-critical external boundaries
 
 The codebase can enforce but cannot choose the project license, rights to Robotopia/TopiaForge assets and
 compatibility work, privacy/backend policy, registry governance, or package trust root. It also cannot synthesize
-Apple/Windows signing credentials, GitHub rulesets/environments, clean native hosts, legally authorized Robotopia access,
-screen-reader review, or Robotopia profiler/gameplay evidence. Each remains an explicit blocker rather than a skipped
-gate.
+future-platform signing credentials, GitHub rulesets/environments, WSL2, pinned Proton, legally authorized Robotopia
+access, screen-reader review, or Robotopia profiler/gameplay evidence. RC1's
+mandatory Windows signing and same-host Proton decisions are explicit,
+fail-closed policy—not silently skipped gates.

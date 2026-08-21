@@ -7,6 +7,9 @@ import 'package:path/path.dart' as p;
 
 import 'release_metadata_inventory.dart';
 import 'bounded_file_reader.dart';
+import 'release_game_archive_metadata.dart';
+import 'release_handoff_models.dart';
+import 'release_metadata_readiness.dart';
 import 'release_policy.dart';
 import 'release_spdx_metadata.dart';
 
@@ -35,11 +38,11 @@ class TopiaForgeReleaseMetadataBuilder {
     required String outputDirectory,
     bool allowUnresolvedPolicy = false,
   }) async {
-    if (!RegExp(r'^[0-9a-f]{40,64}$').hasMatch(targetSha)) {
+    if (!RegExp(r'^[0-9a-f]{40}$').hasMatch(targetSha)) {
       throw ArgumentError.value(
         targetSha,
         'targetSha',
-        'Expected a lowercase 40-64 character commit hash.',
+        'Expected an exact lowercase 40-character commit hash.',
       );
     }
     final policy = TopiaForgeReleasePolicy.load(repositoryRoot);
@@ -56,6 +59,12 @@ class TopiaForgeReleaseMetadataBuilder {
         'Release policy validation failed:\n- ${policyIssues.join('\n- ')}',
       );
     }
+    final readiness = await ReleaseMetadataReadiness.load(
+      repositoryRoot: repositoryRoot,
+      version: version,
+      targetSha: targetSha,
+      allowUnresolved: allowUnresolvedPolicy,
+    );
 
     final assets = Directory(assetsDirectory);
     if (!assets.existsSync()) {
@@ -129,12 +138,14 @@ class TopiaForgeReleaseMetadataBuilder {
     final gameMetadata = _readJsonObject(
       File(p.join(repositoryRoot, policy.gameBuildMetadataFile)),
     );
-    final blockingReasons = <String>[
-      if (!policy.hasApprovedLicense)
-        'Project license is ${policy.licenseDecisionStatus}: ${policy.licenseExpression}.',
-      if (release.status != 'ready')
-        'Release catalog status is ${release.status}, not ready.',
-    ];
+    final blockingReasons = releaseMetadataBlockingReasons(
+      allowUnresolved: allowUnresolvedPolicy,
+      licenseApproved: policy.hasApprovedLicense,
+      licenseStatus: policy.licenseDecisionStatus,
+      licenseExpression: policy.licenseExpression,
+      catalogStatus: release.status,
+      readiness: readiness,
+    );
     final inventory = await const ReleaseMetadataInventoryBuilder().build(
       repositoryRoot: repositoryRoot,
       policy: policy,
@@ -144,15 +155,16 @@ class TopiaForgeReleaseMetadataBuilder {
     final bom = <String, Object?>{
       r'$schema':
           'https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.release-bom.schema.json',
-      'schemaVersion': 2,
+      'schemaVersion': 3,
       'version': release.version,
       'tag': release.tag,
       'targetSha': targetSha,
       'distributable': blockingReasons.isEmpty,
       'blockingReasons': blockingReasons,
+      'readiness': readiness.toBomJson(),
       'rollback': policy.rollback,
       'gameBuild': policy.gameBuildId,
-      'gameArchives': gameMetadata['archives'],
+      'gameArchives': selectTargetGameArchives(gameMetadata, policy),
       'toolchains': _sortedMap(policy.toolchains),
       'license': {
         'spdxExpression': policy.licenseExpression,
@@ -245,6 +257,12 @@ class TopiaForgeReleaseMetadataBuilder {
         'Release policy validation failed:\n- ${issues.join('\n- ')}',
       );
     }
+    final readiness = await ReleaseMetadataReadiness.load(
+      repositoryRoot: repositoryRoot,
+      version: version,
+      targetSha: targetSha,
+      allowUnresolved: allowUnresolvedPolicy,
+    );
     final metadata = Directory(metadataDirectory);
     final bomFile = File(p.join(metadata.path, 'release-bom.json'));
     final sbomFile = File(p.join(metadata.path, 'release-sbom.spdx.json'));
@@ -274,7 +292,17 @@ class TopiaForgeReleaseMetadataBuilder {
     final blockingReasons = (bom['blockingReasons'] as List?)
         ?.whereType<String>()
         .toList();
+    final expectedBlockingReasons = releaseMetadataBlockingReasons(
+      allowUnresolved: allowUnresolvedPolicy,
+      licenseApproved: policy.hasApprovedLicense,
+      licenseStatus: policy.licenseDecisionStatus,
+      licenseExpression: policy.licenseExpression,
+      catalogStatus: release.status,
+      readiness: readiness,
+    );
     if (blockingReasons == null ||
+        jsonEncode(blockingReasons) != jsonEncode(expectedBlockingReasons) ||
+        jsonEncode(bom['readiness']) != jsonEncode(readiness.toBomJson()) ||
         (bom['distributable'] == true && blockingReasons.isNotEmpty) ||
         (bom['distributable'] == false && blockingReasons.isEmpty)) {
       throw StateError(
@@ -333,6 +361,7 @@ class TopiaForgeReleaseMetadataBuilder {
         name: File(p.join(assetsDirectory, name)),
       'release-bom.json': bomFile,
       'release-sbom.spdx.json': sbomFile,
+      ..._presentHandoffFiles(assets, policy.targetPlatforms),
     };
     final lines = sumsFile.readAsLinesSync();
     if (lines.length != expected.length) {
@@ -358,6 +387,33 @@ class TopiaForgeReleaseMetadataBuilder {
   }
 }
 
+Map<String, File> _presentHandoffFiles(
+  Directory assets,
+  List<String> targetPlatforms,
+) {
+  final names = <String>[
+    releaseHandoffFileName,
+    for (final platform in targetPlatforms)
+      releasePlatformBundleFileName(platform),
+  ];
+  final present = <String, File>{};
+  for (final name in names) {
+    final file = File(p.join(assets.path, name));
+    final type = FileSystemEntity.typeSync(file.path, followLinks: false);
+    if (type == FileSystemEntityType.notFound) continue;
+    if (type != FileSystemEntityType.file || file.lengthSync() == 0) {
+      throw StateError('Release handoff checksum input is invalid: $name.');
+    }
+    present[name] = file;
+  }
+  if (present.isNotEmpty && present.length != names.length) {
+    throw StateError(
+      'SHA256SUMS requires the complete policy-derived release handoff set.',
+    );
+  }
+  return present;
+}
+
 Map<String, String> _sortedMap(Map<String, String> source) => {
   for (final key in source.keys.toList()..sort()) key: source[key]!,
 };
@@ -370,9 +426,8 @@ Future<void> _writeJson(File file, Object value) async {
   );
 }
 
-Map<String, Object?> _readJsonObject(File file) {
-  return readBoundedJsonObjectSync(file, maxBytes: CliFileLimits.metadata);
-}
+Map<String, Object?> _readJsonObject(File file) =>
+    readBoundedJsonObjectSync(file, maxBytes: CliFileLimits.metadata);
 
 void _validateSchema(
   String repositoryRoot,
@@ -401,11 +456,11 @@ Map<String, Object?> _readCodeSigningEvidence(
   TopiaForgeReleasePolicy policy,
 ) {
   final json = _readJsonObject(file);
-  const platforms = {'windows-x64', 'linux-x64', 'macos-universal'};
+  final platforms = policy.targetPlatforms.toSet();
   if (!_sameSet(json.keys.toSet(), platforms)) {
     throw StateError(
       '${TopiaForgeReleaseMetadataBuilder.trustEvidenceFileName} must '
-      'contain the exact supported platform set.',
+      'contain the exact policy target platform set.',
     );
   }
   final normalized = <String, Object?>{};
@@ -423,19 +478,11 @@ Map<String, Object?> _readCodeSigningEvidence(
     switch (platform) {
       case 'windows-x64':
         if (status == 'trusted' && !exceptionApplied) break;
-        if (status == 'unsigned' &&
-            exceptionApplied &&
-            policy.allowsUnsignedWindows) {
-          break;
-        }
         throw StateError(
           'Windows code-signing evidence is not permitted by release policy.',
         );
       case 'macos-universal':
         if (status == 'trusted' && !exceptionApplied) break;
-        if (status == 'ad-hoc' && exceptionApplied && policy.allowsAdHocMacOS) {
-          break;
-        }
         throw StateError(
           'macOS code-signing evidence is not permitted by release policy.',
         );
@@ -449,8 +496,5 @@ Map<String, Object?> _readCodeSigningEvidence(
       'exceptionApplied': exceptionApplied,
     };
   }
-  return {
-    'exceptionVersion': policy.codeSigningException?.version,
-    'platforms': normalized,
-  };
+  return {'exceptionVersion': null, 'platforms': normalized};
 }
