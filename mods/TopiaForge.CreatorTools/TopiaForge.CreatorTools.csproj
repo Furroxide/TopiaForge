@@ -24,7 +24,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\CreatorTools\*.cs" Link="CreatorTools\%(Filename)%(Extension)" />
-    <Compile Include="..\TopiaForge.Sandbox\RobotProgramDirector.cs" Link="CreatorTools\RobotProgramDirector.cs" />
   </ItemGroup>
   <Import Project="..\..\src\TopiaForge.Mods.Analyzers\buildTransitive\TopiaForge.Mods.Analyzers.targets" />
 </Project>

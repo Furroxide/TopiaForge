@@ -16,6 +16,11 @@ namespace TopiaForge.RobotKit
     // thread at Stop(); the HTTP transcription runs off-thread and its result is marshalled back on the service Tick,
     // same idiom as the brain-query service. Typed text is handled by the consumer's UI with the shared
     // TopiaForge.Mods.TextInputBuffer; this service is the voice half.
+    //
+    // Sends captured microphone audio to Tomato Cake's RoboAPI, which TopiaForge has no authorization for and no
+    // control over; they may restrict or withdraw it at any time. Off by default, capture requires an explicit
+    // push-to-talk action, and failure must always fall back to typed input. See the warning on RoboApiClient and
+    // the P0-PRIV-01 gate.
     internal sealed class PlayerDialogueInputService : IPlayerDialogueInputService,
         IOwnerBoundExtensionFactory, IDisposable
     {
@@ -38,11 +43,14 @@ namespace TopiaForge.RobotKit
         public PlayerDialogueInputService(IModLogger logger)
         {
             this.logger = logger;
-            var tokenPath = Path.Combine(Application.persistentDataPath, "robo_token.json");
-            client = new RoboApiClient(tokenPath, Guid.NewGuid().ToString("N"), logger);
+            client = new RoboApiClient(
+                Application.persistentDataPath, Guid.NewGuid().ToString("N"), logger);
         }
 
-        public bool IsVoiceAvailable => !disposed && HasMicrophone() && client.HasToken;
+        // Probed by RuntimeCapabilityProbe on every load and scene change. Uses HasTokenFile so probing never
+        // reads or caches the player's credential; Microphone.devices is a device-name enumeration only and
+        // starts no capture. See the note on RoboApiClient.HasTokenFile.
+        public bool IsVoiceAvailable => !disposed && HasMicrophone() && client.HasTokenFile;
 
         public OperationResult<IVoiceCapture> BeginVoiceCapture()
         {

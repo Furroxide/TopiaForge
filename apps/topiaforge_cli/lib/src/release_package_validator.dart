@@ -6,6 +6,7 @@ import 'package:launcher_data/launcher_data.dart';
 import 'package:path/path.dart' as p;
 
 import 'bounded_file_reader.dart';
+import 'release_ecosystem_identity.dart';
 import 'release_loader_payload.dart';
 import 'release_package_io.dart';
 import 'release_package_models.dart';
@@ -22,11 +23,15 @@ class ReleasePackageValidator {
     required this.zipPath,
     this.requireMacUniversal = false,
     this.requireWindowsSignature = false,
+    this.requireWindowsUnsigned = false,
+    this.expectedWindowsSignerSha256 = '',
     this.requireMacTrust = false,
     this.expectedMacTeamId = '',
     this.requireRuntimePayload = true,
     this.requireLauncher = true,
     this.requireDistPackages = true,
+    this.expectedCanonicalEcosystemSha256 = '',
+    this.canonicalAssetsDirectory = '',
     this.runCliSmoke = false,
     this.processRunner = const ReleaseProcessRunner(),
   }) : fileOps = ReleaseFileOps(processRunner: processRunner);
@@ -35,16 +40,38 @@ class ReleasePackageValidator {
   final String zipPath;
   final bool requireMacUniversal;
   final bool requireWindowsSignature;
+  final bool requireWindowsUnsigned;
+  final String expectedWindowsSignerSha256;
   final bool requireMacTrust;
   final String expectedMacTeamId;
   final bool requireRuntimePayload;
   final bool requireLauncher;
   final bool requireDistPackages;
+  final String expectedCanonicalEcosystemSha256;
+  final String canonicalAssetsDirectory;
   final bool runCliSmoke;
   final ReleaseProcessRunner processRunner;
   final ReleaseFileOps fileOps;
 
   Future<void> validate() async {
+    if (requireWindowsSignature && requireWindowsUnsigned) {
+      throw StateError(
+        'Windows package validation cannot require both a trusted signature '
+        'and the explicit unsigned release exception.',
+      );
+    }
+    if (platform != ReleasePackagePlatform.windows &&
+        (requireWindowsSignature || requireWindowsUnsigned)) {
+      throw StateError(
+        'Windows trust validation options require a Windows package.',
+      );
+    }
+    if (requireWindowsUnsigned &&
+        expectedWindowsSignerSha256.trim().isNotEmpty) {
+      throw StateError(
+        'The unsigned Windows exception cannot include an expected signer.',
+      );
+    }
     final zip = File(zipPath).absolute;
     if (!zip.existsSync()) {
       throw StateError('Release package was not found: ${zip.path}');
@@ -128,7 +155,13 @@ class ReleasePackageValidator {
       await WindowsPackageSigner(
         processRunner: processRunner,
         requireTrustedSignature: true,
+        expectedSignerCertificateSha256: expectedWindowsSignerSha256,
       ).verifyTrustedSignatures(root);
+    }
+    if (platform == ReleasePackagePlatform.windows && requireWindowsUnsigned) {
+      await WindowsPackageSigner(
+        processRunner: processRunner,
+      ).verifyUnsignedExecutables(root);
     }
   }
 
@@ -191,6 +224,45 @@ class ReleasePackageValidator {
           'Package must include at least one dist/*.topiaforgemod file.',
         );
       }
+    }
+    _assertCanonicalEcosystem(payloadRoot);
+  }
+
+  void _assertCanonicalEcosystem(String payloadRoot) {
+    if (expectedCanonicalEcosystemSha256.trim().isEmpty &&
+        canonicalAssetsDirectory.trim().isEmpty) {
+      return;
+    }
+    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(expectedCanonicalEcosystemSha256) ||
+        canonicalAssetsDirectory.trim().isEmpty) {
+      throw StateError(
+        'Canonical ecosystem verification requires a SHA-256 and assets directory.',
+      );
+    }
+    final dist = Directory(p.join(payloadRoot, 'dist')).absolute;
+    final embeddedDigest = ReleaseEcosystemIdentity.digestDirectory(dist);
+    if (embeddedDigest != expectedCanonicalEcosystemSha256) {
+      throw StateError(
+        'Embedded canonical ecosystem digest does not match the release handoff.',
+      );
+    }
+
+    final canonicalAssets = Directory(canonicalAssetsDirectory).absolute;
+    if (FileSystemEntity.typeSync(canonicalAssets.path, followLinks: false) !=
+        FileSystemEntityType.directory) {
+      throw StateError('Canonical release assets must be a real directory.');
+    }
+    final embeddedMods = ReleaseEcosystemIdentity.topLevelModDigests(dist);
+    final standaloneMods = ReleaseEcosystemIdentity.topLevelModDigests(
+      canonicalAssets,
+    );
+    if (embeddedMods.length != standaloneMods.length ||
+        embeddedMods.keys.any(
+          (name) => standaloneMods[name] != embeddedMods[name],
+        )) {
+      throw StateError(
+        'Standalone mod assets do not exactly match the embedded ecosystem.',
+      );
     }
   }
 
@@ -374,69 +446,5 @@ class ReleasePackageValidator {
     } finally {
       handle?.closeSync();
     }
-  }
-
-  Future<void> _assertMacTrust(String appPath) async {
-    if (!requireMacTrust) return;
-    if (!Platform.isMacOS) {
-      throw StateError('Final macOS trust validation must run on macOS.');
-    }
-    final teamId = expectedMacTeamId.trim().isNotEmpty
-        ? expectedMacTeamId.trim()
-        : (Platform.environment['MACOS_NOTARY_TEAM_ID'] ?? '').trim();
-    if (teamId.isEmpty) {
-      throw StateError('Expected macOS Developer Team ID is required.');
-    }
-    await _requireSuccess('codesign', [
-      '--verify',
-      '--deep',
-      '--strict',
-      '--verbose=4',
-      appPath,
-    ], label: 'app signature');
-    for (final entity in Directory(
-      appPath,
-    ).listSync(recursive: true, followLinks: false).whereType<File>()) {
-      if (!_hasMachOMagic(entity)) continue;
-      await _requireSuccess('codesign', [
-        '--verify',
-        '--strict',
-        '--verbose=4',
-        entity.path,
-      ], label: p.relative(entity.path, from: appPath));
-      final details = await processRunner.runResult('codesign', [
-        '-d',
-        '--verbose=4',
-        entity.path,
-      ]);
-      final output = '${details.stdout}\n${details.stderr}';
-      if (details.exitCode != 0 ||
-          output.contains('Signature=adhoc') ||
-          !output.contains('Authority=Developer ID Application:') ||
-          !output.contains('TeamIdentifier=$teamId')) {
-        throw StateError(
-          'macOS code-signing identity or Team ID is invalid for '
-          '${p.relative(entity.path, from: appPath)}.',
-        );
-      }
-    }
-    await _requireSuccess('xcrun', [
-      'stapler',
-      'validate',
-      appPath,
-    ], label: 'notarization ticket');
-    await _requireSuccess('xattr', [
-      '-w',
-      'com.apple.quarantine',
-      '0081;00000000;TopiaForge release validation;',
-      appPath,
-    ], label: 'quarantine simulation');
-    await _requireSuccess('spctl', [
-      '--assess',
-      '--type',
-      'execute',
-      '--verbose=4',
-      appPath,
-    ], label: 'Gatekeeper assessment');
   }
 }

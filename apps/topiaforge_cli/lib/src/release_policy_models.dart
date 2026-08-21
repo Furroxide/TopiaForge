@@ -1,5 +1,40 @@
 part of 'release_policy.dart';
 
+const releaseSupportedPlatforms = <String>[
+  'linux-x64',
+  'macos-universal',
+  'windows-x64',
+];
+
+const releasePlatformArchives = <String, String>{
+  'linux-x64': 'TopiaForge-linux-x64.zip',
+  'macos-universal': 'TopiaForge-macos-universal.zip',
+  'windows-x64': 'TopiaForge-windows-x64.zip',
+};
+
+const releasePlatformInstallLayouts = <String, String>{
+  'linux-x64': 'portable-root',
+  'macos-universal': 'app-bundle',
+  'windows-x64': 'portable-root',
+};
+
+const releasePlatformGameArchives = <String, String>{
+  'linux-x64': 'windows',
+  'macos-universal': 'mac',
+  'windows-x64': 'windows',
+};
+
+String releasePlatformForArchive(String archiveName) {
+  for (final entry in releasePlatformArchives.entries) {
+    if (entry.value == archiveName) return entry.key;
+  }
+  throw StateError('Unsupported release platform archive: $archiveName.');
+}
+
+String releaseArchiveForPlatform(String platform) =>
+    releasePlatformArchives[platform] ??
+    (throw StateError('Unsupported release platform: $platform.'));
+
 class TopiaForgeReleasePolicy {
   TopiaForgeReleasePolicy._({
     required this.repositoryRoot,
@@ -15,11 +50,12 @@ class TopiaForgeReleasePolicy {
     required this.rollback,
     required this.platformArchives,
     required this.generatedMetadata,
+    required this.windowsCertificateSha256,
+    required this.macosTeamId,
     required this.bepInExVersion,
     required this.bepInExProvenanceFile,
     required this.unityDoorstopVersion,
     required this.unityDoorstopCommit,
-    required this.codeSigningException,
   });
 
   final String repositoryRoot;
@@ -35,11 +71,12 @@ class TopiaForgeReleasePolicy {
   final String rollback;
   final List<String> platformArchives;
   final List<String> generatedMetadata;
+  final String windowsCertificateSha256;
+  final String macosTeamId;
   final String bepInExVersion;
   final String bepInExProvenanceFile;
   final String unityDoorstopVersion;
   final String unityDoorstopCommit;
-  final ReleaseCodeSigningException? codeSigningException;
 
   static TopiaForgeReleasePolicy load(String repositoryRoot) {
     final file = File(p.join(repositoryRoot, 'release', 'release-policy.json'));
@@ -51,21 +88,35 @@ class TopiaForgeReleasePolicy {
     final game = _object(json['gameBuild'], 'gameBuild');
     final license = _object(json['projectLicense'], 'projectLicense');
     final publication = _object(json['publication'], 'publication');
-    final exceptionValue = publication['codeSigningException'];
-    final codeSigningException = exceptionValue == null
-        ? null
-        : ReleaseCodeSigningException.fromJson(
-            _object(exceptionValue, 'publication.codeSigningException'),
-          );
+    const publicationFields = {
+      'mode',
+      'allowTagCreation',
+      'allowAssetReplacement',
+      'requireImmutableRelease',
+      'publishAfterProtectedApproval',
+    };
+    if (publication.keys.length != publicationFields.length ||
+        !publication.keys.toSet().containsAll(publicationFields)) {
+      throw StateError(
+        '${file.path} publication must contain only the protected immutable '
+        'publication fields; code-signing exceptions are forbidden.',
+      );
+    }
     final versioning = _object(json['versioning'], 'versioning');
     final artifacts = _object(json['artifactPolicy'], 'artifactPolicy');
+    final signingIdentities = _object(
+      json['signingIdentities'],
+      'signingIdentities',
+    );
     final bepInEx = _object(json['bepInEx'], 'bepInEx');
-    if (publication['mode'] != 'draft-only' ||
+    if (publication['mode'] != 'admin-staged-auto-publish' ||
         publication['allowTagCreation'] != false ||
         publication['allowAssetReplacement'] != false ||
-        publication['requireImmutableReleasesBeforeManualPublish'] != true) {
+        publication['requireImmutableRelease'] != true ||
+        publication['publishAfterProtectedApproval'] != true) {
       throw StateError(
-        '${file.path} must remain draft-only, immutable, and non-clobbering.',
+        '${file.path} must require an admin-staged, protected, immutable, '
+        'non-clobbering automatic publication.',
       );
     }
     return TopiaForgeReleasePolicy._(
@@ -91,11 +142,13 @@ class TopiaForgeReleasePolicy {
         artifacts['generatedMetadata'],
         'generatedMetadata',
       ),
+      windowsCertificateSha256:
+          signingIdentities['windowsCertificateSha256'] as String? ?? '',
+      macosTeamId: signingIdentities['macosTeamId'] as String? ?? '',
       bepInExVersion: bepInEx['version'] as String? ?? '',
       bepInExProvenanceFile: bepInEx['provenanceFile'] as String? ?? '',
       unityDoorstopVersion: bepInEx['unityDoorstopVersion'] as String? ?? '',
       unityDoorstopCommit: bepInEx['unityDoorstopCommit'] as String? ?? '',
-      codeSigningException: codeSigningException,
     );
   }
 
@@ -104,38 +157,43 @@ class TopiaForgeReleasePolicy {
       SpdxExpressionValidator.validate(licenseExpression) == null &&
       licenseFile != null;
 
-  bool get allowsUnsignedWindows =>
-      codeSigningException?.allowsUnsignedWindowsFor(productVersion) ?? false;
+  List<String> get targetPlatforms {
+    final selected = <String>{};
+    for (final archive in platformArchives) {
+      final platform = releasePlatformForArchive(archive);
+      if (!selected.add(platform)) {
+        throw StateError(
+          'Release platform archives contain a duplicate target.',
+        );
+      }
+    }
+    return List.unmodifiable([
+      for (final platform in releaseSupportedPlatforms)
+        if (selected.contains(platform)) platform,
+    ]);
+  }
 
-  bool get allowsAdHocMacOS =>
-      codeSigningException?.allowsAdHocMacOSFor(productVersion) ?? false;
-}
+  bool get targetsWindows => targetPlatforms.contains('windows-x64');
 
-class ReleaseCodeSigningException {
-  const ReleaseCodeSigningException({
-    required this.version,
-    required this.allowUnsignedWindows,
-    required this.allowAdHocMacOS,
-  });
+  bool get targetsMacOS => targetPlatforms.contains('macos-universal');
 
-  factory ReleaseCodeSigningException.fromJson(Map<String, Object?> json) =>
-      ReleaseCodeSigningException(
-        version: json['version'] as String? ?? '',
-        allowUnsignedWindows: json['allowUnsignedWindows'] == true,
-        allowAdHocMacOS: json['allowAdHocMacOS'] == true,
-      );
+  bool get requiresWindowsSigningIdentity => targetsWindows;
 
-  final String version;
-  final bool allowUnsignedWindows;
-  final bool allowAdHocMacOS;
+  bool get requiresMacOSSigningIdentity => targetsMacOS;
 
-  bool allowsUnsignedWindowsFor(String productVersion) =>
-      version == '1.0.0-rc.1' &&
-      productVersion == version &&
-      allowUnsignedWindows;
+  bool get hasConfiguredWindowsSigningIdentity =>
+      RegExp(r'^[0-9a-f]{64}$').hasMatch(windowsCertificateSha256) &&
+      windowsCertificateSha256 !=
+          '0000000000000000000000000000000000000000000000000000000000000000';
 
-  bool allowsAdHocMacOSFor(String productVersion) =>
-      version == '1.0.0-rc.1' && productVersion == version && allowAdHocMacOS;
+  bool get hasConfiguredMacOSSigningIdentity =>
+      RegExp(r'^[A-Z0-9]{10}$').hasMatch(macosTeamId) &&
+      macosTeamId != 'UNSETTEAM0';
+
+  bool get hasConfiguredSigningIdentities =>
+      (!requiresWindowsSigningIdentity ||
+          hasConfiguredWindowsSigningIdentity) &&
+      (!requiresMacOSSigningIdentity || hasConfiguredMacOSSigningIdentity);
 }
 
 class TopiaForgeReleaseCatalog {

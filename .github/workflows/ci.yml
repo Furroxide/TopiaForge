@@ -225,10 +225,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-        with:
-          flutter-version: "3.44.6"
-          cache: true
+        uses: ./.github/actions/setup-flutter
 
       - name: Analyze and test shared UI
         working-directory: packages/launcher_ui
@@ -307,6 +304,10 @@ jobs:
       - name: Test generated-payload residue scanning
         run: python3 .github/scripts/test_check_topiaforge_residue.py
 
+      - name: Test pinned Flutter setup
+        shell: pwsh
+        run: ./.github/actions/setup-flutter/test-setup-flutter.ps1
+
       - name: Test repository governance audit
         run: python3 .github/scripts/test_audit_repository_governance.py
 
@@ -314,11 +315,19 @@ jobs:
         run: |
           bash tools/test-verify-release-tag.sh
           bash tools/test-verify-release-candidate.sh
+          bash tools/test-verify-release-governance.sh
+          pwsh -NoProfile -File tools/release/test-verify-robotopia-install.ps1
+          pwsh -NoProfile -File tools/release/test-handoff-signature.ps1
 
       - name: Test release tag and draft publication safety
         run: |
           bash tools/test-verify-release-tag.sh
           bash tools/test-publish-release-draft.sh
+          bash tools/test-verify-release-attestation.sh
+
+      - name: Test admin release orchestration
+        shell: pwsh
+        run: ./tools/test-release-admin.ps1
 
       - name: Set up Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
@@ -443,11 +452,7 @@ jobs:
           dotnet-version: "10.0.301"
 
       - name: Set up Flutter and Dart
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-        with:
-          flutter-version: "3.44.6"
-          channel: stable
-          cache: true
+        uses: ./.github/actions/setup-flutter
 
       - name: Install managed-reference archive dependency
         run: |

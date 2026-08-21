@@ -12,17 +12,30 @@ namespace TopiaForge.RobotKit
     // The first-ever mod-layer RoboAPI client: posts a structured brain query to /agent/check3 reusing the game's own
     // per-user token (read from robo_token.json), the same way the native robot brains authenticate. Self-contained
     // (System.Net.Http + System.IO only, no Unity types) so the transport lives in one place; the caller (the brain
-    // query service) supplies the Unity-resolved token path and ticks the async result back onto the main thread.
+    // query service) supplies the Unity-resolved token directory and ticks the result back onto the main thread.
     //
     // Hardening: a hard per-call timeout, single shared HttpClient, the token cached until a 401 invalidates it, and
     // every returned string clamped by RoboApiProtocol. Never throws — failures resolve to an unavailable result so a
     // consumer's deterministic fallback always stands.
+    //
+    // UNAPPROVED THIRD-PARTY DEPENDENCY. This endpoint belongs to Tomato Cake, not to TopiaForge. As of the
+    // 1.0.0-rc.1 candidate no authorization for these mod-layer calls has been obtained from them, and their
+    // retention, training-use, geographic-processing, account-linkage, rate-limit, abuse-handling, and cost policies
+    // are unknown to this repository. Do not document or imply otherwise. See docs/PrivacyAndCapabilities.md and the
+    // P0-PRIV-01 gate in docs/LaunchBlockers.md.
+    //
+    // Consequences to design for: Tomato Cake may restrict, rate-limit, charge for, authenticate differently, or
+    // withdraw this integration at any time, with no notice and no obligation to TopiaForge. Treat every call as
+    // best-effort. Keep the deterministic fallback path the supported behavior and this the optional enhancement —
+    // never the reverse. Every first-party feature built on this stays off by default and must remain fully playable
+    // when the endpoint returns nothing.
     internal sealed class RoboApiClient
     {
         private const string DefaultBackendRoot = "https://api.tomatocake.dev/v1";
         private const string Check3Route = "/agent/check3";
         private const string SttRoute = "/agent/stt";
         internal const int MaxTokenFileBytes = 32 * 1024;
+        internal const string TokenFileName = "robo_token.json";
         private const int MaxCheck3ResponseBytes = 256 * 1024;
         private const int MaxSttResponseBytes = 64 * 1024;
         private const int MaxSttRequestBytes = 2 * 1024 * 1024;
@@ -48,9 +61,9 @@ namespace TopiaForge.RobotKit
         private string? cachedToken;
         private bool tokenLoaded;
 
-        public RoboApiClient(string tokenFilePath, string sessionId, IModLogger logger)
+        public RoboApiClient(string tokenDirectory, string sessionId, IModLogger logger)
         {
-            this.tokenFilePath = tokenFilePath;
+            this.tokenFilePath = ResolveTokenPath(tokenDirectory);
             this.sessionId = sessionId;
             this.logger = logger;
 
@@ -60,9 +73,65 @@ namespace TopiaForge.RobotKit
             sttEndpoint = backendEnabled ? trimmedRoot + SttRoute : string.Empty;
         }
 
+        // The client reads exactly one file: robo_token.json directly inside the directory the caller supplies.
+        // Taking a directory rather than a full path means no caller can point the client at an arbitrary file,
+        // and resolving the candidate before proving it still sits under that root rejects a directory that
+        // traverses out. Both the probe and the request guard then share one already-validated path.
+        internal static string ResolveTokenPath(string tokenDirectory)
+        {
+            if (string.IsNullOrWhiteSpace(tokenDirectory))
+            {
+                throw new ArgumentException("A token directory is required.", nameof(tokenDirectory));
+            }
+
+            var root = Path.GetFullPath(tokenDirectory);
+            if (root[root.Length - 1] != Path.DirectorySeparatorChar)
+            {
+                root += Path.DirectorySeparatorChar;
+            }
+
+            var candidate = Path.GetFullPath(Path.Combine(root, TokenFileName));
+            if (!candidate.StartsWith(root, StringComparison.Ordinal) ||
+                !string.Equals(Path.GetFileName(candidate), TokenFileName, StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "The resolved token path escaped its directory.", nameof(tokenDirectory));
+            }
+
+            return candidate;
+        }
+
         // True when a usable token is resolvable. Reads the token file at most once (until invalidated), so polling
         // this per frame does not hit disk repeatedly.
+        // Request guard: validates and caches the credential, so an oversized or malformed token file reports
+        // false rather than failing mid-request.
         public bool HasToken => backendEnabled && TryGetToken(out _);
+
+        // Availability probe. RuntimeCapabilityProbe evaluates IsAvailable on every mod load and every scene
+        // change, so routing that through HasToken meant the player's bearer token was parsed and cached in
+        // process memory merely because RobotKit was installed - with every consumer feature off and no request
+        // ever made. A probe only needs to know whether a credential could be obtained, which existence answers
+        // without materialising the secret. Validity is still enforced at the request guard above.
+        // The token cache is deliberately not consulted here. Reading it would turn the probe into a validity
+        // check the moment any request had run, so one unchanged file on disk would answer "available" before a
+        // request and "unavailable" after a failed parse - the probe's answer would depend on call history
+        // rather than on the file. Existence is a stat rather than a read, so answering it every time is cheap.
+        public bool HasTokenFile
+        {
+            get
+            {
+                if (!backendEnabled) return false;
+                try
+                {
+                    return File.Exists(tokenFilePath);
+                }
+                catch (Exception ex)
+                {
+                    logger.Debug("RoboAPI token probe failed: " + ex.Message);
+                    return false;
+                }
+            }
+        }
 
         // Run one /agent/check3 call. Returns an unavailable result (never throws) when there is no token, the call
         // times out, the network fails, or the gateway rejects the token (401, which also invalidates the cache).

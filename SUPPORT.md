@@ -11,3 +11,6 @@ as described in `SECURITY.md`.
 
 The project currently offers best-effort community support without a response-time or long-term-support guarantee.
 Release, incident, revocation, and rollback ownership is documented in `docs/ReleaseOperations.md`.
+
+TopiaForge is an independent community project and is not affiliated with or endorsed by Tomato Cake or the Robotopia
+development team. Please do not contact them about TopiaForge issues.

@@ -11,6 +11,10 @@
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>
     <InformationalVersion>1.0.0-rc.1</InformationalVersion>
+    <!-- Opted out solely for the loader-owned TopiaForgeUi reference below, which TF1007 forbids to
+         ordinary mods and which no capability excuses. This project has no UnityEngine, GameCode, or
+         Harmony reference at all - it is the internal QA gallery, not a native mod. The opt-out is
+         required by UiKitSourceConventionTests.UnityUiReferencesStayInternal. -->
     <TopiaForgeSafeProject>false</TopiaForgeSafeProject>
   </PropertyGroup>
 

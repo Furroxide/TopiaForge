@@ -22,8 +22,8 @@ class ReleasePolicyValidator {
   }) async {
     final root = policy.repositoryRoot;
     final issues = <String>[];
-    _validateCatalog(release, root, issues, allowUnresolvedPolicy);
-    _validateToolchains(policy, release, root, issues);
+    _validateCatalog(policy, release, root, issues, allowUnresolvedPolicy);
+    _validateToolchains(policy, release, root, issues, allowUnresolvedPolicy);
     _validateGameBuild(policy, root, issues);
     _validateComponents(release, root, issues);
     _validateMods(release, root, issues);
@@ -38,6 +38,7 @@ class ReleasePolicyValidator {
   }
 
   void _validateCatalog(
+    TopiaForgeReleasePolicy policy,
     TopiaForgeReleaseCatalogEntry release,
     String root,
     List<String> issues,
@@ -71,9 +72,7 @@ class ReleasePolicyValidator {
       issues.add('Release notes are missing or empty: ${release.notesFile}.');
     }
     final expected = <String>{
-      'TopiaForge-linux-x64.zip',
-      'TopiaForge-macos-universal.zip',
-      'TopiaForge-windows-x64.zip',
+      ...policy.platformArchives,
       for (final entry in release.mods.entries)
         '${entry.key}-${entry.value}.topiaforgemod',
     };
@@ -89,13 +88,14 @@ class ReleasePolicyValidator {
     TopiaForgeReleaseCatalogEntry release,
     String root,
     List<String> issues,
+    bool allowUnresolvedPolicy,
   ) {
     const expected = {
       'dotnetSdk': '10.0.301',
       'dotnetRuntime': '10.0.9',
       'dart': '3.12.2',
       'flutter': '3.44.6',
-      'nodeMinimum': '24.16.0',
+      'node': '24.18.0',
       'unity': '6000.0.23f1',
     };
     if (!_sameMap(expected, policy.toolchains)) {
@@ -110,26 +110,53 @@ class ReleasePolicyValidator {
         'Release versioning or bundled-runtime policy is inconsistent.',
       );
     }
-    final exception = policy.codeSigningException;
     if (release.version == '1.0.0-rc.1') {
-      if (exception == null ||
-          !policy.allowsUnsignedWindows ||
-          !policy.allowsAdHocMacOS ||
-          !release.prerelease) {
+      if (!release.prerelease ||
+          !policy.targetsWindows ||
+          policy.targetsMacOS) {
         issues.add(
-          'The initial preview must declare the exact rc.1 code-signing exception.',
+          'Release 1.0.0-rc.1 must target only signed Windows x64 packages.',
         );
       }
-    } else if (exception != null) {
+    }
+    final windowsIdentityIsValid =
+        policy.windowsCertificateSha256.isEmpty ||
+        RegExp(r'^[0-9a-f]{64}$').hasMatch(policy.windowsCertificateSha256);
+    final macIdentityIsValid =
+        policy.macosTeamId.isEmpty ||
+        RegExp(r'^[A-Z0-9]{10}$').hasMatch(policy.macosTeamId);
+    if (!windowsIdentityIsValid || !macIdentityIsValid) {
       issues.add(
-        'The code-signing exception is restricted to 1.0.0-rc.1 and must be removed.',
+        'Configured signing identities must be a lowercase Windows '
+        'certificate SHA-256 or an uppercase 10-character Apple Team ID.',
       );
     }
-    if (!_sameSet(policy.platformArchives.toSet(), {
-          'TopiaForge-linux-x64.zip',
-          'TopiaForge-macos-universal.zip',
-          'TopiaForge-windows-x64.zip',
-        }) ||
+    if (!allowUnresolvedPolicy &&
+        policy.requiresWindowsSigningIdentity &&
+        !policy.hasConfiguredWindowsSigningIdentity) {
+      issues.add(
+        'A configured Windows signing identity is required for this release.',
+      );
+    }
+    if (!allowUnresolvedPolicy &&
+        policy.requiresMacOSSigningIdentity &&
+        !policy.hasConfiguredMacOSSigningIdentity) {
+      issues.add(
+        'A configured macOS signing identity is required for this release.',
+      );
+    }
+    // Linux is descoped from 1.0.0-rc.1 and returns in rc.2. WSLg cannot reach
+    // a GPU Vulkan implementation, and Robotopia's D3D12 renderer needs it
+    // through VKD3D, so no credible Proton acceptance evidence can be produced
+    // on the administrator host. See P0-LINUX-01 in docs/LaunchBlockers.md.
+    const rc1PlatformArchives = {'TopiaForge-windows-x64.zip'};
+    final hasSupportedPlatforms = policy.platformArchives.every(
+      releasePlatformArchives.containsValue,
+    );
+    if (!hasSupportedPlatforms ||
+        policy.platformArchives.length != policy.targetPlatforms.length ||
+        (release.version == '1.0.0-rc.1' &&
+            !_sameSet(policy.platformArchives.toSet(), rc1PlatformArchives)) ||
         !_sameSet(policy.generatedMetadata.toSet(), {
           'release-bom.json',
           'release-sbom.spdx.json',

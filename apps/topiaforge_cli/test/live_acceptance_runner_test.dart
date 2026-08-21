@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -6,10 +5,12 @@ import 'package:test/test.dart';
 import 'package:topiaforge/src/live_acceptance_models.dart';
 import 'package:topiaforge/src/live_acceptance_runner.dart';
 
-void main() {
-  late _AcceptanceFixture fixture;
+import 'live_acceptance_test_fixture.dart';
 
-  setUp(() => fixture = _AcceptanceFixture());
+void main() {
+  late AcceptanceFixture fixture;
+
+  setUp(() => fixture = AcceptanceFixture());
   tearDown(() => fixture.dispose());
 
   test(
@@ -43,6 +44,11 @@ void main() {
       expect(config['schemaVersion'], 1);
       expect((config['value'] as Map)['migratedFromSchema1'], isFalse);
       expect((config['value'] as Map)['highContrast'], isTrue);
+      expect(
+        (config['value'] as Map)['acceptanceChallenge'],
+        matches(RegExp(r'^[0-9a-f]{64}$')),
+      );
+      expect(fixture.evidenceJson()['schemaVersion'], 2);
       expect(fixture.evidenceJson()['succeeded'], isTrue);
     },
   );
@@ -61,6 +67,7 @@ void main() {
         processRunner: (executable, arguments) async {
           expect(executable, cli.path);
           packagedArguments.addAll(arguments);
+          fixture.writeJourneyPackage('example.release-journey');
           fixture.writePassingRun(
             marker: 'Unique journey loaded',
             journeyPackageId: 'example.release-journey',
@@ -106,7 +113,9 @@ void main() {
             );
             File(packedPath)
               ..createSync(recursive: true)
-              ..writeAsStringSync('packed');
+              ..writeAsBytesSync(
+                acceptancePackageBytes('dev.topiaforge.sdk-acceptance'),
+              );
           } else if (arguments.first == 'launch') {
             fixture.writePassingRun();
           }
@@ -174,6 +183,28 @@ void main() {
     expect(evidence['missingCases'], ['case.two']);
   });
 
+  test('interaction timeout starts after the launch stage returns', () async {
+    var now = DateTime.now().toUtc();
+    final runner = LiveAcceptanceRunner(
+      commandRunner: (arguments) async {
+        if (arguments.first == 'launch') {
+          now = now.add(const Duration(minutes: 5));
+          fixture.writePassingRun();
+        }
+        return 0;
+      },
+      clock: () => now,
+      pollInterval: const Duration(milliseconds: 1),
+    );
+
+    final evidence = await runner.run(
+      fixture.options(timeout: const Duration(milliseconds: 15)),
+    );
+
+    expect(evidence.succeeded, isTrue);
+    expect(evidence.passedCases, ['case.one', 'case.two']);
+  });
+
   test('CLI stage failures keep the stable TFACCEPT110 diagnostic', () async {
     final runner = LiveAcceptanceRunner(commandRunner: (_) async => 9);
 
@@ -190,6 +221,136 @@ void main() {
       ),
     );
   });
+
+  test(
+    'ignores spoofed acceptance markers from another logger source',
+    () async {
+      final runner = LiveAcceptanceRunner(
+        commandRunner: (arguments) async {
+          if (arguments.first == 'launch') {
+            fixture.writePassingRun(acceptanceLogSource: 'example.spoof');
+          }
+          return 0;
+        },
+        pollInterval: const Duration(milliseconds: 1),
+      );
+
+      await expectLater(
+        runner.run(fixture.options(timeout: const Duration(milliseconds: 15))),
+        throwsA(
+          isA<LiveAcceptanceError>().having(
+            (error) => error.code,
+            'code',
+            'TFACCEPT170',
+          ),
+        ),
+      );
+      expect(fixture.evidenceJson()['passedCases'], isEmpty);
+    },
+  );
+
+  test('ignores replayed markers carrying a different challenge', () async {
+    final runner = LiveAcceptanceRunner(
+      commandRunner: (arguments) async {
+        if (arguments.first == 'launch') {
+          fixture.writePassingRun(challenge: List.filled(64, '0').join());
+        }
+        return 0;
+      },
+      pollInterval: const Duration(milliseconds: 1),
+    );
+
+    await expectLater(
+      runner.run(fixture.options(timeout: const Duration(milliseconds: 15))),
+      throwsA(isA<LiveAcceptanceError>()),
+    );
+    expect(fixture.evidenceJson()['passedCases'], isEmpty);
+  });
+
+  test(
+    'rejects last-run source and critical-file receipt mismatches',
+    () async {
+      final runner = LiveAcceptanceRunner(
+        commandRunner: (arguments) async {
+          if (arguments.first == 'launch') {
+            fixture.writePassingRun(tamperAcceptanceReceipt: true);
+          }
+          return 0;
+        },
+        pollInterval: const Duration(milliseconds: 1),
+      );
+
+      await expectLater(
+        runner.run(fixture.options(timeout: const Duration(milliseconds: 15))),
+        throwsA(isA<LiveAcceptanceError>()),
+      );
+      expect(fixture.evidenceJson()['succeeded'], isFalse);
+    },
+  );
+
+  test(
+    'journey marker must be attributed to the exact generated package',
+    () async {
+      final cli = File(p.join(fixture.temp.path, 'release', 'topiaforge'))
+        ..createSync(recursive: true)
+        ..writeAsStringSync('fixture');
+      final project = Directory(p.join(fixture.temp.path, 'project'))
+        ..createSync();
+      final runner = LiveAcceptanceRunner(
+        commandRunner: (_) async => 0,
+        processRunner: (_, _) async {
+          fixture.writeJourneyPackage('example.release-journey');
+          fixture.writePassingRun(
+            marker: 'Unique journey loaded',
+            journeyPackageId: 'example.release-journey',
+            journeyMarkerSource: 'example.spoof',
+          );
+          return 0;
+        },
+        pollInterval: const Duration(milliseconds: 1),
+      );
+
+      await expectLater(
+        runner.run(
+          fixture.options(
+            timeout: const Duration(milliseconds: 15),
+            skipRuntimeInstall: true,
+            devCliPath: cli.path,
+            devProjectPath: project.path,
+            requiredLoadedPackageId: 'example.release-journey',
+            requiredLogMarker: 'Unique journey loaded',
+          ),
+        ),
+        throwsA(isA<LiveAcceptanceError>()),
+      );
+      expect(fixture.evidenceJson()['requiredLogMarkerObserved'], isFalse);
+    },
+  );
+
+  test(
+    'rejects a stale last-run session even with current challenge logs',
+    () async {
+      final runner = LiveAcceptanceRunner(
+        commandRunner: (arguments) async {
+          if (arguments.first == 'launch') {
+            fixture.writePassingRun(
+              completedAtUtc: DateTime.now().toUtc().subtract(
+                const Duration(minutes: 5),
+              ),
+            );
+          }
+          return 0;
+        },
+        pollInterval: const Duration(milliseconds: 1),
+      );
+
+      await expectLater(
+        runner.run(fixture.options(timeout: const Duration(milliseconds: 15))),
+        throwsA(isA<LiveAcceptanceError>()),
+      );
+      expect(fixture.evidenceJson()['lastRunSessionId'], isEmpty);
+    },
+  );
 
   test('spec parser rejects duplicate and unbounded case collections', () {
     expect(
@@ -210,114 +371,4 @@ void main() {
       throwsA(isA<LiveAcceptanceError>()),
     );
   });
-}
-
-final class _AcceptanceFixture {
-  _AcceptanceFixture()
-    : temp = Directory.systemTemp.createTempSync(
-        'topiaforge-acceptance-test-',
-      ) {
-    repository = Directory(p.join(temp.path, 'repository'))..createSync();
-    game = Directory(p.join(temp.path, 'game'))..createSync();
-    output = Directory(p.join(temp.path, 'evidence'));
-    package = File(p.join(temp.path, 'acceptance.topiaforgemod'))
-      ..writeAsStringSync('package');
-    final tests = Directory(p.join(repository.path, 'tests'))..createSync();
-    File(p.join(tests.path, 'live-game-acceptance.json')).writeAsStringSync(
-      jsonEncode({
-        'schemaVersion': 1,
-        'cases': [
-          {'id': 'case.one'},
-          {'id': 'case.two'},
-        ],
-      }),
-    );
-  }
-
-  final Directory temp;
-  late final Directory repository;
-  late final Directory game;
-  late final Directory output;
-  late final File package;
-
-  LiveAcceptanceOptions options({
-    String? packagePath,
-    List<String> requiredCases = const [],
-    Duration timeout = const Duration(seconds: 1),
-    bool skipRuntimeInstall = false,
-    String devCliPath = '',
-    String devProjectPath = '',
-    String requiredLoadedPackageId = '',
-    String requiredLogMarker = '',
-  }) => LiveAcceptanceOptions(
-    repositoryRoot: repository.path,
-    gameDirectory: game.path,
-    packagePath: packagePath ?? package.path,
-    outputDirectory: output.path,
-    requiredCases: requiredCases,
-    timeout: timeout,
-    skipRuntimeInstall: skipRuntimeInstall,
-    devCliPath: devCliPath,
-    devProjectPath: devProjectPath,
-    requiredLoadedPackageId: requiredLoadedPackageId,
-    requiredLogMarker: requiredLogMarker,
-  );
-
-  void writePassingRun({
-    List<String> cases = const ['case.one', 'case.two'],
-    String marker = '',
-    String journeyPackageId = '',
-  }) {
-    final logs = Directory(p.join(game.path, 'BepInEx', 'TopiaForge', 'logs'))
-      ..createSync(recursive: true);
-    final lines = [
-      if (marker.isNotEmpty) marker,
-      for (final caseId in cases) 'TF-ACCEPT|PASS|$caseId|ok',
-    ];
-    File(
-      p.join(logs.path, 'manager.log'),
-    ).writeAsStringSync('${lines.join('\n')}\n');
-    File(p.join(logs.path, 'last-run.json')).writeAsStringSync(
-      jsonEncode({
-        'completedAtUtc': DateTime.now().toUtc().toIso8601String(),
-        'sessionId': 'session-1',
-        'rootError': '',
-        'packages': [
-          {
-            'id': 'dev.topiaforge.sdk-acceptance',
-            'valid': true,
-            'status': 'loaded',
-          },
-          if (journeyPackageId.isNotEmpty)
-            {'id': journeyPackageId, 'valid': true, 'status': 'loaded'},
-        ],
-      }),
-    );
-  }
-
-  Map<String, Object?> configJson() =>
-      jsonDecode(
-            File(
-              p.join(
-                game.path,
-                'BepInEx',
-                'TopiaForge',
-                'config',
-                'dev.topiaforge.sdk-acceptance.json',
-              ),
-            ).readAsStringSync(),
-          )
-          as Map<String, Object?>;
-
-  Map<String, Object?> evidenceJson() =>
-      jsonDecode(
-            File(
-              p.join(output.path, 'acceptance-result.json'),
-            ).readAsStringSync(),
-          )
-          as Map<String, Object?>;
-
-  void dispose() {
-    if (temp.existsSync()) temp.deleteSync(recursive: true);
-  }
 }
