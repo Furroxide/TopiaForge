@@ -19,6 +19,28 @@ SELF_PATH = ".github/scripts/check_topiaforge_residue.py"
 # These paths describe the game build/reference input, not the modding ecosystem.
 ROBOTOPIA_EXACT_PATH_ALLOWLIST = {
     ".github/robotopia-game-build.json",
+    "tools/release/test-verify-robotopia-install.ps1",
+    "tools/release/verify-robotopia-install.ps1",
+}
+
+# These files implement or verify the release handoff for the target game.
+# Lowercase `robotopia` is part of their deterministic manifest field names,
+# evidence paths, and local variable names. This exception applies only to the
+# lowercase-token style rule: every retired-identity BYTE_RULE remains active.
+ROBOTOPIA_GAME_INTEGRATION_CONTENT_ALLOWLIST = {
+    "apps/topiaforge_cli/lib/src/release_handoff_contract.dart",
+    "apps/topiaforge_cli/lib/src/release_handoff_qa.dart",
+    "apps/topiaforge_cli/lib/src/release_handoff_qa_contract.dart",
+    "apps/topiaforge_cli/lib/src/release_handoff_qa_helpers.dart",
+    "apps/topiaforge_cli/test/release_handoff_embedded_ecosystem_test.dart",
+    "apps/topiaforge_cli/test/release_handoff_game_identity_test.dart",
+    "apps/topiaforge_cli/test/release_handoff_qa_fixture.dart",
+    "apps/topiaforge_cli/test/release_handoff_test.dart",
+    "tools/release-admin.ps1",
+    "tools/release/build-windows.ps1",
+    "tools/release/test-verify-robotopia-install.ps1",
+    "tools/release/verify-robotopia-install.ps1",
+    "tools/test-release-admin.ps1",
 }
 
 TOPIAFORGE_PACKAGE_TOOL_PATH = re.compile(
@@ -27,7 +49,30 @@ TOPIAFORGE_PACKAGE_TOOL_PATH = re.compile(
     r"|(?:TopiaForge-macos-universal/)?TopiaForge\.app/Contents/Resources/"
     r"TopiaForge/tools/"
     r")"
+    r"(?:"
     r"(?:restore-robotopia-managed-refs|test-restore-robotopia-managed-refs)\.ps1"
+    r"|release/(?:test-)?verify-robotopia-install\.ps1"
+    r")"
+)
+
+TOPIAFORGE_PACKAGE_CONTENT_PREFIXES = (
+    "TopiaForge-windows-x64/",
+    "TopiaForge-linux-x64/",
+    "TopiaForge.app/Contents/Resources/TopiaForge/",
+    "TopiaForge-macos-universal/TopiaForge.app/Contents/Resources/TopiaForge/",
+)
+
+TOPIAFORGE_MACOS_CODE_RESOURCES_PATH = re.compile(
+    r"(?:TopiaForge-macos-universal/)?"
+    r"TopiaForge\.app/Contents/_CodeSignature/CodeResources"
+)
+
+TOPIAFORGE_MACOS_CODE_RESOURCES_GAME_TOOL = re.compile(
+    r"(?<![A-Za-z0-9_./\\-])"
+    r"Resources/TopiaForge/tools/release/(?:test-)?"
+    r"verify-robotopia-install\.ps1"
+    r"(?![A-Za-z0-9_./\\-])",
+    re.IGNORECASE,
 )
 
 FORBIDDEN_PATH = re.compile(
@@ -115,6 +160,16 @@ LOWERCASE_ROBOTOPIA_ALLOWLIST = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"(?<![A-Za-z0-9_])robotopia-owner(?![A-Za-z0-9_-])",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?<![A-Za-z0-9_./\\-])"
+        r"tools[/\\]release[/\\](?:test-)?verify-robotopia-install\.ps1"
+        r"(?![A-Za-z0-9_./\\-])",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"(?<![A-Za-z0-9_.-])"
         r"robotopia\.(?:characters|items|ugc-props|vehicles)"
         r"(?![A-Za-z0-9_.-])",
@@ -148,6 +203,7 @@ MAX_ARCHIVE_DEPTH = 8
 MAX_ARCHIVE_UNCOMPRESSED_BYTES = 8 * 1024 * 1024 * 1024
 
 LOWERCASE_LITERAL_ALLOWLIST = {
+    "apps/topiaforge_cli/lib/src/creator_persistence_probe.dart",
     "packages/launcher_data/lib/src/local_launcher_repository/game_layout.dart",
     "packages/launcher_data/lib/src/local_launcher_repository/game_runtime_helpers.dart",
     "packages/launcher_data/test/game_layout_test.dart",
@@ -195,6 +251,25 @@ def parse_args() -> argparse.Namespace:
 
 
 def allowed_lowercase_span(path: str, text: str, start: int, end: int) -> bool:
+    normalized_path = path.replace("\\", "/")
+    policy_paths = [normalized_path]
+    for prefix in TOPIAFORGE_PACKAGE_CONTENT_PREFIXES:
+        if normalized_path.startswith(prefix):
+            policy_paths.append(normalized_path.removeprefix(prefix))
+            break
+    if any(
+        policy_path in ROBOTOPIA_GAME_INTEGRATION_CONTENT_ALLOWLIST
+        for policy_path in policy_paths
+    ):
+        return True
+
+    if TOPIAFORGE_MACOS_CODE_RESOURCES_PATH.fullmatch(normalized_path):
+        if any(
+            match.start() <= start and end <= match.end()
+            for match in TOPIAFORGE_MACOS_CODE_RESOURCES_GAME_TOOL.finditer(text)
+        ):
+            return True
+
     for pattern in LOWERCASE_ROBOTOPIA_ALLOWLIST:
         if any(match.start() <= start and end <= match.end() for match in pattern.finditer(text)):
             return True
@@ -207,7 +282,6 @@ def allowed_lowercase_span(path: str, text: str, start: int, end: int) -> bool:
     # Unity package discovery keywords intentionally include the target game.
     # Keep this exception scoped to the exact JSON keyword array in source
     # package manifests and their generated VPM index representation.
-    normalized_path = path.replace("\\", "/")
     if normalized_path.endswith("package.json") or normalized_path.endswith(
         "/vpm/index.json"
     ):

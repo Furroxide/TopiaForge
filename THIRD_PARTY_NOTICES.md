@@ -26,25 +26,39 @@ RoboPatch was used only as behavior prior art for clean-room compatibility plann
 
 Prism Launcher was used only as product maturity and UX inspiration. No Prism Launcher code was copied or ported.
 
-TopiaForge launcher UI bundles first-party Robotopia web brand assets from `https://robotopia.gg/` and local
+TopiaForge launcher UI bundles Robotopia web brand assets from `https://robotopia.gg/` and local
 TopiaForge artwork for offline launcher theming.
 
-- Web-derived raster files: `topiaforge-city-header.webp`, `baby-stitch.webp`, `robot.webp`, and `sheriff.webp`
+- Web-derived raster files: `topiaforge-city-header.webp`, `baby-stitch.webp`, and `sheriff.webp`
 - Source: `https://robotopia.gg/`
+- Rights basis: **unresolved.** These files originate from Robotopia's own web brand assets and no
+  redistribution licence has been identified. Permission has been requested from Tomato Cake. Until a
+  written grant is recorded here, these three files have no distributable rights basis and block
+  `P0-IP-01`. If permission is declined or not received, they must be removed or replaced.
 - Local changes: filenames were normalized for launcher packaging.
 
-The TopiaForge pixel-art wordmark, icon, and generated platform icon variants are first-party project assets,
-not Robotopia-derived third-party artwork.
+The TopiaForge pixel-art wordmark, icon, generated platform icon variants, and the drawn pixel-art robot
+in `packages/launcher_ui/lib/src/pixel_robot.dart` are first-party project assets, not Robotopia-derived
+third-party artwork. The robot replaced a previously bundled `robot.webp` taken from the Robotopia web
+bundle; it is defined as a checked-in pixel grid rather than a raster file so its provenance is
+unambiguous.
 
-TopiaForge launcher UI bundles the Quicksand font copied from the Robotopia web bundle into `packages/launcher_ui/fonts`.
+TopiaForge bundles the Quicksand font for body typography in the launcher UI and Unity brand bundle.
 
 - Project: Quicksand
-- Source file: `https://robotopia.gg/assets/Quicksand-VariableFont_wght-DE2wFU7n.ttf`
+- Source file: `https://github.com/google/fonts/raw/main/ofl/quicksand/Quicksand%5Bwght%5D.ttf`
 - Upstream: https://fonts.google.com/specimen/Quicksand
-- License: Open Font License according to Google Fonts at the time this notice was added.
-- Local changes: none known; filename was normalized for launcher packaging.
-- SHA-256: `8b3a3842cc4b666fde454446e28d1bacde30a0ac861e90cbb0bd77b02ecb9dae`
+- License: SIL Open Font License 1.1
+- Bundled at: `packages/launcher_ui/fonts` and `tools/unity-ui-bundle/Assets/Fonts`
+- Local changes: none; filename was normalized for launcher and Unity packaging.
+- SHA-256: `39c9b64223561f56aaff6062a6f04063c4fc86809ad6768722c06614d977e1cc`
 - License text: `packages/launcher_ui/fonts/Quicksand-OFL.txt` (also copied into the Unity UI bundle source)
+
+  This file was previously copied from the Robotopia web bundle
+  (`https://robotopia.gg/assets/Quicksand-VariableFont_wght-DE2wFU7n.ttf`, SHA-256
+  `8b3a3842cc4b666fde454446e28d1bacde30a0ac861e90cbb0bd77b02ecb9dae`). That copy was not
+  byte-identical to upstream, so both bundled copies were replaced with the Google Fonts release
+  above to give the font a verifiable first-hand provenance.
 
 TopiaForge bundles the Audiowide font for display typography in the launcher UI and Unity brand bundle.
 
@@ -55,6 +69,24 @@ TopiaForge bundles the Audiowide font for display typography in the launcher UI 
 - Bundled at: `packages/launcher_ui/fonts` and `tools/unity-ui-bundle/Assets/Fonts`
 - Local changes: none known; filename was normalized for launcher and Unity packaging.
 - SHA-256: `c7c0f2b0f6fad8c623e31772ce79f94a4edb9321ffce9fce978ea892d20ae730`
+
+TopiaForge redistributes Unity's TextMesh Pro essential resources inside the Unity UI bundle source at
+`tools/unity-ui-bundle/Assets/TextMesh Pro`, and the release archives carry that directory. The set
+comprises shaders, materials, style sheets, line-breaking data, and the Liberation Sans font.
+
+- Project: TextMesh Pro essential resources (Unity Technologies)
+- Bundled at: `tools/unity-ui-bundle/Assets/TextMesh Pro`
+- License: distributed under the Unity Companion License as part of the Unity Editor package.
+- Local changes: the EmojiOne sprite sheet and its sprite asset were removed because their bundled
+  attribution granted no redistribution right; the TMP default sprite asset is cleared and emoji
+  support disabled accordingly.
+
+- Project: Liberation Sans
+- Bundled at: `tools/unity-ui-bundle/Assets/TextMesh Pro/Fonts/LiberationSans.ttf`
+- License: SIL Open Font License 1.1
+- License text: `tools/unity-ui-bundle/Assets/TextMesh Pro/Fonts/LiberationSans - OFL.txt`
+- Local changes: none; redistributed as shipped with TextMesh Pro.
+- SHA-256: `e5b0af421ea2bfbc1ac8d251d647268087ae82786234c57f757d1f0b90fa8b49`
 
 The standalone `topiaforge` executable embeds the Dart SDK runtime and the following runtime packages. Release
 packaging copies the exact license texts resolved by `apps/topiaforge_cli/.dart_tool/package_config.json` into

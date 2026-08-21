@@ -133,6 +133,70 @@ extension _ReleasePackageValidationHelpers on ReleasePackageValidator {
     }
   }
 
+  Future<void> _assertMacTrust(String appPath) async {
+    if (!requireMacTrust) return;
+    if (!Platform.isMacOS) {
+      throw StateError('Final macOS trust validation must run on macOS.');
+    }
+    final teamId = expectedMacTeamId.trim().isNotEmpty
+        ? expectedMacTeamId.trim()
+        : (Platform.environment['MACOS_NOTARY_TEAM_ID'] ?? '').trim();
+    if (teamId.isEmpty) {
+      throw StateError('Expected macOS Developer Team ID is required.');
+    }
+    await _requireSuccess('codesign', [
+      '--verify',
+      '--deep',
+      '--strict',
+      '--verbose=4',
+      appPath,
+    ], label: 'app signature');
+    for (final entity in Directory(
+      appPath,
+    ).listSync(recursive: true, followLinks: false).whereType<File>()) {
+      if (!_hasMachOMagic(entity)) continue;
+      await _requireSuccess('codesign', [
+        '--verify',
+        '--strict',
+        '--verbose=4',
+        entity.path,
+      ], label: p.relative(entity.path, from: appPath));
+      final details = await processRunner.runResult('codesign', [
+        '-d',
+        '--verbose=4',
+        entity.path,
+      ]);
+      final output = '${details.stdout}\n${details.stderr}';
+      if (details.exitCode != 0 ||
+          output.contains('Signature=adhoc') ||
+          !output.contains('Authority=Developer ID Application:') ||
+          !output.contains('TeamIdentifier=$teamId')) {
+        throw StateError(
+          'macOS code-signing identity or Team ID is invalid for '
+          '${p.relative(entity.path, from: appPath)}.',
+        );
+      }
+    }
+    await _requireSuccess('xcrun', [
+      'stapler',
+      'validate',
+      appPath,
+    ], label: 'notarization ticket');
+    await _requireSuccess('xattr', [
+      '-w',
+      'com.apple.quarantine',
+      '0081;00000000;TopiaForge release validation;',
+      appPath,
+    ], label: 'quarantine simulation');
+    await _requireSuccess('spctl', [
+      '--assess',
+      '--type',
+      'execute',
+      '--verbose=4',
+      appPath,
+    ], label: 'Gatekeeper assessment');
+  }
+
   void _assertPath(String path, String message) {
     if (!FileSystemEntity.typeSync(path).exists) {
       throw StateError('$message Missing path: $path');

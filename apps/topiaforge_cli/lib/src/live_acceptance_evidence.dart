@@ -13,13 +13,16 @@ final class LiveAcceptanceEvidence {
     required this.passedCases,
     required this.missingCases,
     required this.failures,
+    required this.acceptanceChallenge,
     required this.lastRunSessionId,
     required this.acceptancePackageStatus,
+    required this.acceptancePackageReceipt,
     required this.releaseJourneyEnabled,
     required this.releaseJourneyCli,
     required this.releaseJourneyProject,
     required this.requiredLoadedPackageId,
     required this.requiredLoadedPackageStatus,
+    required this.requiredLoadedPackageReceipt,
     required this.requiredLogMarker,
     required this.requiredLogMarkerObserved,
     required this.succeeded,
@@ -33,19 +36,22 @@ final class LiveAcceptanceEvidence {
   final List<String> passedCases;
   final List<String> missingCases;
   final List<String> failures;
+  final String acceptanceChallenge;
   final String lastRunSessionId;
   final String acceptancePackageStatus;
+  final LiveAcceptancePackageReceipt? acceptancePackageReceipt;
   final bool releaseJourneyEnabled;
   final String releaseJourneyCli;
   final String releaseJourneyProject;
   final String requiredLoadedPackageId;
   final String requiredLoadedPackageStatus;
+  final LiveAcceptancePackageReceipt? requiredLoadedPackageReceipt;
   final String requiredLogMarker;
   final bool requiredLogMarkerObserved;
   final bool succeeded;
 
   Map<String, Object?> toJson() => {
-    'schemaVersion': 1,
+    'schemaVersion': 2,
     'startedAtUtc': startedAtUtc.toUtc().toIso8601String(),
     'completedAtUtc': completedAtUtc.toUtc().toIso8601String(),
     'gameDirectory': gameDirectory,
@@ -54,8 +60,10 @@ final class LiveAcceptanceEvidence {
     'passedCases': passedCases,
     'missingCases': missingCases,
     'failures': failures,
+    'acceptanceChallenge': acceptanceChallenge,
     'lastRunSessionId': lastRunSessionId,
     'acceptancePackageStatus': acceptancePackageStatus,
+    'acceptancePackageReceipt': acceptancePackageReceipt?.toJson(),
     'releaseJourneyEnabled': releaseJourneyEnabled,
     'releaseJourneyAuthoringCommandCount': releaseJourneyEnabled ? 2 : 0,
     'releaseJourneyCli': releaseJourneyEnabled ? releaseJourneyCli : '',
@@ -64,6 +72,7 @@ final class LiveAcceptanceEvidence {
         ? requiredLoadedPackageId
         : '',
     'requiredLoadedPackageStatus': requiredLoadedPackageStatus,
+    'requiredLoadedPackageReceipt': requiredLoadedPackageReceipt?.toJson(),
     'requiredLogMarker': releaseJourneyEnabled ? requiredLogMarker : '',
     'requiredLogMarkerObserved': requiredLogMarkerObserved,
     'succeeded': succeeded,
@@ -83,6 +92,9 @@ LiveAcceptanceEvidence buildLiveAcceptanceEvidence({
   required List<String> failures,
   required LiveAcceptanceLastRun? lastRun,
   required bool requiredLogMarkerObserved,
+  required String acceptanceChallenge,
+  required LiveAcceptancePackageReceipt expectedAcceptanceReceipt,
+  required LiveAcceptancePackageReceipt? expectedJourneyReceipt,
 }) {
   const acceptanceId = 'dev.topiaforge.sdk-acceptance';
   final acceptancePackage = lastRun?.package(acceptanceId);
@@ -97,12 +109,15 @@ LiveAcceptanceEvidence buildLiveAcceptanceEvidence({
       !options.releaseJourneyEnabled ||
       (requiredLogMarkerObserved &&
           requiredPackage?.valid == true &&
-          requiredPackage?.status == 'loaded');
+          requiredPackage?.status == 'loaded' &&
+          expectedJourneyReceipt != null &&
+          requiredPackage?.matchesReceipt(expectedJourneyReceipt) == true);
   final succeeded =
       missing.isEmpty &&
       failures.isEmpty &&
       acceptancePackage?.valid == true &&
       acceptancePackage?.status == 'loaded' &&
+      acceptancePackage?.matchesReceipt(expectedAcceptanceReceipt) == true &&
       (lastRun?.rootError.trim().isEmpty ?? false) &&
       releaseJourneySucceeded;
   return LiveAcceptanceEvidence(
@@ -114,13 +129,26 @@ LiveAcceptanceEvidence buildLiveAcceptanceEvidence({
     passedCases: List.unmodifiable(passed),
     missingCases: List.unmodifiable(missing),
     failures: List.unmodifiable(failures),
+    acceptanceChallenge: acceptanceChallenge,
     lastRunSessionId: lastRun?.sessionId ?? '',
     acceptancePackageStatus: acceptancePackage?.status ?? 'missing',
+    acceptancePackageReceipt: acceptancePackage?.receiptValid == true
+        ? LiveAcceptancePackageReceipt(
+            sourceSha256: acceptancePackage!.sourceSha256,
+            criticalFiles: acceptancePackage.criticalFiles,
+          )
+        : null,
     releaseJourneyEnabled: options.releaseJourneyEnabled,
     releaseJourneyCli: options.devCliPath,
     releaseJourneyProject: options.devProjectPath,
     requiredLoadedPackageId: options.requiredLoadedPackageId,
     requiredLoadedPackageStatus: requiredPackage?.status ?? 'not-required',
+    requiredLoadedPackageReceipt: requiredPackage?.receiptValid == true
+        ? LiveAcceptancePackageReceipt(
+            sourceSha256: requiredPackage!.sourceSha256,
+            criticalFiles: requiredPackage.criticalFiles,
+          )
+        : null,
     requiredLogMarker: options.requiredLogMarker,
     requiredLogMarkerObserved: requiredLogMarkerObserved,
     succeeded: succeeded,

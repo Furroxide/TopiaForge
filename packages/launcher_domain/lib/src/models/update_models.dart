@@ -267,11 +267,15 @@ final class LauncherUpdateCandidate {
   }) : platforms = Map.unmodifiable(platforms) {
     final parsedVersion = SemanticVersion.tryParse(version);
     final minimum = SemanticVersion.tryParse(minimumUpdaterVersion);
+    const requiredPlatforms = {'windows-x64', 'linux-x64'};
+    const supportedPlatforms = {'windows-x64', 'linux-x64', 'macos-universal'};
+    final platformNames = platforms.keys.toSet();
     if (parsedVersion == null ||
         minimum == null ||
         tag != 'v$version' ||
         !_isTrustedPublicHttpsUrl(releaseUrl) ||
-        platforms.length != 3 ||
+        !platformNames.containsAll(requiredPlatforms) ||
+        platformNames.difference(supportedPlatforms).isNotEmpty ||
         !platforms.values.every((artifact) => artifact.isValid) ||
         !RegExp(r'^ed25519:[0-9a-f]{16}$').hasMatch(signingKeyId) ||
         !RegExp(r'^[0-9a-f]{64}$').hasMatch(payloadSha256)) {
