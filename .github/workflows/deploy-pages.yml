@@ -80,6 +80,7 @@ jobs:
       pages: read
     outputs:
       manual_releases: ${{ steps.feeds.outputs.manual_releases }}
+      registry_mod_count: ${{ steps.feeds.outputs.registry_mod_count }}
     steps:
       - name: Checkout exact triggering revision
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -131,11 +132,7 @@ jobs:
           dotnet-version: "10.0.301"
 
       - name: Set up Flutter and Dart
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-        with:
-          flutter-version: "3.44.6"
-          channel: stable
-          cache: true
+        uses: ./.github/actions/setup-flutter
 
       - name: Verify pinned runtimes
         run: |
@@ -226,6 +223,13 @@ jobs:
               --changelogs ../../mods \
               --output "$feeds/registry"
           )
+          # Record what was generated so the post-deploy smoke can prove the
+          # served index matches it. Without this the smoke's `all(.mods[]; ...)`
+          # is vacuously true on an empty array, so a silent collection failure
+          # (release assets renamed, listReleases returning nothing) would
+          # publish an empty registry and still pass.
+          registry_mod_count=$(jq '.mods | length' "$feeds/registry/index.json")
+          echo "registry_mod_count=$registry_mod_count" >> "$GITHUB_OUTPUT"
           touch "$feeds/.nojekyll"
 
           test ! -e "$GITHUB_WORKSPACE/_site"
@@ -266,6 +270,7 @@ jobs:
       - name: Verify the public portal and generated content
         env:
           HAS_MANUAL_RELEASES: ${{ needs.build-pages.outputs.manual_releases }}
+          REGISTRY_MOD_COUNT: ${{ needs.build-pages.outputs.registry_mod_count }}
         run: |
           set -euo pipefail
           base=https://docs.topiaforge.dev
@@ -290,8 +295,13 @@ jobs:
           done
           fetch /pagefind/pagefind.js "$smoke_root/pagefind.js"
           fetch /registry/index.json "$smoke_root/registry.json"
-          jq -e \
-            '.formatVersion == 2 and all(.mods[]; .origin == "first-party")' \
+          # The mod count is compared against what generation actually produced.
+          # `all(.mods[]; ...)` alone is vacuously true on an empty array, so on
+          # its own it cannot distinguish a correct registry from a lost one.
+          jq -e --argjson expected "$REGISTRY_MOD_COUNT" \
+            '.formatVersion == 2
+              and all(.mods[]; .origin == "first-party")
+              and (.mods | length) == $expected' \
             "$smoke_root/registry.json" >/dev/null
           fetch /source/docs/capability-matrix.json "$smoke_root/capabilities.json"
           fetch /source/tests/live-game-acceptance.json "$smoke_root/acceptance.json"

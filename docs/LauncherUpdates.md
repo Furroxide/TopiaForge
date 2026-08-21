@@ -18,7 +18,8 @@ Every update release contains:
 - `topiaforge-update-v1.json.sig`, an Ed25519 signature sidecar.
 
 The payload identifies the product, SemVer, tag, channel, minimum updater
-version, release URL, and the three immutable platform archives. Each archive
+version, release URL, and the exact immutable platform set in release policy
+(Windows x64 and Linux x64 for RC1). Each archive
 record includes its GitHub URL, SHA-256, byte size, entry count, expanded size,
 and install layout. The sidecar names its public key by SHA-256-derived key ID.
 The initial embedded key is `ed25519:26229e3d2b54e81c`.
@@ -87,15 +88,17 @@ appropriate to the already-installed trust root.
 Before creating `1.0.0-rc.2`:
 
 1. Reuse the existing Ed25519 update key; do not rotate it for this test.
-2. Remove the `1.0.0-rc.1` code-signing exception from release policy.
+2. Confirm release policy still forbids every unsigned/ad-hoc code-signing
+   exception.
 3. Require Authenticode signing and timestamping for Windows.
-4. Require Developer ID signing, notarization, and stapling for macOS.
+4. If macOS is added to that release, require Developer ID signing,
+   notarization, and stapling before adding its archive to policy.
 5. Bump every catalogued product/component/package version and the launcher
    build constant.
 6. Build all archives from the exact protected release SHA.
 7. Generate and independently verify the signed update payload and sidecar.
-8. Install the immutable public `rc.1` archive on clean Windows, Linux, and
-   macOS hosts.
+8. Install the immutable public `rc.1` archive on clean Windows and Linux
+   hosts.
 9. Use the in-app beta check, download, confirmation, helper swap, relaunch,
    and health handshake to reach `rc.2`.
 10. Repeat with an injected startup failure and retain evidence that `rc.1`

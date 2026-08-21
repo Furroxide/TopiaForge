@@ -154,6 +154,16 @@ See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [SUPPORT.md]
 [launch blocker register](docs/LaunchBlockers.md). Remote-service and sensitive-capability behavior is documented in
 [docs/PrivacyAndCapabilities.md](docs/PrivacyAndCapabilities.md).
 
+## Trademarks and affiliation
+
+TopiaForge is an independent, community-built modding toolkit. It is not developed, published, or endorsed by
+Tomato Cake or the Robotopia development team, and is not otherwise affiliated with them. "Robotopia" and
+"Tomato Cake" are the property of their respective owners and are used here only to identify the game this
+toolkit works with.
+
+TopiaForge is licensed under [MIT](LICENSE). Third-party components retain their own licenses; see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
 ## Verification
 
 ```powershell

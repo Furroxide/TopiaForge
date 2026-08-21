@@ -43,6 +43,11 @@
     "input",
     "hud",
     "robot-spawning",
-    "filesystem"
+    "filesystem",
+    "physics",
+    "player-control",
+    "network",
+    "remote-ai",
+    "player-token"
   ]
 }

@@ -44,6 +44,10 @@
     "robot-spawning",
     "input",
     "physics",
-    "hud"
+    "hud",
+    "player-control",
+    "network",
+    "remote-ai",
+    "player-token"
   ]
 }

@@ -23,6 +23,15 @@ updates:
     groups:
       dotnet:
         patterns: ["*"]
+    ignore:
+      # Roslyn analyzer and source-generator packages are locked to the compiler
+      # shipped by the pinned .NET SDK, not to the newest release. An assembly
+      # built against a newer Microsoft.CodeAnalysis than the running compiler is
+      # refused with CS9057, which silently disables the analyzer and makes every
+      # generated member vanish. Dependabot cannot see that constraint, so hold
+      # these at the major version the pinned SDK's compiler accepts.
+      - dependency-name: Microsoft.CodeAnalysis.CSharp
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /tools/ugc-automerge-sidecar

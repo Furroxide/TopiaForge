@@ -4,20 +4,20 @@
   "title": "TopiaForge release policy",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "toolchains", "gameBuild", "projectLicense", "thirdPartyProvenance", "versioning", "artifactPolicy", "bepInEx", "publication"],
+  "required": ["schemaVersion", "toolchains", "gameBuild", "projectLicense", "thirdPartyProvenance", "versioning", "artifactPolicy", "signingIdentities", "bepInEx", "publication"],
   "properties": {
     "$schema": { "type": "string" },
     "schemaVersion": { "const": 2 },
     "toolchains": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["dotnetSdk", "dotnetRuntime", "dart", "flutter", "nodeMinimum", "unity"],
+      "required": ["dotnetSdk", "dotnetRuntime", "dart", "flutter", "node", "unity"],
       "properties": {
         "dotnetSdk": { "type": "string" },
         "dotnetRuntime": { "type": "string" },
         "dart": { "type": "string" },
         "flutter": { "type": "string" },
-        "nodeMinimum": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "node": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
         "unity": { "type": "string" }
       }
     },
@@ -62,9 +62,38 @@
       "additionalProperties": false,
       "required": ["platformArchives", "generatedMetadata", "canonicalEcosystemPayload"],
       "properties": {
-        "platformArchives": { "type": "array", "minItems": 3, "uniqueItems": true, "items": { "type": "string" } },
+        "platformArchives": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "TopiaForge-linux-x64.zip",
+              "TopiaForge-macos-universal.zip",
+              "TopiaForge-windows-x64.zip"
+            ]
+          },
+          "allOf": [
+            { "contains": { "const": "TopiaForge-windows-x64.zip" } }
+          ]
+        },
         "generatedMetadata": { "type": "array", "minItems": 3, "uniqueItems": true, "items": { "type": "string" } },
         "canonicalEcosystemPayload": { "const": true }
+      }
+    },
+    "signingIdentities": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "windowsCertificateSha256": {
+          "type": "string",
+          "pattern": "^(?!0{64}$)[0-9a-f]{64}$"
+        },
+        "macosTeamId": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]{10}$"
+        }
       }
     },
     "bepInEx": {
@@ -81,22 +110,13 @@
     "publication": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["mode", "allowTagCreation", "allowAssetReplacement", "requireImmutableReleasesBeforeManualPublish"],
+      "required": ["mode", "allowTagCreation", "allowAssetReplacement", "requireImmutableRelease", "publishAfterProtectedApproval"],
       "properties": {
-        "mode": { "const": "draft-only" },
+        "mode": { "const": "admin-staged-auto-publish" },
         "allowTagCreation": { "const": false },
         "allowAssetReplacement": { "const": false },
-        "requireImmutableReleasesBeforeManualPublish": { "const": true },
-        "codeSigningException": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["version", "allowUnsignedWindows", "allowAdHocMacOS"],
-          "properties": {
-            "version": { "const": "1.0.0-rc.1" },
-            "allowUnsignedWindows": { "const": true },
-            "allowAdHocMacOS": { "const": true }
-          }
-        }
+        "requireImmutableRelease": { "const": true },
+        "publishAfterProtectedApproval": { "const": true }
       }
     }
   }
