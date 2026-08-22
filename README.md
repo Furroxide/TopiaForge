@@ -113,7 +113,7 @@ Mods are `.topiaforgemod` zip files with a required `topiaforge.mod.json` manife
 Scaffold a mod and pack it:
 
 ```sh
-topiaforge new mod yourname.firstmod --name "First Mod" --author "Your Name" --license MIT
+topiaforge new mod yourname.firstmod --name "First Mod" --author "Your Name" --license AGPL-3.0-or-later
 cd yourname.firstmod
 topiaforge pack
 ```
@@ -133,6 +133,17 @@ BepInEx\TopiaForge\package-inbox
 
 TopiaForge uses trusted local packages. Do not install `.topiaforgemod` files unless you trust their source; C# mods execute code in the Robotopia process.
 
+## License
+
+TopiaForge is free software: you can redistribute it and/or modify it under the terms of the
+[GNU Affero General Public License](LICENSE), version 3 or later (`AGPL-3.0-or-later`),
+`Copyright (C) 2026 furroxide`.
+
+The SDK packages are covered by the same terms with no linking exception, so a mod distributed
+against the TopiaForge SDK must also be licensed `AGPL-3.0-or-later`. Third-party materials keep
+their original licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Contributions are
+accepted under the same terms with a [DCO 1.1](DCO) sign-off.
+
 ## Community and project policy
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [SUPPORT.md](SUPPORT.md),
@@ -149,9 +160,6 @@ TopiaForge is an independent, community-built modding toolkit. It is not develop
 Tomato Cake or the Robotopia development team, and is not otherwise affiliated with them. "Robotopia" and
 "Tomato Cake" are the property of their respective owners and are used here only to identify the game this
 toolkit works with.
-
-TopiaForge is licensed under [MIT](LICENSE). Third-party components retain their own licenses; see
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Verification
 

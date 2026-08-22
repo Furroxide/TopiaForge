@@ -15,7 +15,7 @@
     "requireLatestAtRelease": true
   },
   "projectLicense": {
-    "spdxExpression": "MIT",
+    "spdxExpression": "AGPL-3.0-or-later",
     "licenseFile": "LICENSE",
     "decisionStatus": "approved"
   },

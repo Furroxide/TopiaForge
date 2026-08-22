@@ -65,7 +65,7 @@ check is silently skipped.
 | Public build freshness | PASS | A fresh 2026-07-31 public probe confirms both public platform records identify build `2309`; CI/release fail if the public latest manifest changes. |
 | BepInEx/UnityDoorstop provenance | PASS | Pinned BepInEx `5.4.23.5` archives and extracted trees, UnityDoorstop commit/source, hashes, modes, and notices validate. |
 | macOS release package | OUT OF RC1 | Generic packaging remains in source, but macOS is not in RC1 policy, catalog, update metadata, handoff, or public assets. It requires a separately reviewed future release. |
-| Release-policy/BOM/SBOM/checksum machinery | PASS | Strict policy and metadata regressions cover MIT, actual platform trust, signed update metadata/sidecar, checksums, BOM, SBOM, and immutable asset inventory. |
+| Release-policy/BOM/SBOM/checksum machinery | PASS | Strict policy and metadata regressions cover AGPL-3.0-or-later, actual platform trust, signed update metadata/sidecar, checksums, BOM, SBOM, and immutable asset inventory. |
 | Repository and CI hygiene | PASS | actionlint `1.7.7`, PowerShell/bash parsing, 164 JSON/YAML files, 118 Markdown files, 1,943 built HTML links, action pins, conflict markers, LF policy, and the 381-file non-generated Dart line cap passed. PSScriptAnalyzer `1.25.0` is rerun after every release-script edit. |
 | Credential exposure containment | BLOCKED | The affected workspace DerivedData and launcher build logs were removed, and a scrubbed exact-toolchain sentinel build passed; 13 newly produced Xcode activity logs contained no credential-shaped variable names. Credential owners must still rotate the previously exposed values and confirm revocation. See `P0-CRED-01`. |
 | Strict distributable-release policy | NEEDS RERUN | RC1 policy is scoped to Windows x64 only, forbids signing exceptions, and requires an exact nonzero Windows certificate SHA-256 pin plus an authenticated detached CMS handoff. |
@@ -74,7 +74,7 @@ check is silently skipped.
 | Native CreatorTools evidence collector | BLOCKED | Implemented, not yet attested. `CreatorAcceptanceRecorder` emits challenge-bound per-case markers from observed workbench transitions for all nine `creator.*` cases, `topiaforge acceptance creator` binds them to the exact `last-run.json` session and CreatorTools package receipt, and the three `Assert-WindowsCreator*` verifiers in `tools/release-admin.ps1` now perform real `release-windows-creator-evidence-v2` verification instead of throwing. Save and checkpoint bytes are compared across End Session from the real `player_data.json.gz` document. The gate stays BLOCKED because no evidence has been produced from an authorized interactive build-2309 session at the frozen candidate SHA; see `P0-CREATOR-01`. |
 | Authorized Robotopia build-2309 acceptance | BLOCKED | A local Windows startup smoke passed on 2026-07-28: BepInEx loaded TopiaForge, detected `0.0.2309`, consumed all 16 staged packages, loaded every enabled first-party mod, initialized the native prompt/performance/UI bridges, and left Robotopia responsive. The complete dynamic-binding, reload, recovery, multiplayer, and profiler matrix still requires retained evidence from the frozen candidate; see `P0-GAME-01`. |
 | Native UX/accessibility acceptance | BLOCKED | Screen Recording permission prevented screenshot comparison; screen-reader and native-platform manual QA remain; see `P1-UX-01`. |
-| Project license and OSS redistribution inventory | FAIL | TopiaForge-owned surfaces use MIT and DCO 1.1 governs post-cutover contributions, but the notice inventory was a fixed allowlist that never covered the Unity TextMesh Pro directory. EmojiOne shipped with no redistribution grant, Liberation Sans shipped with no notice, and Quicksand was sourced from the Robotopia web bundle. All fixed; see the re-opened `P0-OSS-01`. IP/brand authority remains tracked separately in `P0-IP-01`. |
+| Project license and OSS redistribution inventory | FAIL | TopiaForge-owned surfaces use AGPL-3.0-or-later and DCO 1.1 governs post-cutover contributions, but the notice inventory was a fixed allowlist that never covered the Unity TextMesh Pro directory. EmojiOne shipped with no redistribution grant, Liberation Sans shipped with no notice, and Quicksand was sourced from the Robotopia web bundle. All fixed; see the re-opened `P0-OSS-01`. IP/brand authority remains tracked separately in `P0-IP-01`. |
 | Privacy/backend authorization and package trust policy | BLOCKED | Remote features default off, but owner approval is still required; see `P0-PRIV-01` and `P0-TRUST-01`. |
 | GitHub rulesets, environments, secrets, tag, and attestations | BLOCKED | Repository administration and credential owners must configure and prove the trusted path; see `P0-HOST-01`. |
 | Frozen candidate admin matrix and reviewed release record | BLOCKED | This audit intentionally leaves uncommitted changes and creates no tag/release; see `P0-CAND-01`. |
@@ -172,14 +172,15 @@ automated tests cannot close Unity object lifetime.
 
 ## P0 blockers
 
-- [x] **P0-LIC-01 — License owned surfaces under MIT and adopt DCO 1.1.**
+- [x] **P0-LIC-01 — License owned surfaces under AGPL-3.0-or-later and adopt DCO 1.1.**
 
   Owner: project owner.
 
   Current state: root and independently distributed TopiaForge-owned surfaces
-  use MIT with `Copyright (c) 2026 furroxide`; release policy is approved,
-  first-party mod and VPM packages carry the text, and DCO 1.1 is checked in.
-  Author-owned scaffolds still require an explicit author license choice.
+  use AGPL-3.0-or-later with `Copyright (C) 2026 furroxide`; release policy is
+  approved, first-party mod and VPM packages carry the text, and DCO 1.1 is
+  checked in. Author-owned scaffolds default to the same terms. This supersedes
+  the earlier MIT declaration.
 
   Evidence: [`ReleaseLicenseInventory.md`](ReleaseLicenseInventory.md),
   `LICENSE`, `DCO`, `CONTRIBUTING.md`, strict release policy, package, registry,

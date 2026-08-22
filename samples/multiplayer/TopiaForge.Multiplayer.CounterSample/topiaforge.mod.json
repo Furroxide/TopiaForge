@@ -22,7 +22,7 @@
     "multiplayer",
     "prediction"
   ],
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "multiplayer": {
     "mode": "session",
     "presence": "required",

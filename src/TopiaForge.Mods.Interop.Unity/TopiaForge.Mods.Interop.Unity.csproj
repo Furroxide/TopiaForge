@@ -10,7 +10,7 @@
     <InformationalVersion>1.0.0-rc.1</InformationalVersion>
     <Description>Explicitly unstable Unity escape hatch for advanced TopiaForge mods.</Description>
     <PackageId>TopiaForge.Mods.Interop.Unity</PackageId>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <WarningsAsErrors>$(WarningsAsErrors);CS1591;CS1574</WarningsAsErrors>

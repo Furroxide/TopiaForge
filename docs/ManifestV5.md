@@ -32,7 +32,7 @@ Future loaders add a new version-specific reader and schema without changing the
   "supportedGameVersionRange": "0.0.2309",
   "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
   "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
-  "license": "MIT"
+  "license": "AGPL-3.0-or-later"
 }
 ```
 

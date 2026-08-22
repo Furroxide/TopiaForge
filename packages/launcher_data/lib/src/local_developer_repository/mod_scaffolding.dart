@@ -107,8 +107,8 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
 
     // Base manifest ← template defaults ← author's explicit overrides,
     // followed by a ModManifest round-trip for canonical field names/ordering.
-    // Identity and license deliberately remain non-publishable until chosen by
-    // the author; templates must never claim ownership on their behalf.
+    // Identity stays non-publishable until the author supplies it; the license
+    // defaults to the project's terms and the author may replace it.
     var manifestMap = <String, Object?>{
       r'$schema': ModManifest.canonicalSchemaUrl,
       'schemaVersion': ModManifest.currentSchemaVersion,
