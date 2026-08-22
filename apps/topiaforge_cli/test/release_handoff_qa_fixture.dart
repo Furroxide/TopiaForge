@@ -50,7 +50,7 @@ void writeReleaseQaFixtures({
       'archiveSha256': _fileSha(linuxArchive),
       'archiveSize': linuxArchive.lengthSync(),
       'canonicalEcosystemSha256': ecosystemSha,
-      'gameBuildId': 2309,
+      'gameBuildId': gameMetadata['buildId'],
       'gameArchiveSha256': windowsGameArchive['sha256'],
       'gameFilesManifestSha256': windowsFilesManifest['sha256'],
       'gameFilesVerified': windowsFilesManifest['fileCount'],
@@ -103,7 +103,7 @@ void writeReleaseQaFixtures({
       'msvc': '14.51.36231',
       'windowsSdk': '10.0.26100.0',
     },
-    'gameBuildId': 2309,
+    'gameBuildId': gameMetadata['buildId'],
     'validationDescriptorSha256': validationSha,
     'unity': {
       'result': 'pass',
