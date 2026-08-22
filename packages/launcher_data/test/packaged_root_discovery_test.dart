@@ -171,7 +171,7 @@ Map<String, Object?> _manifestJson(String id, String version) => {
   'author': {'name': 'TopiaForge'},
   'entryAssembly': '${_assemblyName(id)}.dll',
   'entryType': '$id.Entry',
-  'supportedGameVersionRange': '0.0.2309',
+  'supportedGameVersionRange': '0.0.2409',
   'supportedLoaderVersionRange': '>=0.1.0-rc.1 <0.2.0',
   'supportedSdkVersionRange': '>=0.1.0-rc.1 <0.2.0',
 };
