@@ -255,6 +255,24 @@ void _worldCliTests(_CliTestHarness Function() currentHarness) {
     expect(result.stdout.toString(), contains('Recommended actions:'));
   });
 
+  test('world build rejects a --project that is not a Unity project', () async {
+    final notUnity = Directory(p.join(currentHarness().temp.path, 'PlainDir'))
+      ..createSync(recursive: true);
+
+    final result = await currentHarness().runCli([
+      'world',
+      'build',
+      '--project',
+      notUnity.path,
+    ]);
+
+    expect(result.exitCode, 1);
+    expect(
+      '${result.stdout}\n${result.stderr}',
+      contains('is not a Unity project'),
+    );
+  });
+
   test('world build without a pairing points at world link', () async {
     final unityProject = Directory(
       p.join(currentHarness().temp.path, 'Unpaired'),
