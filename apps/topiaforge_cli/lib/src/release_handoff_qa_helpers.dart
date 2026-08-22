@@ -222,7 +222,7 @@ Map<String, Object?> _qaCreator(Object? value) {
 
 /// Normalizes one exact installed-package receipt carried in QA evidence.
 ///
-/// The receipt binds Creator evidence to the exact CreatorTools payload the
+/// The receipt binds Creator evidence to the exact creator-workbench payload the
 /// manager actually loaded, so a descriptor cannot be replayed against a
 /// different build of the mod.
 Map<String, Object?> _qaPackageReceipt(Object? value, String label) {

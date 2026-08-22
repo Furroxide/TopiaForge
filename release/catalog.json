@@ -29,7 +29,6 @@
       "mods": {
         "io.github.furroxide.topiaforge.chronos": "1.0.0-rc.1",
         "io.github.furroxide.topiaforge.creatorcontent": "1.0.0-rc.1",
-        "io.github.furroxide.topiaforge.creatortools": "1.0.0-rc.1",
         "io.github.furroxide.topiaforge.gravitygun": "1.0.0-rc.1",
         "io.github.furroxide.topiaforge.multiplayer": "1.0.0-rc.1",
         "io.github.furroxide.topiaforge.no-feedback-url": "1.0.0-rc.1",
@@ -49,7 +48,6 @@
         "TopiaForge-windows-x64.zip",
         "io.github.furroxide.topiaforge.chronos-1.0.0-rc.1.topiaforgemod",
         "io.github.furroxide.topiaforge.creatorcontent-1.0.0-rc.1.topiaforgemod",
-        "io.github.furroxide.topiaforge.creatortools-1.0.0-rc.1.topiaforgemod",
         "io.github.furroxide.topiaforge.gravitygun-1.0.0-rc.1.topiaforgemod",
         "io.github.furroxide.topiaforge.multiplayer-1.0.0-rc.1.topiaforgemod",
         "io.github.furroxide.topiaforge.no-feedback-url-1.0.0-rc.1.topiaforgemod",

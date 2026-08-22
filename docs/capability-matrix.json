@@ -96,11 +96,10 @@
         "TopiaForge.Mods.ICreatorMutationSafetyService, TopiaForge.Mods.CreatorContent"
       ],
       "sampleProjects": [
-        "mods/TopiaForge.CreatorTools/TopiaForge.CreatorTools.csproj",
         "mods/TopiaForge.Sandbox/TopiaForge.Sandbox.csproj",
         "tests/TopiaForge.SdkAcceptanceMod/TopiaForge.SdkAcceptanceMod.csproj"
       ],
-      "guide": "docs/CreatorTools.md",
+      "guide": "docs/Sandbox.md",
       "fakeTypes": [
         "TopiaForge.Mods.Testing.FakeInteractionService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeItemService, TopiaForge.Mods.Testing",

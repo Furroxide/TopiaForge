@@ -77,7 +77,7 @@ final class CreatorAcceptanceEvidence {
 /// A run passes only when every declared case was observed as a challenge-bound
 /// native marker, the recorder reported at least the required lifecycle cycles,
 /// save and checkpoint bytes are unchanged across End Session, and the manager
-/// recorded a healthy session whose loaded CreatorTools package matches the
+/// recorded a healthy session whose loaded creator-workbench package matches the
 /// exact receipt built from the installed payload.
 CreatorAcceptanceEvidence buildCreatorAcceptanceEvidence({
   required CreatorAcceptanceOptions options,

@@ -16,6 +16,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" Private="false" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.CreatorContent\TopiaForge.Mods.CreatorContent.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Multiplayer\TopiaForge.Mods.Multiplayer.csproj" Private="false" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.RobotKit\TopiaForge.Mods.RobotKit.csproj" Private="false" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Worlds\TopiaForge.Mods.Worlds.csproj" Private="false" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Analyzers\TopiaForge.Mods.Analyzers.csproj"
@@ -24,7 +25,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\Shared\CreatorTools\*.cs" Link="CreatorTools\%(Filename)%(Extension)" />
   </ItemGroup>
   <Import Project="..\..\src\TopiaForge.Mods.Analyzers\buildTransitive\TopiaForge.Mods.Analyzers.targets" />
 </Project>
