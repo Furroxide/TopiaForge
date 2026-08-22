@@ -189,7 +189,9 @@ extension _TopiaForgeEnvironmentCommands on _TopiaForgeCli {
     stdout.writeln('Next, against an installed build ${result.toBuildId}:');
     stdout.writeln('  1. gamecompat verify   (resolve every declared binding)');
     stdout.writeln('  2. adapt any binding the report flags');
-    stdout.writeln('  3. gamecompat baseline (review the printed surface diff)');
+    stdout.writeln(
+      '  3. gamecompat baseline (review the printed surface diff)',
+    );
     stdout.writeln('  4. re-run the offline test gate');
     stdout.writeln('');
     stdout.writeln(
