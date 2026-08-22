@@ -306,9 +306,19 @@ const _v1StableContractPackageIds = <String>{
   'TopiaForge.Mods.Worlds',
 };
 
+/// The frozen assembly identity for a contract package's compatibility line.
+///
+/// SemVer's breaking axis is MAJOR at 1.0.0 and above, but MINOR below it, so a
+/// 0.x line freezes at `0.<minor>.0.0` and a 1.x+ line at `<major>.0.0.0`.
+/// Collapsing 0.x to `0.0.0.0` would give every 0.x line the same identity, and
+/// Mono/BepInEx has no binding redirects to disambiguate them.
 String? _stableMajorAssemblyVersion(String? packageVersion) {
-  final match = RegExp(r'^(\d+)\.').firstMatch(packageVersion ?? '');
-  return match == null ? null : '${match.group(1)}.0.0.0';
+  final match = RegExp(r'^(\d+)\.(\d+)\.').firstMatch(packageVersion ?? '');
+  if (match == null) {
+    return null;
+  }
+  final major = match.group(1)!;
+  return major == '0' ? '0.${match.group(2)}.0.0' : '$major.0.0.0';
 }
 
 String? _numericAssemblyVersion(String? packageVersion) {

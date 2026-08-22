@@ -3,7 +3,7 @@
   "schemaVersion": 5,
   "name": "io.github.furroxide.topiaforge.uigallery",
   "displayName": "TopiaForge UI Gallery",
-  "version": "1.0.0-rc.1",
+  "version": "0.1.0-rc.1",
   "author": {
     "name": "TopiaForge"
   },
@@ -11,14 +11,14 @@
   "entryAssembly": "TopiaForge.UiGallery.dll",
   "entryType": "TopiaForge.UiGallery.UiGalleryMod",
   "dependencies": {
-    "io.github.furroxide.topiaforge.worlds": ">=1.0.0-rc.1 <2.0.0"
+    "io.github.furroxide.topiaforge.worlds": ">=0.1.0-rc.1 <0.2.0"
   },
   "loadAfter": [
     "io.github.furroxide.topiaforge.worlds"
   ],
   "supportedGameVersionRange": ">=0.0.2409 <0.0.2600",
-  "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
-  "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "supportedLoaderVersionRange": ">=0.1.0-rc.1 <0.2.0",
+  "supportedSdkVersionRange": ">=0.1.0-rc.1 <0.2.0",
   "category": "DevTool",
   "tags": [
     "dev-only",

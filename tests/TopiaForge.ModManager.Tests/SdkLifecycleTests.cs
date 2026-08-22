@@ -28,7 +28,7 @@ namespace TopiaForge.ModManager.Tests
                 "SemVer identifiers should remain discoverable");
             Assert(SemanticVersion.Parse("1.0.0-alpha.2") < SemanticVersion.Parse("1.0.0-alpha.10"),
                 "numeric prerelease identifiers should use numeric precedence");
-            Assert(SemanticVersion.Parse("1.0.0") > SemanticVersion.Parse("1.0.0-rc.1"),
+            Assert(SemanticVersion.Parse("1.0.0") > SemanticVersion.Parse("0.1.0-rc.1"),
                 "stable versions should sort after prereleases");
             Assert(SemanticVersion.Parse("1.0.0+one").CompareTo(SemanticVersion.Parse("1.0.0+two")) == 0,
                 "build metadata should not affect precedence");

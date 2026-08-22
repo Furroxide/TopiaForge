@@ -1,7 +1,7 @@
 {
   "$schema": "../schemas/topiaforge.release-readiness-v1.schema.json",
   "schemaVersion": 1,
-  "releaseVersion": "1.0.0-rc.1",
+  "releaseVersion": "0.1.0-rc.1",
   "candidateBinding": {
     "mode": "git-blob-at-target-sha",
     "path": "release/release-readiness.json",

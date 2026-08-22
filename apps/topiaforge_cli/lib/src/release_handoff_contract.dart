@@ -43,12 +43,11 @@ _ReleaseHandoffContext _loadHandoffContext(
   if (!release.artifacts.toSet().containsAll(expectedArchives)) {
     throw StateError('Release catalog omits a required platform archive.');
   }
-  // Linux is descoped from 1.0.0-rc.1 and returns in rc.2; see the note in
-  // release_policy.dart and P0-LINUX-01 in docs/LaunchBlockers.md.
-  if (version == '1.0.0-rc.1' &&
-      !_sameSet(targetPlatforms.toSet(), {'windows-x64'})) {
+  // Linux is descoped; see the note in release_policy.dart and P0-LINUX-01 in
+  // docs/LaunchBlockers.md. This is a property of the product, not of one version.
+  if (!_sameSet(targetPlatforms.toSet(), {'windows-x64'})) {
     throw StateError(
-      'Release 1.0.0-rc.1 handoff requires signed Windows x64 only.',
+      'Release $version handoff requires signed Windows x64 only.',
     );
   }
   final platformToolchains = _loadPlatformToolchains(repositoryRoot);

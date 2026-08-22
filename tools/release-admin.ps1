@@ -38,7 +38,7 @@ if (-not (Test-Path -LiteralPath $platformToolchainsPath -PathType Leaf)) {
 }
 $platformToolchains = Get-Content -LiteralPath $platformToolchainsPath -Raw |
     ConvertFrom-Json
-# Linux is descoped from 1.0.0-rc.1 and returns in rc.2, so the WSL build,
+# Linux is descoped from 0.1.0-rc.1 and returns in rc.2, so the WSL build,
 # Proton acceptance, and their preflight checks are gated on the policy rather
 # than deleted. Re-adding the Linux archive to release-policy.json restores the
 # whole path. See P0-LINUX-01 in docs/LaunchBlockers.md.
@@ -1032,10 +1032,11 @@ function Invoke-Preflight {
     if ($policyAtHead.versioning.productVersion -ne $Version) {
         throw "Version $Version does not match release policy at $head."
     }
-    if ($Version -ne "1.0.0-rc.1" -or
-        $policyAtHead.publication.PSObject.Properties.Name -contains
+    # The version is already checked against policy immediately above; the rule here is about signing
+    # exceptions, not about which release line is being cut, so it must not be gated on a version literal.
+    if ($policyAtHead.publication.PSObject.Properties.Name -contains
             "codeSigningException") {
-        throw "RC1 production forbids every code-signing exception."
+        throw "Production release forbids every code-signing exception."
     }
     $sdk = Get-DartAndFlutter
     Invoke-Checked $sdk.Dart @(
@@ -3048,7 +3049,7 @@ function Build-Handoff {
             )
         }
     )
-    # Linux is descoped from 1.0.0-rc.1, so the handoff platform set follows
+    # Linux is descoped from 0.1.0-rc.1, so the handoff platform set follows
     # the policy instead of assuming both archives exist. Re-adding the Linux
     # archive to release-policy.json restores this entry. See P0-LINUX-01.
     if ($targetsLinux) {

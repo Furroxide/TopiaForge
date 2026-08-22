@@ -102,7 +102,7 @@ need to follow a save or synchronize between peers. Shared/save-scoped story sta
 future authoritative world-state service. End the current session with an explicit
 `WorldSessionEndReason`; do not infer teardown from arbitrary scene polling.
 
-Live acceptance for custom Robotopia worlds is Windows/Proton-only for V1. Other Robotopia code mods
+Live acceptance for custom Robotopia worlds is Windows/Proton-only on the 0.x line. Other Robotopia code mods
 remain portable when their manifest constraints and content are portable.
 
 See [Specialist modules](Modules.md#worlds), [Manifest V5](ManifestV5.md#package-contract),

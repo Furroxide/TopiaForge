@@ -110,14 +110,13 @@ class ReleasePolicyValidator {
         'Release versioning or bundled-runtime policy is inconsistent.',
       );
     }
-    if (release.version == '1.0.0-rc.1') {
-      if (!release.prerelease ||
-          !policy.targetsWindows ||
-          policy.targetsMacOS) {
-        issues.add(
-          'Release 1.0.0-rc.1 must target only signed Windows x64 packages.',
-        );
-      }
+    // Windows-only is a property of the product's current state (Linux is descoped by P0-LINUX-01 and
+    // macOS has no packaging evidence), not of one version string. Gating this on a literal made the whole
+    // rule evaporate the moment the version changed, with no test failure to show for it.
+    if (!release.prerelease || !policy.targetsWindows || policy.targetsMacOS) {
+      issues.add(
+        'Release ${release.version} must target only signed Windows x64 packages.',
+      );
     }
     final windowsIdentityIsValid =
         policy.windowsCertificateSha256.isEmpty ||
@@ -145,18 +144,17 @@ class ReleasePolicyValidator {
         'A configured macOS signing identity is required for this release.',
       );
     }
-    // Linux is descoped from 1.0.0-rc.1 and returns in rc.2. WSLg cannot reach
+    // Linux is descoped from 0.1.0-rc.1 and returns in rc.2. WSLg cannot reach
     // a GPU Vulkan implementation, and Robotopia's D3D12 renderer needs it
     // through VKD3D, so no credible Proton acceptance evidence can be produced
     // on the administrator host. See P0-LINUX-01 in docs/LaunchBlockers.md.
-    const rc1PlatformArchives = {'TopiaForge-windows-x64.zip'};
+    const supportedPlatformArchives = {'TopiaForge-windows-x64.zip'};
     final hasSupportedPlatforms = policy.platformArchives.every(
       releasePlatformArchives.containsValue,
     );
     if (!hasSupportedPlatforms ||
         policy.platformArchives.length != policy.targetPlatforms.length ||
-        (release.version == '1.0.0-rc.1' &&
-            !_sameSet(policy.platformArchives.toSet(), rc1PlatformArchives)) ||
+        !_sameSet(policy.platformArchives.toSet(), supportedPlatformArchives) ||
         !_sameSet(policy.generatedMetadata.toSet(), {
           'release-bom.json',
           'release-sbom.spdx.json',

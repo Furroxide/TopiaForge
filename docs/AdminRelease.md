@@ -30,8 +30,8 @@ topiaforge acceptance creator --creator-package <CreatorTools .topiaforgemod> --
 
 ./tools/release/new-windows-creator-evidence.ps1 `
   -AcceptanceResult <result.json> -StateDirectory <output>/state `
-  -CaseEvidenceDirectory <case artifacts> -SourceSha <sha> -Version 1.0.0-rc.1 `
-  -WindowsArchive .release-local\1.0.0-rc.1\assets\TopiaForge-windows-x64.zip `
+  -CaseEvidenceDirectory <case artifacts> -SourceSha <sha> -Version 0.1.0-rc.1 `
+  -WindowsArchive .release-local\0.1.0-rc.1\assets\TopiaForge-windows-x64.zip `
   -CanonicalEcosystemSha256 <sha> `
   -OutputBundle C:\release-qa\windows-creator-evidence.zip `
   -OutputDescriptor C:\release-qa\windows-creator-evidence.json
@@ -145,7 +145,7 @@ GitHub CLI token for the audit secret.
 The preflight opens the exact Unity project in batch mode to prove that the
 local activation is usable. It never needs Unity email/password credentials.
 
-> **Out of `1.0.0-rc.1`.** Linux is descoped from RC1 and returns in `1.0.0-rc.2`, so
+> **Out of `0.1.0-rc.1`.** Linux is descoped from RC1 and returns in `0.1.0-rc.2`, so
 > everything from here to the end of *Same-host WSL2/WSLg Proton evidence* is inert for
 > this candidate. `release-admin.ps1` reads `release/release-policy.json` and skips the
 > WSL build, the Proton acceptance, and their preflight checks whenever
@@ -206,7 +206,7 @@ The deterministic procedure is:
    plus the WSL2/WSLg environment, without launching the game:
 
 ```bash
-tools/release/test-proton.sh --preflight-only --repo "$repo" --source-sha "$sha" --version 1.0.0-rc.1 --game-dir "$gameDir" --game-build-id 2409 --proton-executable "$proton" --steam-root "$steamRoot" --compat-data-root "$compatData"
+tools/release/test-proton.sh --preflight-only --repo "$repo" --source-sha "$sha" --version 0.1.0-rc.1 --game-dir "$gameDir" --game-build-id 2409 --proton-executable "$proton" --steam-root "$steamRoot" --compat-data-root "$compatData"
 ```
 
 If Steam has moved `Proton 10.0` to a newer build, the appmanifest will carry a
@@ -333,7 +333,7 @@ The generated descriptor is deterministic JSON and binds at least:
 ```json
 {
   "schema": "release-proton-evidence-v1",
-  "version": "1.0.0-rc.1",
+  "version": "0.1.0-rc.1",
   "targetSha": "0123456789abcdef0123456789abcdef01234567",
   "platform": "linux-proton",
   "executionEnvironment": "wsl2-wslg",

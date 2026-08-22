@@ -1,8 +1,8 @@
 # Initial release blocker register
 
-Last audited: 2026-07-31. Product candidate: `1.0.0-rc.1`. Recommendation: **NO-SHIP**.
+Last audited: 2026-07-31. Product candidate: `0.1.0-rc.1`. Recommendation: **NO-SHIP**.
 
-Scope change on 2026-08-12: **Linux is out of `1.0.0-rc.1`** and returns in `1.0.0-rc.2`.
+Scope change on 2026-08-12: **Linux is out of `0.1.0-rc.1`** and returns in `0.1.0-rc.2`.
 The administrator host cannot reach a GPU Vulkan implementation inside WSL2, and
 Robotopia's Direct3D 12 renderer requires it through VKD3D, so no credible Proton
 acceptance evidence was obtainable. RC1 ships Windows x64 only. See `P0-LINUX-01`.
@@ -93,7 +93,7 @@ gates, so the computed status cannot reach `ready` while any of them is
 unresolved.
 
 The decision carries **twelve** gates for RC1. `P0-LINUX-01` is deliberately absent
-because Linux is out of this candidate; restoring it belongs to `1.0.0-rc.2`
+because Linux is out of this candidate; restoring it belongs to `0.1.0-rc.2`
 alongside the policy archive entry and both schema gate contracts. `P0-OSS-01` is
 present: it was re-opened on 2026-08-06 and the readiness contract must be able to
 carry it rather than infer it from the legal inventory passing.
@@ -118,9 +118,9 @@ and therefore belong to the Robotopia acceptance gate.
 
 The strict build-2309 audit found no removed or changed declared binding. Live
 startup did expose an independent loader defect: BepInEx 5 parses
-`BepInPlugin.Version` as `System.Version`, so the semantic prerelease value `1.0.0-rc.1` caused it to skip the
+`BepInPlugin.Version` as `System.Version`, so the semantic prerelease value `0.1.0-rc.1` caused it to skip the
 TopiaForge plugin as invalid before `Awake`. The plugin now advertises the numeric core `1.0.0` to BepInEx while the
-runtime, package manifests, and compatibility engine retain the full `1.0.0-rc.1` SemVer. `VersionUtilTests` locks the
+runtime, package manifests, and compatibility engine retain the full `0.1.0-rc.1` SemVer. `VersionUtilTests` locks the
 two identities together, and the repaired live install loaded the plugin and consumed all 16 staged packages.
 
 ## First-party mod audit (2026-07-27)
@@ -259,7 +259,7 @@ automated tests cannot close Unity object lifetime.
   update, forced rollback, and uninstall journeys.
 
 - **P0-LINUX-01 — Produce and validate Linux x64 and Proton behavior.** *(OUT OF RC1;
-  deferred to `1.0.0-rc.2` on 2026-08-12)*
+  deferred to `0.1.0-rc.2` on 2026-08-12)*
 
   Owner: Linux/Proton release QA.
 
@@ -282,7 +282,7 @@ automated tests cannot close Unity object lifetime.
   build, Proton acceptance, and their preflight checks are gated on the policy rather than
   removed. Linux support is untouched in the source tree.
 
-  Exit criteria for `1.0.0-rc.2`: restore the Linux archive to the policy, the gate to both
+  Exit criteria for `0.1.0-rc.2`: restore the Linux archive to the policy, the gate to both
   schemas, and `P0-LINUX-01` to the readiness decision, then build Linux x64 from the frozen
   SHA and inspect final ZIP executable modes, links, checksums, notices, and bundled
   payloads. Run the actual Robotopia build-2309 matrix through Proton with
@@ -348,7 +348,7 @@ automated tests cannot close Unity object lifetime.
   read-only governance-audit token there; prove fork PRs are secretless;
   independently recovery-test the protected update seed and remove plaintext
   local duplicates; enable reviewed Pages and immutable-release policy; protect creation of the annotated
-  `v1.0.0-rc.1` tag while forbidding mutation/deletion; retain an administrator-reviewed dry run. Complete one
+  `v0.1.0-rc.1` tag while forbidding mutation/deletion; retain an administrator-reviewed dry run. Complete one
   non-publishing two-platform rehearsal before deleting the obsolete live `unity-validation` and
   `game-acceptance` environments.
 
@@ -380,8 +380,8 @@ automated tests cannot close Unity object lifetime.
   this register does not designate either commit as the frozen candidate. No tag, release, signature, or publication
   has been created.
 
-  Exit criteria: integrate the topic through `dev`, cut and stabilize `release/1.0.0-rc.1`, merge it to `main`, and
-  approve the release notes; create the protected annotated `v1.0.0-rc.1` tag on the exact verified `main` SHA through
+  Exit criteria: integrate the topic through `dev`, cut and stabilize `release/0.1.0-rc.1`, merge it to `main`, and
+  approve the release notes; create the protected annotated `v0.1.0-rc.1` tag on the exact verified `main` SHA through
   the authorized process; run every local/native/Unity gate without unexplained
   warnings or skips; generate and independently verify the candidate BOM, SPDX SBOM, `SHA256SUMS`, nested digests,
   sizes, signatures, provenance, platform manifests, handoff manifest, and manual-release index. The administrator

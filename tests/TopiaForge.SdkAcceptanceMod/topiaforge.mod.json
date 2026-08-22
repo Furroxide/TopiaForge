@@ -3,7 +3,7 @@
   "schemaVersion": 5,
   "name": "dev.topiaforge.sdk-acceptance",
   "displayName": "TopiaForge SDK Live Acceptance",
-  "version": "1.0.0-rc.1",
+  "version": "0.1.0-rc.1",
   "author": {
     "name": "TopiaForge"
   },
@@ -11,19 +11,19 @@
   "entryAssembly": "TopiaForge.SdkAcceptanceMod.dll",
   "entryType": "TopiaForge.SdkAcceptance.SdkAcceptanceMod",
   "dependencies": {
-    "io.github.furroxide.topiaforge.chronos": ">=1.0.0-rc.1 <2.0.0",
-    "io.github.furroxide.topiaforge.creatorcontent": ">=1.0.0-rc.1 <2.0.0",
-    "io.github.furroxide.topiaforge.multiplayer": "1.0.0-rc.1",
-    "io.github.furroxide.topiaforge.prompts": ">=1.0.0-rc.1 <2.0.0",
-    "io.github.furroxide.topiaforge.robotkit": ">=1.0.0-rc.1 <2.0.0",
-    "io.github.furroxide.topiaforge.worlds": ">=1.0.0-rc.1 <2.0.0"
+    "io.github.furroxide.topiaforge.chronos": ">=0.1.0-rc.1 <0.2.0",
+    "io.github.furroxide.topiaforge.creatorcontent": ">=0.1.0-rc.1 <0.2.0",
+    "io.github.furroxide.topiaforge.multiplayer": "0.1.0-rc.1",
+    "io.github.furroxide.topiaforge.prompts": ">=0.1.0-rc.1 <0.2.0",
+    "io.github.furroxide.topiaforge.robotkit": ">=0.1.0-rc.1 <0.2.0",
+    "io.github.furroxide.topiaforge.worlds": ">=0.1.0-rc.1 <0.2.0"
   },
   "optionalDependencies": {
     "dev.topiaforge.sdk-acceptance.missing-provider": ">=1.0.0 <2.0.0"
   },
   "supportedGameVersionRange": ">=0.0.2409 <0.0.2600",
-  "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
-  "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "supportedLoaderVersionRange": ">=0.1.0-rc.1 <0.2.0",
+  "supportedSdkVersionRange": ">=0.1.0-rc.1 <0.2.0",
   "platforms": ["windows", "linux"],
   "architectures": ["x64"],
   "contentTargets": ["code"],

@@ -39,7 +39,7 @@ void writeReleaseQaFixtures({
     p.join(assets.path, 'TopiaForge-windows-x64.zip'),
   );
 
-  // Linux is descoped from 1.0.0-rc.1, so callers that only stage a Windows
+  // Linux is descoped from 0.1.0-rc.1, so callers that only stage a Windows
   // archive get Windows-only QA. The Proton fixture stays intact for rc.2.
   if (linuxArchive.existsSync()) {
     _writeJson(File(releaseQaPath(assets, 'linux-x64')), {

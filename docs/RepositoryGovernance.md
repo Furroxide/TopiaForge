@@ -56,7 +56,7 @@ Each aggregate job uses `if: always()` and fails unless all jobs it represents s
 new dependency with a moderate-or-higher known vulnerability in runtime,
 development, or unknown scope. License and notice validation is
 release-blocking. DCO enforcement is grandfathered through the immutable
-`v1.0.0-rc.1` cutover and applies to every commit introduced afterward.
+`v0.1.0-rc.1` cutover and applies to every commit introduced afterward.
 
 CodeQL is an independent ruleset gate at high-or-critical severity. For the
 Windows/Linux-only RC1, default setup covers Actions, C/C++, C#, and
@@ -130,7 +130,7 @@ The stable PR-policy check enforces these routing rules:
   from that head's `release/release-policy.json`.
 - Direct `main` or `release/*` backflow to `dev` is rejected; `sync/main-v<semver>` is required and must contain the
   current `main` tip as an ancestor.
-- Once `v1.0.0-rc.1` exists, every introduced commit must contain a valid
+- Once `v0.1.0-rc.1` exists, every introduced commit must contain a valid
   `Signed-off-by` trailer matching an author or committer identity. Existing
   history reachable from the cutover tag is grandfathered.
 
@@ -225,7 +225,7 @@ The desired live settings are:
 - Immutable releases are enabled before publication. The repository push limit
   is five refs per push, preventing accidental mirror pushes. Wiki is disabled;
   Issues remain enabled. GitHub web commit sign-off is enabled immediately
-  after the `v1.0.0-rc.1` cutover so future browser-created commits satisfy the
+  after the `v0.1.0-rc.1` cutover so future browser-created commits satisfy the
   DCO policy.
 
 The five-ref push limit and owner-account security posture require manual verification because GitHub does not expose

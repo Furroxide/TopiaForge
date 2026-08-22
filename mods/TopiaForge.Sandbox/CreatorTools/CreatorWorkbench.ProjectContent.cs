@@ -7,7 +7,7 @@ namespace TopiaForge.CreatorTools.Shared
     internal sealed partial class CreatorWorkbench
     {
         private const string RobotKitProjectContentPrefix = "io.github.furroxide.topiaforge.robotkit:";
-        private const string RobotKitProjectSourceVersion = "1.0.0-rc.1";
+        private const string RobotKitProjectSourceVersion = "0.1.0-rc.1";
         private const string RobotKitNativeAdapterId = "robotkit.native-robot";
 
         private string ProjectContentProblem(CreatorProjectEntity entity)
