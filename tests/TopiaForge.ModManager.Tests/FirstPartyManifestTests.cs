@@ -43,7 +43,7 @@ namespace TopiaForge.ModManager.Tests
                     manifest.Id + " must declare the compatible V1 loader line");
                 Assert(manifest.SupportedSdkVersionRange == SdkRange,
                     manifest.Id + " must declare the compatible V1 SDK line");
-                Assert(manifest.License == "MIT",
+                Assert(manifest.License == "AGPL-3.0-or-later",
                     manifest.Id + " must use the approved project license");
                 Assert(manifest.LicenseFiles.SequenceEqual(new[] { "LICENSE" }),
                     manifest.Id + " must include the approved project license in its package");

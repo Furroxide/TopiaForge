@@ -12,7 +12,7 @@ one current `WorldSession`. Consumer mods never coordinate scenes or global tear
 ## Start from a compiled scaffold
 
 ```sh
-topiaforge new mod example.world --template world --name "Example World" --author "You" --license MIT --version 1.0.0
+topiaforge new mod example.world --template world --name "Example World" --author "You" --license AGPL-3.0-or-later --version 1.0.0
 topiaforge restore --project example.world
 ```
 

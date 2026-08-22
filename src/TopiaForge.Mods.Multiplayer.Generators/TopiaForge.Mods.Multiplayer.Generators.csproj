@@ -12,7 +12,7 @@
     <Authors>TopiaForge</Authors>
     <Description>Compile-time contracts, bounded codecs, registration, and prediction safety for TopiaForge multiplayer mods.</Description>
     <PackageTags>topiaforge;modding;multiplayer;source-generator</PackageTags>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>

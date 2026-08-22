@@ -237,6 +237,19 @@ class ReleaseMetadataInventoryBuilder {
       'packages/launcher_ui/fonts/Quicksand-OFL.txt',
       'tools/unity-ui-bundle/Assets/TextMesh Pro/Fonts/LiberationSans - OFL.txt',
       if (policy.licenseFile != null) policy.licenseFile!,
+      // Owned license texts that are physically redistributed: the shared mod
+      // license injected into every .topiaforgemod, the launcher UI package
+      // license, the contribution certificate copied beside the payload, and
+      // the license shipped inside each VPM package.
+      'DCO',
+      'mods/LICENSE',
+      'packages/launcher_ui/LICENSE',
+      'templates/TopiaForge.UnityWorldTemplate/Packages/'
+          'io.github.furroxide.topiaforge.vpm-resolver/LICENSE.md',
+      'templates/TopiaForge.UnityWorldTemplate/Packages/'
+          'io.github.furroxide.topiaforge.world-companion/LICENSE.md',
+      'templates/unity-companion/Packages/'
+          'io.github.furroxide.topiaforge.ugc-companion/LICENSE.md',
     };
     if (paths.length < 9 || paths.length > 32) {
       throw StateError('License/notice inventory is incomplete or excessive.');
