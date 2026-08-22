@@ -26,6 +26,7 @@ import 'package:topiaforge/src/release_readiness.dart';
 import 'package:topiaforge/src/release_update_metadata.dart';
 
 part 'topiaforge_check_commands.dart';
+part 'topiaforge_compat_commands.dart';
 part 'topiaforge_acceptance_commands.dart';
 part 'topiaforge_dev_commands.dart';
 part 'topiaforge_environment_commands.dart';
