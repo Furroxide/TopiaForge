@@ -19,7 +19,7 @@ not merely build projects. Update it whenever a public contract, generator, or r
 | `TopiaForge.GameCompat.Extractor` | Metadata-only installed-Robotopia inspection | Self-contained developer/release executable; never loads Robotopia code for execution |
 | `TopiaForge.ModManager.Tests` | Cross-component C# harness | Exercises Core, SDK, GameCompat, runtime source conventions, and pure mod seams |
 
-The canonical Robotopia-side loader payload contains fourteen managed assemblies: twelve
+The canonical Robotopia-side loader payload contains thirteen managed assemblies: eleven
 `TopiaForge.*` implementations/contracts plus pinned `System.Reflection.Metadata`
 and `System.Collections.Immutable` 10.0.9. Robotopia build 2409 supplies the
 required `System.Memory`, `System.Buffers`, and
@@ -33,7 +33,7 @@ NoFeedbackUrl, OppositeDay, PerfFixes, Performance, Prompts, RobotKit, Sandbox, 
 Zombies. Assets are now a manager-owned core service,
 not a globally mutable framework mod. Runtime dependencies are expressed only through `topiaforge.mod.json`;
 project references to safe contracts are compile-time-only. UiGallery is a validated developer catalog and is excluded
-from the fourteen-package normal non-DevTool payload and the fifteen-package release payload.
+from the thirteen-package release payload.
 
 ## Launcher and developer tooling
 

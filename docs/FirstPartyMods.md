@@ -2,9 +2,8 @@
 
 All first-party mods use the same manifest/package contracts available to community authors. Provider implementations
 may use native APIs internally, while safe consumers receive only owner-bound contracts. Every release candidate
-validates all sixteen source mods. Normal `pack --all` output contains fourteen non-DevTool packages; release
-The developer-only UiGallery is tested but is
-the sole source mod excluded from the resulting fifteen-package release payload.
+validates all fourteen source mods. Normal `pack --all` output contains thirteen non-DevTool packages, which is
+also the release payload. The developer-only UiGallery is tested but is the sole source mod excluded from it.
 
 Every manifest is schema version 5 and declares AGPL-3.0-or-later with a package-relative `LICENSE`. Robotopia
 compatibility follows the per-mod rule in [the compatibility policy](CompatibilityPolicy.md): mods with
