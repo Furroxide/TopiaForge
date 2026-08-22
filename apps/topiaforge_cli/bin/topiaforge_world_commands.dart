@@ -239,5 +239,4 @@ extension _WorldCommands on _TopiaForgeCli {
           ..sort((a, b) => b.lastOpenedUtc.compareTo(a.lastOpenedUtc));
     return worlds.isEmpty ? null : worlds.first.path;
   }
-
 }

@@ -19,31 +19,51 @@ void main() {
 
   setUp(() {
     root = Directory.systemTemp.createTempSync('topiaforge-bump-');
-    _write(root, '.github/robotopia-game-build.json', const JsonEncoder.withIndent('  ').convert({
-      'buildId': 2409,
-      'baseUrl': 'https://builds.example.invalid',
-      'manifestUrl': 'https://builds.example.invalid/latest-build.json',
-      'sourcePlatform': 'windows',
-      'windowsFilesManifest': {
-        'path': 'filelist.json',
-        'sha256': '0' * 64,
-        'fileCount': 409,
-        'gameExecutableSha256': '1' * 64,
-      },
-      'archives': {
-        'windows': {'path': 'Robotopia-v02409-Win64.7z', 'sha256': '2' * 64},
-        'mac': {'path': 'Robotopia-v02409-Mac.7z', 'sha256': '3' * 64},
-      },
-    }));
-    _write(root, 'release/release-policy.json', '{\n  "gameBuild": {\n    "id": 2409\n  }\n}\n');
-    _write(root, 'mods/TopiaForge.RobotKit/topiaforge.mod.json',
-        '{\n  "supportedGameVersionRange": "0.0.2409"\n}\n');
-    _write(root, 'mods/TopiaForge.Zombies/topiaforge.mod.json',
-        '{\n  "supportedGameVersionRange": ">=0.0.2409 <0.0.2600"\n}\n');
-    _write(root, 'apps/topiaforge_cli/test/release_game_build_policy_test.dart',
-        '  const currentBuildId = 2409;\n');
-    _write(root, 'tools/release/test-proton.sh',
-        '[[ "\$game_build_id" == "2409" ]] || die "locked to Robotopia build 2409"\n');
+    _write(
+      root,
+      '.github/robotopia-game-build.json',
+      const JsonEncoder.withIndent('  ').convert({
+        'buildId': 2409,
+        'baseUrl': 'https://builds.example.invalid',
+        'manifestUrl': 'https://builds.example.invalid/latest-build.json',
+        'sourcePlatform': 'windows',
+        'windowsFilesManifest': {
+          'path': 'filelist.json',
+          'sha256': '0' * 64,
+          'fileCount': 409,
+          'gameExecutableSha256': '1' * 64,
+        },
+        'archives': {
+          'windows': {'path': 'Robotopia-v02409-Win64.7z', 'sha256': '2' * 64},
+          'mac': {'path': 'Robotopia-v02409-Mac.7z', 'sha256': '3' * 64},
+        },
+      }),
+    );
+    _write(
+      root,
+      'release/release-policy.json',
+      '{\n  "gameBuild": {\n    "id": 2409\n  }\n}\n',
+    );
+    _write(
+      root,
+      'mods/TopiaForge.RobotKit/topiaforge.mod.json',
+      '{\n  "supportedGameVersionRange": "0.0.2409"\n}\n',
+    );
+    _write(
+      root,
+      'mods/TopiaForge.Zombies/topiaforge.mod.json',
+      '{\n  "supportedGameVersionRange": ">=0.0.2409 <0.0.2600"\n}\n',
+    );
+    _write(
+      root,
+      'apps/topiaforge_cli/test/release_game_build_policy_test.dart',
+      '  const currentBuildId = 2409;\n',
+    );
+    _write(
+      root,
+      'tools/release/test-proton.sh',
+      '[[ "\$game_build_id" == "2409" ]] || die "locked to Robotopia build 2409"\n',
+    );
   });
 
   tearDown(() {
@@ -67,12 +87,12 @@ void main() {
 
     expect(result.fromBuildId, 2409);
     expect(result.toBuildId, 2509);
-    expect(result.isComplete, isTrue,
-        reason: 'residual: ${result.residual}');
+    expect(result.isComplete, isTrue, reason: 'residual: ${result.residual}');
     expect(result.totalReplacements, greaterThan(0));
 
-    final pin = jsonDecode(_read(root, '.github/robotopia-game-build.json'))
-        as Map<String, Object?>;
+    final pin =
+        jsonDecode(_read(root, '.github/robotopia-game-build.json'))
+            as Map<String, Object?>;
     expect(pin['buildId'], 2509);
     final archives = pin['archives'] as Map;
     expect((archives['windows'] as Map)['path'], 'Robotopia-v02509-Win64.7z');
@@ -87,11 +107,16 @@ void main() {
     expect(manifest['gameExecutableSha256'], _exeSha);
 
     expect(_read(root, 'release/release-policy.json'), contains('"id": 2509'));
-    expect(_read(root, 'mods/TopiaForge.RobotKit/topiaforge.mod.json'),
-        contains('"0.0.2509"'));
+    expect(
+      _read(root, 'mods/TopiaForge.RobotKit/topiaforge.mod.json'),
+      contains('"0.0.2509"'),
+    );
     // A bare integer literal that no quoted pattern would reach.
     expect(
-      _read(root, 'apps/topiaforge_cli/test/release_game_build_policy_test.dart'),
+      _read(
+        root,
+        'apps/topiaforge_cli/test/release_game_build_policy_test.dart',
+      ),
       contains('currentBuildId = 2509'),
     );
     // The build-locked acceptance guard, in both its comparison and its message.
@@ -104,8 +129,10 @@ void main() {
     bump();
     // The pin moves; the upper bound is deliberately not derived, so the
     // operator is told to review it rather than having it silently guessed.
-    expect(_read(root, 'mods/TopiaForge.Zombies/topiaforge.mod.json'),
-        contains('>=0.0.2509 <0.0.2600'));
+    expect(
+      _read(root, 'mods/TopiaForge.Zombies/topiaforge.mod.json'),
+      contains('>=0.0.2509 <0.0.2600'),
+    );
   });
 
   test('a dry run writes nothing', () {
@@ -119,8 +146,11 @@ void main() {
 
   test('reports residue instead of accepting a half-bumped tree', () {
     // A file in the target list that the substitutions cannot reach.
-    _write(root, 'release/release-policy.json',
-        '{\n  "gameBuild": {\n    "id": 2409\n  },\n  "note": "pinned at 2409 forever"\n}\n');
+    _write(
+      root,
+      'release/release-policy.json',
+      '{\n  "gameBuild": {\n    "id": 2409\n  },\n  "note": "pinned at 2409 forever"\n}\n',
+    );
 
     final result = bump();
 
