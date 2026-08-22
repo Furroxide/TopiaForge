@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:launcher_data/launcher_data.dart';
 
@@ -22,6 +24,18 @@ void main(List<String> arguments) {
       repository: repository,
       developerRepository: LocalDeveloperRepository(),
       updateRepository: updateRepository,
+      // Developer-only NAT reachability probe. Off by default and inert without configured measurement servers:
+      // TOPIAFORGE_REACHABILITY_SERVERS takes a comma-separated list of address:port entries. There is no built-in
+      // server list on purpose, so a default install contacts nothing. See docs/internal/LauncherReachabilityProbe.md.
+      reachabilityProbe: ReachabilityProbeService(
+        dataRoot: repository.dataRoot,
+        configuredServers:
+            (Platform.environment['TOPIAFORGE_REACHABILITY_SERVERS'] ?? '')
+                .split(',')
+                .map((entry) => entry.trim())
+                .where((entry) => entry.isNotEmpty)
+                .toList(),
+      ),
     ),
   );
 }

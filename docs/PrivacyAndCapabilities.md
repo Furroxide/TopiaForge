@@ -28,6 +28,57 @@ capability, because mods run with the Robotopia process's authority.
 The launcher must show the package source, package SHA-256, arbitrary-code warning, and the aggregate capabilities of
 the selected package and required dependencies before install or update. A capability is not consent by itself.
 
+## Peer address exposure in player-hosted sessions
+
+Status: recorded decision, not a shipped behavior. TopiaForge ships no live transport; the
+[multiplayer hosting feasibility gate](MultiplayerHostingFeasibility.md) is open. This section exists so that when a
+transport is designed, address exposure is a decision someone made on purpose rather than a side effect of whichever
+connection happened to be cheaper.
+
+**The fact.** A direct peer-to-peer connection reveals each participant's IP address to the participants it connects
+to. In a player-hosted session that means the host's address is visible to every participant, and every participant's
+address is visible to the host. In a mesh it means every participant sees every other. An IP address is coarse
+location data and a durable handle on a person's home connection.
+
+**Why it matters here.** Address exposure is the standard griefing and denial-of-service vector in player-hosted
+games: lose a match, look up the host, take their connection offline. It is why platform-provided relays such as Steam
+Datagram Relay exist at all — their primary product is address hiding, not latency. TopiaForge cannot use those
+relays, because each one requires a game-identity relationship with Robotopia that we do not have.
+
+**The tension, stated plainly.** Relayed traffic is metered and direct traffic is free, so any cost model prefers
+direct connections. Direct connections are precisely the ones that expose player addresses. **The cheap axis and the
+safe axis are the same axis, pointing in opposite directions.** A transport that quietly optimises for cost is
+quietly optimising against player safety. Refusing to notice that is how it ships by default.
+
+### Decision
+
+1. **Direct connect is never a silent default.** A player must be told, before joining or hosting, that a direct
+   session reveals their address to the other participants. Consent to play is not consent to be addressable.
+2. **Address hiding must remain purchasable at runtime.** The transport must be able to force a relayed path for a
+   participant who declines address exposure, and the operating cost of honouring that choice is accepted rather than
+   engineered away. A safety control that is disabled when it gets expensive is not a control.
+3. **Observed addresses never reach mod code.** `docs/Multiplayer.md` already establishes that process-local identity
+   never becomes network identity. The inverse holds with equal force: peer addresses, candidate addresses, and any
+   transport-observed endpoint are never exposed to mods, never placed in `MultiplayerSessionSnapshot`, and never
+   written to logs, diagnostic bundles, or crash reports. TopiaForge mods are trusted in-process code, so anything a
+   mod can read is effectively public.
+4. **Disclosure is a capability question, and the current label does not cover it.** `network` means "opens outbound
+   network connections". That does not tell a player that other *players* will learn their address. A distinct
+   canonical label is required before any live provider ships. Adding one is a coordinated change across
+   `schemas/topiaforge.mod.schema.json`, `schemas/topiaforge.mod.v5.schema.json`,
+   `src/TopiaForge.ModManager.Core/ManifestValidator.cs`, and
+   `packages/launcher_domain/lib/src/models/manifest_contract_constants.dart`, and publication validation treats
+   unknown labels as findings. **It is deliberately not being made now**, because shipping a multiplayer capability
+   label while the gate is open would advertise a capability that does not exist. It is a prerequisite of closing the
+   gate, not of this document.
+5. **This is a release blocker in the same sense as the rest of this document.** Player-facing wording about address
+   exposure needs the same privacy/legal approval as the remote-AI and microphone text below. Engineering may not
+   write the final player-facing sentence.
+
+Transport vendor analysis, including why the address-hiding relays are unavailable to us, is maintainer-internal:
+`docs/internal/MultiplayerTransportOptions.md`.
+
+
 ## First-party remote services
 
 RobotKit contains optional integrations with Robotopia's RoboAPI backend. The built-in origin is

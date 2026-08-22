@@ -153,6 +153,9 @@ namespace TopiaForge.Mods.Multiplayer.Generators.Tests
                 ReportsMissingExplicitContractId();
                 ReportsCommandPayloadLimitOverflow();
                 ReportsStateAndEventTransportLimitOverflow();
+                ReportsInboundBandwidthBudgetOverflow();
+                AllowsContractWithinInboundBandwidthBudget();
+                InboundBandwidthBudgetDoesNotChangeContractLockIdentity();
                 ReplicatedStateCanReconnectAcrossSessions();
                 CommandDefinitionEnforcesPayloadLimit();
                 StateAndPresentationDefinitionsEnforceTransportLimit();
@@ -751,6 +754,40 @@ namespace TopiaForge.Mods.Multiplayer.Generators.Tests
             }
             public sealed class Response { public int Value { get; set; } }
             """);
+
+        // The frozen contract can express a client-to-server ceiling (MaximumPerSecond x MaximumPayloadBytes) but has
+        // no rate or fan-out knob for replicated state or presentation events. TFMP014 covers only the half it can.
+        private static void ReportsInboundBandwidthBudgetOverflow() => ExpectDiagnostic("TFMP014", """
+            using TopiaForge.Mods;
+            [MultiplayerContract(Id = "sample.greedy")]
+            public partial class Contract
+            {
+                [MultiplayerCommand("chatter")]
+                private OperationResult<Response> Handle(MultiplayerCommandContext context, Request request) =>
+                    OperationResult<Response>.Success(new Response());
+            }
+            public sealed class Request { public int Value { get; set; } }
+            public sealed class Response { public int Value { get; set; } }
+            """);
+
+        private static void AllowsContractWithinInboundBandwidthBudget()
+        {
+            var result = Generate(ValidContractSource);
+            AssertNoErrors(result);
+            Assert(!result.GeneratorDiagnostics.Any(item => item.Id == "TFMP014"),
+                "A contract inside the per-connection inbound budget must not report TFMP014.");
+        }
+
+        // The budget is a design constraint, not a wire fact. It must never reach a schema digest or contract lock,
+        // because that would change lock identity without any byte-layout change.
+        private static void InboundBandwidthBudgetDoesNotChangeContractLockIdentity()
+        {
+            var result = Generate(ValidContractSource);
+            AssertNoErrors(result);
+            var generated = SingleGeneratedSource(result).SourceText.ToString();
+            Assert(!generated.Contains("32768", StringComparison.Ordinal),
+                "The per-connection bandwidth budget must not be emitted into generated contract code.");
+        }
 
         private static void ReportsStateAndEventTransportLimitOverflow()
         {
