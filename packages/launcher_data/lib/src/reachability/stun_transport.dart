@@ -8,7 +8,18 @@ import 'dart:typed_data';
 
 import 'stun_message.dart';
 
+/// Opens a transport bound for one address family.
+///
+/// The family is chosen by the caller rather than the transport because a probe run has to stay inside a single
+/// family — see [StunTransport] — and only the caller knows which servers it is about to use.
+typedef StunTransportFactory =
+    Future<StunTransport> Function(InternetAddressType family);
+
 /// One STUN binding transaction.
+///
+/// An implementation is bound to a single address family. RFC 5780 behaviour discovery compares the reflexive
+/// endpoints seen across a server's addresses and ports, and endpoints in different families are not comparable, so
+/// a run that mixed them would produce a mapping verdict that means nothing.
 abstract class StunTransport {
   /// Sends a binding request to [server] and waits for a matching success response.
   ///
@@ -34,32 +45,48 @@ abstract class StunTransport {
 /// Deliberately minimal. It binds one ephemeral port, sends a few small datagrams, and closes. It keeps no
 /// connection, allocates no relay, and gathers no candidates.
 class UdpStunTransport implements StunTransport {
-  UdpStunTransport._(this._socket, this._localAddresses, this._timeout)
-    : _random = Random.secure();
+  UdpStunTransport._(
+    this._socket,
+    this._addressLength,
+    this._localAddresses,
+    this._timeout,
+  ) : _random = Random.secure();
 
-  /// Binds an ephemeral UDP port and snapshots this machine's own interface addresses.
+  /// Binds an ephemeral UDP port for [family] and snapshots this machine's own interface addresses.
+  ///
+  /// The socket is bound for one family because it is used unconnected for every transaction in a run, and a datagram
+  /// socket cannot send outside the family it was bound for. `anyIPv6` is not dual-stack on every platform — Windows
+  /// defaults `IPV6_V6ONLY` on and Dart exposes no way to clear it — so a family is chosen rather than assumed.
   ///
   /// The interface addresses are held only to answer [matchesLocalEndpoint] and are discarded with [close]. They are
   /// never persisted, logged, or passed to `launcher_domain`.
-  static Future<UdpStunTransport> bind({
+  static Future<UdpStunTransport> bind(
+    InternetAddressType family, {
     Duration timeout = const Duration(milliseconds: 700),
   }) async {
-    final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+    final wantsIPv6 = family == InternetAddressType.IPv6;
+    final addressLength = wantsIPv6 ? 16 : 4;
+    final socket = await RawDatagramSocket.bind(
+      wantsIPv6 ? InternetAddress.anyIPv6 : InternetAddress.anyIPv4,
+      0,
+    );
     final addresses = <StunEndpoint>[];
     for (final interface in await NetworkInterface.list(
       includeLoopback: false,
       includeLinkLocal: false,
     )) {
       for (final address in interface.addresses) {
+        if (address.rawAddress.length != addressLength) continue;
         addresses.add(
           StunEndpoint(Uint8List.fromList(address.rawAddress), socket.port),
         );
       }
     }
-    return UdpStunTransport._(socket, addresses, timeout);
+    return UdpStunTransport._(socket, addressLength, addresses, timeout);
   }
 
   final RawDatagramSocket _socket;
+  final int _addressLength;
   final List<StunEndpoint> _localAddresses;
   final Duration _timeout;
   final Random _random;
@@ -75,6 +102,11 @@ class UdpStunTransport implements StunTransport {
     bool changeAddress = false,
     bool changePort = false,
   }) async {
+    // The socket cannot reach another family, and `send` would throw rather than report it. Callers pick the
+    // family before binding, so this only fires on a programming error; it stays a `null` because the whole
+    // transport contract is that a transaction reports evidence, never an exception.
+    if (server.address.length != _addressLength) return null;
+
     final transactionId = Uint8List.fromList(
       List<int>.generate(
         StunCodec.transactionIdLength,
