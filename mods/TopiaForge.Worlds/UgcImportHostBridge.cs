@@ -160,11 +160,18 @@ namespace TopiaForge.Worlds
         /// Points the live importer at the planned folder and imports the planned file.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// The config selection is snapshotted before it is overwritten and restored on
         /// <see cref="Dispose"/>. <c>UgcImportHostConfig</c> is a shipped asset shared with the game's own
         /// import host; leaving our folder in it would silently change what the game does after our session
         /// ends. In a player build the asset is in-memory only, so restoring costs nothing and is correct
         /// anyway.
+        /// </para>
+        /// <para>
+        /// An import that fails after the override is applied restores immediately rather than waiting for
+        /// disposal, and the two symbols this needs are resolved before anything is written, so a build that
+        /// no longer exposes them refuses without having touched the game's selection at all.
+        /// </para>
         /// </remarks>
         public bool TryImport(RoboWorldImportPlan plan, out string error)
         {
@@ -193,28 +200,31 @@ namespace TopiaForge.Worlds
                 return false;
             }
 
+            // Both methods are resolved before anything is written, because the config they would be
+            // driving is the game's own shared selection. Failing the second lookup after overriding it
+            // would leave our folder in the game's import UI for the rest of the session.
+            var configureFolder = importHostControllerType.GetMethod(
+                "ConfigureRuntimeImportFolder", PublicInstance);
+            if (configureFolder == null)
+            {
+                error = "This game build does not expose the runtime import-folder override.";
+                return false;
+            }
+
+            var importFile = importHostControllerType.GetMethod("ImportFile", PublicInstance);
+            if (importFile == null)
+            {
+                error = "This game build does not expose a local export import.";
+                return false;
+            }
+
             try
             {
                 ApplyConfigSelection(controller, plan);
 
-                var configureFolder = importHostControllerType.GetMethod(
-                    "ConfigureRuntimeImportFolder", PublicInstance);
-                if (configureFolder == null)
-                {
-                    error = "This game build does not expose the runtime import-folder override.";
-                    return false;
-                }
-
                 configureFolder.Invoke(controller, new object?[] { plan.FolderPath });
                 importHostControllerType.GetMethod("RefreshImportFiles", PublicInstance)
                     ?.Invoke(controller, Array.Empty<object>());
-
-                var importFile = importHostControllerType.GetMethod("ImportFile", PublicInstance);
-                if (importFile == null)
-                {
-                    error = "This game build does not expose a local export import.";
-                    return false;
-                }
 
                 importFile.Invoke(controller, new object?[] { plan.FilePath });
 
@@ -226,6 +236,7 @@ namespace TopiaForge.Worlds
                 if (importedScene == null)
                 {
                     error = "'" + plan.FileName + "' produced no scene. Check the game log for details.";
+                    RestoreConfigSelection();
                     return false;
                 }
 
@@ -240,6 +251,7 @@ namespace TopiaForge.Worlds
             catch (Exception ex)
             {
                 error = "'" + plan.FileName + "' could not be imported: " + Unwrap(ex).Message;
+                RestoreConfigSelection();
                 return false;
             }
         }
@@ -253,6 +265,12 @@ namespace TopiaForge.Worlds
             }
 
             disposed = true;
+            RestoreConfigSelection();
+        }
+
+        /// <summary>Puts the game's own import selection back, if this bridge ever overrode it.</summary>
+        private void RestoreConfigSelection()
+        {
             var selection = restoreSelection;
             restoreSelection = null;
             if (selection == null)
