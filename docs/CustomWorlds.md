@@ -40,6 +40,44 @@ it also hands back content that arrives after a cancel or timeout so you can rel
 reports a blocking wait as [TF1008](Diagnostics.md#tf1008). The same rule applies to every
 `IAssetService` load.
 
+## Local `.roboworld` worlds
+
+A world built in the official [Robotopia Creator](CreatorScope.md) exports as a `.roboworld` file.
+Worlds can load one of those from disk, through the game's own import host — the same code path the
+game uses for a local export, so nothing here parses the format itself.
+
+This path is strictly local. It signs nobody in, publishes nothing, and calls no backend: the game's
+import host takes a folder and a file name and reads them off the machine you are sitting at. Worlds
+touches none of the cloud entry points (`UgcPublishedProjectLoader`, `UgcAutomergeSyncClient`,
+`UgcLaunchUrlStartup`) to make that true by construction rather than by promise.
+
+Configure it in the Worlds mod config:
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `enableLocalWorlds` | `true` | Whether local exports may be loaded at all. |
+| `localWorldFolder` | `""` | The folder scanned for exports. Empty means the folder the game itself scans. |
+
+Recognized extensions are `.roboworld`, `.json`, and `.json.gz` — the three build 2409 scans for.
+
+**The folder is a trust boundary, not a convenience.** The import host accepts any path, so Worlds
+confines an import to the configured folder and refuses anything outside it *before* it checks whether
+the file exists or has a usable extension — otherwise a refusal message would tell a caller which
+files exist elsewhere on the machine. A sibling folder that merely shares the configured folder's name
+prefix is not inside it.
+
+An export is parsed with the game's own loader before the scene is touched, so a malformed file is
+refused while the current world is still intact and the reason a player sees is the game's own
+wording. After the import, Worlds checks that the host actually produced a scene: `ImportFile` returns
+`void` and swallows its own failures, so "it was called" is not "it worked".
+
+Worlds snapshots the game's import selection before overriding it and restores it when the provider
+unloads. `UgcImportHostConfig` is a shipped asset shared with the game's own import host; leaving a
+TopiaForge folder in it would silently change what the game does next.
+
+Every binding on this path is `Degraded`. If a future build moves the import host, local worlds stop
+loading with a stated reason and nothing else in Worlds changes behaviour.
+
 ## Hosting a gamemode
 
 `GamemodeHost<TController>` owns the wiring between a Worlds gamemode and the object that runs one round
