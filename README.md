@@ -161,9 +161,6 @@ Tomato Cake or the Robotopia development team, and is not otherwise affiliated w
 "Tomato Cake" are the property of their respective owners and are used here only to identify the game this
 toolkit works with.
 
-TopiaForge is licensed under [MIT](LICENSE). Third-party components retain their own licenses; see
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
 ## Verification
 
 ```powershell

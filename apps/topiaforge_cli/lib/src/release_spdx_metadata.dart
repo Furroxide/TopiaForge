@@ -21,7 +21,6 @@ void verifyReleaseSpdxSbom(
     ...release.components.keys,
     ...release.vpmPackages.keys,
     ...release.mods.keys,
-    'BepInEx',
   };
   final packageNames = packages
       .map((entry) => entry['name'])
@@ -85,17 +84,46 @@ Map<String, Object?> buildReleaseSpdxSbom({
     ...release.components.entries,
     ...release.vpmPackages.entries,
     ...release.mods.entries,
-    MapEntry('BepInEx', policy.bepInExVersion),
   ]..sort((left, right) => left.key.compareTo(right.key));
-  // First-party surfaces carry the approved project license; third-party
-  // entries keep NOASSERTION because the project does not conclude on their
-  // behalf. BepInEx declares its own upstream terms.
+  // First-party surfaces carry the approved project license. Vendored
+  // third-party components declare their own upstream terms and keep
+  // NOASSERTION for the conclusion and the copyright: the project neither
+  // concludes nor holds copyright on their behalf.
   final ownedLicense = policy.hasApprovedLicense
       ? policy.licenseExpression
       : 'NOASSERTION';
   final ownedCopyright = policy.hasApprovedLicense
       ? _ownedCopyrightText
       : 'NOASSERTION';
+  Map<String, Object?> packageFor(MapEntry<String, String> entry) {
+    final vendored = _vendoredComponentLicenses[entry.key];
+    return _spdxPackage(
+      name: entry.key,
+      version: entry.value,
+      spdxId: _spdxId('Package', entry.key),
+      license: vendored ?? ownedLicense,
+      licenseConcluded: vendored == null ? ownedLicense : 'NOASSERTION',
+      copyrightText: vendored == null ? ownedCopyright : 'NOASSERTION',
+    );
+  }
+
+  // Mod packages are first-party throughout. Platform archives bundle the
+  // vendored loader payload and third-party fonts alongside owned code, so the
+  // project concludes nothing about such an archive as a whole.
+  Map<String, Object?> fileFor(Map<String, Object?> artifact) {
+    final name = artifact['name'].toString();
+    final owned = name.endsWith(_ownedArtifactExtension);
+    return {
+      'fileName': './$name',
+      'SPDXID': _spdxId('File', name),
+      'checksums': [
+        {'algorithm': 'SHA256', 'checksumValue': artifact['sha256']},
+      ],
+      'licenseConcluded': owned ? ownedLicense : 'NOASSERTION',
+      'copyrightText': owned ? ownedCopyright : 'NOASSERTION',
+    };
+  }
+
   final packages = <Map<String, Object?>>[
     _spdxPackage(
       name: 'TopiaForge',
@@ -105,35 +133,10 @@ Map<String, Object?> buildReleaseSpdxSbom({
       licenseConcluded: ownedLicense,
       copyrightText: ownedCopyright,
     ),
-    for (final entry in packageEntries)
-      if (entry.key == 'BepInEx')
-        _spdxPackage(
-          name: entry.key,
-          version: entry.value,
-          spdxId: _spdxId('Package', entry.key),
-          license: 'MIT',
-        )
-      else
-        _spdxPackage(
-          name: entry.key,
-          version: entry.value,
-          spdxId: _spdxId('Package', entry.key),
-          license: ownedLicense,
-          licenseConcluded: ownedLicense,
-          copyrightText: ownedCopyright,
-        ),
+    for (final entry in packageEntries) packageFor(entry),
   ];
   final files = <Map<String, Object?>>[
-    for (final artifact in artifacts)
-      {
-        'fileName': './${artifact['name']}',
-        'SPDXID': _spdxId('File', artifact['name'].toString()),
-        'checksums': [
-          {'algorithm': 'SHA256', 'checksumValue': artifact['sha256']},
-        ],
-        'licenseConcluded': ownedLicense,
-        'copyrightText': ownedCopyright,
-      },
+    for (final artifact in artifacts) fileFor(artifact),
   ];
   final relationships = <Map<String, Object?>>[
     for (final entry in packageEntries)
@@ -203,6 +206,15 @@ Map<String, Object?> _spdxPackage({
 
 /// Copyright line recorded for TopiaForge-owned SPDX packages and files.
 const _ownedCopyrightText = 'Copyright (C) 2026 furroxide';
+
+/// Release-catalog component keys that name vendored third-party software,
+/// mapped to the terms their own authors declare. Keys must match
+/// `release/catalog.json` exactly; anything absent here is treated as owned.
+const _vendoredComponentLicenses = <String, String>{'bepInEx': 'MIT'};
+
+/// Release artifacts built solely from first-party sources. Everything else is
+/// a platform archive that also redistributes third-party payload.
+const _ownedArtifactExtension = '.topiaforgemod';
 
 String _spdxId(String kind, String value) {
   final safe = value.replaceAll(RegExp(r'[^A-Za-z0-9.-]'), '-');
