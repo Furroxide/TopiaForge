@@ -45,7 +45,7 @@ from the generated package ID.
 package the harness actually installed. Stale sessions, replayed challenges, spoofed logger
 sources, and different package bytes fail closed.
 
-Run the complete launch-blocking matrix on an authorized Robotopia build-2309 host (all cases are
+Run the complete launch-blocking matrix on an authorized Robotopia build-2409 host (all cases are
 required by default):
 
 ```powershell
@@ -66,7 +66,7 @@ acceptance mod, seeds a schema-1 config fixture, launches Robotopia, validates `
 writes `acceptance-result.json`. A pass requires the exact package to be valid and loaded, an empty
 root startup error, and every requested marker.
 
-## Creator workbench build-2309 matrix
+## Creator workbench build-2409 matrix
 
 The `creatorAcceptance` inventory in `tests/live-game-acceptance.json` is a required interactive
 matrix for Sandbox and CreatorTools. It is deliberately separate from automatic `TF-ACCEPT`
@@ -75,7 +75,7 @@ personality restoration, save isolation, or F5 focus behavior. Record the candid
 platform, exact Robotopia build, before/after save and checkpoint hashes, and a pass/fail result for
 each creator case alongside the ordinary acceptance result.
 
-On an authorized build-2309 host, complete all of these checks:
+On an authorized build-2409 host, complete all of these checks:
 
 1. In Sandbox, press F5 and confirm Sandbox wins routing. In ordinary stable standalone gameplay,
    confirm CreatorTools owns F5. Menus, scene transitions, Worlds sessions, connected remote
@@ -85,7 +85,7 @@ On an authorized build-2309 host, complete all of these checks:
 3. Move a pre-existing robot and preview autonomous personality and brain changes. End the session
    and verify location, personality, and brain mode restore exactly.
 4. Register test-mod character and validated vehicle factories, spawn them, then unload their source.
-   Verify instances and entries disappear safely. If build 2309 exposes no validated native vehicle
+   Verify instances and entries disappear safely. If build 2409 exposes no validated native vehicle
    adapter, verify that source is visibly empty or degraded.
 5. Hide the workbench with F5 and its close affordance. Player controls must return while the session,
    spawns, edits, graph state, and isolation lease remain; the warning HUD must remain visible. Reopen
@@ -103,7 +103,7 @@ On an authorized build-2309 host, complete all of these checks:
    cycles.
 
 Do not mark this matrix complete from the Unity-free lifecycle suite alone. That suite protects the
-same ownership and rollback policies, but the native build-2309 evidence remains mandatory.
+same ownership and rollback policies, but the native build-2409 evidence remains mandatory.
 
 Creator evidence is collected natively. `CreatorAcceptanceRecorder` in `mods/Shared/CreatorTools`
 emits `TF-CREATOR|PASS|<challenge>|<case>` markers for all nine `creator.*` cases from workbench
@@ -181,7 +181,7 @@ No Robotopia directory was supplied. Set `ROBOTOPIA_GAME_DIR` or pass `--game-di
 
 ## TFACCEPT102
 
-The supplied Robotopia directory does not exist. Select the installed build-2309 directory.
+The supplied Robotopia directory does not exist. Select the installed build-2409 directory.
 
 ## TFACCEPT103
 

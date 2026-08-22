@@ -491,7 +491,7 @@ jobs:
             "$fake_game/Robotopia_Data/Managed"
           printf 'game fixture\n' >"$fake_game/Robotopia.exe"
           printf 'managed fixture\n' >"$fake_game/Robotopia_Data/Managed/UnityEngine.dll"
-          printf '{"id":"2309"}\n' >"$fake_game/installed-build.json"
+          printf '{"id":"2409"}\n' >"$fake_game/installed-build.json"
           game_for_cli="$fake_game"
           if [ "${{ matrix.platform }}" = "windows" ]; then
             game_for_cli="$(cygpath -w "$fake_game")"

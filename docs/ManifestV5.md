@@ -29,7 +29,7 @@ Future loaders add a new version-specific reader and schema without changing the
   "author": { "name": "You" },
   "entryAssembly": "ExampleFirstMod.dll",
   "entryType": "Example.FirstMod.FirstMod",
-  "supportedGameVersionRange": "0.0.2309",
+  "supportedGameVersionRange": "0.0.2409",
   "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
   "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
   "license": "AGPL-3.0-or-later"
@@ -38,7 +38,7 @@ Future loaders add a new version-specific reader and schema without changing the
 
 Required fields are `schemaVersion`, `name`, `displayName`, `version`, `author`, `entryAssembly`,
 `entryType`, and the three `supported*VersionRange` fields. `name` is a stable 2–64 character package
-id. Versions use SemVer 2; Robotopia build 2309 is represented as `0.0.2309`.
+id. Versions use SemVer 2; Robotopia build 2409 is represented as `0.0.2409`.
 
 ## Package contract
 

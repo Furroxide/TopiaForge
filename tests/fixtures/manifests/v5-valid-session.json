@@ -7,7 +7,7 @@
   "author": { "name": "TopiaForge Tests" },
   "entryAssembly": "Fixture.dll",
   "entryType": "Fixtures.V5SessionMod",
-  "supportedGameVersionRange": "0.0.2309",
+  "supportedGameVersionRange": ">=0.0.2409 <0.0.2600",
   "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
   "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
   "multiplayer": {
