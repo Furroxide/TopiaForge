@@ -5,7 +5,7 @@ description: Manage optional editor-side content tooling separately from V1 mod 
 
 # Editor companion packages
 
-Editor companion packages are optional authoring tools for bundle-backed UGC and custom worlds.
+Editor companion packages are optional authoring tools for custom worlds.
 They are not TopiaForge code-mod dependencies and are never loaded into Robotopia as mod assemblies.
 
 Use `topiaforge unity` commands and the Creator Companion project UI to add, remove, resolve, and
@@ -30,5 +30,5 @@ An editor package may generate content, but it must not inject Robotopia-side mo
 assemblies. Published player content is repacked and validated through the ordinary
 `.topiaforgemod` pipeline.
 
-See [UGC live sync](UgcLiveSync.md), [Custom worlds](CustomWorlds.md), and
+See [Custom worlds](CustomWorlds.md) and
 [Manifest V5](ManifestV5.md#package-contract).

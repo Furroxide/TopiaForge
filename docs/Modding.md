@@ -70,7 +70,7 @@ lifetime, events, files, config, installation-local storage, input, time, schedu
 physics, interactions, items, assets, audio, UI, localization, commands, diagnostics, and
 extensions. See [Core services](CoreServices.md) for the complete service map and usage rules.
 
-Creator Content, RobotKit, Worlds, Chronos, Prompts, UGC, and the multiplayer preview are separate
+Creator Content, RobotKit, Worlds, Chronos, Prompts, and the multiplayer preview are separate
 Unity-free module contracts. Add a module with `topiaforge mod add <module>` so its compile-time
 package and runtime manifest dependency stay in sync. See [Specialist modules](Modules.md) and the
 [Creator Tools guide](CreatorTools.md).

@@ -351,17 +351,6 @@ void main() {
       options: const ModScaffoldOptions(template: 'asset'),
     );
     expect(workspace.project!.unityCompanion.enabled, isTrue);
-    expect(
-      Directory(
-        p.join(
-          workspace.projectRoot,
-          'unity-companion',
-          'Packages',
-          'io.github.furroxide.topiaforge.ugc-companion',
-        ),
-      ).existsSync(),
-      isTrue,
-    );
   });
 
   test('unknown template fails loudly', () async {
@@ -441,25 +430,6 @@ void main() {
       );
     },
     timeout: const Timeout(Duration(minutes: 2)),
-  );
-
-  test(
-    'live sync scaffold stores settings and implies the companion',
-    () async {
-      final workspace = await repository.createModProject(
-        parentDirectory: root.path,
-        id: 'test.live',
-        name: 'Live',
-        options: const ModScaffoldOptions(
-          liveSync: UgcLiveSyncSettings(watchFolder: r'C:\ugc-watch'),
-        ),
-      );
-      expect(workspace.project!.unityCompanion.enabled, isTrue);
-      expect(
-        workspace.project!.unityCompanion.liveSync.watchFolder,
-        r'C:\ugc-watch',
-      );
-    },
   );
 
   test('updateModManifest round-trips schema fields and validates', () async {

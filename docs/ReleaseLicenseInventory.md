@@ -25,7 +25,7 @@ This supersedes the earlier MIT declaration.
 | Repository and platform archives | Root `LICENSE`; release packaging copies `LICENSE` and `DCO` beside the product payload. |
 | Sixteen first-party mods | SPDX `AGPL-3.0-or-later` and package-relative `LICENSE`; the packer injects the reviewed shared mod license into every first-party archive. |
 | Twelve SDK NuGet packages | `PackageLicenseExpression` is `AGPL-3.0-or-later` through the shared pack policy or an equivalent project declaration. |
-| VPM resolver, world companion, and UGC companion | SPDX `AGPL-3.0-or-later` in each `package.json` with the complete license text in the package directory. |
+| VPM resolver and world companion | SPDX `AGPL-3.0-or-later` in each `package.json` with the complete license text in the package directory. |
 | Flutter launcher UI package | Complete license text in `packages/launcher_ui/LICENSE`. |
 | CLI, launcher domain/data, sidecar, website, templates, samples, and repository tooling | Covered by the root license unless a more specific adjacent third-party notice applies. |
 

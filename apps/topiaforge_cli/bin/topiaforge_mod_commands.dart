@@ -67,7 +67,7 @@ extension _TopiaForgeModCommands on _TopiaForgeCli {
           '  topiaforge mod add|remove gamemode <id:Name[:description]> [--project path]',
         );
         stdout.writeln(
-          '  topiaforge mod add|remove <chronos|creatorcontent|prompts|robotkit|ugc|worlds|multiplayer|interop-unity> [--project path]',
+          '  topiaforge mod add|remove <chronos|creatorcontent|prompts|robotkit|worlds|multiplayer|interop-unity> [--project path]',
         );
         stdout.writeln(
           '  topiaforge mod sync multiplayer [--project path] [--configuration name]',

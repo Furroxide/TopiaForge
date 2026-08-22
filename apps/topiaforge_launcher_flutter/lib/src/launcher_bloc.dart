@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -14,7 +13,6 @@ part 'launcher_bloc_actions.dart';
 part 'launcher_event_dispatch.dart';
 part 'launcher_game_install_actions.dart';
 part 'launcher_profile_actions.dart';
-part 'launcher_developer_ugc_actions.dart';
 part 'launcher_developer_project_actions.dart';
 part 'launcher_developer_actions.dart';
 part 'launcher_runtime_constraints.dart';
@@ -29,17 +27,6 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
        _updateRepository = updateRepository,
        super(LauncherState.initial()) {
     on<LauncherEvent>(_dispatchEvent, transformer: sequential());
-    _ugcPublisherSub = _repository.ugcPublisherEvents.listen((event) {
-      if (isClosed) {
-        return;
-      }
-      switch (event) {
-        case UgcPublisherOutput(:final sessionId, :final line):
-          add(DeveloperUgcSidecarOutput(line, sessionId));
-        case UgcPublisherExited(:final sessionId, :final exitCode):
-          add(DeveloperUgcPublisherExited(sessionId, exitCode));
-      }
-    });
     _updateStatusSub = _updateRepository?.statuses.listen((status) {
       if (!isClosed) add(LauncherUpdateStatusChanged(status));
     });
@@ -50,46 +37,21 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
   final LauncherUpdateRepository? _updateRepository;
   final DependencyPlanner _dependencyPlanner = const DependencyPlanner();
 
-  StreamSubscription<UgcPublisherEvent>? _ugcPublisherSub;
   StreamSubscription<LauncherUpdateStatus>? _updateStatusSub;
 
   // True while a "Go Live" is waiting for the publisher to report its live document URL before launching the game
   // (so the game auto-connects to the real document, not an empty one).
-  bool _ugcGoLivePending = false;
-  int? _ugcPublisherSessionId;
-  Completer<void>? _ugcMutationLock;
 
   String get dataRoot => _repository.dataRoot;
 
-  Future<T> _withUgcMutation<T>(Future<T> Function() run) async {
-    while (_ugcMutationLock != null) {
-      final pending = _ugcMutationLock!;
-      await pending.future;
-    }
-    final lock = Completer<void>();
-    _ugcMutationLock = lock;
-    try {
-      return await run();
-    } finally {
-      _ugcMutationLock = null;
-      lock.complete();
-    }
-  }
-
   @override
   Future<void> close() {
-    final publisherSubscription = _ugcPublisherSub;
-    _ugcPublisherSub = null;
-    // Initiate both stream shutdowns synchronously so no new publisher output
-    // or UI events can enter while pending handlers finish. Repository
-    // disposal then owns sidecar shutdown instead of racing a handler with a
-    // duplicate stop request.
-    final publisherClose = publisherSubscription?.cancel();
+    // Initiate the stream shutdown synchronously so no new UI events can enter
+    // while pending handlers finish.
     final updateClose = _updateStatusSub?.cancel();
     _updateStatusSub = null;
     final blocClose = super.close();
     return Future.wait<void>([
-      ?publisherClose,
       ?updateClose,
       blocClose,
     ]).whenComplete(() async {

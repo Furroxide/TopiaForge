@@ -203,4 +203,41 @@ extension _WorldCommands on _TopiaForgeCli {
     stdout.writeln('Installed $packagePath.');
     return _launch(const <String>[], restart: false);
   }
+
+  Future<String?> _resolveUnityDevProject(String? selector) async {
+    bool isUnityProject(String path) =>
+        Directory(p.join(path, 'ProjectSettings')).existsSync() &&
+        Directory(p.join(path, 'Assets')).existsSync();
+
+    if (selector != null) {
+      if (Directory(selector).existsSync()) {
+        return p.normalize(p.absolute(selector));
+      }
+      final projects = await developerRepository.listProjects();
+      for (final project in projects) {
+        if (project.name.toLowerCase() == selector.toLowerCase() &&
+            project.isUnity) {
+          return project.path;
+        }
+      }
+      return null;
+    }
+
+    if (isUnityProject(Directory.current.path)) {
+      return Directory.current.path;
+    }
+
+    final projects = await developerRepository.listProjects();
+    final worlds =
+        projects
+            .where(
+              (project) =>
+                  project.kind == ProjectKind.unityWorld &&
+                  Directory(project.path).existsSync(),
+            )
+            .toList()
+          ..sort((a, b) => b.lastOpenedUtc.compareTo(a.lastOpenedUtc));
+    return worlds.isEmpty ? null : worlds.first.path;
+  }
+
 }

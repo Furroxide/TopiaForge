@@ -19,8 +19,7 @@
     "io.github.furroxide.topiaforge.worlds": ">=1.0.0-rc.1 <2.0.0"
   },
   "optionalDependencies": {
-    "dev.topiaforge.sdk-acceptance.missing-provider": ">=1.0.0 <2.0.0",
-    "io.github.furroxide.topiaforge.ugc.livesync": ">=1.0.0-rc.1 <2.0.0"
+    "dev.topiaforge.sdk-acceptance.missing-provider": ">=1.0.0 <2.0.0"
   },
   "supportedGameVersionRange": "0.0.2309",
   "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",

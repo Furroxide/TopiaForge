@@ -259,5 +259,5 @@ asset interfaces are opaque handles with ordinary state and lifetime operations.
 mods portable across supported runtimes and make tests deterministic.
 
 See [specialist modules](Modules.md) for creator content, robots, worlds, time control, prompts,
-UGC, and multiplayer, or open the generated C# reference from the developer site for every member
+and multiplayer, or open the generated C# reference from the developer site for every member
 and default value.

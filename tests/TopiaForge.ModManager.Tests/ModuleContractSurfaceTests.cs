@@ -37,11 +37,10 @@ namespace TopiaForge.ModManager.Tests
                 typeof(ICreatorContentService).Assembly,
                 typeof(IWorldGamemodeService).Assembly,
                 typeof(ITimeControlService).Assembly,
-                typeof(IPromptOverrideRegistry).Assembly,
-                typeof(IUgcLiveSyncService).Assembly
+                typeof(IPromptOverrideRegistry).Assembly
             };
 
-            Assert(modules.Select(assembly => assembly.GetName().Name).Distinct(StringComparer.Ordinal).Count() == 6,
+            Assert(modules.Select(assembly => assembly.GetName().Name).Distinct(StringComparer.Ordinal).Count() == 5,
                 "each module contract must live in its own assembly");
 
             foreach (var module in modules)
@@ -59,8 +58,7 @@ namespace TopiaForge.ModManager.Tests
                          typeof(ICreatorContentService),
                          typeof(IWorldGamemodeService),
                          typeof(ITimeControlService),
-                         typeof(IPromptOverrideRegistry),
-                         typeof(IUgcLiveSyncService)
+                         typeof(IPromptOverrideRegistry)
                      })
             {
                 Assert(specialized.Assembly != core,

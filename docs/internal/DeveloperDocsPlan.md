@@ -257,17 +257,9 @@ The generated C# API tier is **worthless until comments exist** — this is the 
 
 ---
 
-## 10. UGC Live Content Sync (added)
+## 10. UGC Live Content Sync (retired)
 
-The UGC live-sync feature (`IUgcLiveSyncService`, the `TopiaForge.UgcLiveSync` mod, and the
-`io.github.furroxide.topiaforge.ugc-companion` Unity package) slots into the existing phases:
-
-- **Phase 0 (now):** `docs/UgcLiveSync.md` is the canonical guide + the pinned export-JSON schema contract; it is
-  cross-linked from `docs/Modding.md`. The shared contract is regression-pinned by the .NET fixture test
-  (`tests/fixtures/ugc/sample-project.json`) and the Dart `UgcLiveSyncSettings` contract test (cross-language keys).
-- **§7 prerequisite:** `IUgcLiveSyncService` and its DTOs carry full `///` doc comments, so they flow into the
-  Phase-2 DocFX API tier with no extra work.
-- **Shipped:** `topiaforge doctor` verifies the companion package + watch-folder writability; the Flutter launcher
-  Developer view has a "UGC Live Sync" panel (edit settings, deploy the runtime config to the install, open the
-  watch folder, start/stop the Automerge publisher); and the Automerge writer ships as the
-  [`tools/ugc-automerge-sidecar`](../../tools/ugc-automerge-sidecar) Node sidecar driven by `topiaforge ugc`.
+Removed in the build-2409 cutover: Robotopia now ships its own browser Creator with live preview and
+sharing, so the `TopiaForge.UgcLiveSync` mod, the Automerge sidecar, and the UGC companion package were
+deleted rather than retargeted. The world-format contract test survives as
+`tests/fixtures/ugc/sample-project.json`.

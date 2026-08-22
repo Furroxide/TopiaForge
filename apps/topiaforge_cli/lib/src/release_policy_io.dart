@@ -303,7 +303,6 @@ const _v1StableContractPackageIds = <String>{
   'TopiaForge.Mods.Prompts',
   'TopiaForge.Mods.RobotKit',
   'TopiaForge.Mods.Testing',
-  'TopiaForge.Mods.Ugc',
   'TopiaForge.Mods.Worlds',
 };
 

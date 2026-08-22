@@ -16,7 +16,6 @@
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Multiplayer\TopiaForge.Mods.Multiplayer.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Prompts\TopiaForge.Mods.Prompts.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.RobotKit\TopiaForge.Mods.RobotKit.csproj" />
-    <ProjectReference Include="..\..\src\TopiaForge.Mods.Ugc\TopiaForge.Mods.Ugc.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Worlds\TopiaForge.Mods.Worlds.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Testing\TopiaForge.Mods.Testing.csproj" />
     <!-- Unity-free, GameCode-free game-compat core: lets the offline CI gate (GameCompatTests) diff the checked-in
@@ -47,23 +46,14 @@
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Prompts\TopiaForge.Mods.Prompts.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.RobotKit\TopiaForge.Mods.RobotKit.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Testing\TopiaForge.Mods.Testing.csproj" />
-    <ProjectReference Include="..\..\src\TopiaForge.Mods.Ugc\TopiaForge.Mods.Ugc.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Worlds\TopiaForge.Mods.Worlds.csproj" />
   </ItemGroup>
 
-  <!-- Compile the UGC live-sync mod's Unity-free logic directly into the test assembly so the service state
-       machine can be unit-tested on net10.0 without loading the mod's UnityEngine-referencing assembly. Only the
-       Unity-free files are included; UgcGameBridge/overlay/mod entry (which touch UnityEngine) are excluded. -->
+  <!-- Compile shared Unity-free mod helpers directly into the test assembly so they can be unit-tested
+       on net10.0 without loading a UnityEngine-referencing assembly. -->
   <ItemGroup>
     <Compile Include="..\..\mods\Shared\SafeEvent.cs" />
     <Compile Include="..\..\mods\Shared\UgcNoOpLaunchRequest.cs" />
-    <Compile Include="..\..\mods\TopiaForge.UgcLiveSync\UgcLiveSyncBridge.cs" />
-    <Compile Include="..\..\mods\TopiaForge.UgcLiveSync\UgcCommandPollGate.cs" />
-    <Compile Include="..\..\mods\TopiaForge.UgcLiveSync\UgcLiveSyncCommandFile.cs" />
-    <Compile Include="..\..\mods\TopiaForge.UgcLiveSync\UgcLiveSyncConfig.cs" />
-    <Compile Include="..\..\mods\TopiaForge.UgcLiveSync\UgcLiveSyncService.cs" />
-    <Compile Include="..\..\mods\TopiaForge.UgcLiveSync\UgcSnapshotPayloadValidator.cs" />
-    <Compile Include="..\..\mods\TopiaForge.UgcLiveSync\UgcLiveSyncStatusFile.cs" />
   </ItemGroup>
 
   <!-- Same pattern for the OVERRIDE feature: its Unity-free pieces (the RoboAPI wire protocol + JSON, and the
@@ -210,7 +200,6 @@
   <ItemGroup>
     <Compile Include="..\..\templates\TopiaForge.UnityWorldTemplate\Packages\io.github.furroxide.topiaforge.world-companion\Editor\WorldCompanionFileIo.cs" />
     <Compile Include="..\..\templates\TopiaForge.UnityWorldTemplate\Packages\io.github.furroxide.topiaforge.vpm-resolver\Editor\VpmSafeFileReader.cs" />
-    <Compile Include="..\..\templates\unity-companion\Packages\io.github.furroxide.topiaforge.ugc-companion\Editor\UgcCompanionSeedFileIo.cs" />
     <Compile Include="..\..\tools\unity-ui-bundle\Assets\Editor\UiSmokeAssemblyFileIo.cs" />
   </ItemGroup>
 
@@ -231,8 +220,6 @@
                       LogicalName="TopiaForge.ModManager.Tests.topiaforge.mods.multiplayer.api.txt" />
     <EmbeddedResource Include="..\..\baselines\topiaforge.mods.prompts.api.txt"
                       LogicalName="TopiaForge.ModManager.Tests.topiaforge.mods.prompts.api.txt" />
-    <EmbeddedResource Include="..\..\baselines\topiaforge.mods.ugc.api.txt"
-                      LogicalName="TopiaForge.ModManager.Tests.topiaforge.mods.ugc.api.txt" />
     <EmbeddedResource Include="..\..\baselines\topiaforge.mods.testing.api.txt"
                       LogicalName="TopiaForge.ModManager.Tests.topiaforge.mods.testing.api.txt" />
   </ItemGroup>

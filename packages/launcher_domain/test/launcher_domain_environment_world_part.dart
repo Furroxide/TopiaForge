@@ -13,9 +13,9 @@ void _environmentAndWorldModelTests() {
               purpose: ToolPurpose.develop,
             ),
             ToolCheck(
-              name: 'Node.js',
+              name: 'Unity Editor',
               status: ToolStatus.missing,
-              purpose: ToolPurpose.ugcAutomerge,
+              purpose: ToolPurpose.customWorldUnity,
             ),
             ToolCheck(
               name: 'Git',
@@ -26,7 +26,7 @@ void _environmentAndWorldModelTests() {
         );
 
         expect(env.developerReady, isTrue);
-        expect(env.ugcAutomergeReady, isFalse);
+        expect(env.customWorldUnityReady, isFalse);
         expect(env.blockers, isEmpty);
       },
     );

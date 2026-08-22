@@ -33,9 +33,6 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
           : 'Unity Editor: $unityEditor',
     );
 
-    if (workspace.project?.unityCompanion.enabled == true) {
-      _checkUgcCompanion(workspace, messages, issues);
-    }
 
     return DeveloperDoctorReport(
       projectRoot: workspace.projectRoot,
@@ -45,62 +42,6 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
       unityEditorPath: unityEditor,
       issues: issues,
     );
-  }
-
-  // Verifies the UGC live-sync dev loop is wired up: the companion Unity package is present, and the configured
-  // watch folder can actually be written to (the Unity exporter and the game both need that folder).
-  void _checkUgcCompanion(
-    DeveloperWorkspace workspace,
-    List<String> messages,
-    List<LauncherIssue> issues,
-  ) {
-    final packageJson = File(
-      p.join(
-        workspace.projectRoot,
-        'unity-companion',
-        'Packages',
-        'io.github.furroxide.topiaforge.ugc-companion',
-        'package.json',
-      ),
-    );
-    if (packageJson.existsSync()) {
-      messages.add('UGC companion package present.');
-    } else {
-      issues.add(
-        const LauncherIssue(
-          severity: IssueSeverity.warning,
-          message:
-              'UGC companion package missing. Re-scaffold with '
-              '`topiaforge new mod --unity-companion` or copy '
-              'unity-companion/Packages/io.github.furroxide.topiaforge.ugc-companion into the project.',
-        ),
-      );
-    }
-
-    final watchFolder =
-        workspace.project?.unityCompanion.liveSync.watchFolder ?? '';
-    if (watchFolder.isEmpty) {
-      messages.add(
-        'UGC watch folder is not set. Set it in the in-game UGC Live Sync panel '
-        'or the launcher developer view.',
-      );
-      return;
-    }
-
-    try {
-      final dir = Directory(watchFolder)..createSync(recursive: true);
-      final probe = File(p.join(dir.path, '.topiaforge-doctor-probe'));
-      probe.writeAsStringSync('ok');
-      probe.deleteSync();
-      messages.add('UGC watch folder is writable: $watchFolder');
-    } on Object catch (error) {
-      issues.add(
-        LauncherIssue(
-          severity: IssueSeverity.warning,
-          message: 'UGC watch folder is not writable: $watchFolder ($error)',
-        ),
-      );
-    }
   }
 
   Future<EnvironmentReport> _checkEnvironment() async {
@@ -136,40 +77,8 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
       );
     }
 
-    // Node.js — only needed for the optional UGC Automerge live-sync channel.
-    final node = await _which('node');
-    if (node.isEmpty) {
-      checks.add(
-        ToolCheck(
-          name: 'Node.js',
-          status: ToolStatus.missing,
-          purpose: ToolPurpose.ugcAutomerge,
-          detail: 'Not found (optional).',
-          remediation:
-              'Install ${UgcNodeVersionPolicy.requirement} only if '
-              'you publish via the UGC Automerge live-sync channel.',
-          url: 'https://nodejs.org/',
-        ),
-      );
-    } else {
-      final version = await _toolVersion('node', const ['--version']);
-      final outdated = !UgcNodeVersionPolicy.supports(version);
-      checks.add(
-        ToolCheck(
-          name: 'Node.js',
-          status: outdated ? ToolStatus.outdated : ToolStatus.ok,
-          purpose: ToolPurpose.ugcAutomerge,
-          detail: version.isEmpty ? node : version,
-          remediation: outdated
-              ? 'Upgrade to ${UgcNodeVersionPolicy.requirement} for the '
-                    'Automerge sidecar.'
-              : '',
-          url: 'https://nodejs.org/',
-        ),
-      );
-    }
 
-    // Unity — only needed to author UGC content in the companion or build custom-world bundles.
+    // Unity — only needed to build custom-world AssetBundles.
     final unityHub = await _findUnityHub();
     // World/UI bundle builds must use the exact game-player editor.
     final editors = await _scanUnityEditors();
@@ -183,7 +92,7 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
           ? 'Unity not detected (optional).'
           : 'Hub found, editor not detected: $unityHub';
       unityRemediation =
-          'Install Unity via Unity Hub only if you author UGC content or custom worlds.';
+          'Install Unity via Unity Hub only if you author custom worlds.';
     } else if (unityEditor == null) {
       unityStatus = ToolStatus.warning;
       unityDetail =
@@ -200,7 +109,7 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
       ToolCheck(
         name: 'Unity Editor',
         status: unityStatus,
-        purpose: ToolPurpose.ugcUnity,
+        purpose: ToolPurpose.customWorldUnity,
         detail: unityDetail,
         remediation: unityRemediation,
         url: 'https://unity.com/download',
@@ -223,22 +132,6 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
     return EnvironmentReport(checks: checks);
   }
 
-  Future<String> _toolVersion(String executable, List<String> args) async {
-    try {
-      final result = await runBoundedProcess(
-        executable,
-        args,
-        timeout: const Duration(seconds: 10),
-      );
-      if (result.exitCode == 0) {
-        return result.stdout.trim().split('\n').first.trim();
-      }
-    } on Object {
-      // Probe is best-effort; absence is reported by the caller via _which.
-    }
-    return '';
-  }
-
   int? _majorVersion(String version) {
     final match = RegExp(r'(\d+)').firstMatch(version.replaceFirst('v', ''));
     return match == null ? null : int.tryParse(match.group(1)!);
@@ -249,28 +142,6 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
     return 'The .NET SDK could not be validated (${error.runtimeType}).';
   }
 
-  Future<({String action, LauncherIssue? issue})> _installSidecarDeps(
-    String sidecarDir,
-  ) async {
-    try {
-      final sidecar = TrustedUgcSidecar.inspectDirectory(Directory(sidecarDir));
-      await sidecar.ensureDependencies();
-      return (
-        action: 'Verified lockfile-backed UGC sidecar dependencies.',
-        issue: null,
-      );
-    } on Object catch (error) {
-      return (
-        action: 'Could not run npm.',
-        issue: LauncherIssue(
-          severity: IssueSeverity.warning,
-          message:
-              'Could not complete npm ci (${error.runtimeType}). '
-              'Install ${UgcNodeVersionPolicy.requirement} and retry.',
-        ),
-      );
-    }
-  }
 
   Future<DeveloperSetupResult> _runSetup() async {
     final actions = <String>[];
@@ -279,6 +150,7 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
     // Ensure the developer data root exists (where sample projects are scaffolded).
     try {
       _dataRoot.createSync(recursive: true);
+      actions.add('Ensured the developer data folder.');
     } on Object catch (error) {
       issues.add(
         LauncherIssue(
@@ -289,27 +161,6 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
     }
 
     var environment = await checkEnvironment();
-
-    // The only safe auto-fix that needs a tool: install the UGC Automerge sidecar's npm deps when Node is present.
-    if (environment.ugcAutomergeReady) {
-      final sidecar = _findSidecar();
-      if (sidecar == null) {
-        actions.add(
-          'UGC Automerge sidecar not found; skipped dependency install.',
-        );
-      } else {
-        final sidecarDir = File(sidecar).parent.path;
-        final result = await _installSidecarDeps(sidecarDir);
-        actions.add(result.action);
-        if (result.issue != null) {
-          issues.add(result.issue!);
-        }
-      }
-    } else {
-      actions.add(
-        'Node.js not available; skipped the UGC Automerge sidecar (optional).',
-      );
-    }
 
     // Re-check so the returned environment reflects any fixes.
     environment = await checkEnvironment();

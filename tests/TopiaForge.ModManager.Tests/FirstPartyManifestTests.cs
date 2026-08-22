@@ -23,7 +23,7 @@ namespace TopiaForge.ModManager.Tests
                     SearchOption.AllDirectories)
                 .OrderBy(path => path, StringComparer.Ordinal)
                 .ToList();
-            Assert(manifestPaths.Count == 16, "exactly 16 first-party manifests should be release-audited");
+            Assert(manifestPaths.Count == 15, "exactly 15 first-party manifests should be release-audited");
 
             var manifests = new Dictionary<string, ModManifest>(StringComparer.OrdinalIgnoreCase);
             foreach (var path in manifestPaths)

@@ -114,7 +114,6 @@
       "description": "Declared required providers and the installed optional UGC provider resolve exactly once; an absent optional dependency does not block the consumer; singleton conflicts, multiple-provider ordering, deterministic selection, and early release are enforced.",
       "behaviors": [
         "required-provider-singletons",
-        "optional-present-provider",
         "optional-absent-nonblocking",
         "singleton-conflict",
         "multiple-cardinality",
@@ -149,7 +148,6 @@
         "prompt-overrides",
         "robot-targets",
         "creator-sessions",
-        "ugc-asset-overrides",
         "world-registrations"
       ]
     }

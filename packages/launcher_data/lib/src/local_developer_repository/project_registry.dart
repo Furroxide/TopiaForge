@@ -135,9 +135,6 @@ extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
     try {
       _copyDirectory(templateDir, staging, excludeUnityGenerated: true);
 
-      // Install the same authored companion package used by mod scaffolds.
-      await _ensureUgcCompanionPackage(staging.path);
-
       final readme = File(p.join(staging.path, 'README.md'));
       if (FileSystemEntity.typeSync(readme.path, followLinks: false) ==
           FileSystemEntityType.file) {

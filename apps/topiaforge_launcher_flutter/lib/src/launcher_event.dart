@@ -255,7 +255,7 @@ class DeveloperEnvironmentChecked extends LauncherEvent {
   const DeveloperEnvironmentChecked();
 }
 
-/// Runs the safe auto-fixes (runSetup): installs the UGC sidecar deps, ensures folders.
+/// Runs the safe auto-fixes (runSetup): ensures developer folders.
 class DeveloperSetupRequested extends LauncherEvent {
   const DeveloperSetupRequested();
 }
@@ -385,73 +385,3 @@ class DeveloperSampleProjectCreated extends LauncherEvent {
   const DeveloperSampleProjectCreated();
 }
 
-/// Saves UGC live-sync settings into the project (and deploys them to the detected install). Only the provided
-/// fields change; the rest are kept from the current project settings.
-class DeveloperUgcSettingsSaved extends LauncherEvent {
-  const DeveloperUgcSettingsSaved({
-    this.transport,
-    this.watchFolder,
-    this.editorUrl,
-    this.documentUrl,
-    this.syncServerUrl,
-    this.sceneId,
-    this.autoConnectOnStart,
-  });
-
-  final String? transport;
-  final String? watchFolder;
-  final String? editorUrl;
-  final String? documentUrl;
-  final String? syncServerUrl;
-  final String? sceneId;
-  final bool? autoConnectOnStart;
-}
-
-/// Writes the current project's UGC live-sync config into the detected game install.
-class DeveloperUgcConfigDeployed extends LauncherEvent {
-  const DeveloperUgcConfigDeployed();
-}
-
-/// Opens the configured UGC watch folder in the OS file manager.
-class DeveloperWatchFolderOpened extends LauncherEvent {
-  const DeveloperWatchFolderOpened();
-}
-
-/// Starts or stops the Automerge publisher (Node sidecar) in watch mode for the current watch folder.
-class DeveloperUgcPublishToggled extends LauncherEvent {
-  const DeveloperUgcPublishToggled();
-}
-
-/// Stops UGC live-sync end-to-end: publisher process, game-side session,
-/// captured document, and stale status.
-class DeveloperUgcCleanupRequested extends LauncherEvent {
-  const DeveloperUgcCleanupRequested();
-}
-
-/// Refreshes the cockpit's live diagnostics: reads the game's status handshake and the watch-folder scenes.
-class DeveloperUgcStatusRefreshed extends LauncherEvent {
-  const DeveloperUgcStatusRefreshed();
-}
-
-/// Internal: one line of output from the running Automerge publisher. The launcher parses the machine-readable
-/// `TOPIAFORGE_UGC_SESSION {json}` line to auto-detect the live document URL and pre-populate the game's config.
-class DeveloperUgcSidecarOutput extends LauncherEvent {
-  const DeveloperUgcSidecarOutput(this.line, this.publisherSessionId);
-
-  final String line;
-  final int publisherSessionId;
-}
-
-/// Internal: reports that one publisher process exited.
-class DeveloperUgcPublisherExited extends LauncherEvent {
-  const DeveloperUgcPublisherExited(this.publisherSessionId, this.exitCode);
-
-  final int publisherSessionId;
-  final int exitCode;
-}
-
-/// One-button "Go Live": runs setup, starts the publisher (Automerge), deploys the auto-detected config with
-/// auto-connect, and launches the game — the zero-manual-scripts path.
-class DeveloperUgcGoLive extends LauncherEvent {
-  const DeveloperUgcGoLive();
-}

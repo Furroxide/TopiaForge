@@ -33,7 +33,7 @@ Start with the walkthrough: [docs/YourFirstMod.md](docs/YourFirstMod.md). The re
 `topiaforge` CLI at its root — add it to `PATH` and you're set (see
 [docs/Modding.md → Install the CLI](docs/Modding.md#install-the-cli)). Validate your machine first
 (`topiaforge setup` to auto-fix what it safely can, or `topiaforge doctor` to audit read-only). Only the .NET SDK
-is required to build mods; Node/Unity are optional (UGC live-sync). See [docs/Modding.md](docs/Modding.md) for
+is required to build mods; Node/Unity are optional. See [docs/Modding.md](docs/Modding.md) for
 the full reference. Build branded in-game UI for Robotopia (windows, fullscreen tools, graph
 editors, HUDs, modals, and toasts) with the TopiaForge UI kit — see
 [docs/UiKit.md](docs/UiKit.md) and the F8 gallery mod. Add safe creator catalogs and reversible

@@ -94,7 +94,7 @@ Machine setup and the resumable command sequence are in
       bounded HTTP, all adversarial archive cases, and interruption before and
       after every journal transition on all three install layouts.
 - [ ] Runtime repair rejects links/special files, preserves modes, stages atomically, and restores on failure.
-- [ ] UGC inspection uses strict bounded UTF-8/JSON/gzip, typed issues, stable regular files, deterministic selection,
+- [ ] World inspection uses strict bounded UTF-8/JSON/gzip, typed issues, stable regular files, deterministic selection,
       structural validation, race detection, and surfaced errors.
 - [ ] Diagnostics enforce 4 MiB/log and 16 MiB total caps, streaming tails, link rejection, secret redaction,
       truncation metadata, hashes, and atomic ZIP replacement.
