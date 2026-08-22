@@ -83,6 +83,25 @@ dotnet run --project src/TopiaForge.GameCompat.Extractor -- extract --out surfac
 Managed-dir resolution order: `--managed <dir>`, `$RobotopiaManagedDir`, `$RobotopiaGameDir\Robotopia_Data\Managed`,
 then the default launcher install path.
 
+## Bumping the pinned build
+
+A Robotopia build bump touches ~34 files: the pin metadata and its zero-padded archive names, the release
+policy id, every mod manifest's game range, the scaffolder default, runtime version constants, acceptance
+metadata, and several build-locked test fixtures and guards. Doing that by hand is how a site gets missed.
+
+```
+topiaforge compat bump --build <id>   --windows-sha256 <hex> --mac-sha256 <hex>   --files-manifest-sha256 <hex> --file-count <n> --game-exe-sha256 <hex>   [--dry-run]
+```
+
+The hashes are not derivable from the repository, so they are supplied explicitly; the local install's
+values can be read with `tools/release/verify-robotopia-install.ps1`. Everything else is derived from the
+new build id.
+
+Afterwards the command **re-scans every file it owns for the old build id** and fails if any remains, so a
+half-bumped tree is reported rather than committed. Two things it deliberately does not do: it never
+touches `bindings/` or the baseline (that is the reviewed ritual below), and it does not move the SDK-only
+range ceiling, which is a judgement call about how far ahead to trust an unverified build.
+
 ## The baseline-refresh ritual (after an intentional Robotopia adaptation)
 
 A baseline bump means "we accept this new Robotopia surface as the known-good". It is a **reviewed act**, never a

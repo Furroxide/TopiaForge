@@ -172,6 +172,9 @@ extension _HelpCommand on _TopiaForgeCli {
       '  topiaforge compat [--json]             Resolve declared game bindings against the install.',
     );
     stdout.writeln(
+      '  topiaforge compat bump --build <id>    Retarget every pinned Robotopia build reference.',
+    );
+    stdout.writeln(
       '  topiaforge acceptance run              Run the instrumented Robotopia V1 live gate.',
     );
     stdout.writeln('');
