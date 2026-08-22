@@ -98,6 +98,9 @@ extension _TopiaForgeEnvironmentCommands on _TopiaForgeCli {
   }
 
   Future<int> _compat(List<String> args) async {
+    if (args.firstOrNull == 'bump') {
+      return _compatBump(args.skip(1).toList());
+    }
     final result = await _runGameCompat(
       managed: _option(args, '--managed'),
       json: args.contains('--json'),
@@ -115,6 +118,85 @@ extension _TopiaForgeEnvironmentCommands on _TopiaForgeCli {
       stderr.write(err);
     }
     return result.exitCode;
+  }
+
+  /// Retargets every derivable reference to the pinned Robotopia build.
+  ///
+  /// Bindings and the compatibility baseline are deliberately untouched: those
+  /// are a reviewed act, so this prints the ritual instead of guessing at it.
+  Future<int> _compatBump(List<String> args) async {
+    int requireInt(String flag) {
+      final raw = _option(args, flag);
+      final value = raw == null ? null : int.tryParse(raw);
+      if (value == null) {
+        throw UsageError('$flag requires a positive integer.');
+      }
+      return value;
+    }
+
+    String requireValue(String flag) {
+      final raw = _option(args, flag);
+      if (raw == null || raw.isEmpty) {
+        throw UsageError('$flag is required.');
+      }
+      return raw;
+    }
+
+    final dryRun = args.contains('--dry-run');
+    final GameBuildBumpResult result;
+    try {
+      result = bumpRobotopiaGameBuild(
+        repositoryRoot: _releaseRepositoryRoot(),
+        toBuildId: requireInt('--build'),
+        windowsArchiveSha256: requireValue('--windows-sha256'),
+        macArchiveSha256: requireValue('--mac-sha256'),
+        filesManifestSha256: requireValue('--files-manifest-sha256'),
+        filesManifestFileCount: requireInt('--file-count'),
+        gameExecutableSha256: requireValue('--game-exe-sha256'),
+        dryRun: dryRun,
+      );
+    } on ArgumentError catch (error) {
+      throw UsageError('${error.name}: ${error.message}');
+    } on StateError catch (error) {
+      stderr.writeln(error.message);
+      return 1;
+    }
+
+    final prefix = dryRun ? 'Would update' : 'Updated';
+    stdout.writeln(
+      '$prefix ${result.edits.length} file(s), '
+      '${result.totalReplacements} reference(s): '
+      'build ${result.fromBuildId} -> ${result.toBuildId}.',
+    );
+    for (final edit in result.edits) {
+      stdout.writeln('  ${edit.path} (${edit.replacements})');
+    }
+    if (!result.isComplete) {
+      stderr.writeln(
+        'Incomplete bump: these files still mention build '
+        '${result.fromBuildId}:',
+      );
+      for (final path in result.residual) {
+        stderr.writeln('  $path');
+      }
+      return 1;
+    }
+    if (dryRun) {
+      return 0;
+    }
+    stdout.writeln('');
+    stdout.writeln('Bindings and the compatibility baseline are NOT bumped.');
+    stdout.writeln('Next, against an installed build ${result.toBuildId}:');
+    stdout.writeln('  1. gamecompat verify   (resolve every declared binding)');
+    stdout.writeln('  2. adapt any binding the report flags');
+    stdout.writeln('  3. gamecompat baseline (review the printed surface diff)');
+    stdout.writeln('  4. re-run the offline test gate');
+    stdout.writeln('');
+    stdout.writeln(
+      'Review by hand: the SDK-only ceiling in mod manifests and '
+      'FirstPartyManifestTests is a judgement call, not a derivation.',
+    );
+    return 0;
   }
 
   Future<ProcessResult?> _runGameCompat({

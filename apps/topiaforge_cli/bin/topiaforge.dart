@@ -10,6 +10,7 @@ import 'package:topiaforge/src/launcher_update_index_builder.dart';
 import 'package:topiaforge/src/bounded_file_reader.dart';
 import 'package:topiaforge/src/creator_acceptance_models.dart';
 import 'package:topiaforge/src/creator_acceptance_runner.dart';
+import 'package:topiaforge/src/game_build_bump.dart';
 import 'package:topiaforge/src/game_compat_executable_locator.dart';
 import 'package:topiaforge/src/live_acceptance_models.dart';
 import 'package:topiaforge/src/live_acceptance_runner.dart';
