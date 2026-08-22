@@ -349,7 +349,6 @@ ${references.join('\n')}
         '';
   }
 
-
   String _assemblyName(String id) => id
       .split(RegExp(r'[^A-Za-z0-9]+'))
       .where((part) => part.isNotEmpty)

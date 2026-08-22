@@ -25,7 +25,6 @@ class DeveloperProject {
   final VersionRange loaderVersionRange;
   final UnityCompanionSettings unityCompanion;
 
-
   factory DeveloperProject.fromJson(Map<String, Object?> json) {
     return DeveloperProject(
       schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 0,
@@ -373,7 +372,6 @@ class ModScaffoldOptions {
   final String? homepage;
   final String? source;
   final bool includeUnityCompanion;
-
 
   /// Applies the specified overrides on top of [manifest] (a template-default or generated manifest map),
   /// returning the merged `topiaforge.mod.json` map. List/map fields replace wholesale when specified.

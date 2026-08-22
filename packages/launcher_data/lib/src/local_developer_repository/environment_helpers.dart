@@ -33,7 +33,6 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
           : 'Unity Editor: $unityEditor',
     );
 
-
     return DeveloperDoctorReport(
       projectRoot: workspace.projectRoot,
       messages: messages,
@@ -76,7 +75,6 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
         ),
       );
     }
-
 
     // Unity — only needed to build custom-world AssetBundles.
     final unityHub = await _findUnityHub();
@@ -141,7 +139,6 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
     if (error case StateError(:final message)) return message.toString();
     return 'The .NET SDK could not be validated (${error.runtimeType}).';
   }
-
 
   Future<DeveloperSetupResult> _runSetup() async {
     final actions = <String>[];

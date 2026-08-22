@@ -18,8 +18,7 @@ class DeveloperScreen extends StatelessWidget {
       children: [
         ScreenHeader(
           title: 'Developer',
-          subtitle:
-              'Environment, project lifecycle, and references.',
+          subtitle: 'Environment, project lifecycle, and references.',
           trailing: Wrap(
             spacing: 8,
             runSpacing: 8,

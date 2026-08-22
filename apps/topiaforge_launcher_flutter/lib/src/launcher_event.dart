@@ -384,4 +384,3 @@ class DeveloperDoctorRequested extends LauncherEvent {
 class DeveloperSampleProjectCreated extends LauncherEvent {
   const DeveloperSampleProjectCreated();
 }
-

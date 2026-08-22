@@ -51,10 +51,7 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     final updateClose = _updateStatusSub?.cancel();
     _updateStatusSub = null;
     final blocClose = super.close();
-    return Future.wait<void>([
-      ?updateClose,
-      blocClose,
-    ]).whenComplete(() async {
+    return Future.wait<void>([?updateClose, blocClose]).whenComplete(() async {
       await _updateRepository?.dispose();
       await _repository.dispose();
     });

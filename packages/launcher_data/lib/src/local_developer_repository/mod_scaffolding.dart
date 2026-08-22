@@ -324,8 +324,6 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
     );
     return manifest.validate();
   }
-
-
 }
 
 String _withExactSdkPackageReferences(

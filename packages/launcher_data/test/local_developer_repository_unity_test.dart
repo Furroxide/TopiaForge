@@ -30,95 +30,88 @@ void main() {
     }
   });
 
-  test(
-    'createUnityProject copies the template and registers it',
-    () async {
-      final templateDir = Directory(
-        p.join(repoRoot.path, 'templates', 'TopiaForge.UnityWorldTemplate'),
-      );
-      Directory(
-        p.join(templateDir.path, 'Packages'),
-      ).createSync(recursive: true);
-      File(
-        p.join(templateDir.path, 'Packages', 'vpm-manifest.json'),
-      ).writeAsStringSync(
-        '{"dependencies":{"io.github.furroxide.topiaforge.world-companion":"^0.1.0"}}',
-      );
-      Directory(p.join(templateDir.path, 'ProjectSettings')).createSync();
-      File(
-        p.join(templateDir.path, 'ProjectSettings', 'ProjectVersion.txt'),
-      ).writeAsStringSync('m_EditorVersion: 6000.0.23f1\n');
-      File(
-        p.join(templateDir.path, 'README.md'),
-      ).writeAsStringSync('# Template\n');
-      File(
-        p.join(templateDir.path, '.gitignore'),
-      ).writeAsStringSync('Library/\n');
-      File(
-        p.join(templateDir.path, 'Assets', 'keep.txt'),
-      ).createSync(recursive: true);
-      for (final generated
-          in 'Library/cache.bin,Build/game.bin,Logs/editor.log,'
-                  'UserSettings/settings.asset,Generated.csproj,Generated.sln'
-              .split(',')) {
-        File(p.join(templateDir.path, generated))
-          ..createSync(recursive: true)
-          ..writeAsStringSync('generated');
-      }
-      final projects = await repository.createUnityProject(
-        parentDirectory: root.path,
-        name: 'My World',
-      );
+  test('createUnityProject copies the template and registers it', () async {
+    final templateDir = Directory(
+      p.join(repoRoot.path, 'templates', 'TopiaForge.UnityWorldTemplate'),
+    );
+    Directory(p.join(templateDir.path, 'Packages')).createSync(recursive: true);
+    File(
+      p.join(templateDir.path, 'Packages', 'vpm-manifest.json'),
+    ).writeAsStringSync(
+      '{"dependencies":{"io.github.furroxide.topiaforge.world-companion":"^0.1.0"}}',
+    );
+    Directory(p.join(templateDir.path, 'ProjectSettings')).createSync();
+    File(
+      p.join(templateDir.path, 'ProjectSettings', 'ProjectVersion.txt'),
+    ).writeAsStringSync('m_EditorVersion: 6000.0.23f1\n');
+    File(
+      p.join(templateDir.path, 'README.md'),
+    ).writeAsStringSync('# Template\n');
+    File(
+      p.join(templateDir.path, '.gitignore'),
+    ).writeAsStringSync('Library/\n');
+    File(
+      p.join(templateDir.path, 'Assets', 'keep.txt'),
+    ).createSync(recursive: true);
+    for (final generated
+        in 'Library/cache.bin,Build/game.bin,Logs/editor.log,'
+                'UserSettings/settings.asset,Generated.csproj,Generated.sln'
+            .split(',')) {
+      File(p.join(templateDir.path, generated))
+        ..createSync(recursive: true)
+        ..writeAsStringSync('generated');
+    }
+    final projects = await repository.createUnityProject(
+      parentDirectory: root.path,
+      name: 'My World',
+    );
 
-      expect(projects, hasLength(1));
-      final created = projects.single;
-      expect(created.kind, ProjectKind.unityWorld);
-      expect(created.unityVersion, '6000.0.23f1');
+    expect(projects, hasLength(1));
+    final created = projects.single;
+    expect(created.kind, ProjectKind.unityWorld);
+    expect(created.unityVersion, '6000.0.23f1');
+    expect(
+      File(p.join(created.path, 'Packages', 'vpm-manifest.json')).existsSync(),
+      isTrue,
+    );
+    expect(
+      File(p.join(created.path, 'README.md')).readAsStringSync(),
+      contains('My World'),
+    );
+    expect(File(p.join(created.path, '.gitignore')).existsSync(), isTrue);
+    expect(
+      File(p.join(created.path, 'Assets', 'keep.txt')).existsSync(),
+      isTrue,
+    );
+    for (final generated
+        in 'Library,Build,Logs,UserSettings,Generated.csproj,Generated.sln'
+            .split(',')) {
       expect(
-        File(
-          p.join(created.path, 'Packages', 'vpm-manifest.json'),
-        ).existsSync(),
-        isTrue,
-      );
-      expect(
-        File(p.join(created.path, 'README.md')).readAsStringSync(),
-        contains('My World'),
-      );
-      expect(File(p.join(created.path, '.gitignore')).existsSync(), isTrue);
-      expect(
-        File(p.join(created.path, 'Assets', 'keep.txt')).existsSync(),
-        isTrue,
-      );
-      for (final generated
-          in 'Library,Build,Logs,UserSettings,Generated.csproj,Generated.sln'
-              .split(',')) {
-        expect(
-          FileSystemEntity.typeSync(
-            p.join(created.path, generated),
-            followLinks: false,
-          ),
-          FileSystemEntityType.notFound,
-          reason: generated,
-        );
-      }
-      expect(
-        File(
-          p.join(created.path, 'Packages', 'vpm-resolver-repos.json'),
-        ).existsSync(),
-        isFalse,
-        reason: 'new projects must not embed a machine-local repository path',
-      );
-
-      expect(
-        () => repository.createUnityProject(
-          parentDirectory: root.path,
-          name: 'Other',
-          template: 'avatar',
+        FileSystemEntity.typeSync(
+          p.join(created.path, generated),
+          followLinks: false,
         ),
-        throwsA(isA<StateError>()),
+        FileSystemEntityType.notFound,
+        reason: generated,
       );
-    },
-  );
+    }
+    expect(
+      File(
+        p.join(created.path, 'Packages', 'vpm-resolver-repos.json'),
+      ).existsSync(),
+      isFalse,
+      reason: 'new projects must not embed a machine-local repository path',
+    );
+
+    expect(
+      () => repository.createUnityProject(
+        parentDirectory: root.path,
+        name: 'Other',
+        template: 'avatar',
+      ),
+      throwsA(isA<StateError>()),
+    );
+  });
 
   test(
     'resolveUnityProject rejects malformed VPM state without replacing it',

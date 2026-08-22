@@ -101,5 +101,4 @@ extension LauncherDeveloperActions on LauncherBloc {
       add(const DeveloperProjectsRefreshed());
     });
   }
-
 }
