@@ -58,7 +58,6 @@ export default defineConfig({
             { label: 'Core services', slug: 'guides/core-services' },
             { label: 'In-game UI', slug: 'guides/ui' },
             { label: 'Specialist modules', slug: 'guides/modules' },
-            { label: 'Creator Tools', slug: 'guides/creator-tools' },
             { label: 'Sandbox creator mode', slug: 'guides/sandbox' },
             { label: 'Multiplayer preview', slug: 'guides/multiplayer' },
             { label: 'RobotKit', slug: 'guides/robotkit' },
