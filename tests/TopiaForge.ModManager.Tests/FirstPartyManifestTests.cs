@@ -23,7 +23,7 @@ namespace TopiaForge.ModManager.Tests
                     SearchOption.AllDirectories)
                 .OrderBy(path => path, StringComparer.Ordinal)
                 .ToList();
-            Assert(manifestPaths.Count == 15, "exactly 15 first-party manifests should be release-audited");
+            Assert(manifestPaths.Count == 14, "exactly 14 first-party manifests should be release-audited");
 
             var manifests = new Dictionary<string, ModManifest>(StringComparer.OrdinalIgnoreCase);
             foreach (var path in manifestPaths)
@@ -100,19 +100,8 @@ namespace TopiaForge.ModManager.Tests
             AssertCapabilities(
                 manifests["io.github.furroxide.topiaforge.sandbox"],
                 "network", "remote-ai", "player-token", "player-control");
-            AssertCapabilities(
-                manifests["io.github.furroxide.topiaforge.creatortools"],
-                "network", "remote-ai", "player-token", "player-control", "physics");
-            AssertLacksCapabilities(
-                manifests["io.github.furroxide.topiaforge.creatortools"],
-                "microphone", "speech-to-text");
             Assert(manifests["io.github.furroxide.topiaforge.creatorcontent"].Category == "Framework",
                 "Creator Content must ship as a normal framework dependency");
-            Assert(manifests["io.github.furroxide.topiaforge.creatortools"].Category == "DevTool",
-                "Creator Tools must remain an explicitly packaged DevTool");
-            Assert(manifests["io.github.furroxide.topiaforge.creatortools"].Dependencies.ContainsKey(
-                    "io.github.furroxide.topiaforge.creatorcontent"),
-                "Creator Tools must require the Creator Content framework");
             AssertCapabilities(
                 manifests["io.github.furroxide.topiaforge.zombies"],
                 "navigation", "scene-management", "network", "remote-ai", "player-token", "microphone", "speech-to-text");
@@ -280,12 +269,11 @@ namespace TopiaForge.ModManager.Tests
                 || manifest.Id == "io.github.furroxide.topiaforge.sandbox"
                 || manifest.Id == "io.github.furroxide.topiaforge.zombies"
                 || manifest.Id == "io.github.furroxide.topiaforge.opposite-day"
-                || manifest.Id == "io.github.furroxide.topiaforge.creatortools"
                 || manifest.Id == "io.github.furroxide.topiaforge.uigallery")
             {
                 // Linked sources ship inside the safe consumer's own assembly, so they must clear the same
-                // bar as code that physically lives in the mod directory. mods/Shared/CreatorTools (23 files)
-                // is compiled into both CreatorTools and Sandbox and was previously scanned by neither.
+                // bar as code that physically lives in the mod directory. The creator workbench
+                // (mods/TopiaForge.Sandbox/CreatorTools) is scanned with the rest of Sandbox.
                 ValidateSafeConsumerSource(
                     manifest,
                     project,

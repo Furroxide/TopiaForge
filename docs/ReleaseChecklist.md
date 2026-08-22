@@ -130,7 +130,7 @@ Machine setup and the resumable command sequence are in
       other expressions require safe repeatable `--license-file` inputs.
 - [ ] Three VPM packages/listings build twice and pass direct manifest, license, notice, target, and hash inspection.
 - [ ] One canonical deterministic `ecosystem-dist` contains exactly 15 released mods plus three VPM packages;
-      UiGallery remains validated but absent, Creator Tools is explicitly packed, and every platform consumes
+      UiGallery remains validated but absent, and every platform consumes
       identical nested bytes.
 - [ ] Strict registry schema/semantic/dependency/license/package/all-version validation passes.
 - [ ] Merge-base/index comparison proves append-only history: no deletion, rename, reorder, mutation, downgrade, or

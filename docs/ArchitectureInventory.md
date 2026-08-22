@@ -28,7 +28,7 @@ tests verify their exact identities and hashes instead of shadowing them in the
 plugin directory. Launcher repair and CLI release packaging consume the same
 inventory from `launcher_data`.
 
-The primary solution builds sixteen first-party mods: Chronos, CreatorContent, CreatorTools, GravityGun, Multiplayer,
+The primary solution builds fourteen first-party mods: Chronos, CreatorContent, GravityGun, Multiplayer,
 NoFeedbackUrl, OppositeDay, PerfFixes, Performance, Prompts, RobotKit, Sandbox, UiGallery, Worlds, and
 Zombies. Assets are now a manager-owned core service,
 not a globally mutable framework mod. Runtime dependencies are expressed only through `topiaforge.mod.json`;

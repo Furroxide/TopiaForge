@@ -73,7 +73,7 @@ extensions. See [Core services](CoreServices.md) for the complete service map an
 Creator Content, RobotKit, Worlds, Chronos, Prompts, and the multiplayer preview are separate
 Unity-free module contracts. Add a module with `topiaforge mod add <module>` so its compile-time
 package and runtime manifest dependency stay in sync. See [Specialist modules](Modules.md) and the
-[Creator Tools guide](CreatorTools.md).
+[Sandbox guide](Sandbox.md).
 
 ## Errors, queries, and cancellation
 
@@ -131,7 +131,7 @@ staged when required and take effect after a Robotopia restart.
 - [Multiplayer API preview](Multiplayer.md)
 - [Core services](CoreServices.md)
 - [Specialist modules](Modules.md)
-- [Creator Tools](CreatorTools.md)
+- [Sandbox](Sandbox.md)
 - [Test a mod](TestingMods.md)
 - [Development loop](CliDevLoop.md)
 - [Diagnostics](Diagnostics.md)

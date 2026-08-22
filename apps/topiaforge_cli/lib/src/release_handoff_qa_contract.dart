@@ -337,7 +337,7 @@ void _validateCreatorQa(
   }
   // v2 binds the run to the exact interactive session and loaded payload, so
   // a descriptor cannot be replayed from a different run or a different build
-  // of CreatorTools.
+  // of the creator-workbench package.
   final sessionId = qa['lastRunSessionId'];
   if (sessionId is! String ||
       sessionId.trim().isEmpty ||
@@ -346,7 +346,7 @@ void _validateCreatorQa(
   }
   final receipt = qa['creatorPackageReceipt'];
   if (receipt is! Map) {
-    throw StateError('Windows Creator QA has no CreatorTools package receipt.');
+    throw StateError('Windows Creator QA has no creator-workbench package receipt.');
   }
   final receiptMap = receipt.cast<String, Object?>();
   final criticalFiles = receiptMap['criticalFiles'];

@@ -29,9 +29,11 @@ final class CreatorAcceptanceOptions {
     this.skipLaunch = false,
   });
 
-  /// Canonical id of the mod that hosts the global F5 workbench.
+  /// Canonical id of the mod that hosts the creator workbench. The standalone
+  /// global-host package was retired with the Robotopia Creator release; the
+  /// workbench now ships inside Sandbox.
   static const String creatorModId =
-      'io.github.furroxide.topiaforge.creatortools';
+      'io.github.furroxide.topiaforge.sandbox';
 
   /// First-party ids are stored under a shortened config stem by
   /// `ManagerPaths.GetConfigPath`; mirror that derivation exactly.
@@ -272,7 +274,7 @@ final class CreatorAcceptanceMarker {
   final String detail;
 }
 
-/// Canonical marker prefix emitted by the native CreatorTools recorder.
+/// Canonical marker prefix emitted by the native creator-workbench recorder.
 const String creatorMarkerPrefix = 'TF-CREATOR';
 
 final RegExp _creatorPassPattern = RegExp(

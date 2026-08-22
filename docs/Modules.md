@@ -74,7 +74,7 @@ local visual event projects, and routes one shared configurable F5 action to the
 Factories run through the registering mod's own safe asset/entity services. Explicit reversible native adapters use
 the separate owner-bound `ICreatorSceneAdapterRegistry`; the provider wraps their targets, bounds discovery, validates
 safe duplicate recipes, and enforces exclusive temporary edits. Arbitrary native scans, cross-package loading, and
-custom graph callbacks are rejected. See [Creator Tools](CreatorTools.md).
+custom graph callbacks are rejected. See [Sandbox](Sandbox.md).
 
 ## Prompts
 

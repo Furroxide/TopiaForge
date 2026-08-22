@@ -3,7 +3,7 @@
 All first-party mods use the same manifest/package contracts available to community authors. Provider implementations
 may use native APIs internally, while safe consumers receive only owner-bound contracts. Every release candidate
 validates all sixteen source mods. Normal `pack --all` output contains fourteen non-DevTool packages; release
-automation then adds the optional Creator Tools package explicitly. The developer-only UiGallery is tested but is
+The developer-only UiGallery is tested but is
 the sole source mod excluded from the resulting fifteen-package release payload.
 
 Every manifest is schema version 5, constrains Robotopia to `0.0.2309`, constrains the loader and SDK to
@@ -15,7 +15,6 @@ every deterministic archive.
 | --- | --- | --- |
 | `io.github.furroxide.topiaforge.chronos` | Framework service for owner-tagged time leases | Exercise freeze, scale, input-driven time, bounded step, nested owners, a throwing subscriber, scene transition, and repeated disposal; confirm `timeScale` and `fixedDeltaTime` return to baseline. |
 | `io.github.furroxide.topiaforge.creatorcontent` | Framework provider for authenticated content catalogs, reversible creator sessions, explicit native adapters, local event projects, mutation isolation, and the single F5 router | Register/unregister custom sources and scene adapters, inject factory/adapter faults, verify source-qualified ids, bounded discovery, exclusive leases, safe duplicate recipes, and deterministic ordering, recover project/index writes, route competing hosts, and confirm exact-once LIFO cleanup across scene replacement and unload. |
-| `io.github.furroxide.topiaforge.creatortools` | Optional, first-install-disabled ordinary-game host for the shared Creator workbench | Enable only in a Creator profile; verify F5 eligibility, persistence-isolation acknowledgement, hide/reopen retention, native restoration, graph-only rollback, scene-transition cleanup, and ten leak-free lifecycles. See [Creator Tools](CreatorTools.md). |
 | `io.github.furroxide.topiaforge.gravitygun` | Physics grab/pull/throw gameplay | Acquire and release valid props/robots, reject invalid/destroyed targets, charge and throw, change scene while holding, unload/reload, and confirm beam/model/input cleanup. |
 | `io.github.furroxide.topiaforge.multiplayer` | Stable multiplayer contract preview and standalone loopback provider | Load in standalone, exercise generated registration and loopback commands/state/presentation, verify one logical execution on a listen-host-shaped rig, and confirm clean teardown. Live transport is not part of 1.0. |
 | `io.github.furroxide.topiaforge.no-feedback-url` | Isolated shutdown-feedback Harmony patch | Verify the page is allowed on the first launch and suppressed later; confirm unsupported bindings fail only this mod and patch teardown is idempotent. |

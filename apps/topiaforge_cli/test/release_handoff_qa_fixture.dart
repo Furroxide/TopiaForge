@@ -138,7 +138,7 @@ void writeReleaseQaFixtures({
         'sourceSha256': _digest('windows-x64:creator-package'),
         'criticalFiles': [
           {
-            'path': 'TopiaForge.CreatorTools.dll',
+            'path': 'TopiaForge.Sandbox.dll',
             'sha256': _digest('windows-x64:creator-assembly'),
           },
           {

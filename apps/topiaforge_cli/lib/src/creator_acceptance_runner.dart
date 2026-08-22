@@ -18,7 +18,7 @@ typedef CreatorChallengeGenerator = String Function();
 /// Drives one interactive Creator workbench acceptance run and writes evidence.
 ///
 /// This mirrors the live acceptance runner: a one-run 64-hex challenge is
-/// written into the CreatorTools config, the recorder echoes that challenge
+/// written into the creator-workbench config, the recorder echoes that challenge
 /// in every marker it emits from a real observed workbench transition, and the
 /// run is bound to the manager's exact session and package receipt.
 final class CreatorAcceptanceRunner {
@@ -70,8 +70,8 @@ final class CreatorAcceptanceRunner {
         FileSystemEntityType.file) {
       throw CreatorAcceptanceError(
         'TFCREATOR120',
-        'The CreatorTools package does not exist: $packagePath',
-        'Build the CreatorTools package and pass --creator-package.',
+        'The creator-workbench package does not exist: $packagePath',
+        'Build the creator-workbench package and pass --creator-package.',
       );
     }
     final expectedReceipt = readLiveAcceptancePackageReceipt(packagePath);
@@ -288,7 +288,7 @@ final class CreatorAcceptanceRunner {
     );
   }
 
-  /// Writes the one-run challenge into the CreatorTools config document.
+  /// Writes the one-run challenge into the creator-workbench config document.
   ///
   /// The recorder refuses to emit any marker unless this value is a 64-hex
   /// string, so evidence cannot be produced by a run the operator did not

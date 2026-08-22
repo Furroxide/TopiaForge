@@ -37,7 +37,7 @@ is required to build mods; Node/Unity are optional. See [docs/Modding.md](docs/M
 the full reference. Build branded in-game UI for Robotopia (windows, fullscreen tools, graph
 editors, HUDs, modals, and toasts) with the TopiaForge UI kit — see
 [docs/UiKit.md](docs/UiKit.md) and the F8 gallery mod. Add safe creator catalogs and reversible
-sessions with [Creator Content](docs/CreatorTools.md). The complete first-party catalog and
+sessions with [Creator Content](docs/CoreServices.md). The complete first-party catalog and
 candidate gameplay acceptance flows are in [docs/FirstPartyMods.md](docs/FirstPartyMods.md).
 
 TopiaForge 1.0 remains standalone-only, while the stable multiplayer API preview lets authors opt a V5 mod into
@@ -119,7 +119,7 @@ topiaforge pack
 ```
 
 `topiaforge pack --all` packs the non-DevTool first-party mods under `mods/`; add
-`--include-dev-mods` to include Creator Tools and UiGallery. Release packaging adds Creator Tools
+`--include-dev-mods` to include UiGallery. Release packaging
 explicitly while keeping UiGallery out of the player payload. `topiaforge unity pack-packages`
 regenerates the VPM listing in `dist/vpm/`.
 

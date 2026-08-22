@@ -21,7 +21,6 @@
   <Folder Name="/mods/">
     <Project Path="mods/TopiaForge.Chronos/TopiaForge.Chronos.csproj" />
     <Project Path="mods/TopiaForge.CreatorContent/TopiaForge.CreatorContent.csproj" />
-    <Project Path="mods/TopiaForge.CreatorTools/TopiaForge.CreatorTools.csproj" />
     <Project Path="mods/TopiaForge.Multiplayer/TopiaForge.Multiplayer.csproj" />
     <Project Path="mods/TopiaForge.GravityGun/TopiaForge.GravityGun.csproj" />
     <Project Path="mods/TopiaForge.NoFeedbackUrl/TopiaForge.NoFeedbackUrl.csproj" />
