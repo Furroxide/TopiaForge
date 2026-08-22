@@ -9,10 +9,10 @@
       "assembly": "GameCode",
       "declaringType": "RoboAPI.Agent+PlanRequest",
       "member": ".ctor",
-      "matchMode": "StaticFullName",
+      "matchMode": "PredicateOverload",
       "criticality": "Degraded",
       "feature": "Append owner-scoped directives to native autonomous robot planning requests",
-      "sourceRef": "mods/TopiaForge.Prompts/NativeRobotPromptBridge.cs:124",
+      "sourceRef": "mods/TopiaForge.Prompts/NativeRobotPromptBridge.cs:126",
       "parameters": [
         {
           "type": "ModelAsset",
@@ -24,19 +24,19 @@
         },
         {
           "type": "System.Collections.Generic.IReadOnlyList<System.String>",
-          "constrained": true
+          "constrained": false
         },
         {
           "type": "System.Collections.Generic.IReadOnlyList<System.String>",
-          "constrained": true
+          "constrained": false
         },
         {
           "type": "System.Single",
-          "constrained": true
+          "constrained": false
         },
         {
           "type": "System.String",
-          "constrained": true
+          "constrained": false
         }
       ]
     },
@@ -49,7 +49,7 @@
       "matchMode": "StaticFullName",
       "criticality": "Degraded",
       "feature": "Append owner-scoped directives without replacing the native system prompt",
-      "sourceRef": "mods/TopiaForge.Prompts/NativeRobotPromptBridge.cs:170",
+      "sourceRef": "mods/TopiaForge.Prompts/NativeRobotPromptBridge.cs:181",
       "returnType": "System.Collections.Generic.IReadOnlyList<System.String>"
     },
     {
@@ -60,7 +60,7 @@
       "matchMode": "StaticFullName",
       "criticality": "Degraded",
       "feature": "Native autonomous robot planning request bridge",
-      "sourceRef": "mods/TopiaForge.Prompts/NativeRobotPromptBridge.cs:124"
+      "sourceRef": "mods/TopiaForge.Prompts/NativeRobotPromptBridge.cs:126"
     }
   ]
 }
