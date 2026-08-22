@@ -101,7 +101,6 @@ abstract interface class LauncherRepository {
 
   /// Persists launcher self-update settings such as automatic checks and release channel.
   Future<void> saveLauncherUpdateSettings(LauncherUpdateSettings settings);
-
 }
 
 abstract interface class LauncherUpdateRepository {
@@ -157,8 +156,6 @@ abstract interface class DeveloperRepository {
     ModManifest manifest,
   );
 
-
-
   Future<DeveloperWorkspace> resolveDeveloperProject(
     String projectPath, {
     bool restore = true,
@@ -198,7 +195,6 @@ abstract interface class DeveloperRepository {
     String outputDir = '',
     String configuration = 'Release',
   });
-
 
   /// Lists the tracked developer projects (VCC-style registry, persisted to `developer_projects.json`).
   Future<List<RegisteredProject>> listProjects();

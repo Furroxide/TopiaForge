@@ -230,7 +230,6 @@ class _FakeLauncherRepository extends _InstallFakeLauncherRepository {
   Future<void> saveLauncherUpdateSettings(
     LauncherUpdateSettings settings,
   ) async {}
-
 }
 
 class _FakeDeveloperRepository implements DeveloperRepository {
@@ -361,7 +360,6 @@ class _FakeDeveloperRepository implements DeveloperRepository {
   }) {
     throw UnimplementedError();
   }
-
 
   @override
   Future<List<RegisteredProject>> listProjects() async => const [];

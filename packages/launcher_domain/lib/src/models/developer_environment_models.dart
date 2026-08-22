@@ -61,7 +61,6 @@ class EnvironmentReport {
 
   bool get developerReady => ofPurpose(ToolPurpose.develop).every((c) => c.ok);
 
-
   bool get customWorldUnityReady =>
       ofPurpose(ToolPurpose.customWorldUnity).every((c) => c.ok);
 
