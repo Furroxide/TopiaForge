@@ -74,16 +74,16 @@ namespace TopiaForge.ModManager.Tests
                 root, "mods", "TopiaForge.Worlds", "topiaforge.mod.json")));
 
             Assert(sandbox.RootElement.GetProperty("dependencies").GetProperty("io.github.furroxide.topiaforge.worlds").GetString()
-                    == ">=1.0.0-rc.1 <2.0.0",
+                    == ">=0.1.0-rc.1 <0.2.0",
                 "Sandbox must require the V1 Worlds contract");
             Assert(zombies.RootElement.GetProperty("dependencies").GetProperty("io.github.furroxide.topiaforge.worlds").GetString()
-                    == ">=1.0.0-rc.1 <2.0.0",
+                    == ">=0.1.0-rc.1 <0.2.0",
                 "Zombies must require the V1 Worlds contract");
-            Assert(worlds.RootElement.GetProperty("supportedSdkVersionRange").GetString() == ">=1.0.0-rc.1 <2.0.0",
+            Assert(worlds.RootElement.GetProperty("supportedSdkVersionRange").GetString() == ">=0.1.0-rc.1 <0.2.0",
                 "scene-coordinated framework mods must require the V1 SDK line");
-            Assert(sandbox.RootElement.GetProperty("version").GetString() == "1.0.0-rc.1"
-                && zombies.RootElement.GetProperty("version").GetString() == "1.0.0-rc.1"
-                && worlds.RootElement.GetProperty("version").GetString() == "1.0.0-rc.1",
+            Assert(sandbox.RootElement.GetProperty("version").GetString() == "0.1.0-rc.1"
+                && zombies.RootElement.GetProperty("version").GetString() == "0.1.0-rc.1"
+                && worlds.RootElement.GetProperty("version").GetString() == "0.1.0-rc.1",
                 "first-party runtime packages must move atomically to the V1 release candidate");
         }
 

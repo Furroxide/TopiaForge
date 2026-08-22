@@ -10,7 +10,7 @@ import 'package:topiaforge/src/release_policy.dart';
 import 'release_handoff_qa_fixture.dart';
 
 void main() {
-  const version = '1.0.0-rc.1';
+  const version = '0.1.0-rc.1';
   const targetSha = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
   const ecosystemSha = _testEcosystemSha;
   late Directory temp;
@@ -441,7 +441,7 @@ Future<void> _buildPlatformBundles({
     final archiveName = releaseArchiveForPlatform(platform);
     await contract.buildPlatformBundle(
       repositoryRoot: root,
-      version: '1.0.0-rc.1',
+      version: '0.1.0-rc.1',
       targetSha: targetSha,
       platform: platform,
       archivePath: p.join(assets.path, archiveName),

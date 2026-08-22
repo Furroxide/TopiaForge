@@ -1,6 +1,6 @@
 # Launcher updates
 
-TopiaForge `1.0.0-rc.1` introduces signed whole-package updates so a later
+TopiaForge `0.1.0-rc.1` introduces signed whole-package updates so a later
 candidate can validate an installed `rc.1` to `rc.2` upgrade. Updates are
 explicitly confirmed, never silent, and never elevate privileges.
 
@@ -85,7 +85,7 @@ appropriate to the already-installed trust root.
 
 ## `rc.2` validation procedure
 
-Before creating `1.0.0-rc.2`:
+Before creating `0.1.0-rc.2`:
 
 1. Reuse the existing Ed25519 update key; do not rotate it for this test.
 2. Confirm release policy still forbids every unsigned/ad-hoc code-signing

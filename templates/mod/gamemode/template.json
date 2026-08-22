@@ -8,7 +8,7 @@
     "tags": ["gameplay", "gamemode"],
     "capabilities": ["world-service", "hud"],
     "dependencies": {
-      "io.github.furroxide.topiaforge.worlds": ">=1.0.0-rc.1 <2.0.0"
+      "io.github.furroxide.topiaforge.worlds": ">=0.1.0-rc.1 <0.2.0"
     },
     "loadAfter": ["io.github.furroxide.topiaforge.worlds"],
     "worldGamemodes": [

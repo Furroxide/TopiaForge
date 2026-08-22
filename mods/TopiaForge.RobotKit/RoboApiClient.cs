@@ -19,7 +19,7 @@ namespace TopiaForge.RobotKit
     // consumer's deterministic fallback always stands.
     //
     // UNAPPROVED THIRD-PARTY DEPENDENCY. This endpoint belongs to Tomato Cake, not to TopiaForge. As of the
-    // 1.0.0-rc.1 candidate no authorization for these mod-layer calls has been obtained from them, and their
+    // 0.1.0-rc.1 candidate no authorization for these mod-layer calls has been obtained from them, and their
     // retention, training-use, geographic-processing, account-linkage, rate-limit, abuse-handling, and cost policies
     // are unknown to this repository. Do not document or imply otherwise. See docs/PrivacyAndCapabilities.md and the
     // P0-PRIV-01 gate in docs/LaunchBlockers.md.

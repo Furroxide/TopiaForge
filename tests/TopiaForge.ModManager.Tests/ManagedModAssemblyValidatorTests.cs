@@ -15,7 +15,7 @@ namespace TopiaForge.ModManager.Tests
     {
         private const string FixtureAssembly = "TopiaForge.ValidTestMod.dll";
         private const string SdkAssemblyName = "TopiaForge.Mods.Abstractions";
-        private static readonly Version CompatibleSdkVersion = new Version(1, 0, 0, 0);
+        private static readonly Version CompatibleSdkVersion = new Version(0, 1, 0, 0);
 
         public static void Run(string root)
         {
@@ -120,7 +120,7 @@ namespace TopiaForge.ModManager.Tests
                 SdkAssemblyName,
                 addCompatibleSdkReference: false);
             var manifest = NewManifest("IncompatibleSdk.dll", "Synthetic.IncompatibleSdkMod");
-            AssertContains(ManagedModAssemblyValidator.Validate(package, manifest), "V1 requires unsigned TopiaForge.Mods.Abstractions 1.0.0.0");
+            AssertContains(ManagedModAssemblyValidator.Validate(package, manifest), "the loader requires unsigned TopiaForge.Mods.Abstractions 0.1.0.0");
 
             package = CreateEmptyPackage(root, "tfm-incompatible");
             WriteSyntheticAssembly(
@@ -248,8 +248,8 @@ namespace TopiaForge.ModManager.Tests
                 EntryAssembly = assembly,
                 EntryType = type,
                 SupportedGameVersionRange = "*",
-                SupportedLoaderVersionRange = ">=1.0.0-rc.1 <2.0.0",
-                SupportedSdkVersionRange = ">=1.0.0-rc.1 <2.0.0"
+                SupportedLoaderVersionRange = ">=0.1.0-rc.1 <0.2.0",
+                SupportedSdkVersionRange = ">=0.1.0-rc.1 <0.2.0"
             };
         }
 

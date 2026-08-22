@@ -9,7 +9,7 @@ details.
 
 ## Developer Certificate of Origin
 
-Contributions made after the `v1.0.0-rc.1` cutover must certify the
+Contributions made after the `v0.1.0-rc.1` cutover must certify the
 [Developer Certificate of Origin 1.1](DCO). Add a trailer to every commit:
 
 ```text
@@ -18,7 +18,7 @@ Signed-off-by: Your Name <your-email@example.com>
 
 Git can add it with `git commit --signoff`. The trailer states that you have
 the right to submit the work under the project's license; it is not a copyright
-assignment. Existing history before `v1.0.0-rc.1` is grandfathered.
+assignment. Existing history before `v0.1.0-rc.1` is grandfathered.
 
 ## Pull requests
 

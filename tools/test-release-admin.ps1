@@ -780,7 +780,7 @@ exit 0
                 release/release-policy.json `
                 release/platform-toolchains.json `
                 release/catalog.json `
-                release/notes/v1.0.0-rc.1.md `
+                release/notes/v0.1.0-rc.1.md `
                 tests/live-game-acceptance.json
             $testTree = (& git -C $repositoryRootForTest write-tree).Trim()
             $sourceSha = (& git -C $repositoryRootForTest `
@@ -1508,7 +1508,7 @@ exit 0
             completedAtUtc = "2026-07-31T09:01:00.000Z"
             gameDirectory = $GameDirectory
             package = Join-Path $testRoot `
-                "dev.topiaforge.sdk-acceptance-1.0.0-rc.1.topiaforgemod"
+                "dev.topiaforge.sdk-acceptance-0.1.0-rc.1.topiaforgemod"
             requiredCases = $windowsRequiredCases
             passedCases = $windowsPassedCases
             missingCases = @()
@@ -1621,7 +1621,7 @@ exit 0
             startedAtUtc = "2026-07-31T10:00:00.000Z"
             completedAtUtc = "2026-07-31T10:01:00.000Z"
             gameDirectory = "/mnt/c/Robotopia"
-            package = "/tmp/dev.topiaforge.sdk-acceptance-1.0.0-rc.1.topiaforgemod"
+            package = "/tmp/dev.topiaforge.sdk-acceptance-0.1.0-rc.1.topiaforgemod"
             succeeded = $true
             requiredCases = $expectedCases
             passedCases = $expectedCases
@@ -1845,7 +1845,7 @@ exit 0
                 ".github/repository-governance.json"
         ) -Destination $stageGovernanceDirectory
         Set-Content -LiteralPath (
-            Join-Path $stageNotesDirectory "v1.0.0-rc.1.md"
+            Join-Path $stageNotesDirectory "v0.1.0-rc.1.md"
         ) -Value "stage notes" -Encoding utf8NoBOM
         Set-Content -LiteralPath (Join-Path $stageRepository "tracked.txt") `
             -Value "tracked" -Encoding ascii
@@ -1888,11 +1888,11 @@ exit 0
         )
         $env:FAKE_STAGE_RELEASE_JSON = (
             [ordered]@{
-                tagName = "v1.0.0-rc.1"
+                tagName = "v0.1.0-rc.1"
                 isDraft = $true
                 isImmutable = $false
                 isPrerelease = $true
-                name = "TopiaForge 1.0.0-rc.1"
+                name = "TopiaForge 0.1.0-rc.1"
                 body = "stage notes"
                 assets = @()
                 targetCommitish = $stageSourceSha
@@ -1932,7 +1932,7 @@ if "%~1"=="api" if "%~2"=="repos/furroxide/TopiaForge/collaborators/admin/permis
   echo admin
   exit /b 0
 )
-if "%~1"=="api" if "%~2"=="repos/furroxide/TopiaForge/releases/tags/v1.0.0-rc.1" (
+if "%~1"=="api" if "%~2"=="repos/furroxide/TopiaForge/releases/tags/v0.1.0-rc.1" (
   echo %FAKE_STAGE_ASSET_JSON%
   exit /b 0
 )
@@ -1984,7 +1984,7 @@ if [[ ${1:-} == api &&
   exit 0
 fi
 if [[ ${1:-} == api &&
-      ${2:-} == repos/furroxide/TopiaForge/releases/tags/v1.0.0-rc.1 ]]; then
+      ${2:-} == repos/furroxide/TopiaForge/releases/tags/v0.1.0-rc.1 ]]; then
   printf '%s\n' "$FAKE_STAGE_ASSET_JSON"
   exit 0
 fi
@@ -2083,7 +2083,7 @@ printf 'dart %s\n' "$*" >>"$FAKE_STAGE_LOG"
             }
             function Get-ReleaseCatalogEntry {
                 return [pscustomobject]@{
-                    notesFile = "release/notes/v1.0.0-rc.1.md"
+                    notesFile = "release/notes/v0.1.0-rc.1.md"
                     prerelease = $true
                     artifacts = @("asset.bin")
                 }
@@ -2144,7 +2144,7 @@ printf 'dart %s\n' "$*" >>"$FAKE_STAGE_LOG"
             $identityIndex = $stageNativeLog.IndexOf("signing-identity")
             $tagIndex = $stageNativeLog.IndexOf("signed-tag")
             $uploadIndex = $stageNativeLog.IndexOf(
-                "release upload v1.0.0-rc.1"
+                "release upload v0.1.0-rc.1"
             )
             Assert-True (
                 $policyIndex -ge 0 -and
@@ -2304,10 +2304,10 @@ function New-FakeRun {
     }
     return [pscustomobject][ordered]@{
         databaseId = [Int64]$env:FAKE_DISPATCH_RUN_ID
-        displayTitle = "Finalize v1.0.0-rc.1 " +
+        displayTitle = "Finalize v0.1.0-rc.1 " +
             "($($env:FAKE_DISPATCH_REQUEST_ID))"
         event = "workflow_dispatch"
-        headBranch = "v1.0.0-rc.1"
+        headBranch = "v0.1.0-rc.1"
         headSha = $headSha
         status = $Status
         conclusion = $Conclusion
@@ -2439,7 +2439,7 @@ exit 64
         $env:FAKE_DISPATCH_LIST_COUNT = $dispatchListCount
         $env:FAKE_DISPATCH_RELEASE_JSON = (
             [ordered]@{
-                tagName = "v1.0.0-rc.1"
+                tagName = "v0.1.0-rc.1"
                 isDraft = $false
                 isImmutable = $true
                 isPrerelease = $true
@@ -2571,8 +2571,8 @@ exit 64
             Assert-True (
                 $successLog.Contains(
                     "workflow run release.yml --repo " +
-                    "furroxide/TopiaForge --ref v1.0.0-rc.1 " +
-                    "-f tag=v1.0.0-rc.1 -f request_id=$successRequestId"
+                    "furroxide/TopiaForge --ref v0.1.0-rc.1 " +
+                    "-f tag=v0.1.0-rc.1 -f request_id=$successRequestId"
                 ) -and
                 $successLog.Contains("journal-attempt 1")
             ) (

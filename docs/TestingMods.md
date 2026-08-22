@@ -6,7 +6,7 @@ description: Run fast lifecycle tests with TopiaForge.Mods.Testing and NUnit.
 # Test a mod
 
 Every V1 scaffold includes a small NUnit project that references `TopiaForge.Mods.Testing` version
-`1.0.0-rc.1`. The testing library is runner-neutral, so an existing project may use another test runner.
+`0.1.0-rc.1`. The testing library is runner-neutral, so an existing project may use another test runner.
 Tests run without a Robotopia installation or a Unity editor.
 
 ## Arrange, load, drive, unload

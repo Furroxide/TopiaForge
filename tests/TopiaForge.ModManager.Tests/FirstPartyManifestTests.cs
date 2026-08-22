@@ -31,8 +31,8 @@ namespace TopiaForge.ModManager.Tests
             "io.github.furroxide.topiaforge.robotkit",
             "io.github.furroxide.topiaforge.worlds",
         };
-        private const string LoaderRange = ">=1.0.0-rc.1 <2.0.0";
-        private const string SdkRange = ">=1.0.0-rc.1 <2.0.0";
+        private const string LoaderRange = ">=0.1.0-rc.1 <0.2.0";
+        private const string SdkRange = ">=0.1.0-rc.1 <0.2.0";
 
         internal static void Run()
         {

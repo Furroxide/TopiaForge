@@ -95,7 +95,7 @@ multi-peer test rig. The add command keeps the mod on Manifest V5, pins all thre
 release, and adds multiplayer metadata; removing
 the module leaves a valid standalone V5 manifest. Shared state is
 server-canonical with optional owner prediction. See [Multiplayer API preview](Multiplayer.md) and
-[Manifest V5](ManifestV5.md). Live transport is not part of TopiaForge 1.0.
+[Manifest V5](ManifestV5.md). Live transport is not part of the current release.
 
 Advanced native interop is deliberately not a specialist safe module. Read
 [Advanced interop](UnityInterop.md) before adding that separate package.

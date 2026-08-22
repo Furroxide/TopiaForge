@@ -3,7 +3,7 @@
   "schemaVersion": 5,
   "name": "io.github.furroxide.topiaforge.opposite-day",
   "displayName": "Opposite Day",
-  "version": "1.0.0-rc.1",
+  "version": "0.1.0-rc.1",
   "author": {
     "name": "TopiaForge"
   },
@@ -11,11 +11,11 @@
   "entryAssembly": "TopiaForge.OppositeDay.dll",
   "entryType": "TopiaForge.OppositeDay.OppositeDayMod",
   "dependencies": {
-    "io.github.furroxide.topiaforge.prompts": ">=1.0.0-rc.1 <2.0.0"
+    "io.github.furroxide.topiaforge.prompts": ">=0.1.0-rc.1 <0.2.0"
   },
   "supportedGameVersionRange": ">=0.0.2409 <0.0.2600",
-  "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
-  "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "supportedLoaderVersionRange": ">=0.1.0-rc.1 <0.2.0",
+  "supportedSdkVersionRange": ">=0.1.0-rc.1 <0.2.0",
   "category": "Gameplay",
   "tags": [
     "opposite-day",

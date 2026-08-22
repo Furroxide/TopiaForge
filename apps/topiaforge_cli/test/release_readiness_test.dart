@@ -26,7 +26,7 @@ void main() {
   test('current decision is an honest blocked exact-gate summary', () {
     final decision = _parse(readinessBytes, schemaBytes, targetSha: targetSha);
 
-    expect(decision.releaseVersion, '1.0.0-rc.1');
+    expect(decision.releaseVersion, '0.1.0-rc.1');
     expect(decision.status, 'blocked');
     expect(decision.isReady, isFalse);
     expect(decision.gates, hasLength(12));
@@ -297,13 +297,13 @@ void main() {
         final decision = await ReleaseReadinessDecision.loadAtGitSha(
           repositoryRoot: temp.path,
           targetSha: commit,
-          expectedReleaseVersion: '1.0.0-rc.1',
+          expectedReleaseVersion: '0.1.0-rc.1',
         );
         expect(decision.status, 'blocked');
         expect(decision.targetSha, commit);
         final metadataReadiness = await ReleaseMetadataReadiness.load(
           repositoryRoot: temp.path,
-          version: '1.0.0-rc.1',
+          version: '0.1.0-rc.1',
           targetSha: commit,
           allowUnresolved: true,
         );
@@ -326,7 +326,7 @@ void main() {
         await expectLater(
           ReleaseMetadataReadiness.load(
             repositoryRoot: temp.path,
-            version: '1.0.0-rc.1',
+            version: '0.1.0-rc.1',
             targetSha: commit,
             allowUnresolved: false,
           ),
@@ -350,7 +350,7 @@ void main() {
           'release',
           'validate-readiness',
           '--version',
-          '1.0.0-rc.1',
+          '0.1.0-rc.1',
           '--target-sha',
           commit,
         ], workingDirectory: temp.path);
@@ -382,7 +382,7 @@ void main() {
           ReleaseReadinessDecision.loadAtGitSha(
             repositoryRoot: temp.path,
             targetSha: missingDecisionCommit,
-            expectedReleaseVersion: '1.0.0-rc.1',
+            expectedReleaseVersion: '0.1.0-rc.1',
           ),
           throwsA(
             isA<StateError>().having(
@@ -394,7 +394,7 @@ void main() {
         );
         final unavailable = await ReleaseMetadataReadiness.load(
           repositoryRoot: temp.path,
-          version: '1.0.0-rc.1',
+          version: '0.1.0-rc.1',
           targetSha: missingDecisionCommit,
           allowUnresolved: true,
         );
@@ -417,7 +417,7 @@ ReleaseReadinessDecision _parse(
     readinessBytes: readinessBytes,
     schemaBytes: schemaBytes,
     targetSha: targetSha,
-    expectedReleaseVersion: '1.0.0-rc.1',
+    expectedReleaseVersion: '0.1.0-rc.1',
   );
 }
 

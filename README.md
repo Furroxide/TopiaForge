@@ -40,7 +40,7 @@ editors, HUDs, modals, and toasts) with the TopiaForge UI kit — see
 sessions with [Creator Content](docs/CoreServices.md). The complete first-party catalog and
 candidate gameplay acceptance flows are in [docs/FirstPartyMods.md](docs/FirstPartyMods.md).
 
-TopiaForge 1.0 remains standalone-only, while the stable multiplayer API preview lets authors opt a V5 mod into
+TopiaForge remains standalone-only, while the stable multiplayer API preview lets authors opt a V5 mod into
 generated server-canonical contracts, loopback play, and deterministic multi-peer tests before live
 transport ships. V5 is also the normal standalone manifest when `multiplayer` is omitted; pre-release V4 was retired.
 See

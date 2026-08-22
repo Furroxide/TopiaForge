@@ -10,7 +10,7 @@ import 'package:topiaforge/src/release_policy.dart';
 import 'release_handoff_qa_fixture.dart';
 
 void main() {
-  const version = '1.0.0-rc.1';
+  const version = '0.1.0-rc.1';
   const targetSha = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
   const ecosystemSha =
       'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
@@ -61,7 +61,7 @@ Future<void> _expectGameIdentityFailure(
   await expectLater(
     const TopiaForgeReleaseHandoff().buildPlatformBundle(
       repositoryRoot: root,
-      version: '1.0.0-rc.1',
+      version: '0.1.0-rc.1',
       targetSha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       platform: platform,
       archivePath: p.join(assets.path, releaseArchiveForPlatform(platform)),

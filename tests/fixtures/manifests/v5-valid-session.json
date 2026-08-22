@@ -8,8 +8,8 @@
   "entryAssembly": "Fixture.dll",
   "entryType": "Fixtures.V5SessionMod",
   "supportedGameVersionRange": ">=0.0.2409 <0.0.2600",
-  "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
-  "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "supportedLoaderVersionRange": ">=0.1.0-rc.1 <0.2.0",
+  "supportedSdkVersionRange": ">=0.1.0-rc.1 <0.2.0",
   "multiplayer": {
     "mode": "session",
     "presence": "required",

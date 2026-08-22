@@ -7,7 +7,7 @@ namespace TopiaForge.ModPackageValidator.Tests;
 
 internal static class Program
 {
-    private const string SdkVersion = "1.0.0-rc.1";
+    private const string SdkVersion = "0.1.0-rc.1";
 
     private static int Main()
     {

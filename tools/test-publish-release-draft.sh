@@ -18,11 +18,11 @@ wrong_sha=$(git -C "$temp_root/work" rev-parse HEAD)
 git -C "$temp_root/work" commit --quiet --allow-empty -m release
 target_sha=$(git -C "$temp_root/work" rev-parse HEAD)
 git -C "$temp_root/work" push --quiet origin HEAD:refs/heads/main
-git -C "$temp_root/work" tag -a v1.0.0-rc.1 "$target_sha" -m v1.0.0-rc.1
+git -C "$temp_root/work" tag -a v0.1.0-rc.1 "$target_sha" -m v0.1.0-rc.1
 git -C "$temp_root/work" tag -a v1.0.1-rc.1 "$wrong_sha" -m v1.0.1-rc.1
 git -C "$temp_root/work" tag -a v1.0.2 "$target_sha" -m v1.0.2
 git -C "$temp_root/work" push --quiet origin \
-  refs/tags/v1.0.0-rc.1 refs/tags/v1.0.1-rc.1 refs/tags/v1.0.2
+  refs/tags/v0.1.0-rc.1 refs/tags/v1.0.1-rc.1 refs/tags/v1.0.2
 
 mkdir -p "$temp_root/bin" "$temp_root/assets" "$temp_root/state"
 cp "$fake_gh" "$temp_root/bin/gh"
@@ -31,7 +31,7 @@ printf '{"distributable":true,"blockingReasons":[]}\n' \
   >"$temp_root/assets/release-bom.json"
 printf '{"spdxVersion":"SPDX-2.3"}\n' \
   >"$temp_root/assets/release-sbom.spdx.json"
-printf '{"version":"1.0.0-rc.1"}\n' \
+printf '{"version":"0.1.0-rc.1"}\n' \
   >"$temp_root/assets/topiaforge-update-v1.json"
 printf 'update-signature\n' \
   >"$temp_root/assets/topiaforge-update-v1.json.sig"
@@ -88,8 +88,8 @@ run_fetcher() {
   local destination=$1
   (
     cd "$temp_root/work"
-    bash "$fetcher" owner/repo v1.0.0-rc.1 "$target_sha" \
-      "TopiaForge 1.0.0-rc.1" "$temp_root/notes.md" "$destination" true
+    bash "$fetcher" owner/repo v0.1.0-rc.1 "$target_sha" \
+      "TopiaForge 0.1.0-rc.1" "$temp_root/notes.md" "$destination" true
   )
 }
 must_fail() {
@@ -103,8 +103,8 @@ reset_matching_release() {
     --arg body "$(<"$temp_root/notes.md")" \
     '{
       id:1,
-      tag_name:"v1.0.0-rc.1",
-      name:"TopiaForge 1.0.0-rc.1",
+      tag_name:"v0.1.0-rc.1",
+      name:"TopiaForge 0.1.0-rc.1",
       body:$body,
       draft:true,
       prerelease:true,
@@ -137,14 +137,14 @@ write_publish_uploader_fixture() {
 }
 
 # New draft: the POST omits target_commitish, so GitHub cannot synthesize a tag.
-must_fail run_publisher_with_flag v1.0.0-rc.1 "$target_sha" false
-run_publisher v1.0.0-rc.1 "$target_sha" >/dev/null
+must_fail run_publisher_with_flag v0.1.0-rc.1 "$target_sha" false
+run_publisher v0.1.0-rc.1 "$target_sha" >/dev/null
 test "$(<"$FAKE_GH_STATE/uploads")" = "$expected_asset_count"
 jq -e \
   '.draft == true and
    .immutable == false and
    .prerelease == true and
-   .tag_name == "v1.0.0-rc.1" and
+   .tag_name == "v0.1.0-rc.1" and
    (.target_commitish | not)' \
   "$FAKE_GH_STATE/release.json" >/dev/null
 
@@ -158,27 +158,27 @@ must_fail run_fetcher "$temp_root/human-generated-draft-fetch"
 jq '.author.login="other-admin"' "$FAKE_GH_STATE/release.json" \
   >"$FAKE_GH_STATE/release.tmp"
 mv "$FAKE_GH_STATE/release.tmp" "$FAKE_GH_STATE/release.json"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha"
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
 mkdir "$temp_root/non-admin-fetch"
 must_fail run_fetcher "$temp_root/non-admin-fetch"
 reset_matching_release
 jq '.author.id=999' "$FAKE_GH_STATE/release.json" \
   >"$FAKE_GH_STATE/release.tmp"
 mv "$FAKE_GH_STATE/release.tmp" "$FAKE_GH_STATE/release.json"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha"
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
 reset_matching_release
 
 # Every admin-staged asset is bound to the pinned login, actor ID, and type.
 cp "$FAKE_GH_STATE/assets.json" "$FAKE_GH_STATE/assets.identity-good.json"
 jq '.[0].uploader.id=999' "$FAKE_GH_STATE/assets.identity-good.json" \
   >"$FAKE_GH_STATE/assets.json"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha"
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
 mkdir "$temp_root/wrong-uploader-fetch"
 must_fail run_fetcher "$temp_root/wrong-uploader-fetch"
 cp "$FAKE_GH_STATE/assets.identity-good.json" "$FAKE_GH_STATE/assets.json"
 jq '.[0].uploader.type="Bot"' "$FAKE_GH_STATE/assets.identity-good.json" \
   >"$FAKE_GH_STATE/assets.json"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha"
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
 cp "$FAKE_GH_STATE/assets.identity-good.json" "$FAKE_GH_STATE/assets.json"
 
 if [[ ${TOPIAFORGE_RELEASE_AUTHORITY_TEST_ONLY:-false} == true ]]; then
@@ -194,7 +194,7 @@ if [[ ${TOPIAFORGE_RELEASE_AUTHORITY_TEST_ONLY:-false} == true ]]; then
     )
   ' "$FAKE_GH_STATE/assets.authority-publish.json" \
     >"$FAKE_GH_STATE/assets.json"
-  must_fail run_publisher v1.0.0-rc.1 "$target_sha" publish
+  must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
   reset_matching_release
   jq '
     map(
@@ -205,13 +205,13 @@ if [[ ${TOPIAFORGE_RELEASE_AUTHORITY_TEST_ONLY:-false} == true ]]; then
     )
   ' "$FAKE_GH_STATE/assets.authority-publish.json" \
     >"$FAKE_GH_STATE/assets.json"
-  must_fail run_publisher v1.0.0-rc.1 "$target_sha" publish
+  must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
   reset_matching_release
   jq '[.[] | select(.name != "TopiaForge-windows-x64.zip")]' \
     "$FAKE_GH_STATE/assets.authority-publish.json" \
     >"$FAKE_GH_STATE/assets.json"
   uploads_before_missing_admin=$(<"$FAKE_GH_STATE/uploads")
-  must_fail run_publisher v1.0.0-rc.1 "$target_sha" publish
+  must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
   test "$(<"$FAKE_GH_STATE/uploads")" = "$uploads_before_missing_admin"
   reset_matching_release
   jq '
@@ -224,7 +224,7 @@ if [[ ${TOPIAFORGE_RELEASE_AUTHORITY_TEST_ONLY:-false} == true ]]; then
   ' "$FAKE_GH_STATE/assets.authority-publish.json" \
     >"$FAKE_GH_STATE/assets.json"
   uploads_before_admin_starter=$(<"$FAKE_GH_STATE/uploads")
-  must_fail run_publisher v1.0.0-rc.1 "$target_sha" publish
+  must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
   test "$(<"$FAKE_GH_STATE/uploads")" = "$uploads_before_admin_starter"
   jq -e '
     any(.[];
@@ -243,7 +243,7 @@ if [[ ${TOPIAFORGE_RELEASE_AUTHORITY_TEST_ONLY:-false} == true ]]; then
   mv "$FAKE_GH_STATE/assets.tmp" "$FAKE_GH_STATE/assets.json"
   rm -f "$FAKE_GH_STATE/asset-content/$missing_generated_id"
   export FAKE_GH_UPLOAD_PRINCIPAL=workflow
-  run_publisher v1.0.0-rc.1 "$target_sha" publish >/dev/null
+  run_publisher v0.1.0-rc.1 "$target_sha" publish >/dev/null
   unset FAKE_GH_UPLOAD_PRINCIPAL
   jq '
     map(
@@ -260,14 +260,14 @@ if [[ ${TOPIAFORGE_RELEASE_AUTHORITY_TEST_ONLY:-false} == true ]]; then
 fi
 
 # Exact draft rerun is a no-op.
-run_publisher v1.0.0-rc.1 "$target_sha" >/dev/null
+run_publisher v0.1.0-rc.1 "$target_sha" >/dev/null
 test "$(<"$FAKE_GH_STATE/uploads")" = "$expected_asset_count"
 
 # A partial starter upload is deleted and resumed with the exact local bytes.
 jq '.[0] |= (.state="starter" | .digest=null | .size=0)' \
   "$FAKE_GH_STATE/assets.json" >"$FAKE_GH_STATE/assets.tmp"
 mv "$FAKE_GH_STATE/assets.tmp" "$FAKE_GH_STATE/assets.json"
-run_publisher v1.0.0-rc.1 "$target_sha" >/dev/null
+run_publisher v0.1.0-rc.1 "$target_sha" >/dev/null
 test "$(<"$FAKE_GH_STATE/uploads")" = "$((expected_asset_count + 1))"
 jq -e 'all(.[]; .state == "uploaded")' \
   "$FAKE_GH_STATE/assets.json" >/dev/null
@@ -276,7 +276,7 @@ jq -e 'all(.[]; .state == "uploaded")' \
 cp "$FAKE_GH_STATE/assets.json" "$FAKE_GH_STATE/assets.good.json"
 jq '.[0].digest="sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"' \
   "$FAKE_GH_STATE/assets.good.json" >"$FAKE_GH_STATE/assets.json"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha"
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
 cp "$FAKE_GH_STATE/assets.good.json" "$FAKE_GH_STATE/assets.json"
 jq '. + [{
   id:999,
@@ -285,7 +285,7 @@ jq '. + [{
   digest:"sha256:0000000000000000000000000000000000000000000000000000000000000000",
   size:1
 }]' "$FAKE_GH_STATE/assets.good.json" >"$FAKE_GH_STATE/assets.json"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha"
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
 cp "$FAKE_GH_STATE/assets.good.json" "$FAKE_GH_STATE/assets.json"
 
 # Candidate and release metadata mismatches fail before publication.
@@ -293,30 +293,30 @@ reset_matching_release
 jq '.prerelease=false' "$FAKE_GH_STATE/release.json" \
   >"$FAKE_GH_STATE/release.tmp"
 mv "$FAKE_GH_STATE/release.tmp" "$FAKE_GH_STATE/release.json"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha"
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
 
 reset_matching_release
 jq '.name="Wrong title"' "$FAKE_GH_STATE/release.json" \
   >"$FAKE_GH_STATE/release.tmp"
 mv "$FAKE_GH_STATE/release.tmp" "$FAKE_GH_STATE/release.json"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha"
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
 
 reset_matching_release
 jq '.body="Wrong notes"' "$FAKE_GH_STATE/release.json" \
   >"$FAKE_GH_STATE/release.tmp"
 mv "$FAKE_GH_STATE/release.tmp" "$FAKE_GH_STATE/release.json"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha"
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
 
 # Both a wrong target argument and an annotated tag at another commit fail.
 reset_matching_release
-must_fail run_publisher v1.0.0-rc.1 "$wrong_sha"
+must_fail run_publisher v0.1.0-rc.1 "$wrong_sha"
 must_fail run_publisher v1.0.1-rc.1 "$target_sha"
 
 # Final checksums must cover every public asset other than the checksum file.
 cp "$temp_root/assets/SHA256SUMS" "$temp_root/SHA256SUMS.good"
 grep -v 'release-handoff-v1.json$' \
   "$temp_root/SHA256SUMS.good" >"$temp_root/assets/SHA256SUMS"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha" publish
+must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
 mv "$temp_root/SHA256SUMS.good" "$temp_root/assets/SHA256SUMS"
 
 # Publication is a single transition, requires immutable releases, and reruns
@@ -334,7 +334,7 @@ cp "$FAKE_GH_STATE/assets.publish-good.json" "$FAKE_GH_STATE/assets.json"
 mkdir "$temp_root/stranded-finalizer-fetch"
 run_fetcher "$temp_root/stranded-finalizer-fetch" >/dev/null
 uploads_before_stranded_resume=$(<"$FAKE_GH_STATE/uploads")
-run_publisher v1.0.0-rc.1 "$target_sha" publish >/dev/null
+run_publisher v0.1.0-rc.1 "$target_sha" publish >/dev/null
 jq -e \
   '.draft == false and
    .immutable == true and
@@ -358,7 +358,7 @@ mkdir "$temp_root/stranded-finalizer-starter-fetch"
 run_fetcher "$temp_root/stranded-finalizer-starter-fetch" >/dev/null
 uploads_before_stranded_starter=$(<"$FAKE_GH_STATE/uploads")
 export FAKE_GH_UPLOAD_PRINCIPAL=workflow
-run_publisher v1.0.0-rc.1 "$target_sha" publish >/dev/null
+run_publisher v0.1.0-rc.1 "$target_sha" publish >/dev/null
 unset FAKE_GH_UPLOAD_PRINCIPAL
 test "$(<"$FAKE_GH_STATE/uploads")" = \
   "$((uploads_before_stranded_starter + 1))"
@@ -372,7 +372,7 @@ cp "$FAKE_GH_STATE/assets.publish-good.json" "$FAKE_GH_STATE/assets.json"
 
 rm -f "$FAKE_GH_STATE/asset-get-count"
 export FAKE_GH_MUTATE_ASSETS_ON_GET=3
-must_fail run_publisher v1.0.0-rc.1 "$target_sha" publish
+must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
 unset FAKE_GH_MUTATE_ASSETS_ON_GET
 cp "$FAKE_GH_STATE/assets.publish-good.json" "$FAKE_GH_STATE/assets.json"
 rm -f "$FAKE_GH_STATE/asset-get-count"
@@ -387,7 +387,7 @@ jq '
     end
   )
 ' "$FAKE_GH_STATE/assets.publish-good.json" >"$FAKE_GH_STATE/assets.json"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha" publish
+must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
 mkdir "$temp_root/stranded-wrong-actions-actor-fetch"
 must_fail run_fetcher "$temp_root/stranded-wrong-actions-actor-fetch"
 reset_matching_release
@@ -399,13 +399,13 @@ jq '
     end
   )
 ' "$FAKE_GH_STATE/assets.publish-good.json" >"$FAKE_GH_STATE/assets.json"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha" publish
+must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
 mkdir "$temp_root/stranded-wrong-actions-app-fetch"
 must_fail run_fetcher "$temp_root/stranded-wrong-actions-app-fetch"
 cp "$FAKE_GH_STATE/assets.publish-good.json" "$FAKE_GH_STATE/assets.json"
 reset_matching_release
 uploads_before_publish=$(<"$FAKE_GH_STATE/uploads")
-run_publisher v1.0.0-rc.1 "$target_sha" publish >/dev/null
+run_publisher v0.1.0-rc.1 "$target_sha" publish >/dev/null
 jq -e \
   '.draft == false and
    .immutable == true and
@@ -429,26 +429,26 @@ mkdir "$temp_root/wrong-workflow-uploader-fetch"
 must_fail run_fetcher "$temp_root/wrong-workflow-uploader-fetch"
 cp "$FAKE_GH_STATE/assets.publish-good.json" "$FAKE_GH_STATE/assets.json"
 
-run_publisher v1.0.0-rc.1 "$target_sha" publish >/dev/null
+run_publisher v0.1.0-rc.1 "$target_sha" publish >/dev/null
 test "$(<"$FAKE_GH_STATE/uploads")" = "$uploads_before_publish"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha"
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
 
 # Published-byte drift and non-immutable publication both fail closed.
 jq '.[0].size += 1' "$FAKE_GH_STATE/assets.json" \
   >"$FAKE_GH_STATE/assets.tmp"
 mv "$FAKE_GH_STATE/assets.tmp" "$FAKE_GH_STATE/assets.json"
-must_fail run_publisher v1.0.0-rc.1 "$target_sha" publish
+must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
 cp "$FAKE_GH_STATE/assets.publish-good.json" "$FAKE_GH_STATE/assets.json"
 
 reset_matching_release
 export FAKE_GH_IMMUTABLE_ENABLED=false
-must_fail run_publisher v1.0.0-rc.1 "$target_sha" publish
+must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
 jq -e '.draft == true' "$FAKE_GH_STATE/release.json" >/dev/null
 export FAKE_GH_IMMUTABLE_ENABLED=true
 
 reset_matching_release
 export FAKE_GH_PUBLISHED_IMMUTABLE=false
-must_fail run_publisher v1.0.0-rc.1 "$target_sha" publish
+must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
 export FAKE_GH_PUBLISHED_IMMUTABLE=true
 
 # Stable releases retain an explicit false prerelease state.

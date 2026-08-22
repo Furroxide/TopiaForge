@@ -95,8 +95,10 @@ namespace TopiaForge.ModManager.Tests
 
         private static void AssertContractAssembly(Assembly assembly)
         {
-            Assert(assembly.GetName().Version == new Version(1, 0, 0, 0),
-                assembly.GetName().Name + " must keep the V1 assembly version stable");
+            // Frozen for the whole 0.x line: Mono/BepInEx has no binding redirects, so moving the SDK's
+            // assembly identity would hard-fail every already-compiled third-party mod.
+            Assert(assembly.GetName().Version == new Version(0, 1, 0, 0),
+                assembly.GetName().Name + " must keep the 0.x assembly version stable");
             Assert(File.Exists(Path.ChangeExtension(assembly.Location, ".xml")),
                 assembly.GetName().Name + " must emit IntelliSense XML documentation");
 

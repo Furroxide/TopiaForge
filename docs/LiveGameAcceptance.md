@@ -1,7 +1,7 @@
 # Live Robotopia acceptance
 
 The safe SDK has an instrumented, non-distributable acceptance mod under
-`tests/TopiaForge.SdkAcceptanceMod`. It uses only public V1 contracts and writes machine-readable
+`tests/TopiaForge.SdkAcceptanceMod`. It uses only public safe SDK contracts and writes machine-readable
 `TF-ACCEPT|PASS|challenge|case-id|detail` markers to the attributed manager log. The canonical case list is
 `tests/live-game-acceptance.json`.
 

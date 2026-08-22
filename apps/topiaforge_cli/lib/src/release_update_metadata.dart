@@ -128,7 +128,7 @@ final class ReleaseUpdateMetadataBuilder {
       'version': release.version,
       'tag': release.tag,
       'channel': release.prerelease ? 'beta' : 'release',
-      'minimumUpdaterVersion': '1.0.0-rc.1',
+      'minimumUpdaterVersion': '0.1.0-rc.1',
       'releaseUrl':
           'https://github.com/furroxide/TopiaForge/releases/tag/${release.tag}',
       'platforms': platforms,

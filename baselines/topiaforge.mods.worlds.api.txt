@@ -3,7 +3,7 @@
 # Regenerate with: dotnet run --project tests/TopiaForge.ModManager.Tests -c Release -- --print-sdk-api-baseline topiaforge.mods.worlds
 # Review every change. Breaking changes require explicit V1 compatibility approval.
 
-assembly TopiaForge.Mods.Worlds, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null
+assembly TopiaForge.Mods.Worlds, Version=0.1.0.0, Culture=neutral, PublicKeyToken=null
 target-framework .NETStandard,Version=v2.1
 
 type public sealed class TopiaForge.Mods.BundleWorldContent : System.Object, TopiaForge.Mods.ICustomWorldContent

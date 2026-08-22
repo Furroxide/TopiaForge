@@ -306,7 +306,7 @@
     "Confirm the sole owner has a passkey or hardware key, TOTP recovery, offline recovery codes, and reviewed sessions, PATs, and SSH keys.",
     "Confirm administrator bypass is disabled in each protected environment if the REST response cannot prove it.",
     "Confirm only explicitly trusted collaborators can submit formal approval or changes-requested reviews.",
-    "Confirm DCO enforcement and GitHub web commit signoff are enabled after the v1.0.0-rc.1 cutover tag.",
+    "Confirm DCO enforcement and GitHub web commit signoff are enabled after the v0.1.0-rc.1 cutover tag.",
     "Confirm ordinary dev pull requests use squash merge and sync/main-v* pull requests use a merge commit; GitHub cannot condition a merge method on the source branch."
   ]
 }
