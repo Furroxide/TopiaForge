@@ -83,7 +83,8 @@ Robotopia uses numeric build identifiers. TopiaForge maps build `N` to SemVer `0
 evaluation while retaining the human-readable build label. The supported build is build 2409
 (`0.0.2409`). When the installed Robotopia build is unknown, a constrained mod fails closed.
 
-Compatibility is declared **per mod**, by whether the mod actually resolves GameCode symbols:
+Compatibility is declared **per mod**, by whether the mod actually resolves symbols out of the game's
+own implementation assembly:
 
 - A mod with a `bindings/<id>.gamebindings.json` manifest pins the exact audited build, because it may
   claim only what its bindings were verified against. Exact pins fail closed rather than silently
@@ -94,9 +95,9 @@ Compatibility is declared **per mod**, by whether the mod actually resolves Game
 
 Two limits are worth stating plainly. There is no loader-level game-build gate: `supportedGameVersionRange`
 is the only check, and a ranged mod that loads on an unverified build still runs inside a loader that
-compile-time references `GameCode.dll`. The range therefore changes the failure *mode*, not the underlying
-coupling. Separately, range evaluation has no npm-style prerelease exclusion, so `<0.0.2600` also admits
-`0.0.2600-x`; that is pre-existing behaviour, documented rather than special-cased.
+holds a compile-time reference to that assembly. The range therefore changes the failure *mode*, not the
+underlying coupling. Separately, range evaluation has no npm-style prerelease exclusion, so `<0.0.2600`
+also admits `0.0.2600-x`; that is pre-existing behaviour, documented rather than special-cased.
 TopiaForge reads the launcher's `installed-build.json` marker from the game root first. In Tomato Cake's
 Windows/Proton layout it also checks beside the launcher-owned `Robotopia` directory, matching the real
 installation shape. An existing malformed higher-priority marker never falls through to a lower-priority
