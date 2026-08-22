@@ -250,6 +250,13 @@ jobs:
           INPUT_PATH: _site
         run: |
           set -euo pipefail
+          # Upstream picks a GNU tar per runner OS. Only the Linux steps are
+          # inlined here, so refuse anything else outright rather than build an
+          # archive with quietly different semantics.
+          if test "$RUNNER_OS" != Linux; then
+            echo "::error::Pages artifacts must be archived on a Linux runner."
+            exit 1
+          fi
           tar \
             --dereference --hard-dereference \
             --directory "$INPUT_PATH" \
