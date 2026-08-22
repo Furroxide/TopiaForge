@@ -116,6 +116,10 @@ TOPIAFORGE_REACHABILITY_SERVERS=203.0.113.10:3478,203.0.113.11:3478
 Behaviour discovery needs a server that advertises an alternate address (RFC 5780 `OTHER-ADDRESS`) and honours
 `CHANGE-REQUEST`. Against a server that does not, the probe reports mapping as `unknown` rather than guessing.
 
+Every entry has to name the same address family. One run binds one unconnected socket and decides mapping by
+comparing reflexive endpoints across a server address and port, and endpoints in two families are not comparable, so
+a mixed list is refused rather than quietly reduced to one of them.
+
 Then: enable developer mode, open the **Dev** tab, switch on **Run the reachability probe**, and press **Run probe**.
 The classification is shown in the pane and goes nowhere else.
 
@@ -143,5 +147,6 @@ Tests: `packages/launcher_domain/test/reachability_probe_test.dart`,
   can ever be justified is a question for the privacy owner, not for engineering.
 - **Longitudinal drift.** NAT behaviour changes with carrier policy and router firmware. One measurement dates.
 - **IPv6.** A dual-stack host may be directly reachable over IPv6 and relay-bound over IPv4. The classifier reports
-  one answer per run, over whichever family the socket bound. Splitting this is future work, not a gap that changes
-  the current conclusion.
+  one answer per run, over the family the configured servers name; measuring both means running the probe twice
+  against two server lists and reading the results side by side. Reporting one number per host is future work, not a
+  gap that changes the current conclusion.

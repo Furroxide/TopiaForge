@@ -7,8 +7,15 @@ import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
+part 'reachability_probe_service_test_part.dart';
+
 StunEndpoint _v4(List<int> address, int port) =>
     StunEndpoint(Uint8List.fromList(address), port);
+
+/// The scripted server endpoints every group in this suite shares.
+final primary = _v4([198, 51, 100, 10], 3478);
+final alternate = _v4([203, 0, 113, 20], 3479);
+final alternateOnPrimaryPort = _v4([203, 0, 113, 20], 3478);
 
 /// A scripted transport. Every reply is chosen by the destination it was sent to, so a test can model a NAT by
 /// deciding which reflexive endpoint each destination sees.
@@ -54,10 +61,6 @@ class _FakeStunTransport implements StunTransport {
 }
 
 void main() {
-  final primary = _v4([198, 51, 100, 10], 3478);
-  final alternate = _v4([203, 0, 113, 20], 3479);
-  final alternateOnPrimaryPort = _v4([203, 0, 113, 20], 3478);
-
   group('StunCodec', () {
     const codec = StunCodec();
     final transactionId = Uint8List.fromList(List<int>.generate(12, (i) => i));
@@ -327,141 +330,7 @@ void main() {
     });
   });
 
-  group('ReachabilityProbeService', () {
-    late Directory root;
-
-    setUp(() async {
-      root = await Directory.systemTemp.createTemp('topiaforge-probe-');
-    });
-
-    tearDown(() async {
-      if (await root.exists()) await root.delete(recursive: true);
-    });
-
-    ReachabilityProbeService service({StunTransport? transport}) =>
-        ReachabilityProbeService(
-          dataRoot: root.path,
-          openTransport: transport == null ? null : () async => transport,
-        );
-
-    test('defaults to off with no settings file', () async {
-      expect(await service().loadSettings(), const ReachabilityProbeSettings());
-    });
-
-    test('treats a corrupt settings file as off', () async {
-      await File(
-        p.join(root.path, ReachabilityProbeService.settingsFileName),
-      ).writeAsString('{not json');
-
-      expect(await service().loadSettings(), const ReachabilityProbeSettings());
-    });
-
-    test('persists the opt-in', () async {
-      final subject = service();
-      await subject.saveSettings(
-        const ReachabilityProbeSettings(enabled: true),
-      );
-
-      expect(
-        await subject.loadSettings(),
-        const ReachabilityProbeSettings(enabled: true),
-      );
-      final written = jsonDecode(
-        await File(
-          p.join(root.path, ReachabilityProbeService.settingsFileName),
-        ).readAsString(),
-      );
-      expect(written, {'enabled': true, 'shareAggregateResults': false});
-    });
-
-    test('refuses to run outside developer mode', () async {
-      final transport = _FakeStunTransport(mappedFor: const {});
-      final subject = service(transport: transport);
-      await subject.saveSettings(
-        const ReachabilityProbeSettings(enabled: true),
-      );
-
-      final outcome = await subject.run(
-        developerMode: false,
-        servers: const ['198.51.100.10:3478'],
-      );
-
-      expect(outcome.refusal, ReachabilityProbeRefusal.developerModeRequired);
-      expect(outcome.ran, isFalse);
-      expect(
-        transport.calls,
-        isEmpty,
-        reason: 'A refused probe must not touch the network at all.',
-      );
-    });
-
-    test('refuses to run until the player opts in', () async {
-      final transport = _FakeStunTransport(mappedFor: const {});
-
-      final outcome = await service(
-        transport: transport,
-      ).run(developerMode: true, servers: const ['198.51.100.10:3478']);
-
-      expect(outcome.refusal, ReachabilityProbeRefusal.notEnabled);
-      expect(transport.calls, isEmpty);
-    });
-
-    test('reports unavailable with no configured servers', () async {
-      final subject = service(
-        transport: _FakeStunTransport(mappedFor: const {}),
-      );
-      await subject.saveSettings(
-        const ReachabilityProbeSettings(enabled: true),
-      );
-
-      final outcome = await subject.run(developerMode: true, servers: const []);
-
-      expect(outcome.refusal, isNull);
-      expect(outcome.message, contains('No probe servers'));
-    });
-
-    test('runs and closes the transport once permitted', () async {
-      final reflexive = _v4([192, 0, 2, 55], 51234);
-      final transport = _FakeStunTransport(
-        mappedFor: {
-          primary: reflexive,
-          alternateOnPrimaryPort: reflexive,
-          alternate: reflexive,
-        },
-        otherAddress: alternate,
-      );
-      final subject = service(transport: transport);
-      await subject.saveSettings(
-        const ReachabilityProbeSettings(enabled: true),
-      );
-
-      final outcome = await subject.run(
-        developerMode: true,
-        servers: const ['198.51.100.10:3478'],
-      );
-
-      expect(outcome.ran, isTrue);
-      expect(
-        outcome.classification.reachability,
-        HostReachability.holePunchable,
-      );
-      expect(transport.closed, isTrue);
-    });
-
-    test('never previews a report while the privacy notice is unapproved', () {
-      // Consent from the player is necessary but not sufficient; the project's own approval is still missing.
-      final preview = service().reportPreview(
-        developerMode: true,
-        settings: const ReachabilityProbeSettings(
-          enabled: true,
-          shareAggregateResults: true,
-        ),
-        classification: NatClassification.unknown,
-      );
-
-      expect(preview, ReachabilityProbeRefusal.privacyNoticeNotApproved);
-    });
-  });
+  _reachabilityProbeServiceTests();
 }
 
 /// Builds a Binding Success Response carrying XOR-MAPPED-ADDRESS and optionally OTHER-ADDRESS.
