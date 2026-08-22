@@ -19,7 +19,9 @@ extension LauncherReachabilityActions on LauncherBloc {
     }
     await _guard(emit, 'Reachability probe settings saved.', () async {
       await gateway.saveSettings(event.settings);
-      emit(state.copyWith(isBusy: false, reachabilityProbe: event.settings));
+      // Leave isBusy set: _guard emits the success message above only while the state
+      // is still busy, so clearing it here would silently drop that feedback.
+      emit(state.copyWith(reachabilityProbe: event.settings));
     });
   }
 
