@@ -7,7 +7,7 @@ namespace TopiaForge.CreatorTools.Shared
 {
     internal sealed partial class CreatorWorkbench
     {
-        /// <summary>Built-in curated build-2309 item source.</summary>
+        /// <summary>Built-in curated build-2409 item source.</summary>
         private const string CuratedItemsSourceId = "robotopia.items";
         /// <summary>Built-in UGC prop source.</summary>
         private const string UgcPropsSourceId = "robotopia.ugc-props";

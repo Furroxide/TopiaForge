@@ -305,7 +305,7 @@ Directory _createSdkSmokeGame(Directory temp) {
   File(p.join(managed.path, 'UnityEngine.dll')).writeAsStringSync('unity');
   File(
     p.join(root.path, 'installed-build.json'),
-  ).writeAsStringSync(jsonEncode({'id': '2309'}));
+  ).writeAsStringSync(jsonEncode({'id': '2409'}));
   return root;
 }
 

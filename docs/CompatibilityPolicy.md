@@ -72,9 +72,24 @@ active-scene-only startup behavior and one-callback-per-load behavior afterward.
 
 ## Robotopia and platform compatibility
 
-Robotopia uses numeric build identifiers. TopiaForge maps build 2309 to SemVer `0.0.2309` for range
-evaluation while retaining the human-readable build label. A mod may claim only ranges exercised by
-its acceptance tests. When the installed Robotopia build is unknown, a constrained mod fails closed.
+Robotopia uses numeric build identifiers. TopiaForge maps build `N` to SemVer `0.0.N` for range
+evaluation while retaining the human-readable build label. The supported build is build 2409
+(`0.0.2409`). When the installed Robotopia build is unknown, a constrained mod fails closed.
+
+Compatibility is declared **per mod**, by whether the mod actually resolves GameCode symbols:
+
+- A mod with a `bindings/<id>.gamebindings.json` manifest pins the exact audited build, because it may
+  claim only what its bindings were verified against. Exact pins fail closed rather than silently
+  selecting another version.
+- A mod that rides the SDK alone declares a bounded range (`>=0.0.2409 <0.0.2600`), so an ordinary game
+  update does not brick it. Published builds step by roughly +100 (2309 -> 2409), so that bound admits
+  the current build and the next one, and nothing beyond a review.
+
+Two limits are worth stating plainly. There is no loader-level game-build gate: `supportedGameVersionRange`
+is the only check, and a ranged mod that loads on an unverified build still runs inside a loader that
+compile-time references `GameCode.dll`. The range therefore changes the failure *mode*, not the underlying
+coupling. Separately, range evaluation has no npm-style prerelease exclusion, so `<0.0.2600` also admits
+`0.0.2600-x`; that is pre-existing behaviour, documented rather than special-cased.
 TopiaForge reads the launcher's `installed-build.json` marker from the game root first. In Tomato Cake's
 Windows/Proton layout it also checks beside the launcher-owned `Robotopia` directory, matching the real
 installation shape. An existing malformed higher-priority marker never falls through to a lower-priority

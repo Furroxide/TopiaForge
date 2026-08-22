@@ -10,7 +10,27 @@ namespace TopiaForge.ModManager.Tests
 {
     internal static class FirstPartyManifestTests
     {
-        private const string GameRange = "0.0.2309";
+        // Robotopia compatibility is declared per mod, by whether the mod actually resolves GameCode symbols.
+        // A mod with declared native bindings may claim only the build its bindings were verified against; a mod
+        // that rides the SDK alone gets a bounded range so an ordinary game update does not brick it. The range
+        // ends at 0.0.2600 because published builds step ~+100 (2309 -> 2409), so this admits the current build
+        // and the next one, and nothing beyond a review.
+        private const string BoundGameRange = "0.0.2409";
+        private const string SdkOnlyGameRange = ">=0.0.2409 <0.0.2600";
+        private const string InstalledGameVersion = "0.0.2409";
+
+        // Exactly the mods carrying a bindings/<id>.gamebindings.json manifest.
+        private static readonly HashSet<string> GameBoundModIds = new(StringComparer.Ordinal)
+        {
+            "io.github.furroxide.topiaforge.chronos",
+            "io.github.furroxide.topiaforge.creatorcontent",
+            "io.github.furroxide.topiaforge.no-feedback-url",
+            "io.github.furroxide.topiaforge.perffixes",
+            "io.github.furroxide.topiaforge.performance",
+            "io.github.furroxide.topiaforge.prompts",
+            "io.github.furroxide.topiaforge.robotkit",
+            "io.github.furroxide.topiaforge.worlds",
+        };
         private const string LoaderRange = ">=1.0.0-rc.1 <2.0.0";
         private const string SdkRange = ">=1.0.0-rc.1 <2.0.0";
 
@@ -37,8 +57,14 @@ namespace TopiaForge.ModManager.Tests
                 Assert(manifest.EntryAssembly.StartsWith("TopiaForge.", StringComparison.Ordinal)
                     && manifest.EntryType.StartsWith("TopiaForge.", StringComparison.Ordinal),
                     manifest.Id + " must expose only TopiaForge assembly and type identities");
-                Assert(manifest.SupportedGameVersionRange == GameRange,
-                    manifest.Id + " must pin the audited Robotopia build 2309");
+                var isGameBound = GameBoundModIds.Contains(manifest.Id);
+                var bindingsPath = Path.Combine(repoRoot, "bindings", manifest.Id + ".gamebindings.json");
+                Assert(File.Exists(bindingsPath) == isGameBound,
+                    manifest.Id + " must be classified by whether it actually declares native game bindings");
+                Assert(manifest.SupportedGameVersionRange == (isGameBound ? BoundGameRange : SdkOnlyGameRange),
+                    isGameBound
+                        ? manifest.Id + " declares native bindings, so it must pin the audited Robotopia build"
+                        : manifest.Id + " rides the SDK alone, so it must declare the bounded game range");
                 Assert(manifest.SupportedLoaderVersionRange == LoaderRange,
                     manifest.Id + " must declare the compatible V1 loader line");
                 Assert(manifest.SupportedSdkVersionRange == SdkRange,
@@ -53,7 +79,7 @@ namespace TopiaForge.ModManager.Tests
 
                 var errors = ManifestValidator.Validate(
                     manifest,
-                    new ManifestValidationContext("0.0.2309", requireKnownGameVersion: true));
+                    new ManifestValidationContext(InstalledGameVersion, requireKnownGameVersion: true));
                 Assert(errors.Count == 0, manifest.Id + " failed strict compatibility validation: " + string.Join("; ", errors));
 
                 var projectPath = Directory.GetFiles(Path.GetDirectoryName(path)!, "*.csproj").Single();
