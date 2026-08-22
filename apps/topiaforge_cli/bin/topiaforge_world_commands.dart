@@ -210,8 +210,15 @@ extension _WorldCommands on _TopiaForgeCli {
         Directory(p.join(path, 'Assets')).existsSync();
 
     if (selector != null) {
-      if (Directory(selector).existsSync()) {
-        return p.normalize(p.absolute(selector));
+      // An explicit path has to clear the same check `world link` applies; every
+      // other route into this resolver already does. A directory that fails it is
+      // still offered to the registry lookup, because `--project` also takes a name
+      // and a same-named directory in the working tree must not shadow one.
+      final directory = Directory(selector).existsSync()
+          ? p.normalize(p.absolute(selector))
+          : null;
+      if (directory != null && isUnityProject(directory)) {
+        return directory;
       }
       final projects = await developerRepository.listProjects();
       for (final project in projects) {
@@ -219,6 +226,13 @@ extension _WorldCommands on _TopiaForgeCli {
             project.isUnity) {
           return project.path;
         }
+      }
+      if (directory != null) {
+        // Say why a real directory was rejected rather than letting the caller's
+        // "no project found" message suggest the path was missing.
+        throw StateError(
+          '$directory is not a Unity project (expected Assets/ and ProjectSettings/).',
+        );
       }
       return null;
     }
