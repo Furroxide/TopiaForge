@@ -19,7 +19,7 @@ explicit confirmation; a startup health handshake enables automatic rollback.
 Unsupported layouts use the verified manual GitHub Releases download. See
 [launcher updates](docs/LauncherUpdates.md).
 
-The current compatibility target is Robotopia build **2309**. The built-in registry initially carries verified
+The current compatibility target is Robotopia build **2409**. The built-in registry initially carries verified
 first-party release artifacts only; community authors can use the documented self-hosted registry format while
 official submission governance is being established.
 
@@ -28,6 +28,11 @@ custom-world bundles target `StandaloneWindows64`. Custom worlds are therefore W
 on macOS, TopiaForgeUi falls through its documented font fallback chain if the brand bundle cannot load.
 
 ## For mod developers
+
+Robotopia now ships its own browser world editor, the **Robotopia Creator**, so read
+[docs/RobotopiaCreator.md](docs/RobotopiaCreator.md) first: it states which half of the problem
+TopiaForge owns (C# behaviour, gamemodes, runtime control, local/CI tooling) and which half the
+Creator owns (scene layout, personalities, publishing).
 
 Start with the walkthrough: [docs/YourFirstMod.md](docs/YourFirstMod.md). The release zip contains the
 `topiaforge` CLI at its root — add it to `PATH` and you're set (see
