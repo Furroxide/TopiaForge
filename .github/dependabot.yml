@@ -45,6 +45,14 @@ updates:
     groups:
       website:
         patterns: ["*"]
+    ignore:
+      # @astrojs/check declares `peer typescript@"^5.0.0 || ^6.0.0"` and has no
+      # release that accepts 7.x, whose native port ships as a different package
+      # set entirely. Taking the major makes `npm ci` fail ERESOLVE, which stops
+      # the docs build and the repository hygiene job before either runs. Hold
+      # the major until @astrojs/check ships a release that peers on it.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: pub
     directory: /packages/launcher_domain
