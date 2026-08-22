@@ -96,7 +96,11 @@ namespace TopiaForge.Worlds
         /// <summary>
         /// Plans an import of <paramref name="requestedPath"/> from <paramref name="folderPath"/>.
         /// </summary>
-        /// <param name="folderPath">The declared import folder. Must exist.</param>
+        /// <param name="folderPath">
+        /// The declared import folder. Normalized to an absolute path here but not probed: confinement is a
+        /// string comparison, and a folder that does not exist cannot hold a file, so a missing one is
+        /// already reported by <paramref name="fileExists"/> rather than needing a second probe.
+        /// </param>
         /// <param name="requestedPath">An absolute path, or a file name relative to the folder.</param>
         /// <param name="fileExists">Existence probe, injected so the rules are testable without a real tree.</param>
         /// <param name="plan">The accepted plan, or null.</param>
