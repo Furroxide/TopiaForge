@@ -5,7 +5,8 @@
     <RootNamespace>TopiaForge.Mods</RootNamespace>
     <Version>0.1.0-rc.1</Version>
     <PackageVersion>0.1.0-rc.1</PackageVersion>
-    <!-- Keep binary binding stable throughout the V1 SDK line. -->
+    <!-- Keep binary binding stable throughout the 0.1 SDK line. Below 1.0.0 SemVer's breaking
+         axis is MINOR, so the frozen identity is 0.<minor>.0.0 rather than <major>.0.0.0. -->
     <AssemblyVersion>0.1.0.0</AssemblyVersion>
     <FileVersion>0.1.0.0</FileVersion>
     <InformationalVersion>0.1.0-rc.1</InformationalVersion>

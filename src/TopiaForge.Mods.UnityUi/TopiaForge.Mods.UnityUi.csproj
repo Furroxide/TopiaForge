@@ -5,8 +5,9 @@
     <RootNamespace>TopiaForge.Mods.UnityUi</RootNamespace>
     <!--
       Mods bind to this assembly by simple name (ModRuntime.ResolveAssembly), so the
-      public API is additive-only within a major version. AssemblyVersion stays pinned
-      for all of 1.x; Version/FileVersion move per release.
+      public API is additive-only within a compatibility line. Below 1.0.0 that line is
+      MINOR, not MAJOR, so AssemblyVersion stays pinned for all of 0.1.x;
+      Version/FileVersion move per release.
     -->
     <Version>0.1.0-rc.1</Version>
     <PackageVersion>0.1.0-rc.1</PackageVersion>
