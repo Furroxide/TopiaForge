@@ -133,7 +133,7 @@ jobs:
           --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
           -c Release -- --source public --require-latest
 
-      - name: Validate 12 SDK packages and all 7 C# harnesses
+      - name: Validate 11 SDK packages and all 7 C# harnesses
         shell: bash
         run: |
           set -euo pipefail
