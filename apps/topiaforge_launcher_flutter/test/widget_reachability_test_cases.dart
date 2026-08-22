@@ -126,6 +126,14 @@ void registerReachabilityProbeWidgetTests() {
     expect(probe.saved.single.enabled, isTrue);
     expect(probe.saved.single.shareAggregateResults, isFalse);
     expect(probe.runCount, isZero, reason: 'Opting in does not run the probe.');
+    expect(
+      find.text('Reachability probe settings saved.'),
+      findsOneWidget,
+      reason:
+          'Saving the opt-in has to say so. The handler used to clear '
+          'isBusy itself, which suppressed the success message _guard emits '
+          'only while the state is still busy.',
+    );
   });
 
   testWidgets('turning the probe off withdraws sharing consent', (
