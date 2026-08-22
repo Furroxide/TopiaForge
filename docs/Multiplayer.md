@@ -111,6 +111,23 @@ The command builds the mod, reads generator-owned metadata, and atomically write
 hashes. `topiaforge pack` independently rebuilds and refuses a missing, stale, or edited lock, so protocol changes are
 reviewable without making authors maintain hashes by hand.
 
+## Bandwidth budget
+
+A contract's declared client-to-server ceiling is the sum of `MaximumPerSecond` x `MaximumPayloadBytes` across its
+commands and replicated objects. TopiaForge budgets **256 kbit/s (32 KiB/s) per connection in each direction**, with a
+short burst allowance reserved for join, reconnect, and session-replacement snapshots. `TFMP014` warns when a
+contract's declared client-to-server total exceeds that budget. It is a warning, not an error: the attribute defaults
+(`MaximumPerSecond = 30`, `MaximumPayloadBytes = 16 KiB`) are permissive placeholders, and most contracts want far
+less than either. Declare the rate and payload your commands actually need.
+
+The budget is not part of the wire format. It is never encoded, never included in a schema digest, and never written
+to a contract lock, so tightening a declaration to satisfy `TFMP014` changes lock identity only through the
+`MaximumPerSecond` and `MaximumPayloadBytes` values you changed.
+
+The other direction is not checked. `[ReplicatedState]` and `[PresentationEvent]` declare no rate, and no contract
+declaration expresses participant fan-out, so a provider - not the generator - owns the server-to-client ceiling.
+Keep replicated state small and presentation events infrequent; the compiler cannot tell you when you have not.
+
 The generator also owns a wire-format revision that is embedded in every schema digest, descriptor, and contract-lock
 entry. Authors never set or copy it. Any change to the generated encoder's byte layout must bump this revision and the
 global TopiaForge multiplayer protocol together; a revision bump deliberately changes lock identity even when an

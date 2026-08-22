@@ -384,3 +384,16 @@ class DeveloperDoctorRequested extends LauncherEvent {
 class DeveloperSampleProjectCreated extends LauncherEvent {
   const DeveloperSampleProjectCreated();
 }
+
+/// Turns the developer-only NAT reachability probe on or off, and records whether the player agrees that an
+/// aggregate, address-free result may be shared. Both default to off; see `docs/internal/LauncherReachabilityProbe.md`.
+class ReachabilityProbeSettingsChanged extends LauncherEvent {
+  const ReachabilityProbeSettingsChanged(this.settings);
+
+  final ReachabilityProbeSettings settings;
+}
+
+/// Runs the reachability probe once, locally. The result is shown to the person who ran it and goes nowhere else.
+class ReachabilityProbeRequested extends LauncherEvent {
+  const ReachabilityProbeRequested();
+}

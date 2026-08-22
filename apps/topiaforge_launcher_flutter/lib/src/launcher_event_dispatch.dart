@@ -131,6 +131,14 @@ extension LauncherEventDispatch on LauncherBloc {
         event,
         emit,
       ),
+      ReachabilityProbeSettingsChanged() => _onReachabilityProbeSettingsChanged(
+        event,
+        emit,
+      ),
+      ReachabilityProbeRequested() => _onReachabilityProbeRequested(
+        event,
+        emit,
+      ),
     };
   }
 }
