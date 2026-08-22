@@ -54,10 +54,11 @@ class _EnvironmentPane extends StatelessWidget {
               'Build mods (.NET)',
               env.ofPurpose(ToolPurpose.develop),
             ),
-            ..._group(context, 'UGC live-sync (optional)', [
-              ...env.ofPurpose(ToolPurpose.ugcUnity),
-              ...env.ofPurpose(ToolPurpose.ugcAutomerge),
-            ]),
+            ..._group(
+              context,
+              'Custom worlds (optional)',
+              env.ofPurpose(ToolPurpose.customWorldUnity),
+            ),
             ..._group(context, 'Other', env.ofPurpose(ToolPurpose.optional)),
           ],
           if (setup != null && setup.actions.isNotEmpty) ...[

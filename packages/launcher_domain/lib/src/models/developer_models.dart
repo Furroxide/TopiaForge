@@ -25,18 +25,6 @@ class DeveloperProject {
   final VersionRange loaderVersionRange;
   final UnityCompanionSettings unityCompanion;
 
-  /// Returns a copy with [liveSync] merged into the Unity companion settings (enabling the companion).
-  DeveloperProject withUgcLiveSync(UgcLiveSyncSettings liveSync) {
-    return copyWith(
-      unityCompanion: UnityCompanionSettings(
-        enabled: true,
-        projectPath: unityCompanion.projectPath,
-        unityVersion: unityCompanion.unityVersion,
-        assetBundleOutputPath: unityCompanion.assetBundleOutputPath,
-        liveSync: liveSync,
-      ),
-    );
-  }
 
   factory DeveloperProject.fromJson(Map<String, Object?> json) {
     return DeveloperProject(
@@ -353,7 +341,6 @@ class ModScaffoldOptions {
     this.homepage,
     this.source,
     this.includeUnityCompanion = false,
-    this.liveSync,
   });
 
   final String template;
@@ -387,8 +374,6 @@ class ModScaffoldOptions {
   final String? source;
   final bool includeUnityCompanion;
 
-  /// When set, the project is scaffolded with UGC live sync preconfigured (implies the Unity companion).
-  final UgcLiveSyncSettings? liveSync;
 
   /// Applies the specified overrides on top of [manifest] (a template-default or generated manifest map),
   /// returning the merged `topiaforge.mod.json` map. List/map fields replace wholesale when specified.

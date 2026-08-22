@@ -1,6 +1,6 @@
 ---
 title: Specialist modules
-description: Add optional V1 creator, robot, world, time, prompt, UGC, and multiplayer contracts safely.
+description: Add optional V1 creator, robot, world, time, prompt, and multiplayer contracts safely.
 ---
 
 # Specialist modules
@@ -25,7 +25,6 @@ spoof that declaration.
 | Chronos | `topiaforge mod add chronos` | `ITimeControlService`, time leases, drivers, turn scheduler | `io.github.furroxide.topiaforge.chronos` |
 | Creator Content | `topiaforge mod add creatorcontent` | Catalog registrations, creator sessions, project library, mutation safety, F5 host routing | `io.github.furroxide.topiaforge.creatorcontent` |
 | Prompts | `topiaforge mod add prompts` | `IPromptOverrideRegistry`, override leases, conflict diagnostics | `io.github.furroxide.topiaforge.prompts` |
-| UGC | `topiaforge mod add ugc` | `IUgcLiveSyncService`, sync and asset-override leases | `io.github.furroxide.topiaforge.ugc.livesync` |
 | Multiplayer | `topiaforge mod add multiplayer` | Sessions, participants, replicated state/objects, commands, prediction, presentation events | `io.github.furroxide.topiaforge.multiplayer` |
 
 ## Resolve a provider
@@ -88,12 +87,6 @@ provider appends its effective value to native Robotopia planning, while RobotKi
 structured brain and conversation requests. The directive augments the prompt; it never replaces personality,
 grounded facts, action schemas, or structured-output requirements. Registrations remain owner-bound and changes take
 effect dynamically, so unloading the consumer restores normal planning without restarting either provider.
-
-## UGC
-
-UGC can consume watched local snapshots or a live Automerge document, then update a world preview.
-Sessions and asset overrides are owner-bound leases. Treat received documents as untrusted,
-bounded content and surface sync errors without destroying the last good running scene.
 
 ## Multiplayer
 

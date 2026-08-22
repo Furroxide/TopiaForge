@@ -295,11 +295,8 @@ extension _TopiaForgeEnvironmentCommands on _TopiaForgeCli {
     stdout.writeln('');
     stdout.writeln('Build mods (.NET, required to develop):');
     _printChecks(env.ofPurpose(ToolPurpose.develop));
-    stdout.writeln('UGC live-sync (optional):');
-    _printChecks([
-      ...env.ofPurpose(ToolPurpose.ugcUnity),
-      ...env.ofPurpose(ToolPurpose.ugcAutomerge),
-    ]);
+    stdout.writeln('Custom worlds (optional):');
+    _printChecks(env.ofPurpose(ToolPurpose.customWorldUnity).toList());
     final other = env.ofPurpose(ToolPurpose.optional).toList();
     if (other.isNotEmpty) {
       stdout.writeln('Other:');

@@ -18,7 +18,6 @@
     <ProjectReference Include="..\TopiaForge.Mods.Interop.Unity\TopiaForge.Mods.Interop.Unity.csproj" />
     <ProjectReference Include="..\TopiaForge.Mods.Prompts\TopiaForge.Mods.Prompts.csproj" />
     <ProjectReference Include="..\TopiaForge.Mods.RobotKit\TopiaForge.Mods.RobotKit.csproj" />
-    <ProjectReference Include="..\TopiaForge.Mods.Ugc\TopiaForge.Mods.Ugc.csproj" />
     <ProjectReference Include="..\TopiaForge.Mods.Worlds\TopiaForge.Mods.Worlds.csproj" />
     <ProjectReference Include="..\TopiaForge.ModManager.Core\TopiaForge.ModManager.Core.csproj" />
     <ProjectReference Include="..\TopiaForge.Mods.UnityUi\TopiaForge.Mods.UnityUi.csproj" />

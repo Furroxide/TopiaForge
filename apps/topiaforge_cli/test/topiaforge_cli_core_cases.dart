@@ -11,8 +11,6 @@ void _coreCliTests(_CliTestHarness Function() currentHarness) {
     expect(result.stdout.toString(), contains('topiaforge updates index'));
     expect(result.stdout.toString(), contains('topiaforge mod set'));
     expect(result.stdout.toString(), contains('topiaforge check scaffold'));
-    expect(result.stdout.toString(), contains('topiaforge ugc setup'));
-    expect(result.stdout.toString(), contains('topiaforge ugc dev'));
     expect(
       result.stdout.toString(),
       contains('topiaforge release build-package'),

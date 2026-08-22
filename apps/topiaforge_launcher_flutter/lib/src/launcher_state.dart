@@ -31,14 +31,9 @@ class LauncherState {
     this.diagnosticBundle,
     this.developerWorkspace,
     this.developerDoctor,
-    this.ugcPublisherRunning = false,
     this.developerMode = false,
     this.developerEnvironment,
     this.developerSetup,
-    this.ugcStatus,
-    this.ugcScenes = const [],
-    this.ugcSidecarLog = const [],
-    this.ugcCapturedDocumentUrl = '',
     this.developerProjects = const [],
     this.unityEditors = const [],
     this.managedProject,
@@ -96,9 +91,6 @@ class LauncherState {
   final DeveloperWorkspace? developerWorkspace;
   final DeveloperDoctorReport? developerDoctor;
 
-  /// True while the UGC Automerge publisher (Node sidecar) is running in watch mode from the launcher.
-  final bool ugcPublisherRunning;
-
   /// Opt-in developer mode (off by default). Controls whether the Developer tab is shown.
   final bool developerMode;
 
@@ -108,17 +100,11 @@ class LauncherState {
   /// Last setup/auto-fix result (action log), shown after running Setup in the Dev tab.
   final DeveloperSetupResult? developerSetup;
 
-  /// Last UGC live-sync status read from the game's handshake file (default watch folder, connected doc, scenes).
-  final UgcLiveSyncStatusSnapshot? ugcStatus;
-
   /// Scenes parsed from the newest exported project in the watch folder (drives the cockpit's scene dropdown).
-  final List<UgcSceneRef> ugcScenes;
 
   /// Recent lines from the running Automerge publisher (Node sidecar), shown in the cockpit's console view.
-  final List<String> ugcSidecarLog;
 
   /// The live Automerge document url auto-captured from the publisher's output (pre-populated into the game).
-  final String ugcCapturedDocumentUrl;
 
   /// The VCC-style tracked developer projects (mod + Unity), shown in the Dev tab's Projects list.
   final List<RegisteredProject> developerProjects;
@@ -137,11 +123,6 @@ class LauncherState {
 
   /// The subscribed VPM repositories (package listings).
   final List<PackageSource> unityRepos;
-
-  /// Convenience accessor for the current project's UGC live-sync settings (defaults when none).
-  UgcLiveSyncSettings get ugcLiveSync =>
-      developerWorkspace?.project?.unityCompanion.liveSync ??
-      const UgcLiveSyncSettings();
 
   LauncherProfile? get selectedProfile {
     for (final profile in profiles) {
@@ -229,15 +210,9 @@ class LauncherState {
     DiagnosticBundle? diagnosticBundle,
     DeveloperWorkspace? developerWorkspace,
     DeveloperDoctorReport? developerDoctor,
-    bool? ugcPublisherRunning,
     bool? developerMode,
     EnvironmentReport? developerEnvironment,
     DeveloperSetupResult? developerSetup,
-    UgcLiveSyncStatusSnapshot? ugcStatus,
-    bool clearUgcStatus = false,
-    List<UgcSceneRef>? ugcScenes,
-    List<String>? ugcSidecarLog,
-    String? ugcCapturedDocumentUrl,
     List<RegisteredProject>? developerProjects,
     List<UnityEditor>? unityEditors,
     RegisteredProject? managedProject,
@@ -283,15 +258,9 @@ class LauncherState {
       diagnosticBundle: diagnosticBundle ?? this.diagnosticBundle,
       developerWorkspace: developerWorkspace ?? this.developerWorkspace,
       developerDoctor: developerDoctor ?? this.developerDoctor,
-      ugcPublisherRunning: ugcPublisherRunning ?? this.ugcPublisherRunning,
       developerMode: developerMode ?? this.developerMode,
       developerEnvironment: developerEnvironment ?? this.developerEnvironment,
       developerSetup: developerSetup ?? this.developerSetup,
-      ugcStatus: clearUgcStatus ? null : ugcStatus ?? this.ugcStatus,
-      ugcScenes: ugcScenes ?? this.ugcScenes,
-      ugcSidecarLog: ugcSidecarLog ?? this.ugcSidecarLog,
-      ugcCapturedDocumentUrl:
-          ugcCapturedDocumentUrl ?? this.ugcCapturedDocumentUrl,
       developerProjects: developerProjects ?? this.developerProjects,
       unityEditors: unityEditors ?? this.unityEditors,
       managedProject: clearManagedProject

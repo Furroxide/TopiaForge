@@ -80,7 +80,7 @@ On an authorized build-2309 host, complete all of these checks:
 1. In Sandbox, press F5 and confirm Sandbox wins routing. In ordinary stable standalone gameplay,
    confirm CreatorTools owns F5. Menus, scene transitions, Worlds sessions, connected remote
    multiplayer, and headless processes must reject the global host.
-2. Spawn curated items, UGC props, and every available RobotKit robot type. Exercise search, filters,
+2. Spawn curated items, environment props, and every available RobotKit robot type. Exercise search, filters,
    selection, transform, duplicate, temporary remove, undo, and explicit End Session cleanup.
 3. Move a pre-existing robot and preview autonomous personality and brain changes. End the session
    and verify location, personality, and brain mode restore exactly.
@@ -153,13 +153,13 @@ The `lifecycle.ten-cycles` marker is emitted only after ten live acquire/release
 the automatable resource families named in `tests/live-game-acceptance.json`. The probe covers
 explicit lifetime cleanup, events, scheduler work and cancellation, input, nested player-control
 leases, asset/prefab/entity and interaction handles, audio, UI, localization, commands, extensions,
-Chronos, Prompts, RobotKit targets, Creator Content sessions, UGC overrides, and Worlds registrations. It reuses stable ids,
+Chronos, Prompts, RobotKit targets, Creator Content sessions, and Worlds registrations. It reuses stable ids,
 checks inactive handles, verifies callbacks stop after release, and performs a final reacquisition.
 Hardware-, dialogue-, robot-, pause-, and session-specific handles remain in their dedicated live
 cases rather than being misreported as automatic ten-cycle coverage.
 
 The `integration.provider-scope` marker requires exactly one provider for each declared core module,
-an installed optional UGC provider, and a deliberately absent optional provider that does not block
+and a deliberately absent optional provider that does not block
 this consumer from loading. A private probe contract then verifies singleton conflict reporting,
 multiple-provider registration order, deterministic first selection, and idempotent early release.
 This case does not claim to inject a corrupt package; corrupt optional-provider isolation remains a

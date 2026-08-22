@@ -20,13 +20,11 @@
         "unityUi": "1.0.0-rc.1",
         "gameCompatExtractor": "1.1.0-rc.1",
         "gameCompatSurface": "1.1.0-rc.1",
-        "sidecar": "0.1.0-rc.1",
         "bepInEx": "5.4.23.5"
       },
       "vpmPackages": {
         "io.github.furroxide.topiaforge.vpm-resolver": "0.1.0-rc.1",
-        "io.github.furroxide.topiaforge.world-companion": "0.1.0-rc.1",
-        "io.github.furroxide.topiaforge.ugc-companion": "0.1.1-rc.1"
+        "io.github.furroxide.topiaforge.world-companion": "0.1.0-rc.1"
       },
       "mods": {
         "io.github.furroxide.topiaforge.chronos": "1.0.0-rc.1",
@@ -41,7 +39,6 @@
         "io.github.furroxide.topiaforge.prompts": "1.0.0-rc.1",
         "io.github.furroxide.topiaforge.robotkit": "1.0.0-rc.1",
         "io.github.furroxide.topiaforge.sandbox": "1.0.0-rc.1",
-        "io.github.furroxide.topiaforge.ugc.livesync": "1.0.0-rc.1",
         "io.github.furroxide.topiaforge.worlds": "1.0.0-rc.1",
         "io.github.furroxide.topiaforge.zombies": "1.0.0-rc.1"
       },
@@ -62,7 +59,6 @@
         "io.github.furroxide.topiaforge.prompts-1.0.0-rc.1.topiaforgemod",
         "io.github.furroxide.topiaforge.robotkit-1.0.0-rc.1.topiaforgemod",
         "io.github.furroxide.topiaforge.sandbox-1.0.0-rc.1.topiaforgemod",
-        "io.github.furroxide.topiaforge.ugc.livesync-1.0.0-rc.1.topiaforgemod",
         "io.github.furroxide.topiaforge.worlds-1.0.0-rc.1.topiaforgemod",
         "io.github.furroxide.topiaforge.zombies-1.0.0-rc.1.topiaforgemod"
       ]

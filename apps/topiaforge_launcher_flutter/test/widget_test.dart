@@ -10,26 +10,29 @@ import 'package:topiaforge_launcher_flutter/src/launcher_app.dart';
 import 'package:topiaforge_launcher_flutter/src/launcher_bloc.dart';
 import 'package:topiaforge_launcher_flutter/src/launcher_event.dart';
 import 'package:topiaforge_launcher_flutter/src/launcher_section.dart';
-import 'package:topiaforge_launcher_flutter/src/launcher_state.dart';
 import 'package:topiaforge_launcher_flutter/src/screens.dart';
 
 part 'widget_test_fakes.dart';
 part 'widget_test_developer_fake_helpers.dart';
-part 'widget_test_publisher_fake.dart';
+part 'widget_test_install_fake.dart';
 part 'widget_lifecycle_test_cases.dart';
 part 'widget_install_test_cases.dart';
 part 'widget_mod_repair_test_cases.dart';
 part 'widget_accessibility_test_cases.dart';
 part 'widget_profile_launch_test_cases.dart';
 part 'widget_test_snapshots.dart';
-part 'widget_ugc_test_cases.dart';
 part 'widget_update_test_cases.dart';
 part 'widget_update_test_fakes.dart';
 
+Finder _devScrollable() => find
+    .descendant(
+      of: find.byKey(const Key('developer-scroll')),
+      matching: find.byType(Scrollable),
+    )
+    .first;
+
 void main() {
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
-  registerUgcWidgetTests();
-  registerUgcBlocTests();
   registerLauncherLifecycleTests();
   registerInstallConfirmationWidgetTests();
   registerModRepairTests();
@@ -420,7 +423,7 @@ void main() {
 
     expect(developer.runSetupCount, 1);
     expect(
-      find.textContaining('sidecar dependencies already present'),
+      find.textContaining('Ensured the developer data folder'),
       findsWidgets,
     );
   });

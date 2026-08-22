@@ -31,7 +31,7 @@ void main() {
   });
 
   test(
-    'createUnityProject copies the template + companion and registers it',
+    'createUnityProject copies the template and registers it',
     () async {
       final templateDir = Directory(
         p.join(repoRoot.path, 'templates', 'TopiaForge.UnityWorldTemplate'),
@@ -42,7 +42,7 @@ void main() {
       File(
         p.join(templateDir.path, 'Packages', 'vpm-manifest.json'),
       ).writeAsStringSync(
-        '{"dependencies":{"io.github.furroxide.topiaforge.ugc-companion":"^0.1.0"}}',
+        '{"dependencies":{"io.github.furroxide.topiaforge.world-companion":"^0.1.0"}}',
       );
       Directory(p.join(templateDir.path, 'ProjectSettings')).createSync();
       File(
@@ -65,19 +65,6 @@ void main() {
           ..createSync(recursive: true)
           ..writeAsStringSync('generated');
       }
-      final companionDir = Directory(
-        p.join(
-          repoRoot.path,
-          'templates',
-          'unity-companion',
-          'Packages',
-          'io.github.furroxide.topiaforge.ugc-companion',
-        ),
-      )..createSync(recursive: true);
-      File(p.join(companionDir.path, 'package.json')).writeAsStringSync(
-        '{"name":"io.github.furroxide.topiaforge.ugc-companion","version":"0.1.0"}',
-      );
-
       final projects = await repository.createUnityProject(
         parentDirectory: root.path,
         name: 'My World',
@@ -90,17 +77,6 @@ void main() {
       expect(
         File(
           p.join(created.path, 'Packages', 'vpm-manifest.json'),
-        ).existsSync(),
-        isTrue,
-      );
-      expect(
-        File(
-          p.join(
-            created.path,
-            'Packages',
-            'io.github.furroxide.topiaforge.ugc-companion',
-            'package.json',
-          ),
         ).existsSync(),
         isTrue,
       );

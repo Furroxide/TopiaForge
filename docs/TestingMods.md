@@ -39,7 +39,7 @@ dotnet test --configuration Release
   `FakeUiSurface` also finds controls by id, invokes form/list/graph interactions, captures state and
   dismissal, and isolates callback failures.
 - `FakeInteractionService` and `FakeItemService` cover interactables and held-item flows.
-- `FakeExtensionService` registers Creator Content, RobotKit, Worlds, Chronos, Prompts, UGC,
+- `FakeExtensionService` registers Creator Content, RobotKit, Worlds, Chronos, Prompts,
   multiplayer, or custom providers.
 - `FakeRobotKit` covers agents, objectives, controlled brain queries, conversations, and voice input.
 - `FakeCreatorContentService`, `FakeCreatorMutationSafetyService`,
@@ -47,7 +47,7 @@ dotnet test --configuration Release
   registrations, owned spawns, exclusive temporary edits, fail-closed persistence isolation, and
   local event-project validation/storage.
 - `FakeWorldGamemodeService`, `FakeTimeControlService`, `FakePromptOverrideRegistry`, and
-  `FakeUgcLiveSyncService` provide deterministic specialist-module behavior and leak-observable handles;
+  provide deterministic specialist-module behavior and leak-observable handles;
   use `TryGetWorldContent` to exercise a registered custom-world factory without an engine installation.
 - `ControlledOperation<T>` lets a test choose when asynchronous work completes, fails, or cancels.
 

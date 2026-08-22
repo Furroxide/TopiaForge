@@ -33,17 +33,6 @@ updates:
       - dependency-name: Microsoft.CodeAnalysis.CSharp
         update-types: ["version-update:semver-major"]
 
-  - package-ecosystem: npm
-    directory: /tools/ugc-automerge-sidecar
-    schedule:
-      interval: weekly
-    target-branch: dev
-    commit-message:
-      prefix: deps
-    groups:
-      sidecar:
-        patterns: ["*"]
-
   # The website is pending on the bootstrap branch. This entry becomes active
   # when its package.json and package-lock.json are promoted to the default branch.
   - package-ecosystem: npm

@@ -240,19 +240,11 @@ class ReleasePolicyValidator {
         issues,
       );
     }
-    _expectJsonVersion(
-      root,
-      'tools/ugc-automerge-sidecar/package.json',
-      release.components['sidecar'],
-      issues,
-    );
     final vpmPaths = {
       'io.github.furroxide.topiaforge.vpm-resolver':
           'templates/TopiaForge.UnityWorldTemplate/Packages/io.github.furroxide.topiaforge.vpm-resolver/package.json',
       'io.github.furroxide.topiaforge.world-companion':
           'templates/TopiaForge.UnityWorldTemplate/Packages/io.github.furroxide.topiaforge.world-companion/package.json',
-      'io.github.furroxide.topiaforge.ugc-companion':
-          'templates/unity-companion/Packages/io.github.furroxide.topiaforge.ugc-companion/package.json',
     };
     for (final entry in vpmPaths.entries) {
       _expectJsonVersion(

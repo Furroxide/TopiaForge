@@ -55,7 +55,7 @@ dependent package may compile against.
 `filesystem-watch`, `harmony-patch`, `hud`, `input`, `navigation`, `network`, `microphone`, `particles`,
 `physics`, `physics-settings`, `player-control`, `player-token`, `prompt-overrides`, `quality-settings`,
 `remote-ai`, `render-settings`, `robot-spawning`, `scene-management`, `speech-to-text`, `time`,
-`ugc-livesync`, `unsafe-native`, and `world-service`. Capabilities do not grant or sandbox authority.
+`unsafe-native`, and `world-service`. Capabilities do not grant or sandbox authority.
 In particular, `network` continues to mean arbitrary outbound networking and is unrelated to
 TopiaForge's multiplayer transport.
 

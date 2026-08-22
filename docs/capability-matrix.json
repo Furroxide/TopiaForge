@@ -124,8 +124,7 @@
         "TopiaForge.Mods.ISceneService, TopiaForge.Mods.Abstractions",
         "TopiaForge.Mods.ISceneLoadEventSource, TopiaForge.Mods.Abstractions",
         "TopiaForge.Mods.SceneLoadEvent, TopiaForge.Mods.Abstractions",
-        "TopiaForge.Mods.IWorldGamemodeService, TopiaForge.Mods.Worlds",
-        "TopiaForge.Mods.IUgcLiveSyncService, TopiaForge.Mods.Ugc"
+        "TopiaForge.Mods.IWorldGamemodeService, TopiaForge.Mods.Worlds"
       ],
       "sampleProjects": [
         "mods/TopiaForge.Zombies/TopiaForge.Zombies.csproj",
@@ -136,8 +135,7 @@
         "TopiaForge.Mods.Testing.FakeModEvents, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeSceneService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeWorldGamemodeService, TopiaForge.Mods.Testing",
-        "TopiaForge.Mods.Testing.FakeWorldPauseMenuService, TopiaForge.Mods.Testing",
-        "TopiaForge.Mods.Testing.FakeUgcLiveSyncService, TopiaForge.Mods.Testing"
+        "TopiaForge.Mods.Testing.FakeWorldPauseMenuService, TopiaForge.Mods.Testing"
       ],
       "acceptanceCases": [
         "lifecycle.initial-scene",

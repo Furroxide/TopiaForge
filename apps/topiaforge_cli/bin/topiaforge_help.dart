@@ -23,7 +23,6 @@ const _commands = [
   'doctor',
   'compat',
   'setup',
-  'ugc',
   'world',
   'projects',
   'unity',
@@ -174,29 +173,6 @@ extension _HelpCommand on _TopiaForgeCli {
     );
     stdout.writeln(
       '  topiaforge acceptance run              Run the instrumented Robotopia V1 live gate.',
-    );
-    stdout.writeln('');
-    stdout.writeln('UGC live-sync:');
-    stdout.writeln(
-      '  topiaforge ugc setup                   Configure live-sync (transport, watch folder).',
-    );
-    stdout.writeln(
-      '  topiaforge ugc dev [--project p]       One-command UGC dev loop (watch + deploy).',
-    );
-    stdout.writeln(
-      '  topiaforge ugc publish --file <p>      Publish a UGC project.',
-    );
-    stdout.writeln(
-      '  topiaforge ugc watch <folder>          Watch a folder and sync changes into the game.',
-    );
-    stdout.writeln(
-      '  topiaforge ugc status                  Show live-sync status.',
-    );
-    stdout.writeln(
-      '  topiaforge ugc cleanup                 Stop live sync and clear transient state.',
-    );
-    stdout.writeln(
-      '  topiaforge ugc go-live                 Promote the current UGC session.',
     );
     stdout.writeln('');
     stdout.writeln('Unity & worlds:');
