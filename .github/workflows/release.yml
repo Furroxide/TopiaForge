@@ -43,6 +43,7 @@ jobs:
       prerelease: ${{ steps.metadata.outputs.prerelease }}
       target_sha: ${{ steps.metadata.outputs.target_sha }}
       notes_file: ${{ steps.metadata.outputs.notes_file }}
+      platform_matrix: ${{ steps.metadata.outputs.platform_matrix }}
       release_head_sha: ${{ steps.evidence.outputs.release_head_sha }}
       release_pr_number: ${{ steps.evidence.outputs.release_pr_number }}
     steps:
@@ -97,12 +98,34 @@ jobs:
           [[ "/$notes_file/" != *"/../"* && "/$notes_file/" != *"/./"* ]]
           test "$notes_file" = "$expected_notes_file"
           test -s "$notes_file"
+          # The platform set is the policy's, not the workflow's. RC1 is
+          # Windows-only, so hard-coding a Linux leg here made `finalize`
+          # demand a bundle `artifactPolicy` never asks anyone to build.
+          platform_matrix=$(jq -ec '
+            [
+              .artifactPolicy.platformArchives[] |
+              (
+                if . == "TopiaForge-windows-x64.zip" then
+                  {platform: "windows", target: "windows-x64",
+                   runner: "windows-2025"}
+                elif . == "TopiaForge-linux-x64.zip" then
+                  {platform: "linux", target: "linux-x64",
+                   runner: "ubuntu-24.04"}
+                else
+                  error("Unsupported release platform archive: " + .)
+                end
+              ) + {archive: .}
+            ] |
+            select(length >= 1) |
+            {include: .}
+          ' release/release-policy.json)
           {
             printf 'version=%s\n' "$version"
             printf 'tag=%s\n' "$tag"
             printf 'prerelease=%s\n' "$prerelease"
             printf 'target_sha=%s\n' "$target_sha"
             printf 'notes_file=%s\n' "$notes_file"
+            printf 'platform_matrix=%s\n' "$platform_matrix"
           } >>"$GITHUB_OUTPUT"
 
       - name: Enforce complete release policy
@@ -138,14 +161,7 @@ jobs:
       contents: read
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - platform: windows
-            runner: windows-2025
-            archive: TopiaForge-windows-x64.zip
-          - platform: linux
-            runner: ubuntu-24.04
-            archive: TopiaForge-linux-x64.zip
+      matrix: ${{ fromJSON(needs.verify-candidate.outputs.platform_matrix) }}
     steps:
       - name: Checkout exact release commit
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -501,10 +517,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Expect one hosted-verification record per platform the release
+          # policy actually ships, not a fixed two.
+          read -r -a expected_platforms <<<"$(jq -er '
+            [
+              .artifactPolicy.platformArchives[] |
+              if . == "TopiaForge-windows-x64.zip" then "windows"
+              elif . == "TopiaForge-linux-x64.zip" then "linux"
+              else error("Unsupported release platform archive: " + .)
+              end
+            ] |
+            sort | join(" ")
+          ' release/release-policy.json)"
+          test "${#expected_platforms[@]}" -ge 1
           test "$(
             find hosted-verification -mindepth 1 -maxdepth 1 \
               -type f -name 'hosted-verification-*.json' | wc -l
-          )" -eq 2
+          )" -eq "${#expected_platforms[@]}"
           handoff_sha=$(sha256sum staged-assets/release-handoff-v1.json |
             awk '{print $1}')
           handoff_signature_sha=$(
@@ -549,8 +578,10 @@ jobs:
               wc -c <"staged-assets/$archive"
             )"
           done
-          test "${seen_platforms[windows]:-}" = 1
-          test "${seen_platforms[linux]:-}" = 1
+          for expected_platform in "${expected_platforms[@]}"; do
+            test "${seen_platforms[$expected_platform]:-}" = 1
+          done
+          test "${#seen_platforms[@]}" -eq "${#expected_platforms[@]}"
 
       - name: Isolate the exact catalog asset set
         shell: bash
@@ -603,9 +634,17 @@ jobs:
           handoff_names=(
             release-handoff-v1.json
             release-handoff-v1.json.p7s
-            release-platform-bundle-v1-linux-x64.json
-            release-platform-bundle-v1-windows-x64.json
           )
+          while IFS= read -r bundle_name; do
+            handoff_names+=("$bundle_name")
+          done < <(jq -er '
+            [
+              .artifactPolicy.platformArchives[] |
+              "release-platform-bundle-v1-" +
+              (ltrimstr("TopiaForge-") | rtrimstr(".zip")) + ".json"
+            ] |
+            sort | .[]
+          ' release/release-policy.json)
           for name in "${handoff_names[@]}"; do
             cp -- "staged-assets/$name" "release-assets/$name"
           done

@@ -1,52 +1,8 @@
 {
   "schemaVersion": 1,
+  "gameBuild": "2409",
   "requiredLifecycleCycles": 10,
   "markerPrefix": "TF-ACCEPT",
-  "creatorAcceptance": {
-    "gameBuild": "2409",
-    "evidenceMode": "manual-required",
-    "minimumLifecycleCycles": 10,
-    "description": "Creator workbench checks require an authorized interactive build-2409 run. They are recorded separately from automatic TF-ACCEPT markers so synthetic or source-only tests cannot claim native game coverage.",
-    "cases": [
-      {
-        "id": "creator.f5-routing-and-session",
-        "description": "F5 opens Sandbox while the Sandbox gamemode owns routing and opens CreatorTools only during stable standalone gameplay. Hide releases player controls while preserving the creator session; F5 reopens the same session."
-      },
-      {
-        "id": "creator.catalog-items-ugc-and-robots",
-        "description": "The catalog spawns curated build-2409 items, UGC props, and every RobotKit robot type; search, kind filters, duplicate, transform, remove, undo, and End Session cleanup remain usable."
-      },
-      {
-        "id": "creator.personality-and-location-restore",
-        "description": "A native robot's location, autonomous personality, and brain mode can be previewed and are restored exactly when the session ends, without retaining native runtime handles in a project."
-      },
-      {
-        "id": "creator.custom-character-and-vehicle-sources",
-        "description": "A test mod's authenticated character and validated self-contained vehicle factories spawn and unload safely. When no native vehicle adapter exists, the native vehicle source is visibly empty or degraded instead of inventing support."
-      },
-      {
-        "id": "creator.persistence-isolation",
-        "description": "Global mutation requires one explicit acknowledgement and a validated isolation lease. Save and checkpoint state are byte-for-byte unchanged after End Session; unavailable or revoked isolation fails closed and restores temporary changes."
-      },
-      {
-        "id": "creator.event-graph-and-rollback",
-        "description": "A local visual event project loads, resolves its content, runs deterministic bounded branches, and Stop restores graph-owned spawns and edits while leaving unrelated manual session spawns intact."
-      },
-      {
-        "id": "creator.scene-transition-cleanup",
-        "description": "Scene replacement, a Worlds transition or session, remote multiplayer admission, and mod unload close the global workbench and restore owned content, temporary native edits, controls, conversations, audio, and mutation isolation."
-      },
-      {
-        "id": "creator.source-unload-cleanup",
-        "description": "Unloading a custom content source removes its catalog entries and every produced instance exactly once in LIFO order; the open workbench prunes stale roster entries without crashing."
-      },
-      {
-        "id": "creator.ten-lifecycle-cycles",
-        "description": "Ten open, spawn, edit, hide, reopen, graph run/stop, and End Session cycles complete with no retained objects, leases, bindings, input actions, UI surfaces, interactions, conversations, audio, callbacks, or save-state changes.",
-        "minimumCycles": 10
-      }
-    ]
-  },
   "cases": [
     {
       "id": "lifecycle.initial-scene",

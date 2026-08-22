@@ -50,6 +50,16 @@ void main() {
       ),
       isTrue,
     );
+    // Every gate is blocked, so the computed status is decided entirely by
+    // which of them the contract declares blocking. Pin that set: silently
+    // downgrading one is exactly the change this file exists to catch.
+    expect(
+      decision.gates
+          .where((gate) => gate.enforcement == 'blocking')
+          .map((gate) => gate.id),
+      ['P0-IP-01', 'P0-OSS-01', 'P0-PRIV-01', 'P0-CRED-01', 'P0-GAME-01'],
+    );
+    expect(decision.gates.where((gate) => gate.blocksRelease), hasLength(5));
 
     final publicSummary = decision.toPublicSummary();
     expect(publicSummary.keys, {
@@ -60,6 +70,10 @@ void main() {
       'status',
       'gates',
     });
+    for (final gate in publicSummary['gates']! as List) {
+      expect((gate as Map)['enforcement'], anyOf('advisory', 'blocking'));
+    }
+
     final encoded = jsonEncode(publicSummary);
     for (final forbidden in const [
       'hostname',
@@ -89,7 +103,13 @@ void main() {
     final readinessGate = _at(readinessSchema, ['definitions', 'gate']);
     final bomGate = _at(bomSchema, ['definitions', 'readinessGate']);
 
-    for (final field in const ['id', 'reasonCode', 'status', 'priority']) {
+    for (final field in const [
+      'id',
+      'reasonCode',
+      'status',
+      'priority',
+      'enforcement',
+    ]) {
       expect(
         _at(bomGate, ['properties', field])['enum'],
         _at(readinessGate, ['properties', field])['enum'],
@@ -98,6 +118,13 @@ void main() {
             'schemas.',
       );
     }
+
+    expect(
+      bomGate['required'],
+      readinessGate['required'],
+      reason:
+          'Gate required fields differ between the readiness and BOM schemas.',
+    );
 
     expect(
       _at(bomGate, ['properties', 'reviewerRoles', 'items'])['enum'],
@@ -194,6 +221,80 @@ void main() {
     };
     expect(
       () => _parseJson(ready, schemaBytes),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('schema-invalid'),
+        ),
+      ),
+    );
+  });
+
+  test('advisory gates are reported but do not hold the candidate', () {
+    // The 0.x posture: approving only the five blocking gates reaches `ready`
+    // while the seven advisory gates are still recorded as blocked.
+    final ready = _readinessJson(readinessBytes);
+    const blocking = {
+      'P0-IP-01',
+      'P0-OSS-01',
+      'P0-PRIV-01',
+      'P0-CRED-01',
+      'P0-GAME-01',
+    };
+    for (final rawGate in ready['gates']! as List) {
+      final gate = rawGate as Map;
+      final id = gate['id']! as String;
+      if (!blocking.contains(id)) continue;
+      gate['status'] = 'approved';
+      gate.remove('reasonCode');
+      gate['evidenceIds'] = ['EVID-$id-0001'];
+    }
+    ready['status'] = 'ready';
+
+    final decision = _parseJson(ready, schemaBytes);
+    expect(decision.isReady, isTrue);
+    expect(
+      decision.gates.where((gate) => gate.status == 'blocked'),
+      hasLength(7),
+    );
+
+    // One blocking gate left unapproved still stops the release.
+    final held = _readinessJson(utf8.encode(jsonEncode(ready)))
+      ..['status'] = 'blocked';
+    final ip = (held['gates']! as List).cast<Map>().singleWhere(
+      (gate) => gate['id'] == 'P0-IP-01',
+    );
+    ip['status'] = 'blocked';
+    ip['reasonCode'] = 'approval-evidence-missing';
+    ip['evidenceIds'] = <String>[];
+    expect(_parseJson(held, schemaBytes).isReady, isFalse);
+  });
+
+  test('rejects a decision that relaxes its own enforcement', () {
+    // The decision file is untrusted input. If it could declare a blocking gate
+    // advisory, a candidate could unblock itself by editing one word.
+    final relaxed = _readinessJson(readinessBytes);
+    (relaxed['gates']! as List).cast<Map>().singleWhere(
+      (gate) => gate['id'] == 'P0-IP-01',
+    )['enforcement'] = 'advisory';
+    expect(
+      () => _parseJson(relaxed, schemaBytes),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('wrong identity'),
+        ),
+      ),
+    );
+
+    final unknownEnforcement = _readinessJson(readinessBytes);
+    (unknownEnforcement['gates']! as List).cast<Map>().singleWhere(
+      (gate) => gate['id'] == 'P0-WIN-01',
+    )['enforcement'] = 'optional';
+    expect(
+      () => _parseJson(unknownEnforcement, schemaBytes),
       throwsA(
         isA<StateError>().having(
           (error) => error.message,
@@ -310,7 +411,13 @@ void main() {
         expect(metadataReadiness.status, 'blocked');
         expect(metadataReadiness.blobSha256, decision.readinessBlobSha256);
         expect(metadataReadiness.summary, decision.toPublicSummary());
-        expect(metadataReadiness.blockingReasons, hasLength(12));
+        // Five blocking gates, not twelve: the advisory seven stay in the
+        // summary but no longer make the candidate non-distributable.
+        expect(metadataReadiness.blockingReasons, hasLength(5));
+        expect(
+          metadataReadiness.blockingReasons,
+          isNot(contains(contains('P0-WIN-01'))),
+        );
         final bomSchema = _readinessBomSchema(repositoryRoot);
         final bomSchemaResult = bomSchema.validate(
           metadataReadiness.toBomJson(),

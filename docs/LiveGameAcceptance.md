@@ -17,12 +17,12 @@ cannot mark a live case as passed or waive missing Robotopia evidence. RC1 metad
 records that the WSL2/WSLg Proton run is same-host and non-independent.
 
 Acceptance evidence is valid only for the exact frozen candidate package hashes recorded by the
-harness in `acceptance-result.json` and `last-run.json`. The local Windows Creator evidence bundle
-and orchestrator-produced Proton evidence must also bind the source SHA, release version, platform
-archive SHA-256 and size, canonical ecosystem digest, Robotopia build, full case inventory, pinned
-Proton runtime identity, `WINEDLLOVERRIDES`, execution environment, result, and scrubbed evidence
-digests. Until the automated Windows result, complete Creator descriptor/bundle, and same-host
-Proton evidence match the candidate, the V1 gate remains blocked.
+harness in `acceptance-result.json` and `last-run.json`. Orchestrator-produced Proton evidence must
+also bind the source SHA, release version, platform archive SHA-256 and size, canonical ecosystem
+digest, Robotopia build, full case inventory, pinned Proton runtime identity, `WINEDLLOVERRIDES`,
+execution environment, result, and scrubbed evidence digests. Until the automated Windows result and
+the evidence for every platform in `artifactPolicy` match the candidate, `P0-GAME-01` stays
+blocked.
 Custom-world live acceptance remains scoped to authorized Windows/Proton hosts. Mods execute as
 [trusted full-process code](PrivacyAndCapabilities.md); the capability declarations checked here
 are disclosure, not a sandbox.
@@ -66,20 +66,19 @@ acceptance mod, seeds a schema-1 config fixture, launches Robotopia, validates `
 writes `acceptance-result.json`. A pass requires the exact package to be valid and loaded, an empty
 root startup error, and every requested marker.
 
-## Creator workbench build-2409 matrix
+## Creator workbench manual matrix
 
-The `creatorAcceptance` inventory in `tests/live-game-acceptance.json` is a required interactive
-matrix for Sandbox and CreatorTools. It is deliberately separate from automatic `TF-ACCEPT`
-markers: an offline test or a generic SDK probe cannot honestly prove native catalog contents,
-personality restoration, save isolation, or F5 focus behavior. Record the candidate package hashes,
-platform, exact Robotopia build, before/after save and checkpoint hashes, and a pass/fail result for
-each creator case alongside the ordinary acceptance result.
+**Not a release gate.** `P0-CREATOR-01` and the challenge-bound evidence collector that attested it
+were retired with the `0.x` governance change: they existed to prove an interactive workbench
+session from a frozen candidate SHA, and the workbench is now a Sandbox feature rather than a
+shipped package of its own. What remains is the checklist below — useful manual QA for anyone
+touching `mods/TopiaForge.Sandbox/CreatorTools`, with no machine-checked evidence attached to it.
+`P0-GAME-01`'s mod-load smoke is what a release actually turns on.
 
-On an authorized build-2409 host, complete all of these checks:
+On an authorized build-2409 host, the workbench checks are:
 
-1. In Sandbox, press F5 and confirm Sandbox wins routing. In ordinary stable standalone gameplay,
-   confirm CreatorTools owns F5. Menus, scene transitions, Worlds sessions, connected remote
-   multiplayer, and headless processes must reject the global host.
+1. In Sandbox, press F5 and confirm Sandbox wins routing. Menus, scene transitions, Worlds
+   sessions, connected remote multiplayer, and headless processes must reject the global host.
 2. Spawn curated items, environment props, and every available RobotKit robot type. Exercise search, filters,
    selection, transform, duplicate, temporary remove, undo, and explicit End Session cleanup.
 3. Move a pre-existing robot and preview autonomous personality and brain changes. End the session
@@ -102,36 +101,9 @@ On an authorized build-2409 host, complete all of these checks:
    input, UI, interaction, conversation, audio, callback, or persistence-state count may grow between
    cycles.
 
-Do not mark this matrix complete from the Unity-free lifecycle suite alone. That suite protects the
-same ownership and rollback policies, but the native build-2409 evidence remains mandatory.
-
-Creator evidence is collected natively. `CreatorAcceptanceRecorder` in `mods/Shared/CreatorTools`
-emits `TF-CREATOR|PASS|<challenge>|<case>` markers for all nine `creator.*` cases from workbench
-transitions it actually observed, so partial instrumentation fails closed instead of reporting a
-false pass. The recorder is inert unless a 64-hex challenge has been provisioned into the
-CreatorTools config, so ordinary play emits nothing. Run it with:
-
-```powershell
-topiaforge acceptance creator --creator-package <CreatorTools .topiaforgemod> --all
-```
-
-That command issues the challenge itself — you never see or type it — tails `manager.log`, and binds
-the result to the exact `last-run.json` session and CreatorTools package receipt. Save and
-checkpoint bytes are captured before and after End Session from the real `player_data.json.gz`,
-decompressed before hashing so the gzip mtime does not read as a spurious change. Convert the result
-to a release descriptor with `tools/release/new-windows-creator-evidence.ps1`; the three
-`Assert-WindowsCreator*` verifiers in `tools/release-admin.ps1` then perform real
-`release-windows-creator-evidence-v2` verification, re-deriving every claim from the bundle rather
-than trusting the descriptor.
-
-The legacy script that inferred `pass` from case-directory files, a manual cycle count, and identical
-state blobs still exits with an error, and the orchestrator still rejects legacy Creator evidence.
-Do not hand-author a replacement — use the collector above.
-
-Ordering note: the descriptor requires `-WindowsArchive`, which only exists after the Windows build.
-So `release-admin.ps1 build` is expected to stop at the Creator-evidence check on its first pass;
-produce the evidence, then continue with `resume -WindowsCreatorEvidence … -WindowsCreatorEvidenceBundle …`.
-The full sequence is in `docs/AdminRelease.md` in the repository.
+The Unity-free lifecycle suite protects the same ownership and rollback policies offline, so a
+change that breaks them fails there first; this matrix is what catches the native-only behaviour it
+cannot see.
 
 The local Windows and same-host WSL2/Proton runs also extract their candidate developer payload,
 use only its packaged CLI to create a fresh minimal mod outside the extraction, and pass that

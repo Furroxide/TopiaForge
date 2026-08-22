@@ -206,7 +206,14 @@
     "readinessGate": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "priority", "status", "reviewerRoles", "evidenceIds"],
+      "required": [
+        "id",
+        "priority",
+        "enforcement",
+        "status",
+        "reviewerRoles",
+        "evidenceIds"
+      ],
       "properties": {
         "id": {
           "enum": [
@@ -225,6 +232,7 @@
           ]
         },
         "priority": { "enum": ["P0", "P1"] },
+        "enforcement": { "enum": ["advisory", "blocking"] },
         "status": { "enum": ["accepted-risk", "approved", "blocked"] },
         "reasonCode": {
           "enum": [

@@ -12,6 +12,7 @@ final class ReleaseReadinessGateDecision {
   ReleaseReadinessGateDecision({
     required this.id,
     required this.priority,
+    required this.enforcement,
     required this.status,
     required this.reviewerRoles,
     required this.evidenceIds,
@@ -22,6 +23,7 @@ final class ReleaseReadinessGateDecision {
 
   final String id;
   final String priority;
+  final String enforcement;
   final String status;
   final List<String> reviewerRoles;
   final List<String> evidenceIds;
@@ -29,12 +31,22 @@ final class ReleaseReadinessGateDecision {
   final String? acceptedRiskScope;
   final String? acceptedRiskEvidenceId;
 
-  bool get satisfiesRelease =>
+  /// Whether the gate's own exit criteria are met.
+  bool get isSatisfied =>
       status == 'approved' || (priority == 'P1' && status == 'accepted-risk');
+
+  /// Whether an unmet gate stops the release.
+  ///
+  /// A `0.x` line keeps the whole register visible but only lets the gates
+  /// declared `blocking` in [_gateContracts] hold a candidate. An `advisory`
+  /// gate is still recorded, still reported, and still reaches `ready` only by
+  /// approval — it just does not by itself make the computed status `blocked`.
+  bool get blocksRelease => enforcement == 'blocking' && !isSatisfied;
 
   Map<String, Object?> toPublicSummary() => {
     'id': id,
     'priority': priority,
+    'enforcement': enforcement,
     'status': status,
     if (reasonCode != null) 'reasonCode': reasonCode,
     'reviewerRoles': reviewerRoles,
@@ -149,11 +161,13 @@ final class ReleaseReadinessDecision {
       final contract = _gateContracts[index];
       final id = raw['id']! as String;
       final priority = raw['priority']! as String;
+      final enforcement = raw['enforcement']! as String;
       final status = raw['status']! as String;
       final roles = List<String>.from(raw['reviewerRoles']! as List);
       final gateEvidence = List<String>.from(raw['evidenceIds']! as List);
       if (id != contract.id ||
           priority != contract.priority ||
+          enforcement != contract.enforcement ||
           !_sameList(roles, contract.reviewerRoles)) {
         throw StateError(
           'Release readiness gate ${contract.id} has the wrong identity '
@@ -191,6 +205,7 @@ final class ReleaseReadinessDecision {
         ReleaseReadinessGateDecision(
           id: id,
           priority: priority,
+          enforcement: enforcement,
           status: status,
           reasonCode: reasonCode,
           reviewerRoles: List.unmodifiable(roles),
@@ -201,9 +216,9 @@ final class ReleaseReadinessDecision {
       );
     }
 
-    final computedStatus = gates.every((gate) => gate.satisfiesRelease)
-        ? 'ready'
-        : 'blocked';
+    final computedStatus = gates.any((gate) => gate.blocksRelease)
+        ? 'blocked'
+        : 'ready';
     if (readiness['status'] != computedStatus) {
       throw StateError(
         'Release readiness status does not match its exact gate decisions.',
@@ -284,6 +299,7 @@ final class _GateContract {
   const _GateContract({
     required this.id,
     required this.priority,
+    required this.enforcement,
     required this.blockedReasonCode,
     required this.reviewerRoles,
     this.acceptedRiskScope,
@@ -291,15 +307,36 @@ final class _GateContract {
 
   final String id;
   final String priority;
+  final String enforcement;
   final String blockedReasonCode;
   final List<String> reviewerRoles;
   final String? acceptedRiskScope;
 }
 
+// The `0.x` release register keeps every gate visible but only lets a
+// `blocking` gate hold a candidate. TopiaForge has never shipped, and eight of
+// the original twelve gates wait on organizational evidence — counsel sign-off,
+// a paid code-signing certificate, GitHub org administration, external QA
+// participants — that an alpha line cannot obtain. Blocking is therefore
+// reserved for the four gates that are release-fatal at any version plus the
+// one that proves the product runs at all:
+//
+//   P0-IP-01     rights to integrate with Robotopia
+//   P0-OSS-01    third-party redistribution
+//   P0-PRIV-01   the unapproved RoboAPI backend dependency
+//   P0-CRED-01   rotation of exposed credentials
+//   P0-GAME-01   the product loads and runs on the pinned game build
+//
+// The remaining seven are advisory: recorded, reported, and approvable, but not
+// by themselves a stop. Restoring the `1.0` posture is a matter of moving each
+// `enforcement` back to `blocking` here and in `release/release-readiness.json`;
+// the enforcement value is pinned per gate so the decision file cannot relax
+// itself. See docs/LaunchBlockers.md.
 const _gateContracts = [
   _GateContract(
     id: 'P0-IP-01',
     priority: 'P0',
+    enforcement: 'blocking',
     blockedReasonCode: 'approval-evidence-missing',
     reviewerRoles: ['ip-trademark-counsel', 'project-owner', 'robotopia-owner'],
   ),
@@ -310,12 +347,14 @@ const _gateContracts = [
   _GateContract(
     id: 'P0-OSS-01',
     priority: 'P0',
+    enforcement: 'blocking',
     blockedReasonCode: 'approval-evidence-missing',
     reviewerRoles: ['ip-trademark-counsel', 'release-owner'],
   ),
   _GateContract(
     id: 'P0-PRIV-01',
     priority: 'P0',
+    enforcement: 'blocking',
     blockedReasonCode: 'approval-evidence-missing',
     reviewerRoles: [
       'backend-owner',
@@ -328,6 +367,7 @@ const _gateContracts = [
   _GateContract(
     id: 'P0-TRUST-01',
     priority: 'P0',
+    enforcement: 'advisory',
     blockedReasonCode: 'approval-evidence-missing',
     reviewerRoles: [
       'product-owner',
@@ -339,12 +379,14 @@ const _gateContracts = [
   _GateContract(
     id: 'P0-CRED-01',
     priority: 'P0',
+    enforcement: 'blocking',
     blockedReasonCode: 'rotation-evidence-missing',
     reviewerRoles: ['credential-owner', 'security-owner'],
   ),
   _GateContract(
     id: 'P0-WIN-01',
     priority: 'P0',
+    enforcement: 'advisory',
     blockedReasonCode: 'platform-evidence-missing',
     reviewerRoles: ['release-owner', 'windows-release-qa'],
   ),
@@ -354,12 +396,14 @@ const _gateContracts = [
   _GateContract(
     id: 'P0-GAME-01',
     priority: 'P0',
+    enforcement: 'blocking',
     blockedReasonCode: 'acceptance-evidence-missing',
     reviewerRoles: ['robotopia-owner', 'runtime-mod-qa'],
   ),
   _GateContract(
     id: 'P0-HOST-01',
     priority: 'P0',
+    enforcement: 'advisory',
     blockedReasonCode: 'host-evidence-missing',
     reviewerRoles: [
       'credential-owner',
@@ -370,12 +414,14 @@ const _gateContracts = [
   _GateContract(
     id: 'P0-CAND-01',
     priority: 'P0',
+    enforcement: 'advisory',
     blockedReasonCode: 'candidate-evidence-missing',
     reviewerRoles: ['project-owner', 'release-manager'],
   ),
   _GateContract(
     id: 'P1-UX-01',
     priority: 'P1',
+    enforcement: 'advisory',
     blockedReasonCode: 'acceptance-evidence-missing',
     reviewerRoles: ['accessibility-reviewer', 'native-qa', 'product-owner'],
     acceptedRiskScope: 'rc1-native-ux-accessibility',
@@ -383,6 +429,7 @@ const _gateContracts = [
   _GateContract(
     id: 'P1-E2E-01',
     priority: 'P1',
+    enforcement: 'advisory',
     blockedReasonCode: 'independent-evidence-missing',
     reviewerRoles: [
       'external-author-reviewer',
@@ -394,6 +441,7 @@ const _gateContracts = [
   _GateContract(
     id: 'P1-SUPPORT-01',
     priority: 'P1',
+    enforcement: 'advisory',
     blockedReasonCode: 'ownership-evidence-missing',
     reviewerRoles: [
       'incident-owner',
