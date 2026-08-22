@@ -30,7 +30,7 @@ on macOS, TopiaForgeUi falls through its documented font fallback chain if the b
 ## For mod developers
 
 Robotopia now ships its own browser world editor, the **Robotopia Creator**, so read
-[docs/RobotopiaCreator.md](docs/RobotopiaCreator.md) first: it states which half of the problem
+[docs/CreatorScope.md](docs/CreatorScope.md) first: it states which half of the problem
 TopiaForge owns (C# behaviour, gamemodes, runtime control, local/CI tooling) and which half the
 Creator owns (scene layout, personalities, publishing).
 
