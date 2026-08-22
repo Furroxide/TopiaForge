@@ -279,7 +279,7 @@ void _expectSdkCsprojVersion(
     path,
     expected,
     issues,
-    expectedAssemblyVersion: _v1StableContractPackageIds.contains(packageId)
+    expectedAssemblyVersion: _stableContractPackageIds.contains(packageId)
         ? _stableMajorAssemblyVersion(expected)
         : null,
   );
@@ -295,7 +295,7 @@ void _expectSdkCsprojVersion(
   }
 }
 
-const _v1StableContractPackageIds = <String>{
+const _stableContractPackageIds = <String>{
   'TopiaForge.Mods.Abstractions',
   'TopiaForge.Mods.Chronos',
   'TopiaForge.Mods.CreatorContent',
