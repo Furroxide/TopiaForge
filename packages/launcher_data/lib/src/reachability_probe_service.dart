@@ -30,7 +30,7 @@ class ReachabilityProbeService implements ReachabilityProbeGateway {
     ReachabilityProbePolicy policy = const ReachabilityProbePolicy(),
     StunServerList serverList = const StunServerList(),
     List<String> configuredServers = const [],
-    Future<StunTransport> Function()? openTransport,
+    StunTransportFactory? openTransport,
   }) : _dataRoot = dataRoot,
        _configuredServers = configuredServers,
        _runner = runner,
@@ -48,7 +48,7 @@ class ReachabilityProbeService implements ReachabilityProbeGateway {
   final ReachabilityProbePolicy _policy;
   final StunServerList _serverList;
   final List<String> _configuredServers;
-  final Future<StunTransport> Function() _openTransport;
+  final StunTransportFactory _openTransport;
 
   File get _settingsFile => File(p.join(_dataRoot, settingsFileName));
 
@@ -87,6 +87,10 @@ class ReachabilityProbeService implements ReachabilityProbeGateway {
   ///
   /// [servers] are `address:port` entries for STUN servers that advertise an alternate address. There is no default
   /// list: the probe contacts nothing unless a maintainer configures where to send it.
+  ///
+  /// Every entry must name the same address family. Mapping is decided by comparing reflexive endpoints across the
+  /// server's addresses and ports, and endpoints in different families are not comparable, so a mixed list is a
+  /// misconfiguration rather than a fallback list; it is refused instead of silently reduced to one family.
   @override
   Future<ReachabilityProbeOutcome> run({
     required bool developerMode,
@@ -106,9 +110,20 @@ class ReachabilityProbeService implements ReachabilityProbeGateway {
       );
     }
 
+    final wantsIPv4 = endpoints.first.isIPv4;
+    if (endpoints.any((endpoint) => endpoint.isIPv4 != wantsIPv4)) {
+      return const ReachabilityProbeOutcome.unavailable(
+        'Probe servers must all use the same address family. One run compares reflexive '
+        'endpoints across a server address and port, and endpoints in different families '
+        'are not comparable.',
+      );
+    }
+
     StunTransport? transport;
     try {
-      transport = await _openTransport();
+      transport = await _openTransport(
+        wantsIPv4 ? InternetAddressType.IPv4 : InternetAddressType.IPv6,
+      );
       final observation = await _runner.run(transport, endpoints);
       return ReachabilityProbeOutcome.completed(
         _classifier.classify(observation),
