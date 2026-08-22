@@ -1,5 +1,5 @@
 {
-  "capturedUtc": "2026-08-22T14:53:35.8667292Z",
+  "capturedUtc": "2026-08-22T16:57:53.6327928Z",
   "extractorVersion": "1.1.0-rc.1",
   "gameCodeMvid": "b01cf95e-d12d-4c36-951a-a5fc61889fd7",
   "gameVersion": "0.0.2409",
@@ -247,7 +247,7 @@
     "GameCode|SentryRuntimeConfiguration": 1,
     "GameCode|SettingsScreen": 1
   },
-  "surfaceContentHash": "4475f915f4d4f212a21b5aae52b6c47ee6a577557dd319ca9c9eb763cc7b7a0d",
+  "surfaceContentHash": "3884dc9030c0656fd02f6537272018907bd6d156e0c0ca15a3d4a2c9ca636a77",
   "types": {
     "GameCode|ActionTarget": {
       "assembly": "GameCode",
@@ -8299,6 +8299,397 @@
       "simpleName": "Entry",
       "status": "Resolved",
       "typeKey": "GameCode|UgcEnvironmentPrefabMap+Entry"
+    },
+    "GameCode|UgcExportLoader": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "SupportedLocalAssetTypes",
+          "type": "System.Collections.Generic.HashSet<System.String>"
+        }
+      ],
+      "fullName": "UgcExportLoader",
+      "isAbstract": true,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "DecompressGzipBytes",
+          "parameters": [
+            "System.Byte[]"
+          ],
+          "returnType": "System.Byte[]"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "IsGzipBytes",
+          "parameters": [
+            "System.Byte[]"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "isPublic": true,
+          "isStatic": true,
+          "name": "LoadProject",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "UgcExportProject"
+        },
+        {
+          "isPublic": true,
+          "isStatic": true,
+          "name": "LoadProjectFromBytes",
+          "parameters": [
+            "System.Byte[]",
+            "System.String"
+          ],
+          "returnType": "UgcExportProject"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "NormalizeProject",
+          "parameters": [
+            "UgcExportProject"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": true,
+          "isStatic": true,
+          "name": "ReadProjectJsonBytes",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "System.Byte[]"
+        },
+        {
+          "isPublic": true,
+          "isStatic": true,
+          "name": "TryLoadProject",
+          "parameters": [
+            "System.String",
+            "UgcExportProject&",
+            "System.String&"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "WarnAboutUnsupportedLocalAssets",
+          "parameters": [
+            "UgcExportProject",
+            "System.String"
+          ],
+          "returnType": "System.Void"
+        }
+      ],
+      "properties": [],
+      "simpleName": "UgcExportLoader",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcExportLoader"
+    },
+    "GameCode|UgcExportProject": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "assets",
+          "type": "System.Collections.Generic.Dictionary<System.String, System.String>"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "created",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "localAssets",
+          "type": "System.Collections.Generic.Dictionary<System.String, Newtonsoft.Json.Linq.JToken>"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "modified",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "name",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "scenes",
+          "type": "System.Collections.Generic.Dictionary<System.String, UgcExportScene>"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "version",
+          "type": "System.String"
+        }
+      ],
+      "fullName": "UgcExportProject",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "ResolveScene",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "UgcExportScene"
+        }
+      ],
+      "properties": [],
+      "simpleName": "UgcExportProject",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcExportProject"
+    },
+    "GameCode|UgcImportFileIndex": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "Object"
+      ],
+      "constructors": [],
+      "enumMembers": {},
+      "fields": [],
+      "fullName": "UgcImportFileIndex",
+      "isAbstract": true,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "BuildRecord",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "UgcImportFileRecord"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
+          "name": "IsSupportedExportPath",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "System.Boolean"
+        },
+        {
+          "isPublic": true,
+          "isStatic": true,
+          "name": "Scan",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "System.Collections.Generic.List<UgcImportFileRecord>"
+        }
+      ],
+      "properties": [],
+      "simpleName": "UgcImportFileIndex",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcImportFileIndex"
+    },
+    "GameCode|UgcImportFileRecord": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "ValueType",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": [
+            "System.String",
+            "System.String",
+            "System.DateTime",
+            "System.String",
+            "System.Int32",
+            "System.String"
+          ]
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "fileName",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "lastWriteTimeUtc",
+          "type": "System.DateTime"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "loadError",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "path",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "projectName",
+          "type": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "sceneCount",
+          "type": "System.Int32"
+        }
+      ],
+      "fullName": "UgcImportFileRecord",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [],
+      "properties": [],
+      "simpleName": "UgcImportFileRecord",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcImportFileRecord"
+    },
+    "GameCode|UgcImportHostConfig": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "ScriptableObject",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "importFolderOverride",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "selectedExportFilePath",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "selectedSceneId",
+          "type": "System.String"
+        }
+      ],
+      "fullName": "UgcImportHostConfig",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "isPublic": true,
+          "isStatic": true,
+          "name": "GetDefaultImportFolderPath",
+          "parameters": [],
+          "returnType": "System.String"
+        },
+        {
+          "isPublic": true,
+          "isStatic": false,
+          "name": "GetImportFolderPath",
+          "parameters": [],
+          "returnType": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "NormalizeSerializedFields",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnEnable",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnValidate",
+          "parameters": [],
+          "returnType": "System.Void"
+        }
+      ],
+      "properties": [
+        {
+          "canRead": true,
+          "canWrite": true,
+          "name": "ImportFolderOverride",
+          "type": "System.String"
+        },
+        {
+          "canRead": true,
+          "canWrite": true,
+          "name": "SelectedExportFilePath",
+          "type": "System.String"
+        },
+        {
+          "canRead": true,
+          "canWrite": true,
+          "name": "SelectedSceneId",
+          "type": "System.String"
+        }
+      ],
+      "simpleName": "UgcImportHostConfig",
+      "status": "Resolved",
+      "typeKey": "GameCode|UgcImportHostConfig"
     },
     "GameCode|UgcImportHostSceneController": {
       "assembly": "GameCode",
