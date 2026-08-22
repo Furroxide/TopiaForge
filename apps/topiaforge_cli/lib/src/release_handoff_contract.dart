@@ -320,7 +320,6 @@ const _platformToolchainSections = <String, String>{
 const _requiredEvidence = <String, Set<String>>{
   'windows-x64': {
     'authenticode',
-    'creator',
     'ecosystem-reproducibility',
     'package',
     'robotopia',

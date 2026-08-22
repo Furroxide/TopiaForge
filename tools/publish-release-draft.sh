@@ -97,14 +97,24 @@ while IFS= read -r generated_name; do
   workflow_generated_assets[$generated_name]=1
 done < <(jq -r '.[]' <<<"$workflow_generated_json")
 
+# The handoff asset set follows artifactPolicy. Naming both platforms
+# unconditionally required a Linux archive the Windows-only RC1 build never
+# produces, so re-adding Linux to the policy is all it takes to restore it.
 required_handoff_assets=(
   release-handoff-v1.json
   release-handoff-v1.json.p7s
-  release-platform-bundle-v1-linux-x64.json
-  release-platform-bundle-v1-windows-x64.json
-  TopiaForge-linux-x64.zip
-  TopiaForge-windows-x64.zip
 )
+while IFS= read -r policy_archive; do
+  bundle_target=${policy_archive#TopiaForge-}
+  bundle_target=${bundle_target%.zip}
+  required_handoff_assets+=(
+    "$policy_archive"
+    "release-platform-bundle-v1-$bundle_target.json"
+  )
+done < <(jq -er '
+  .artifactPolicy.platformArchives |
+  select(type == "array" and length > 0) | sort | .[]
+' "$release_policy")
 for required in "${required_handoff_assets[@]}"; do
   [[ -f $assets_dir/$required && -s $assets_dir/$required ]] || {
     echo "Required local handoff asset is missing: $required" >&2

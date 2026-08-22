@@ -6,17 +6,9 @@ extension _TopiaForgeAcceptanceCommands on _TopiaForgeCli {
       '[--output dir] [--case id ...] [--all] [--timeout-seconds 30..3600] '
       '[--skip-runtime-install] [--skip-launch]';
 
-  static const _creatorUsage =
-      'Usage: topiaforge acceptance creator --creator-package path '
-      '[--game-dir path] [--output dir] [--case id ...] [--all] '
-      '[--timeout-seconds 30..3600] [--skip-runtime-install] [--skip-launch]';
-
   Future<int> _acceptance(List<String> args) async {
-    if (args.firstOrNull == 'creator') {
-      return _acceptanceCreator(args.skip(1).toList(growable: false));
-    }
     if (args.firstOrNull != 'run') {
-      throw UsageError('$_acceptanceUsage\n$_creatorUsage');
+      throw UsageError(_acceptanceUsage);
     }
     final runArgs = args.skip(1).toList(growable: false);
     if (runArgs.contains('--help')) {
@@ -82,90 +74,6 @@ extension _TopiaForgeAcceptanceCommands on _TopiaForgeCli {
     );
     stdout.writeln('Evidence: ${p.join(output, 'acceptance-result.json')}');
     return 0;
-  }
-
-  /// Runs the interactive Creator workbench acceptance journey.
-  ///
-  /// Unlike `acceptance run`, every case here is proven by a challenge-bound
-  /// marker the native recorder emits from a real observed workbench
-  /// transition, so this command cannot be satisfied by a source-only harness.
-  Future<int> _acceptanceCreator(List<String> args) async {
-    if (args.contains('--help')) {
-      stdout.writeln(_creatorUsage);
-      stdout.writeln(
-        'Requires an authorized interactive Robotopia build-2309 session. '
-        'With no --case, every creatorAcceptance case is required.',
-      );
-      return 0;
-    }
-    final parsed = _parseCreatorArguments(args);
-    final repoRoot = _findRepoRoot() ?? Directory.current.absolute.path;
-    final gameDirectory = parsed.values['--game-dir']?.trim().isNotEmpty == true
-        ? parsed.values['--game-dir']!
-        : Platform.environment['ROBOTOPIA_GAME_DIR'] ?? '';
-    final timeoutSeconds = int.tryParse(
-      parsed.values['--timeout-seconds'] ?? '1800',
-    );
-    if (timeoutSeconds == null ||
-        timeoutSeconds < 30 ||
-        timeoutSeconds > 3600) {
-      throw UsageError(
-        '--timeout-seconds must be an integer from 30 through 3600.\n'
-        '$_creatorUsage',
-      );
-    }
-    final creatorPackage = parsed.values['--creator-package'] ?? '';
-    if (creatorPackage.trim().isEmpty) {
-      throw UsageError('--creator-package is required.\n$_creatorUsage');
-    }
-    final output = parsed.values['--output']?.trim().isNotEmpty == true
-        ? p.normalize(p.absolute(parsed.values['--output']!))
-        : p.join(Directory.systemTemp.path, 'topiaforge-creator-acceptance');
-    final options = CreatorAcceptanceOptions(
-      repositoryRoot: repoRoot,
-      gameDirectory: gameDirectory.trim().isEmpty
-          ? ''
-          : p.normalize(p.absolute(gameDirectory)),
-      outputDirectory: output,
-      requiredCases: parsed.cases,
-      timeout: Duration(seconds: timeoutSeconds),
-      requireAll: parsed.flags.contains('--all'),
-      skipRuntimeInstall: parsed.flags.contains('--skip-runtime-install'),
-      skipLaunch: parsed.flags.contains('--skip-launch'),
-    );
-    final runner = CreatorAcceptanceRunner(
-      commandRunner: (arguments) => run(arguments),
-    );
-    final evidence = await runner.run(
-      options,
-      p.normalize(p.absolute(creatorPackage)),
-    );
-    stdout.writeln(
-      'TopiaForge Creator acceptance passed '
-      '${evidence.requiredCases.length} required cases across '
-      '${evidence.lifecycleCycles} lifecycle cycles.',
-    );
-    stdout.writeln(
-      'Evidence: ${p.join(output, 'creator-acceptance-result.json')}',
-    );
-    return 0;
-  }
-
-  _AcceptanceArguments _parseCreatorArguments(List<String> args) {
-    const valueFlags = {
-      '--game-dir',
-      '--creator-package',
-      '--output',
-      '--case',
-      '--timeout-seconds',
-    };
-    const booleanFlags = {
-      '--all',
-      '--require-all',
-      '--skip-runtime-install',
-      '--skip-launch',
-    };
-    return _parseFlagArguments(args, valueFlags, booleanFlags, _creatorUsage);
   }
 
   _AcceptanceArguments _parseFlagArguments(

@@ -12,44 +12,21 @@ The entry point is:
 ./tools/release-admin.ps1 build
 ```
 
-**`build` is expected to stop on its first pass**, and this is by design rather
-than a failure. The Creator evidence descriptor is bound to the Windows archive
-by digest, so it cannot be produced until `build` has created that archive.
-`build` therefore runs to `platforms-built`, retains everything, and then stops
-at the Creator-evidence check with "Builds are retained; provide
--WindowsCreatorEvidence and run resume."
+`build` contains a mandatory interactive window: the live `TF-ACCEPT`
+acceptance run needs roughly 30 minutes at the keyboard with a gamepad and
+microphone. See [`LiveGameAcceptance.md`](LiveGameAcceptance.md).
 
-Note also that `build` contains a mandatory interactive window: the live
-`TF-ACCEPT` acceptance run needs roughly 30 minutes at the keyboard with a
-gamepad and microphone. See [`LiveGameAcceptance.md`](LiveGameAcceptance.md).
-
-At that point run the Creator session, convert its result, and continue:
+Then continue:
 
 ```powershell
-topiaforge acceptance creator --creator-package <CreatorTools .topiaforgemod> --all
-
-./tools/release/new-windows-creator-evidence.ps1 `
-  -AcceptanceResult <result.json> -StateDirectory <output>/state `
-  -CaseEvidenceDirectory <case artifacts> -SourceSha <sha> -Version 0.1.0-rc.1 `
-  -WindowsArchive .release-local\0.1.0-rc.1\assets\TopiaForge-windows-x64.zip `
-  -CanonicalEcosystemSha256 <sha> `
-  -OutputBundle C:\release-qa\windows-creator-evidence.zip `
-  -OutputDescriptor C:\release-qa\windows-creator-evidence.json
-
-./tools/release-admin.ps1 resume `
-  -WindowsCreatorEvidence C:\release-qa\windows-creator-evidence.json `
-  -WindowsCreatorEvidenceBundle C:\release-qa\windows-creator-evidence.zip
 ./tools/release-admin.ps1 stage
 ./tools/release-admin.ps1 dispatch
 ```
 
 `resume` continues from the durable local state and `all` runs every remaining
-phase. Passing the two evidence flags to `build` or `all` up front works only
-when a valid descriptor for that exact archive already exists — on a fresh
-candidate it will not, so expect the two-step sequence above.
-Add `-Rehearsal` to `all` for a verified, non-publishing two-platform
-rehearsal. Local state and raw evidence live under `.release-local/`, which is
-ignored by Git.
+phase. Add `-Rehearsal` to `all` for a verified, non-publishing
+rehearsal of every platform in `artifactPolicy`. Local state and raw evidence
+live under `.release-local/`, which is ignored by Git.
 
 Each canonical ecosystem pass runs in its own detached clean worktree. The
 SHA-256 of the normalized, sorted tree manifest is the ecosystem identity; the
@@ -60,11 +37,19 @@ The machine-readable ship decision is
 `release/release-readiness.json`. It is read from the exact target commit,
 validated against the schema from that same commit, and bound into the BOM by
 digest and gate summary. It carries one entry for each of the twelve
-release-fatal gates in [`LaunchBlockers.md`](LaunchBlockers.md), so no gate that
-can stop a release is tracked only in prose. Every P0 gate must be `approved`.
-Each P1 gate must be either `approved` or `accepted-risk` with an allowed RC1
-scope and evidence identifier. A blocked, missing, malformed, working-tree-only, or wrong-version
-decision stops preflight, staging, and the protected finalizer. The catalog
+recorded gates in [`LaunchBlockers.md`](LaunchBlockers.md), so no gate that can stop a
+release is tracked only in prose.
+
+Each gate declares an `enforcement`, pinned per gate id in
+`release_readiness.dart` so the decision file cannot relax itself. On this `0.x`
+line five gates are `blocking` — `P0-IP-01`, `P0-OSS-01`, `P0-PRIV-01`,
+`P0-CRED-01`, and `P0-GAME-01` — and each must be `approved` before the computed
+status can reach `ready`. The other seven are `advisory`: still recorded, still
+reported by `release validate-readiness` (as warnings), and still approvable,
+but they do not by themselves hold a candidate. An advisory P1 gate may also
+carry `accepted-risk` with an allowed scope and evidence identifier. A missing,
+malformed, working-tree-only, or wrong-version decision, or one whose blocking
+gates are unmet, stops preflight, staging, and the protected finalizer. The catalog
 must remain `blocked` until the reviewed decision is committed. The CLI treats
 the `evidenceIds` as manually reviewed attestation references: it validates
 their exact syntax, uniqueness, gate binding, and exact-commit digest, but does
@@ -252,70 +237,6 @@ translated into its WSL path by the orchestrator.
 macOS packaging remains source-tested as future-platform capability, but RC1
 has no macOS archive, remote builder, Apple identity, notarization step, or
 macOS handoff manifest.
-
-## Windows Creator evidence
-
-The scripted Windows run verifies the installed build-2409 marker, Unity
-lifecycle, canonical live markers, and packaged `new mod` to `dev` journey.
-The nine interactive Creator workbench cases cannot be inferred from those
-markers, screenshots, artifact-directory presence, a manually supplied cycle
-number, or two identical arbitrary files. They require an authorized
-interactive build-2409 session driven by the acceptance harness.
-
-### Producing the evidence
-
-Run the harness from the frozen candidate checkout, then perform the nine
-workbench workflows in-game while it tails the manager log:
-
-```
-topiaforge acceptance creator --creator-package <CreatorTools .topiaforgemod> --all
-```
-
-The harness issues an unpredictable 64-hex one-run challenge and writes it into
-the CreatorTools config before launch. `CreatorAcceptanceRecorder` is inert
-unless that challenge is present, so an ordinary play session cannot emit
-evidence. Each case emits `TF-CREATOR|PASS|<challenge>|<case>` only when every
-required workbench transition was actually observed; a case whose transitions
-did not all occur simply never passes. The harness digests the real
-`player_data.json.gz` save document before and after End Session — decompressed
-first, because a gzip header embeds an mtime that would otherwise read as a
-change — and digests the checkpoint cursor and `<id>_reached` flags separately.
-
-Convert the resulting `creator-acceptance-result.json` and retained state
-pre-images into the release descriptor and bundle:
-
-```
-tools/release/new-windows-creator-evidence.ps1 -AcceptanceResult <result.json> `
-  -StateDirectory <output>/state -CaseEvidenceDirectory <case artifacts> `
-  -SourceSha <sha> -Version <version> -WindowsArchive <zip> `
-  -CanonicalEcosystemSha256 <sha> -OutputBundle <bundle> -OutputDescriptor <json>
-```
-
-The generator derives every claim from the acceptance result rather than from
-artifact presence, and refuses any result that is incomplete, short of the
-required cycles, or shows changed save or checkpoint bytes.
-
-### What the release validator enforces
-
-`release-admin.ps1` accepts only `release-windows-creator-evidence-v2` and
-re-derives the embedded acceptance result's claims rather than trusting the
-public descriptor. A descriptor is rejected unless it binds:
-
-- the challenge and exact `lastRunSessionId`;
-- the CreatorTools package `sourceSha256` and ordered critical-file receipts;
-- the `acceptanceResultSha256` of the acceptance result embedded in the bundle;
-- the source SHA, version, Windows archive digest/size, canonical ecosystem
-  digest, Robotopia build, and exact case-inventory digest;
-- typed per-case evidence produced by the native action, not file presence;
-- the measured lifecycle cycle count and unchanged before/after save and
-  checkpoint receipts from that same session.
-
-The bundle additionally carries the declared persistence layout, so a future
-game build that relocates or renames its persisted state fails closed instead of
-silently reporting "unchanged". `tools/test-release-admin.ps1` fails the run if
-spoofed-challenge, spoofed-session, spoofed-result-digest, wrong-package-receipt,
-replayed prior-run, missing-case, extra-case, short-cycle, mutated-save, or
-mutated-checkpoint evidence is accepted.
 
 ## Same-host WSL2/WSLg Proton evidence
 

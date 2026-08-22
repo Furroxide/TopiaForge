@@ -21,8 +21,6 @@ void writeReleaseQaFixtures({
   ).readAsBytesSync();
   final inventory = jsonDecode(utf8.decode(inventoryBytes)) as Map;
   final liveCases = _caseIds(inventory['cases']);
-  final creator = inventory['creatorAcceptance'] as Map;
-  final creatorCases = _caseIds(creator['cases']);
   final inventorySha = sha256.convert(inventoryBytes).toString();
   final gameMetadata =
       jsonDecode(
@@ -129,38 +127,6 @@ void writeReleaseQaFixtures({
       'releaseJourney': _releaseJourney,
       'evidenceSha256': _digest('windows-x64:robotopia'),
     },
-    'creator': {
-      'result': 'pass',
-      'suite': 'creator-full',
-      'acceptanceChallenge': _digest('windows-x64:creator-challenge'),
-      'lastRunSessionId': 'creator-session-fixture',
-      'creatorPackageReceipt': {
-        'sourceSha256': _digest('windows-x64:creator-package'),
-        'criticalFiles': [
-          {
-            'path': 'TopiaForge.Sandbox.dll',
-            'sha256': _digest('windows-x64:creator-assembly'),
-          },
-          {
-            'path': 'topiaforge.mod.json',
-            'sha256': _digest('windows-x64:creator-manifest'),
-          },
-        ],
-      },
-      'acceptanceResultSha256': _digest('windows-x64:creator-result'),
-      'caseInventorySha256': inventorySha,
-      'requiredCases': creatorCases,
-      'requiredCasesSha256': _caseSetSha(creatorCases),
-      'passedCases': creatorCases,
-      'passedCasesSha256': _caseSetSha(creatorCases),
-      'lifecycleCycles': creator['minimumLifecycleCycles'],
-      'saveStateUnchanged': true,
-      'checkpointStateUnchanged': true,
-      'failures': <String>[],
-      'descriptorSha256': _digest('windows-x64:creator-descriptor'),
-      'evidenceSha256': _digest('windows-x64:creator-bundle'),
-      'evidenceSize': 8192,
-    },
   });
 }
 
@@ -181,7 +147,6 @@ Map<String, String> releaseQaEvidenceFor(
   if (platform == 'windows-x64') {
     final validationSha = _digest('windows:validation');
     return {
-      'creator': _digest('windows-x64:creator-descriptor'),
       'ecosystem-reproducibility': ecosystemSha,
       'package': validationSha,
       'robotopia': _digest('windows-x64:robotopia'),
