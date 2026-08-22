@@ -1,180 +1,192 @@
-# TopiaForge
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/readme/hero-dark.svg">
+    <img src="./assets/readme/hero-light.svg" width="100%"
+         alt="TopiaForge — build mods for Robotopia without touching Unity, BepInEx, or game internals. A terminal shows the quickstart: topiaforge doctor --strict, topiaforge new mod, cd, topiaforge dev.">
+  </picture>
+</p>
 
-TopiaForge is the umbrella toolkit for modding Robotopia: a runtime mod loader, a
-standalone desktop launcher, and a developer CLI for the Unity Mono build of Robotopia.
+<p align="center">
+  <a href="LICENSE"><img alt="License: AGPL-3.0-or-later" src="https://img.shields.io/badge/license-AGPL--3.0--or--later-FF7A11?style=flat-square"></a>
+  <a href="https://github.com/Furroxide/TopiaForge/actions/workflows/ci.yml"><img alt="CI status" src="https://img.shields.io/github/actions/workflow/status/Furroxide/TopiaForge/ci.yml?branch=dev&style=flat-square&label=ci&color=20F6FE"></a>
+  <a href="docs/"><img alt="Documentation" src="https://img.shields.io/badge/docs-44%20guides-20F6FE?style=flat-square"></a>
+  <img alt="Project status: 0.x early" src="https://img.shields.io/badge/status-0.x%20early-E4B373?style=flat-square">
+</p>
 
-## For players (installing & playing mods)
+**TopiaForge is a modding toolkit for [Robotopia](https://builds.tomatocake.dev).** Players get a
+desktop launcher that finds the game, repairs it, and installs mods. Authors get a typed C# SDK, a
+developer CLI, and an in-game UI kit — with no dependency on Unity, BepInEx, or Robotopia internals.
 
-You need **no developer tools** -- no Flutter, Dart, .NET, or Node. Download the release zip for your OS:
-`TopiaForge-windows-x64.zip`, `TopiaForge-macos-universal.zip`, or `TopiaForge-linux-x64.zip`. Windows and
-Linux packages expose the launcher in `launcher/` and a root `topiaforge` CLI executable; macOS packages expose
-`TopiaForge.app` plus a root `topiaforge` shim. The launcher detects your Robotopia installation, repairs the Windows
-or macOS runtime payload, and lets you browse, install, enable/disable, and launch mods. The **Developer** tab is hidden by
-default -- turn it on under **Settings -> Developer mode** only if you build mods.
+Mods compile only against reference packages that TopiaForge ships. You never touch an engine type,
+a reflection handle, or a game assembly, so a Robotopia update breaks far less than a hand-patched
+mod would.
 
-Prerelease launchers check the signed beta channel by default after a persisted
-cooldown. Updates are verified against embedded Ed25519 trust, downloaded and
-extracted within signed bounds, and replace the complete package only after
-explicit confirmation; a startup health handshake enables automatic rollback.
-Unsupported layouts use the verified manual GitHub Releases download. See
+---
+
+## For players
+
+You need **no developer tools** — no Flutter, Dart, .NET, or Node.
+
+1. Download the archive and `SHA256SUMS` from [Releases](https://github.com/Furroxide/TopiaForge/releases).
+2. Check the archive against `SHA256SUMS`, then extract it with its layout intact.
+3. Run `topiaforge doctor --strict`, then start the launcher.
+
+The launcher detects your Robotopia installation, repairs the runtime payload, and lets you browse,
+install, enable, disable, and launch mods. Profiles, dependency previews, and diagnostic bundles are
+built in. The **Developer** tab is hidden unless you turn it on under **Settings → Developer mode**.
+
+In game, open the manager from the main-menu **TopiaForge** button or press `F10`.
+
+> [!IMPORTANT]
+> The current candidate ships a **Windows x64 archive only.** Linux is held for a later 0.x release
+> because Proton acceptance could not be validated on the release host, and macOS additionally
+> requires Developer ID signing and notarization. Both remain supported in source.
+
+Launcher updates are signed with Ed25519, verified before parsing, applied only after explicit
+confirmation, and rolled back automatically if the startup health handshake fails — see
 [launcher updates](docs/LauncherUpdates.md).
 
-The current compatibility target is Robotopia build **2309**. The built-in registry initially carries verified
-first-party release artifacts only; community authors can use the documented self-hosted registry format while
-official submission governance is being established.
+## Build your first mod
 
-Native macOS launcher/runtime packages are supported, but the current Unity-authored TopiaForgeUi brand bundle and
-custom-world bundles target `StandaloneWindows64`. Custom worlds are therefore Windows/Proton-only for now;
-on macOS, TopiaForgeUi falls through its documented font fallback chain if the brand bundle cannot load.
+Only the pinned .NET SDK is required. Unity and Node are optional, for UGC live-sync and world
+authoring.
 
-## For mod developers
-
-Start with the walkthrough: [docs/YourFirstMod.md](docs/YourFirstMod.md). The release zip contains the
-`topiaforge` CLI at its root — add it to `PATH` and you're set (see
-[docs/Modding.md → Install the CLI](docs/Modding.md#install-the-cli)). Validate your machine first
-(`topiaforge setup` to auto-fix what it safely can, or `topiaforge doctor` to audit read-only). Only the .NET SDK
-is required to build mods; Node/Unity are optional (UGC live-sync). See [docs/Modding.md](docs/Modding.md) for
-the full reference. Build branded in-game UI for Robotopia (windows, fullscreen tools, graph
-editors, HUDs, modals, and toasts) with the TopiaForge UI kit — see
-[docs/UiKit.md](docs/UiKit.md) and the F8 gallery mod. Add safe creator catalogs and reversible
-sessions with [Creator Content](docs/CreatorTools.md). The complete first-party catalog and
-candidate gameplay acceptance flows are in [docs/FirstPartyMods.md](docs/FirstPartyMods.md).
-
-TopiaForge 1.0 remains standalone-only, while the stable multiplayer API preview lets authors opt a V5 mod into
-generated server-canonical contracts, loopback play, and deterministic multi-peer tests before live
-transport ships. V5 is also the normal standalone manifest when `multiplayer` is omitted; pre-release V4 was retired.
-See
-[docs/Multiplayer.md](docs/Multiplayer.md) and [docs/ManifestV5.md](docs/ManifestV5.md).
-
-## Standalone launcher
-
-The next-generation desktop launcher is in:
-
-```powershell
-apps\topiaforge_launcher_flutter
+```sh
+topiaforge doctor --strict
+topiaforge new mod example.first-mod --name "First Mod" --author "You" --license AGPL-3.0-or-later
+cd example.first-mod
+topiaforge dev
 ```
 
-Run it locally with:
+`topiaforge dev` restores, builds, tests, packs, validates, and installs the mod in one pass, then
+tails the log in an interactive terminal. The full walkthrough is
+[docs/YourFirstMod.md](docs/YourFirstMod.md).
 
-```powershell
-cd apps\topiaforge_launcher_flutter
-flutter run -d windows   # or -d macos / -d linux
+Every service you need hangs off one owner-scoped context, so there is no owner id to pass and no
+global cleanup to remember:
+
+```csharp
+using TopiaForge.Mods;
+
+public sealed class FirstMod : TopiaForgeMod
+{
+    protected override void OnLoad()
+    {
+        Context.Logger.Info($"{Context.Identity.Name} {Context.Identity.Version} loaded.");
+        Context.Ui.ShowToast("First Mod is running.");
+    }
+}
 ```
 
-The launcher uses Flutter with Bloc state management. It detects the known Robotopia installation, validates the Robotopia payload (`Robotopia.exe` on Windows/Proton, `Robotopia.app` on macOS), repairs bundled BepInEx and the C# loader, manages profiles, previews dependency/conflict plans before package installs, launches Robotopia, and creates diagnostic bundles.
+See [docs/CoreServices.md](docs/CoreServices.md) for all 24 services and
+[docs/Modding.md](docs/Modding.md) for the full reference.
 
-Current launcher state management uses `Bloc<LauncherEvent, LauncherState>` rather than Cubit. Non-generated Dart source files are kept at 500 lines or fewer and split by responsibility.
+## How it fits together
 
-## Developer workflow
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/readme/architecture-dark.svg">
+    <img src="./assets/readme/architecture-light.svg" width="100%"
+         alt="Architecture. In the game process: Robotopia (Unity Mono, HDRP) is loaded by BepInEx and UnityDoorstop, which load TopiaForge.ModManager. The loader owns ModManager.Core (Unity-free domain), Mods.Abstractions (V1 safe contracts), and Mods.UnityUi (in-game UI renderer). On the desktop, never loading game code: the Flutter/Bloc launcher and the Dart topiaforge CLI both sit on launcher_data (I/O and repair) and launcher_domain (pure Dart).">
+  </picture>
+</p>
 
-TopiaForge has a Creator Companion style workflow with project manifests, lock files, package sources, restore, generated C# references, a `topiaforge` CLI, and a launcher Developer surface.
+Two sides, one boundary. **In the game process**, BepInEx loads `TopiaForge.ModManager`, which owns
+the loader payload and hands each mod a safe, owner-scoped context. **On the desktop**, the launcher
+and the CLI share the same Dart domain and data layers and never load game code — so packaging,
+dependency planning, and repair logic exist once, not twice.
 
-Contributors building the complete repository on Windows or macOS should run the cross-platform bootstrap first:
+The release-facing component and contract map is
+[docs/ArchitectureInventory.md](docs/ArchitectureInventory.md).
+
+## What's in the box
+
+| Component | What it does |
+| --- | --- |
+| **Mod loader** | BepInEx plugin that discovers, orders, and runs `.topiaforgemod` packages, with an in-game manager on `F10`. |
+| **Typed C# SDK** | 24 owner-scoped services on `IModContext`. No Unity types, no game internals, no reflection handles. |
+| **Desktop launcher** | Detects and repairs the install, manages profiles, previews dependency and conflict plans, launches the game. |
+| **`topiaforge` CLI** | 28 commands covering scaffold, restore, build, test, pack, validate, install, and release. |
+| **In-game UI kit** | Declarative `UiNode` trees rendered by TopiaForgeUi — HUDs, windows, modals, toasts, with accessibility built in. See [docs/UiKit.md](docs/UiKit.md). |
+| **7 mod templates** | `minimal`, `gameplay`, `gamemode`, `service`, `ui`, `asset`, `world` — each scaffolded, built, packed, and validated in CI. |
+| **16 first-party mods** | Working reference implementations, from physics toys to a wave-survival showcase. See [docs/FirstPartyMods.md](docs/FirstPartyMods.md). |
+| **Build-time analyzers** | Roslyn diagnostics that fail the build on direct Unity, GameCode, or Harmony use, wrong target framework, or undeclared capabilities. |
+| **Optional modules** | RobotKit, Worlds, Chronos, Creator Content, Prompts, UGC, and Multiplayer, added atomically with `topiaforge mod add`. See [docs/Modules.md](docs/Modules.md). |
+
+Authoring content instead of code? The launcher's Developer tab is a Creator-Companion-style cockpit
+for Unity projects, VPM packages, and UGC live-sync —
+see [docs/CreatorCompanion.md](docs/CreatorCompanion.md).
+
+## Status
+
+TopiaForge is in early **0.x** development and has not had a stable release.
+
+| | |
+| --- | --- |
+| Current candidate | `v0.1.0-rc.1` — prerelease, release readiness **blocked** |
+| Platforms | Windows x64 only in this candidate |
+| Robotopia target | build `2409` (canonical pin: [`.github/robotopia-game-build.json`](.github/robotopia-game-build.json)) |
+| Registry | First-party artifacts only; community submissions closed pending moderation policy |
+| Multiplayer | API preview with loopback and deterministic multi-peer tests; no live transport yet |
+
+A 0.x line makes no cross-minor compatibility promise and is not the recommended build for
+unattended or long-lived installations. Open gates are tracked in
+[docs/LaunchBlockers.md](docs/LaunchBlockers.md); the compatibility policy is
+[docs/CompatibilityPolicy.md](docs/CompatibilityPolicy.md).
+
+## Trust model
+
+TopiaForge installs **trusted local packages**. C# mods execute code inside the Robotopia process,
+so do not install a `.topiaforgemod` file unless you trust its source.
+
+Manifest capabilities *disclose* potentially sensitive behavior to a player. They do not sandbox,
+mediate, or grant it. See [docs/PrivacyAndCapabilities.md](docs/PrivacyAndCapabilities.md).
+
+## Meet the team
+
+<table>
+  <tr>
+    <td align="center" valign="top" width="50%">
+      <a href="https://github.com/Furroxide"><img src="https://github.com/Furroxide.png?size=200" width="104" alt="Furroxide's GitHub avatar"></a><br>
+      <b><a href="https://github.com/Furroxide">Furroxide</a></b><br>
+      <sub><b>Founder &amp; Technical Lead</b></sub><br>
+      <sub>Sets the project's direction and builds the runtime, launcher, SDK, developer tooling, and release platform.</sub>
+    </td>
+    <td align="center" valign="top" width="50%">
+      <a href="https://github.com/skavvy"><img src="https://github.com/skavvy.png?size=200" width="104" alt="skavvy's GitHub avatar"></a><br>
+      <b><a href="https://github.com/skavvy">skavvy</a></b><br>
+      <sub><b>Quality &amp; Visual Assets Lead</b></sub><br>
+      <sub>Holds the quality bar and shapes how TopiaForge looks and presents itself.</sub>
+    </td>
+  </tr>
+</table>
+
+## Contributing
+
+Pull requests target `dev`, use Conventional Commits titles, and need a
+[DCO 1.1](DCO) sign-off (`git commit --signoff`). Start with
+[CONTRIBUTING.md](CONTRIBUTING.md) and [docs/ContributorSetup.md](docs/ContributorSetup.md), which
+covers prerequisites, the pinned SDKs, and the full verification suite.
 
 ```powershell
 pwsh ./tools/bootstrap-dev.ps1 -Verify
 ```
 
-See [docs/ContributorSetup.md](docs/ContributorSetup.md) for prerequisites, the pinned Flutter SDK, managed
-reference caching, and platform-specific build notes.
-
-Start here:
-
-```text
-docs\CreatorCompanionParity.md
-```
-
-The workflow is inspired by VCC/VPM concepts and remains Robotopia-native: `.topiaforgemod` is still the runtime package format, while `topiaforge.project.json`, `topiaforge.lock.json`, and generated `topiaforge.dev.props` support source-controlled mod development.
-
-## Local install
-
-```sh
-topiaforge dev-install                     # add --game-dir <path> to override Robotopia detection
-```
-
-(From a source checkout: `cd apps/topiaforge_cli && dart run topiaforge dev-install`.)
-
-This installs BepInEx 5.4.23.5 and the manager plugin into the detected Robotopia installation:
-
-| Platform | Built-in discovery |
-| --- | --- |
-| Windows | `%LOCALAPPDATA%\Tomato Cake\launcher\Robotopia`, plus Robotopia manifests in declared Steam libraries |
-| macOS | `~/Library/Application Support/Tomato Cake/launcher` (the folder containing `Robotopia.app`; BepInEx installs beside the app), plus Robotopia manifests in declared Steam libraries |
-| Linux | Robotopia manifests in Steam libraries declared by `libraryfolders.vdf`, including the Windows payload used by Proton |
-
-Steam discovery requires an app manifest whose name and install directory are both exactly `Robotopia`; TopiaForge does not guess a Steam app id or recursively scan Wine/Proton prefixes. For another store or a custom prefix, pass `--game-dir` pointing at the Windows-layout Robotopia folder. On Linux, launch Robotopia with `WINEDLLOVERRIDES="winhttp=n,b"` so the mod loader injects. The `ROBOTOPIA_GAME_DIR` environment variable overrides automatic detection on every platform.
-
-Launch Robotopia, then open the manager from the main-menu **TopiaForge** button or press `F10`.
-
-## Package format
-
-Mods are `.topiaforgemod` zip files with a required `topiaforge.mod.json` manifest and a C# entry class that derives from `TopiaForge.Mods.TopiaForgeMod`.
-
-Scaffold a mod and pack it:
-
-```sh
-topiaforge new mod yourname.firstmod --name "First Mod" --author "Your Name" --license AGPL-3.0-or-later
-cd yourname.firstmod
-topiaforge pack
-```
-
-`topiaforge pack --all` packs the non-DevTool first-party mods under `mods/`; add
-`--include-dev-mods` to include Creator Tools and UiGallery. Release packaging adds Creator Tools
-explicitly while keeping UiGallery out of the player payload. `topiaforge unity pack-packages`
-regenerates the VPM listing in `dist/vpm/`.
-
-Packages can be installed from the Robotopia manager's package tab by full path, or by placing them into:
-
-```text
-BepInEx\TopiaForge\package-inbox
-```
-
-## Trust model
-
-TopiaForge uses trusted local packages. Do not install `.topiaforgemod` files unless you trust their source; C# mods execute code in the Robotopia process.
+Also relevant: [SECURITY.md](SECURITY.md) · [SUPPORT.md](SUPPORT.md) ·
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 
 ## License
 
-TopiaForge is free software: you can redistribute it and/or modify it under the terms of the
-[GNU Affero General Public License](LICENSE), version 3 or later (`AGPL-3.0-or-later`),
-`Copyright (C) 2026 furroxide`.
+TopiaForge is free software under the [GNU Affero General Public License](LICENSE), version 3 or
+later (`AGPL-3.0-or-later`), `Copyright (C) 2026 furroxide`.
 
-The SDK packages are covered by the same terms with no linking exception, so a mod distributed
-against the TopiaForge SDK must also be licensed `AGPL-3.0-or-later`. Third-party materials keep
-their original licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Contributions are
-accepted under the same terms with a [DCO 1.1](DCO) sign-off.
-
-## Community and project policy
-
-See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [SUPPORT.md](SUPPORT.md),
-[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), and the
-[compatibility policy](docs/CompatibilityPolicy.md). The release-facing component and contract map is in
-[docs/ArchitectureInventory.md](docs/ArchitectureInventory.md). Maintainers preparing a release should use the
-[release checklist](docs/ReleaseChecklist.md) and close the current
-[launch blocker register](docs/LaunchBlockers.md). Remote-service and sensitive-capability behavior is documented in
-[docs/PrivacyAndCapabilities.md](docs/PrivacyAndCapabilities.md).
+The SDK packages carry the same terms **with no linking exception**, so a mod distributed against
+the TopiaForge SDK must also be licensed `AGPL-3.0-or-later`. Third-party materials keep their
+original licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Trademarks and affiliation
 
-TopiaForge is an independent, community-built modding toolkit. It is not developed, published, or endorsed by
-Tomato Cake or the Robotopia development team, and is not otherwise affiliated with them. "Robotopia" and
-"Tomato Cake" are the property of their respective owners and are used here only to identify the game this
-toolkit works with.
-
-## Verification
-
-```powershell
-dotnet build TopiaForge.slnx -c Release
-dotnet run --project tests\TopiaForge.ModManager.Tests\TopiaForge.ModManager.Tests.csproj -c Release
-dotnet run --project tests\TopiaForge.ModRuntime.Tests\TopiaForge.ModRuntime.Tests.csproj -c Release
-dotnet run --project tests\TopiaForge.Mods.Analyzers.Tests\TopiaForge.Mods.Analyzers.Tests.csproj -c Release
-dotnet run --project tests\TopiaForge.Mods.Multiplayer.Generators.Tests\TopiaForge.Mods.Multiplayer.Generators.Tests.csproj -c Release
-dotnet run --project tests\TopiaForge.Mods.Multiplayer.Tests\TopiaForge.Mods.Multiplayer.Tests.csproj -c Release
-Push-Location packages\launcher_domain; dart test; dart analyze; Pop-Location
-Push-Location packages\launcher_data; dart test; dart analyze; Pop-Location
-Push-Location apps\topiaforge_cli; dart test; dart analyze; Pop-Location
-Push-Location packages\launcher_ui; flutter test; flutter analyze; Pop-Location
-Push-Location apps\topiaforge_launcher_flutter; flutter test; flutter analyze; flutter build windows --debug; Pop-Location
-```
-
-On macOS/Linux the same commands apply with `flutter build macos --debug` / `flutter build linux --debug` in the last step.
+TopiaForge is an independent, community-built modding toolkit. It is not developed, published, or
+endorsed by Tomato Cake or the Robotopia development team, and is not otherwise affiliated with
+them. "Robotopia" and "Tomato Cake" are the property of their respective owners and are used here
+only to identify the game this toolkit works with.

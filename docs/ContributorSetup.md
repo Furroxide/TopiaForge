@@ -240,6 +240,28 @@ dotnet build TopiaForge.slnx -c Release
 dotnet run --project tests/TopiaForge.ModManager.Tests/TopiaForge.ModManager.Tests.csproj -c Release
 ```
 
+## Full verification
+
+Run the complete suite before opening a pull request. This is the whole-repository
+check that used to live in `README.md`.
+
+```powershell
+dotnet build TopiaForge.slnx -c Release
+dotnet run --project tests\TopiaForge.ModManager.Tests\TopiaForge.ModManager.Tests.csproj -c Release
+dotnet run --project tests\TopiaForge.ModRuntime.Tests\TopiaForge.ModRuntime.Tests.csproj -c Release
+dotnet run --project tests\TopiaForge.Mods.Analyzers.Tests\TopiaForge.Mods.Analyzers.Tests.csproj -c Release
+dotnet run --project tests\TopiaForge.Mods.Multiplayer.Generators.Tests\TopiaForge.Mods.Multiplayer.Generators.Tests.csproj -c Release
+dotnet run --project tests\TopiaForge.Mods.Multiplayer.Tests\TopiaForge.Mods.Multiplayer.Tests.csproj -c Release
+Push-Location packages\launcher_domain; dart test; dart analyze; Pop-Location
+Push-Location packages\launcher_data; dart test; dart analyze; Pop-Location
+Push-Location apps\topiaforge_cli; dart test; dart analyze; Pop-Location
+Push-Location packages\launcher_ui; flutter test; flutter analyze; Pop-Location
+Push-Location apps\topiaforge_launcher_flutter; flutter test; flutter analyze; flutter build windows --debug; Pop-Location
+```
+
+On macOS and Linux the same commands apply with `flutter build macos --debug` or
+`flutter build linux --debug` in the last step.
+
 ## Optional Unity authoring
 
 Unity is not required for the normal runtime, CLI, launcher, or mod build. World and UI AssetBundles must use
