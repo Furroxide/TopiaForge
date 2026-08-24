@@ -31,10 +31,18 @@ TopiaForge artwork for offline launcher theming.
 
 - Web-derived raster files: `topiaforge-city-header.webp`, `baby-stitch.webp`, and `sheriff.webp`
 - Source: `https://robotopia.gg/`
-- Rights basis: **unresolved.** These files originate from Robotopia's own web brand assets and no
-  redistribution licence has been identified. Permission has been requested from Tomato Cake. Until a
-  written grant is recorded here, these three files have no distributable rights basis and block
-  `P0-IP-01`. If permission is declined or not received, they must be removed or replaced.
+- Owner: **Tomato Cake.** These three files are Robotopia web brand assets and remain the property of
+  Tomato Cake. TopiaForge does not claim any ownership of them, they are not covered by this project's
+  AGPL-3.0-or-later grant, and they carry no separate redistribution licence. They are bundled for
+  offline launcher theming with attribution only.
+- Rights basis: attribution pending a written grant. Permission has been requested from Tomato Cake and
+  no written grant has been recorded yet. The project owner has accepted this as a non-blocking risk
+  for the `0.x` line (recorded 2026-08-24); it must be revisited before `1.0`. If permission is
+  declined, or if Tomato Cake asks for their removal, these files are removed or replaced on request.
+- Replacement status: no first-party artwork exists for these three yet. All three are referenced by the
+  launcher (`TopiaForgeBrandAssets.cityHeader`, `.babyStitch`, `.sheriff` in
+  `packages/launcher_ui/lib/src/launcher_theme.dart`). The precedent for replacing them is
+  `packages/launcher_ui/lib/src/pixel_robot.dart`, which retired the bundled `robot.webp`.
 - Local changes: filenames were normalized for launcher packaging.
 
 The TopiaForge pixel-art wordmark, icon, generated platform icon variants, and the drawn pixel-art robot
@@ -142,7 +150,7 @@ Both signed NuGet packages declare MIT and record dotnet/dotnet commit
 `901ca941248413c79832d2fdbd709da0c4386353`. Release packaging verifies the
 exact netstandard2.0 DLL and notice hashes, then emits their license, notices,
 and machine-readable provenance under `third_party/dotnet/runtime-loader`.
-Robotopia build 2309 supplies the referenced `System.Memory`, `System.Buffers`,
+Robotopia build 2409 supplies the referenced `System.Memory`, `System.Buffers`,
 and `System.Runtime.CompilerServices.Unsafe` assemblies; those player-profile
 identities and hashes are validated but their proprietary game copies are not
 redistributed.
