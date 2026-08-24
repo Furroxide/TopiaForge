@@ -86,7 +86,7 @@ Edit the default greeting in `ExampleFirstModConfig.cs`, add a test assertion, a
 - Use [Core services](CoreServices.md) to add input, player, physics, entities, assets, audio, or UI.
 - Add creator content, robots, worlds, time control, prompt overrides, or multiplayer through
   [Specialist modules](Modules.md).
-- Use [Creator Content](CoreServices.md) when your mod should contribute safe catalog content or work
+- Use [Creator Content](Modules.md#creator-content) when your mod should contribute safe catalog content or work
   with reversible creator sessions.
 - Read [Test a mod](TestingMods.md) before adding behavior with several resource handles.
 - Use [Manifest V5](ManifestV5.md) for dependencies, constraints, capabilities, optional multiplayer metadata, and exported contracts.

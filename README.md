@@ -5,12 +5,12 @@ standalone desktop launcher, and a developer CLI for the Unity Mono build of Rob
 
 ## For players (installing & playing mods)
 
-You need **no developer tools** -- no Flutter, Dart, .NET, or Node. Download the release zip for your OS:
-`TopiaForge-windows-x64.zip`, `TopiaForge-macos-universal.zip`, or `TopiaForge-linux-x64.zip`. Windows and
-Linux packages expose the launcher in `launcher/` and a root `topiaforge` CLI executable; macOS packages expose
-`TopiaForge.app` plus a root `topiaforge` shim. The launcher detects your Robotopia installation, repairs the Windows
-or macOS runtime payload, and lets you browse, install, enable/disable, and launch mods. The **Developer** tab is hidden by
-default -- turn it on under **Settings -> Developer mode** only if you build mods.
+You need **no developer tools** -- no Flutter, Dart, .NET, or Node. Download `TopiaForge-windows-x64.zip`
+from the release. **`0.1.0-rc.1` ships Windows x64 only**: Linux returns in `0.1.0-rc.2` and macOS has no
+release package yet, so do not expect either archive on this release. The package exposes the launcher in
+`launcher/` and a root `topiaforge` CLI executable. The launcher detects your Robotopia installation, repairs
+the runtime payload, and lets you browse, install, enable/disable, and launch mods. The **Developer** tab is
+hidden by default -- turn it on under **Settings -> Developer mode** only if you build mods.
 
 Prerelease launchers check the signed beta channel by default after a persisted
 cooldown. Updates are verified against embedded Ed25519 trust, downloaded and
@@ -42,7 +42,7 @@ is required to build mods; Node/Unity are optional. See [docs/Modding.md](docs/M
 the full reference. Build branded in-game UI for Robotopia (windows, fullscreen tools, graph
 editors, HUDs, modals, and toasts) with the TopiaForge UI kit — see
 [docs/UiKit.md](docs/UiKit.md) and the F8 gallery mod. Add safe creator catalogs and reversible
-sessions with [Creator Content](docs/CoreServices.md). The complete first-party catalog and
+sessions with [Creator Content](docs/Modules.md#creator-content). The complete first-party catalog and
 candidate gameplay acceptance flows are in [docs/FirstPartyMods.md](docs/FirstPartyMods.md).
 
 TopiaForge remains standalone-only, while the stable multiplayer API preview lets authors opt a V5 mod into
@@ -124,9 +124,8 @@ topiaforge pack
 ```
 
 `topiaforge pack --all` packs the non-DevTool first-party mods under `mods/`; add
-`--include-dev-mods` to include UiGallery. Release packaging
-explicitly while keeping UiGallery out of the player payload. `topiaforge unity pack-packages`
-regenerates the VPM listing in `dist/vpm/`.
+`--include-dev-mods` to include UiGallery. Release packaging uses the same set, keeping UiGallery out of
+the player payload. `topiaforge unity pack-packages` regenerates the VPM listing in `dist/vpm/`.
 
 Packages can be installed from the Robotopia manager's package tab by full path, or by placing them into:
 

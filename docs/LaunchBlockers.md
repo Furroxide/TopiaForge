@@ -17,11 +17,22 @@ by source changes. The strict publication gates intentionally continue to reject
 closed.
 
 `P0-CREATOR-01` was retired on 2026-08-22 rather than closed. It existed to attest the native CreatorTools evidence
-collector from an interactive session, and the package it collected evidence for no longer ships: the workbench moved
-into Sandbox. Its machinery — the challenge-bound acceptance runner, the `release-windows-creator-evidence-v2`
-descriptor and bundle, the generator, and the three `Assert-WindowsCreator*` verifiers — was deleted with it, because a
-verifier nothing produces evidence for is not a gate, it is a hard stop nobody can pass. The workbench checklist
-survives as manual QA in [`LiveGameAcceptance.md`](LiveGameAcceptance.md).
+collector from an interactive session, and the standalone package it collected evidence for no longer ships: the
+workbench moved into Sandbox. Its *release* machinery — the challenge-bound acceptance runner, the
+`release-windows-creator-evidence-v2` descriptor and bundle, the generator, and the three `Assert-WindowsCreator*`
+verifiers — was deleted with it, because a verifier nothing produces evidence for is not a gate, it is a hard stop
+nobody can pass. The workbench checklist survives as manual QA in
+[`LiveGameAcceptance.md`](LiveGameAcceptance.md).
+
+Corrected 2026-08-24: the collector itself was **not** deleted. `CreatorAcceptanceRecorder` and
+`CreatorAcceptanceCases` moved into the shipping Sandbox mod with the rest of the workbench and are still constructed
+by `CreatorWorkbench.TryCreate`. They are inert without a provisioned 64-hex challenge, and nothing can provision one
+any more, so this is dormant instrumentation rather than a live code path — but it does ship, and its consumer does
+not exist. Removing it from `mods/TopiaForge.Sandbox/CreatorTools/` is follow-up work, not a release blocker.
+
+More broadly: "Creator Tools is retired" describes the *package*, not the *code*. Roughly 5,400 lines moved into
+Sandbox, which also gained an optional `io.github.furroxide.topiaforge.multiplayer` dependency. The payload count
+drops 15 → 13; the shipped code surface does not shrink proportionally.
 
 This register records a pre-freeze working-tree preflight on the date above. It does not attest a future commit or a
 release candidate SHA. Close an item only with evidence from the frozen candidate SHA; do not treat an unavailable
@@ -221,17 +232,32 @@ automated tests cannot close Unity object lifetime.
 
   Owner: project owner, Robotopia owner, and IP/trademark counsel.
 
+  Current state, web-derived art (recorded 2026-08-24): the three Robotopia web brand rasters
+  (`topiaforge-city-header.webp`, `baby-stitch.webp`, `sheriff.webp`) are now attributed in
+  [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md) as the property of Tomato Cake, outside this
+  project's AGPL grant, bundled with attribution only while a written grant remains outstanding. All
+  three are still referenced by the launcher and no first-party replacement exists for them; the
+  precedent for retiring one is `packages/launcher_ui/lib/src/pixel_robot.dart`, which replaced
+  `robot.webp`. The project owner has accepted this as a **non-blocking** risk for the `0.x` line. It
+  must be revisited before `1.0`, and the files are removed or replaced on request from Tomato Cake.
+
   Exit criteria: retain written authority or an approved clean-room/non-affiliation basis for the Robotopia and
   TopiaForge names, Robotopia injection, compatibility extraction/baselines, registry claims, web-derived art, adapted
   icons, fonts, and custom-world content. Remove or replace any item that lacks a distributable rights basis and
-  record provenance, transformation, hash, license, and approver for retained assets.
+  record provenance, transformation, hash, license, and approver for retained assets. The web-derived art
+  sub-item carries the dated disposition above for `0.x`; the naming, injection, and extraction
+  questions are unchanged and still need counsel.
 
 - [ ] **P0-OSS-01 — Complete the third-party redistribution audit.** *(re-opened 2026-08-06)* *(blocking)*
 
   Owner: open-source compliance/legal and release engineering.
 
   Current state: BepInEx, Harmony, MonoMod, Cecil, UnityDoorstop, .NET, MetadataLoadContext, Flutter/Dart, and SPDX
-  data remain mechanically verified. UnityDoorstop corresponding source is bundled.
+  data remain mechanically verified. UnityDoorstop corresponding source is vendored in the repository
+  **and, as of 2026-08-24, copied into the release archive**. It previously was not: package payload
+  copying took only `third_party/BepInEx/LICENSES/`, so the LGPL-2.1 binary shipped with its notice but
+  without its source. The payload writer now resolves the archive list from `provenance.json` and throws
+  on a declared-but-missing file, and package validation rejects an archive that lacks it.
 
   This gate was previously marked complete on the strength of "font provenance/notices are mechanically verified".
   That claim did not hold. The legal inventory in `release_metadata_inventory.dart` is a fixed allowlist of licence
@@ -284,14 +310,22 @@ automated tests cannot close Unity object lifetime.
   certificate is a purchase decision, not a code defect, so it should not be what a `0.x` alpha's readiness register
   hangs on; the intended `0.x` disposition is to ship unsigned behind a documented SmartScreen warning.
 
-  But the *pipeline* still refuses to produce an unsigned release, and this change did not touch that.
-  `release validate-policy` requires a nonzero 64-hex `signingIdentities.windowsCertificateSha256`, `release.yml`
-  `finalize` re-checks it before verifying the handoff, and `release test-package` runs
-  `--require-windows-signature` against that exact pin. Every one of those is unconditional by design — PR 7 made
-  them so after finding the whole rule had been gated on a version string. Actually shipping unsigned therefore
-  needs its own change, ideally an explicit recorded `unsigned` distribution mode rather than an absent identity, so
-  that a *missing* certificate can never be mistaken for a *chosen* one. Until then this gate is advisory and the
-  policy still stops at the same place.
+  Progress 2026-08-24: the explicit recorded mode now exists.
+  `signingIdentities.windowsDistribution` is `signed` (the default when the key is absent) or `unsigned`, so a
+  missing certificate can no longer be mistaken for a decision to ship without one. `release validate-policy`
+  enforces the guard rails — an unsigned distribution may not also pin a certificate, must be a prerelease, and
+  must be on a `0.x` line — and `tools/release/build-windows.ps1` drops `--require-windows-signing` while adding
+  `--require-windows-unsigned`, so the artifacts are *proved* unsigned rather than merely unchecked. Preflight and
+  handoff staging in `tools/release-admin.ps1` skip the certificate and the detached CMS signature, and the two
+  `release.yml` handoff-verification steps expect the P7S to be absent.
+
+  **Not finished, and deliberately failing closed.** The published trust envelope still embeds
+  `release-handoff-v1.json.p7s` unconditionally: the hosted-verification evidence, the final public asset
+  inventory, and the attestation subject all name it, and `tools/publish-release-draft.sh` expects it in the asset
+  list. Reshaping those is a reviewed change that needs a `-Rehearsal` run behind it, so `release.yml` carries a
+  guard step that rejects an unsigned distribution outright rather than publishing a candidate whose provenance
+  record silently lost its signature field. Removing that guard is the last move of that work, not the first.
+  Until it lands, selecting `unsigned` gets you a correct local build and a hard stop at publication.
 
   Exit criteria for signed distribution: build from the frozen SHA on the administrator Windows
   workstation. Require the CLI, GameCompat extractor, and launcher to have

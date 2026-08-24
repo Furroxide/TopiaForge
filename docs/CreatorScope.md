@@ -23,7 +23,7 @@ does not compete with any of that and should not try.
 
 | TopiaForge | Robotopia Creator |
 |---|---|
-| C# behaviour: Harmony-patched runtime, gamemodes, shop/wallet, pause semantics | Scene and entity authoring |
+| C# behaviour: patched game runtime, gamemodes, shop/wallet, pause semantics | Scene and entity authoring |
 | Runtime robot control: spawning, native pathfinding, objectives, dialogue, brain queries | Robot personalities, lore, voices |
 | Time control, performance patches, in-game UI for mods | The world's look and contents |
 | Custom-geometry worlds authored in Unity and shipped as AssetBundles | Worlds built from the shipped asset libraries |
