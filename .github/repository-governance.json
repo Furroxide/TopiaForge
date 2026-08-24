@@ -67,7 +67,9 @@
         "actions",
         "c-cpp",
         "csharp",
-        "javascript-typescript"
+        "javascript",
+        "javascript-typescript",
+        "typescript"
       ],
       "query_suite": "default",
       "schedule": "weekly",
@@ -294,6 +296,10 @@
       ],
       "prevent_self_review": false,
       "branch_policies": [
+        {
+          "name": "main",
+          "type": "branch"
+        },
         {
           "name": "v*",
           "type": "tag"
