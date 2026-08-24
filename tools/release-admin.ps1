@@ -1331,10 +1331,31 @@ function New-CanonicalEcosystem {
         "--output", (Join-Path $Output "vpm")
     ) -WorkingDirectory $cliProject
 
+    # Derived from the candidate's own catalog rather than hard-coded. A literal
+    # pair here goes stale the moment the payload changes, and no test or CI job
+    # reaches this function, so a wrong literal would surface for the first time
+    # part-way through a real release.
+    $expectedCatalog = Get-Content -LiteralPath (
+        Join-Path $SourceRoot "release/catalog.json"
+    ) -Raw | ConvertFrom-Json
+    $expectedRelease = @(
+        $expectedCatalog.releases |
+            Where-Object { $_.version -eq $policy.versioning.productVersion }
+    )
+    if ($expectedRelease.Count -ne 1) {
+        throw "release/catalog.json must contain exactly one entry for $($policy.versioning.productVersion)."
+    }
+    $expectedModCount = @($expectedRelease[0].mods.PSObject.Properties).Count
+    $expectedVpmCount = @($expectedRelease[0].vpmPackages.PSObject.Properties).Count
+    if ($expectedModCount -lt 1 -or $expectedVpmCount -lt 1) {
+        throw "release/catalog.json declares no mod or VPM packages for $($policy.versioning.productVersion)."
+    }
+
     $packages = @(Get-ChildItem -LiteralPath $Output -File -Filter "*.topiaforgemod")
     $vpmPackages = @(Get-ChildItem -LiteralPath (Join-Path $Output "vpm") -File -Filter "*.zip")
-    if ($packages.Count -ne 13 -or $vpmPackages.Count -ne 3) {
-        throw "Canonical ecosystem must contain exactly 13 mod and 3 VPM packages."
+    if ($packages.Count -ne $expectedModCount -or $vpmPackages.Count -ne $expectedVpmCount) {
+        throw ("Canonical ecosystem must contain exactly $expectedModCount mod and " +
+            "$expectedVpmCount VPM packages; built $($packages.Count) and $($vpmPackages.Count).")
     }
     foreach ($package in $packages) {
         Invoke-Checked $Dart @(

@@ -210,7 +210,9 @@ void _rewritePinHashes(
 /// would silently start rewriting unrelated files that happen to contain the
 /// number. Anything added later is caught by the residual self-check.
 const List<String> gameBuildBumpTargets = <String>[
+  'THIRD_PARTY_NOTICES.md',
   '.github/robotopia-game-build.json',
+  'apps/topiaforge_cli/lib/src/release_package_notices.dart',
   '.github/workflows/release-package-build.yml',
   'release/release-policy.json',
   'tests/live-game-acceptance.json',
