@@ -86,6 +86,25 @@ function Enter-ReleaseLock {
     }
 }
 
+# Resolves the recorded Windows distribution mode from a parsed release policy.
+#
+# Absent means "signed". Shipping unsigned is a decision that has to be written
+# into the policy, so a certificate that simply went missing can never be
+# mistaken for a deliberate choice to ship without one.
+function Get-WindowsDistributionMode {
+    param([Parameter(Mandatory = $true)][object]$PolicyObject)
+
+    $mode = "signed"
+    if ($PolicyObject.signingIdentities.PSObject.Properties.Name -contains
+        "windowsDistribution") {
+        $mode = [string]$PolicyObject.signingIdentities.windowsDistribution
+    }
+    if ($mode -cne "signed" -and $mode -cne "unsigned") {
+        throw "Unknown Windows distribution mode '$mode'; expected 'signed' or 'unsigned'."
+    }
+    return $mode
+}
+
 function Invoke-Checked {
     param(
         [Parameter(Mandatory = $true)]
@@ -1049,20 +1068,30 @@ function Invoke-Preflight {
         $windowsCertificatePin =
             [string]$policyAtHead.signingIdentities.windowsCertificateSha256
     }
-    if ($windowsCertificatePin -cnotmatch "^(?!0{64}$)[0-9a-f]{64}$") {
-        throw "RC1 requires a reviewed nonzero Windows certificate SHA-256 pin."
+    $windowsDistributionAtHead = Get-WindowsDistributionMode -PolicyObject $policyAtHead
+    if ($windowsDistributionAtHead -ceq "unsigned") {
+        if (-not [string]::IsNullOrEmpty($windowsCertificatePin)) {
+            throw "An unsigned Windows distribution must not also pin a signing certificate."
+        }
+        Write-Host ("Release policy records an UNSIGNED Windows distribution: " +
+            "Authenticode signing and the detached CMS handoff signature are skipped.")
     }
-    Invoke-Checked $powerShellExecutable @(
-        "-NoLogo",
-        "-NoProfile",
-        "-NonInteractive",
-        "-File",
-        $handoffSignatureScript,
-        "-Mode",
-        "ValidateCredentials",
-        "-ExpectedCertificateSha256",
-        $windowsCertificatePin
-    )
+    else {
+        if ($windowsCertificatePin -cnotmatch "^(?!0{64}$)[0-9a-f]{64}$") {
+            throw "A signed release requires a reviewed nonzero Windows certificate SHA-256 pin."
+        }
+        Invoke-Checked $powerShellExecutable @(
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-File",
+            $handoffSignatureScript,
+            "-Mode",
+            "ValidateCredentials",
+            "-ExpectedCertificateSha256",
+            $windowsCertificatePin
+        )
+    }
 
     Invoke-Checked $gitHubCli @("auth", "status", "--hostname", "github.com")
     $githubLogin = Invoke-Checked $gitHubCli @(
@@ -2265,10 +2294,16 @@ function Build-Handoff {
         $windowsCertificatePin =
             [string]$policy.signingIdentities.windowsCertificateSha256
     }
-    if ($windowsCertificatePin -cnotmatch "^(?!0{64}$)[0-9a-f]{64}$") {
+    $windowsDistribution = Get-WindowsDistributionMode -PolicyObject $policy
+    if ($windowsDistribution -ceq "unsigned") {
+        if (-not [string]::IsNullOrEmpty($windowsCertificatePin)) {
+            throw "An unsigned Windows distribution must not also pin a signing certificate."
+        }
+    }
+    elseif ($windowsCertificatePin -cnotmatch "^(?!0{64}$)[0-9a-f]{64}$") {
         throw "A reviewed nonzero Windows certificate SHA-256 pin is required."
     }
-    if (-not $VerifyOnly) {
+    if (-not $VerifyOnly -and $windowsDistribution -cne "unsigned") {
         Invoke-Checked $powerShellExecutable @(
             "-NoLogo",
             "-NoProfile",
@@ -2537,22 +2572,36 @@ function Build-Handoff {
     $handoffPath = Join-Path $assetsDirectory "release-handoff-v1.json"
     $handoffSignaturePath = Join-Path $assetsDirectory `
         "release-handoff-v1.json.p7s"
-    $handoffSignatureMode = if ($VerifyOnly) { "Verify" } else { "Sign" }
-    Invoke-Checked $powerShellExecutable @(
-        "-NoLogo",
-        "-NoProfile",
-        "-NonInteractive",
-        "-File",
-        $handoffSignatureScript,
-        "-Mode",
-        $handoffSignatureMode,
-        "-ExpectedCertificateSha256",
-        $windowsCertificatePin,
-        "-HandoffPath",
-        $handoffPath,
-        "-SignaturePath",
-        $handoffSignaturePath
-    )
+    # An unsigned distribution has no code-signing certificate, so it also has no
+    # detached CMS handoff signature. The hosted finalizer reads the same policy
+    # field at the same target SHA and expects the P7S to be absent, so this is a
+    # declared difference in the trust path rather than a skipped step.
+    if ($windowsDistribution -ceq "unsigned") {
+        if (Test-Path -LiteralPath $handoffSignaturePath) {
+            throw ("An unsigned Windows distribution must not stage " +
+                "release-handoff-v1.json.p7s.")
+        }
+        Write-Host ("Unsigned Windows distribution: the detached CMS handoff " +
+            "signature is intentionally not produced.")
+    }
+    else {
+        $handoffSignatureMode = if ($VerifyOnly) { "Verify" } else { "Sign" }
+        Invoke-Checked $powerShellExecutable @(
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-File",
+            $handoffSignatureScript,
+            "-Mode",
+            $handoffSignatureMode,
+            "-ExpectedCertificateSha256",
+            $windowsCertificatePin,
+            "-HandoffPath",
+            $handoffPath,
+            "-SignaturePath",
+            $handoffSignaturePath
+        )
+    }
     Invoke-Checked $sdk.Dart @(
         "run", "bin/topiaforge.dart", "release", "verify-handoff",
         "--version", $Version, "--target-sha", $SourceSha,

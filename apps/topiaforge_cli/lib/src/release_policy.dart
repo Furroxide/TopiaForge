@@ -115,7 +115,7 @@ class ReleasePolicyValidator {
     // rule evaporate the moment the version changed, with no test failure to show for it.
     if (!release.prerelease || !policy.targetsWindows || policy.targetsMacOS) {
       issues.add(
-        'Release ${release.version} must target only signed Windows x64 packages.',
+        'Release ${release.version} must target only Windows x64 packages.',
       );
     }
     final windowsIdentityIsValid =
@@ -128,6 +128,35 @@ class ReleasePolicyValidator {
       issues.add(
         'Configured signing identities must be a lowercase Windows '
         'certificate SHA-256 or an uppercase 10-character Apple Team ID.',
+      );
+    }
+    // An unsigned distribution has to be a recorded decision, and it is only
+    // allowed to be one on a 0.x prerelease. Requiring the certificate pin to be
+    // absent as well means a policy can never carry both, so "we meant to sign
+    // and the pin went missing" and "we meant to ship unsigned" stay
+    // distinguishable from the file alone.
+    if (policy.distributesWindowsUnsigned) {
+      if (policy.windowsCertificateSha256.isNotEmpty) {
+        issues.add(
+          'An unsigned Windows distribution must not also pin a signing '
+          'certificate; remove one or the other.',
+        );
+      }
+      if (!release.prerelease) {
+        issues.add(
+          'An unsigned Windows distribution is only allowed for a prerelease.',
+        );
+      }
+      if (!release.version.startsWith('0.')) {
+        issues.add(
+          'An unsigned Windows distribution is only allowed on a 0.x line; '
+          'release ${release.version} must be signed.',
+        );
+      }
+    } else if (policy.windowsDistribution != 'signed') {
+      issues.add(
+        'Unknown Windows distribution mode '
+        '"${policy.windowsDistribution}"; expected "signed" or "unsigned".',
       );
     }
     if (!allowUnresolvedPolicy &&

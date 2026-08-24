@@ -91,6 +91,29 @@ directory is prepended to `PATH` for the shell verifiers only. Install it with:
 winget install jqlang.jq
 ```
 
+## Signed or unsigned distribution
+
+`signingIdentities.windowsDistribution` in `release/release-policy.json` records
+which one this candidate is. The key is optional and its absence means `signed`,
+so a certificate that simply went missing can never be read as a decision to
+ship without one — shipping unsigned has to be written down.
+
+`unsigned` is accepted only on a `0.x` prerelease, and only when no certificate
+is pinned; `release validate-policy` rejects a policy that carries both. In that
+mode `build-windows.ps1` drops `--require-windows-signing` and adds
+`--require-windows-unsigned`, so the artifacts are proved unsigned rather than
+merely unchecked, and preflight and handoff staging skip the certificate and the
+detached CMS signature.
+
+> **Not yet publishable.** The hosted publication path still embeds
+> `release-handoff-v1.json.p7s` in its verification evidence, its final asset
+> inventory, and its attestation subject. Until that is reshaped, `release.yml`
+> rejects an unsigned distribution outright rather than publishing a candidate
+> whose provenance record silently lost its signature field. An unsigned
+> candidate therefore builds and validates locally and stops at publication.
+
+The rest of this section describes the `signed` path.
+
 RC1 and every later production release require Authenticode. Before freezing
 the release commit, pin the reviewed leaf certificate SHA-256 in
 `signingIdentities.windowsCertificateSha256` and supply
