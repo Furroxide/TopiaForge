@@ -45,6 +45,22 @@ TopiaForge artwork for offline launcher theming.
   `packages/launcher_ui/lib/src/pixel_robot.dart`, which retired the bundled `robot.webp`.
 - Local changes: filenames were normalized for launcher packaging.
 
+## First-party binary and generated assets
+
+These ship in the release archive, are not third-party redistribution, and are recorded here so the
+inventory covers every non-source file a user receives rather than only the ones with licence texts.
+
+- `src/TopiaForge.Mods.UnityUi/Assets/topiaforge-ui.bundle` and
+  `mods/TopiaForge.Worlds/AssetBundles/topiaforge-representative-world.bundle` are compiled from this
+  repository's own Unity sources with editor `6000.0.23f1`. Each carries a sibling
+  `*.manifest.json` recording the editor version, the contained asset paths, and a SHA-256, and release
+  validation rebuilds them twice and compares bytes. A compiled AssetBundle is opaque to inspection, so
+  that reproducible rebuild is what establishes the contents, not a reading of the file. The UI bundle
+  bakes in glyph data derived from the OFL fonts noted below; those notices apply to it.
+- `templates/TopiaForge.UnityWorldTemplate/Assets/HDRPDefaultResources/*.asset` are Unity YAML
+  configuration assets authored by this project. They hold settings values and reference HDRP script
+  GUIDs; the HDRP package itself is resolved by the consumer's Unity and is not redistributed here.
+
 The TopiaForge pixel-art wordmark, icon, generated platform icon variants, and the drawn pixel-art robot
 in `packages/launcher_ui/lib/src/pixel_robot.dart` are first-party project assets, not Robotopia-derived
 third-party artwork. The robot replaced a previously bundled `robot.webp` taken from the Robotopia web
