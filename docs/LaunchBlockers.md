@@ -149,6 +149,24 @@ carry it rather than infer it from the legal inventory passing.
 `P0-CREATOR-01` was never a readiness entry and is now retired outright; see the
 note at the top of this register.
 
+## Dependency and code-scanning alerts (recorded 2026-08-24)
+
+Four open Dependabot alerts, three high: `nanoid`, `js-yaml`, and `fast-uri`, plus medium `postcss`. All
+four are in `website/package-lock.json`, which builds the documentation site. `website/` is not copied
+into any release payload — `release_package_payload.dart` never references it — so none of them reaches
+a distributed artifact. They execute during the Pages build over repository-owned content, not
+attacker-supplied input. **Disposition: not release-blocking for `0.1.0-rc.1`; carry them into the Pages
+work and take the upstream fixes when they land.** GitHub reports three of the four as `runtime` scope,
+which is scope *within the website package*, not within the product.
+
+Three open CodeQL alerts, all high, all `actions/cache-poisoning/poisonable-step`: two in
+`release-package-build.yml` and one in `deploy-pages.yml`. These are **not** dispositioned. They sit in
+the two workflows that build release artifacts and publish the site, the `codeql-high-critical` ruleset
+is active with `bypass_actors: []`, and closing them means changing how `actions/cache` is used on the
+publication path — restore-only, or saves gated on a trusted ref. That is a reviewed change of its own.
+Until it lands, a `release/*` → `main` promotion that introduces any *new* high alert cannot be merged by
+anyone, including the owner.
+
 The remaining informational exceptions are explained, not waived:
 `dotnet format` reports expected workspace-loader
 diagnostics for the intentional Unity compile/reference split while finding no formatting changes; Flutter reports newer
