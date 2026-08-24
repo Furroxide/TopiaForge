@@ -67,9 +67,7 @@
         "actions",
         "c-cpp",
         "csharp",
-        "javascript",
-        "javascript-typescript",
-        "typescript"
+        "javascript-typescript"
       ],
       "query_suite": "default",
       "schedule": "weekly",
