@@ -471,3 +471,14 @@ Future<DotnetSdkSelection> _resolveFixtureDotnetSdk(
 
 const _fixtureDotnetExecutable = '/verified/dotnet';
 const _fixtureDotnetVersion = '10.0.301';
+
+/// Adds the UnityDoorstop corresponding-source archive a valid package must
+/// carry beside its LGPL-2.1 notice.
+void addDoorstopSourceFixture(Archive archive, {String prefix = ''}) {
+  archive.addFile(
+    ArchiveFile.string(
+      '${prefix}third_party/BepInEx/$bepInExCorrespondingSourceFileName',
+      'doorstop source fixture',
+    ),
+  );
+}
