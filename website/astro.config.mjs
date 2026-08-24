@@ -48,6 +48,10 @@ export default defineConfig({
           label: 'Start here',
           items: [
             { label: 'Overview', slug: 'index' },
+            {
+              label: 'TopiaForge and the Robotopia Creator',
+              slug: 'getting-started/creator-scope',
+            },
             { label: 'Your first mod', slug: 'getting-started/first-mod' },
             { label: 'SDK overview', slug: 'reference/sdk-overview' },
           ],

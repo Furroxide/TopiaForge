@@ -2,6 +2,7 @@ import { extname } from 'node:path';
 
 export const pages = [
   page('website/content/index.md', 'index.md', false),
+  page('docs/CreatorScope.md', 'getting-started/creator-scope.md'),
   page('docs/YourFirstMod.md', 'getting-started/first-mod.md'),
   page('docs/Modding.md', 'reference/sdk-overview.md'),
   page('docs/CoreServices.md', 'guides/core-services.md'),
