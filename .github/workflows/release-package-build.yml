@@ -117,8 +117,13 @@ jobs:
           --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
           -c Release -- --source public --cache-key-only
 
-      - name: Cache Robotopia managed refs
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      # Restore-only. This job checks out a caller-supplied ref, so letting it
+      # write the cache would let that ref plant an entry the default branch
+      # later restores -- and a cache hit is currently accepted on a structural
+      # check alone, without re-asserting the pinned archive SHA-256. Entries
+      # are populated by ci.yml on trusted refs instead.
+      - name: Restore cached Robotopia managed refs
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/robotopia-managed-refs-cache
           key: ${{ steps.refs-cache.outputs.key }}
@@ -318,8 +323,13 @@ jobs:
           --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
           -c Release -- --cache-key-only
 
-      - name: Cache Robotopia managed refs
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      # Restore-only. This job checks out a caller-supplied ref, so letting it
+      # write the cache would let that ref plant an entry the default branch
+      # later restores -- and a cache hit is currently accepted on a structural
+      # check alone, without re-asserting the pinned archive SHA-256. Entries
+      # are populated by ci.yml on trusted refs instead.
+      - name: Restore cached Robotopia managed refs
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/robotopia-managed-refs-cache
           key: ${{ steps.refs-cache.outputs.key }}

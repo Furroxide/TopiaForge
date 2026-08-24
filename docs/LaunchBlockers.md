@@ -159,13 +159,22 @@ attacker-supplied input. **Disposition: not release-blocking for `0.1.0-rc.1`; c
 work and take the upstream fixes when they land.** GitHub reports three of the four as `runtime` scope,
 which is scope *within the website package*, not within the product.
 
-Three open CodeQL alerts, all high, all `actions/cache-poisoning/poisonable-step`: two in
-`release-package-build.yml` and one in `deploy-pages.yml`. These are **not** dispositioned. They sit in
-the two workflows that build release artifacts and publish the site, the `codeql-high-critical` ruleset
-is active with `bypass_actors: []`, and closing them means changing how `actions/cache` is used on the
-publication path — restore-only, or saves gated on a trusted ref. That is a reviewed change of its own.
-Until it lands, a `release/*` → `main` promotion that introduces any *new* high alert cannot be merged by
-anyone, including the owner.
+Three CodeQL alerts, all high, all `actions/cache-poisoning/poisonable-step`: two in
+`release-package-build.yml` and one in `deploy-pages.yml`. **Fixed 2026-08-25** by making all three
+restore-only (`actions/cache/restore`). Both workflows check out a caller-supplied ref, so cache *write*
+access there let that ref plant an entry the default branch would later restore. Entries are populated by
+`ci.yml` on trusted refs, which runs on push to `main`, `dev`, and `release/**`, so nothing is lost but
+the occasional cold download.
+
+Worth recording why this was a real finding rather than a theoretical one: `ManagedRefsRestore` accepts a
+cache hit on a *structural* check (`validator.IsValid`) and returns before re-asserting the pinned archive
+SHA-256, which it only checks on the download path. A poisoned entry would therefore have been used as the
+managed reference assemblies the whole C# build compiles against. There is no sound way to verify a mutable
+cache against itself — an attacker who can write the tree can write any marker beside it — so write access
+*is* the trust boundary, which is exactly what this change closes.
+
+Note for the freeze: `codeql-high-critical` is active with `bypass_actors: []`, so a `release/*` → `main`
+promotion that introduces any *new* high alert cannot be merged by anyone, including the owner.
 
 The remaining informational exceptions are explained, not waived:
 `dotnet format` reports expected workspace-loader
