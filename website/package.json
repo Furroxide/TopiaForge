@@ -26,13 +26,13 @@
   },
   "dependencies": {
     "@astrojs/starlight": "0.41.7",
-    "astro": "7.2.2",
+    "astro": "7.2.4",
     "sharp": "0.35.3"
   },
   "devDependencies": {
     "@astrojs/check": "0.9.10",
     "pagefind": "1.5.2",
-    "typescript": "6.0.3",
+    "typescript": "7.0.2",
     "yaml": "2.9.0"
   }
 }
