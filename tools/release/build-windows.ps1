@@ -698,6 +698,33 @@ if ($LASTEXITCODE -ne 0 -or -not [string]::IsNullOrWhiteSpace($finalTrackedChang
     throw "The Windows release build changed tracked source files."
 }
 
+# The validation record has to state what this build actually did. Leaving the
+# Authenticode claim unconditional meant an unsigned build produced a handoff
+# asserting a signature it never carried -- worse than an absent field, because
+# it is an affirmative false provenance claim.
+$signingStateValue = if ($windowsDistribution -ceq "unsigned") {
+    "unsigned"
+}
+else {
+    "authenticode-timestamped"
+}
+$validationChecks = [System.Collections.Generic.List[string]]::new()
+$validationChecks.AddRange([string[]]@(
+        "archive-smoke",
+        "embedded-cli",
+        "packaged-launcher-health",
+        "canonical-ecosystem"
+    ))
+if ($windowsDistribution -cne "unsigned") {
+    $validationChecks.Add("authenticode")
+}
+$validationChecks.AddRange([string[]]@(
+        "unity-reproducibility",
+        "unity-lifecycle",
+        "official-game-bytes",
+        "robotopia-acceptance"
+    ))
+
 $validation = [ordered]@{
     schema = "release-local-validation-v1"
     platform = "windows"
@@ -706,7 +733,7 @@ $validation = [ordered]@{
     archiveSha256 = Get-Sha256 $archive
     canonicalEcosystemSha256 = $CanonicalEcosystemSha256
     canonicalArchiveSha256 = $CanonicalArchiveSha256
-    signingState = "authenticode-timestamped"
+    signingState = $signingStateValue
     platformToolchains = [ordered]@{
         node = $measuredNode
         msvc = $measuredMsvc
@@ -717,17 +744,7 @@ $validation = [ordered]@{
     gameFilesManifestSha256 = [string]$officialInstallBefore.filesManifestSha256
     gameFilesVerified = [Int64]$officialInstallBefore.filesVerified
     gameExecutableSha256 = [string]$officialInstallBefore.gameExecutableSha256
-    checks = @(
-        "archive-smoke",
-        "embedded-cli",
-        "packaged-launcher-health",
-        "canonical-ecosystem",
-        "authenticode",
-        "unity-reproducibility",
-        "unity-lifecycle",
-        "official-game-bytes",
-        "robotopia-acceptance"
-    )
+    checks = @($validationChecks.ToArray())
     evidenceSha256 = [ordered]@{
         unity = Get-Sha256 $unityEvidence
         robotopia = Get-Sha256 $gameEvidenceFile

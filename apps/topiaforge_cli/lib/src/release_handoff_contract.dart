@@ -189,7 +189,7 @@ void _validatePlatformBundle(
     throw StateError('${bundle.platform} archive name is invalid.');
   }
   _requireSha256(bundle.archive.sha256, '${bundle.platform} archive sha256');
-  final expectedSigning = _signingState(bundle.platform);
+  final expectedSigning = _signingState(bundle.platform, context.policy);
   if (bundle.signing.scheme != expectedSigning.scheme ||
       bundle.signing.status != expectedSigning.status ||
       bundle.signing.notarization != expectedSigning.notarization ||
@@ -198,7 +198,10 @@ void _validatePlatformBundle(
       '${bundle.platform} signing state does not match release policy.',
     );
   }
-  final requiredEvidence = _requiredEvidenceFor(bundle.platform);
+  final requiredEvidence = _requiredEvidenceFor(
+    bundle.platform,
+    context.policy,
+  );
   if (!_sameSet(bundle.validations.keys.toSet(), requiredEvidence)) {
     throw StateError(
       '${bundle.platform} validations must be exactly: '
@@ -254,7 +257,7 @@ void _validateHandoff(
         '${reference.platform} handoff builder profile is invalid.',
       );
     }
-    final signing = _signingState(reference.platform);
+    final signing = _signingState(reference.platform, context.policy);
     if (reference.signing.scheme != signing.scheme ||
         reference.signing.status != signing.status ||
         reference.signing.notarization != signing.notarization ||
@@ -263,7 +266,7 @@ void _validateHandoff(
         '${reference.platform} handoff signing state is invalid.',
       );
     }
-    final evidence = _requiredEvidenceFor(reference.platform);
+    final evidence = _requiredEvidenceFor(reference.platform, context.policy);
     if (!_sameSet(reference.validations.keys.toSet(), evidence)) {
       throw StateError(
         '${reference.platform} handoff validation set is invalid.',
@@ -337,13 +340,31 @@ const _requiredEvidence = <String, Set<String>>{
   },
 };
 
-ReleaseHandoffSigning _signingState(String platform) => switch (platform) {
-  'windows-x64' => const ReleaseHandoffSigning(
-    scheme: 'authenticode',
-    status: 'verified',
-    notarization: 'not-applicable',
-    exceptionApplied: false,
-  ),
+/// The signing state a platform bundle must declare.
+///
+/// Windows depends on the recorded distribution mode: an unsigned build has to
+/// say so. Deriving this from the platform alone meant an unsigned release
+/// would still have asserted `authenticode` / `verified` in its handoff, which
+/// is worse than an absent field — it is an affirmative false provenance claim
+/// in the document GitHub verifies before publishing.
+ReleaseHandoffSigning _signingState(
+  String platform,
+  TopiaForgeReleasePolicy policy,
+) => switch (platform) {
+  'windows-x64' =>
+    policy.distributesWindowsUnsigned
+        ? const ReleaseHandoffSigning(
+            scheme: 'not-applicable',
+            status: 'unsigned',
+            notarization: 'not-applicable',
+            exceptionApplied: false,
+          )
+        : const ReleaseHandoffSigning(
+            scheme: 'authenticode',
+            status: 'verified',
+            notarization: 'not-applicable',
+            exceptionApplied: false,
+          ),
   'linux-x64' => const ReleaseHandoffSigning(
     scheme: 'not-applicable',
     status: 'not-applicable',
@@ -359,10 +380,21 @@ ReleaseHandoffSigning _signingState(String platform) => switch (platform) {
   _ => throw StateError('Unsupported release handoff platform: $platform.'),
 };
 
-Set<String> _requiredEvidenceFor(String platform) {
+/// The evidence keys a platform bundle must carry.
+///
+/// An unsigned Windows build produces no Authenticode evidence, so requiring
+/// the key would have made the bundle unsatisfiable; leaving it required *and*
+/// satisfied would have meant fabricating it.
+Set<String> _requiredEvidenceFor(
+  String platform,
+  TopiaForgeReleasePolicy policy,
+) {
   final evidence = _requiredEvidence[platform];
   if (evidence == null) {
     throw StateError('Unsupported release handoff platform: $platform.');
+  }
+  if (platform == 'windows-x64' && policy.distributesWindowsUnsigned) {
+    return evidence.where((key) => key != 'authenticode').toSet();
   }
   return evidence;
 }

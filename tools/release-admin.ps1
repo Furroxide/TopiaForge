@@ -2329,24 +2329,39 @@ function Build-Handoff {
         $EcosystemEvidenceSha -ne $CanonicalSha) {
         throw "Canonical ecosystem identity or reproducibility evidence changed."
     }
+    # The expected record follows the recorded distribution mode, so an unsigned
+    # build is required to declare itself unsigned rather than being compared
+    # against an Authenticode claim it never made.
+    $expectedSigningState = if ($windowsDistribution -ceq "unsigned") {
+        "unsigned"
+    }
+    else {
+        "authenticode-timestamped"
+    }
+    $expectedWindowsChecks = [System.Collections.Generic.List[string]]::new()
+    $expectedWindowsChecks.AddRange([string[]]@(
+            "archive-smoke",
+            "embedded-cli",
+            "packaged-launcher-health",
+            "canonical-ecosystem"
+        ))
+    if ($windowsDistribution -cne "unsigned") {
+        $expectedWindowsChecks.Add("authenticode")
+    }
+    $expectedWindowsChecks.AddRange([string[]]@(
+            "unity-reproducibility",
+            "unity-lifecycle",
+            "official-game-bytes",
+            "robotopia-acceptance"
+        ))
     $platforms = @(
         @{
             Name = "windows-x64"
             ValidationPlatform = "windows"
             Archive = "TopiaForge-windows-x64.zip"
             Validation = "validation-windows.json"
-            SigningState = "authenticode-timestamped"
-            ExpectedChecks = @(
-                "archive-smoke",
-                "embedded-cli",
-                "packaged-launcher-health",
-                "canonical-ecosystem",
-                "authenticode",
-                "unity-reproducibility",
-                "unity-lifecycle",
-                "official-game-bytes",
-                "robotopia-acceptance"
-            )
+            SigningState = $expectedSigningState
+            ExpectedChecks = @($expectedWindowsChecks.ToArray())
         }
     )
     # Linux is descoped from 0.1.0-rc.1, so the handoff platform set follows
@@ -2775,10 +2790,14 @@ function Get-StagedAssetPaths {
             "release-platform-bundle-v1-$target.json"
         }
     )
-    $names = @($release.artifacts) + $bundleNames + @(
-        "release-handoff-v1.json",
-        "release-handoff-v1.json.p7s"
-    )
+    # An unsigned distribution has no detached CMS signature, and Build-Handoff
+    # refuses to stage one. Demanding it here made the run abort at -Stage rather
+    # than at the documented hosted guard.
+    $handoffNames = @("release-handoff-v1.json")
+    if ((Get-WindowsDistributionMode -PolicyObject $policy) -cne "unsigned") {
+        $handoffNames += "release-handoff-v1.json.p7s"
+    }
+    $names = @($release.artifacts) + $bundleNames + $handoffNames
     return @($names | ForEach-Object {
             $path = Join-Path $assetsDirectory $_
             if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
