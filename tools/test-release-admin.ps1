@@ -1,7 +1,5 @@
 [CmdletBinding()]
-param(
-    [switch]$CreatorEvidenceOnly
-)
+param()
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
@@ -34,113 +32,6 @@ function Assert-ThrowsMatch {
     throw $Message
 }
 
-function Copy-CreatorEvidenceZipForTest {
-    param(
-        [Parameter(Mandatory = $true)][string]$Source,
-        [Parameter(Mandatory = $true)][string]$Destination,
-        [switch]$TamperFirstArtifact,
-        [switch]$AddUnexpectedEntry,
-        [switch]$AddUnsafeEntry,
-        [switch]$MarkFirstArtifactReparse
-    )
-    $sourceZip = [System.IO.Compression.ZipFile]::OpenRead($Source)
-    try {
-        $entries = @(
-            $sourceZip.Entries | ForEach-Object {
-                $memory = [System.IO.MemoryStream]::new()
-                $stream = $_.Open()
-                try {
-                    $stream.CopyTo($memory)
-                    $bytes = $memory.ToArray()
-                }
-                finally {
-                    $stream.Dispose()
-                    $memory.Dispose()
-                }
-                [pscustomobject]@{
-                    Name = $_.FullName
-                    Bytes = $bytes
-                }
-            }
-        )
-    }
-    finally {
-        $sourceZip.Dispose()
-    }
-    if ($TamperFirstArtifact) {
-        $artifact = @(
-            $entries | Where-Object { $_.Name.StartsWith("artifacts/") }
-        )[0]
-        [Array]::Fill[byte]($artifact.Bytes, 0x58)
-    }
-    if ($AddUnexpectedEntry) {
-        $entries += [pscustomobject]@{
-            Name = "unexpected.bin"
-            Bytes = [byte[]]@(0x58)
-        }
-    }
-    if ($AddUnsafeEntry) {
-        $entries += [pscustomobject]@{
-            Name = "../escape.bin"
-            Bytes = [byte[]]@(0x58)
-        }
-    }
-    $destinationStream = [System.IO.File]::Open(
-        $Destination,
-        [System.IO.FileMode]::CreateNew,
-        [System.IO.FileAccess]::Write,
-        [System.IO.FileShare]::None
-    )
-    $destinationZip = [System.IO.Compression.ZipArchive]::new(
-        $destinationStream,
-        [System.IO.Compression.ZipArchiveMode]::Create,
-        $false
-    )
-    try {
-        $markedReparse = $false
-        foreach ($sourceEntry in $entries) {
-            $entry = $destinationZip.CreateEntry(
-                $sourceEntry.Name,
-                [System.IO.Compression.CompressionLevel]::NoCompression
-            )
-            $entry.LastWriteTime = [DateTimeOffset]::new(
-                1980,
-                1,
-                1,
-                0,
-                0,
-                0,
-                [TimeSpan]::Zero
-            )
-            if ($MarkFirstArtifactReparse -and
-                -not $markedReparse -and
-                $sourceEntry.Name.StartsWith("artifacts/")) {
-                $entry.ExternalAttributes =
-                    [int][System.IO.FileAttributes]::ReparsePoint
-                $markedReparse = $true
-            }
-            else {
-                $entry.ExternalAttributes = 0
-            }
-            $entryStream = $entry.Open()
-            try {
-                $entryStream.Write(
-                    $sourceEntry.Bytes,
-                    0,
-                    $sourceEntry.Bytes.Length
-                )
-            }
-            finally {
-                $entryStream.Dispose()
-            }
-        }
-    }
-    finally {
-        $destinationZip.Dispose()
-        $destinationStream.Dispose()
-    }
-}
-
 $repositoryRootForTest = (Resolve-Path -LiteralPath (
         Join-Path $PSScriptRoot ".."
     )).Path
@@ -167,8 +58,6 @@ foreach ($requiredParameter in @(
         "ProtonExecutable",
         "SteamRoot",
         "CompatDataRoot",
-        "WindowsCreatorEvidence",
-        "WindowsCreatorEvidenceBundle",
         "PythonPath"
     )) {
     Assert-True ($parameterNames -contains $requiredParameter) (
@@ -212,7 +101,7 @@ foreach ($requiredSource in @(
         "authenticode-timestamped",
         "release-handoff-v1.json.p7s",
         "handoff-signature.ps1",
-        "RC1 production forbids every code-signing exception",
+        "Production release forbids every code-signing exception",
         "verify-release-governance.sh",
         ".github/scripts/audit_repository_governance.py",
         "Invoke-ReleaseGovernanceAudit",
@@ -780,7 +669,7 @@ exit 0
                 release/release-policy.json `
                 release/platform-toolchains.json `
                 release/catalog.json `
-                release/notes/v1.0.0-rc.1.md `
+                release/notes/v0.1.0-rc.1.md `
                 tests/live-game-acceptance.json
             $testTree = (& git -C $repositoryRootForTest write-tree).Trim()
             $sourceSha = (& git -C $repositoryRootForTest `
@@ -873,7 +762,9 @@ exit 0
                 "macKnownHostsFile",
                 "macExpectedTeamId",
                 "protonEvidence",
-                "protonEvidenceBundle"
+                "protonEvidenceBundle",
+                "windowsCreatorEvidence",
+                "windowsCreatorEvidenceBundle"
             )) {
             Assert-True (
                 $storedState.PSObject.Properties.Name -notcontains
@@ -887,568 +778,12 @@ exit 0
         $script:ProtonExecutable = "/opt/proton-10.0-4/proton"
 
         $windowsArchive = Join-Path $testAssets "TopiaForge-windows-x64.zip"
-        $creatorBundle = Join-Path $testRoot "creator-evidence.bundle"
-        $creatorDescriptor = Join-Path $testRoot "creator-evidence.json"
         Set-Content -LiteralPath $windowsArchive -Value "windows candidate" `
             -Encoding ascii
-        $script:WindowsCreatorEvidence = $creatorDescriptor
-        $script:WindowsCreatorEvidenceBundle = $creatorBundle
         $acceptanceInventoryPath = Join-Path $repositoryRootForTest `
             "tests/live-game-acceptance.json"
         $acceptanceInventory = Get-Content -LiteralPath $acceptanceInventoryPath `
             -Raw | ConvertFrom-Json
-        $creatorCaseEvidence = Join-Path $testRoot "creator-cases"
-        New-Item -ItemType Directory -Force -Path $creatorCaseEvidence |
-            Out-Null
-        foreach ($creatorCase in $acceptanceInventory.creatorAcceptance.cases) {
-            $caseDirectory = Join-Path $creatorCaseEvidence `
-                ([string]$creatorCase.id)
-            New-Item -ItemType Directory -Force -Path $caseDirectory |
-                Out-Null
-            Set-Content -LiteralPath (
-                Join-Path $caseDirectory "observation.txt"
-            ) -Value "retained evidence for $($creatorCase.id)" `
-                -Encoding utf8NoBOM -NoNewline
-        }
-        # The native collector is exercised through its real artifact: a
-        # challenge-bound acceptance result plus the canonical state pre-images
-        # the CLI retains. Nothing here can be produced by inspecting a
-        # directory, which is what the retired generator wrongly accepted.
-        $creatorStateDirectory = Join-Path $testRoot "creator-state"
-        New-Item -ItemType Directory -Force -Path $creatorStateDirectory |
-            Out-Null
-        $creatorSaveDocument =
-            '{"layoutVersion":1,"members":[{"path":"player_data.json.gz",' +
-            '"sha256":"' + ("3" * 64) + '","size":218}]}'
-        $creatorCheckpointDocument =
-            '{"saveVersion":2,"layoutVersion":1,"checkpoint":' +
-            '{"CURRENT_CHECKPOINT":"F0Ql0Uceu2E","SGJzGz9Pevo_reached":true}}'
-        function Write-CreatorStateForTest {
-            param(
-                [Parameter(Mandatory = $true)][string]$Directory,
-                [Parameter(Mandatory = $true)][string]$SaveBeforeText,
-                [Parameter(Mandatory = $true)][string]$SaveAfterText,
-                [Parameter(Mandatory = $true)][string]$CheckpointBeforeText,
-                [Parameter(Mandatory = $true)][string]$CheckpointAfterText
-            )
-            $pairs = [ordered]@{
-                "save-before.bin" = $SaveBeforeText
-                "save-after.bin" = $SaveAfterText
-                "checkpoint-before.bin" = $CheckpointBeforeText
-                "checkpoint-after.bin" = $CheckpointAfterText
-            }
-            foreach ($name in $pairs.Keys) {
-                [System.IO.File]::WriteAllBytes(
-                    (Join-Path $Directory $name),
-                    [System.Text.Encoding]::UTF8.GetBytes($pairs[$name])
-                )
-            }
-        }
-        Write-CreatorStateForTest -Directory $creatorStateDirectory `
-            -SaveBeforeText $creatorSaveDocument `
-            -SaveAfterText $creatorSaveDocument `
-            -CheckpointBeforeText $creatorCheckpointDocument `
-            -CheckpointAfterText $creatorCheckpointDocument
-
-        $creatorChallenge = "ab" * 32
-        $creatorSessionId = "creator-session-0001"
-        $creatorReceiptSha = "5" * 64
-        $creatorMinimumCycles =
-            [Int64]$acceptanceInventory.creatorAcceptance.minimumLifecycleCycles
-        function Write-CreatorAcceptanceResultForTest {
-            param(
-                [Parameter(Mandatory = $true)][string]$Path,
-                [Parameter(Mandatory = $true)][string]$StateDirectory,
-                [Parameter(Mandatory = $true)][string]$Challenge,
-                [Parameter(Mandatory = $true)][string]$SessionId,
-                [Parameter(Mandatory = $true)][string]$ReceiptSha,
-                [Parameter(Mandatory = $true)][string[]]$ExpectedCases,
-                [Parameter(Mandatory = $true)][string]$GameBuildId,
-                [Parameter(Mandatory = $true)][Int64]$MinimumCycles,
-                [string[]]$PassedCases = @(),
-                [Int64]$Cycles = 0
-            )
-            if ($PassedCases.Count -eq 0) { $PassedCases = $ExpectedCases }
-            if ($Cycles -eq 0) { $Cycles = $MinimumCycles }
-            $saveBeforeSha = Get-Sha256 (
-                Join-Path $StateDirectory "save-before.bin"
-            )
-            $checkpointBeforeSha = Get-Sha256 (
-                Join-Path $StateDirectory "checkpoint-before.bin"
-            )
-            $SaveAfterSha = Get-Sha256 (
-                Join-Path $StateDirectory "save-after.bin"
-            )
-            $CheckpointAfterSha = Get-Sha256 (
-                Join-Path $StateDirectory "checkpoint-after.bin"
-            )
-            $body = [ordered]@{
-                schemaVersion = 1
-                suite = "creator-full"
-                startedAtUtc = "2026-01-01T00:00:00.000Z"
-                completedAtUtc = "2026-01-01T01:00:00.000Z"
-                gameDirectory = "C:/Robotopia"
-                gameBuild = $GameBuildId
-                acceptanceChallenge = $Challenge
-                lastRunSessionId = $SessionId
-                creatorPackageStatus = "loaded"
-                creatorPackageReceipt = [ordered]@{
-                    sourceSha256 = $ReceiptSha
-                    criticalFiles = @(
-                        [ordered]@{
-                            path = "TopiaForge.CreatorTools.dll"
-                            sha256 = "6" * 64
-                        },
-                        [ordered]@{
-                            path = "topiaforge.mod.json"
-                            sha256 = "7" * 64
-                        }
-                    )
-                }
-                requiredCases = @($ExpectedCases)
-                passedCases = @($PassedCases)
-                missingCases = @()
-                failures = @()
-                lifecycleCycles = $Cycles
-                minimumLifecycleCycles = $MinimumCycles
-                persistence = [ordered]@{
-                    layout = [ordered]@{
-                        version = 1
-                        roots = @("%LOCALAPPDATA%/../LocalLow/Tomato Cake/robotopia")
-                        exclusions = @("Player.log", "PostHog/", "Sentry/")
-                    }
-                    save = [ordered]@{
-                        before = [ordered]@{ sha256 = $saveBeforeSha; size = 1 }
-                        after = [ordered]@{ sha256 = $SaveAfterSha; size = 1 }
-                        unchanged = ($saveBeforeSha -ceq $SaveAfterSha)
-                    }
-                    checkpoint = [ordered]@{
-                        before = [ordered]@{
-                            sha256 = $checkpointBeforeSha
-                            size = 1
-                        }
-                        after = [ordered]@{
-                            sha256 = $CheckpointAfterSha
-                            size = 1
-                        }
-                        unchanged = (
-                            $checkpointBeforeSha -ceq $CheckpointAfterSha
-                        )
-                    }
-                }
-                saveStateUnchanged = ($saveBeforeSha -ceq $SaveAfterSha)
-                checkpointStateUnchanged = (
-                    $checkpointBeforeSha -ceq $CheckpointAfterSha
-                )
-                succeeded = $true
-            }
-            [System.IO.File]::WriteAllBytes(
-                $Path,
-                [System.Text.Encoding]::UTF8.GetBytes(
-                    ($body | ConvertTo-Json -Depth 32 -Compress)
-                )
-            )
-            return $Path
-        }
-        $creatorExpectedCases = @(
-            $acceptanceInventory.creatorAcceptance.cases |
-                ForEach-Object { [string]$_.id } | Sort-Object
-        )
-        $releasePolicyForTest = Get-Content -LiteralPath (
-            Join-Path $repositoryRootForTest "release/release-policy.json"
-        ) -Raw | ConvertFrom-Json
-        $creatorGameBuildId = [string]$releasePolicyForTest.gameBuild.id
-        $creatorResultDefaults = @{
-            StateDirectory = $creatorStateDirectory
-            Challenge = $creatorChallenge
-            SessionId = $creatorSessionId
-            ReceiptSha = $creatorReceiptSha
-            ExpectedCases = $creatorExpectedCases
-            GameBuildId = $creatorGameBuildId
-            MinimumCycles = $creatorMinimumCycles
-        }
-
-        $creatorAcceptanceResult = Join-Path $testRoot `
-            "creator-acceptance-result.json"
-        $null = Write-CreatorAcceptanceResultForTest @creatorResultDefaults `
-            -Path $creatorAcceptanceResult
-        $creatorGenerator = Join-Path $repositoryRootForTest `
-            "tools/release/new-windows-creator-evidence.ps1"
-        & $creatorGenerator -SourceSha $sourceSha -Version $Version `
-            -WindowsArchive $windowsArchive `
-            -CanonicalEcosystemSha256 $canonicalSha `
-            -AcceptanceResult $creatorAcceptanceResult `
-            -StateDirectory $creatorStateDirectory `
-            -CaseEvidenceDirectory $creatorCaseEvidence `
-            -OutputBundle $creatorBundle `
-            -OutputDescriptor $creatorDescriptor `
-            -RepositoryRoot $repositoryRootForTest | Out-Null
-
-        $deterministicBundle = Join-Path $testRoot `
-            "creator-evidence-deterministic.bundle"
-        $deterministicDescriptor = Join-Path $testRoot `
-            "creator-evidence-deterministic.json"
-        & $creatorGenerator -SourceSha $sourceSha -Version $Version `
-            -WindowsArchive $windowsArchive `
-            -CanonicalEcosystemSha256 $canonicalSha `
-            -AcceptanceResult $creatorAcceptanceResult `
-            -StateDirectory $creatorStateDirectory `
-            -CaseEvidenceDirectory $creatorCaseEvidence `
-            -OutputBundle $deterministicBundle `
-            -OutputDescriptor $deterministicDescriptor `
-            -RepositoryRoot $repositoryRootForTest | Out-Null
-        Assert-True (
-            (Get-Sha256 $creatorBundle) -ceq
-                (Get-Sha256 $deterministicBundle) -and
-            (Get-Sha256 $creatorDescriptor) -ceq
-                (Get-Sha256 $deterministicDescriptor)
-        ) "Identical Creator inputs did not produce byte-identical evidence."
-
-        Assert-WindowsCreatorEvidence -SourceSha $sourceSha `
-            -WindowsArchive $windowsArchive -CanonicalSha $canonicalSha
-        Assert-True (
-            Test-Path -LiteralPath (
-                Join-Path $testEvidence `
-                    "windows-creator/creator-evidence.bundle"
-            )
-        ) "Manual same-host Windows Creator evidence was not retained."
-
-        $creatorBundleBackup = Join-Path $testRoot `
-            "creator-evidence-positive.bundle"
-        $creatorDescriptorBackup = Join-Path $testRoot `
-            "creator-evidence-positive.json"
-        Copy-Item -LiteralPath $creatorBundle -Destination $creatorBundleBackup
-        Copy-Item -LiteralPath $creatorDescriptor `
-            -Destination $creatorDescriptorBackup
-        Set-Content -LiteralPath $creatorBundle `
-            -Value "opaque creator evidence" -Encoding ascii
-        $opaqueDescriptor = Get-Content -LiteralPath $creatorDescriptor -Raw |
-            ConvertFrom-Json
-        $opaqueDescriptor.evidenceSha256 = Get-Sha256 $creatorBundle
-        $opaqueDescriptor.evidenceSize =
-            (Get-Item -LiteralPath $creatorBundle).Length
-        $opaqueDescriptor | ConvertTo-Json -Depth 8 |
-            Set-Content -LiteralPath $creatorDescriptor -Encoding utf8NoBOM
-        Assert-ThrowsMatch -Action {
-            Assert-WindowsCreatorEvidencePair -SourceSha $sourceSha `
-                -WindowsArchive $windowsArchive `
-                -CanonicalSha $canonicalSha `
-                -DescriptorPath $creatorDescriptor `
-                -BundlePath $creatorBundle
-        } -Pattern "not a valid ZIP" `
-            -Message "Opaque Creator evidence bytes were accepted."
-        Copy-Item -LiteralPath $creatorBundleBackup `
-            -Destination $creatorBundle -Force
-        Copy-Item -LiteralPath $creatorDescriptorBackup `
-            -Destination $creatorDescriptor -Force
-
-        $tamperedBytesBundle = Join-Path $testRoot `
-            "creator-evidence-tampered-bytes.bundle"
-        $tamperedBytesDescriptor = Join-Path $testRoot `
-            "creator-evidence-tampered-bytes.json"
-        Copy-CreatorEvidenceZipForTest -Source $creatorBundleBackup `
-            -Destination $tamperedBytesBundle -TamperFirstArtifact
-        Copy-Item -LiteralPath $creatorDescriptorBackup `
-            -Destination $tamperedBytesDescriptor
-        $tamperedDescriptor = Get-Content `
-            -LiteralPath $tamperedBytesDescriptor -Raw | ConvertFrom-Json
-        $tamperedDescriptor.evidenceSha256 = Get-Sha256 $tamperedBytesBundle
-        $tamperedDescriptor.evidenceSize =
-            (Get-Item -LiteralPath $tamperedBytesBundle).Length
-        $tamperedDescriptor | ConvertTo-Json -Depth 8 |
-            Set-Content -LiteralPath $tamperedBytesDescriptor `
-                -Encoding utf8NoBOM
-        Assert-ThrowsMatch -Action {
-            Assert-WindowsCreatorEvidencePair -SourceSha $sourceSha `
-                -WindowsArchive $windowsArchive `
-                -CanonicalSha $canonicalSha `
-                -DescriptorPath $tamperedBytesDescriptor `
-                -BundlePath $tamperedBytesBundle
-        } -Pattern "embedded evidence bytes" `
-            -Message "Tampered embedded Creator evidence bytes were accepted."
-
-        $extraEntryBundle = Join-Path $testRoot `
-            "creator-evidence-extra-entry.bundle"
-        $extraEntryDescriptor = Join-Path $testRoot `
-            "creator-evidence-extra-entry.json"
-        Copy-CreatorEvidenceZipForTest -Source $creatorBundleBackup `
-            -Destination $extraEntryBundle -AddUnexpectedEntry
-        Copy-Item -LiteralPath $creatorDescriptorBackup `
-            -Destination $extraEntryDescriptor
-        $extraDescriptor = Get-Content -LiteralPath $extraEntryDescriptor `
-            -Raw | ConvertFrom-Json
-        $extraDescriptor.evidenceSha256 = Get-Sha256 $extraEntryBundle
-        $extraDescriptor.evidenceSize =
-            (Get-Item -LiteralPath $extraEntryBundle).Length
-        $extraDescriptor | ConvertTo-Json -Depth 8 |
-            Set-Content -LiteralPath $extraEntryDescriptor `
-                -Encoding utf8NoBOM
-        Assert-ThrowsMatch -Action {
-            Assert-WindowsCreatorEvidencePair -SourceSha $sourceSha `
-                -WindowsArchive $windowsArchive `
-                -CanonicalSha $canonicalSha `
-                -DescriptorPath $extraEntryDescriptor `
-                -BundlePath $extraEntryBundle
-        } -Pattern "unexpected entries" `
-            -Message "An uninventoried Creator evidence entry was accepted."
-
-        $unsafeEntryBundle = Join-Path $testRoot `
-            "creator-evidence-unsafe-entry.bundle"
-        $unsafeEntryDescriptor = Join-Path $testRoot `
-            "creator-evidence-unsafe-entry.json"
-        Copy-CreatorEvidenceZipForTest -Source $creatorBundleBackup `
-            -Destination $unsafeEntryBundle -AddUnsafeEntry
-        Copy-Item -LiteralPath $creatorDescriptorBackup `
-            -Destination $unsafeEntryDescriptor
-        $unsafeDescriptor = Get-Content -LiteralPath $unsafeEntryDescriptor `
-            -Raw | ConvertFrom-Json
-        $unsafeDescriptor.evidenceSha256 = Get-Sha256 $unsafeEntryBundle
-        $unsafeDescriptor.evidenceSize =
-            (Get-Item -LiteralPath $unsafeEntryBundle).Length
-        $unsafeDescriptor | ConvertTo-Json -Depth 8 |
-            Set-Content -LiteralPath $unsafeEntryDescriptor `
-                -Encoding utf8NoBOM
-        Assert-ThrowsMatch -Action {
-            Assert-WindowsCreatorEvidencePair -SourceSha $sourceSha `
-                -WindowsArchive $windowsArchive `
-                -CanonicalSha $canonicalSha `
-                -DescriptorPath $unsafeEntryDescriptor `
-                -BundlePath $unsafeEntryBundle
-        } -Pattern "unsafe" `
-            -Message "An unsafe Creator evidence ZIP path was accepted."
-
-        $reparseEntryBundle = Join-Path $testRoot `
-            "creator-evidence-reparse-entry.bundle"
-        $reparseEntryDescriptor = Join-Path $testRoot `
-            "creator-evidence-reparse-entry.json"
-        Copy-CreatorEvidenceZipForTest -Source $creatorBundleBackup `
-            -Destination $reparseEntryBundle -MarkFirstArtifactReparse
-        Copy-Item -LiteralPath $creatorDescriptorBackup `
-            -Destination $reparseEntryDescriptor
-        $reparseDescriptor = Get-Content `
-            -LiteralPath $reparseEntryDescriptor -Raw | ConvertFrom-Json
-        $reparseDescriptor.evidenceSha256 = Get-Sha256 $reparseEntryBundle
-        $reparseDescriptor.evidenceSize =
-            (Get-Item -LiteralPath $reparseEntryBundle).Length
-        $reparseDescriptor | ConvertTo-Json -Depth 8 |
-            Set-Content -LiteralPath $reparseEntryDescriptor `
-                -Encoding utf8NoBOM
-        Assert-ThrowsMatch -Action {
-            Assert-WindowsCreatorEvidencePair -SourceSha $sourceSha `
-                -WindowsArchive $windowsArchive `
-                -CanonicalSha $canonicalSha `
-                -DescriptorPath $reparseEntryDescriptor `
-                -BundlePath $reparseEntryBundle
-        } -Pattern "reparse-like" `
-            -Message "A reparse-like Creator evidence entry was accepted."
-
-        $sensitiveDescriptorPath = Join-Path $testRoot `
-            "creator-evidence-sensitive.json"
-        $sensitiveDescriptor = Get-Content `
-            -LiteralPath $creatorDescriptorBackup -Raw | ConvertFrom-Json
-        $sensitiveDescriptor | Add-Member -NotePropertyName "hostname" `
-            -NotePropertyValue "release-workstation"
-        $sensitiveDescriptor | ConvertTo-Json -Depth 8 |
-            Set-Content -LiteralPath $sensitiveDescriptorPath `
-                -Encoding utf8NoBOM
-        Assert-ThrowsMatch -Action {
-            Assert-WindowsCreatorEvidencePair -SourceSha $sourceSha `
-                -WindowsArchive $windowsArchive `
-                -CanonicalSha $canonicalSha `
-                -DescriptorPath $sensitiveDescriptorPath `
-                -BundlePath $creatorBundleBackup
-        } -Pattern "exact expected fields|forbidden" `
-            -Message "Sensitive public Creator metadata was accepted."
-
-        # --- Adversarial: state mutated across End Session -----------------
-        $mutatedStateDirectory = Join-Path $testRoot "creator-state-mutated"
-        New-Item -ItemType Directory -Force -Path $mutatedStateDirectory |
-            Out-Null
-        Write-CreatorStateForTest -Directory $mutatedStateDirectory `
-            -SaveBeforeText $creatorSaveDocument `
-            -SaveAfterText ($creatorSaveDocument -replace '"size":218',
-                '"size":219') `
-            -CheckpointBeforeText $creatorCheckpointDocument `
-            -CheckpointAfterText $creatorCheckpointDocument
-        $mutatedSaveArgs = $creatorResultDefaults.Clone()
-        $mutatedSaveArgs.StateDirectory = $mutatedStateDirectory
-        $mutatedSaveResult = Write-CreatorAcceptanceResultForTest `
-            @mutatedSaveArgs `
-            -Path (Join-Path $testRoot "mutated-save-result.json")
-        Assert-ThrowsMatch -Action {
-            & $creatorGenerator -SourceSha $sourceSha -Version $Version `
-                -WindowsArchive $windowsArchive `
-                -CanonicalEcosystemSha256 $canonicalSha `
-                -AcceptanceResult $mutatedSaveResult `
-                -StateDirectory $mutatedStateDirectory `
-                -CaseEvidenceDirectory $creatorCaseEvidence `
-                -OutputBundle (Join-Path $testRoot "changed-state.bundle") `
-                -OutputDescriptor (Join-Path $testRoot "changed-state.json") `
-                -RepositoryRoot $repositoryRootForTest | Out-Null
-        } -Pattern "challenge-bound interactive run|Save state changed" `
-            -Message "Changed Creator save-state bytes were accepted."
-
-        $mutatedCheckpointDirectory = Join-Path $testRoot `
-            "creator-state-checkpoint"
-        New-Item -ItemType Directory -Force `
-            -Path $mutatedCheckpointDirectory | Out-Null
-        Write-CreatorStateForTest -Directory $mutatedCheckpointDirectory `
-            -SaveBeforeText $creatorSaveDocument `
-            -SaveAfterText $creatorSaveDocument `
-            -CheckpointBeforeText $creatorCheckpointDocument `
-            -CheckpointAfterText ($creatorCheckpointDocument -replace
-                'F0Ql0Uceu2E', 'ZZZZZZZZZZZ')
-        $mutatedCheckpointArgs = $creatorResultDefaults.Clone()
-        $mutatedCheckpointArgs.StateDirectory = $mutatedCheckpointDirectory
-        $mutatedCheckpointResult = Write-CreatorAcceptanceResultForTest `
-            @mutatedCheckpointArgs `
-            -Path (Join-Path $testRoot "mutated-checkpoint-result.json")
-        Assert-ThrowsMatch -Action {
-            & $creatorGenerator -SourceSha $sourceSha -Version $Version `
-                -WindowsArchive $windowsArchive `
-                -CanonicalEcosystemSha256 $canonicalSha `
-                -AcceptanceResult $mutatedCheckpointResult `
-                -StateDirectory $mutatedCheckpointDirectory `
-                -CaseEvidenceDirectory $creatorCaseEvidence `
-                -OutputBundle (Join-Path $testRoot "changed-checkpoint.bundle") `
-                -OutputDescriptor (
-                    Join-Path $testRoot "changed-checkpoint.json"
-                ) `
-                -RepositoryRoot $repositoryRootForTest | Out-Null
-        } -Pattern "challenge-bound interactive run|Checkpoint state changed" `
-            -Message "Changed Creator checkpoint bytes were accepted."
-
-        # --- Adversarial: incomplete or overstated case sets ----------------
-        $shortCaseResult = Write-CreatorAcceptanceResultForTest `
-            @creatorResultDefaults `
-            -Path (Join-Path $testRoot "short-cases-result.json") `
-            -PassedCases @($creatorExpectedCases | Select-Object -Skip 1)
-        Assert-ThrowsMatch -Action {
-            & $creatorGenerator -SourceSha $sourceSha -Version $Version `
-                -WindowsArchive $windowsArchive `
-                -CanonicalEcosystemSha256 $canonicalSha `
-                -AcceptanceResult $shortCaseResult `
-                -StateDirectory $creatorStateDirectory `
-                -CaseEvidenceDirectory $creatorCaseEvidence `
-                -OutputBundle (Join-Path $testRoot "short-cases.bundle") `
-                -OutputDescriptor (Join-Path $testRoot "short-cases.json") `
-                -RepositoryRoot $repositoryRootForTest | Out-Null
-        } -Pattern "challenge-bound interactive run" `
-            -Message "A Creator run missing a case was accepted."
-
-        $shortCycleResult = Write-CreatorAcceptanceResultForTest `
-            @creatorResultDefaults `
-            -Path (Join-Path $testRoot "short-cycles-result.json") `
-            -Cycles ([Int64]($creatorMinimumCycles - 1))
-        Assert-ThrowsMatch -Action {
-            & $creatorGenerator -SourceSha $sourceSha -Version $Version `
-                -WindowsArchive $windowsArchive `
-                -CanonicalEcosystemSha256 $canonicalSha `
-                -AcceptanceResult $shortCycleResult `
-                -StateDirectory $creatorStateDirectory `
-                -CaseEvidenceDirectory $creatorCaseEvidence `
-                -OutputBundle (Join-Path $testRoot "short-cycles.bundle") `
-                -OutputDescriptor (Join-Path $testRoot "short-cycles.json") `
-                -RepositoryRoot $repositoryRootForTest | Out-Null
-        } -Pattern "challenge-bound interactive run" `
-            -Message "A short Creator lifecycle cycle count was accepted."
-
-        # --- Adversarial: spoofed, replayed, or rebound descriptors ---------
-        foreach ($spoof in @(
-                @{ Field = "acceptanceChallenge"; Value = "cd" * 32
-                    Label = "challenge" },
-                @{ Field = "lastRunSessionId"; Value = "other-session"
-                    Label = "session" },
-                @{ Field = "acceptanceResultSha256"; Value = "9" * 64
-                    Label = "acceptance result digest" }
-            )) {
-            $spoofDescriptorPath = Join-Path $testRoot `
-                "creator-spoof-$($spoof.Label -replace '\s', '-').json"
-            $spoofDescriptor = Get-Content `
-                -LiteralPath $creatorDescriptorBackup -Raw | ConvertFrom-Json
-            $spoofDescriptor.($spoof.Field) = $spoof.Value
-            $spoofDescriptor | ConvertTo-Json -Depth 32 -Compress |
-                Set-Content -LiteralPath $spoofDescriptorPath `
-                    -Encoding utf8NoBOM -NoNewline
-            Assert-ThrowsMatch -Action {
-                Assert-WindowsCreatorEvidencePair -SourceSha $sourceSha `
-                    -WindowsArchive $windowsArchive `
-                    -CanonicalSha $canonicalSha `
-                    -DescriptorPath $spoofDescriptorPath `
-                    -BundlePath $creatorBundleBackup
-            } -Pattern "does not match this exact candidate|challenge-bound interactive run|manifest does not match" `
-                -Message "A spoofed Creator $($spoof.Label) was accepted."
-        }
-
-        $wrongReceiptDescriptorPath = Join-Path $testRoot `
-            "creator-wrong-receipt.json"
-        $wrongReceiptDescriptor = Get-Content `
-            -LiteralPath $creatorDescriptorBackup -Raw | ConvertFrom-Json
-        $wrongReceiptDescriptor.creatorPackageReceipt.sourceSha256 = "8" * 64
-        $wrongReceiptDescriptor | ConvertTo-Json -Depth 32 -Compress |
-            Set-Content -LiteralPath $wrongReceiptDescriptorPath `
-                -Encoding utf8NoBOM -NoNewline
-        Assert-ThrowsMatch -Action {
-            Assert-WindowsCreatorEvidencePair -SourceSha $sourceSha `
-                -WindowsArchive $windowsArchive `
-                -CanonicalSha $canonicalSha `
-                -DescriptorPath $wrongReceiptDescriptorPath `
-                -BundlePath $creatorBundleBackup
-        } -Pattern "challenge-bound interactive run" `
-            -Message "A wrong Creator package receipt was accepted."
-
-        # A complete prior-run bundle replayed under a fresh challenge must
-        # fail: the embedded acceptance result still carries the old challenge.
-        $replayArgs = $creatorResultDefaults.Clone()
-        $replayArgs.Challenge = "ef" * 32
-        $replayArgs.SessionId = "creator-session-0002"
-        $replayResult = Write-CreatorAcceptanceResultForTest @replayArgs `
-            -Path (Join-Path $testRoot "replay-result.json")
-        $replayBundle = Join-Path $testRoot "creator-replay.bundle"
-        $replayDescriptor = Join-Path $testRoot "creator-replay.json"
-        & $creatorGenerator -SourceSha $sourceSha -Version $Version `
-            -WindowsArchive $windowsArchive `
-            -CanonicalEcosystemSha256 $canonicalSha `
-            -AcceptanceResult $replayResult `
-            -StateDirectory $creatorStateDirectory `
-            -CaseEvidenceDirectory $creatorCaseEvidence `
-            -OutputBundle $replayBundle -OutputDescriptor $replayDescriptor `
-            -RepositoryRoot $repositoryRootForTest | Out-Null
-        Assert-ThrowsMatch -Action {
-            Assert-WindowsCreatorEvidencePair -SourceSha $sourceSha `
-                -WindowsArchive $windowsArchive `
-                -CanonicalSha $canonicalSha `
-                -DescriptorPath $creatorDescriptorBackup `
-                -BundlePath $replayBundle
-        } -Pattern "does not match this exact candidate|manifest does not match|changed while it was being validated" `
-            -Message "A replayed prior-run Creator bundle was accepted."
-
-        $extraCaseDirectory = Join-Path $creatorCaseEvidence "unexpected-case"
-        New-Item -ItemType Directory -Path $extraCaseDirectory | Out-Null
-        Set-Content -LiteralPath (
-            Join-Path $extraCaseDirectory "observation.txt"
-        ) -Value "unexpected" -Encoding ascii -NoNewline
-        Assert-ThrowsMatch -Action {
-            & $creatorGenerator -SourceSha $sourceSha -Version $Version `
-                -WindowsArchive $windowsArchive `
-                -CanonicalEcosystemSha256 $canonicalSha `
-                -AcceptanceResult $creatorAcceptanceResult `
-                -StateDirectory $creatorStateDirectory `
-                -CaseEvidenceDirectory $creatorCaseEvidence `
-                -OutputBundle (Join-Path $testRoot "extra-case.bundle") `
-                -OutputDescriptor (Join-Path $testRoot "extra-case.json") `
-                -RepositoryRoot $repositoryRootForTest | Out-Null
-        } -Pattern "exact source-SHA cases" `
-            -Message "An extra Creator evidence case was accepted."
-        Remove-Item -LiteralPath $extraCaseDirectory -Recurse -Force
-
-        if ($CreatorEvidenceOnly) {
-            Write-Host (
-                "Windows Creator deterministic evidence regression passed."
-            )
-            return
-        }
-
         $windowsEvidence = Join-Path $testEvidence "windows"
         $unityEvidenceDirectory = Join-Path $windowsEvidence "unity"
         $robotopiaEvidenceDirectory = Join-Path $windowsEvidence "robotopia"
@@ -1508,7 +843,7 @@ exit 0
             completedAtUtc = "2026-07-31T09:01:00.000Z"
             gameDirectory = $GameDirectory
             package = Join-Path $testRoot `
-                "dev.topiaforge.sdk-acceptance-1.0.0-rc.1.topiaforgemod"
+                "dev.topiaforge.sdk-acceptance-0.1.0-rc.1.topiaforgemod"
             requiredCases = $windowsRequiredCases
             passedCases = $windowsPassedCases
             missingCases = @()
@@ -1621,7 +956,7 @@ exit 0
             startedAtUtc = "2026-07-31T10:00:00.000Z"
             completedAtUtc = "2026-07-31T10:01:00.000Z"
             gameDirectory = "/mnt/c/Robotopia"
-            package = "/tmp/dev.topiaforge.sdk-acceptance-1.0.0-rc.1.topiaforgemod"
+            package = "/tmp/dev.topiaforge.sdk-acceptance-0.1.0-rc.1.topiaforgemod"
             succeeded = $true
             requiredCases = $expectedCases
             passedCases = $expectedCases
@@ -1782,53 +1117,6 @@ exit 0
         Assert-ByteIdenticalMetadata -ExpectedPath $recomputedQa `
             -ActualPath $frozenQa -Label "Exact-rerun Windows QA summary"
 
-        $retainedCreatorDescriptor = Join-Path $testEvidence `
-            "windows-creator/creator-evidence.json"
-        $retainedCreatorBundle = Join-Path $testEvidence `
-            "windows-creator/creator-evidence.bundle"
-        $creatorDescriptorBackup = Join-Path $testRoot "creator-descriptor.backup"
-        $creatorBundleBackup = Join-Path $testRoot "creator-bundle.backup"
-        Copy-Item $retainedCreatorDescriptor $creatorDescriptorBackup
-        Copy-Item $retainedCreatorBundle $creatorBundleBackup
-        # A replacement Creator pair that is internally consistent but is not
-        # the frozen one must still be rejected: the QA summary is byte-frozen.
-        $firstCreatorCaseId = [string]$acceptanceInventory.
-            creatorAcceptance.cases[0].id
-        Set-Content -LiteralPath (
-            Join-Path (
-                Join-Path $creatorCaseEvidence $firstCreatorCaseId
-            ) "observation.txt"
-        ) -Value "different but valid retained evidence" `
-            -Encoding utf8NoBOM -NoNewline
-        $replacementCreatorBundle = Join-Path $testRoot `
-            "creator-replacement.bundle"
-        $replacementCreatorDescriptor = Join-Path $testRoot `
-            "creator-replacement.json"
-        & $creatorGenerator -SourceSha $sourceSha -Version $Version `
-            -WindowsArchive $windowsArchive `
-            -CanonicalEcosystemSha256 $canonicalSha `
-            -AcceptanceResult $creatorAcceptanceResult `
-            -StateDirectory $creatorStateDirectory `
-            -CaseEvidenceDirectory $creatorCaseEvidence `
-            -OutputBundle $replacementCreatorBundle `
-            -OutputDescriptor $replacementCreatorDescriptor `
-            -RepositoryRoot $repositoryRootForTest | Out-Null
-        Copy-Item -LiteralPath $replacementCreatorBundle `
-            -Destination $retainedCreatorBundle -Force
-        Copy-Item -LiteralPath $replacementCreatorDescriptor `
-            -Destination $retainedCreatorDescriptor -Force
-        New-WindowsQaSummary -SourceSha $sourceSha `
-            -CanonicalSha $canonicalSha -WindowsArchive $windowsArchive `
-            -ValidationPath $windowsValidationPath `
-            -Validation $windowsValidationObject -OutputPath $recomputedQa
-        Assert-ThrowsMatch -Action {
-            Assert-ByteIdenticalMetadata -ExpectedPath $recomputedQa `
-                -ActualPath $frozenQa -Label "Frozen Windows QA summary"
-        } -Pattern "frozen bytes" `
-            -Message "An internally consistent replacement Creator pair was accepted."
-        Copy-Item $creatorDescriptorBackup $retainedCreatorDescriptor -Force
-        Copy-Item $creatorBundleBackup $retainedCreatorBundle -Force
-
         $stageRepository = Join-Path $testRoot "stage-repository"
         $stageAssets = Join-Path $testRoot "stage-assets"
         $stageState = Join-Path $testRoot "stage-state"
@@ -1845,7 +1133,7 @@ exit 0
                 ".github/repository-governance.json"
         ) -Destination $stageGovernanceDirectory
         Set-Content -LiteralPath (
-            Join-Path $stageNotesDirectory "v1.0.0-rc.1.md"
+            Join-Path $stageNotesDirectory "v0.1.0-rc.1.md"
         ) -Value "stage notes" -Encoding utf8NoBOM
         Set-Content -LiteralPath (Join-Path $stageRepository "tracked.txt") `
             -Value "tracked" -Encoding ascii
@@ -1888,11 +1176,11 @@ exit 0
         )
         $env:FAKE_STAGE_RELEASE_JSON = (
             [ordered]@{
-                tagName = "v1.0.0-rc.1"
+                tagName = "v0.1.0-rc.1"
                 isDraft = $true
                 isImmutable = $false
                 isPrerelease = $true
-                name = "TopiaForge 1.0.0-rc.1"
+                name = "TopiaForge 0.1.0-rc.1"
                 body = "stage notes"
                 assets = @()
                 targetCommitish = $stageSourceSha
@@ -1932,7 +1220,7 @@ if "%~1"=="api" if "%~2"=="repos/furroxide/TopiaForge/collaborators/admin/permis
   echo admin
   exit /b 0
 )
-if "%~1"=="api" if "%~2"=="repos/furroxide/TopiaForge/releases/tags/v1.0.0-rc.1" (
+if "%~1"=="api" if "%~2"=="repos/furroxide/TopiaForge/releases/tags/v0.1.0-rc.1" (
   echo %FAKE_STAGE_ASSET_JSON%
   exit /b 0
 )
@@ -1984,7 +1272,7 @@ if [[ ${1:-} == api &&
   exit 0
 fi
 if [[ ${1:-} == api &&
-      ${2:-} == repos/furroxide/TopiaForge/releases/tags/v1.0.0-rc.1 ]]; then
+      ${2:-} == repos/furroxide/TopiaForge/releases/tags/v0.1.0-rc.1 ]]; then
   printf '%s\n' "$FAKE_STAGE_ASSET_JSON"
   exit 0
 fi
@@ -2083,7 +1371,7 @@ printf 'dart %s\n' "$*" >>"$FAKE_STAGE_LOG"
             }
             function Get-ReleaseCatalogEntry {
                 return [pscustomobject]@{
-                    notesFile = "release/notes/v1.0.0-rc.1.md"
+                    notesFile = "release/notes/v0.1.0-rc.1.md"
                     prerelease = $true
                     artifacts = @("asset.bin")
                 }
@@ -2113,9 +1401,6 @@ printf 'dart %s\n' "$*" >>"$FAKE_STAGE_LOG"
                 compatDataRoot = $CompatDataRoot
                 unityPath = $UnityPath
                 gameDirectory = $GameDirectory
-                windowsCreatorEvidence = $WindowsCreatorEvidence
-                windowsCreatorEvidenceBundle =
-                    $WindowsCreatorEvidenceBundle
                 canonicalSha256 = $canonicalSha
                 canonicalArchiveSha256 = $canonicalSha
                 ecosystemEvidenceSha256 = $canonicalSha
@@ -2144,7 +1429,7 @@ printf 'dart %s\n' "$*" >>"$FAKE_STAGE_LOG"
             $identityIndex = $stageNativeLog.IndexOf("signing-identity")
             $tagIndex = $stageNativeLog.IndexOf("signed-tag")
             $uploadIndex = $stageNativeLog.IndexOf(
-                "release upload v1.0.0-rc.1"
+                "release upload v0.1.0-rc.1"
             )
             Assert-True (
                 $policyIndex -ge 0 -and
@@ -2304,10 +1589,10 @@ function New-FakeRun {
     }
     return [pscustomobject][ordered]@{
         databaseId = [Int64]$env:FAKE_DISPATCH_RUN_ID
-        displayTitle = "Finalize v1.0.0-rc.1 " +
+        displayTitle = "Finalize v0.1.0-rc.1 " +
             "($($env:FAKE_DISPATCH_REQUEST_ID))"
         event = "workflow_dispatch"
-        headBranch = "v1.0.0-rc.1"
+        headBranch = "v0.1.0-rc.1"
         headSha = $headSha
         status = $Status
         conclusion = $Conclusion
@@ -2439,7 +1724,7 @@ exit 64
         $env:FAKE_DISPATCH_LIST_COUNT = $dispatchListCount
         $env:FAKE_DISPATCH_RELEASE_JSON = (
             [ordered]@{
-                tagName = "v1.0.0-rc.1"
+                tagName = "v0.1.0-rc.1"
                 isDraft = $false
                 isImmutable = $true
                 isPrerelease = $true
@@ -2474,9 +1759,6 @@ exit 64
                 compatDataRoot = $CompatDataRoot
                 unityPath = $UnityPath
                 gameDirectory = $GameDirectory
-                windowsCreatorEvidence = $WindowsCreatorEvidence
-                windowsCreatorEvidenceBundle =
-                    $WindowsCreatorEvidenceBundle
                 canonicalSha256 = $canonicalSha
                 canonicalArchiveSha256 = $canonicalSha
                 ecosystemEvidenceSha256 = $canonicalSha
@@ -2571,8 +1853,8 @@ exit 64
             Assert-True (
                 $successLog.Contains(
                     "workflow run release.yml --repo " +
-                    "furroxide/TopiaForge --ref v1.0.0-rc.1 " +
-                    "-f tag=v1.0.0-rc.1 -f request_id=$successRequestId"
+                    "furroxide/TopiaForge --ref v0.1.0-rc.1 " +
+                    "-f tag=v0.1.0-rc.1 -f request_id=$successRequestId"
                 ) -and
                 $successLog.Contains("journal-attempt 1")
             ) (

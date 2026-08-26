@@ -81,7 +81,7 @@ namespace TopiaForge.ModManager.Tests
                 SchemaVersion = 5,
                 Id = "io.github.furroxide.topiaforge.worlds",
                 Name = "TopiaForge Worlds",
-                Version = "1.0.0-rc.1",
+                Version = "0.1.0-rc.1",
                 EntryAssembly = "TopiaForge.Worlds.dll",
                 EntryType = "TopiaForge.Worlds.WorldsMod"
             };
@@ -90,7 +90,7 @@ namespace TopiaForge.ModManager.Tests
                 SchemaVersion = 5,
                 Id = "io.github.furroxide.topiaforge.prompts",
                 Name = "TopiaForge Prompts",
-                Version = "1.0.0-rc.1",
+                Version = "0.1.0-rc.1",
                 EntryAssembly = "TopiaForge.Prompts.dll",
                 EntryType = "TopiaForge.Prompts.PromptsMod"
             };
@@ -103,8 +103,8 @@ namespace TopiaForge.ModManager.Tests
                 EntryAssembly = "Consumer.dll",
                 EntryType = "Consumer.Entry"
             };
-            consumerManifest.Dependencies.Add("io.github.furroxide.topiaforge.worlds", ">=1.0.0-rc.1 <2.0.0");
-            consumerManifest.Dependencies.Add("io.github.furroxide.topiaforge.prompts", ">=1.0.0-rc.1 <2.0.0");
+            consumerManifest.Dependencies.Add("io.github.furroxide.topiaforge.worlds", ">=0.1.0-rc.1 <0.2.0");
+            consumerManifest.Dependencies.Add("io.github.furroxide.topiaforge.prompts", ">=0.1.0-rc.1 <0.2.0");
             consumerManifest.LoadAfter.Add("io.github.furroxide.topiaforge.worlds");
             consumerManifest.LoadAfter.Add("io.github.furroxide.topiaforge.prompts");
 

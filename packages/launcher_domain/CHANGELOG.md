@@ -1,4 +1,4 @@
-## 1.0.0-rc.1
+## 0.1.0-rc.1
 
 - Added the strict manifest V5, SemVer, dependency, compatibility, capability,
   profile, multiplayer admission/inactive-reason, and package-selection

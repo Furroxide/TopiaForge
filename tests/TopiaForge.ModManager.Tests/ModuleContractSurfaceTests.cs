@@ -37,11 +37,10 @@ namespace TopiaForge.ModManager.Tests
                 typeof(ICreatorContentService).Assembly,
                 typeof(IWorldGamemodeService).Assembly,
                 typeof(ITimeControlService).Assembly,
-                typeof(IPromptOverrideRegistry).Assembly,
-                typeof(IUgcLiveSyncService).Assembly
+                typeof(IPromptOverrideRegistry).Assembly
             };
 
-            Assert(modules.Select(assembly => assembly.GetName().Name).Distinct(StringComparer.Ordinal).Count() == 6,
+            Assert(modules.Select(assembly => assembly.GetName().Name).Distinct(StringComparer.Ordinal).Count() == 5,
                 "each module contract must live in its own assembly");
 
             foreach (var module in modules)
@@ -59,8 +58,7 @@ namespace TopiaForge.ModManager.Tests
                          typeof(ICreatorContentService),
                          typeof(IWorldGamemodeService),
                          typeof(ITimeControlService),
-                         typeof(IPromptOverrideRegistry),
-                         typeof(IUgcLiveSyncService)
+                         typeof(IPromptOverrideRegistry)
                      })
             {
                 Assert(specialized.Assembly != core,
@@ -97,8 +95,10 @@ namespace TopiaForge.ModManager.Tests
 
         private static void AssertContractAssembly(Assembly assembly)
         {
-            Assert(assembly.GetName().Version == new Version(1, 0, 0, 0),
-                assembly.GetName().Name + " must keep the V1 assembly version stable");
+            // Frozen for the whole 0.x line: Mono/BepInEx has no binding redirects, so moving the SDK's
+            // assembly identity would hard-fail every already-compiled third-party mod.
+            Assert(assembly.GetName().Version == new Version(0, 1, 0, 0),
+                assembly.GetName().Name + " must keep the 0.x assembly version stable");
             Assert(File.Exists(Path.ChangeExtension(assembly.Location, ".xml")),
                 assembly.GetName().Name + " must emit IntelliSense XML documentation");
 

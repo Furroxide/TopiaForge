@@ -17,7 +17,6 @@ import 'public_url.dart';
 import 'safe_zip_archive.dart';
 import 'secure_http.dart';
 import 'sdk_reference_pack.dart';
-import 'ugc_sidecar_runtime.dart';
 
 part 'local_developer_repository/io_helpers.dart';
 part 'local_developer_repository/template_copy.dart';
@@ -129,7 +128,6 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
     final withCompanion =
         includeUnityCompanion ||
         options.includeUnityCompanion ||
-        options.liveSync != null ||
         templateInfo.includeUnityCompanion;
     root.createSync(recursive: true);
 
@@ -145,17 +143,6 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
             )
           : const UnityCompanionSettings(),
     );
-    if (options.liveSync != null) {
-      project = project.copyWith(
-        unityCompanion: UnityCompanionSettings(
-          enabled: true,
-          projectPath: project.unityCompanion.projectPath,
-          unityVersion: project.unityCompanion.unityVersion,
-          assetBundleOutputPath: project.unityCompanion.assetBundleOutputPath,
-          liveSync: options.liveSync!,
-        ),
-      );
-    }
     await _writeProject(root.path, project);
     await _scaffoldModFromTemplate(root.path, id, name, options, withCompanion);
     final sdk = await _initializeSdkProject(root.path);
@@ -320,43 +307,6 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
     String projectPath,
     ModManifest manifest,
   ) => _updateModManifest(projectPath, manifest);
-
-  @override
-  Future<bool> ensureUgcCompanionPackage(
-    String projectPath, {
-    bool update = false,
-  }) => _ensureUgcCompanionPackage(projectPath, update: update);
-
-  @override
-  Future<String> writeUgcCompanionSeed(
-    String projectPath, {
-    required String watchFolder,
-    String projectName = '',
-    String sceneId = '',
-    String sceneName = '',
-    String environment = '',
-    bool liveSync = true,
-  }) => _writeUgcCompanionSeed(
-    projectPath,
-    watchFolder: watchFolder,
-    projectName: projectName,
-    sceneId: sceneId,
-    sceneName: sceneName,
-    environment: environment,
-    liveSync: liveSync,
-  );
-
-  @override
-  Future<DeveloperProject> updateUgcLiveSync(
-    String projectPath,
-    UgcLiveSyncSettings settings,
-  ) async {
-    final root = _requireProjectRoot(projectPath);
-    final project = await _readProject(root.path);
-    final updated = project.withUgcLiveSync(settings);
-    await _writeProject(root.path, updated);
-    return updated;
-  }
 
   @override
   Future<String> packProject(

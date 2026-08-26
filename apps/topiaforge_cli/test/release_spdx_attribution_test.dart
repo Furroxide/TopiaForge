@@ -24,7 +24,7 @@ void main() {
   setUp(() {
     root = _repositoryRoot();
     policy = TopiaForgeReleasePolicy.load(root);
-    release = TopiaForgeReleaseCatalog.load(root).release('1.0.0-rc.1');
+    release = TopiaForgeReleaseCatalog.load(root).release('0.1.0-rc.1');
     sbom = buildReleaseSpdxSbom(
       policy: policy,
       release: release,

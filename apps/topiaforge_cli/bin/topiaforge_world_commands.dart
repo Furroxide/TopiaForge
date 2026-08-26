@@ -203,4 +203,54 @@ extension _WorldCommands on _TopiaForgeCli {
     stdout.writeln('Installed $packagePath.');
     return _launch(const <String>[], restart: false);
   }
+
+  Future<String?> _resolveUnityDevProject(String? selector) async {
+    bool isUnityProject(String path) =>
+        Directory(p.join(path, 'ProjectSettings')).existsSync() &&
+        Directory(p.join(path, 'Assets')).existsSync();
+
+    if (selector != null) {
+      // An explicit path has to clear the same check `world link` applies; every
+      // other route into this resolver already does. A directory that fails it is
+      // still offered to the registry lookup, because `--project` also takes a name
+      // and a same-named directory in the working tree must not shadow one.
+      final directory = Directory(selector).existsSync()
+          ? p.normalize(p.absolute(selector))
+          : null;
+      if (directory != null && isUnityProject(directory)) {
+        return directory;
+      }
+      final projects = await developerRepository.listProjects();
+      for (final project in projects) {
+        if (project.name.toLowerCase() == selector.toLowerCase() &&
+            project.isUnity) {
+          return project.path;
+        }
+      }
+      if (directory != null) {
+        // Say why a real directory was rejected rather than letting the caller's
+        // "no project found" message suggest the path was missing.
+        throw StateError(
+          '$directory is not a Unity project (expected Assets/ and ProjectSettings/).',
+        );
+      }
+      return null;
+    }
+
+    if (isUnityProject(Directory.current.path)) {
+      return Directory.current.path;
+    }
+
+    final projects = await developerRepository.listProjects();
+    final worlds =
+        projects
+            .where(
+              (project) =>
+                  project.kind == ProjectKind.unityWorld &&
+                  Directory(project.path).existsSync(),
+            )
+            .toList()
+          ..sort((a, b) => b.lastOpenedUtc.compareTo(a.lastOpenedUtc));
+    return worlds.isEmpty ? null : worlds.first.path;
+  }
 }

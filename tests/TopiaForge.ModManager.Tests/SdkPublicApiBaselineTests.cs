@@ -64,10 +64,6 @@ namespace TopiaForge.ModManager.Tests
                 "TopiaForge.Mods.Prompts",
                 () => typeof(IPromptOverrideRegistry).Assembly),
             new BaselineSpec(
-                "topiaforge.mods.ugc",
-                "TopiaForge.Mods.Ugc",
-                () => typeof(IUgcLiveSyncService).Assembly),
-            new BaselineSpec(
                 "topiaforge.mods.testing",
                 "TopiaForge.Mods.Testing",
                 () => typeof(TopiaForge.Mods.Testing.FakeModContext).Assembly)

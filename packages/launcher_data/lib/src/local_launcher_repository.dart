@@ -18,7 +18,6 @@ import 'process_identity.dart';
 import 'package_contract.dart';
 import 'public_url.dart';
 import 'secure_http.dart';
-import 'ugc_sidecar_runtime.dart';
 import 'safe_zip_archive.dart';
 
 part 'local_launcher_repository/game_layout.dart';
@@ -46,8 +45,6 @@ part 'local_launcher_repository/repository_hooks.dart';
 part 'local_launcher_repository/runtime_transaction.dart';
 part 'local_launcher_repository/runtime_repair_helpers.dart';
 part 'local_launcher_repository/storage_helpers.dart';
-part 'local_launcher_repository/ugc_live_sync_helpers.dart';
-part 'local_launcher_repository/ugc_publisher_helpers.dart';
 
 class LocalLauncherRepository implements GameInstallDiscoveryRepository {
   LocalLauncherRepository({
@@ -60,7 +57,6 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
     PackageMetadataValidator? packageMetadataValidator,
     PackageInstallCommitHook? packageInstallCommitHook,
     RuntimeRepairCommitHook? runtimeRepairCommitHook,
-    UgcInspectionReadHook? ugcInspectionReadHook,
     GameProcessStarter? gameProcessStarter,
   }) : _dataRoot = Directory(dataRoot ?? resolveTopiaForgeDataRoot()),
        _repositoryRoot = Directory(
@@ -74,7 +70,6 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
        _packageMetadataValidator = packageMetadataValidator,
        _packageInstallCommitHook = packageInstallCommitHook,
        _runtimeRepairCommitHook = runtimeRepairCommitHook,
-       _ugcInspectionReadHook = ugcInspectionReadHook,
        _gameProcessStarter = gameProcessStarter ?? _startDetachedGameProcess;
   final Directory _dataRoot;
   final Directory _repositoryRoot;
@@ -85,17 +80,9 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
   final Map<String, Future<List<String>>> _installedMetadataCache = {};
   final PackageInstallCommitHook? _packageInstallCommitHook;
   final RuntimeRepairCommitHook? _runtimeRepairCommitHook;
-  final UgcInspectionReadHook? _ugcInspectionReadHook;
   final GameProcessStarter _gameProcessStarter;
   Future<void> _settingsMutationTail = Future<void>.value();
   Future<void> _launcherLogMutationTail = Future<void>.value();
-  final StreamController<UgcPublisherEvent> _ugcPublisherEvents =
-      StreamController<UgcPublisherEvent>.broadcast();
-  Process? _ugcPublisher;
-  StreamSubscription<String>? _ugcPublisherStdout;
-  StreamSubscription<String>? _ugcPublisherStderr;
-  int _ugcPublisherSessionId = 0;
-  bool _ugcPublisherStopping = false;
   bool _disposed = false;
   @override
   String get dataRoot => _dataRoot.path;
@@ -104,8 +91,6 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
   File get _sourcesFile => File(p.join(_dataRoot.path, 'package_sources.json'));
   File get _launcherLogFile =>
       File(p.join(_dataRoot.path, 'logs', 'launcher.log'));
-  File get _ugcPublisherSessionFile =>
-      File(p.join(_dataRoot.path, 'ugc-session.json'));
   Directory get _packageCache =>
       Directory(p.join(_dataRoot.path, 'package-cache'));
 
@@ -408,49 +393,6 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
   }
 
   @override
-  Future<String> deployUgcLiveSyncConfig(
-    GameInstall install,
-    UgcLiveSyncSettings settings,
-  ) => _deployUgcLiveSyncConfig(install, settings);
-
-  @override
-  Future<UgcLiveSyncCleanupReport> cleanupUgcLiveSync(
-    GameInstall install,
-    UgcLiveSyncSettings fallbackSettings,
-  ) => _cleanupUgcLiveSync(install, fallbackSettings);
-
-  @override
-  Stream<UgcPublisherEvent> get ugcPublisherEvents =>
-      _ugcPublisherEvents.stream;
-
-  @override
-  bool get isUgcPublisherRunning => _ugcPublisher != null;
-
-  @override
-  Future<UgcPublisherStartResult> startUgcPublisher(
-    UgcLiveSyncSettings settings,
-  ) => _startUgcPublisher(settings);
-
-  @override
-  Future<void> stopUgcPublisher({bool waitForExit = false}) =>
-      _stopUgcPublisher(waitForExit: waitForExit);
-
-  @override
-  Future<void> revokeUgcPublisherSession() async {
-    await _deleteFileIfExists(_ugcPublisherSessionFile);
-  }
-
-  @override
-  Future<UgcLiveSyncStatusSnapshot?> readUgcLiveSyncStatus(
-    GameInstall install,
-  ) => _readUgcLiveSyncStatus(install);
-
-  @override
-  Future<UgcSceneInspectionResult> inspectWatchFolderScenes(
-    String watchFolder,
-  ) => _inspectWatchFolderScenes(watchFolder);
-
-  @override
   Future<DiagnosticBundle> createDiagnosticBundle(
     GameInstall install,
     DependencyResolutionResult resolution,
@@ -476,13 +418,5 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
-    try {
-      await _stopUgcPublisher(waitForExit: true);
-    } finally {
-      await _cancelUgcPublisherOutput();
-      if (!_ugcPublisherEvents.isClosed) {
-        await _ugcPublisherEvents.close();
-      }
-    }
   }
 }

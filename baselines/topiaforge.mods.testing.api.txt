@@ -3,7 +3,7 @@
 # Regenerate with: dotnet run --project tests/TopiaForge.ModManager.Tests -c Release -- --print-sdk-api-baseline topiaforge.mods.testing
 # Review every change. Breaking changes require explicit V1 compatibility approval.
 
-assembly TopiaForge.Mods.Testing, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null
+assembly TopiaForge.Mods.Testing, Version=0.1.0.0, Culture=neutral, PublicKeyToken=null
 target-framework .NETStandard,Version=v2.1
 
 type public sealed class TopiaForge.Mods.Testing.CapturedLogEntry : System.Object
@@ -548,25 +548,6 @@ type public sealed class TopiaForge.Mods.Testing.FakeToast : System.Object
   constructor .ctor(System.String message, TopiaForge.Mods.UiTone tone)
   property System.String Message { get; }
   property TopiaForge.Mods.UiTone Tone { get; }
-
-type public sealed class TopiaForge.Mods.Testing.FakeUgcLiveSyncService : System.Object, TopiaForge.Mods.IUgcLiveSyncService
-  constructor .ctor(TopiaForge.Mods.Testing.FakeModLifetime lifetime)
-  event System.Action<TopiaForge.Mods.UgcSnapshotInfo>? PatchApplied { add [virtual,final,newslot]; remove [virtual,final,newslot]; }
-  event System.Action<TopiaForge.Mods.UgcSnapshotInfo>? SnapshotImported { add [virtual,final,newslot]; remove [virtual,final,newslot]; }
-  event System.Action<TopiaForge.Mods.UgcSyncError>? SyncError { add [virtual,final,newslot]; remove [virtual,final,newslot]; }
-  event System.Action<TopiaForge.Mods.UgcSyncSession>? SessionStarted { add [virtual,final,newslot]; remove [virtual,final,newslot]; }
-  event System.Action<TopiaForge.Mods.UgcSyncSession>? SessionStopped { add [virtual,final,newslot]; remove [virtual,final,newslot]; }
-  method System.Void RaiseSyncError(System.String phase, System.String message)
-  method TopiaForge.Mods.OperationResult<TopiaForge.Mods.UgcSnapshotInfo> ApplyPatch(System.String projectName, System.String sceneId, System.String sceneName, System.Int32 entityCount, System.String revisionLabel, System.Boolean isFullRebuild = false)
-  method TopiaForge.Mods.OperationResult<TopiaForge.Mods.UgcSnapshotInfo> ImportSnapshot(System.String projectName, System.String sceneId, System.String sceneName, System.Int32 entityCount, System.String revisionLabel)
-  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUgcAssetOverrideLease> RegisterAssetOverride(TopiaForge.Mods.UgcAssetOverride assetOverride)
-  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUgcSyncLease> StartAutomergeSession(TopiaForge.Mods.UgcLiveSyncRequest request)
-  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUgcSyncLease> StartLocalSession(TopiaForge.Mods.UgcLiveSyncRequest request)
-  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.UgcAssetOverride> AssetOverrides { get [virtual,final,newslot]; }
-  property System.DateTime CurrentUtc { get; set; }
-  property System.Int32 ActiveLeaseCount { get; }
-  property TopiaForge.Mods.UgcLiveSyncStatus Status { get [virtual,final,newslot]; }
-  property TopiaForge.Mods.UgcSyncSession? CurrentSession { get [virtual,final,newslot]; }
 
 type public sealed class TopiaForge.Mods.Testing.FakeUiModal : System.Object, System.IDisposable, TopiaForge.Mods.IUiModal
   method System.Void Confirm()

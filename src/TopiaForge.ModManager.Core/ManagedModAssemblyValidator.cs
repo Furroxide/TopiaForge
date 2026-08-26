@@ -13,7 +13,10 @@ namespace TopiaForge.ModManager.Core
     {
         private const string SdkAssemblyName = "TopiaForge.Mods.Abstractions";
         private const string SupportedTargetFramework = ".NETStandard,Version=v2.1";
-        private static readonly Version CompatibleSdkAssemblyVersion = new Version(1, 0, 0, 0);
+        // Frozen for the whole 0.x line. Mono/BepInEx has no binding-redirect infrastructure, so changing the
+        // SDK's assembly identity is a hard load failure for every already-compiled third-party mod. Tracking
+        // the minor would be "correct" SemVer and operationally useless.
+        private static readonly Version CompatibleSdkAssemblyVersion = new Version(0, 1, 0, 0);
 
         private static readonly HashSet<string> ProhibitedExactNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -345,7 +348,7 @@ namespace TopiaForge.ModManager.Core
                     errors.Add(
                         "entryAssembly references incompatible SDK identity '" +
                         DescribeAssemblyReference(reader, reference) +
-                        "'; V1 requires unsigned " + SdkAssemblyName + " " +
+                        "'; the loader requires unsigned " + SdkAssemblyName + " " +
                         CompatibleSdkAssemblyVersion + ".");
                 }
             }

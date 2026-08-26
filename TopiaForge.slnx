@@ -16,13 +16,11 @@
     <Project Path="src/TopiaForge.Mods.RobotKit/TopiaForge.Mods.RobotKit.csproj" />
     <Project Path="src/TopiaForge.Mods.Testing/TopiaForge.Mods.Testing.csproj" />
     <Project Path="src/TopiaForge.Mods.UnityUi/TopiaForge.Mods.UnityUi.csproj" />
-    <Project Path="src/TopiaForge.Mods.Ugc/TopiaForge.Mods.Ugc.csproj" />
     <Project Path="src/TopiaForge.Mods.Worlds/TopiaForge.Mods.Worlds.csproj" />
   </Folder>
   <Folder Name="/mods/">
     <Project Path="mods/TopiaForge.Chronos/TopiaForge.Chronos.csproj" />
     <Project Path="mods/TopiaForge.CreatorContent/TopiaForge.CreatorContent.csproj" />
-    <Project Path="mods/TopiaForge.CreatorTools/TopiaForge.CreatorTools.csproj" />
     <Project Path="mods/TopiaForge.Multiplayer/TopiaForge.Multiplayer.csproj" />
     <Project Path="mods/TopiaForge.GravityGun/TopiaForge.GravityGun.csproj" />
     <Project Path="mods/TopiaForge.NoFeedbackUrl/TopiaForge.NoFeedbackUrl.csproj" />
@@ -32,7 +30,6 @@
     <Project Path="mods/TopiaForge.Prompts/TopiaForge.Prompts.csproj" />
     <Project Path="mods/TopiaForge.RobotKit/TopiaForge.RobotKit.csproj" />
     <Project Path="mods/TopiaForge.Sandbox/TopiaForge.Sandbox.csproj" />
-    <Project Path="mods/TopiaForge.UgcLiveSync/TopiaForge.UgcLiveSync.csproj" />
     <Project Path="mods/TopiaForge.UiGallery/TopiaForge.UiGallery.csproj" />
     <Project Path="mods/TopiaForge.Worlds/TopiaForge.Worlds.csproj" />
     <Project Path="mods/TopiaForge.Zombies/TopiaForge.Zombies.csproj" />

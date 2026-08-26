@@ -73,18 +73,6 @@ namespace TopiaForge.ModManager.Tests
             Assert(!chronos.IsFrozen && chronos.Mode == TimeMode.Slowed,
                 "disposing the turn scheduler restores the preceding time state");
 
-            var bundle = context.Assets.LoadBundleAsync("content/test.bundle").Result.Value!;
-            var prefab = context.Assets.LoadPrefabAsync(bundle, "TestPrefab").Result.Value!;
-            var ugc = new FakeUgcLiveSyncService(context.Lifetime);
-            var overrideResult = ugc.RegisterAssetOverride(new UgcAssetOverride("@test/prefab", prefab));
-            var sessionResult = ugc.StartLocalSession(new UgcLiveSyncRequest(watchFolder: "exports"));
-            var snapshots = 0;
-            ugc.SnapshotImported += _ => snapshots++;
-            Assert(overrideResult.Succeeded && sessionResult.Succeeded &&
-                   ugc.ImportSnapshot("Project", "scene", "Scene", 3, "r1").Succeeded &&
-                   snapshots == 1,
-                "UGC fake owns sessions and injects snapshot notifications");
-
             var robotKit = new FakeRobotKit(context.Lifetime);
             var spawn = robotKit.Agents.Spawn(new RobotAgentSpawnRequest(
                 new Vec3(1f, 0f, 2f),
@@ -149,7 +137,6 @@ namespace TopiaForge.ModManager.Tests
                    lifetimeCancelledLoad.Result.ErrorCode == ModErrorCode.Cancelled &&
                    !worlds.HasPendingLoad &&
                    chronos.ActiveLeaseCount == 0 &&
-                   ugc.ActiveLeaseCount == 0 &&
                    robotKit.Agents.ActiveAgents.Count == 0 &&
                    robotKit.Objectives.ActiveHandleCount == 0 &&
                    robotKit.Conversations.ActiveConversationCount == 0 &&

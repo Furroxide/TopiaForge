@@ -8,17 +8,25 @@ Machine setup and the resumable command sequence are in
 
 ## 1. Scope, policy, and ownership
 
-- [x] Product version is `1.0.0-rc.1`; components/mods version independently; initial release has no rollback target.
+- [x] Product version is `0.1.0-rc.1`; components/mods version independently; initial release has no rollback target.
 - [ ] `release/release-readiness.json` is committed on the frozen candidate,
-      matches that exact version and SHA, approves every P0 gate, and either
-      approves or records an allowed manually reviewed accepted-risk decision
-      for every P1 gate. Its `evidenceIds` are attestation references, not
-      machine-resolved evidence: the protected release approver must verify
-      their existence and reviewer authorization. The catalog remains
-      `blocked` before that decision.
+      matches that exact version and SHA, and approves every **blocking** gate:
+      `P0-IP-01`, `P0-OSS-01`, `P0-PRIV-01`, `P0-CRED-01`, and `P0-GAME-01`. The
+      seven advisory gates should each be closed or given a dated disposition,
+      but an open one does not stop the release on a `0.x` line; see
+      [What blocks a `0.x` release](LaunchBlockers.md#what-blocks-a-0x-release).
+      Its `evidenceIds` are attestation references, not machine-resolved
+      evidence: the protected release approver must verify their existence and
+      reviewer authorization. The catalog remains `blocked` before that
+      decision.
 - [x] RC discovery is GitHub Releases only; stable Pages/manual and official registry feeds exclude prereleases.
 - [x] The stale `release/0.1.1` line is retired and is neither reused nor deleted during RC preparation.
-- [x] Robotopia support is build `2309` only (`0.0.2309`); public-latest drift is release-fatal.
+- [x] Robotopia support is build `2409` (`0.0.2409`). Public-latest drift stops CI and release, which makes an
+      external party's publishing cadence a hard dependency of this repository — `gameBuild.requireLatestAtRelease`
+      and the `--require-latest` flag in `ci.yml`, `deploy-pages.yml`, `release-package-build.yml`, and `release.yml`
+      are all still on. Reviewed 2026-08-22 and deliberately kept: `topiaforge compat bump` now turns a bump into one
+      command, so the cost of a drift is minutes rather than a 25-file edit. Note that clearing the policy flag alone
+      would change nothing — the workflows pass the flag literally.
 - [x] Unity is exactly `6000.0.23f1`; no fallback editor is accepted.
 - [x] Launcher updates use signed GitHub prerelease metadata, explicit
       confirmation, whole-package replacement, health-gated rollback, and a
@@ -29,7 +37,7 @@ Machine setup and the resumable command sequence are in
       the redistribution inventory in
       [`ReleaseLicenseInventory.md`](ReleaseLicenseInventory.md) is reconciled.
 - [x] DCO 1.1 is checked in and post-cutover commits require valid
-      `Signed-off-by` trailers; pre-`v1.0.0-rc.1` history is grandfathered.
+      `Signed-off-by` trailers; pre-`v0.1.0-rc.1` history is grandfathered.
 - [ ] Owner/legal approves Robotopia/brand/art/font/compatibility/injection rights and all third-party dispositions.
 - [ ] Privacy/backend/security owners approve remote data flows, retention, consent, cost, abuse, and incident policy.
 - [ ] Security/product owners approve first-party package trust, origin, revocation, and installed-user recovery.
@@ -39,12 +47,12 @@ Machine setup and the resumable command sequence are in
 ## 2. Candidate and toolchains
 
 - [ ] Review and commit the remediation without discarding unrelated user work; freeze one candidate SHA.
-- [ ] Create a protected, annotated `v1.0.0-rc.1` tag on that SHA through the approved administrator process.
+- [ ] Create a protected, annotated `v0.1.0-rc.1` tag on that SHA through the approved administrator process.
 - [ ] Confirm `global.json` resolves exactly .NET SDK `10.0.301` with roll-forward disabled and runtime `10.0.9`.
 - [ ] Confirm Dart `3.12.2`, Flutter `3.44.6`, and Node `24.18.0` in each
       applicable production environment, plus Unity `6000.0.23f1` on the
       Windows production builder.
-- [ ] Probe the public latest-build manifest and verify both pinned build-2309 archive paths and SHA-256 values.
+- [ ] Probe the public latest-build manifest and verify both pinned build-2409 archive paths and SHA-256 values.
 - [ ] Confirm all LFS objects, immutable BepInEx inputs, UnityDoorstop source, and managed references are present.
 - [ ] Git LFS is installed on Windows and in Ubuntu; `git lfs fsck` succeeds
       and every tracked LFS path is materialized in both the admin checkout and
@@ -94,7 +102,7 @@ Machine setup and the resumable command sequence are in
       bounded HTTP, all adversarial archive cases, and interruption before and
       after every journal transition on all three install layouts.
 - [ ] Runtime repair rejects links/special files, preserves modes, stages atomically, and restores on failure.
-- [ ] UGC inspection uses strict bounded UTF-8/JSON/gzip, typed issues, stable regular files, deterministic selection,
+- [ ] World inspection uses strict bounded UTF-8/JSON/gzip, typed issues, stable regular files, deterministic selection,
       structural validation, race detection, and surfaced errors.
 - [ ] Diagnostics enforce 4 MiB/log and 16 MiB total caps, streaming tails, link rejection, secret redaction,
       truncation metadata, hashes, and atomic ZIP replacement.
@@ -116,21 +124,21 @@ Machine setup and the resumable command sequence are in
 
 ## 6. Mods, templates, registry, and ecosystem payload
 
-- [ ] All 16 first-party source manifests, projects, and current-version changelogs align; all 15 release-payload
-      packages validate; normal `pack --all` emits 14 non-DevTool packages and release automation adds only Creator
-      Tools; every payload mod is packed twice byte-identically and the resulting archive is inspected
-      for manifest, assembly, license paths, links, names, and collisions.
+- [ ] All 14 first-party source manifests, projects, and current-version changelogs align; all 13 release-payload
+      packages validate; `pack --all` emits exactly those 13 non-DevTool packages, with UiGallery the one exclusion
+      and no package added out of band; every payload mod is packed twice byte-identically and the resulting archive
+      is inspected for manifest, assembly, license paths, links, names, and collisions.
 - [ ] The packaged metadata validator rejects bad PE/type/constructor/SDK/TFM fixtures without loading mod code, and
       every first-party archive is independently scanned for loader-owned SDK DLL/PDB files.
 - [ ] The canonical 14-assembly loader payload contains the exact pinned Metadata/Immutable bytes and notices; the
-      build-2309 Unity/Mono profile supplies the verified Memory/Buffers/Unsafe dependency closure, and every DLL in
+      build-2409 Unity/Mono profile supplies the verified Memory/Buffers/Unsafe dependency closure, and every DLL in
       the Windows Robotopia-executed BepInEx overlay hashes identically to its canonical payload copy.
 - [ ] All seven C# templates scaffold, validate, build/package twice, and retain safe non-publishable defaults.
 - [ ] Explicit `--author`/`--license` scaffolding is tested; AGPL text is generated by default; MIT/Apache text after explicit selection and
       other expressions require safe repeatable `--license-file` inputs.
 - [ ] Three VPM packages/listings build twice and pass direct manifest, license, notice, target, and hash inspection.
 - [ ] One canonical deterministic `ecosystem-dist` contains exactly 15 released mods plus three VPM packages;
-      UiGallery remains validated but absent, Creator Tools is explicitly packed, and every platform consumes
+      UiGallery remains validated but absent, and every platform consumes
       identical nested bytes.
 - [ ] Strict registry schema/semantic/dependency/license/package/all-version validation passes.
 - [ ] Merge-base/index comparison proves append-only history: no deletion, rename, reorder, mutation, downgrade, or
@@ -147,15 +155,15 @@ Machine setup and the resumable command sequence are in
       to baseline.
 - [ ] UiGallery covers loading, empty, information, warning, error, success, disabled, focus, long/scroll content,
       destructive modal, toast, scale, contrast, and reduced-motion states.
-- [ ] Authorized Robotopia/profiler QA validates all 16 source-mod flows, every declared GameCompat binding, lifecycle isolation, save behavior,
-      TopiaForgeUi usage, accessibility propagation, and zero steady-state allocation regressions.
+- [ ] `P0-GAME-01` is closed on the pinned build: a startup smoke reporting the detected version, at least one
+      `GameCode`-coupled first-party mod reaching `Loaded`, and `gamecompat verify` exiting 0 against that install's
+      `Managed` directory. The wider source-mod, profiler, and allocation matrix is manual QA in
+      [`LiveGameAcceptance.md`](LiveGameAcceptance.md), not a `0.x` gate.
 - [ ] Local Windows acceptance passes from the frozen SHA with all canonical markers, main-thread assertions, ten
       resource cycles, exact package hashes, and a scrubbed validation summary.
-- [ ] The separate local Windows Creator-workbench descriptor covers every required interactive build-2309 case,
-      records at least ten lifecycle cycles and unchanged save/checkpoint state, and matches its retained evidence
-      bundle and exact Windows archive (launcher, CLI, and GameCompat extractor
-      Authenticode-signed and RFC 3161 timestamped by the pinned certificate).
-- [ ] *(Out of RC1; `1.0.0-rc.2`.)* The Proton evidence bundle matches the exact Linux archive digest and covers real
+- [ ] The exact Windows archive verifies (launcher, CLI, and GameCompat extractor Authenticode-signed and RFC 3161
+      timestamped by the pinned certificate).
+- [ ] *(Out of RC1; `0.1.0-rc.2`.)* The Proton evidence bundle matches the exact Linux archive digest and covers real
       discovery, path/process, repair, custom-world, runtime, and uninstall behavior with Proton `10.0-4`.
       Metadata records that this RC1 evidence is non-independent; build output without the actual game run is not
       accepted.
@@ -165,7 +173,7 @@ Machine setup and the resumable command sequence are in
 ## 8. Platform release archives
 
 - [ ] On a clean checkout of the frozen SHA, build Windows x64 on the administrator workstation. *(Linux x64 in
-      Ubuntu 24.04 under WSL2 is out of RC1 and returns in `1.0.0-rc.2`.)*
+      Ubuntu 24.04 under WSL2 is out of RC1 and returns in `0.1.0-rc.2`.)*
 - [ ] Build the canonical ecosystem twice byte-identically before distribution and prove every platform archive
       contains that exact ecosystem digest.
 - [ ] Directly inspect final extracted archives for missing/extra/duplicate/linked entries, case collisions, modes,
@@ -174,7 +182,7 @@ Machine setup and the resumable command sequence are in
       Authenticode signatures from the exact reviewed leaf-certificate
       SHA-256 pin and valid HTTPS RFC 3161 timestamps. Unsigned, partly signed,
       untimestamped, expired-at-signing, mismatched, or invalid output fails.
-- [ ] *(Out of RC1; `1.0.0-rc.2`.)* Linux executable modes, native launcher/CLI, and
+- [ ] *(Out of RC1; `0.1.0-rc.2`.)* Linux executable modes, native launcher/CLI, and
       discovery/path/process/repair/custom-world assumptions for Robotopia's Windows build under Proton pass on a
       clean host that can reach a GPU Vulkan implementation.
 - [ ] Clean-machine install, repair, profiles, dependency preview, normal/safe-mode launch, failure recovery,
@@ -256,15 +264,16 @@ Machine setup and the resumable command sequence are in
 - [ ] Admin preflight and the protected finalizer both prove immutable releases,
       exact `furroxide` release review with admin bypass disabled and only `v*`
       tags allowed, and active release/version-tag lifecycle rules.
-- [ ] Complete a non-publishing two-platform rehearsal before deleting the obsolete live `unity-validation` and
-      `game-acceptance` environments.
+- [ ] Complete a non-publishing rehearsal covering every platform in `artifactPolicy` before deleting the obsolete
+      live `unity-validation` and `game-acceptance` environments.
 
 ## 10. Final decision
 
 - [ ] Re-run `release validate-readiness` against the frozen target SHA
       immediately before tag creation and again after protected-environment
       approval; the exact committed decision and BOM binding remain ready.
-- [ ] Rerun [`LaunchBlockers.md`](LaunchBlockers.md) against the frozen SHA: every P0 closed, every P1 closed or given a
-      dated owner disposition, zero critical/high defects, zero unexplained warnings/failures/flakes, and zero skips.
+- [ ] Rerun [`LaunchBlockers.md`](LaunchBlockers.md) against the frozen SHA: every blocking gate closed, every
+      advisory gate closed or given a dated owner disposition, zero critical/high defects, zero unexplained
+      warnings/failures/flakes, and zero skips.
 - [ ] Record an explicit **SHIP** decision by the project owner and release manager. Until then, the decision is
       **NO-SHIP**.

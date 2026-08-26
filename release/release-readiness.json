@@ -1,7 +1,7 @@
 {
   "$schema": "../schemas/topiaforge.release-readiness-v1.schema.json",
   "schemaVersion": 1,
-  "releaseVersion": "1.0.0-rc.1",
+  "releaseVersion": "0.1.0-rc.1",
   "candidateBinding": {
     "mode": "git-blob-at-target-sha",
     "path": "release/release-readiness.json",
@@ -12,6 +12,7 @@
     {
       "id": "P0-IP-01",
       "priority": "P0",
+      "enforcement": "blocking",
       "status": "blocked",
       "reasonCode": "approval-evidence-missing",
       "reviewerRoles": [
@@ -24,6 +25,7 @@
     {
       "id": "P0-OSS-01",
       "priority": "P0",
+      "enforcement": "blocking",
       "status": "blocked",
       "reasonCode": "approval-evidence-missing",
       "reviewerRoles": [
@@ -35,6 +37,7 @@
     {
       "id": "P0-PRIV-01",
       "priority": "P0",
+      "enforcement": "blocking",
       "status": "blocked",
       "reasonCode": "approval-evidence-missing",
       "reviewerRoles": [
@@ -49,6 +52,7 @@
     {
       "id": "P0-TRUST-01",
       "priority": "P0",
+      "enforcement": "advisory",
       "status": "blocked",
       "reasonCode": "approval-evidence-missing",
       "reviewerRoles": [
@@ -62,6 +66,7 @@
     {
       "id": "P0-CRED-01",
       "priority": "P0",
+      "enforcement": "blocking",
       "status": "blocked",
       "reasonCode": "rotation-evidence-missing",
       "reviewerRoles": [
@@ -73,6 +78,7 @@
     {
       "id": "P0-WIN-01",
       "priority": "P0",
+      "enforcement": "advisory",
       "status": "blocked",
       "reasonCode": "platform-evidence-missing",
       "reviewerRoles": [
@@ -84,6 +90,7 @@
     {
       "id": "P0-GAME-01",
       "priority": "P0",
+      "enforcement": "blocking",
       "status": "blocked",
       "reasonCode": "acceptance-evidence-missing",
       "reviewerRoles": [
@@ -95,6 +102,7 @@
     {
       "id": "P0-HOST-01",
       "priority": "P0",
+      "enforcement": "advisory",
       "status": "blocked",
       "reasonCode": "host-evidence-missing",
       "reviewerRoles": [
@@ -107,6 +115,7 @@
     {
       "id": "P0-CAND-01",
       "priority": "P0",
+      "enforcement": "advisory",
       "status": "blocked",
       "reasonCode": "candidate-evidence-missing",
       "reviewerRoles": [
@@ -118,6 +127,7 @@
     {
       "id": "P1-UX-01",
       "priority": "P1",
+      "enforcement": "advisory",
       "status": "blocked",
       "reasonCode": "acceptance-evidence-missing",
       "reviewerRoles": [
@@ -130,6 +140,7 @@
     {
       "id": "P1-E2E-01",
       "priority": "P1",
+      "enforcement": "advisory",
       "status": "blocked",
       "reasonCode": "independent-evidence-missing",
       "reviewerRoles": [
@@ -142,6 +153,7 @@
     {
       "id": "P1-SUPPORT-01",
       "priority": "P1",
+      "enforcement": "advisory",
       "status": "blocked",
       "reasonCode": "ownership-evidence-missing",
       "reviewerRoles": [

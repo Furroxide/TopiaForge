@@ -1,6 +1,6 @@
 part of 'widget_test.dart';
 
-class _FakeLauncherRepository extends _PublisherFakeLauncherRepository {
+class _FakeLauncherRepository extends _InstallFakeLauncherRepository {
   _FakeLauncherRepository({
     LauncherSnapshot? snapshot,
     bool developerMode = false,
@@ -230,41 +230,16 @@ class _FakeLauncherRepository extends _PublisherFakeLauncherRepository {
   Future<void> saveLauncherUpdateSettings(
     LauncherUpdateSettings settings,
   ) async {}
-
-  @override
-  Future<UgcLiveSyncStatusSnapshot?> readUgcLiveSyncStatus(
-    GameInstall install,
-  ) async {
-    return null;
-  }
-
-  @override
-  Future<UgcSceneInspectionResult> inspectWatchFolderScenes(
-    String watchFolder,
-  ) async => UgcSceneInspectionResult();
 }
 
 class _FakeDeveloperRepository implements DeveloperRepository {
-  _FakeDeveloperRepository({
-    this.initialUgcSettings = const UgcLiveSyncSettings(
-      editorUrl: 'https://editor/?project=automerge:stale',
-      documentUrl: 'automerge:stale',
-      autoConnectOnStart: true,
-    ),
-  }) : _currentUgcSettings = initialUgcSettings;
-
   bool hasProject = true;
-  final UgcLiveSyncSettings initialUgcSettings;
-  UgcLiveSyncSettings _currentUgcSettings;
-  UgcLiveSyncSettings? updatedUgcSettings;
-  Completer<void>? updateUgcGate;
-  Completer<void>? updateUgcEntered;
 
   @override
   String get developerDataRoot => '/tmp/topiaforge-developer';
   @override
   Future<DeveloperWorkspace> loadDeveloperWorkspace({String? projectPath}) {
-    return Future.value(_workspace(_currentUgcSettings));
+    return Future.value(_workspace());
   }
 
   @override
@@ -301,29 +276,6 @@ class _FakeDeveloperRepository implements DeveloperRepository {
     ModManifest manifest,
   ) {
     return Future.value(const <LauncherIssue>[]);
-  }
-
-  @override
-  Future<bool> ensureUgcCompanionPackage(
-    String projectPath, {
-    bool update = false,
-  }) {
-    return Future.value(true);
-  }
-
-  @override
-  Future<String> writeUgcCompanionSeed(
-    String projectPath, {
-    required String watchFolder,
-    String projectName = '',
-    String sceneId = '',
-    String sceneName = '',
-    String environment = '',
-    bool liveSync = true,
-  }) {
-    return Future.value(
-      '$projectPath/ProjectSettings/TopiaForgeUgcCompanion.json',
-    );
   }
 
   @override
@@ -367,7 +319,7 @@ class _FakeDeveloperRepository implements DeveloperRepository {
     runSetupCount += 1;
     return DeveloperSetupResult(
       environment: await checkEnvironment(),
-      actions: const ['UGC Automerge sidecar dependencies already present.'],
+      actions: const ['Ensured the developer data folder.'],
     );
   }
 
@@ -407,21 +359,6 @@ class _FakeDeveloperRepository implements DeveloperRepository {
     String configuration = 'Release',
   }) {
     throw UnimplementedError();
-  }
-
-  @override
-  Future<DeveloperProject> updateUgcLiveSync(
-    String projectPath,
-    UgcLiveSyncSettings settings,
-  ) async {
-    final entered = updateUgcEntered;
-    if (entered != null && !entered.isCompleted) {
-      entered.complete();
-    }
-    await updateUgcGate?.future;
-    updatedUgcSettings = settings;
-    _currentUgcSettings = settings;
-    return _workspace(settings).project!;
   }
 
   @override

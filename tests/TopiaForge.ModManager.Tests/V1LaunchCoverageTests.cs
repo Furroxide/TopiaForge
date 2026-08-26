@@ -23,7 +23,6 @@ namespace TopiaForge.ModManager.Tests
             typeof(ICreatorContentService).Assembly,
             typeof(IMultiplayerSession).Assembly,
             typeof(IPromptOverrideRegistry).Assembly,
-            typeof(IUgcLiveSyncService).Assembly,
             typeof(FakeModContext).Assembly
         };
 
@@ -35,7 +34,6 @@ namespace TopiaForge.ModManager.Tests
             "src/TopiaForge.Mods.Multiplayer/TopiaForge.Mods.Multiplayer.csproj",
             "src/TopiaForge.Mods.Prompts/TopiaForge.Mods.Prompts.csproj",
             "src/TopiaForge.Mods.RobotKit/TopiaForge.Mods.RobotKit.csproj",
-            "src/TopiaForge.Mods.Ugc/TopiaForge.Mods.Ugc.csproj",
             "src/TopiaForge.Mods.Worlds/TopiaForge.Mods.Worlds.csproj",
             "src/TopiaForge.Mods.Testing/TopiaForge.Mods.Testing.csproj",
             "src/TopiaForge.Mods.Interop.Unity/TopiaForge.Mods.Interop.Unity.csproj"
@@ -197,7 +195,6 @@ namespace TopiaForge.ModManager.Tests
             string manifestPath)
         {
             const string caseId = "integration.provider-scope";
-            const string ugcProviderId = "io.github.furroxide.topiaforge.ugc.livesync";
             const string missingProviderId = "dev.topiaforge.sdk-acceptance.missing-provider";
             var acceptanceCase = cases.Single(value =>
                 string.Equals(RequiredText(value, "id"), caseId, StringComparison.Ordinal));
@@ -207,7 +204,6 @@ namespace TopiaForge.ModManager.Tests
             Assert(behaviors.SetEquals(new[]
                 {
                     "required-provider-singletons",
-                    "optional-present-provider",
                     "optional-absent-nonblocking",
                     "singleton-conflict",
                     "multiple-cardinality",
@@ -220,7 +216,6 @@ namespace TopiaForge.ModManager.Tests
             {
                 "Context.Extensions.GetAll<ITimeControlService>()",
                 "Context.Extensions.GetAll<ICreatorContentService>()",
-                "Context.Extensions.GetAll<IUgcLiveSyncService>()",
                 "Context.Extensions.GetAll<IMissingOptionalProvider>()",
                 "ModErrorCode.Conflict",
                 "ExtensionCardinality.Multiple",
@@ -232,10 +227,6 @@ namespace TopiaForge.ModManager.Tests
             using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
             var required = manifest.RootElement.GetProperty("dependencies");
             var optional = manifest.RootElement.GetProperty("optionalDependencies");
-            Assert(!required.TryGetProperty(ugcProviderId, out _),
-                "the live UGC provider must be optional for the provider-scope probe");
-            Assert(optional.TryGetProperty(ugcProviderId, out _),
-                "the provider-scope probe must declare an installed optional provider");
             Assert(optional.TryGetProperty(missingProviderId, out _),
                 "the provider-scope probe must declare a deliberately absent optional provider");
             Assert(source.Contains(
@@ -284,7 +275,6 @@ namespace TopiaForge.ModManager.Tests
                     "prompt-overrides",
                     "robot-targets",
                     "creator-sessions",
-                    "ugc-asset-overrides",
                     "world-registrations"
                 }), caseId + " resourceFamilies must exactly describe the automatable live cycle coverage");
 
@@ -360,8 +350,7 @@ namespace TopiaForge.ModManager.Tests
                 "Context.Assets.LoadBundleAsync",
                 "Context.Assets.LoadPrefabAsync",
                 "Context.Assets.Spawn",
-                "Context.Interactions.Register",
-                "RegisterCycleUgcOverride(resources, prefab)"
+                "Context.Interactions.Register"
             });
             ValidateProbeMethod(source, "ProbeAudio", new[]
             {
@@ -416,12 +405,6 @@ namespace TopiaForge.ModManager.Tests
                 "service.TryResolveTarget",
                 "registration.IsActive"
             });
-            ValidateProbeMethod(source, "RegisterCycleUgcOverride", new[]
-            {
-                "service.RegisterAssetOverride",
-                "lease.IsActive",
-                "ContainsUgcOverride"
-            });
             ValidateProbeMethod(source, "RegisterCycleWorlds", new[]
             {
                 "service.RegisterWorld",
@@ -437,7 +420,6 @@ namespace TopiaForge.ModManager.Tests
                 "!world.IsActive",
                 "!assets.Bundle.IsAlive",
                 "!assets.Interaction.IsActive",
-                "!assets.UgcOverride.IsActive",
                 "Context.Scheduler.DelayAsync",
                 "event or scheduled callback fired after early release"
             });

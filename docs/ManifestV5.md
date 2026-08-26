@@ -5,7 +5,7 @@ description: Canonical TopiaForge package manifest, including optional multiplay
 
 # Manifest V5
 
-Manifest V5 is the sole manifest schema supported by TopiaForge 1.0. It is strict: unknown fields are
+Manifest V5 is the sole manifest schema supported by TopiaForge. It is strict: unknown fields are
 rejected unless their name begins with `x-`, and collections, strings, paths, and dependency graphs are
 bounded before an assembly loads. The `multiplayer` object is optional. Omitting it is the canonical
 standalone-only declaration.
@@ -29,16 +29,16 @@ Future loaders add a new version-specific reader and schema without changing the
   "author": { "name": "You" },
   "entryAssembly": "ExampleFirstMod.dll",
   "entryType": "Example.FirstMod.FirstMod",
-  "supportedGameVersionRange": "0.0.2309",
-  "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
-  "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "supportedGameVersionRange": "0.0.2409",
+  "supportedLoaderVersionRange": ">=0.1.0-rc.1 <0.2.0",
+  "supportedSdkVersionRange": ">=0.1.0-rc.1 <0.2.0",
   "license": "AGPL-3.0-or-later"
 }
 ```
 
 Required fields are `schemaVersion`, `name`, `displayName`, `version`, `author`, `entryAssembly`,
 `entryType`, and the three `supported*VersionRange` fields. `name` is a stable 2–64 character package
-id. Versions use SemVer 2; Robotopia build 2309 is represented as `0.0.2309`.
+id. Versions use SemVer 2; Robotopia build 2409 is represented as `0.0.2409`.
 
 ## Package contract
 
@@ -55,7 +55,7 @@ dependent package may compile against.
 `filesystem-watch`, `harmony-patch`, `hud`, `input`, `navigation`, `network`, `microphone`, `particles`,
 `physics`, `physics-settings`, `player-control`, `player-token`, `prompt-overrides`, `quality-settings`,
 `remote-ai`, `render-settings`, `robot-spawning`, `scene-management`, `speech-to-text`, `time`,
-`ugc-livesync`, `unsafe-native`, and `world-service`. Capabilities do not grant or sandbox authority.
+`unsafe-native`, and `world-service`. Capabilities do not grant or sandbox authority.
 In particular, `network` continues to mean arbitrary outbound networking and is unrelated to
 TopiaForge's multiplayer transport.
 
@@ -146,6 +146,6 @@ explicit approval.
 
 ## Compatibility rule
 
-V5 is the only TopiaForge 1.0 schema. A future manifest schema must receive a new reader, validator, and explicit
+V5 is the only supported schema. A future manifest schema must receive a new reader, validator, and explicit
 migration; it may not change what V5 means. See [Compatibility policy](CompatibilityPolicy.md) and
 [Multiplayer API preview](Multiplayer.md).

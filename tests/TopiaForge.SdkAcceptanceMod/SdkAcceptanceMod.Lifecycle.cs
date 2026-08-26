@@ -15,7 +15,6 @@ namespace TopiaForge.SdkAcceptance
         private const string LifecyclePromptId = "dev.topiaforge.sdk-acceptance.lifecycle-prompt";
         private const string LifecycleRobotTarget = "SDK ACCEPTANCE LIFECYCLE TARGET";
         private const string LifecycleSurfaceId = "lifecycle-cycle";
-        private const string LifecycleUgcAssetId = "@topiaforge/sdk-acceptance-lifecycle";
         private const string LifecycleWorldId = "dev.topiaforge.sdk-acceptance.lifecycle-world";
         private const string LifecycleGamemodeId = "dev.topiaforge.sdk-acceptance.lifecycle-mode";
         private const string LifecycleMenuEntryId = "dev.topiaforge.sdk-acceptance.lifecycle-menu";
@@ -102,7 +101,7 @@ namespace TopiaForge.SdkAcceptance
                 Pass(
                     "lifecycle.ten-cycles",
                     "cycles=" + completedCycles
-                    + ";families=lifetime,events,scheduler,input,player-control,assets,entities,interactions,audio,ui,localization,commands,extensions,chronos,prompts,robot-targets,creator-sessions,ugc-overrides,world-registrations"
+                    + ";families=lifetime,events,scheduler,input,player-control,assets,entities,interactions,audio,ui,localization,commands,extensions,chronos,prompts,robot-targets,creator-sessions,world-registrations"
                     + ";release=reverse-idempotent-reacquired");
             }
             catch (Exception exception)
@@ -467,23 +466,9 @@ namespace TopiaForge.SdkAcceptance
             resources.Push(interaction);
             Require(interaction.IsActive, "lifecycle interaction was not active");
 
-            var ugcOverride = RegisterCycleUgcOverride(resources, prefab);
-            return new LifecycleAssetHandles(bundle, prefab, spawned, interaction, ugcOverride);
+            return new LifecycleAssetHandles(bundle, prefab, spawned, interaction);
         }
 
-        private IUgcAssetOverrideLease RegisterCycleUgcOverride(
-            Stack<IDisposable> resources,
-            IPrefabAsset prefab)
-        {
-            var service = ugcLiveSync ?? throw new InvalidOperationException("UGC provider is unavailable.");
-            var lease = RequireValue(
-                service.RegisterAssetOverride(new UgcAssetOverride(LifecycleUgcAssetId, prefab)),
-                "register lifecycle UGC asset override");
-            resources.Push(lease);
-            Require(lease.IsActive && ContainsUgcOverride(service.AssetOverrides, LifecycleUgcAssetId),
-                "lifecycle UGC asset override was not active");
-            return lease;
-        }
 
         private async Task WaitForCycleCallbacksAsync(LifecycleEventCounters counters, int cycle)
         {
@@ -536,10 +521,8 @@ namespace TopiaForge.SdkAcceptance
             Require(!assets.Bundle.IsAlive
                     && !assets.Prefab.IsAlive
                     && !assets.Spawned.IsAlive
-                    && !assets.Interaction.IsActive
-                    && !assets.UgcOverride.IsActive
-                    && !ContainsUgcOverride(ugcLiveSync?.AssetOverrides, LifecycleUgcAssetId),
-                "asset, entity, interaction, or UGC handle remained active after cycle " + cycle);
+                    && !assets.Interaction.IsActive,
+                "asset, entity, or interaction handle remained active after cycle " + cycle);
             Require(Context.Localization.Get(LifecycleLocalizationKey, "released") == "released",
                 "lifecycle localization catalog remained registered after cycle " + cycle);
             Require(!Context.Commands.TryExecute(
@@ -636,16 +619,6 @@ namespace TopiaForge.SdkAcceptance
             }
         }
 
-        private static bool ContainsUgcOverride(IReadOnlyList<UgcAssetOverride>? overrides, string assetId)
-        {
-            if (overrides == null) return false;
-            for (var index = 0; index < overrides.Count; index++)
-            {
-                if (string.Equals(overrides[index].AssetId, assetId, StringComparison.Ordinal)) return true;
-            }
-
-            return false;
-        }
 
         private interface ILifecycleProbeProvider
         {
@@ -683,21 +656,18 @@ namespace TopiaForge.SdkAcceptance
                 IAssetBundle bundle,
                 IPrefabAsset prefab,
                 ISpawnedEntity spawned,
-                IInteractableRegistration interaction,
-                IUgcAssetOverrideLease ugcOverride)
+                IInteractableRegistration interaction)
             {
                 Bundle = bundle;
                 Prefab = prefab;
                 Spawned = spawned;
                 Interaction = interaction;
-                UgcOverride = ugcOverride;
             }
 
             public IAssetBundle Bundle { get; }
             public IPrefabAsset Prefab { get; }
             public ISpawnedEntity Spawned { get; }
             public IInteractableRegistration Interaction { get; }
-            public IUgcAssetOverrideLease UgcOverride { get; }
         }
 
         private sealed class CountingDisposable : IDisposable

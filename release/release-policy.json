@@ -10,7 +10,7 @@
     "unity": "6000.0.23f1"
   },
   "gameBuild": {
-    "id": 2309,
+    "id": 2409,
     "metadataFile": ".github/robotopia-game-build.json",
     "requireLatestAtRelease": true
   },
@@ -23,7 +23,7 @@
     "third_party/BepInEx/provenance.json"
   ],
   "versioning": {
-    "productVersion": "1.0.0-rc.1",
+    "productVersion": "0.1.0-rc.1",
     "componentVersionsAreIndependent": true,
     "rollback": "none-initial-release"
   },

@@ -62,6 +62,7 @@ class ReleasePackagePayloadWriter {
       Directory(p.join(repositoryRoot, 'third_party', 'BepInEx', 'LICENSES')),
       Directory(p.join(destinationRoot, 'third_party', 'BepInEx', 'LICENSES')),
     );
+    _noticeWriter.copyBepInExCorrespondingSource(destinationRoot);
     _copyTemplates(destinationRoot);
     fileOps.copyFileIfExists(
       p.join(repositoryRoot, 'README.md'),

@@ -10,7 +10,6 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
     'io.github.furroxide.topiaforge.prompts': 'TopiaForge.Mods.Prompts',
     'io.github.furroxide.topiaforge.robotkit': 'TopiaForge.Mods.RobotKit',
     'io.github.furroxide.topiaforge.multiplayer': 'TopiaForge.Mods.Multiplayer',
-    'io.github.furroxide.topiaforge.ugc.livesync': 'TopiaForge.Mods.Ugc',
     'io.github.furroxide.topiaforge.worlds': 'TopiaForge.Mods.Worlds',
   };
   Directory get _modTemplatesRoot =>
@@ -121,7 +120,7 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
       'entryType': '${tokens['ASSEMBLY_NAME']}.${tokens['TYPE_NAME']}Mod',
       'dependencies': <String, Object?>{},
       'optionalDependencies': <String, Object?>{},
-      'supportedGameVersionRange': '0.0.2309',
+      'supportedGameVersionRange': '>=0.0.2409 <0.0.2600',
       'supportedLoaderVersionRange': _compatibleMinorRange(
         TopiaForgeRuntimeVersions.loaderVersion,
       ),
@@ -324,68 +323,6 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
       _prettyJson(manifest.toJson()),
     );
     return manifest.validate();
-  }
-
-  Directory get _companionTemplateDir => Directory(
-    p.join(
-      _repositoryRoot.path,
-      'templates',
-      'unity-companion',
-      'Packages',
-      'io.github.furroxide.topiaforge.ugc-companion',
-    ),
-  );
-
-  Future<bool> _ensureUgcCompanionPackage(
-    String projectPath, {
-    bool update = false,
-  }) async {
-    final target = Directory(
-      p.join(
-        projectPath,
-        'Packages',
-        'io.github.furroxide.topiaforge.ugc-companion',
-      ),
-    );
-    if (target.existsSync() && !update) {
-      return true;
-    }
-    final source = _companionTemplateDir;
-    if (!source.existsSync()) {
-      return target.existsSync();
-    }
-    _copyDirectory(source, target);
-    return true;
-  }
-
-  Future<String> _writeUgcCompanionSeed(
-    String projectPath, {
-    required String watchFolder,
-    String projectName = '',
-    String sceneId = '',
-    String sceneName = '',
-    String environment = '',
-    bool liveSync = true,
-  }) async {
-    final settingsDir = Directory(p.join(projectPath, 'ProjectSettings'))
-      ..createSync(recursive: true);
-    final file = File(p.join(settingsDir.path, 'TopiaForgeUgcCompanion.json'));
-    _writeDeveloperTextAtomic(
-      file,
-      _prettyJson({
-        'schemaVersion': 2,
-        'watchFolder': watchFolder,
-        if (projectName.isNotEmpty) 'projectName': projectName,
-        if (sceneId.isNotEmpty) 'sceneId': sceneId,
-        if (sceneName.isNotEmpty) 'sceneName': sceneName,
-        if (environment.isNotEmpty) 'environment': environment,
-        'liveSync': liveSync,
-        // The companion's editor bootstrap applies the seed once and stamps appliedUtc; a fresh seededUtc from
-        // the CLI re-arms it.
-        'seededUtc': DateTime.now().toUtc().toIso8601String(),
-      }),
-    );
-    return file.path;
   }
 }
 

@@ -11,7 +11,6 @@ void _registerRuntimeLoaderPayloadTests({
     'TopiaForge.Mods.Multiplayer.dll',
     'TopiaForge.Mods.Prompts.dll',
     'TopiaForge.Mods.RobotKit.dll',
-    'TopiaForge.Mods.Ugc.dll',
     'TopiaForge.Mods.Worlds.dll',
   ];
   const validatorDependencyDlls = <String>[
@@ -35,8 +34,8 @@ void _registerRuntimeLoaderPayloadTests({
     final report = await repository().installOrRepairRuntime(install);
 
     expect(report.ok, isTrue);
-    expect(topiaForgeRuntimeLoaderAssemblies, hasLength(14));
-    expect(topiaForgeRuntimeLoaderDlls, hasLength(14));
+    expect(topiaForgeRuntimeLoaderAssemblies, hasLength(13));
+    expect(topiaForgeRuntimeLoaderDlls, hasLength(13));
     expect(topiaForgeRuntimeLoaderDlls, containsAll(moduleAndInteropDlls));
     final packages = {
       for (final assembly in topiaForgeRuntimeLoaderAssemblies.where(

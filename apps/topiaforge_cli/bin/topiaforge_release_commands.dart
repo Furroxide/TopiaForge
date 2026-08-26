@@ -138,14 +138,17 @@ extension _TopiaForgeReleaseCommands on _TopiaForgeCli {
       targetSha: targetSha,
       expectedReleaseVersion: version,
     );
+    // Report every unmet gate. Advisory ones are named too — they just do not
+    // fail the command on a 0.x line.
+    for (final gate in decision.gates) {
+      if (gate.isSatisfied) continue;
+      final severity = gate.blocksRelease ? 'error' : 'warning';
+      stderr.writeln(
+        '$severity: Release readiness gate ${gate.id} is ${gate.status} '
+        '(${gate.enforcement}).',
+      );
+    }
     if (!decision.isReady) {
-      for (final gate in decision.gates) {
-        if (!gate.satisfiesRelease) {
-          stderr.writeln(
-            'error: Release readiness gate ${gate.id} is ${gate.status}.',
-          );
-        }
-      }
       return 1;
     }
     stdout.writeln(

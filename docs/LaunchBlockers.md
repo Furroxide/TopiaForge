@@ -1,8 +1,10 @@
 # Initial release blocker register
 
-Last audited: 2026-07-31. Product candidate: `1.0.0-rc.1`. Recommendation: **NO-SHIP**.
+Last audited: 2026-07-31. Product candidate: `0.1.0-rc.1`. Recommendation: **NO-SHIP**.
+Governance relaxed for the `0.x` line on 2026-08-22; see
+[What blocks a `0.x` release](#what-blocks-a-0x-release).
 
-Scope change on 2026-08-12: **Linux is out of `1.0.0-rc.1`** and returns in `1.0.0-rc.2`.
+Scope change on 2026-08-12: **Linux is out of `0.1.0-rc.1`** and returns in `0.1.0-rc.2`.
 The administrator host cannot reach a GPU Vulkan implementation inside WSL2, and
 Robotopia's Direct3D 12 renderer requires it through VKD3D, so no credible Proton
 acceptance evidence was obtainable. RC1 ships Windows x64 only. See `P0-LINUX-01`.
@@ -14,12 +16,23 @@ decisions, credentials, protected-host configuration, and native Robotopia-runti
 by source changes. The strict publication gates intentionally continue to reject the candidate until those items are
 closed.
 
-One blocker was an exception to that framing because it was supplied by a source change: the native CreatorTools
-evidence collector. That collector, its challenge-bound acceptance runner, the `release-windows-creator-evidence-v2`
-descriptor, and the three real verifiers now exist, so `release-admin.ps1` no longer refuses to build. It is tracked as
-`P0-CREATOR-01` below and remains open only for the same reason as its neighbours: it now waits on an external input,
-an authorized interactive Robotopia build-2309 session, whose evidence must come from the frozen candidate SHA. Every
-release gate is therefore implemented and waits only on an external input.
+`P0-CREATOR-01` was retired on 2026-08-22 rather than closed. It existed to attest the native CreatorTools evidence
+collector from an interactive session, and the standalone package it collected evidence for no longer ships: the
+workbench moved into Sandbox. Its *release* machinery — the challenge-bound acceptance runner, the
+`release-windows-creator-evidence-v2` descriptor and bundle, the generator, and the three `Assert-WindowsCreator*`
+verifiers — was deleted with it, because a verifier nothing produces evidence for is not a gate, it is a hard stop
+nobody can pass. The workbench checklist survives as manual QA in
+[`LiveGameAcceptance.md`](LiveGameAcceptance.md).
+
+Corrected 2026-08-24: the collector itself was **not** deleted. `CreatorAcceptanceRecorder` and
+`CreatorAcceptanceCases` moved into the shipping Sandbox mod with the rest of the workbench and are still constructed
+by `CreatorWorkbench.TryCreate`. They are inert without a provisioned 64-hex challenge, and nothing can provision one
+any more, so this is dormant instrumentation rather than a live code path — but it does ship, and its consumer does
+not exist. Removing it from `mods/TopiaForge.Sandbox/CreatorTools/` is follow-up work, not a release blocker.
+
+More broadly: "Creator Tools is retired" describes the *package*, not the *code*. Roughly 5,400 lines moved into
+Sandbox, which also gained an optional `io.github.furroxide.topiaforge.multiplayer` dependency. The payload count
+drops 15 → 13; the shipped code surface does not shrink proportionally.
 
 This register records a pre-freeze working-tree preflight on the date above. It does not attest a future commit or a
 release candidate SHA. Close an item only with evidence from the frozen candidate SHA; do not treat an unavailable
@@ -33,6 +46,40 @@ Priority meanings:
 - **P1** — required before general availability unless the owner records an explicit, dated, scope-limited
   disposition.
 - **P2** — a conditional future gate; it is not a v1 blocker while the stated conservative constraint remains true.
+
+## What blocks a `0.x` release
+
+Priority says how serious a gate is. **Enforcement** says whether an unmet one stops the release, and on a `0.x` line
+those are no longer the same question.
+
+TopiaForge has never shipped. Eight of the twelve recorded gates wait on organizational evidence — IP counsel
+sign-off, a paid code-signing certificate, GitHub organization administration, external QA participants — that an
+alpha with no users cannot obtain, and a register where every gate is fatal is a register that says nothing about
+which gate matters. So five gates stay **blocking** and seven become **advisory**:
+
+| Gate | Enforcement | Why |
+| --- | --- | --- |
+| `P0-IP-01` | blocking | No rights basis, no distribution, at any version. |
+| `P0-OSS-01` | blocking | Redistributing an unlicensed third-party asset is release-fatal at `0.0.1`. |
+| `P0-PRIV-01` | blocking | `RoboApiClient` posts to an unapproved third-party backend reusing the player's token. |
+| `P0-CRED-01` | blocking | Exposed credentials stay exposed regardless of version number. |
+| `P0-GAME-01` | blocking | Obtainable by the maintainer alone, and it is the claim the product *is*. |
+| `P0-WIN-01` | advisory | `0.x` ships unsigned with a documented SmartScreen warning; see the gate. |
+| `P0-TRUST-01` | advisory | The trust model is disclosed, not enforced; approving it is a `1.0` question. |
+| `P0-HOST-01` | advisory | Protected-host configuration is org administration, not product state. |
+| `P0-CAND-01` | advisory | Freeze discipline is process; a `0.x` prerelease is not immutable-forever. |
+| `P1-UX-01` | advisory | Was already dispositionable; it is now dispositionable by default. |
+| `P1-E2E-01` | advisory | Needs external participants an unshipped alpha has none of. |
+| `P1-SUPPORT-01` | advisory | One named interim owner is honest for `0.x`. |
+
+Advisory does not mean removed. Every gate keeps its entry in
+[`release/release-readiness.json`](../release/release-readiness.json) with its status and reason code,
+`topiaforge release validate-readiness` prints unmet advisory gates as warnings, and the published BOM carries the
+whole summary. Only the *computed status* changes: an advisory gate cannot by itself hold a candidate.
+
+Enforcement is pinned per gate id in `apps/topiaforge_cli/lib/src/release_readiness.dart`, so the decision file cannot
+declare itself advisory. Restoring the `1.0` posture means moving each value back to `blocking` in that contract and in
+the decision file together.
 
 ## Verification matrix
 
@@ -55,14 +102,14 @@ check is silently skipped.
 | C#/Dart contract parity | PASS | Manifest V5, V4 retirement, SemVer 2.0, build mapping, multiplayer admission, canonical fields, unknown fields, dependencies, pins, conflicts, load order, and state fixtures agree. |
 | Sidecar install/runtime/security | PASS | Lockfile `npm ci`, syntax checks, 24 tests (22 passed and two Windows signal-delivery cases skipped), production dependency tree, and audit passed with zero vulnerabilities. |
 | Archive, UGC, diagnostic, repair, and process hardening | PASS | Adversarial traversal/link/collision/size/race/rollback/redaction/timeout regressions passed. Transaction recovery passes interruptions before and after every phase on all three layouts; the real Windows archive also passed a locally signed `rc.1` → synthetic `rc.2` swap and forced-health-failure rollback. |
-| First-party mods | NEEDS RERUN | Repeat deterministic packing and managed-assembly validation for all 16 source mods, the 14-package normal non-DevTool output, and the 15-package release payload with Creator Tools added explicitly; UiGallery remains excluded. |
+| First-party mods | NEEDS RERUN | Repeat deterministic packing and managed-assembly validation for all 14 source mods and the 13-package release payload; UiGallery is the one excluded DevTool. |
 | C# author templates | PASS | All seven template families scaffolded from a release-like payload, restored, relocated, built, tested, packed, validated, installed with full receipt checks, and rebuilt after extraction removal; each real platform-archive job repeats that lifecycle. Defaults remain deliberately non-publishable. |
-| VPM and canonical ecosystem payload | NEEDS RERUN | The retained ecosystem evidence predates Creator Content and Creator Tools. Rebuild and compare two independent three-VPM plus 15-mod release trees from the frozen candidate. |
+| VPM and canonical ecosystem payload | NEEDS RERUN | The retained ecosystem evidence predates Creator Content and the UgcLiveSync/CreatorTools retirement. Rebuild and compare two independent three-VPM plus 13-mod release trees from the frozen candidate. |
 | Exact-Unity TopiaForgeUi build | PASS | Unity `6000.0.23f1`; two builds matched SHA-256 `3cc6624f2a3a5fabc83c4fde49b32f859869e1d1e202afdaf91a888089f9fedb`. |
 | Exact-Unity representative world build | PASS | Two current-tree builds matched SHA-256 `afa3e9195e8e03199b414f8a5c9002e9f89831041a63c7e1c9b8eef173d9057d`; manifests, editor provenance, and companion/VPM inputs matched. |
 | Exact-Unity lifecycle smoke | NEEDS RERUN | A current-tree Unity `6000.0.23f1` run executed the managed validator and all 16 lifecycle cycles successfully with zero retained-resource delta. The administrator-controlled Windows release flow must regenerate and scrub that evidence from the frozen candidate. |
-| Robotopia compatibility | PASS | Build `2309`; 219 bindings, 198 verifiable offline, 21 explicitly uncheckable offline, zero errors, warnings, or indeterminate findings; safe GravityGun, OppositeDay, Sandbox, and Zombies have no native binding declarations. |
-| Public build freshness | PASS | A fresh 2026-07-31 public probe confirms both public platform records identify build `2309`; CI/release fail if the public latest manifest changes. |
+| Robotopia compatibility | PASS | Build `2409`; 182 bindings across 8 mods, 161 verifiable offline, 21 explicitly uncheckable offline, zero errors, warnings, or indeterminate findings; safe GravityGun, Multiplayer, OppositeDay, Sandbox, UiGallery, and Zombies have no native binding declarations. |
+| Public build freshness | PASS | The public latest manifest identifies build `2409`, matching the pin; CI/release fail if it changes. |
 | BepInEx/UnityDoorstop provenance | PASS | Pinned BepInEx `5.4.23.5` archives and extracted trees, UnityDoorstop commit/source, hashes, modes, and notices validate. |
 | macOS release package | OUT OF RC1 | Generic packaging remains in source, but macOS is not in RC1 policy, catalog, update metadata, handoff, or public assets. It requires a separately reviewed future release. |
 | Release-policy/BOM/SBOM/checksum machinery | PASS | Strict policy and metadata regressions cover AGPL-3.0-or-later, actual platform trust, signed update metadata/sidecar, checksums, BOM, SBOM, and immutable asset inventory. |
@@ -71,8 +118,7 @@ check is silently skipped.
 | Strict distributable-release policy | NEEDS RERUN | RC1 policy is scoped to Windows x64 only, forbids signing exceptions, and requires an exact nonzero Windows certificate SHA-256 pin plus an authenticated detached CMS handoff. |
 | Windows x64 RC1 package and clean-host run | BLOCKED | Requires a reviewed code-signing certificate/PFX, RFC 3161 timestamp service, a frozen clean candidate, exact timestamped-signature verification, Unity/Robotopia evidence, and clean-machine QA; see `P0-WIN-01`. |
 | Linux x64 package and Proton run | OUT OF RC1 | The WSL2 builder is fully provisioned and every pinned Linux toolchain verifies, but no GPU-backed Vulkan implementation is reachable there: NVIDIA ships no Vulkan ICD for WSL2 and Ubuntu does not package Mesa's Dozen driver, leaving only software lavapipe. Robotopia's Direct3D 12 renderer reaches Proton through VKD3D, which requires Vulkan, so the working OpenGL-over-d3d12 path cannot serve it. RC1 is therefore Windows-only; see `P0-LINUX-01`. |
-| Native CreatorTools evidence collector | BLOCKED | Implemented, not yet attested. `CreatorAcceptanceRecorder` emits challenge-bound per-case markers from observed workbench transitions for all nine `creator.*` cases, `topiaforge acceptance creator` binds them to the exact `last-run.json` session and CreatorTools package receipt, and the three `Assert-WindowsCreator*` verifiers in `tools/release-admin.ps1` now perform real `release-windows-creator-evidence-v2` verification instead of throwing. Save and checkpoint bytes are compared across End Session from the real `player_data.json.gz` document. The gate stays BLOCKED because no evidence has been produced from an authorized interactive build-2309 session at the frozen candidate SHA; see `P0-CREATOR-01`. |
-| Authorized Robotopia build-2309 acceptance | BLOCKED | A local Windows startup smoke passed on 2026-07-28: BepInEx loaded TopiaForge, detected `0.0.2309`, consumed all 16 staged packages, loaded every enabled first-party mod, initialized the native prompt/performance/UI bridges, and left Robotopia responsive. The complete dynamic-binding, reload, recovery, multiplayer, and profiler matrix still requires retained evidence from the frozen candidate; see `P0-GAME-01`. |
+| Authorized Robotopia acceptance on the pinned build | BLOCKED | The 2026-07-28 evidence was recorded on build `2309` and is void: `release-policy.json` now pins `2409`. The re-scoped gate needs a startup smoke, one first-party mod reaching `Loaded`, and `gamecompat verify` exiting 0 on the pinned build from the frozen candidate; see `P0-GAME-01`. |
 | Native UX/accessibility acceptance | BLOCKED | Screen Recording permission prevented screenshot comparison; screen-reader and native-platform manual QA remain; see `P1-UX-01`. |
 | Project license and OSS redistribution inventory | FAIL | TopiaForge-owned surfaces use AGPL-3.0-or-later and DCO 1.1 governs post-cutover contributions, but the notice inventory was a fixed allowlist that never covered the Unity TextMesh Pro directory. EmojiOne shipped with no redistribution grant, Liberation Sans shipped with no notice, and Quicksand was sourced from the Robotopia web bundle. All fixed; see the re-opened `P0-OSS-01`. IP/brand authority remains tracked separately in `P0-IP-01`. |
 | Privacy/backend authorization and package trust policy | BLOCKED | Remote features default off, but owner approval is still required; see `P0-PRIV-01` and `P0-TRUST-01`. |
@@ -88,24 +134,47 @@ Every gate below whose exit criteria are met by a reviewed record has a matching
 against its schema at the exact candidate SHA. The readiness decision previously
 carried only the four owner-decision P0 gates and the three P1 gates, which left
 `P0-WIN-01`, `P0-GAME-01`, `P0-HOST-01`, and `P0-CAND-01`
-release-fatal here but invisible to the machine decision. They are now recorded
-gates, so the computed status cannot reach `ready` while any of them is
-unresolved.
+release-fatal here but invisible to the machine decision. All twelve are now
+recorded, each with the `enforcement` value from
+[What blocks a `0.x` release](#what-blocks-a-0x-release), so the computed status
+cannot reach `ready` while any *blocking* gate is unresolved and an unmet
+advisory gate is still visible in the published summary.
 
 The decision carries **twelve** gates for RC1. `P0-LINUX-01` is deliberately absent
-because Linux is out of this candidate; restoring it belongs to `1.0.0-rc.2`
+because Linux is out of this candidate; restoring it belongs to `0.1.0-rc.2`
 alongside the policy archive entry and both schema gate contracts. `P0-OSS-01` is
 present: it was re-opened on 2026-08-06 and the readiness contract must be able to
 carry it rather than infer it from the legal inventory passing.
 
-`P0-CREATOR-01` is deliberately not a readiness entry. The code it required now
-exists, but it is still not closed by an attestation: it is closed by evidence
-that only an authorized interactive build-2309 session can produce, and that
-evidence is already enforced more strictly than a recorded decision could be.
-The verifiers reject any descriptor whose challenge, `last-run.json` session,
-CreatorTools package receipt, acceptance-result digest, case set, cycle count,
-or save/checkpoint bytes do not match the exact candidate. Recording it as an
-approvable gate would make it weaker, not stronger.
+`P0-CREATOR-01` was never a readiness entry and is now retired outright; see the
+note at the top of this register.
+
+## Dependency and code-scanning alerts (recorded 2026-08-24)
+
+Four open Dependabot alerts, three high: `nanoid`, `js-yaml`, and `fast-uri`, plus medium `postcss`. All
+four are in `website/package-lock.json`, which builds the documentation site. `website/` is not copied
+into any release payload — `release_package_payload.dart` never references it — so none of them reaches
+a distributed artifact. They execute during the Pages build over repository-owned content, not
+attacker-supplied input. **Disposition: not release-blocking for `0.1.0-rc.1`; carry them into the Pages
+work and take the upstream fixes when they land.** GitHub reports three of the four as `runtime` scope,
+which is scope *within the website package*, not within the product.
+
+Three CodeQL alerts, all high, all `actions/cache-poisoning/poisonable-step`: two in
+`release-package-build.yml` and one in `deploy-pages.yml`. **Fixed 2026-08-25** by making all three
+restore-only (`actions/cache/restore`). Both workflows check out a caller-supplied ref, so cache *write*
+access there let that ref plant an entry the default branch would later restore. Entries are populated by
+`ci.yml` on trusted refs, which runs on push to `main`, `dev`, and `release/**`, so nothing is lost but
+the occasional cold download.
+
+Worth recording why this was a real finding rather than a theoretical one: `ManagedRefsRestore` accepts a
+cache hit on a *structural* check (`validator.IsValid`) and returns before re-asserting the pinned archive
+SHA-256, which it only checks on the download path. A poisoned entry would therefore have been used as the
+managed reference assemblies the whole C# build compiles against. There is no sound way to verify a mutable
+cache against itself — an attacker who can write the tree can write any marker beside it — so write access
+*is* the trust boundary, which is exactly what this change closes.
+
+Note for the freeze: `codeql-high-critical` is active with `bypass_actors: []`, so a `release/*` → `main`
+promotion that introduces any *new* high alert cannot be merged by anyone, including the owner.
 
 The remaining informational exceptions are explained, not waived:
 `dotnet format` reports expected workspace-loader
@@ -118,9 +187,9 @@ and therefore belong to the Robotopia acceptance gate.
 
 The strict build-2309 audit found no removed or changed declared binding. Live
 startup did expose an independent loader defect: BepInEx 5 parses
-`BepInPlugin.Version` as `System.Version`, so the semantic prerelease value `1.0.0-rc.1` caused it to skip the
+`BepInPlugin.Version` as `System.Version`, so the semantic prerelease value `0.1.0-rc.1` caused it to skip the
 TopiaForge plugin as invalid before `Awake`. The plugin now advertises the numeric core `1.0.0` to BepInEx while the
-runtime, package manifests, and compatibility engine retain the full `1.0.0-rc.1` SemVer. `VersionUtilTests` locks the
+runtime, package manifests, and compatibility engine retain the full `0.1.0-rc.1` SemVer. `VersionUtilTests` locks the
 two identities together, and the repaired live install loaded the plugin and consumed all 16 staged packages.
 
 ## First-party mod audit (2026-07-27)
@@ -186,21 +255,36 @@ automated tests cannot close Unity object lifetime.
   `LICENSE`, `DCO`, `CONTRIBUTING.md`, strict release policy, package, registry,
   BOM, SBOM, and archive-notice validation.
 
-- [ ] **P0-IP-01 — Approve the rights basis and public naming for Robotopia integration and assets.**
+- [ ] **P0-IP-01 — Approve the rights basis and public naming for Robotopia integration and assets.** *(blocking)*
 
   Owner: project owner, Robotopia owner, and IP/trademark counsel.
+
+  Current state, web-derived art (recorded 2026-08-24): the three Robotopia web brand rasters
+  (`topiaforge-city-header.webp`, `baby-stitch.webp`, `sheriff.webp`) are now attributed in
+  [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md) as the property of Tomato Cake, outside this
+  project's AGPL grant, bundled with attribution only while a written grant remains outstanding. All
+  three are still referenced by the launcher and no first-party replacement exists for them; the
+  precedent for retiring one is `packages/launcher_ui/lib/src/pixel_robot.dart`, which replaced
+  `robot.webp`. The project owner has accepted this as a **non-blocking** risk for the `0.x` line. It
+  must be revisited before `1.0`, and the files are removed or replaced on request from Tomato Cake.
 
   Exit criteria: retain written authority or an approved clean-room/non-affiliation basis for the Robotopia and
   TopiaForge names, Robotopia injection, compatibility extraction/baselines, registry claims, web-derived art, adapted
   icons, fonts, and custom-world content. Remove or replace any item that lacks a distributable rights basis and
-  record provenance, transformation, hash, license, and approver for retained assets.
+  record provenance, transformation, hash, license, and approver for retained assets. The web-derived art
+  sub-item carries the dated disposition above for `0.x`; the naming, injection, and extraction
+  questions are unchanged and still need counsel.
 
-- [ ] **P0-OSS-01 — Complete the third-party redistribution audit.** *(re-opened 2026-08-06)*
+- [ ] **P0-OSS-01 — Complete the third-party redistribution audit.** *(re-opened 2026-08-06)* *(blocking)*
 
   Owner: open-source compliance/legal and release engineering.
 
   Current state: BepInEx, Harmony, MonoMod, Cecil, UnityDoorstop, .NET, MetadataLoadContext, Flutter/Dart, and SPDX
-  data remain mechanically verified. UnityDoorstop corresponding source is bundled.
+  data remain mechanically verified. UnityDoorstop corresponding source is vendored in the repository
+  **and, as of 2026-08-24, copied into the release archive**. It previously was not: package payload
+  copying took only `third_party/BepInEx/LICENSES/`, so the LGPL-2.1 binary shipped with its notice but
+  without its source. The payload writer now resolves the archive list from `provenance.json` and throws
+  on a declared-but-missing file, and package validation rejects an archive that lacks it.
 
   This gate was previously marked complete on the strength of "font provenance/notices are mechanically verified".
   That claim did not hold. The legal inventory in `release_metadata_inventory.dart` is a fixed allowlist of licence
@@ -218,7 +302,7 @@ automated tests cannot close Unity object lifetime.
   method, OFL derivative/font treatment, notice placement, and original license
   terms. Exact final BOM/SBOM/archive bytes are rechecked at publication.
 
-- [ ] **P0-PRIV-01 — Approve remote AI, player-token, microphone, and speech-to-text behavior.**
+- [ ] **P0-PRIV-01 — Approve remote AI, player-token, microphone, and speech-to-text behavior.** *(blocking)*
 
   Owner: backend owner, Robotopia owner, privacy/legal, security, and product.
 
@@ -233,7 +317,7 @@ automated tests cannot close Unity object lifetime.
   deletion, abuse/rate limits, transcript/history handling, incident response, and jurisdictional requirements; review
   launcher disclosures; test signed-out, denied, offline, rate-limited, timeout, cancellation, and revocation paths.
 
-- [ ] **P0-TRUST-01 — Approve the package trust and first-party publication model.**
+- [ ] **P0-TRUST-01 — Approve the package trust and first-party publication model.** *(advisory)*
 
   Owner: security, product, registry, and release owners.
 
@@ -245,11 +329,32 @@ automated tests cannot close Unity object lifetime.
   revoked, how installed users are warned/recovered, and who may authorize an official payload. Do not market
   capability declarations as containment.
 
-- [ ] **P0-WIN-01 — Produce and validate the Windows x64 archive.**
+- [ ] **P0-WIN-01 — Produce and validate the Windows x64 archive.** *(advisory)*
 
   Owner: Windows release QA.
 
-  Exit criteria: build from the frozen SHA on the administrator Windows
+  Downgraded 2026-08-22, with one thing said plainly that the downgrade does **not** change. A code-signing
+  certificate is a purchase decision, not a code defect, so it should not be what a `0.x` alpha's readiness register
+  hangs on; the intended `0.x` disposition is to ship unsigned behind a documented SmartScreen warning.
+
+  Progress 2026-08-24: the explicit recorded mode now exists.
+  `signingIdentities.windowsDistribution` is `signed` (the default when the key is absent) or `unsigned`, so a
+  missing certificate can no longer be mistaken for a decision to ship without one. `release validate-policy`
+  enforces the guard rails — an unsigned distribution may not also pin a certificate, must be a prerelease, and
+  must be on a `0.x` line — and `tools/release/build-windows.ps1` drops `--require-windows-signing` while adding
+  `--require-windows-unsigned`, so the artifacts are *proved* unsigned rather than merely unchecked. Preflight and
+  handoff staging in `tools/release-admin.ps1` skip the certificate and the detached CMS signature, and the two
+  `release.yml` handoff-verification steps expect the P7S to be absent.
+
+  **Not finished, and deliberately failing closed.** The published trust envelope still embeds
+  `release-handoff-v1.json.p7s` unconditionally: the hosted-verification evidence, the final public asset
+  inventory, and the attestation subject all name it, and `tools/publish-release-draft.sh` expects it in the asset
+  list. Reshaping those is a reviewed change that needs a `-Rehearsal` run behind it, so `release.yml` carries a
+  guard step that rejects an unsigned distribution outright rather than publishing a candidate whose provenance
+  record silently lost its signature field. Removing that guard is the last move of that work, not the first.
+  Until it lands, selecting `unsigned` gets you a correct local build and a hard stop at publication.
+
+  Exit criteria for signed distribution: build from the frozen SHA on the administrator Windows
   workstation. Require the CLI, GameCompat extractor, and launcher to have
   valid Authenticode signatures from the exact reviewed leaf-certificate
   SHA-256 pin and valid HTTPS RFC 3161 timestamps; reject unsigned, partly
@@ -259,7 +364,7 @@ automated tests cannot close Unity object lifetime.
   update, forced rollback, and uninstall journeys.
 
 - **P0-LINUX-01 — Produce and validate Linux x64 and Proton behavior.** *(OUT OF RC1;
-  deferred to `1.0.0-rc.2` on 2026-08-12)*
+  deferred to `0.1.0-rc.2` on 2026-08-12)*
 
   Owner: Linux/Proton release QA.
 
@@ -282,10 +387,10 @@ automated tests cannot close Unity object lifetime.
   build, Proton acceptance, and their preflight checks are gated on the policy rather than
   removed. Linux support is untouched in the source tree.
 
-  Exit criteria for `1.0.0-rc.2`: restore the Linux archive to the policy, the gate to both
+  Exit criteria for `0.1.0-rc.2`: restore the Linux archive to the policy, the gate to both
   schemas, and `P0-LINUX-01` to the readiness decision, then build Linux x64 from the frozen
   SHA and inspect final ZIP executable modes, links, checksums, notices, and bundled
-  payloads. Run the actual Robotopia build-2309 matrix through Proton with
+  payloads. Run the actual Robotopia matrix for the pinned build through Proton with
   `WINEDLLOVERRIDES=winhttp=n,b` **on a host that can reach a GPU Vulkan implementation**,
   exercise the native Linux launcher/CLI, discovery, path translation, process launch,
   runtime repair, custom-world, recovery, and uninstall flows, and return a scrubbed
@@ -294,40 +399,52 @@ automated tests cannot close Unity object lifetime.
   `wsl2-wslg` execution environment and the orchestrator's WSL-driven collection must be
   reworked first.
 
-- [ ] **P0-GAME-01 — Complete authorized build-2309 runtime and first-party-mod acceptance.**
+- [ ] **P0-GAME-01 — Complete authorized runtime and first-party-mod acceptance on the pinned build.**
+  *(blocking)*
 
   Owner: runtime/mod QA with authorized Robotopia access.
 
-  Exit criteria: on build `2309`, test startup/shutdown, repeated scenes, safe mode, reloads, enable/disable,
-  dependency order, package inbox, collision isolation, partial failures, restart-required state, save compatibility,
-  all 16 source-mod flows, TopiaForgeUi-only UI, dirty updates, and resource teardown. Verify every declared GameCompat binding and
-  record profiler evidence of no steady-state allocation regressions or task/callback leaks.
+  Re-scoped 2026-08-22. The gate previously named build `2309` and demanded the complete dynamic-binding, reload,
+  recovery, multiplayer, and profiler matrix across all sixteen source mods. Its 2026-07-28 evidence is void — the
+  pinned build is now `2409` — and re-earning that matrix is not what a `0.x` alpha needs from this gate. It needs to
+  know the thing runs.
 
-- [ ] **P0-CREATOR-01 — Attest the native CreatorTools evidence collector from a live build-2309 run.**
+  The gate is anchored to **the build pinned in [`release/release-policy.json`](../release/release-policy.json)**
+  (`gameBuild.id`), not to a literal written here, so `topiaforge compat bump` retargets it without a documentation
+  edit.
 
-  Owner: runtime/SDK engineering.
+  Exit criteria, all three on that pinned build, from the frozen candidate SHA:
 
-  Current state: the collector is implemented and the source work is complete; the gate is open only for want of a
-  live run. `CreatorAcceptanceRecorder` in `mods/Shared/CreatorTools` emits `TF-CREATOR|PASS|<challenge>|<case>`
-  markers for all nine `creator.*` cases, and each case passes only when every one of its required workbench
-  transitions was actually observed, so partial instrumentation fails closed rather than reporting a false pass. The
-  recorder is inert unless a 64-hex challenge was provisioned into the CreatorTools config, so ordinary play cannot
-  emit evidence. `topiaforge acceptance creator` issues that challenge, tails `manager.log`, and binds the result to
-  the exact `last-run.json` session and CreatorTools package receipt. Save and checkpoint state are compared across
-  End Session from the real `player_data.json.gz` document — decompressed before hashing, since a gzip header
-  embeds an mtime that would otherwise read as a spurious change — with the checkpoint cursor and `<id>_reached`
-  flags digested separately from the rest of the save. The three `Assert-WindowsCreator*` verifiers perform real
-  `release-windows-creator-evidence-v2` verification, and `new-windows-creator-evidence.ps1` derives evidence from
-  the challenge-bound acceptance result instead of from artifact presence.
+  1. **Startup smoke.** BepInEx loads TopiaForge, the loader reports the detected game version as `0.0.<pinned id>`,
+     and Robotopia reaches an interactive state and shuts down cleanly.
+  2. **One mod load.** At least one first-party mod reaches `Loaded` — a `GameCode`-coupled one, since an exact pin is
+     a claim about exactly those.
+  3. **`gamecompat verify` exits 0** against that install's `Managed` directory, with no critical binding error.
 
-  Exit criteria: retained evidence from an authorized interactive build-2309 session at the frozen candidate SHA in
-  which all nine cases pass, at least ten clean lifecycle cycles complete, and save and checkpoint bytes are
-  unchanged. Adversarial rejection is already proven by `tools/test-release-admin.ps1`, which fails the run if
-  spoofed-challenge, spoofed-session, spoofed-result-digest, wrong-package-receipt, replayed prior-run,
-  missing-case, extra-case, short-cycle, mutated-save, or mutated-checkpoint evidence is accepted. Producing the
-  live evidence belongs to `P0-GAME-01`.
+  Anything beyond those three is a `1.0` concern and belongs in [`LiveGameAcceptance.md`](LiveGameAcceptance.md) as
+  manual QA, not here. Record the three results as the replacement evidence.
 
-- [ ] **P0-HOST-01 — Configure and prove the protected verifier/publisher path.**
+- **P0-CREATOR-01 — Attest the native CreatorTools evidence collector from a live run.**
+  *(RETIRED 2026-08-22)*
+
+  Retired, not closed. The gate attested an evidence collector for the standalone CreatorTools package, and that
+  package no longer ships — the workbench moved into Sandbox. Keeping a gate that only an interactive session against
+  a deleted package could pass is a permanent hard stop wearing a checkbox.
+
+  Removed with it: `apps/topiaforge_cli/lib/src/creator_acceptance_{models,evidence,runner}.dart` and
+  `creator_persistence_probe.dart`, `topiaforge acceptance creator`, the `creatorAcceptance` inventory in
+  `tests/live-game-acceptance.json`, `tools/release/new-windows-creator-evidence.ps1`, the three
+  `Assert-WindowsCreator*` verifiers and the `-WindowsCreatorEvidence`/`-WindowsCreatorEvidenceBundle` inputs in
+  `tools/release-admin.ps1`, and the `release-windows-creator-evidence-v2` branch of the handoff QA contract.
+
+  `CreatorAcceptanceRecorder` and `CreatorAcceptanceCases` remain in `mods/TopiaForge.Sandbox/CreatorTools`. They are
+  inert unless a 64-hex challenge is provisioned into the config, and nothing provisions one any more; they are woven
+  through roughly 25 workbench call sites, so unpicking them is a Sandbox change rather than a governance one.
+
+  What the workbench still owes is manual QA, recorded in
+  [`LiveGameAcceptance.md`](LiveGameAcceptance.md). Live-run coverage of the shipped product belongs to `P0-GAME-01`.
+
+- [ ] **P0-HOST-01 — Configure and prove the protected verifier/publisher path.** *(advisory)*
 
   Owner: GitHub administrator, security, and credential owners.
 
@@ -348,11 +465,11 @@ automated tests cannot close Unity object lifetime.
   read-only governance-audit token there; prove fork PRs are secretless;
   independently recovery-test the protected update seed and remove plaintext
   local duplicates; enable reviewed Pages and immutable-release policy; protect creation of the annotated
-  `v1.0.0-rc.1` tag while forbidding mutation/deletion; retain an administrator-reviewed dry run. Complete one
+  `v0.1.0-rc.1` tag while forbidding mutation/deletion; retain an administrator-reviewed dry run. Complete one
   non-publishing two-platform rehearsal before deleting the obsolete live `unity-validation` and
   `game-acceptance` environments.
 
-- [ ] **P0-CRED-01 — Rotate credentials exposed through the local Xcode build log.**
+- [ ] **P0-CRED-01 — Rotate credentials exposed through the local Xcode build log.** *(blocking)*
 
   Owner: credential owners and security.
 
@@ -371,7 +488,7 @@ automated tests cannot close Unity object lifetime.
   review local and GitHub secrets for least privilege; and retain a sentinel build proving a sanitized Xcode launch does not
   expose credentials.
 
-- [ ] **P0-CAND-01 — Freeze and attest one candidate SHA.**
+- [ ] **P0-CAND-01 — Freeze and attest one candidate SHA.** *(advisory)*
 
   Owner: release manager.
 
@@ -380,8 +497,8 @@ automated tests cannot close Unity object lifetime.
   this register does not designate either commit as the frozen candidate. No tag, release, signature, or publication
   has been created.
 
-  Exit criteria: integrate the topic through `dev`, cut and stabilize `release/1.0.0-rc.1`, merge it to `main`, and
-  approve the release notes; create the protected annotated `v1.0.0-rc.1` tag on the exact verified `main` SHA through
+  Exit criteria: integrate the topic through `dev`, cut and stabilize `release/0.1.0-rc.1`, merge it to `main`, and
+  approve the release notes; create the protected annotated `v0.1.0-rc.1` tag on the exact verified `main` SHA through
   the authorized process; run every local/native/Unity gate without unexplained
   warnings or skips; generate and independently verify the candidate BOM, SPDX SBOM, `SHA256SUMS`, nested digests,
   sizes, signatures, provenance, platform manifests, handoff manifest, and manual-release index. The administrator
@@ -390,7 +507,7 @@ automated tests cannot close Unity object lifetime.
 
 ## P1 acceptance gates
 
-- [ ] **P1-UX-01 — Complete native visual and accessibility acceptance.**
+- [ ] **P1-UX-01 — Complete native visual and accessibility acceptance.** *(advisory)*
 
   Owner: product/accessibility QA.
 
@@ -400,7 +517,7 @@ automated tests cannot close Unity object lifetime.
   long paths, and no-overflow behavior. Local automated coverage is green, but macOS denied Screen Recording to this
   audit, so screenshot comparison was not fabricated.
 
-- [ ] **P1-E2E-01 — Run independent clean-machine player and author journeys.**
+- [ ] **P1-E2E-01 — Run independent clean-machine player and author journeys.** *(advisory)*
 
   Owner: release/community QA.
 
@@ -409,7 +526,7 @@ automated tests cannot close Unity object lifetime.
   Separately, a new author uses only published docs to install prerequisites, scaffold with explicit author/license,
   build/test/package/validate, publish to a self-hosted registry, install through the launcher, diagnose, and update.
 
-- [ ] **P1-SUPPORT-01 — Name public support and incident owners.**
+- [ ] **P1-SUPPORT-01 — Name public support and incident owners.** *(advisory)*
 
   Owner: project/community/security owners.
 
@@ -431,13 +548,20 @@ automated tests cannot close Unity object lifetime.
   only. Opening submissions requires namespace ownership, moderation, malware review, transfer/dispute, yank,
   revocation, appeal, and installed-user response governance plus tests.
 - [x] **P2-WORLDS-01 — Custom worlds are Windows/Proton-only for v1.** Do not advertise native macOS Robotopia support.
-- [x] **P2-COMPAT-01 — Build `2309` is the sole supported Robotopia build.** Numeric build `N` maps to SemVer `0.0.N`.
+- [x] **P2-COMPAT-01 — Build `2409` is the supported Robotopia build.** Numeric build `N` maps to SemVer `0.0.N`.
+  Compatibility is declared per mod: mods with native `GameCode` bindings pin `0.0.2409`; SDK-only mods declare the
+  bounded range `>=0.0.2409 <0.0.2600`. See [the compatibility policy](CompatibilityPolicy.md).
   Any change in the public latest manifest stops release for a new compatibility audit; unknown constrained versions
   block mods but never block an empty safe-mode launch.
 
 ## Ship decision
 
-**NO-SHIP.** Local remediation is release-credible, but the strict policy and production trust gates correctly fail,
-and all P0/P1 evidence above must be tied to a frozen candidate. The recommendation may change only after every P0 is
-closed, each P1 is closed or receives an explicit dated disposition, the final matrix is rerun against the candidate
-SHA, and no new critical/high finding or unexplained warning remains.
+**NO-SHIP**, and the `0.x` relaxation does not move it. All five blocking gates — `P0-IP-01`, `P0-OSS-01`,
+`P0-PRIV-01`, `P0-CRED-01`, `P0-GAME-01` — are open, so the computed readiness status is `blocked` on its own terms.
+Separately, `release validate-policy` still fails on the unset Windows signing identity and the deliberately `blocked`
+catalog status.
+
+The recommendation may change once every blocking gate is closed with evidence from the frozen candidate SHA, the
+final matrix is rerun against it, and no new critical/high finding or unexplained warning remains. Advisory gates
+should still be closed or given an explicit dated disposition — they are advice, not absolution — but an open one no
+longer holds the release.

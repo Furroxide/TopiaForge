@@ -1,7 +1,7 @@
 # TopiaForge contributor setup
 
 This guide is for contributors building the complete repository: the C# runtime and mods, Dart CLI, Flutter
-launcher, and optional UGC sidecar. Mod users do not need this toolchain, and mod authors can use the lighter
+launcher. Mod users do not need this toolchain, and mod authors can use the lighter
 `topiaforge setup` flow described in [Modding.md](Modding.md).
 
 ## Supported contributor hosts
@@ -19,7 +19,7 @@ Required tools:
 - [FVM](https://fvm.app/) and its managed Flutter 3.44.6 SDK.
 - Git and Git LFS.
 - PowerShell 7 (`pwsh`) and 7-Zip.
-- Node.js **24.16.0** or newer for the documentation portal and optional Automerge UGC sidecar.
+- Node.js **24.16.0** or newer for the documentation portal.
 - Xcode and CocoaPods for macOS launcher builds, or Visual Studio Build Tools with Desktop C++ for Windows builds.
 
 macOS prerequisites:

@@ -82,8 +82,8 @@ namespace TopiaForge.ModRuntime.Tests
                 EntryAssembly = FixtureAssembly,
                 EntryType = entryType,
                 SupportedGameVersionRange = "*",
-                SupportedLoaderVersionRange = ">=1.0.0-rc.1 <2.0.0",
-                SupportedSdkVersionRange = ">=1.0.0-rc.1 <2.0.0"
+                SupportedLoaderVersionRange = ">=0.1.0-rc.1 <0.2.0",
+                SupportedSdkVersionRange = ">=0.1.0-rc.1 <0.2.0"
             };
             JsonUtil.SaveFile(
                 Path.Combine(packagePath, PackageInstallReceipt.FileName),

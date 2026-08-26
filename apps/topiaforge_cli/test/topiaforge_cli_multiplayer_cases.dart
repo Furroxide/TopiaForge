@@ -37,7 +37,7 @@ void _multiplayerCliTests(_CliTestHarness Function() currentHarness) {
     expect(
       (manifest['dependencies']
           as Map)['io.github.furroxide.topiaforge.multiplayer'],
-      '1.0.0-rc.1',
+      '0.1.0-rc.1',
     );
     expect(added.stdout, contains('topiaforge mod sync multiplayer'));
 
@@ -48,13 +48,13 @@ void _multiplayerCliTests(_CliTestHarness Function() currentHarness) {
     expect(
       project.readAsStringSync(),
       contains(
-        '<PackageReference Include="TopiaForge.Mods.Multiplayer" Version="1.0.0-rc.1" />',
+        '<PackageReference Include="TopiaForge.Mods.Multiplayer" Version="0.1.0-rc.1" />',
       ),
     );
     expect(
       project.readAsStringSync(),
       contains(
-        '<PackageReference Include="TopiaForge.Mods.Multiplayer.Generators" Version="1.0.0-rc.1" PrivateAssets="all" />',
+        '<PackageReference Include="TopiaForge.Mods.Multiplayer.Generators" Version="0.1.0-rc.1" PrivateAssets="all" />',
       ),
     );
     final lockFile = File(

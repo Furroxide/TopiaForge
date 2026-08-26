@@ -8,8 +8,7 @@ import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 import 'package:topiaforge/src/launcher_update_index_builder.dart';
 import 'package:topiaforge/src/bounded_file_reader.dart';
-import 'package:topiaforge/src/creator_acceptance_models.dart';
-import 'package:topiaforge/src/creator_acceptance_runner.dart';
+import 'package:topiaforge/src/game_build_bump.dart';
 import 'package:topiaforge/src/game_compat_executable_locator.dart';
 import 'package:topiaforge/src/live_acceptance_models.dart';
 import 'package:topiaforge/src/live_acceptance_runner.dart';
@@ -25,9 +24,9 @@ import 'package:topiaforge/src/release_metadata.dart';
 import 'package:topiaforge/src/release_policy.dart';
 import 'package:topiaforge/src/release_readiness.dart';
 import 'package:topiaforge/src/release_update_metadata.dart';
-import 'package:topiaforge/src/ugc_live_sync_transitions.dart';
 
 part 'topiaforge_check_commands.dart';
+part 'topiaforge_compat_commands.dart';
 part 'topiaforge_acceptance_commands.dart';
 part 'topiaforge_dev_commands.dart';
 part 'topiaforge_environment_commands.dart';
@@ -42,9 +41,6 @@ part 'topiaforge_scaffold_validation.dart';
 part 'topiaforge_registry_commands.dart';
 part 'topiaforge_release_commands.dart';
 part 'topiaforge_update_commands.dart';
-part 'topiaforge_ugc_sidecar.dart';
-part 'topiaforge_ugc_dev_commands.dart';
-part 'topiaforge_ugc_unity_commands.dart';
 part 'topiaforge_ui_bundle_commands.dart';
 part 'topiaforge_unity_commands.dart';
 part 'topiaforge_world_commands.dart';
@@ -108,7 +104,6 @@ class _TopiaForgeCli {
       'doctor' => _doctor(rest),
       'compat' => _compat(rest),
       'setup' => _setup(rest),
-      'ugc' => _ugc(rest),
       'world' => _world(rest),
       'projects' => _projects(rest),
       'unity' => _unity(rest),
@@ -201,7 +196,7 @@ class _TopiaForgeCli {
         );
       }
       stdout.writeln(
-        'unity-world${' ' * 15} Unity 6 UGC authoring project with the companion package preinstalled',
+        'unity-world${' ' * 15} Unity 6 custom-world authoring project',
       );
       return 0;
     }

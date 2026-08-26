@@ -92,7 +92,7 @@ jobs:
       - name: Build solution
         run: dotnet build TopiaForge.slnx -c Release --no-restore
 
-      - name: Audit 12 SDK packages and run all 7 C# harnesses
+      - name: Audit 11 SDK packages and run all 7 C# harnesses
         shell: bash
         run: bash tools/verify-csharp-release-surface.sh
 
@@ -242,38 +242,6 @@ jobs:
           dart format --output=none --set-exit-if-changed lib test
           flutter analyze
           flutter test
-
-  sidecar-checks:
-    name: Validate UGC Automerge sidecar
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          lfs: true
-          persist-credentials: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "24.16.0"
-          cache: npm
-          cache-dependency-path: tools/ugc-automerge-sidecar/package-lock.json
-
-      - name: Restore and check sidecar
-        working-directory: tools/ugc-automerge-sidecar
-        run: |
-          node -e 'process.exit(process.versions.node === "24.16.0" ? 0 : 1)'
-          npm ci --ignore-scripts --no-audit --no-fund
-          find . -path ./node_modules -prune -o -name '*.mjs' -print0 |
-            xargs -0 -n1 node --check
-          npm test
-          npm ls --omit=dev
-          npm audit --omit=dev --audit-level=moderate
-          output="$(node index.mjs --check)"
-          echo "$output"
-          grep -F "deps        : installed" <<< "$output"
 
   repository-audits:
     name: Validate workflows and repository file hygiene
@@ -613,7 +581,6 @@ jobs:
       - csharp-tests
       - dart-tests
       - flutter-tests
-      - sidecar-checks
       - repository-audits
       - docs
       - template-matrix
@@ -625,12 +592,11 @@ jobs:
           CSHARP: ${{ needs.csharp-tests.result }}
           DART: ${{ needs.dart-tests.result }}
           FLUTTER: ${{ needs.flutter-tests.result }}
-          SIDECAR: ${{ needs.sidecar-checks.result }}
           REPOSITORY: ${{ needs.repository-audits.result }}
           DOCS: ${{ needs.docs.result }}
           TEMPLATES: ${{ needs.template-matrix.result }}
         run: |
           set -euo pipefail
-          for result in "$CSHARP" "$DART" "$FLUTTER" "$SIDECAR" "$REPOSITORY" "$DOCS" "$TEMPLATES"; do
+          for result in "$CSHARP" "$DART" "$FLUTTER" "$REPOSITORY" "$DOCS" "$TEMPLATES"; do
             test "$result" = success
           done

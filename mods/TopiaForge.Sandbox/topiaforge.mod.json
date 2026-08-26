@@ -3,7 +3,7 @@
   "schemaVersion": 5,
   "name": "io.github.furroxide.topiaforge.sandbox",
   "displayName": "Sandbox",
-  "version": "1.0.0-rc.1",
+  "version": "0.1.0-rc.1",
   "author": {
     "name": "TopiaForge"
   },
@@ -11,9 +11,12 @@
   "entryAssembly": "TopiaForge.Sandbox.dll",
   "entryType": "TopiaForge.Sandbox.SandboxMod",
   "dependencies": {
-    "io.github.furroxide.topiaforge.worlds": ">=1.0.0-rc.1 <2.0.0",
-    "io.github.furroxide.topiaforge.robotkit": ">=1.0.0-rc.1 <2.0.0",
-    "io.github.furroxide.topiaforge.creatorcontent": ">=1.0.0-rc.1 <2.0.0"
+    "io.github.furroxide.topiaforge.worlds": ">=0.1.0-rc.1 <0.2.0",
+    "io.github.furroxide.topiaforge.robotkit": ">=0.1.0-rc.1 <0.2.0",
+    "io.github.furroxide.topiaforge.creatorcontent": ">=0.1.0-rc.1 <0.2.0"
+  },
+  "optionalDependencies": {
+    "io.github.furroxide.topiaforge.multiplayer": ">=0.1.0-rc.1 <0.2.0"
   },
   "loadAfter": [
     "io.github.furroxide.topiaforge.worlds",
@@ -21,9 +24,9 @@
     "io.github.furroxide.topiaforge.creatorcontent",
     "io.github.furroxide.topiaforge.gravitygun"
   ],
-  "supportedGameVersionRange": "0.0.2309",
-  "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
-  "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "supportedGameVersionRange": ">=0.0.2409 <0.0.2600",
+  "supportedLoaderVersionRange": ">=0.1.0-rc.1 <0.2.0",
+  "supportedSdkVersionRange": ">=0.1.0-rc.1 <0.2.0",
   "category": "Gameplay",
   "tags": [
     "sandbox",

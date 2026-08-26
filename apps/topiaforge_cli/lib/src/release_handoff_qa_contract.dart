@@ -12,17 +12,11 @@ class _ReleaseQaCaseInventory {
     required this.sha256,
     required this.liveCases,
     required this.liveCasesSha256,
-    required this.creatorCases,
-    required this.creatorCasesSha256,
-    required this.creatorMinimumCycles,
   });
 
   final String sha256;
   final List<String> liveCases;
   final String liveCasesSha256;
-  final List<String> creatorCases;
-  final String creatorCasesSha256;
-  final int creatorMinimumCycles;
 }
 
 class _RobotopiaGameIdentity {
@@ -200,7 +194,6 @@ void _validateWindowsQa(
   }
   _validateUnityQa(bundle, qa['unity']);
   _validateRobotopiaQa(bundle, qa['robotopia'], inventory, gameIdentity);
-  _validateCreatorQa(bundle, qa['creator'], inventory);
 }
 
 void _validateUnityQa(ReleasePlatformBundle bundle, Object? value) {
@@ -309,58 +302,5 @@ _RobotopiaGameIdentity _loadRobotopiaGameIdentity(
     filesManifestSha256: manifestSha256! as String,
     filesVerified: manifest['fileCount']! as int,
     gameExecutableSha256: executableSha256! as String,
-  );
-}
-
-void _validateCreatorQa(
-  ReleasePlatformBundle bundle,
-  Object? value,
-  _ReleaseQaCaseInventory inventory,
-) {
-  final qa = (value as Map).cast<String, Object?>();
-  for (final field in const [
-    'descriptorSha256',
-    'evidenceSha256',
-    'acceptanceChallenge',
-    'acceptanceResultSha256',
-  ]) {
-    _requireQaDigest(qa, field, 'Windows Creator QA');
-  }
-  if (qa['result'] != 'pass' ||
-      qa['suite'] != 'creator-full' ||
-      (qa['failures'] as List).isNotEmpty ||
-      (qa['lifecycleCycles'] as int) < inventory.creatorMinimumCycles ||
-      qa['saveStateUnchanged'] != true ||
-      qa['checkpointStateUnchanged'] != true ||
-      bundle.validations['creator']!.evidenceSha256 != qa['descriptorSha256']) {
-    throw StateError('Windows Creator QA is incomplete or invalid.');
-  }
-  // v2 binds the run to the exact interactive session and loaded payload, so
-  // a descriptor cannot be replayed from a different run or a different build
-  // of CreatorTools.
-  final sessionId = qa['lastRunSessionId'];
-  if (sessionId is! String ||
-      sessionId.trim().isEmpty ||
-      sessionId.length > 256) {
-    throw StateError('Windows Creator QA has no bound last-run session.');
-  }
-  final receipt = qa['creatorPackageReceipt'];
-  if (receipt is! Map) {
-    throw StateError('Windows Creator QA has no CreatorTools package receipt.');
-  }
-  final receiptMap = receipt.cast<String, Object?>();
-  final criticalFiles = receiptMap['criticalFiles'];
-  _requireQaDigest(receiptMap, 'sourceSha256', 'Windows Creator QA receipt');
-  if (criticalFiles is! List || criticalFiles.isEmpty) {
-    throw StateError(
-      'Windows Creator QA receipt has no critical-file digests.',
-    );
-  }
-  _requireQaCases(
-    qa,
-    inventory.creatorCases,
-    inventory.creatorCasesSha256,
-    inventory.sha256,
-    'Windows Creator QA',
   );
 }

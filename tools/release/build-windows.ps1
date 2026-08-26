@@ -321,7 +321,18 @@ if ($policy.publication.PSObject.Properties.Name -contains
     "codeSigningException") {
     throw "Production Windows builds forbid every code-signing exception."
 }
-if (-not $hasWindowsCertificatePin) {
+$windowsDistribution = "signed"
+if ($policy.signingIdentities.PSObject.Properties.Name -contains
+    "windowsDistribution") {
+    $windowsDistribution = [string]$policy.signingIdentities.windowsDistribution
+}
+if ($windowsDistribution -cne "signed" -and $windowsDistribution -cne "unsigned") {
+    throw "Unknown Windows distribution mode '$windowsDistribution'; expected 'signed' or 'unsigned'."
+}
+if ($windowsDistribution -ceq "unsigned" -and $hasWindowsCertificatePin) {
+    throw "An unsigned Windows distribution must not also pin a signing certificate."
+}
+if ($windowsDistribution -ceq "signed" -and -not $hasWindowsCertificatePin) {
     throw "release-policy.json must pin the reviewed Windows signing certificate."
 }
 foreach ($name in @(
@@ -492,7 +503,9 @@ $buildPackageArguments = @(
     "--prebuilt-launcher", $launcherDirectory, "--prebuilt-cli", $compiledCli,
     "--prebuilt-dist", $canonicalDirectory
 )
-$buildPackageArguments += "--require-windows-signing"
+if ($windowsDistribution -ceq "signed") {
+    $buildPackageArguments += "--require-windows-signing"
+}
 Invoke-Checked -FilePath $dart -WorkingDirectory $cliProject `
     -Arguments $buildPackageArguments
 $archive = Join-Path $output "TopiaForge-windows-x64.zip"
@@ -503,10 +516,17 @@ $testPackageArguments = @(
     "--expected-canonical-ecosystem-sha256", $CanonicalEcosystemSha256,
     "--canonical-assets", $canonicalDirectory
 )
-$testPackageArguments += @(
-    "--require-windows-signature",
-    "--expected-windows-signer-sha256", $windowsCertificatePin
-)
+if ($windowsDistribution -ceq "unsigned") {
+    # Prove the artifacts really are unsigned rather than accidentally signed by
+    # stray credentials in the environment.
+    $testPackageArguments += "--require-windows-unsigned"
+}
+else {
+    $testPackageArguments += @(
+        "--require-windows-signature",
+        "--expected-windows-signer-sha256", $windowsCertificatePin
+    )
+}
 Invoke-Checked -FilePath $dart -WorkingDirectory $cliProject `
     -Arguments $testPackageArguments
 Invoke-PackagedLauncherHealthCheck -ArchivePath $archive `
