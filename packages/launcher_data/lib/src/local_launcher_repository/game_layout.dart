@@ -97,7 +97,6 @@ const topiaForgeRuntimeLoaderAssemblies = <TopiaForgeRuntimeAssembly>[
   TopiaForgeRuntimeAssembly(fileName: 'TopiaForge.Mods.Multiplayer.dll'),
   TopiaForgeRuntimeAssembly(fileName: 'TopiaForge.Mods.Prompts.dll'),
   TopiaForgeRuntimeAssembly(fileName: 'TopiaForge.Mods.RobotKit.dll'),
-  TopiaForgeRuntimeAssembly(fileName: 'TopiaForge.Mods.Ugc.dll'),
   TopiaForgeRuntimeAssembly(fileName: 'TopiaForge.Mods.UnityUi.dll'),
   TopiaForgeRuntimeAssembly(fileName: 'TopiaForge.Mods.Worlds.dll'),
 ];

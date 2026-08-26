@@ -18,7 +18,7 @@ extension _NewCommands on _TopiaForgeCli {
       );
       stdout.writeln(
         'Created Unity world project "$name" (${projects.length} project(s) tracked). '
-        'Open it in Unity and author UGC markers, then Go Live from the launcher cockpit.',
+        'Open it in Unity to author custom-world content, then build it with `topiaforge world build`.',
       );
       final pairedMod = _option(args, '--mod');
       if (pairedMod != null) {
@@ -29,27 +29,6 @@ extension _NewCommands on _TopiaForgeCli {
             )
             .path;
         await _worldLink(['--project', projectPath, '--mod', pairedMod]);
-      }
-      if (args.contains('--live-sync')) {
-        final projectPath = projects
-            .firstWhere(
-              (project) => p.basename(project.path) == name,
-              orElse: () => projects.last,
-            )
-            .path;
-        final watch = await _resolveWatchFolder(
-          _option(args, '--watch'),
-          fallbackRoot: projectPath,
-        );
-        final seed = await developerRepository.writeUgcCompanionSeed(
-          projectPath,
-          watchFolder: watch,
-          projectName: name,
-          sceneId: _option(args, '--scene') ?? '',
-        );
-        stdout.writeln(
-          'Live sync seeded ($seed, watch folder $watch). Launch it with `topiaforge ugc dev --project "$projectPath"`.',
-        );
       }
       return 0;
     }
@@ -92,16 +71,10 @@ extension _NewCommands on _TopiaForgeCli {
         );
       }
     }
-    if (options.includeUnityCompanion || options.liveSync != null) {
+    if (options.includeUnityCompanion) {
       stdout.writeln(
-        'Unity companion scaffolded in unity-companion/. Open it in Unity and use '
-        'TopiaForge → UGC Live Sync to author and live-sync UGC content into the running game.',
-      );
-    }
-    if (options.liveSync != null) {
-      stdout.writeln(
-        'Live sync preconfigured (${options.liveSync!.transport}). Deploy it to the game with '
-        '`topiaforge ugc setup` and start the full loop with `topiaforge ugc dev`.',
+        'Unity companion scaffolded in unity-companion/. Open it in Unity to author '
+        'custom-world AssetBundles, then build them with `topiaforge world build`.',
       );
     }
     return 0;
@@ -148,15 +121,6 @@ extension _NewCommands on _TopiaForgeCli {
     VersionRange? parseRange(String? value) =>
         value == null ? null : VersionRange.parse(value);
 
-    final liveSync = args.contains('--live-sync')
-        ? UgcLiveSyncSettings(
-            transport: UgcLiveSyncSettings.normalizeTransport(
-              _option(args, '--transport'),
-            ),
-            watchFolder: _option(args, '--watch') ?? '',
-            sceneId: _option(args, '--scene') ?? '',
-          )
-        : null;
     final licenseText = _readLicenseText(args);
 
     return ModScaffoldOptions(
@@ -193,7 +157,6 @@ extension _NewCommands on _TopiaForgeCli {
       homepage: _option(args, '--homepage'),
       source: _option(args, '--source'),
       includeUnityCompanion: args.contains('--unity-companion'),
-      liveSync: liveSync,
     );
   }
 

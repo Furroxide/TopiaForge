@@ -1,7 +1,7 @@
 # Release ownership and incident operations
 
 The interim owner for the first TopiaForge release line is repository administrator `@furroxide`. Before
-`1.0.0-rc.1` can be published, that account must confirm that GitHub notifications and private vulnerability reports
+`0.1.0-rc.1` can be published, that account must confirm that GitHub notifications and private vulnerability reports
 are monitored and name a delegate for any role it cannot cover.
 
 | Responsibility | Intake and authority | First-RC expectation |

@@ -43,7 +43,7 @@ package root, or global cleanup target.
 | `Diagnostics` | Bounded structured reports mirrored to the attributed log. |
 | `Extensions` | Typed providers exposed by declared dependencies. |
 
-Locality is part of the V1 contract. `Files`, `Config`, `LocalStorage`, `Input`, `Time`,
+Locality is part of the safe SDK contract. `Files`, `Config`, `LocalStorage`, `Input`, `Time`,
 `LocalPlayer`, `Interactions`, `Items`, `Audio`, and `Ui` describe this game process only; they do
 not silently synchronize between peers. `IEntity.Id` and scene instance ids are process-local
 correlation keys, not network identities. A future authoritative world-state service will be a
@@ -259,5 +259,5 @@ asset interfaces are opaque handles with ordinary state and lifetime operations.
 mods portable across supported runtimes and make tests deterministic.
 
 See [specialist modules](Modules.md) for creator content, robots, worlds, time control, prompts,
-UGC, and multiplayer, or open the generated C# reference from the developer site for every member
+and multiplayer, or open the generated C# reference from the developer site for every member
 and default value.

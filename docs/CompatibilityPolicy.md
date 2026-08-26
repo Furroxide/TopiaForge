@@ -1,42 +1,49 @@
 ---
 title: Compatibility policy
-description: V1 source, binary, manifest, runtime, and package compatibility guarantees for mods targeting Robotopia.
+description: 0.x source, binary, manifest, runtime, and package compatibility posture for mods targeting Robotopia.
 ---
 
 # Compatibility policy
 
-TopiaForge runtime, SDK, CLI, launcher, schemas, and first-party packages use Semantic Versioning 2.
-The safe V1 contract identity begins at `1.0.0`; the first public packages carry the
-`1.0.0-rc.1` release-candidate suffix.
+TopiaForge runtime, SDK, CLI, launcher, schemas, and first-party packages use Semantic Versioning 2 and
+are currently on the **0.x** line, starting at `0.1.0-rc.1`.
+
+**A 0.x line makes no cross-minor compatibility promise.** Under SemVer the breaking axis below `1.0.0`
+is MINOR, so anything in this document that holds "within a release" holds within a 0.x **patch**, and a
+minor bump may break source, binary, or manifest compatibility. Stable contract identity is reserved for
+a future `1.0.0`.
 
 ## Safe SDK packages
 
-Core, UI facade, testing, and specialist module contract assemblies keep `AssemblyVersion`
-`1.0.0.0` throughout the V1 line. NuGet package and file versions carry the release SemVer.
-Compatibility baselines include public types, members, nullability, default values, and XML
-documentation coverage.
+Core, UI facade, testing, and specialist module contract assemblies keep `AssemblyVersion` `0.1.0.0`
+frozen for the whole 0.x line. That is a deliberate deviation from strict SemVer: Mono and BepInEx have
+no binding-redirect infrastructure, so changing a contract assembly's identity is a hard load failure for
+every already-compiled third-party mod. Tracking the minor would be "correct" and operationally useless.
+NuGet package and file versions carry the real release SemVer. Compatibility baselines include public
+types, members, nullability, default values, and XML documentation coverage.
 
-Within V1:
+Within a 0.x patch:
 
 - patch releases fix behavior without breaking public source or binary compatibility;
-- minor releases add APIs and optional behavior without invalidating existing safe mods;
-- obsolete APIs remain callable until the next major unless retaining one creates a critical risk;
 - provider implementations may adapt to a Robotopia update behind unchanged safe contracts; and
 - an unavailable adapter reports a reason instead of exposing a native fallback.
 
-The explicitly unstable interop package is outside these guarantees.
+Across a 0.x **minor** bump, APIs may be removed or changed. Removals are listed in the package
+CHANGELOG; there is no deprecate-until-next-major guarantee before `1.0.0`.
+
+The explicitly unstable interop package is outside even these guarantees.
 
 ## Manifest and serialized state
 
-Schema V5 is the sole TopiaForge 1.0 package manifest. Its `multiplayer` object is optional; absence means
+Schema V5 is the sole TopiaForge package manifest. Its `multiplayer` object is optional; absence means
 standalone-only. Manifest V4 was retired before the first public release and is rejected with an actionable V5
 migration path. Readers dispatch by schema version and never reinterpret an older schema. Unknown fields fail
 validation except bounded namespaced `x-*` metadata. Changing an existing field's meaning requires a new schema and
 migration command. Future loaders may accept newer schemas alongside V5, but must keep a dedicated V5 reader and
-its original semantics for the entire V1 compatibility line.
+its original semantics for the entire 0.x line and into 1.0.
 
-The `TopiaForge.Mods.Multiplayer` 1.0 public preview receives the same V1 source and binary compatibility guarantee as
-other safe specialist contracts. It does not promise live networking in TopiaForge 1.0. Protocol versions are
+The `TopiaForge.Mods.Multiplayer` public preview receives the same 0.x posture as other safe specialist
+contracts. It does not promise live networking. Protocol versions are
 independent from package versions, and standalone V5 mods are not assumed multiplayer-correct.
 
 Manager, profile, receipt, journal, and last-run state are versioned, bounded, and written atomically.
@@ -72,16 +79,32 @@ active-scene-only startup behavior and one-callback-per-load behavior afterward.
 
 ## Robotopia and platform compatibility
 
-Robotopia uses numeric build identifiers. TopiaForge maps build 2309 to SemVer `0.0.2309` for range
-evaluation while retaining the human-readable build label. A mod may claim only ranges exercised by
-its acceptance tests. When the installed Robotopia build is unknown, a constrained mod fails closed.
+Robotopia uses numeric build identifiers. TopiaForge maps build `N` to SemVer `0.0.N` for range
+evaluation while retaining the human-readable build label. The supported build is build 2409
+(`0.0.2409`). When the installed Robotopia build is unknown, a constrained mod fails closed.
+
+Compatibility is declared **per mod**, by whether the mod actually resolves symbols out of the game's
+own implementation assembly:
+
+- A mod with a `bindings/<id>.gamebindings.json` manifest pins the exact audited build, because it may
+  claim only what its bindings were verified against. Exact pins fail closed rather than silently
+  selecting another version.
+- A mod that rides the SDK alone declares a bounded range (`>=0.0.2409 <0.0.2600`), so an ordinary game
+  update does not brick it. Published builds step by roughly +100 (2309 -> 2409), so that bound admits
+  the current build and the next one, and nothing beyond a review.
+
+Two limits are worth stating plainly. There is no loader-level game-build gate: `supportedGameVersionRange`
+is the only check, and a ranged mod that loads on an unverified build still runs inside a loader that
+holds a compile-time reference to that assembly. The range therefore changes the failure *mode*, not the
+underlying coupling. Separately, range evaluation has no npm-style prerelease exclusion, so `<0.0.2600`
+also admits `0.0.2600-x`; that is pre-existing behaviour, documented rather than special-cased.
 TopiaForge reads the launcher's `installed-build.json` marker from the game root first. In Tomato Cake's
 Windows/Proton layout it also checks beside the launcher-owned `Robotopia` directory, matching the real
 installation shape. An existing malformed higher-priority marker never falls through to a lower-priority
 one; users are directed to finish or repair the game installation instead.
 
 Platform and architecture claims are made per release artifact and require their native CI jobs.
-Custom-world live acceptance is Windows/Proton-only for V1. Bundle content must declare an
+Custom-world live acceptance is Windows/Proton-only for 0.x. Bundle content must declare an
 appropriate content target; a build for one target is not assumed portable to another.
 Under Proton/Wine, TopiaForge treats Robotopia as the Windows player target. Empty constraint lists are portable;
 otherwise the loader normalizes the host platform/architecture and requires at least one declared

@@ -72,7 +72,7 @@ the mod remains responsible for validating and publishing the next immutable tre
 
 The compiled `ui` template demonstrates the standard form/list controls, accessibility changes,
 result handling, and a configurable nonreserved input action. The
-[Creator Tools](CreatorTools.md) workbench is the task-oriented reference for fullscreen split-pane
+The [Sandbox](Sandbox.md) workbench is the task-oriented reference for fullscreen split-pane
 and graph composition. Prefer updating the body for small status changes; use `SetContent` when the
 control structure itself changes.
 

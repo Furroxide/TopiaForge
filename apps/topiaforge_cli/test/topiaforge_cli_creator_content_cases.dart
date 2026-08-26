@@ -39,7 +39,7 @@ void _creatorContentCliTests(_CliTestHarness Function() currentHarness) {
     expect(
       project.readAsStringSync(),
       contains(
-        '<PackageReference Include="TopiaForge.Mods.CreatorContent" Version="1.0.0-rc.1" />',
+        '<PackageReference Include="TopiaForge.Mods.CreatorContent" Version="0.1.0-rc.1" />',
       ),
     );
   });

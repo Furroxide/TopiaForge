@@ -18,8 +18,7 @@ class DeveloperScreen extends StatelessWidget {
       children: [
         ScreenHeader(
           title: 'Developer',
-          subtitle:
-              'Environment, project lifecycle, references, and UGC live sync.',
+          subtitle: 'Environment, project lifecycle, and references.',
           trailing: Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -187,7 +186,6 @@ class DeveloperScreen extends StatelessWidget {
                 _DoctorPane(report: state.developerDoctor),
                 const SizedBox(height: 16),
               ],
-              _UgcLiveSyncPane(state: state),
             ],
           ),
         ),
@@ -453,7 +451,7 @@ class _DoctorPane extends StatelessWidget {
           const SizedBox(height: 10),
           if (report == null)
             const Text(
-              'Run Doctor to check the project: UGC companion package, watch folder, and restore status.',
+              'Run Doctor to check the project: toolchain, references, and restore status.',
             )
           else ...[
             StatusPill(

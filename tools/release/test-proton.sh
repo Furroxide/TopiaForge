@@ -202,8 +202,8 @@ jq -e '.schemaVersion == 1' <<<"$platform_toolchains_json" >/dev/null ||
    "$proton_source_commit" == \
      e2becb87430ca3ff510d949d9e75fa9b401da489 ]] ||
   die "source policy must pin the reviewed Proton 10.0-4 Steam provenance"
-[[ "$game_build_id" == "2309" ]] ||
-  die "this acceptance runner is locked to Robotopia build 2309"
+[[ "$game_build_id" == "2409" ]] ||
+  die "this acceptance runner is locked to Robotopia build 2409"
 
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] ||
   die "acceptance requires x86_64 Linux"

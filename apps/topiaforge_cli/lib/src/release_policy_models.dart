@@ -50,6 +50,7 @@ class TopiaForgeReleasePolicy {
     required this.rollback,
     required this.platformArchives,
     required this.generatedMetadata,
+    required this.windowsDistribution,
     required this.windowsCertificateSha256,
     required this.macosTeamId,
     required this.bepInExVersion,
@@ -71,6 +72,12 @@ class TopiaForgeReleasePolicy {
   final String rollback;
   final List<String> platformArchives;
   final List<String> generatedMetadata;
+
+  /// `signed` or `unsigned`. Defaults to `signed` when the policy is silent, so
+  /// an absent certificate can never be mistaken for a decision to ship without
+  /// one — shipping unsigned has to be written down.
+  final String windowsDistribution;
+
   final String windowsCertificateSha256;
   final String macosTeamId;
   final String bepInExVersion;
@@ -142,6 +149,8 @@ class TopiaForgeReleasePolicy {
         artifacts['generatedMetadata'],
         'generatedMetadata',
       ),
+      windowsDistribution:
+          signingIdentities['windowsDistribution'] as String? ?? 'signed',
       windowsCertificateSha256:
           signingIdentities['windowsCertificateSha256'] as String? ?? '',
       macosTeamId: signingIdentities['macosTeamId'] as String? ?? '',
@@ -177,7 +186,11 @@ class TopiaForgeReleasePolicy {
 
   bool get targetsMacOS => targetPlatforms.contains('macos-universal');
 
-  bool get requiresWindowsSigningIdentity => targetsWindows;
+  /// True when the policy explicitly records an unsigned Windows distribution.
+  bool get distributesWindowsUnsigned => windowsDistribution == 'unsigned';
+
+  bool get requiresWindowsSigningIdentity =>
+      targetsWindows && !distributesWindowsUnsigned;
 
   bool get requiresMacOSSigningIdentity => targetsMacOS;
 

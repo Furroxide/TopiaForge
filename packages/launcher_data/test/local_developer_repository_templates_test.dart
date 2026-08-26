@@ -215,7 +215,7 @@ void main() {
           mainProjectText,
           allOf(
             contains(
-              '<PackageReference Include="TopiaForge.Mods.Abstractions" Version="1.0.0-rc.1" />',
+              '<PackageReference Include="TopiaForge.Mods.Abstractions" Version="0.1.0-rc.1" />',
             ),
             contains('<Compile Remove="tests\\**\\*.cs" />'),
           ),
@@ -246,7 +246,7 @@ void main() {
             contains('<TopiaForgeSafeProject>false</TopiaForgeSafeProject>'),
             contains('<PackageReference Include="NUnit" Version="4.3.2" />'),
             contains(
-              '<PackageReference Include="TopiaForge.Mods.Testing" Version="1.0.0-rc.1" />',
+              '<PackageReference Include="TopiaForge.Mods.Testing" Version="0.1.0-rc.1" />',
             ),
           ),
           reason: template.id,
@@ -351,17 +351,6 @@ void main() {
       options: const ModScaffoldOptions(template: 'asset'),
     );
     expect(workspace.project!.unityCompanion.enabled, isTrue);
-    expect(
-      Directory(
-        p.join(
-          workspace.projectRoot,
-          'unity-companion',
-          'Packages',
-          'io.github.furroxide.topiaforge.ugc-companion',
-        ),
-      ).existsSync(),
-      isTrue,
-    );
   });
 
   test('unknown template fails loudly', () async {
@@ -408,7 +397,7 @@ void main() {
     expect(
       projectFile,
       contains(
-        '<PackageReference Include="TopiaForge.Mods.Abstractions" Version="1.0.0-rc.1" />',
+        '<PackageReference Include="TopiaForge.Mods.Abstractions" Version="0.1.0-rc.1" />',
       ),
     );
     expect(projectFile, contains('<RestorePackagesWithLockFile>true'));
@@ -441,25 +430,6 @@ void main() {
       );
     },
     timeout: const Timeout(Duration(minutes: 2)),
-  );
-
-  test(
-    'live sync scaffold stores settings and implies the companion',
-    () async {
-      final workspace = await repository.createModProject(
-        parentDirectory: root.path,
-        id: 'test.live',
-        name: 'Live',
-        options: const ModScaffoldOptions(
-          liveSync: UgcLiveSyncSettings(watchFolder: r'C:\ugc-watch'),
-        ),
-      );
-      expect(workspace.project!.unityCompanion.enabled, isTrue);
-      expect(
-        workspace.project!.unityCompanion.liveSync.watchFolder,
-        r'C:\ugc-watch',
-      );
-    },
   );
 
   test('updateModManifest round-trips schema fields and validates', () async {

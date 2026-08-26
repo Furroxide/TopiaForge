@@ -21,8 +21,6 @@ void writeReleaseQaFixtures({
   ).readAsBytesSync();
   final inventory = jsonDecode(utf8.decode(inventoryBytes)) as Map;
   final liveCases = _caseIds(inventory['cases']);
-  final creator = inventory['creatorAcceptance'] as Map;
-  final creatorCases = _caseIds(creator['cases']);
   final inventorySha = sha256.convert(inventoryBytes).toString();
   final gameMetadata =
       jsonDecode(
@@ -39,7 +37,7 @@ void writeReleaseQaFixtures({
     p.join(assets.path, 'TopiaForge-windows-x64.zip'),
   );
 
-  // Linux is descoped from 1.0.0-rc.1, so callers that only stage a Windows
+  // Linux is descoped from 0.1.0-rc.1, so callers that only stage a Windows
   // archive get Windows-only QA. The Proton fixture stays intact for rc.2.
   if (linuxArchive.existsSync()) {
     _writeJson(File(releaseQaPath(assets, 'linux-x64')), {
@@ -50,7 +48,7 @@ void writeReleaseQaFixtures({
       'archiveSha256': _fileSha(linuxArchive),
       'archiveSize': linuxArchive.lengthSync(),
       'canonicalEcosystemSha256': ecosystemSha,
-      'gameBuildId': 2309,
+      'gameBuildId': gameMetadata['buildId'],
       'gameArchiveSha256': windowsGameArchive['sha256'],
       'gameFilesManifestSha256': windowsFilesManifest['sha256'],
       'gameFilesVerified': windowsFilesManifest['fileCount'],
@@ -103,7 +101,7 @@ void writeReleaseQaFixtures({
       'msvc': '14.51.36231',
       'windowsSdk': '10.0.26100.0',
     },
-    'gameBuildId': 2309,
+    'gameBuildId': gameMetadata['buildId'],
     'validationDescriptorSha256': validationSha,
     'unity': {
       'result': 'pass',
@@ -129,38 +127,6 @@ void writeReleaseQaFixtures({
       'releaseJourney': _releaseJourney,
       'evidenceSha256': _digest('windows-x64:robotopia'),
     },
-    'creator': {
-      'result': 'pass',
-      'suite': 'creator-full',
-      'acceptanceChallenge': _digest('windows-x64:creator-challenge'),
-      'lastRunSessionId': 'creator-session-fixture',
-      'creatorPackageReceipt': {
-        'sourceSha256': _digest('windows-x64:creator-package'),
-        'criticalFiles': [
-          {
-            'path': 'TopiaForge.CreatorTools.dll',
-            'sha256': _digest('windows-x64:creator-assembly'),
-          },
-          {
-            'path': 'topiaforge.mod.json',
-            'sha256': _digest('windows-x64:creator-manifest'),
-          },
-        ],
-      },
-      'acceptanceResultSha256': _digest('windows-x64:creator-result'),
-      'caseInventorySha256': inventorySha,
-      'requiredCases': creatorCases,
-      'requiredCasesSha256': _caseSetSha(creatorCases),
-      'passedCases': creatorCases,
-      'passedCasesSha256': _caseSetSha(creatorCases),
-      'lifecycleCycles': creator['minimumLifecycleCycles'],
-      'saveStateUnchanged': true,
-      'checkpointStateUnchanged': true,
-      'failures': <String>[],
-      'descriptorSha256': _digest('windows-x64:creator-descriptor'),
-      'evidenceSha256': _digest('windows-x64:creator-bundle'),
-      'evidenceSize': 8192,
-    },
   });
 }
 
@@ -181,7 +147,6 @@ Map<String, String> releaseQaEvidenceFor(
   if (platform == 'windows-x64') {
     final validationSha = _digest('windows:validation');
     return {
-      'creator': _digest('windows-x64:creator-descriptor'),
       'ecosystem-reproducibility': ecosystemSha,
       'package': validationSha,
       'robotopia': _digest('windows-x64:robotopia'),

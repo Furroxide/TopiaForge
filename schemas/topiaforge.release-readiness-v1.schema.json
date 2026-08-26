@@ -115,6 +115,7 @@
       "required": [
         "id",
         "priority",
+        "enforcement",
         "status",
         "reviewerRoles",
         "evidenceIds"
@@ -140,6 +141,12 @@
           "enum": [
             "P0",
             "P1"
+          ]
+        },
+        "enforcement": {
+          "enum": [
+            "advisory",
+            "blocking"
           ]
         },
         "status": {

@@ -131,33 +131,6 @@ extension LauncherEventDispatch on LauncherBloc {
         event,
         emit,
       ),
-      DeveloperUgcSettingsSaved() => _onDeveloperUgcSettingsSaved(event, emit),
-      DeveloperUgcConfigDeployed() => _onDeveloperUgcConfigDeployed(
-        event,
-        emit,
-      ),
-      DeveloperWatchFolderOpened() => _onDeveloperWatchFolderOpened(
-        event,
-        emit,
-      ),
-      DeveloperUgcPublishToggled() => _onDeveloperUgcPublishToggled(
-        event,
-        emit,
-      ),
-      DeveloperUgcCleanupRequested() => _onDeveloperUgcCleanupRequested(
-        event,
-        emit,
-      ),
-      DeveloperUgcStatusRefreshed() => _onDeveloperUgcStatusRefreshed(
-        event,
-        emit,
-      ),
-      DeveloperUgcSidecarOutput() => _onDeveloperUgcSidecarOutput(event, emit),
-      DeveloperUgcPublisherExited() => _onDeveloperUgcPublisherExited(
-        event,
-        emit,
-      ),
-      DeveloperUgcGoLive() => _onDeveloperUgcGoLive(event, emit),
     };
   }
 }

@@ -41,8 +41,8 @@ done < <(
   find src -mindepth 2 -maxdepth 2 -type f \
     -path 'src/TopiaForge.Mods.*/TopiaForge.Mods.*.csproj' | sort
 )
-[[ ${#projects[@]} -eq 12 ]] || {
-  echo "Expected 12 packable TopiaForge.Mods SDK projects; found ${#projects[@]}." >&2
+[[ ${#projects[@]} -eq 11 ]] || {
+  echo "Expected 11 packable TopiaForge.Mods SDK projects; found ${#projects[@]}." >&2
   exit 1
 }
 
@@ -68,8 +68,8 @@ packages=()
 while IFS= read -r package; do
   packages+=("$package")
 done < <(find "$sdk_output" -maxdepth 1 -type f -name '*.nupkg' | sort)
-[[ ${#packages[@]} -eq 12 ]] || {
-  echo "Expected 12 SDK NuGet packages; found ${#packages[@]}." >&2
+[[ ${#packages[@]} -eq 11 ]] || {
+  echo "Expected 11 SDK NuGet packages; found ${#packages[@]}." >&2
   exit 1
 }
 for package in "${packages[@]}"; do
@@ -122,4 +122,4 @@ for harness in "${harnesses[@]}"; do
   "$dotnet_command" run --project "$harness" -c Release --no-build
 done
 
-echo "Validated 12 SDK packages and all 7 C# release harnesses."
+echo "Validated 11 SDK packages and all 7 C# release harnesses."

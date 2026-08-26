@@ -40,8 +40,8 @@ namespace TopiaForge.ModManager.Tests
         {
             var manifest = ValidManifest("compat.context");
             manifest.SupportedGameVersionRange = "0.0.2309";
-            manifest.SupportedLoaderVersionRange = ">=1.0.0-rc.1 <2.0.0";
-            manifest.SupportedSdkVersionRange = ">=1.0.0-rc.1 <2.0.0";
+            manifest.SupportedLoaderVersionRange = ">=0.1.0-rc.1 <0.2.0";
+            manifest.SupportedSdkVersionRange = ">=0.1.0-rc.1 <0.2.0";
 
             Assert(ManifestValidator.Validate(manifest).Count == 0,
                 "context-free compatibility wrapper should syntax-check without requiring a game install");

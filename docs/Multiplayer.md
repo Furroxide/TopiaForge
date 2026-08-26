@@ -5,7 +5,7 @@ description: Build and deterministically test server-canonical TopiaForge mods f
 
 # Multiplayer API preview
 
-TopiaForge 1.0 remains standalone-only. `TopiaForge.Mods.Multiplayer` 1.0 freezes the future-facing public contract,
+TopiaForge remains standalone-only. `TopiaForge.Mods.Multiplayer` freezes the future-facing public contract,
 generated wire format, real-game loopback provider, and deterministic multi-peer test rig before a supported live
 transport exists. Ordinary V5 mods keep standalone behavior when `multiplayer` is omitted; multiplayer support is an explicit
 module and manifest opt-in, not a claim that arbitrary local mutations can be synchronized safely.
