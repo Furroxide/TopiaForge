@@ -42,7 +42,7 @@ reports a blocking wait as [TF1008](Diagnostics.md#tf1008). The same rule applie
 
 ## Local `.roboworld` worlds
 
-A world built in the official [Robotopia Creator](CreatorScope.md) exports as a `.roboworld` file.
+A world built in the official [Robotopia Creator](https://robotopia.gg/editor/) exports as a `.roboworld` file.
 Worlds can load one of those from disk, through the game's own import host — the same code path the
 game uses for a local export, so nothing here parses the format itself.
 
