@@ -166,7 +166,7 @@ void _validateWindowsQa(
 ) {
   final qa = bundle.qa;
   _requireQaReleaseIdentity(qa, bundle, context, expectedPlatform: 'windows');
-  const expectedSigning = 'authenticode-timestamped';
+  final expectedSigning = _windowsQaSigningState(context.policy);
   final expectedToolchains = {
     ...context.policy.toolchains,
     ...context.platformToolchains['windows-x64']!,
@@ -185,7 +185,13 @@ void _validateWindowsQa(
     _requireQaDigest(qa, field, 'Windows QA');
   }
   final validationSha = qa['validationDescriptorSha256'];
-  for (final name in ['package', 'toolchains', 'authenticode']) {
+  // Which of these exist is the policy's call, not this function's: an unsigned
+  // build carries no `authenticode` validation, so filter through the same
+  // source of truth the bundle was validated against rather than restating the
+  // set here.
+  final required = _requiredEvidenceFor(bundle.platform, context.policy);
+  const validationBound = ['package', 'toolchains', 'authenticode'];
+  for (final name in validationBound.where(required.contains)) {
     if (bundle.validations[name]!.evidenceSha256 != validationSha) {
       throw StateError(
         'Windows $name validation must bind the local validation summary.',
