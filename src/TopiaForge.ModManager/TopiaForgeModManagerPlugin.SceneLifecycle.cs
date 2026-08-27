@@ -29,7 +29,7 @@ namespace TopiaForge.ModManager
             }
             catch (Exception ex)
             {
-                managerLogger.Error(ex, "Failed to dispatch a scene-loaded event.");
+                managerLogger.Error(ex, "Failed to dispatch a scene-loaded event for '" + scene.name + "' (handle " + scene.handle + ", mode " + mode + ").");
             }
         }
 
