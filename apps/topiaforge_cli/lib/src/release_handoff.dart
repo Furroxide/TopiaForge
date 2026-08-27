@@ -71,7 +71,7 @@ class TopiaForgeReleaseHandoff {
       canonicalEcosystemSha256: canonicalEcosystemSha256,
       toolchains: context.policy.toolchains,
       platformToolchains: context.platformToolchains[platform]!,
-      signing: _signingState(platform),
+      signing: _signingState(platform, context.policy),
       validations: validations,
       qa: qa,
     );
