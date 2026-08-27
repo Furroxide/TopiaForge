@@ -22,6 +22,7 @@ unrecognised file is failure rather than silence.
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -88,15 +89,34 @@ def redistributed_assets(paths: list[str]) -> list[str]:
     return sorted(p for p in paths if Path(p).suffix.lower() in ASSET_SUFFIXES)
 
 
+CODE_SPAN = re.compile(r"`([^`\n]+)`")
+
+
+def recorded_paths(notices: str) -> set[str]:
+    """Every path the notices record, as exact Markdown code spans.
+
+    Matching spans rather than searching the raw text is what makes this an
+    audit instead of a grep. A substring search over the prose accepts far too
+    much: an asset at `mods/anything.png` matched because the bare word "mods"
+    occurs in a sentence, and a new file named `robot.webp` matched because the
+    notices mention that filename while explaining that it was *removed*. Both
+    reported "covered" for assets nobody had recorded, which is the exact
+    failure this audit exists to prevent.
+    """
+    return {match.group(1).strip() for match in CODE_SPAN.finditer(notices)}
+
+
 def coverage_for(path: str, notices: str) -> str | None:
     """Why `path` is accounted for, or None when nothing covers it."""
     for tree, reason in BLANKET_LICENSED_TREES.items():
         if path.startswith(tree):
             return reason
-    # Naming the exact path is the strongest form; a bare filename is accepted
-    # because the notices describe several assets by name in prose.
-    if path in notices or Path(path).name in notices:
-        return f"named in {NOTICES}"
+    recorded = recorded_paths(notices)
+    # The full path, recorded exactly. Bare filenames are deliberately not
+    # accepted: a filename is not unique, so honouring one would let a new file
+    # inherit an unrelated entry just by reusing its name.
+    if path in recorded:
+        return f"recorded in {NOTICES}"
     # The notices also record a bundled set by its directory ("Bundled at:
     # `packages/launcher_ui/fonts`"), which is how the fonts are covered: their
     # on-disk names differ from the upstream filenames.
@@ -106,7 +126,7 @@ def coverage_for(path: str, notices: str) -> str | None:
     # is recorded, and EmojiOne sat one level below it in `.../Sprites/`. An
     # ancestor match would have covered the exact file this audit exists for.
     parent = str(Path(path).parent).replace("\\", "/")
-    if parent and parent != "." and parent in notices:
+    if parent and parent != "." and parent in recorded:
         return f"bundled directory recorded in {NOTICES}"
     return None
 
@@ -143,8 +163,9 @@ def main() -> int:
             print(f"  - {failure}", file=sys.stderr)
         print(
             "\nEvery redistributed non-source file must be accounted for. Record "
-            f"the asset in {NOTICES}: name its exact path, its filename, or the "
-            "directory it is bundled in. First-party artwork belongs under "
+            f"the asset in {NOTICES} as a backticked path: either its exact path "
+            "or the directory it is bundled in. A bare filename is not enough, "
+            "because a filename is not unique. First-party artwork belongs under "
             '"First-party binary and generated assets", which already claims to '
             "cover every non-source file a user receives.",
             file=sys.stderr,
