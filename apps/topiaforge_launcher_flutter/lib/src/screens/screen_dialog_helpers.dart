@@ -191,7 +191,8 @@ Future<void> _showNewUnityProjectDialog(BuildContext context) async {
             const SizedBox(height: 8),
             const Text(
               'Copies the Unity world template. '
-              'Open it in Unity to author markers, then Go Live from the cockpit.',
+              'Open it in Unity to author your scene, then build its bundle '
+              'with `topiaforge world build`.',
               style: TextStyle(fontSize: 12),
             ),
           ],
