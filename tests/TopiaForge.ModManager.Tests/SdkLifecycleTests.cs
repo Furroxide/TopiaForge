@@ -77,6 +77,27 @@ namespace TopiaForge.ModManager.Tests
             Assert(initialBackground.IsInitial && !initialBackground.IsActive,
                 "initial replay metadata should support already-loaded background scenes");
 
+            // Robotopia 2409 handed Unity's Scene.handle back negative. The manager passes that
+            // through verbatim, so rejecting the sign threw inside SceneManager.sceneLoaded and
+            // no mod received a scene event at all. The id is an opaque correlation key.
+            var negativeHandle = new SceneLifecycleEvent(
+                -1877,
+                "Gameplay",
+                SceneLifecyclePhase.Loaded,
+                SceneLoadMode.Single,
+                isActive: true);
+            Assert(negativeHandle.SceneInstanceId == -1877,
+                "a negative host scene handle should be preserved, not rejected");
+
+            var extremeHandle = new SceneLifecycleEvent(
+                int.MinValue,
+                "Gameplay",
+                SceneLifecyclePhase.Loaded,
+                SceneLoadMode.Single,
+                isActive: true);
+            Assert(extremeHandle.SceneInstanceId == int.MinValue,
+                "no scene handle value should be treated as out of range");
+
             var detailedOnlyEvents = new DetailedOnlyModEvents();
             SceneLifecycleEvent? fallback = null;
             detailedOnlyEvents.SubscribeSceneLifecycle(scene => fallback = scene);
