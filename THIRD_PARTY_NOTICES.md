@@ -67,6 +67,20 @@ third-party artwork. The robot replaced a previously bundled `robot.webp` taken 
 bundle; it is defined as a checked-in pixel grid rather than a raster file so its provenance is
 unambiguous.
 
+Those marks are the following files. They are listed by path because a prose description cannot be
+checked, and this section claims to cover every non-source file a user receives:
+
+- `packages/launcher_ui/assets/brand/topiaforge-icon.png` and
+  `packages/launcher_ui/assets/brand/topiaforge-wordmark.png` — the source marks. Clean pixel art with
+  six opaque colours and no anti-aliasing, which is what lets `assets/readme/source/pixel_marks.py`
+  convert them to exact SVG paths for the repository homepage.
+- `apps/topiaforge_launcher_flutter/assets/brand/topiaforge-app-icon.png` and
+  `apps/topiaforge_launcher_flutter/snap/gui/topiaforge.png` — the launcher application icon.
+- `apps/topiaforge_launcher_flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset` — the same icon at
+  the eight sizes macOS requires. Generated from the mark above, not drawn separately.
+- `website/public/favicon.png` and `website/src/assets/topiaforge-wordmark.png` — the documentation
+  site's copies of the same marks.
+
 TopiaForge bundles the Quicksand font for body typography in the launcher UI and Unity brand bundle.
 
 - Project: Quicksand
