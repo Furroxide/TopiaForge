@@ -194,3 +194,6 @@ TopiaForge is an independent, community-built modding toolkit. It is not develop
 endorsed by Tomato Cake or the Robotopia development team, and is not otherwise affiliated with
 them. "Robotopia" and "Tomato Cake" are the property of their respective owners and are used here
 only to identify the game this toolkit works with.
+
+The canonical wording, including the short form used in the launcher and the in-game manager, is
+[TRADEMARKS.md](TRADEMARKS.md).
