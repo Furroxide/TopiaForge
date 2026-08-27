@@ -15,8 +15,7 @@ namespace TopiaForge.Mods.Testing
             new Dictionary<string, GamemodeDefinition>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, GamemodeMenuEntry> entries =
             new Dictionary<string, GamemodeMenuEntry>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, AssetOverrideLease> assetOverrides =
-            new Dictionary<string, AssetOverrideLease>(StringComparer.Ordinal);
+        private readonly List<AssetOverrideLease> assetOverrides = new List<AssetOverrideLease>();
         private readonly List<string> loadedLocalWorlds = new List<string>();
         private PendingLoad? pending;
 
@@ -254,23 +253,32 @@ namespace TopiaForge.Mods.Testing
                 throw new ArgumentNullException(nameof(assetOverride));
             }
 
-            if (assetOverrides.TryGetValue(assetOverride.AssetId, out var existing))
+            var lease = new AssetOverrideLease(this, assetOverride);
+            var existing = assetOverrides.FindIndex(candidate =>
+                string.Equals(candidate.Override.AssetId, assetOverride.AssetId, StringComparison.Ordinal));
+            if (existing >= 0)
             {
-                existing.Deactivate();
+                assetOverrides[existing].Deactivate();
+                assetOverrides[existing] = lease;
+            }
+            else
+            {
+                assetOverrides.Add(lease);
             }
 
-            var lease = new AssetOverrideLease(this, assetOverride);
-            assetOverrides[assetOverride.AssetId] = lease;
             return OperationResult<IDisposable>.Success(lifetime.Track(lease));
         }
 
-        /// <summary>Gets the overrides registered and not yet disposed, in registration order.</summary>
+        /// <summary>
+        /// Gets the overrides registered and not yet disposed, in registration order. Replacing an asset id
+        /// keeps the position of the override it replaced.
+        /// </summary>
         public IReadOnlyList<WorldAssetOverride> AssetOverrides
         {
             get
             {
                 var snapshot = new List<WorldAssetOverride>(assetOverrides.Count);
-                foreach (var lease in assetOverrides.Values)
+                foreach (var lease in assetOverrides)
                 {
                     snapshot.Add(lease.Override);
                 }
@@ -336,14 +344,7 @@ namespace TopiaForge.Mods.Testing
             return OperationResult<bool>.Success(true);
         }
 
-        private void ReleaseAssetOverride(AssetOverrideLease lease)
-        {
-            if (assetOverrides.TryGetValue(lease.Override.AssetId, out var current)
-                && ReferenceEquals(current, lease))
-            {
-                assetOverrides.Remove(lease.Override.AssetId);
-            }
-        }
+        private void ReleaseAssetOverride(AssetOverrideLease lease) => assetOverrides.Remove(lease);
 
         private sealed class AssetOverrideLease : IDisposable
         {

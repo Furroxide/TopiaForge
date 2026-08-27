@@ -83,7 +83,19 @@ namespace TopiaForge.Worlds
             try
             {
                 var full = Path.GetFullPath(folderPath!);
-                return full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                var trimmed = full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+                // Trimming a root leaves something Path.Combine no longer treats as absolute: "/" becomes
+                // "" and "C:\" becomes "C:", a drive-relative prefix. Either one makes a requested file
+                // name resolve against the process working directory instead of the configured folder, so
+                // the root keeps its separator.
+                if (trimmed.Length == 0 ||
+                    trimmed[trimmed.Length - 1] == Path.VolumeSeparatorChar)
+                {
+                    return full;
+                }
+
+                return trimmed;
             }
             catch (Exception)
             {
@@ -176,7 +188,11 @@ namespace TopiaForge.Worlds
             // Compare on the separator-terminated folder so "…\worlds-backup\x.roboworld" cannot pass as a
             // child of "…\worlds". Ordinal-ignore-case matches Windows and the game's own path handling; a
             // case-sensitive filesystem only makes this stricter, never more permissive.
-            var prefix = folder + Path.DirectorySeparatorChar;
+            // A root folder already ends in its separator; appending another would never match.
+            var last = folder.Length == 0 ? ' ' : folder[folder.Length - 1];
+            var prefix = last == Path.DirectorySeparatorChar || last == Path.AltDirectorySeparatorChar
+                ? folder
+                : folder + Path.DirectorySeparatorChar;
             return candidate.Length > prefix.Length
                 && candidate.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
         }

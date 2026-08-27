@@ -58,6 +58,16 @@ namespace TopiaForge.Worlds
         public bool IsAvailable => importHostControllerType != null && exportLoaderType != null;
 
         /// <summary>
+        /// Gets whether the game still exposes the folder scanner backing <see cref="ScanFolder"/>.
+        /// </summary>
+        /// <remarks>
+        /// Separate from <see cref="IsAvailable"/> on purpose: importing a known path does not need the
+        /// scanner, so a build that lost only the index can still load a world the caller names. Listing
+        /// cannot, and must say so rather than return an empty folder.
+        /// </remarks>
+        public bool CanScanFolder => importFileIndexType?.GetMethod("Scan", PublicStatic) != null;
+
+        /// <summary>
         /// Gets the folder the game itself scans by default, or an empty string when the game no longer
         /// says. Used as the default for the Worlds local-world folder so the two agree out of the box.
         /// </summary>

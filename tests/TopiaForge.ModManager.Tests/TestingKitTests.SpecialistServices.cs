@@ -172,9 +172,21 @@ namespace TopiaForge.ModManager.Tests
                    ReferenceEquals(worlds.AssetOverrides[0].Prefab, second),
                 "Disposing a superseded override lease should not remove its replacement.");
 
+            // Registration order is a documented guarantee of the fake, and a replacement keeps the slot
+            // it replaced rather than moving to the end.
+            var third = worlds.RegisterAssetOverride(new WorldAssetOverride("@author/rock", first));
+            Assert(worlds.AssetOverrides.Count == 2 &&
+                   worlds.AssetOverrides[0].AssetId == "@author/tree" &&
+                   worlds.AssetOverrides[1].AssetId == "@author/rock",
+                "Overrides should be reported in registration order.");
+            worlds.RegisterAssetOverride(new WorldAssetOverride("@author/tree", first));
+            Assert(worlds.AssetOverrides[0].AssetId == "@author/tree",
+                "Replacing an override should keep its position.");
+            third!.Value!.Dispose();
+
             replacementLease!.Dispose();
-            Assert(worlds.AssetOverrides.Count == 0,
-                "Disposing the live override lease should remove the override.");
+            Assert(worlds.AssetOverrides.Count == 1,
+                "Disposing a superseded lease should not remove the override that replaced it.");
 
             var rejected = false;
             try

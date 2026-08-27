@@ -173,6 +173,15 @@ namespace TopiaForge.Worlds
                     "This game build does not expose the local world importer.");
             }
 
+            // Without this the scanner going missing is reported as Success with an empty list, which a
+            // caller cannot tell from a folder that simply holds no worlds.
+            if (!ImportHost.CanScanFolder)
+            {
+                return OperationResult<IReadOnlyList<LocalWorldFile>>.Failure(
+                    ModErrorCode.Unavailable,
+                    "This game build does not expose the local world scanner.");
+            }
+
             var scanned = ListLocalWorldFiles();
             var mapped = new List<LocalWorldFile>(scanned.Count);
             foreach (var file in scanned)
