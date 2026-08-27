@@ -1,6 +1,8 @@
 # Initial release blocker register
 
-Last audited: 2026-07-31. Product candidate: `0.1.0-rc.1`. Recommendation: **NO-SHIP**.
+Last audited: 2026-07-31. Reconciled against the 2409 tree on 2026-08-27; see
+[Reconciliation](#reconciliation-2026-08-27). Product candidate: `0.1.0-rc.1`.
+Recommendation: **NO-SHIP**.
 Governance relaxed for the `0.x` line on 2026-08-22; see
 [What blocks a `0.x` release](#what-blocks-a-0x-release).
 
@@ -81,6 +83,34 @@ Enforcement is pinned per gate id in `apps/topiaforge_cli/lib/src/release_readin
 declare itself advisory. Restoring the `1.0` posture means moving each value back to `blocking` in that contract and in
 the decision file together.
 
+## Reconciliation (2026-08-27)
+
+The 2026-07-31 audit predates the 2409 cutover ([#66](https://github.com/Furroxide/TopiaForge/pull/66),
+landed 2026-08-26). That line retired two subsystems, so parts of this register described a repository
+that no longer exists. This pass corrects only what the retirement falsified. **No gate changed state
+and no new evidence was recorded** — a developer workstation cannot supply a matrix row, and nothing
+here was rerun on the release host.
+
+| Row | Was | Now | Why |
+| --- | --- | --- | --- |
+| Sidecar install/runtime/security | PASS | RETIRED | `tools/ugc-automerge-sidecar` was deleted; the row attested a subsystem that is gone. |
+| CLI tests | PASS | NEEDS RERUN | Counted 190 cases and credited UGC coverage; the `ugc` command family was deleted and the suite is now 215 cases. |
+
+Two rows were checked and are already correct: **First-party mods** (14 source mods, 13-package
+payload) and **VPM and canonical ecosystem payload**, which already records that its evidence
+predates the retirement.
+
+`P0-OSS-01`'s structural limitation — the inventory verifies that *listed* licence files exist rather
+than that every redistributed asset *has* one — has a fix in review at
+[#79](https://github.com/Furroxide/TopiaForge/pull/79). It enumerates the redistributed assets and
+fails on any the notices do not cover, and it found twelve first-party assets that nothing recorded.
+That closes the engineering half only; the gate still needs the compliance review in its exit
+criteria and stays **blocking**.
+
+The `docs.topiaforge.dev` custom domain still returns 404 with the Pages API reporting `status: null`,
+unchanged since it was first noted. It is not a gate and is recorded here only so the next audit does
+not rediscover it.
+
 ## Verification matrix
 
 `PASS` means the locally applicable gate passed on this working tree. `FAIL` is an expected hard-stop that correctly
@@ -98,9 +128,9 @@ check is silently skipped.
 | Dart formatting and analyzers | PASS | All tracked Dart sources were formatted; domain, data, UI, app, and CLI analyzers report no issues and every non-generated file is at most 500 lines. |
 | Dart domain/data tests | PASS | 203 domain and 362 data tests passed (four environment-specific data cases skipped), including Manifest V5 dispatch, multiplayer admission, signed launcher updates, deterministic package-inbox planning, runtime repair, and receipt provenance/repair behavior. |
 | Flutter UI/app tests | PASS | 3 shared-UI and 66 launcher tests passed in isolated Windows test processes, including BLoC lifecycle, all signed-update states, scaling, contrast, focus, install/repair confirmation, safe mode, recovery, health handshake, and Xcode payload/logging configuration. |
-| CLI tests | PASS | All 190 CLI tests passed with Dart `3.12.2` (four platform-capability cases skipped), including V4-to-V5 migration, packaging, registry, Unity probing, UGC, signed release metadata, final-archive and handoff validation, and the relocated seven-template lifecycle. |
+| CLI tests | NEEDS RERUN | The retained result is void: it counted 190 cases and credited UGC coverage, and the `ugc` command family was deleted in the 2409 cutover. The suite is now 215 cases. Rerun on the release host from the frozen candidate; a developer workstation cannot supply this row, because four `release_package_mod_sdk` and packaged-CLI cases need a Release build of the C# solution and fail without one. |
 | C#/Dart contract parity | PASS | Manifest V5, V4 retirement, SemVer 2.0, build mapping, multiplayer admission, canonical fields, unknown fields, dependencies, pins, conflicts, load order, and state fixtures agree. |
-| Sidecar install/runtime/security | PASS | Lockfile `npm ci`, syntax checks, 24 tests (22 passed and two Windows signal-delivery cases skipped), production dependency tree, and audit passed with zero vulnerabilities. |
+| Sidecar install/runtime/security | RETIRED | `tools/ugc-automerge-sidecar` was deleted with UGC live sync in the 2409 cutover. The row is kept rather than removed so the matrix does not silently lose a line; there is no sidecar left to test, and nothing replaced it. |
 | Archive, UGC, diagnostic, repair, and process hardening | PASS | Adversarial traversal/link/collision/size/race/rollback/redaction/timeout regressions passed. Transaction recovery passes interruptions before and after every phase on all three layouts; the real Windows archive also passed a locally signed `rc.1` → synthetic `rc.2` swap and forced-health-failure rollback. |
 | First-party mods | NEEDS RERUN | Repeat deterministic packing and managed-assembly validation for all 14 source mods and the 13-package release payload; UiGallery is the one excluded DevTool. |
 | C# author templates | PASS | All seven template families scaffolded from a release-like payload, restored, relocated, built, tested, packed, validated, installed with full receipt checks, and rebuilt after extraction removal; each real platform-archive job repeats that lifecycle. Defaults remain deliberately non-publishable. |
