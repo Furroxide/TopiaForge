@@ -15,7 +15,25 @@ namespace TopiaForge.ModManager
 {
     public sealed partial class TopiaForgeModManagerPlugin
     {
+        // Unity invokes these three from its own event dispatch, so anything that escapes is
+        // reported by Unity against the game rather than by TopiaForge against TopiaForge. A
+        // contract violation here therefore left no manager-log trace, no last-run.json error,
+        // and a loader still announcing "ready" — which is how a negative Scene.handle silently
+        // suppressed every scene event on build 2409. Log against the loader and keep the
+        // subscription alive; a scene event we failed to translate must not also stop the next one.
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            try
+            {
+                OnSceneLoadedCore(scene, mode);
+            }
+            catch (Exception ex)
+            {
+                managerLogger.Error(ex, "Failed to dispatch a scene-loaded event for '" + scene.name + "' (handle " + scene.handle + ", mode " + mode + ").");
+            }
+        }
+
+        private void OnSceneLoadedCore(Scene scene, LoadSceneMode mode)
         {
             var sdkMode = mode == LoadSceneMode.Additive
                 ? SceneLoadMode.Additive
@@ -49,6 +67,18 @@ namespace TopiaForge.ModManager
 
         private void OnSceneUnloaded(Scene scene)
         {
+            try
+            {
+                OnSceneUnloadedCore(scene);
+            }
+            catch (Exception ex)
+            {
+                managerLogger.Error(ex, "Failed to dispatch a scene-unloaded event.");
+            }
+        }
+
+        private void OnSceneUnloadedCore(Scene scene)
+        {
             var knownScene = loadedSceneModes.TryGetValue(scene.handle, out var loadedMode);
             var mode = knownScene
                 ? loadedMode
@@ -62,6 +92,18 @@ namespace TopiaForge.ModManager
         }
 
         private void OnActiveSceneChanged(Scene previous, Scene current)
+        {
+            try
+            {
+                OnActiveSceneChangedCore(previous, current);
+            }
+            catch (Exception ex)
+            {
+                managerLogger.Error(ex, "Failed to dispatch an active-scene-changed event.");
+            }
+        }
+
+        private void OnActiveSceneChangedCore(Scene previous, Scene current)
         {
             lastActiveSceneHandle = current.IsValid() ? current.handle : 0;
             if (current.IsValid() && suppressNextActivation.Remove(current.handle))
