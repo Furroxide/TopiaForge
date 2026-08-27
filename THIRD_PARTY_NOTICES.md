@@ -1,5 +1,17 @@
 # Third Party Notices
 
+## Trademarks and affiliation
+
+This file ships inside the release archive, so it states the notice for readers who never see the
+repository. The canonical wording is [TRADEMARKS.md](TRADEMARKS.md).
+
+TopiaForge is an independent, community-built modding toolkit. It is not developed, published, or
+endorsed by Tomato Cake or the Robotopia development team, and is not otherwise affiliated with
+them. "Robotopia" and "Tomato Cake" are the property of their respective owners and are used here
+only to identify the game this toolkit works with.
+
+## Bundled runtimes and assets
+
 This repository bundles BepInEx 5.4.23.5 binary runtime files under
 `third_party/BepInEx/win_x64_5.4.23.5` and `third_party/BepInEx/macos_universal_5.4.23.5` for local Robotopia
 loader installation.

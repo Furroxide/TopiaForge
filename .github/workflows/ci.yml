@@ -272,6 +272,9 @@ jobs:
       - name: Test generated-payload residue scanning
         run: python3 .github/scripts/test_check_topiaforge_residue.py
 
+      - name: Keep the trademark notice identical across surfaces
+        run: python3 .github/scripts/check_trademark_notice.py
+
       - name: Test pinned Flutter setup
         shell: pwsh
         run: ./.github/actions/setup-flutter/test-setup-flutter.ps1
