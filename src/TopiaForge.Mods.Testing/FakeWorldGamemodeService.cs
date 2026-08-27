@@ -17,6 +17,7 @@ namespace TopiaForge.Mods.Testing
             new Dictionary<string, GamemodeMenuEntry>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, AssetOverrideLease> assetOverrides =
             new Dictionary<string, AssetOverrideLease>(StringComparer.Ordinal);
+        private readonly List<string> loadedLocalWorlds = new List<string>();
         private PendingLoad? pending;
 
         /// <summary>Creates a fake Worlds service owned by a mod lifetime.</summary>
@@ -276,6 +277,63 @@ namespace TopiaForge.Mods.Testing
 
                 return snapshot;
             }
+        }
+
+        /// <summary>Gets the local exports this fake reports; add to it to stage a scan result.</summary>
+        public List<LocalWorldFile> LocalWorlds { get; } = new List<LocalWorldFile>();
+
+        /// <summary>Gets or sets whether the fake pretends the game exposes a local importer.</summary>
+        public bool LocalWorldsAvailable { get; set; } = true;
+
+        /// <summary>Gets the paths passed to <see cref="LoadLocalWorld"/>, in call order.</summary>
+        public IReadOnlyList<string> LoadedLocalWorlds => loadedLocalWorlds;
+
+        /// <inheritdoc />
+        public OperationResult<IReadOnlyList<LocalWorldFile>> ListLocalWorlds()
+        {
+            if (!LocalWorldsAvailable)
+            {
+                return OperationResult<IReadOnlyList<LocalWorldFile>>.Failure(
+                    ModErrorCode.Unavailable,
+                    "This game build does not expose the local world importer.");
+            }
+
+            return OperationResult<IReadOnlyList<LocalWorldFile>>.Success(
+                new List<LocalWorldFile>(LocalWorlds));
+        }
+
+        /// <inheritdoc />
+        public OperationResult<bool> LoadLocalWorld(string requestedPath)
+        {
+            if (string.IsNullOrWhiteSpace(requestedPath))
+            {
+                return OperationResult<bool>.Failure(
+                    ModErrorCode.InvalidArgument, "A local world path is required.");
+            }
+
+            if (!LocalWorldsAvailable)
+            {
+                return OperationResult<bool>.Failure(
+                    ModErrorCode.Unavailable,
+                    "This game build does not expose the local world importer.");
+            }
+
+            var match = LocalWorlds.Find(world =>
+                string.Equals(world.Path, requestedPath, StringComparison.Ordinal) ||
+                string.Equals(world.FileName, requestedPath, StringComparison.Ordinal));
+            if (match == null)
+            {
+                return OperationResult<bool>.Failure(
+                    ModErrorCode.NotFound, "'" + requestedPath + "' is not in the local world folder.");
+            }
+
+            if (!match.IsLoadable)
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, match.LoadError);
+            }
+
+            loadedLocalWorlds.Add(match.Path);
+            return OperationResult<bool>.Success(true);
         }
 
         private void ReleaseAssetOverride(AssetOverrideLease lease)

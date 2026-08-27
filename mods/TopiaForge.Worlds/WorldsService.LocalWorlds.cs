@@ -53,7 +53,7 @@ namespace TopiaForge.Worlds
         /// missing from a list learns nothing; one who sees it listed with the loader's own error learns
         /// what to fix.
         /// </remarks>
-        internal IReadOnlyList<RoboWorldFile> ListLocalWorlds()
+        internal IReadOnlyList<RoboWorldFile> ListLocalWorldFiles()
         {
             ThrowIfDisposed();
             if (!LocalWorldsAvailable)
@@ -152,6 +152,51 @@ namespace TopiaForge.Worlds
             }
 
             return ImportHost.TryImport(plan, SnapshotAssetOverrides(), out error);
+        }
+
+        /// <inheritdoc />
+        public OperationResult<IReadOnlyList<LocalWorldFile>> ListLocalWorlds()
+        {
+            ThrowIfDisposed();
+
+            if (!EnableLocalWorlds)
+            {
+                return OperationResult<IReadOnlyList<LocalWorldFile>>.Failure(
+                    ModErrorCode.InvalidState,
+                    "Local worlds are disabled in the Worlds configuration.");
+            }
+
+            if (!ImportHost.IsAvailable)
+            {
+                return OperationResult<IReadOnlyList<LocalWorldFile>>.Failure(
+                    ModErrorCode.Unavailable,
+                    "This game build does not expose the local world importer.");
+            }
+
+            var scanned = ListLocalWorldFiles();
+            var mapped = new List<LocalWorldFile>(scanned.Count);
+            foreach (var file in scanned)
+            {
+                mapped.Add(new LocalWorldFile(file.Path, file.FileName, file.ProjectName, file.LoadError));
+            }
+
+            return OperationResult<IReadOnlyList<LocalWorldFile>>.Success(mapped);
+        }
+
+        /// <inheritdoc />
+        public OperationResult<bool> LoadLocalWorld(string requestedPath)
+        {
+            if (!TryLoadLocalWorld(requestedPath, out var error))
+            {
+                // The importer reports refusals as prose, and the distinction the caller acts on is whether
+                // the build can do this at all versus whether this particular file was rejected.
+                var code = error.IndexOf("does not expose", StringComparison.Ordinal) >= 0
+                    ? ModErrorCode.Unavailable
+                    : ModErrorCode.InvalidArgument;
+                return OperationResult<bool>.Failure(code, error);
+            }
+
+            return OperationResult<bool>.Success(true);
         }
 
         private void DisposeLocalWorlds()

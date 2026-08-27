@@ -189,6 +189,36 @@ namespace TopiaForge.ModManager.Tests
             Assert(rejected, "A blank asset id should be rejected at construction.");
         }
 
+        private static void TestLocalWorldFake()
+        {
+            var context = new FakeModContext();
+            var worlds = new FakeWorldGamemodeService(context.Lifetime);
+            worlds.LocalWorlds.Add(new LocalWorldFile("/worlds/town.roboworld", "town.roboworld", "Town", string.Empty));
+            worlds.LocalWorlds.Add(new LocalWorldFile("/worlds/broken.roboworld", "broken.roboworld", string.Empty, "Unexpected end of input."));
+
+            var listed = worlds.ListLocalWorlds();
+            Assert(listed.TryGetValue(out var files) && files!.Count == 2 &&
+                   files[0].IsLoadable && !files[1].IsLoadable,
+                "Listing local worlds should include unreadable exports with their error.");
+
+            Assert(worlds.LoadLocalWorld("town.roboworld").Succeeded &&
+                   worlds.LoadedLocalWorlds.Count == 1,
+                "Loading a listed local world should succeed and be recorded.");
+
+            // An export the scanner could not parse is refused with the scanner's own reason, not silently skipped.
+            var brokenLoad = worlds.LoadLocalWorld("broken.roboworld");
+            Assert(!brokenLoad.Succeeded && brokenLoad.ErrorCode == ModErrorCode.InvalidArgument,
+                "Loading an unreadable export should fail with the scanner's reason.");
+
+            Assert(worlds.LoadLocalWorld("missing.roboworld").ErrorCode == ModErrorCode.NotFound,
+                "Loading an unlisted file should report NotFound.");
+
+            worlds.LocalWorldsAvailable = false;
+            Assert(worlds.ListLocalWorlds().ErrorCode == ModErrorCode.Unavailable &&
+                   worlds.LoadLocalWorld("town.roboworld").ErrorCode == ModErrorCode.Unavailable,
+                "A build without the importer should report Unavailable rather than an empty list.");
+        }
+
         private static void TestWorldPauseMenuFake()
         {
             var context = new FakeModContext();

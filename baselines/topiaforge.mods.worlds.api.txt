@@ -58,6 +58,8 @@ type public interface TopiaForge.Mods.IWorldGamemodeService
   method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.WorldSession>> LaunchMenuEntryAsync(System.String entryId, System.Threading.CancellationToken cancellationToken = null)
   method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.WorldSession>> LoadAsync(TopiaForge.Mods.WorldLoadRequest request, System.Threading.CancellationToken cancellationToken = null)
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> EndSession(TopiaForge.Mods.WorldSessionEndReason reason)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> LoadLocalWorld(System.String requestedPath)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.LocalWorldFile>> ListLocalWorlds()
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.IDisposable> RegisterAssetOverride(TopiaForge.Mods.WorldAssetOverride assetOverride)
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IWorldRegistration> RegisterGamemode(TopiaForge.Mods.GamemodeDefinition gamemode)
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IWorldRegistration> RegisterMenuEntry(TopiaForge.Mods.GamemodeMenuEntry entry)
@@ -79,6 +81,14 @@ type public interface TopiaForge.Mods.IWorldRegistration : System.IDisposable
 
 type public interface TopiaForge.Mods.IWorldTransitionState
   property System.Boolean IsTransitionInFlight { get [abstract,virtual,newslot]; }
+
+type public sealed class TopiaForge.Mods.LocalWorldFile : System.Object
+  constructor .ctor(System.String path, System.String fileName, System.String projectName, System.String loadError)
+  property System.Boolean IsLoadable { get; }
+  property System.String FileName { get; }
+  property System.String LoadError { get; }
+  property System.String Path { get; }
+  property System.String ProjectName { get; }
 
 type public sealed class TopiaForge.Mods.ShopItem : System.Object
   constructor .ctor(System.String id, System.String name, System.String description, System.Int32 price, System.String category = "", System.Int32 maxPurchases = 0)

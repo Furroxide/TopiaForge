@@ -108,6 +108,12 @@ namespace TopiaForge.Worlds
             public OperationResult<IDisposable> RegisterAssetOverride(WorldAssetOverride assetOverride) =>
                 TrackDisposable(service.RegisterAssetOverride(assetOverride));
 
+            public OperationResult<IReadOnlyList<LocalWorldFile>> ListLocalWorlds() =>
+                service.ListLocalWorlds();
+
+            public OperationResult<bool> LoadLocalWorld(string requestedPath) =>
+                service.LoadLocalWorld(requestedPath);
+
             private OperationResult<IDisposable> TrackDisposable(OperationResult<IDisposable> result)
             {
                 if (lifetime.IsStopping)
