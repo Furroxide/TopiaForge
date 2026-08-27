@@ -204,7 +204,7 @@ pwsh ./tools/bootstrap-dev.ps1 -Verify
 ```
 
 `-SkipManagedRefs` is useful for Dart/Flutter-only work. `-Verify` runs the C# manager, runtime-integration,
-managed-reference, and scaffold-validator harnesses; all Dart, Flutter, documentation, and Automerge checks; then
+managed-reference, and scaffold-validator harnesses; all Dart, Flutter, and documentation checks; then
 builds the current host's debug launcher. Platform signing, release publication, and live Robotopia acceptance remain
 CI or authorized test-host gates rather than bootstrap tasks.
 

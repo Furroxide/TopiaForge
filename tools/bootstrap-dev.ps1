@@ -224,17 +224,17 @@ if ($node) {
     $nodeVersion = (& $node.Source --version).Trim()
     $requiredNodeVersion = [version]"24.16.0"
     if ($nodeVersion -notmatch '^v?(?<version>[0-9]+\.[0-9]+\.[0-9]+)$' -or [version]$Matches.version -lt $requiredNodeVersion) {
-        Write-Warning "Node.js $requiredNodeVersion or newer is required for the documentation portal and optional Automerge sidecar; found '$nodeVersion'. Skipping documentation and sidecar restore."
+        Write-Warning "Node.js $requiredNodeVersion or newer is required for the documentation portal; found '$nodeVersion'. Skipping the documentation restore."
         $node = $null
     }
     elseif (!$npm) {
-        Write-Warning "npm was not found on PATH. Skipping documentation and sidecar restore."
+        Write-Warning "npm was not found on PATH. Skipping the documentation restore."
         $node = $null
     }
 }
 
 if ($Verify -and (!$node -or !$npm)) {
-    throw "Node.js 24.16.0 or newer with npm is required by -Verify for documentation and sidecar checks."
+    throw "Node.js 24.16.0 or newer with npm is required by -Verify for the documentation checks."
 }
 
 Write-Host "TopiaForge contributor bootstrap"
@@ -251,7 +251,7 @@ if ($node) {
     Write-Host "  Node: $nodeVersion"
 }
 else {
-    Write-Warning "A usable Node.js 24.16+/npm toolchain was not found; documentation and the optional Automerge sidecar will not be restored."
+    Write-Warning "A usable Node.js 24.16+/npm toolchain was not found; the documentation portal will not be restored."
 }
 
 Invoke-Checked $git @("config", "core.hooksPath", ".githooks")
@@ -300,18 +300,13 @@ foreach ($package in @(
 }
 
 $website = Join-Path $RepoRoot "website"
-$sidecar = Join-Path $RepoRoot "tools/ugc-automerge-sidecar"
 $websiteRestored = $false
-$sidecarRestored = $false
 if ($node -and $npm) {
-    foreach ($npmPackage in @($website, $sidecar)) {
-        if (!(Test-Path -LiteralPath (Join-Path $npmPackage "package-lock.json"))) {
-            throw "The package-lock.json file is missing from $npmPackage; refusing a non-deterministic npm restore."
-        }
-        Invoke-Checked $npm.Source @("ci", "--ignore-scripts", "--no-audit", "--no-fund") $npmPackage
+    if (!(Test-Path -LiteralPath (Join-Path $website "package-lock.json"))) {
+        throw "The package-lock.json file is missing from $website; refusing a non-deterministic npm restore."
     }
+    Invoke-Checked $npm.Source @("ci", "--ignore-scripts", "--no-audit", "--no-fund") $website
     $websiteRestored = $true
-    $sidecarRestored = $true
 }
 
 if (!$SkipManagedRefs) {
@@ -373,12 +368,6 @@ if ($Verify) {
         "apps/topiaforge_launcher_flutter"
     )) {
         Verify-FlutterPackage $package
-    }
-
-    if ($sidecarRestored) {
-        Invoke-Checked $node.Source @("--check", "index.mjs") $sidecar
-        Invoke-Checked $npm.Source @("test") $sidecar
-        Invoke-Checked $node.Source @("index.mjs", "--check") $sidecar
     }
 
     if ($websiteRestored) {
