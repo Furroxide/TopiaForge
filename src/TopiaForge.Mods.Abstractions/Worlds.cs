@@ -56,6 +56,50 @@ namespace TopiaForge.Mods
 
         /// <summary>Ends the current session. The call is idempotent.</summary>
         OperationResult<bool> EndSession(WorldSessionEndReason reason);
+
+        /// <summary>
+        /// Resolves an authored asset id to a prefab this mod supplies, so a locally imported world renders
+        /// the mod's own content in place of the catalog asset.
+        /// </summary>
+        /// <remarks>
+        /// Takes effect on the next local-world import; entities already in the scene keep the prefab they
+        /// were built with. Registering the same asset id twice replaces the earlier override and
+        /// deactivates its lease. Disposing the returned lease removes the override.
+        /// </remarks>
+        /// <param name="assetOverride">The asset id, prefab, and optional local-space offset.</param>
+        OperationResult<IDisposable> RegisterAssetOverride(WorldAssetOverride assetOverride);
+    }
+
+    /// <summary>
+    /// Maps an authored asset id to a modder-supplied prefab so imported entities render as real content
+    /// rather than the importer's own fallback.
+    /// </summary>
+    public sealed class WorldAssetOverride
+    {
+        /// <summary>Creates an override binding one authored asset id to one prefab.</summary>
+        /// <param name="assetId">Authored asset id as referenced by exported entities.</param>
+        /// <param name="prefab">A prefab loaded through this mod's own asset service.</param>
+        /// <param name="localPositionOffset">Optional local-space offset aligning the prefab to the authored origin.</param>
+        public WorldAssetOverride(string assetId, IPrefabAsset prefab, Vec3? localPositionOffset = null)
+        {
+            if (string.IsNullOrWhiteSpace(assetId))
+            {
+                throw new ArgumentException("An authored asset id is required.", nameof(assetId));
+            }
+
+            AssetId = assetId;
+            Prefab = prefab ?? throw new ArgumentNullException(nameof(prefab));
+            LocalPositionOffset = localPositionOffset;
+        }
+
+        /// <summary>Gets the authored asset id this override resolves.</summary>
+        public string AssetId { get; }
+
+        /// <summary>Gets the opaque prefab asset that replaces it.</summary>
+        public IPrefabAsset Prefab { get; }
+
+        /// <summary>Gets the optional local-space offset; <c>null</c> means zero.</summary>
+        public Vec3? LocalPositionOffset { get; }
     }
 
     /// <summary>Exposes whether the provider is currently changing scenes.</summary>

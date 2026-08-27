@@ -173,7 +173,10 @@ namespace TopiaForge.Worlds
         /// no longer exposes them refuses without having touched the game's selection at all.
         /// </para>
         /// </remarks>
-        public bool TryImport(RoboWorldImportPlan plan, out string error)
+        public bool TryImport(
+            RoboWorldImportPlan plan,
+            IReadOnlyList<WorldAssetOverride> assetOverrides,
+            out string error)
         {
             if (plan == null)
             {
@@ -222,6 +225,10 @@ namespace TopiaForge.Worlds
             {
                 ApplyConfigSelection(controller, plan);
 
+                // Before ImportFile, never after: the importer resolves every asset id while it builds
+                // the scene, and offers no way to re-skin an entity once it exists.
+                ApplyAssetOverrides(controller, assetOverrides);
+
                 configureFolder.Invoke(controller, new object?[] { plan.FolderPath });
                 importHostControllerType.GetMethod("RefreshImportFiles", PublicInstance)
                     ?.Invoke(controller, Array.Empty<object>());
@@ -236,6 +243,7 @@ namespace TopiaForge.Worlds
                 if (importedScene == null)
                 {
                     error = "'" + plan.FileName + "' produced no scene. Check the game log for details.";
+                    ClearAssetOverrides();
                     RestoreConfigSelection();
                     return false;
                 }
@@ -251,6 +259,7 @@ namespace TopiaForge.Worlds
             catch (Exception ex)
             {
                 error = "'" + plan.FileName + "' could not be imported: " + Unwrap(ex).Message;
+                ClearAssetOverrides();
                 RestoreConfigSelection();
                 return false;
             }
@@ -265,8 +274,113 @@ namespace TopiaForge.Worlds
             }
 
             disposed = true;
+            ClearAssetOverrides();
             RestoreConfigSelection();
         }
+
+        /// <summary>
+        /// Points the importer's own runtime override table at modder-supplied prefabs.
+        /// </summary>
+        /// <remarks>
+        /// The game already owns this mechanism — <c>UgcRuntimeAssetConfig.SetRuntimeOverride</c> is public
+        /// and the importer consults it while resolving each entity. All this does is fill that table, so an
+        /// unresolvable symbol costs the substitution and nothing else.
+        /// </remarks>
+        private void ApplyAssetOverrides(object controller, IReadOnlyList<WorldAssetOverride> assetOverrides)
+        {
+            if (assetOverrides == null || assetOverrides.Count == 0)
+            {
+                return;
+            }
+
+            var assetConfig = GetRuntimeAssetConfig(controller);
+            if (assetConfig == null)
+            {
+                logger.Debug("Worlds found no runtime asset config; asset overrides will not apply.");
+                return;
+            }
+
+            var setOverride = assetConfig.GetType().GetMethod("SetRuntimeOverride", PublicInstance);
+            if (setOverride == null)
+            {
+                logger.Debug("Worlds found no runtime override entry point; asset overrides will not apply.");
+                return;
+            }
+
+            foreach (var item in assetOverrides)
+            {
+                // Safe contracts keep Unity objects opaque on purpose. This bridge is the native adapter, so
+                // it unwraps the manager-owned prefab handle only here, inside the implementation assembly.
+                UnityEngine.GameObject? prefab;
+                try
+                {
+                    prefab = item.Prefab.GetType()
+                        .GetProperty("Prefab", AnyInstance)
+                        ?.GetValue(item.Prefab) as UnityEngine.GameObject;
+                }
+                catch (Exception ex)
+                {
+                    logger.Debug(
+                        "Worlds could not unwrap asset override '" + item.AssetId + "': " + Unwrap(ex).Message);
+                    continue;
+                }
+
+                if (prefab == null)
+                {
+                    logger.Warn(
+                        "Worlds skipped asset override '" + item.AssetId
+                        + "': its prefab did not come from the active TopiaForge asset provider.");
+                    continue;
+                }
+
+                UnityEngine.Vector3? offset = null;
+                if (item.LocalPositionOffset.HasValue)
+                {
+                    var value = item.LocalPositionOffset.Value;
+                    offset = new UnityEngine.Vector3(value.X, value.Y, value.Z);
+                }
+
+                try
+                {
+                    setOverride.Invoke(assetConfig, new object?[] { item.AssetId, prefab, offset });
+                }
+                catch (Exception ex)
+                {
+                    logger.Debug(
+                        "Worlds could not set asset override '" + item.AssetId + "': " + Unwrap(ex).Message);
+                }
+            }
+        }
+
+        /// <summary>Empties the importer's runtime override table, leaving the game's own catalog in charge.</summary>
+        private void ClearAssetOverrides()
+        {
+            try
+            {
+                if (importHostControllerType == null)
+                {
+                    return;
+                }
+
+                var controller = UnityEngine.Object.FindAnyObjectByType(importHostControllerType);
+                if (controller == null)
+                {
+                    return;
+                }
+
+                var assetConfig = GetRuntimeAssetConfig(controller);
+                assetConfig?.GetType()
+                    .GetMethod("ClearRuntimeOverrides", PublicInstance)
+                    ?.Invoke(assetConfig, null);
+            }
+            catch (Exception ex)
+            {
+                logger.Debug("Worlds could not clear asset overrides: " + Unwrap(ex).Message);
+            }
+        }
+
+        private object? GetRuntimeAssetConfig(object controller) =>
+            importHostControllerType?.GetProperty("RuntimeAssetConfig", PublicInstance)?.GetValue(controller);
 
         /// <summary>Puts the game's own import selection back, if this bridge ever overrode it.</summary>
         private void RestoreConfigSelection()

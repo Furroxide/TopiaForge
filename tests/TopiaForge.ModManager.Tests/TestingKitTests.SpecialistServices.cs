@@ -145,6 +145,50 @@ namespace TopiaForge.ModManager.Tests
             context.AssertNoLeaks();
         }
 
+        private static void TestWorldAssetOverrideFake()
+        {
+            var context = new FakeModContext();
+            var worlds = new FakeWorldGamemodeService(context.Lifetime);
+            var bundle = context.Assets.LoadBundleAsync("worlds/testing.bundle").Result.Value!;
+            var first = context.Assets.LoadPrefabAsync(bundle, "Tree").Result.Value!;
+            var second = context.Assets.LoadPrefabAsync(bundle, "Rock").Result.Value!;
+
+            var registered = worlds.RegisterAssetOverride(
+                new WorldAssetOverride("@author/tree", first, new Vec3(0f, 1f, 0f)));
+            Assert(registered.TryGetValue(out var lease) && worlds.AssetOverrides.Count == 1 &&
+                   worlds.AssetOverrides[0].AssetId == "@author/tree" &&
+                   worlds.AssetOverrides[0].LocalPositionOffset.HasValue,
+                "Registering an asset override should expose it with its offset.");
+
+            // One prefab per id, matching the game's own table: the second registration wins.
+            var replaced = worlds.RegisterAssetOverride(new WorldAssetOverride("@author/tree", second));
+            Assert(replaced.TryGetValue(out var replacementLease) && worlds.AssetOverrides.Count == 1 &&
+                   ReferenceEquals(worlds.AssetOverrides[0].Prefab, second),
+                "Re-registering an asset id should replace the earlier override rather than fail.");
+
+            // The superseded lease is inert: disposing it must not evict the override that replaced it.
+            lease!.Dispose();
+            Assert(worlds.AssetOverrides.Count == 1 &&
+                   ReferenceEquals(worlds.AssetOverrides[0].Prefab, second),
+                "Disposing a superseded override lease should not remove its replacement.");
+
+            replacementLease!.Dispose();
+            Assert(worlds.AssetOverrides.Count == 0,
+                "Disposing the live override lease should remove the override.");
+
+            var rejected = false;
+            try
+            {
+                worlds.RegisterAssetOverride(new WorldAssetOverride(" ", first));
+            }
+            catch (ArgumentException)
+            {
+                rejected = true;
+            }
+
+            Assert(rejected, "A blank asset id should be rejected at construction.");
+        }
+
         private static void TestWorldPauseMenuFake()
         {
             var context = new FakeModContext();

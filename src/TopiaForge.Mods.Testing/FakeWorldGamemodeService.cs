@@ -15,6 +15,8 @@ namespace TopiaForge.Mods.Testing
             new Dictionary<string, GamemodeDefinition>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, GamemodeMenuEntry> entries =
             new Dictionary<string, GamemodeMenuEntry>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, AssetOverrideLease> assetOverrides =
+            new Dictionary<string, AssetOverrideLease>(StringComparer.Ordinal);
         private PendingLoad? pending;
 
         /// <summary>Creates a fake Worlds service owned by a mod lifetime.</summary>
@@ -237,6 +239,74 @@ namespace TopiaForge.Mods.Testing
             CurrentSession = null;
             SessionEnded?.Invoke(new WorldSessionEnd(ended, reason));
             return OperationResult<bool>.Success(true);
+        }
+
+        /// <inheritdoc />
+        /// <remarks>
+        /// Mirrors the runtime provider: a second registration for the same asset id replaces the first and
+        /// deactivates its lease, because the game holds one prefab per id.
+        /// </remarks>
+        public OperationResult<IDisposable> RegisterAssetOverride(WorldAssetOverride assetOverride)
+        {
+            if (assetOverride == null)
+            {
+                throw new ArgumentNullException(nameof(assetOverride));
+            }
+
+            if (assetOverrides.TryGetValue(assetOverride.AssetId, out var existing))
+            {
+                existing.Deactivate();
+            }
+
+            var lease = new AssetOverrideLease(this, assetOverride);
+            assetOverrides[assetOverride.AssetId] = lease;
+            return OperationResult<IDisposable>.Success(lifetime.Track(lease));
+        }
+
+        /// <summary>Gets the overrides registered and not yet disposed, in registration order.</summary>
+        public IReadOnlyList<WorldAssetOverride> AssetOverrides
+        {
+            get
+            {
+                var snapshot = new List<WorldAssetOverride>(assetOverrides.Count);
+                foreach (var lease in assetOverrides.Values)
+                {
+                    snapshot.Add(lease.Override);
+                }
+
+                return snapshot;
+            }
+        }
+
+        private void ReleaseAssetOverride(AssetOverrideLease lease)
+        {
+            if (assetOverrides.TryGetValue(lease.Override.AssetId, out var current)
+                && ReferenceEquals(current, lease))
+            {
+                assetOverrides.Remove(lease.Override.AssetId);
+            }
+        }
+
+        private sealed class AssetOverrideLease : IDisposable
+        {
+            private FakeWorldGamemodeService? owner;
+
+            public AssetOverrideLease(FakeWorldGamemodeService owner, WorldAssetOverride assetOverride)
+            {
+                this.owner = owner;
+                Override = assetOverride;
+            }
+
+            public WorldAssetOverride Override { get; }
+
+            public void Deactivate() => owner = null;
+
+            public void Dispose()
+            {
+                var service = owner;
+                owner = null;
+                service?.ReleaseAssetOverride(this);
+            }
         }
 
         private OperationResult<WorldSession> CompleteLoad(WorldLoadRequest request)

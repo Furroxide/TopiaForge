@@ -14,6 +14,9 @@ namespace TopiaForge.Worlds
     /// </remarks>
     public sealed partial class WorldsService
     {
+        private readonly Dictionary<string, AssetOverrideLease> assetOverrides =
+            new Dictionary<string, AssetOverrideLease>(StringComparer.Ordinal);
+
         private UgcImportHostBridge? importHost;
 
         /// <summary>Gets or sets whether local exports may be loaded (WorldsConfig.EnableLocalWorlds).</summary>
@@ -63,6 +66,59 @@ namespace TopiaForge.Worlds
         }
 
         /// <summary>
+        /// Resolves an authored asset id to a prefab this mod supplies, for the next local-world import.
+        /// </summary>
+        /// <remarks>
+        /// Registering the same id twice replaces the earlier override and deactivates its lease, matching
+        /// the game's own table, which holds one prefab per id. The alternative — refusing the second
+        /// registration — leaves the caller unable to correct an override it already owns.
+        /// </remarks>
+        public OperationResult<IDisposable> RegisterAssetOverride(WorldAssetOverride assetOverride)
+        {
+            ThrowIfDisposed();
+
+            if (assetOverride == null)
+            {
+                throw new ArgumentNullException(nameof(assetOverride));
+            }
+
+            if (assetOverrides.TryGetValue(assetOverride.AssetId, out var existing))
+            {
+                existing.Deactivate();
+            }
+
+            var lease = new AssetOverrideLease(this, assetOverride);
+            assetOverrides[assetOverride.AssetId] = lease;
+            return OperationResult<IDisposable>.Success(lease);
+        }
+
+        /// <summary>Snapshots the live overrides so an import is not exposed to concurrent edits.</summary>
+        private IReadOnlyList<WorldAssetOverride> SnapshotAssetOverrides()
+        {
+            if (assetOverrides.Count == 0)
+            {
+                return Array.Empty<WorldAssetOverride>();
+            }
+
+            var snapshot = new List<WorldAssetOverride>(assetOverrides.Count);
+            foreach (var lease in assetOverrides.Values)
+            {
+                snapshot.Add(lease.Override);
+            }
+
+            return snapshot;
+        }
+
+        private void ReleaseAssetOverride(AssetOverrideLease lease)
+        {
+            if (assetOverrides.TryGetValue(lease.Override.AssetId, out var current)
+                && ReferenceEquals(current, lease))
+            {
+                assetOverrides.Remove(lease.Override.AssetId);
+            }
+        }
+
+        /// <summary>
         /// Imports one local export into the active scene through the game's own import host.
         /// </summary>
         /// <param name="requestedPath">An absolute path inside the folder, or a file name relative to it.</param>
@@ -95,14 +151,45 @@ namespace TopiaForge.Worlds
                 return false;
             }
 
-            return ImportHost.TryImport(plan, out error);
+            return ImportHost.TryImport(plan, SnapshotAssetOverrides(), out error);
         }
 
         private void DisposeLocalWorlds()
         {
+            foreach (var lease in assetOverrides.Values)
+            {
+                lease.Deactivate();
+            }
+
+            assetOverrides.Clear();
+
             var host = importHost;
             importHost = null;
             host?.Dispose();
+        }
+
+        /// <summary>One registered override; disposing it removes the entry.</summary>
+        private sealed class AssetOverrideLease : IDisposable
+        {
+            private WorldsService? owner;
+
+            public AssetOverrideLease(WorldsService owner, WorldAssetOverride assetOverride)
+            {
+                this.owner = owner;
+                Override = assetOverride;
+            }
+
+            public WorldAssetOverride Override { get; }
+
+            /// <summary>Drops the owner link without touching the table, for replacement and teardown.</summary>
+            public void Deactivate() => owner = null;
+
+            public void Dispose()
+            {
+                var service = owner;
+                owner = null;
+                service?.ReleaseAssetOverride(this);
+            }
         }
     }
 }

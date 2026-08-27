@@ -595,6 +595,57 @@
       "returnType": "System.String"
     },
     {
+      "id": "worlds.prop.ugcImportHostSceneController.runtimeAssetConfig",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostSceneController",
+      "member": "RuntimeAssetConfig",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Substituting mod-supplied prefabs for authored asset ids on import",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:383",
+      "returnType": "UgcRuntimeAssetConfig"
+    },
+    {
+      "id": "worlds.method.ugcRuntimeAssetConfig.setRuntimeOverride",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcRuntimeAssetConfig",
+      "member": "SetRuntimeOverride",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Substituting mod-supplied prefabs for authored asset ids on import",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:303",
+      "parameters": [
+        {
+          "type": "System.String",
+          "constrained": true
+        },
+        {
+          "type": "UnityEngine.GameObject",
+          "constrained": true
+        },
+        {
+          "type": "System.Nullable<UnityEngine.Vector3>",
+          "constrained": true
+        }
+      ],
+      "returnType": "System.Void"
+    },
+    {
+      "id": "worlds.method.ugcRuntimeAssetConfig.clearRuntimeOverrides",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcRuntimeAssetConfig",
+      "member": "ClearRuntimeOverrides",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Restoring the game's own catalog when the importer is released",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:373",
+      "parameters": [],
+      "returnType": "System.Void"
+    },
+    {
       "id": "worlds.method.ugcExportLoader.tryLoadProject",
       "kind": "Method",
       "assembly": "GameCode",
