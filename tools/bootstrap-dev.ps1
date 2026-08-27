@@ -254,7 +254,20 @@ else {
     Write-Warning "A usable Node.js 24.16+/npm toolchain was not found; the documentation portal will not be restored."
 }
 
-Invoke-Checked $git @("config", "core.hooksPath", ".githooks")
+# Claim core.hooksPath only when the clone has not already been pointed somewhere else. Overwriting
+# it silently disables whatever the configured directory was doing (signing helpers, secret scanners,
+# a company-mandated suite) and the developer gets no indication that it stopped running.
+$configuredHooksPath = (& $git config --get core.hooksPath 2>$null | Select-Object -First 1)
+if ($null -ne $configuredHooksPath) {
+    $configuredHooksPath = $configuredHooksPath.Trim()
+}
+if ([string]::IsNullOrWhiteSpace($configuredHooksPath)) {
+    Invoke-Checked $git @("config", "core.hooksPath", ".githooks")
+}
+elseif ($configuredHooksPath -ne ".githooks") {
+    Write-Host "  Git hooks: keeping the configured core.hooksPath '$configuredHooksPath'."
+    Write-Warning "core.hooksPath is '$configuredHooksPath', so the tracked .githooks do not run directly. Have that directory forward to them, or run 'git config core.hooksPath .githooks', or the Git LFS integration will not apply."
+}
 if ($IsWindows) {
     Invoke-Checked $git @("config", "core.longpaths", "true")
 }
