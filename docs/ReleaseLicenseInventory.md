@@ -1,6 +1,6 @@
 # TopiaForge release license inventory
 
-Status for `1.0.0-rc.1`: **owned-surface audit complete; redistribution audit
+Status for `0.1.0-rc.1`: **owned-surface audit complete; redistribution audit
 re-opened.** `P0-OSS-01` was re-opened on 2026-08-06 — see
 [`LaunchBlockers.md`](LaunchBlockers.md). The inventory below is a fixed
 allowlist that proves the licence texts it names exist; it does **not** prove
@@ -11,7 +11,7 @@ a record of what has been reviewed, not as evidence that the surface is closed.
 TopiaForge-owned code and content are licensed under the GNU Affero General
 Public License, version 3 or later (`AGPL-3.0-or-later`), with
 `Copyright (C) 2026 furroxide`. Contributions made after the
-`v1.0.0-rc.1` cutover use Developer Certificate of Origin 1.1 sign-off;
+`v0.1.0-rc.1` cutover use Developer Certificate of Origin 1.1 sign-off;
 inbound terms match outbound terms. Existing history is grandfathered.
 Third-party materials retain their original licenses and are not relicensed by
 the project AGPL grant.
@@ -23,11 +23,11 @@ This supersedes the earlier MIT declaration.
 | Surface | Declaration and placement |
 | --- | --- |
 | Repository and platform archives | Root `LICENSE`; release packaging copies `LICENSE` and `DCO` beside the product payload. |
-| Sixteen first-party mods | SPDX `AGPL-3.0-or-later` and package-relative `LICENSE`; the packer injects the reviewed shared mod license into every first-party archive. |
-| Twelve SDK NuGet packages | `PackageLicenseExpression` is `AGPL-3.0-or-later` through the shared pack policy or an equivalent project declaration. |
-| VPM resolver, world companion, and UGC companion | SPDX `AGPL-3.0-or-later` in each `package.json` with the complete license text in the package directory. |
+| Fourteen first-party mods | SPDX `AGPL-3.0-or-later` and package-relative `LICENSE`; the packer injects the reviewed shared mod license into every first-party archive. |
+| Eleven SDK NuGet packages | `PackageLicenseExpression` is `AGPL-3.0-or-later` through the shared pack policy or an equivalent project declaration. |
+| VPM resolver and world companion | SPDX `AGPL-3.0-or-later` in each `package.json` with the complete license text in the package directory. |
 | Flutter launcher UI package | Complete license text in `packages/launcher_ui/LICENSE`. |
-| CLI, launcher domain/data, sidecar, website, templates, samples, and repository tooling | Covered by the root license unless a more specific adjacent third-party notice applies. |
+| CLI, launcher domain/data, website, templates, samples, and repository tooling | Covered by the root license unless a more specific adjacent third-party notice applies. |
 
 The SDK packages are licensed on the same terms as the rest of the project, with
 no linking exception. A mod distributed against the TopiaForge SDK is therefore
@@ -64,6 +64,6 @@ checks pass.
 
 The canonical DCO 1.1 text is checked in as `DCO`; `CONTRIBUTING.md` explains
 the required `Signed-off-by` trailer. The PR policy begins enforcing trailers
-for commits introduced after the immutable `v1.0.0-rc.1` cutover tag. The
+for commits introduced after the immutable `v0.1.0-rc.1` cutover tag. The
 repository web-commit sign-off setting is enabled at that cutover so GitHub
 authored commits can carry the same certification.

@@ -117,8 +117,13 @@ jobs:
           --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
           -c Release -- --source public --cache-key-only
 
-      - name: Cache Robotopia managed refs
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      # Restore-only. This job checks out a caller-supplied ref, so letting it
+      # write the cache would let that ref plant an entry the default branch
+      # later restores -- and a cache hit is currently accepted on a structural
+      # check alone, without re-asserting the pinned archive SHA-256. Entries
+      # are populated by ci.yml on trusted refs instead.
+      - name: Restore cached Robotopia managed refs
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/robotopia-managed-refs-cache
           key: ${{ steps.refs-cache.outputs.key }}
@@ -133,7 +138,7 @@ jobs:
           --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
           -c Release -- --source public --require-latest
 
-      - name: Validate 12 SDK packages and all 7 C# harnesses
+      - name: Validate 11 SDK packages and all 7 C# harnesses
         shell: bash
         run: |
           set -euo pipefail
@@ -153,9 +158,6 @@ jobs:
             -c Release --nologo
           for output in "$RUNNER_TEMP/ecosystem-a" "$RUNNER_TEMP/ecosystem-b"; do
             dart run bin/topiaforge.dart pack --all --output "$output" --configuration Release
-            dart run bin/topiaforge.dart pack \
-              --project "$GITHUB_WORKSPACE/mods/TopiaForge.CreatorTools" \
-              --output "$output" --configuration Release
             dart run bin/topiaforge.dart unity pack-packages --output "$output/vpm"
             shopt -s nullglob
             packages=("$output"/*.topiaforgemod)
@@ -163,16 +165,12 @@ jobs:
             multiplayer_packages=(
               "$output"/io.github.furroxide.topiaforge.multiplayer-*.topiaforgemod
             )
-            creator_tools_packages=(
-              "$output"/io.github.furroxide.topiaforge.creatortools-*.topiaforgemod
-            )
             ui_gallery_packages=(
               "$output"/io.github.furroxide.topiaforge.uigallery-*.topiaforgemod
             )
-            test "${#packages[@]}" -eq 15
-            test "${#vpm_packages[@]}" -eq 3
+            test "${#packages[@]}" -eq 13
+            test "${#vpm_packages[@]}" -eq 2
             test "${#multiplayer_packages[@]}" -eq 1
-            test "${#creator_tools_packages[@]}" -eq 1
             test "${#ui_gallery_packages[@]}" -eq 0
             for package in "${packages[@]}"; do
               dart run bin/topiaforge.dart check package "$package"
@@ -325,8 +323,13 @@ jobs:
           --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
           -c Release -- --cache-key-only
 
-      - name: Cache Robotopia managed refs
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      # Restore-only. This job checks out a caller-supplied ref, so letting it
+      # write the cache would let that ref plant an entry the default branch
+      # later restores -- and a cache hit is currently accepted on a structural
+      # check alone, without re-asserting the pinned archive SHA-256. Entries
+      # are populated by ci.yml on trusted refs instead.
+      - name: Restore cached Robotopia managed refs
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/robotopia-managed-refs-cache
           key: ${{ steps.refs-cache.outputs.key }}
@@ -498,7 +501,7 @@ jobs:
             "$fake_game/Robotopia_Data/Managed"
           printf 'game fixture\n' >"$fake_game/Robotopia.exe"
           printf 'managed fixture\n' >"$fake_game/Robotopia_Data/Managed/UnityEngine.dll"
-          printf '{"id":"2309"}\n' >"$fake_game/installed-build.json"
+          printf '{"id":"2409"}\n' >"$fake_game/installed-build.json"
           game_for_cli="$fake_game"
           if [ "${{ matrix.platform }}" = "windows" ]; then
             game_for_cli="$(cygpath -w "$fake_game")"

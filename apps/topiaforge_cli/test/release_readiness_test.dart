@@ -7,12 +7,16 @@ import 'package:test/test.dart';
 import 'package:topiaforge/src/release_metadata_readiness.dart';
 import 'package:topiaforge/src/release_readiness.dart';
 
-void main() {
-  const targetSha = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-  late String repositoryRoot;
-  late List<int> readinessBytes;
-  late List<int> schemaBytes;
+part 'release_readiness_git_test_part.dart';
 
+/// Shared across both halves of this suite: the parts are one library, so the
+/// fixtures `setUpAll` fills are top-level rather than locals of `main`.
+const targetSha = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+late String repositoryRoot;
+late List<int> readinessBytes;
+late List<int> schemaBytes;
+
+void main() {
   setUpAll(() {
     repositoryRoot = _repositoryRoot();
     readinessBytes = File(
@@ -26,7 +30,7 @@ void main() {
   test('current decision is an honest blocked exact-gate summary', () {
     final decision = _parse(readinessBytes, schemaBytes, targetSha: targetSha);
 
-    expect(decision.releaseVersion, '1.0.0-rc.1');
+    expect(decision.releaseVersion, '0.1.0-rc.1');
     expect(decision.status, 'blocked');
     expect(decision.isReady, isFalse);
     expect(decision.gates, hasLength(12));
@@ -50,6 +54,16 @@ void main() {
       ),
       isTrue,
     );
+    // Every gate is blocked, so the computed status is decided entirely by
+    // which of them the contract declares blocking. Pin that set: silently
+    // downgrading one is exactly the change this file exists to catch.
+    expect(
+      decision.gates
+          .where((gate) => gate.enforcement == 'blocking')
+          .map((gate) => gate.id),
+      ['P0-IP-01', 'P0-OSS-01', 'P0-PRIV-01', 'P0-CRED-01', 'P0-GAME-01'],
+    );
+    expect(decision.gates.where((gate) => gate.blocksRelease), hasLength(5));
 
     final publicSummary = decision.toPublicSummary();
     expect(publicSummary.keys, {
@@ -60,6 +74,10 @@ void main() {
       'status',
       'gates',
     });
+    for (final gate in publicSummary['gates']! as List) {
+      expect((gate as Map)['enforcement'], anyOf('advisory', 'blocking'));
+    }
+
     final encoded = jsonEncode(publicSummary);
     for (final forbidden in const [
       'hostname',
@@ -89,7 +107,13 @@ void main() {
     final readinessGate = _at(readinessSchema, ['definitions', 'gate']);
     final bomGate = _at(bomSchema, ['definitions', 'readinessGate']);
 
-    for (final field in const ['id', 'reasonCode', 'status', 'priority']) {
+    for (final field in const [
+      'id',
+      'reasonCode',
+      'status',
+      'priority',
+      'enforcement',
+    ]) {
       expect(
         _at(bomGate, ['properties', field])['enum'],
         _at(readinessGate, ['properties', field])['enum'],
@@ -98,6 +122,13 @@ void main() {
             'schemas.',
       );
     }
+
+    expect(
+      bomGate['required'],
+      readinessGate['required'],
+      reason:
+          'Gate required fields differ between the readiness and BOM schemas.',
+    );
 
     expect(
       _at(bomGate, ['properties', 'reviewerRoles', 'items'])['enum'],
@@ -204,6 +235,80 @@ void main() {
     );
   });
 
+  test('advisory gates are reported but do not hold the candidate', () {
+    // The 0.x posture: approving only the five blocking gates reaches `ready`
+    // while the seven advisory gates are still recorded as blocked.
+    final ready = _readinessJson(readinessBytes);
+    const blocking = {
+      'P0-IP-01',
+      'P0-OSS-01',
+      'P0-PRIV-01',
+      'P0-CRED-01',
+      'P0-GAME-01',
+    };
+    for (final rawGate in ready['gates']! as List) {
+      final gate = rawGate as Map;
+      final id = gate['id']! as String;
+      if (!blocking.contains(id)) continue;
+      gate['status'] = 'approved';
+      gate.remove('reasonCode');
+      gate['evidenceIds'] = ['EVID-$id-0001'];
+    }
+    ready['status'] = 'ready';
+
+    final decision = _parseJson(ready, schemaBytes);
+    expect(decision.isReady, isTrue);
+    expect(
+      decision.gates.where((gate) => gate.status == 'blocked'),
+      hasLength(7),
+    );
+
+    // One blocking gate left unapproved still stops the release.
+    final held = _readinessJson(utf8.encode(jsonEncode(ready)))
+      ..['status'] = 'blocked';
+    final ip = (held['gates']! as List).cast<Map>().singleWhere(
+      (gate) => gate['id'] == 'P0-IP-01',
+    );
+    ip['status'] = 'blocked';
+    ip['reasonCode'] = 'approval-evidence-missing';
+    ip['evidenceIds'] = <String>[];
+    expect(_parseJson(held, schemaBytes).isReady, isFalse);
+  });
+
+  test('rejects a decision that relaxes its own enforcement', () {
+    // The decision file is untrusted input. If it could declare a blocking gate
+    // advisory, a candidate could unblock itself by editing one word.
+    final relaxed = _readinessJson(readinessBytes);
+    (relaxed['gates']! as List).cast<Map>().singleWhere(
+      (gate) => gate['id'] == 'P0-IP-01',
+    )['enforcement'] = 'advisory';
+    expect(
+      () => _parseJson(relaxed, schemaBytes),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('wrong identity'),
+        ),
+      ),
+    );
+
+    final unknownEnforcement = _readinessJson(readinessBytes);
+    (unknownEnforcement['gates']! as List).cast<Map>().singleWhere(
+      (gate) => gate['id'] == 'P0-WIN-01',
+    )['enforcement'] = 'optional';
+    expect(
+      () => _parseJson(unknownEnforcement, schemaBytes),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('schema-invalid'),
+        ),
+      ),
+    );
+  });
+
   test('rejects aggregate, exact-set, role, and unknown-field drift', () {
     final aggregate = _readinessJson(readinessBytes)..['status'] = 'ready';
     expect(
@@ -261,151 +366,7 @@ void main() {
     );
   });
 
-  test(
-    'loads readiness and schema only from the exact target commit',
-    () async {
-      final temp = Directory.systemTemp.createTempSync(
-        'topiaforge-readiness-git-',
-      );
-      try {
-        final readinessFile = File(p.join(temp.path, releaseReadinessPath))
-          ..createSync(recursive: true)
-          ..writeAsBytesSync(readinessBytes);
-        File(
-          p.join(temp.path, 'TopiaForge.slnx'),
-        ).writeAsStringSync('<Solution />');
-        File(p.join(temp.path, releaseReadinessSchemaPath))
-          ..createSync(recursive: true)
-          ..writeAsBytesSync(schemaBytes);
-        _git(temp.path, ['init', '--quiet']);
-        _git(temp.path, ['config', 'user.name', 'Release Readiness Test']);
-        _git(temp.path, [
-          'config',
-          'user.email',
-          'release-readiness@example.invalid',
-        ]);
-        _git(temp.path, ['add', '--', releaseReadinessPath]);
-        _git(temp.path, ['add', '--', releaseReadinessSchemaPath]);
-        _git(temp.path, ['commit', '--quiet', '-m', 'test: freeze readiness']);
-        final commit = _git(temp.path, ['rev-parse', 'HEAD']).trim();
-
-        final workingTreeDrift = _readinessJson(readinessBytes)
-          ..['status'] = 'ready';
-        readinessFile.writeAsStringSync(jsonEncode(workingTreeDrift));
-        File(p.join(temp.path, releaseReadinessSchemaPath)).deleteSync();
-
-        final decision = await ReleaseReadinessDecision.loadAtGitSha(
-          repositoryRoot: temp.path,
-          targetSha: commit,
-          expectedReleaseVersion: '1.0.0-rc.1',
-        );
-        expect(decision.status, 'blocked');
-        expect(decision.targetSha, commit);
-        final metadataReadiness = await ReleaseMetadataReadiness.load(
-          repositoryRoot: temp.path,
-          version: '1.0.0-rc.1',
-          targetSha: commit,
-          allowUnresolved: true,
-        );
-        expect(metadataReadiness.status, 'blocked');
-        expect(metadataReadiness.blobSha256, decision.readinessBlobSha256);
-        expect(metadataReadiness.summary, decision.toPublicSummary());
-        expect(metadataReadiness.blockingReasons, hasLength(12));
-        final bomSchema = _readinessBomSchema(repositoryRoot);
-        final bomSchemaResult = bomSchema.validate(
-          metadataReadiness.toBomJson(),
-        );
-        expect(
-          bomSchemaResult.isValid,
-          isTrue,
-          reason: bomSchemaResult.errors.join('\n'),
-        );
-        final tamperedBinding = metadataReadiness.toBomJson()
-          ..['binding'] = 'working-tree';
-        expect(bomSchema.validate(tamperedBinding).isValid, isFalse);
-        await expectLater(
-          ReleaseMetadataReadiness.load(
-            repositoryRoot: temp.path,
-            version: '1.0.0-rc.1',
-            targetSha: commit,
-            allowUnresolved: false,
-          ),
-          throwsA(
-            isA<StateError>().having(
-              (error) => error.message,
-              'message',
-              contains('Release readiness validation failed'),
-            ),
-          ),
-        );
-
-        final cli = await Process.run(Platform.resolvedExecutable, [
-          p.join(
-            repositoryRoot,
-            'apps',
-            'topiaforge_cli',
-            'bin',
-            'topiaforge.dart',
-          ),
-          'release',
-          'validate-readiness',
-          '--version',
-          '1.0.0-rc.1',
-          '--target-sha',
-          commit,
-        ], workingDirectory: temp.path);
-        expect(
-          cli.exitCode,
-          1,
-          reason: 'stdout: ${cli.stdout}\nstderr: ${cli.stderr}',
-        );
-        expect(cli.stderr, contains('P0-IP-01 is blocked'));
-
-        _git(temp.path, [
-          'rm',
-          '--force',
-          '--quiet',
-          '--',
-          releaseReadinessPath,
-        ]);
-        _git(temp.path, [
-          'commit',
-          '--quiet',
-          '-m',
-          'test: remove readiness decision',
-        ]);
-        final missingDecisionCommit = _git(temp.path, [
-          'rev-parse',
-          'HEAD',
-        ]).trim();
-        await expectLater(
-          ReleaseReadinessDecision.loadAtGitSha(
-            repositoryRoot: temp.path,
-            targetSha: missingDecisionCommit,
-            expectedReleaseVersion: '1.0.0-rc.1',
-          ),
-          throwsA(
-            isA<StateError>().having(
-              (error) => error.message,
-              'message',
-              contains('not tracked at the target commit'),
-            ),
-          ),
-        );
-        final unavailable = await ReleaseMetadataReadiness.load(
-          repositoryRoot: temp.path,
-          version: '1.0.0-rc.1',
-          targetSha: missingDecisionCommit,
-          allowUnresolved: true,
-        );
-        expect(unavailable.status, 'unavailable');
-        expect(unavailable.blobSha256, isNull);
-        expect(unavailable.summary, isNull);
-      } finally {
-        temp.deleteSync(recursive: true);
-      }
-    },
-  );
+  _exactTargetCommitTests();
 }
 
 ReleaseReadinessDecision _parse(
@@ -417,7 +378,7 @@ ReleaseReadinessDecision _parse(
     readinessBytes: readinessBytes,
     schemaBytes: schemaBytes,
     targetSha: targetSha,
-    expectedReleaseVersion: '1.0.0-rc.1',
+    expectedReleaseVersion: '0.1.0-rc.1',
   );
 }
 

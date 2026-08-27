@@ -9,7 +9,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="License: AGPL-3.0-or-later" src="https://img.shields.io/badge/license-AGPL--3.0--or--later-FF7A11?style=flat-square"></a>
   <a href="https://github.com/Furroxide/TopiaForge/actions/workflows/ci.yml"><img alt="CI status" src="https://img.shields.io/github/actions/workflow/status/Furroxide/TopiaForge/ci.yml?branch=dev&style=flat-square&label=ci&color=20F6FE"></a>
-  <a href="docs/"><img alt="Documentation" src="https://img.shields.io/badge/docs-44%20guides-20F6FE?style=flat-square"></a>
+  <a href="docs/"><img alt="Documentation" src="https://img.shields.io/badge/docs-43%20guides-20F6FE?style=flat-square"></a>
   <img alt="Project status: 0.x early" src="https://img.shields.io/badge/status-0.x%20early-E4B373?style=flat-square">
 </p>
 
@@ -48,8 +48,12 @@ confirmation, and rolled back automatically if the startup health handshake fail
 
 ## Build your first mod
 
-Only the pinned .NET SDK is required. Unity and Node are optional, for UGC live-sync and world
-authoring.
+Robotopia build 2409 ships **Robotopia Creator**, its own browser world editor, so the split is
+worth knowing before you start: the Creator owns what is *in* a world — scene layout, personalities,
+publishing — and TopiaForge owns what a world *does* — C# behaviour, gamemodes, runtime control, and
+local/CI tooling. [docs/CreatorScope.md](docs/CreatorScope.md) draws the line in full.
+
+Only the pinned .NET SDK is required. Unity is optional, and only to author custom-geometry worlds.
 
 ```sh
 topiaforge doctor --strict
@@ -106,15 +110,15 @@ The release-facing component and contract map is
 | **Mod loader** | BepInEx plugin that discovers, orders, and runs `.topiaforgemod` packages, with an in-game manager on `F10`. |
 | **Typed C# SDK** | 24 owner-scoped services on `IModContext`. No Unity types, no game internals, no reflection handles. |
 | **Desktop launcher** | Detects and repairs the install, manages profiles, previews dependency and conflict plans, launches the game. |
-| **`topiaforge` CLI** | 28 commands covering scaffold, restore, build, test, pack, validate, install, and release. |
+| **`topiaforge` CLI** | 27 commands covering scaffold, restore, build, test, pack, validate, install, and release. |
 | **In-game UI kit** | Declarative `UiNode` trees rendered by TopiaForgeUi — HUDs, windows, modals, toasts, with accessibility built in. See [docs/UiKit.md](docs/UiKit.md). |
 | **7 mod templates** | `minimal`, `gameplay`, `gamemode`, `service`, `ui`, `asset`, `world` — each scaffolded, built, packed, and validated in CI. |
-| **16 first-party mods** | Working reference implementations, from physics toys to a wave-survival showcase. See [docs/FirstPartyMods.md](docs/FirstPartyMods.md). |
+| **14 first-party mods** | Working reference implementations, from physics toys to a wave-survival showcase. See [docs/FirstPartyMods.md](docs/FirstPartyMods.md). |
 | **Build-time analyzers** | Roslyn diagnostics that fail the build on direct Unity, GameCode, or Harmony use, wrong target framework, or undeclared capabilities. |
-| **Optional modules** | RobotKit, Worlds, Chronos, Creator Content, Prompts, UGC, and Multiplayer, added atomically with `topiaforge mod add`. See [docs/Modules.md](docs/Modules.md). |
+| **Optional modules** | RobotKit, Worlds, Chronos, Creator Content, Prompts, and Multiplayer, added atomically with `topiaforge mod add`. See [docs/Modules.md](docs/Modules.md). |
 
 Authoring content instead of code? The launcher's Developer tab is a Creator-Companion-style cockpit
-for Unity projects, VPM packages, and UGC live-sync —
+for Unity projects, VPM packages, and template scaffolding —
 see [docs/CreatorCompanion.md](docs/CreatorCompanion.md).
 
 ## Status

@@ -171,7 +171,6 @@ namespace TopiaForge.ModManager.Tests
             var repositoryRoot = Program.FindRepoRoot();
             var expected = new HashSet<string>(new[]
             {
-                "mods/TopiaForge.UgcLiveSync/TopiaForge.UgcLiveSync.csproj",
                 "mods/TopiaForge.UiGallery/TopiaForge.UiGallery.csproj",
                 "mods/TopiaForge.Worlds/TopiaForge.Worlds.csproj",
                 "src/TopiaForge.ModManager/TopiaForge.ModManager.csproj"

@@ -1,6 +1,6 @@
 name: topiaforge
 description: Command-line developer tools for TopiaForge mods.
-version: 1.0.0-rc.1
+version: 0.1.0-rc.1
 publish_to: none
 
 environment:

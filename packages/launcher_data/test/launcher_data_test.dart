@@ -12,7 +12,6 @@ part 'launcher_data_test_helpers.dart';
 part 'installed_build_provenance_test_part.dart';
 part 'launcher_data_diagnostics_test_part.dart';
 part 'devtool_installation_test_part.dart';
-part 'launcher_data_ugc_test_part.dart';
 part 'profile_launch_test_part.dart';
 part 'runtime_repair_security_test_part.dart';
 part 'runtime_loader_payload_test_part.dart';
@@ -46,11 +45,6 @@ void main() {
     }
   });
 
-  _registerUgcDataTests(
-    repository: () => repository,
-    dataRoot: () => dataRoot,
-    gameRoot: () => gameRoot,
-  );
   _registerDiagnosticDataTests(
     repository: () => repository,
     dataRoot: () => dataRoot,

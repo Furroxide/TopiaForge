@@ -19,6 +19,60 @@ class ReleasePackageNoticeWriter {
   final String repositoryRoot;
   final ReleaseFileOps fileOps;
 
+  /// Copies every corresponding-source archive named by the vendored BepInEx
+  /// provenance into the package.
+  ///
+  /// UnityDoorstop ships as `winhttp.dll` inside the loader runtime and is
+  /// LGPL-2.1, so redistributing the binary obliges us to redistribute its
+  /// source too. Shipping only `LICENSES/UnityDoorstop-LGPL-2.1.txt` satisfies
+  /// the notice requirement and not the source one. The file list is read from
+  /// `provenance.json` rather than hard-coded so a Doorstop bump cannot
+  /// silently drop it, and a declared-but-missing archive throws instead of
+  /// being quietly skipped.
+  void copyBepInExCorrespondingSource(String destinationRoot) {
+    final bepInExRoot = Directory(
+      p.join(repositoryRoot, 'third_party', 'BepInEx'),
+    );
+    if (!bepInExRoot.existsSync()) {
+      // Nothing is being redistributed, so nothing has to accompany it.
+      return;
+    }
+    final provenanceFile = File(p.join(bepInExRoot.path, 'provenance.json'));
+    if (!provenanceFile.existsSync()) {
+      throw StateError(
+        'Missing third_party/BepInEx/provenance.json; '
+        'cannot resolve corresponding source.',
+      );
+    }
+    final provenance =
+        jsonDecode(
+              readBoundedTextFileSync(provenanceFile, maxBytes: 256 * 1024),
+            )
+            as Map<String, Object?>;
+    final entries = provenance['correspondingSource'];
+    if (entries is! List || entries.isEmpty) {
+      throw StateError(
+        'third_party/BepInEx/provenance.json declares no corresponding source.',
+      );
+    }
+    for (final entry in entries) {
+      final relative = (entry as Map<String, Object?>)['file'] as String?;
+      if (relative == null || relative.isEmpty || relative.contains('..')) {
+        throw StateError('Invalid corresponding-source file entry: $relative');
+      }
+      final source = File(p.join(bepInExRoot.path, relative));
+      if (!source.existsSync()) {
+        throw StateError(
+          'Corresponding source declared but missing: ${source.path}',
+        );
+      }
+      fileOps.copyFileIfExists(
+        source.path,
+        p.join(destinationRoot, 'third_party', 'BepInEx', relative),
+      );
+    }
+  }
+
   /// Copies and verifies notices for the exact managed validator dependencies
   /// that are installed beside the game-side loader.
   Future<void> copyRuntimeLoaderNotices(
@@ -100,7 +154,7 @@ class ReleasePackageNoticeWriter {
           'assembly': assembly.fileName,
           'assemblyVersion': assembly.assemblyVersion,
           'sha256': assembly.sha256,
-          'providedBy': 'Robotopia build 2309 Unity/Mono profile',
+          'providedBy': 'Robotopia build 2409 Unity/Mono profile',
         },
     ];
     File(p.join(destination.path, 'PROVENANCE.json')).writeAsStringSync(

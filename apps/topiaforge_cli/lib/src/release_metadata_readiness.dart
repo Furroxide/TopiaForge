@@ -50,9 +50,13 @@ final class ReleaseMetadataReadiness {
       );
     }
 
+    // Only a `blocking` gate makes the release non-distributable. Advisory
+    // gates stay in `summary`, which carries every gate's enforcement and
+    // status, so downgrading one hides nothing — it only stops it holding the
+    // candidate.
     final blockingReasons = [
       for (final gate in decision.gates)
-        if (!gate.satisfiesRelease)
+        if (gate.blocksRelease)
           'Release readiness gate ${gate.id} is ${gate.status}.',
     ];
     if (!decision.isReady && !allowUnresolved) {

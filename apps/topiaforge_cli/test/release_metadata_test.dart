@@ -19,7 +19,7 @@ void main() {
   setUp(() {
     temp = Directory.systemTemp.createTempSync('topiaforge-metadata-test-');
     root = _repositoryRoot();
-    release = TopiaForgeReleaseCatalog.load(root).release('1.0.0-rc.1');
+    release = TopiaForgeReleaseCatalog.load(root).release('0.1.0-rc.1');
     _writeCandidateAssets(temp, release);
   });
 
@@ -41,8 +41,8 @@ void main() {
 
     expect(result.isValid, isTrue, reason: result.errors.join('\n'));
     expect(catalogJson['schemaVersion'], 3);
-    expect(release.version, '1.0.0-rc.1');
-    expect(release.tag, 'v1.0.0-rc.1');
+    expect(release.version, '0.1.0-rc.1');
+    expect(release.tag, 'v0.1.0-rc.1');
     expect(release.prerelease, isTrue);
 
     final entryWithoutFlag = Map<String, Object?>.from(
@@ -144,7 +144,7 @@ void main() {
 
     expect(
       issues,
-      contains('Catalog prerelease false does not match version 1.0.0-rc.1.'),
+      contains('Catalog prerelease false does not match version 0.1.0-rc.1.'),
     );
   });
 
@@ -335,14 +335,14 @@ void main() {
     },
   );
 
-  test('V1 safe contract assembly identity survives patch releases', () async {
+  test('safe contract assembly identity survives patch releases', () async {
     final next = TopiaForgeReleaseCatalogEntry(
       version: release.version,
       tag: release.tag,
       prerelease: release.prerelease,
       status: release.status,
       notesFile: release.notesFile,
-      components: {...release.components, 'sdk': '1.0.1', 'unityUi': '1.0.1'},
+      components: {...release.components, 'sdk': '0.1.1', 'unityUi': '0.1.1'},
       vpmPackages: release.vpmPackages,
       mods: release.mods,
       excludedDeveloperMods: release.excludedDeveloperMods,
@@ -369,14 +369,14 @@ void main() {
 
     expect(
       issues,
-      contains('$abstractions Version 1.0.0-rc.1 does not match 1.0.1.'),
+      contains('$abstractions Version 0.1.0-rc.1 does not match 0.1.1.'),
     );
     expect(hasAssemblyIssue(abstractions), isFalse);
     expect(hasAssemblyIssue(unityUi), isFalse);
     expect(
       hasAssemblyIssue(interop),
       isTrue,
-      reason: 'the explicitly unstable interop package is not V1-frozen',
+      reason: 'the explicitly unstable interop package is not frozen',
     );
   });
 }

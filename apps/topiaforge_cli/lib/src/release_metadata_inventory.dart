@@ -248,8 +248,6 @@ class ReleaseMetadataInventoryBuilder {
           'io.github.furroxide.topiaforge.vpm-resolver/LICENSE.md',
       'templates/TopiaForge.UnityWorldTemplate/Packages/'
           'io.github.furroxide.topiaforge.world-companion/LICENSE.md',
-      'templates/unity-companion/Packages/'
-          'io.github.furroxide.topiaforge.ugc-companion/LICENSE.md',
     };
     if (paths.length < 9 || paths.length > 32) {
       throw StateError('License/notice inventory is incomplete or excessive.');

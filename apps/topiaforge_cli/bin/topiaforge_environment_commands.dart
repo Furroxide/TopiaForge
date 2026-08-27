@@ -97,153 +97,6 @@ extension _TopiaForgeEnvironmentCommands on _TopiaForgeCli {
     return recommendations;
   }
 
-  Future<int> _compat(List<String> args) async {
-    final result = await _runGameCompat(
-      managed: _option(args, '--managed'),
-      json: args.contains('--json'),
-    );
-    if (result == null) {
-      stderr.writeln('Could not run the GameCompat extractor.');
-      stderr.writeln(
-        '  Repair the TopiaForge release, or build src/TopiaForge.GameCompat.Extractor from source.',
-      );
-      return 1;
-    }
-    stdout.write(result.stdout);
-    final err = result.stderr as String;
-    if (err.isNotEmpty) {
-      stderr.write(err);
-    }
-    return result.exitCode;
-  }
-
-  Future<ProcessResult?> _runGameCompat({
-    String? managed,
-    bool json = false,
-  }) async {
-    final verifyArgs = <String>[
-      'verify',
-      if (managed != null) ...['--managed', managed],
-      '--format',
-      json ? 'json' : 'text',
-    ];
-
-    final packaged = const GameCompatExecutableLocator().findPackaged(
-      resolvedExecutable: Platform.resolvedExecutable,
-    );
-    if (packaged != null) {
-      return _runGameCompatExecutable(
-        packaged,
-        verifyArgs,
-        workingDirectory: File(packaged).parent.path,
-      );
-    }
-
-    final root = _findRepoRoot();
-    if (root == null) {
-      return null;
-    }
-
-    for (final config in ['Release', 'Debug']) {
-      final binDir =
-          '$root/src/TopiaForge.GameCompat.Extractor/bin/$config/net10.0';
-      for (final name in [
-        'TopiaForge.GameCompat.Extractor.exe',
-        'TopiaForge.GameCompat.Extractor',
-      ]) {
-        final exe = '$binDir/$name';
-        if (File(exe).existsSync()) {
-          return _runGameCompatExecutable(
-            exe,
-            verifyArgs,
-            workingDirectory: root,
-          );
-        }
-      }
-    }
-
-    late final DotnetSdkSelection dotnet;
-    try {
-      dotnet = await resolveRepositoryDotnetSdk(Directory(root));
-    } on Object catch (error) {
-      stderr.writeln(
-        'GameCompat could not select the repository .NET SDK: '
-        '${_environmentErrorMessage(error)}',
-      );
-      return null;
-    }
-    try {
-      final run = await runBoundedProcess(
-        dotnet.executable,
-        [
-          'run',
-          '--project',
-          '$root/src/TopiaForge.GameCompat.Extractor',
-          '-c',
-          'Release',
-          '--',
-          ...verifyArgs,
-        ],
-        workingDirectory: root,
-        timeout: _environmentDotnetTimeout,
-        maxStdoutBytes: _environmentDotnetOutputLimit ~/ 2,
-        maxStderrBytes: _environmentDotnetOutputLimit ~/ 2,
-      );
-      return ProcessResult(0, run.exitCode, run.stdout, run.stderr);
-    } on BoundedProcessException catch (error) {
-      stderr.writeln(
-        _environmentBoundedProcessFailure(
-          'GameCompat dotnet run',
-          dotnet.executable,
-          error,
-        ),
-      );
-      return null;
-    } on Object catch (error) {
-      stderr.writeln(
-        'GameCompat could not start the verified .NET host '
-        '${dotnet.executable}: '
-        '${_environmentErrorMessage(error)}',
-      );
-      return null;
-    }
-  }
-
-  Future<ProcessResult?> _runGameCompatExecutable(
-    String executable,
-    List<String> arguments, {
-    required String workingDirectory,
-  }) async {
-    try {
-      final run = await runBoundedProcess(
-        executable,
-        arguments,
-        workingDirectory: workingDirectory,
-        timeout: _gameCompatTimeout,
-        maxStdoutBytes: _gameCompatOutputLimit ~/ 2,
-        maxStderrBytes: _gameCompatOutputLimit ~/ 2,
-      );
-      return ProcessResult(0, run.exitCode, run.stdout, run.stderr);
-    } on BoundedProcessException catch (error) {
-      stderr.writeln(
-        _environmentBoundedProcessFailure(
-          'GameCompat extractor',
-          executable,
-          error,
-          timeout: _gameCompatTimeout,
-          combinedOutputLimit: _gameCompatOutputLimit,
-        ),
-      );
-      return null;
-    } on Object catch (error) {
-      stderr.writeln(
-        'GameCompat could not start $executable: '
-        '${_environmentErrorMessage(error)}',
-      );
-      return null;
-    }
-  }
-
   String? _findRepoRoot() {
     var dir = Directory.current;
     while (true) {
@@ -295,11 +148,8 @@ extension _TopiaForgeEnvironmentCommands on _TopiaForgeCli {
     stdout.writeln('');
     stdout.writeln('Build mods (.NET, required to develop):');
     _printChecks(env.ofPurpose(ToolPurpose.develop));
-    stdout.writeln('UGC live-sync (optional):');
-    _printChecks([
-      ...env.ofPurpose(ToolPurpose.ugcUnity),
-      ...env.ofPurpose(ToolPurpose.ugcAutomerge),
-    ]);
+    stdout.writeln('Custom worlds (optional):');
+    _printChecks(env.ofPurpose(ToolPurpose.customWorldUnity).toList());
     final other = env.ofPurpose(ToolPurpose.optional).toList();
     if (other.isNotEmpty) {
       stdout.writeln('Other:');
@@ -471,5 +321,3 @@ String _environmentBoundedProcessFailure(
 
 const _environmentDotnetTimeout = Duration(minutes: 10);
 const _environmentDotnetOutputLimit = 16 * 1024 * 1024;
-const _gameCompatTimeout = Duration(minutes: 2);
-const _gameCompatOutputLimit = 4 * 1024 * 1024;

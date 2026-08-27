@@ -30,7 +30,6 @@ namespace TopiaForge.SdkAcceptance
         private ITimeControlService? timeControl;
         private ICreatorContentService? creatorContent;
         private IPromptOverrideRegistry? promptOverrides;
-        private IUgcLiveSyncService? ugcLiveSync;
         private IWorldGamemodeService? worlds;
         private int mainThreadId;
         private bool activeSceneSeen;
@@ -747,7 +746,6 @@ namespace TopiaForge.SdkAcceptance
                     && timeControl != null
                     && promptOverrides != null
                     && robotObjectives != null
-                    && ugcLiveSync != null
                     && worlds != null)
                 {
                     lifecycleProbeRunning = true;

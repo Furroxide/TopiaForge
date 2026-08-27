@@ -6,7 +6,7 @@ import 'package:topiaforge/src/release_game_build_policy.dart';
 import 'package:test/test.dart';
 
 void main() {
-  const currentBuildId = 2309;
+  const currentBuildId = 2409;
   final root = _repositoryRoot();
   final metadata = _json(
     File(p.join(root, '.github', 'robotopia-game-build.json')),
@@ -75,17 +75,17 @@ void main() {
   test('validates a future build without changing validator code', () {
     final changedGame = _clone(metadata);
     final changedBaseline = _clone(baseline);
-    changedGame['buildId'] = 2310;
+    changedGame['buildId'] = 2510;
     final archives = changedGame['archives'] as Map;
-    (archives['windows'] as Map)['path'] = 'Robotopia-v02310-Win64.7z';
-    (archives['mac'] as Map)['path'] = 'Robotopia-v02310-Mac.7z';
-    changedBaseline['gameVersionLabel'] = 'build 2310';
-    changedBaseline['gameVersion'] = '0.0.2310';
+    (archives['windows'] as Map)['path'] = 'Robotopia-v02510-Win64.7z';
+    (archives['mac'] as Map)['path'] = 'Robotopia-v02510-Mac.7z';
+    changedBaseline['gameVersionLabel'] = 'build 2510';
+    changedBaseline['gameVersion'] = '0.0.2510';
 
     expect(
       validateRobotopiaGameBuildMetadata(
         metadata: changedGame,
-        policyBuildId: 2310,
+        policyBuildId: 2510,
         requireLatestAtRelease: true,
         baseline: changedBaseline,
       ),

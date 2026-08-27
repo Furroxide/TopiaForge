@@ -3,7 +3,7 @@
   "schemaVersion": 5,
   "name": "io.github.furroxide.topiaforge.worlds",
   "displayName": "TopiaForge Worlds",
-  "version": "1.0.0-rc.1",
+  "version": "0.1.0-rc.1",
   "author": {
     "name": "TopiaForge"
   },
@@ -11,9 +11,9 @@
   "entryAssembly": "TopiaForge.Worlds.dll",
   "entryType": "TopiaForge.Worlds.WorldsMod",
   "dependencies": {},
-  "supportedGameVersionRange": "0.0.2309",
-  "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
-  "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "supportedGameVersionRange": "0.0.2409",
+  "supportedLoaderVersionRange": ">=0.1.0-rc.1 <0.2.0",
+  "supportedSdkVersionRange": ">=0.1.0-rc.1 <0.2.0",
   "category": "Framework",
   "tags": [
     "worlds",

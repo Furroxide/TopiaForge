@@ -18,7 +18,6 @@ namespace TopiaForge.SdkAcceptance
                 var robotConversationProviders = Context.Extensions.GetAll<IRobotConversationService>();
                 var dialogueProviders = Context.Extensions.GetAll<IPlayerDialogueInputService>();
                 var worldProviders = Context.Extensions.GetAll<IWorldGamemodeService>();
-                var ugcProviders = Context.Extensions.GetAll<IUgcLiveSyncService>();
                 if (timeProviders.Count != 1
                     || creatorContentProviders.Count != 1
                     || promptProviders.Count != 1
@@ -27,12 +26,11 @@ namespace TopiaForge.SdkAcceptance
                     || robotBrainProviders.Count != 1
                     || robotConversationProviders.Count != 1
                     || dialogueProviders.Count != 1
-                    || worldProviders.Count != 1
-                    || ugcProviders.Count != 1)
+                    || worldProviders.Count != 1)
                 {
                     Fail(
                         "integration.provider-scope",
-                        "declared required providers and the installed optional UGC provider must each resolve exactly once");
+                        "declared required providers must each resolve exactly once");
                     return false;
                 }
 
@@ -45,14 +43,12 @@ namespace TopiaForge.SdkAcceptance
                 robotConversations = robotConversationProviders[0];
                 dialogueInput = dialogueProviders[0];
                 worlds = worldProviders[0];
-                ugcLiveSync = ugcProviders[0];
 
                 var versions = Context.Runtime.ProviderVersions;
                 if (!versions.ContainsKey("io.github.furroxide.topiaforge.chronos")
                     || !versions.ContainsKey("io.github.furroxide.topiaforge.creatorcontent")
                     || !versions.ContainsKey("io.github.furroxide.topiaforge.prompts")
                     || !versions.ContainsKey("io.github.furroxide.topiaforge.robotkit")
-                    || !versions.ContainsKey("io.github.furroxide.topiaforge.ugc.livesync")
                     || !versions.ContainsKey(WorldsModule.Id))
                 {
                     Fail("integration.provider-scope", "a resolved module is missing provider version metadata");
@@ -70,9 +66,7 @@ namespace TopiaForge.SdkAcceptance
                 }
 
                 if (!Context.TryGetExtension<ITimeControlService>(out var selectedTime)
-                    || !ReferenceEquals(selectedTime, timeControl)
-                    || !Context.TryGetExtension<IUgcLiveSyncService>(out var selectedUgc)
-                    || !ReferenceEquals(selectedUgc, ugcLiveSync))
+                    || !ReferenceEquals(selectedTime, timeControl))
                 {
                     Fail("integration.provider-scope", "deterministic first-provider selection did not match GetAll");
                     return false;
@@ -174,7 +168,7 @@ namespace TopiaForge.SdkAcceptance
 
                 Pass(
                     "integration.provider-scope",
-                    "required-singletons=9;optional-present=ugc;optional-absent="
+                    "required-singletons=9;optional-absent="
                     + MissingOptionalProviderId
                     + ";singleton-conflict=Conflict;multiple-order=first,second;early-release=clean");
                 return true;
