@@ -38,6 +38,9 @@ namespace TopiaForge.Mods
         /// <summary>Creates a scene lifecycle notification.</summary>
         /// <param name="sceneInstanceId">
         /// Process-local scene identity, or zero when an older/fake host cannot provide one.
+        /// Opaque: compare it for equality and nothing else. Any <see cref="int"/> is valid,
+        /// negatives included — the host supplies this from its own scene handle, and Unity's
+        /// is an opaque identifier with no documented sign guarantee.
         /// </param>
         /// <param name="sceneName">Name of the scene instance.</param>
         /// <param name="phase">The normalized lifecycle phase.</param>
@@ -55,11 +58,11 @@ namespace TopiaForge.Mods
             bool isActive,
             bool isInitial = false)
         {
-            if (sceneInstanceId < 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(sceneInstanceId));
-            }
-
+            // No sign check. This rejected every scene event on Robotopia 2409: the manager
+            // passes Unity's Scene.handle straight through, Unity handed back a negative one,
+            // and the throw landed inside SceneManager.sceneLoaded — so no mod ever received a
+            // scene event, while the loader still reported ready and last-run.json recorded no
+            // errors. The id is an opaque correlation key, so its sign was never ours to police.
             if (string.IsNullOrWhiteSpace(sceneName))
             {
                 throw new ArgumentException("A scene name is required.", nameof(sceneName));
