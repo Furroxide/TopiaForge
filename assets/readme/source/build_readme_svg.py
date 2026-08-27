@@ -5,15 +5,27 @@ Both variants come from one composition so they cannot drift. Colours are the
 canonical launcher tokens (packages/launcher_ui/lib/src/launcher_theme.dart) and
 the in-game HUD tokens (src/TopiaForge.Mods.UnityUi/Core/TopiaForgePalette.cs).
 
+Needs Pillow, and the brand PNGs pulled by Git LFS:
+
+    pip install Pillow
+    git lfs pull
     python build_readme_svg.py
+
+Runs from any working directory. Writes the four SVGs to assets/readme/.
 """
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-from pixel_marks import ICON_PNG, WORDMARK_PNG, mark_paths, robot_paths
+# pixel_marks sits beside this file. CPython normally puts that directory on
+# sys.path itself, but not under -P / PYTHONSAFEPATH, and not when this module
+# is imported rather than run. Add it explicitly so every invocation works.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from pixel_marks import ICON_PNG, WORDMARK_PNG, mark_paths, robot_paths  # noqa: E402
 
 OUT = Path(__file__).resolve().parent.parent
 

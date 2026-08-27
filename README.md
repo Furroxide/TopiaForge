@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./assets/readme/hero-dark.svg">
-    <img src="./assets/readme/hero-light.svg" width="100%"
+    <img src="./assets/readme/hero-light.svg"
          alt="TopiaForge — build mods for Robotopia without touching Unity, BepInEx, or game internals. A terminal shows the quickstart: topiaforge doctor --strict, topiaforge new mod, cd, topiaforge dev.">
   </picture>
 </p>
@@ -90,7 +90,7 @@ See [docs/CoreServices.md](docs/CoreServices.md) for all 24 services and
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./assets/readme/architecture-dark.svg">
-    <img src="./assets/readme/architecture-light.svg" width="100%"
+    <img src="./assets/readme/architecture-light.svg"
          alt="Architecture. In the game process: Robotopia (Unity Mono, HDRP) is loaded by BepInEx and UnityDoorstop, which load TopiaForge.ModManager. The loader owns ModManager.Core (Unity-free domain), Mods.Abstractions (V1 safe contracts), and Mods.UnityUi (in-game UI renderer). On the desktop, never loading game code: the Flutter/Bloc launcher and the Dart topiaforge CLI both sit on launcher_data (I/O and repair) and launcher_domain (pure Dart).">
   </picture>
 </p>

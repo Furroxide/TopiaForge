@@ -6,6 +6,11 @@ or fully transparent and only six colours appear, so this conversion is
 lossless. Horizontal runs of identical cells are merged, then grouped by colour
 into one <path> per colour, which keeps the emitted geometry small.
 
+Needs Pillow, and the brand PNGs pulled by Git LFS:
+
+    pip install Pillow
+    git lfs pull
+
 Run directly to print a standalone <g> fragment:
 
     python pixel_marks.py ../../../packages/launcher_ui/assets/brand/topiaforge-icon.png
