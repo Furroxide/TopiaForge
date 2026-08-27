@@ -380,11 +380,26 @@ ReleaseHandoffSigning _signingState(
   _ => throw StateError('Unsupported release handoff platform: $platform.'),
 };
 
+/// The `signingState` a Windows QA summary must record.
+///
+/// `build-windows.ps1` derives the same string from the same policy field and
+/// `New-WindowsQaSummary` propagates it, so this is the reader for a value the
+/// producers already condition. It exists as a function rather than a constant
+/// because a constant is exactly what went wrong: the QA validator asserted
+/// `authenticode-timestamped` unconditionally, which an unsigned build can only
+/// fail.
+String _windowsQaSigningState(TopiaForgeReleasePolicy policy) =>
+    policy.distributesWindowsUnsigned ? 'unsigned' : 'authenticode-timestamped';
+
 /// The evidence keys a platform bundle must carry.
 ///
 /// An unsigned Windows build produces no Authenticode evidence, so requiring
 /// the key would have made the bundle unsatisfiable; leaving it required *and*
 /// satisfied would have meant fabricating it.
+///
+/// This is the single source of truth for the set. Anything that needs to know
+/// which evidence keys exist for a platform must ask here rather than keep its
+/// own list, or the two drift and only the unsigned path notices.
 Set<String> _requiredEvidenceFor(
   String platform,
   TopiaForgeReleasePolicy policy,

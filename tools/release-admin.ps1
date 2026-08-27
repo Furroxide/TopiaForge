@@ -2519,9 +2519,15 @@ function Build-Handoff {
                     -ActualPath $retainedQaPath `
                     -Label "Frozen Windows QA summary"
             }
+            $arguments += @("--qa", $qaPath)
+            # The evidence set follows the recorded distribution mode, exactly as
+            # _requiredEvidenceFor does on the Dart side. The bundle validator
+            # compares the two sets for equality, so an unsigned build that sent
+            # this key anyway would fail on the extra entry.
+            if ($windowsDistribution -cne "unsigned") {
+                $arguments += @("--evidence", "authenticode=$validationSha")
+            }
             $arguments += @(
-                "--qa", $qaPath,
-                "--evidence", "authenticode=$validationSha",
                 "--evidence", "unity=$($validation.evidenceSha256.unity)",
                 "--evidence", "robotopia=$($validation.evidenceSha256.robotopia)"
             )
