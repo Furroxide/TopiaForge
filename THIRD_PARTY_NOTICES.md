@@ -29,7 +29,9 @@ Prism Launcher was used only as product maturity and UX inspiration. No Prism La
 TopiaForge launcher UI bundles Robotopia web brand assets from `https://robotopia.gg/` and local
 TopiaForge artwork for offline launcher theming.
 
-- Web-derived raster files: `topiaforge-city-header.webp`, `baby-stitch.webp`, and `sheriff.webp`
+- Web-derived raster files: `packages/launcher_ui/assets/brand/topiaforge-city-header.webp`,
+  `packages/launcher_ui/assets/brand/baby-stitch.webp`, and
+  `packages/launcher_ui/assets/brand/sheriff.webp`
 - Source: `https://robotopia.gg/`
 - Owner: **Tomato Cake.** These three files are Robotopia web brand assets and remain the property of
   Tomato Cake. TopiaForge does not claim any ownership of them, they are not covered by this project's

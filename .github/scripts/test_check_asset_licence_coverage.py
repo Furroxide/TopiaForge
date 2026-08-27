@@ -27,6 +27,10 @@ that directory.
 - Bundled at: `tools/unity-ui-bundle/Assets/TextMesh Pro/Fonts/LiberationSans.ttf`
 - Web-derived raster files: `sheriff.webp`
 
+The pixel robot replaced a previously bundled `robot.webp` taken from the web
+bundle. Prose in this file freely names directories such as mods and website
+without marking them as paths.
+
 ## First-party binary and generated assets
 
 - `packages/launcher_ui/assets/brand/topiaforge-icon.png` — the source mark.
@@ -70,10 +74,31 @@ class CoverageRuleTests(unittest.TestCase):
             )
         )
 
-    def test_bare_filename_in_prose_is_covered(self):
-        self.assertIsNotNone(
-            self.covered("packages/launcher_ui/assets/brand/sheriff.webp")
-        )
+    def test_bare_filename_is_not_enough(self):
+        # `sheriff.webp` appears in the notices as a filename only. A filename
+        # is not unique, so honouring it would let any new file inherit an
+        # unrelated entry by reusing the name. The real notices record these by
+        # full path for exactly this reason.
+        self.assertIsNone(self.covered("mods/Elsewhere/sheriff.webp"))
+
+    def test_prose_word_matching_a_directory_does_not_cover(self):
+        # The word "mods" occurs throughout the notices prose. A substring
+        # search treated that as a recorded directory and silently covered
+        # anything dropped in `mods/`.
+        self.assertIsNone(self.covered("mods/sneaky.png"))
+
+    def test_a_filename_the_notices_call_removed_does_not_cover(self):
+        # The notices mention `robot.webp` while explaining that it was
+        # *retired*. A substring search read that as coverage, so a brand-new
+        # unlicensed file could pass by taking the name of a deleted one.
+        self.assertIsNone(self.covered("mods/TopiaForge.Sandbox/robot.webp"))
+
+    def test_code_span_paths_are_read_from_the_notices(self):
+        spans = AUDIT_MODULE.recorded_paths(NOTICES)
+        self.assertIn("packages/launcher_ui/fonts", spans)
+        self.assertIn("robot.webp", spans)
+        # Prose words are not code spans, so they never become coverage.
+        self.assertNotIn("mods", spans)
 
     def test_blanket_licensed_tree_is_covered(self):
         self.assertIsNotNone(
