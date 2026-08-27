@@ -15,6 +15,7 @@ void writeReleaseQaFixtures({
   required String version,
   required String targetSha,
   required String ecosystemSha,
+  String windowsDistribution = 'signed',
 }) {
   final inventoryBytes = File(
     p.join(repositoryRoot, 'tests', 'live-game-acceptance.json'),
@@ -90,7 +91,11 @@ void writeReleaseQaFixtures({
     'archiveSha256': _fileSha(windowsArchive),
     'archiveSize': windowsArchive.lengthSync(),
     'canonicalEcosystemSha256': ecosystemSha,
-    'signingState': 'authenticode-timestamped',
+    // Mirrors New-WindowsQaSummary, which propagates whatever signing state the
+    // local validation descriptor recorded.
+    'signingState': windowsDistribution == 'unsigned'
+        ? 'unsigned'
+        : 'authenticode-timestamped',
     'toolchains': {
       'dart': '3.12.2',
       'dotnetRuntime': '10.0.9',
@@ -134,6 +139,7 @@ Map<String, String> releaseQaEvidenceFor(
   Directory assets,
   String platform, {
   required String ecosystemSha,
+  String windowsDistribution = 'signed',
 }) {
   if (platform == 'linux-x64') {
     final validationSha = _digest('linux-x64:validation');
@@ -151,7 +157,9 @@ Map<String, String> releaseQaEvidenceFor(
       'package': validationSha,
       'robotopia': _digest('windows-x64:robotopia'),
       'toolchains': validationSha,
-      'authenticode': validationSha,
+      // An unsigned build produces no Authenticode evidence, so it sends no
+      // key — the same condition release-admin.ps1 applies to the CLI argument.
+      if (windowsDistribution != 'unsigned') 'authenticode': validationSha,
       'unity': _digest('windows-x64:unity'),
     };
   }
