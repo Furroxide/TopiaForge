@@ -39,9 +39,6 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
 
   StreamSubscription<LauncherUpdateStatus>? _updateStatusSub;
 
-  // True while a "Go Live" is waiting for the publisher to report its live document URL before launching the game
-  // (so the game auto-connects to the real document, not an empty one).
-
   String get dataRoot => _repository.dataRoot;
 
   @override

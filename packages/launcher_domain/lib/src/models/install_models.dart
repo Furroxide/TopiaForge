@@ -390,7 +390,7 @@ class LauncherSnapshot {
   final LauncherUpdateSettings launcherUpdates;
 
   /// Opt-in developer mode. Off by default so the launcher is a clean install-and-play app for the majority of
-  /// users, who never build a mod. When on, the Developer tab (project tools, UGC live-sync) is revealed.
+  /// users, who never build a mod. When on, the Developer tab (project tools, world authoring) is revealed.
   final bool developerMode;
 
   /// Per-source load health from the most recent catalog load (enabled

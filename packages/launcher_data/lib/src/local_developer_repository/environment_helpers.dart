@@ -157,10 +157,8 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
       );
     }
 
-    var environment = await checkEnvironment();
-
-    // Re-check so the returned environment reflects any fixes.
-    environment = await checkEnvironment();
+    // Creating the data folder cannot change any probe result, so one pass is enough.
+    final environment = await checkEnvironment();
     return DeveloperSetupResult(
       environment: environment,
       actions: actions,

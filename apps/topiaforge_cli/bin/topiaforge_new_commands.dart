@@ -35,7 +35,7 @@ extension _NewCommands on _TopiaForgeCli {
     if (args.firstOrNull != 'mod' || args.length < 2) {
       throw UsageError(
         'Usage: topiaforge new mod <id> [--template id] [--name Name] [--dir Path] [flags...]\n'
-        '       topiaforge new unity-world <name> [--dir Path] [--live-sync [--watch folder]]\n'
+        '       topiaforge new unity-world <name> [--dir Path] [--mod ModDir]\n'
         'Run `topiaforge list templates` for template ids and `topiaforge help` for the full flag list.',
       );
     }

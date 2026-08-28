@@ -56,6 +56,95 @@ namespace TopiaForge.Mods
 
         /// <summary>Ends the current session. The call is idempotent.</summary>
         OperationResult<bool> EndSession(WorldSessionEndReason reason);
+
+        /// <summary>
+        /// Resolves an authored asset id to a prefab this mod supplies, so a locally imported world renders
+        /// the mod's own content in place of the catalog asset.
+        /// </summary>
+        /// <remarks>
+        /// Takes effect on the next local-world import; entities already in the scene keep the prefab they
+        /// were built with. Registering the same asset id twice replaces the earlier override and
+        /// deactivates its lease. Disposing the returned lease removes the override.
+        /// </remarks>
+        /// <param name="assetOverride">The asset id, prefab, and optional local-space offset.</param>
+        OperationResult<IDisposable> RegisterAssetOverride(WorldAssetOverride assetOverride);
+
+        /// <summary>
+        /// Lists the local world exports on the player's own disk, including ones that failed to parse.
+        /// </summary>
+        /// <remarks>
+        /// Unreadable files are listed with the scanner's own error rather than filtered out: a player whose
+        /// export is missing from a list learns nothing, one who sees it listed with a reason learns what to fix.
+        /// </remarks>
+        OperationResult<IReadOnlyList<LocalWorldFile>> ListLocalWorlds();
+
+        /// <summary>Imports one local world export into the active scene.</summary>
+        /// <param name="requestedPath">An absolute path inside the local-world folder, or a file name in it.</param>
+        /// <remarks>
+        /// Main thread only. Any asset overrides registered through
+        /// <see cref="RegisterAssetOverride"/> are applied to this import.
+        /// </remarks>
+        OperationResult<bool> LoadLocalWorld(string requestedPath);
+    }
+
+    /// <summary>One local world export found on disk.</summary>
+    public sealed class LocalWorldFile
+    {
+        /// <summary>Creates a description of one scanned export.</summary>
+        public LocalWorldFile(string path, string fileName, string projectName, string loadError)
+        {
+            Path = path ?? string.Empty;
+            FileName = fileName ?? string.Empty;
+            ProjectName = projectName ?? string.Empty;
+            LoadError = loadError ?? string.Empty;
+        }
+
+        /// <summary>Gets the absolute path of the export.</summary>
+        public string Path { get; }
+
+        /// <summary>Gets the export's file name.</summary>
+        public string FileName { get; }
+
+        /// <summary>Gets the project name declared inside the export, when it could be read.</summary>
+        public string ProjectName { get; }
+
+        /// <summary>Gets the scanner's own error for this file, or an empty string when it parsed.</summary>
+        public string LoadError { get; }
+
+        /// <summary>Gets whether the game's scanner could read this export.</summary>
+        public bool IsLoadable => LoadError.Length == 0;
+    }
+
+    /// <summary>
+    /// Maps an authored asset id to a modder-supplied prefab so imported entities render as real content
+    /// rather than the importer's own fallback.
+    /// </summary>
+    public sealed class WorldAssetOverride
+    {
+        /// <summary>Creates an override binding one authored asset id to one prefab.</summary>
+        /// <param name="assetId">Authored asset id as referenced by exported entities.</param>
+        /// <param name="prefab">A prefab loaded through this mod's own asset service.</param>
+        /// <param name="localPositionOffset">Optional local-space offset aligning the prefab to the authored origin.</param>
+        public WorldAssetOverride(string assetId, IPrefabAsset prefab, Vec3? localPositionOffset = null)
+        {
+            if (string.IsNullOrWhiteSpace(assetId))
+            {
+                throw new ArgumentException("An authored asset id is required.", nameof(assetId));
+            }
+
+            AssetId = assetId;
+            Prefab = prefab ?? throw new ArgumentNullException(nameof(prefab));
+            LocalPositionOffset = localPositionOffset;
+        }
+
+        /// <summary>Gets the authored asset id this override resolves.</summary>
+        public string AssetId { get; }
+
+        /// <summary>Gets the opaque prefab asset that replaces it.</summary>
+        public IPrefabAsset Prefab { get; }
+
+        /// <summary>Gets the optional local-space offset; <c>null</c> means zero.</summary>
+        public Vec3? LocalPositionOffset { get; }
     }
 
     /// <summary>Exposes whether the provider is currently changing scenes.</summary>
