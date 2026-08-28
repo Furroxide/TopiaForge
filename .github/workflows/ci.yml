@@ -278,6 +278,12 @@ jobs:
       - name: Test asset licence coverage audit
         run: python3 .github/scripts/test_check_asset_licence_coverage.py
 
+      - name: Keep the trademark notice identical across surfaces
+        run: python3 .github/scripts/check_trademark_notice.py
+
+      - name: Test trademark notice audit
+        run: python3 .github/scripts/test_check_trademark_notice.py
+
       - name: Test pinned Flutter setup
         shell: pwsh
         run: ./.github/actions/setup-flutter/test-setup-flutter.ps1
