@@ -110,8 +110,10 @@ That closes the engineering half only; the gate still needs the compliance revie
 criteria and stays **blocking**.
 
 The `docs.topiaforge.dev` custom domain still returns 404 with the Pages API reporting `status: null`,
-unchanged since it was first noted. It is not a gate and is recorded here only so the next audit does
-not rediscover it.
+unchanged since it was first noted. Rechecked 2026-08-28, with one detail worth adding so the next
+audit does not start from the wrong end: the CNAME resolves and `https_certificate` is `approved`, so
+DNS and TLS are both fine. `status: null` means no Pages build has ever succeeded for the domain,
+which is where to look. It is not a gate.
 
 ## Second reconciliation (2026-08-28)
 
@@ -154,15 +156,22 @@ shipped product with users.
   The gate **stays blocking and open**, and the owner explicitly declined to record a `0.x`
   disposition for it on 2026-08-28. Its approval half — destination, retention, training use, cost,
   deletion, abuse limits, jurisdiction — is untouched.
-- **`P0-IP-01`** — unchanged as a gate. A canonical trademark and non-affiliation notice with a CI
-  drift audit is in review at [#83](https://github.com/Furroxide/TopiaForge/pull/83). It improves
-  the disclosure; it does not supply counsel, and the naming, injection, and extraction questions
-  are exactly as open as they were.
+- **`P0-GAME-01`** — all three exit criteria were met on the current tree against the maintainer's
+  build-`2409` install: the loader reported `0.0.2409`, thirteen mods reached `Loaded` including all
+  eight `GameCode`-coupled ones, and `gamecompat verify` exited 0 over 206 bindings. The full result
+  is in the gate entry below. It **stays blocking**, because the criteria bind their evidence to a
+  frozen candidate SHA and `P0-CAND-01` is open, so there is nothing to bind them to. What changed
+  is that the criteria are now known to be reachable, and the void build-`2309` evidence is retired.
 
 ### Gates that did not change
 
 `P0-CRED-01` is unchanged and **blocking**. The exposed credentials have **not** been rotated —
 confirmed with the owner on 2026-08-28. No amount of source work closes it.
+
+`P0-IP-01` is unchanged. A canonical trademark and non-affiliation notice with a CI drift audit is in
+review at [#83](https://github.com/Furroxide/TopiaForge/pull/83), which improves the disclosure. It
+does not supply counsel, and the naming, injection, and extraction questions are exactly as open as
+they were.
 
 `P0-HOST-01`, `P0-CAND-01`, `P1-UX-01`, and `P1-E2E-01` were out of this session's scope and are
 unchanged.
