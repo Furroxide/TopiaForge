@@ -166,9 +166,11 @@ pwsh ./tools/bootstrap-dev.ps1
 ```
 
 The bootstrap validates host tools, enables the tracked Git hooks, installs Flutter 3.44.6 through FVM,
-restores Dart/Flutter/npm/NuGet dependencies, and prepares compile-only Robotopia managed references. It sets
-`core.hooksPath` to `.githooks`: the tracked hooks run Git LFS integration, and `commit-msg` removes AI co-author
-trailers before a commit is created.
+restores Dart/Flutter/npm/NuGet dependencies, and prepares compile-only Robotopia managed references. When the
+clone has no hooks path configured it sets `core.hooksPath` to `.githooks`: the tracked hooks run Git LFS
+integration, and `commit-msg` removes AI co-author trailers before a commit is created. A `core.hooksPath` you
+have already set is left alone and reported, so your own hooks directory survives the bootstrap — have it
+forward to `.githooks` to keep the LFS integration.
 
 Managed references come from the Windows archive pinned in `.github/robotopia-game-build.json`. The first run
 downloads a SHA-256-verified archive of about **2.17 GB**, extracts only the managed assemblies, deletes the
@@ -204,7 +206,7 @@ pwsh ./tools/bootstrap-dev.ps1 -Verify
 ```
 
 `-SkipManagedRefs` is useful for Dart/Flutter-only work. `-Verify` runs the C# manager, runtime-integration,
-managed-reference, and scaffold-validator harnesses; all Dart, Flutter, documentation, and Automerge checks; then
+managed-reference, and scaffold-validator harnesses; all Dart, Flutter, and documentation checks; then
 builds the current host's debug launcher. Platform signing, release publication, and live Robotopia acceptance remain
 CI or authorized test-host gates rather than bootstrap tasks.
 
