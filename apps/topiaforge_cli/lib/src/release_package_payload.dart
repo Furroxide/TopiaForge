@@ -64,10 +64,11 @@ class ReleasePackagePayloadWriter {
     );
     _noticeWriter.copyBepInExCorrespondingSource(destinationRoot);
     _copyTemplates(destinationRoot);
-    // Root documents the archive carries verbatim. TRADEMARKS.md is here
-    // because README.md and THIRD_PARTY_NOTICES.md both link to it and it is
-    // the canonical wording of a legal notice: a reader unpacking the archive
-    // has to be able to follow that link rather than be sent to the repository.
+    // Root documents the archive carries verbatim, so the licence and notices
+    // travel with the binaries. This copy is deliberately tolerant because
+    // presence is enforced upstream: LICENSE and DCO by the release legal
+    // inventory, README.md and TRADEMARKS.md by the trademark notice audit, and
+    // THIRD_PARTY_NOTICES.md again in the built package by the validator.
     for (final document in const [
       'README.md',
       'LICENSE',
