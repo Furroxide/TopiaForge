@@ -738,7 +738,7 @@ jobs:
               (ltrimstr("TopiaForge-") | rtrimstr(".zip")) + ".json"
             ] |
             sort | .[]
-          ' release/release-policy.json)
+          ' release/release-policy.json | tr -d '\r')
           for name in "${handoff_names[@]}"; do
             cp -- "staged-assets/$name" "release-assets/$name"
           done
