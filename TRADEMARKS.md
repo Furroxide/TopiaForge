@@ -1,8 +1,11 @@
 # Trademarks and affiliation
 
-This is the canonical wording. Every surface that shows a non-affiliation notice — the README, the
-desktop launcher, the in-game manager, the support page, the release archive — states one of the two
-forms below, unchanged. Editing this file is how that wording changes everywhere.
+This is the canonical wording. Every surface that shows a non-affiliation notice states one of the
+two forms below, unchanged, and editing this file is how that wording changes everywhere.
+
+Today those surfaces are the README, the support page, and the release archive's notice file; CI
+checks all three. The desktop launcher and the in-game manager do not display a notice yet. The
+short form below is the wording reserved for them when they do — it is not text that ships today.
 
 ## Full statement
 
