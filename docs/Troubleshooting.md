@@ -15,7 +15,7 @@ It audits the toolchain (with versions and install links), the current project, 
 ends with a **Recommended actions:** section that maps every finding to a next step — run `topiaforge setup`
 for the safe auto-fixes, a pointer to this page when no Robotopia installation is detected, and `No action needed.`
 when everything is green. `topiaforge setup` runs the same audit and applies the safe fixes automatically
-(for example installing the Automerge sidecar dependencies); anything that needs a manual install is
+(for example creating the developer data folder); anything that needs a manual install is
 spelled out.
 
 ## Robotopia not detected — `ROBOTOPIA_GAME_DIR`

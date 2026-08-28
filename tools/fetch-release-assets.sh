@@ -231,7 +231,7 @@ while IFS= read -r encoded; do
     exit 1
   }
   downloaded_count=$((downloaded_count + 1))
-done < <(jq -r '.[] | @base64' "$assets_file")
+done < <(jq -r '.[] | @base64' "$assets_file" | tr -d '\r')
 
 [[ $downloaded_count -gt 0 ]] || {
   echo "Release $tag contains no complete assets." >&2

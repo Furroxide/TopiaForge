@@ -464,4 +464,77 @@ jq -e \
    .tag_name == "v1.0.2"' \
   "$FAKE_GH_STATE/release.json" >/dev/null
 
+# An unsigned distribution has no certificate and therefore no detached CMS
+# handoff signature. The publisher used to demand release-handoff-v1.json.p7s
+# unconditionally, which is what made the hosted path reject an unsigned
+# candidate outright. Mirror the repository layout the script reads its policy
+# from, because both paths are derived from the script's own location.
+# See P0-WIN-01 in docs/LaunchBlockers.md.
+unsigned_root="$temp_root/unsigned-repo"
+mkdir -p "$unsigned_root/tools" "$unsigned_root/release" "$unsigned_root/.github"
+cp "$script_dir/publish-release-draft.sh" "$unsigned_root/tools/"
+cp "$script_dir/verify-release-tag.sh" "$unsigned_root/tools/"
+cp "$script_dir/../.github/repository-governance.json" "$unsigned_root/.github/"
+jq '.signingIdentities.windowsDistribution = "unsigned"' \
+  "$script_dir/../release/release-policy.json" \
+  >"$unsigned_root/release/release-policy.json"
+
+# The same asset set with the signature removed, which is what an unsigned build
+# actually produces.
+cp -r "$temp_root/assets" "$temp_root/unsigned-assets"
+rm -f "$temp_root/unsigned-assets/release-handoff-v1.json.p7s"
+unsigned_checksums="$temp_root/unsigned-assets/SHA256SUMS.tmp"
+(
+  cd "$temp_root/unsigned-assets"
+  rm -f SHA256SUMS
+  find . -mindepth 1 -maxdepth 1 -type f ! -name 'SHA256SUMS*' \
+    -printf '%f\n' | sort |
+    while IFS= read -r name; do
+      sha256sum "$name"
+    done
+) >"$unsigned_checksums"
+mv "$unsigned_checksums" "$temp_root/unsigned-assets/SHA256SUMS"
+
+run_unsigned_publisher() {
+  local publisher_path=$1
+  (
+    cd "$temp_root/work"
+    "$publisher_path" owner/repo v0.1.0-rc.1 "$target_sha" \
+      "TopiaForge 0.1.0-rc.1" "$temp_root/notes.md" \
+      "$temp_root/unsigned-assets" true draft
+  )
+}
+
+# Unsigned policy plus unsigned assets stages successfully.
+rm -f \
+  "$FAKE_GH_STATE/release.json" \
+  "$FAKE_GH_STATE/assets.json" \
+  "$FAKE_GH_STATE/uploads"
+rm -rf "$FAKE_GH_STATE/asset-content"
+run_unsigned_publisher "$unsigned_root/tools/publish-release-draft.sh" >/dev/null
+jq -e '.draft == true and .tag_name == "v0.1.0-rc.1"' \
+  "$FAKE_GH_STATE/release.json" >/dev/null
+# The signature must not be staged, or the published set would disagree with the
+# policy that produced it.
+test "$(
+  jq -r '[.[] | select(.name == "release-handoff-v1.json.p7s")] | length' \
+    "$FAKE_GH_STATE/assets.json"
+)" -eq 0
+
+# The requirement is still enforced in the other direction: the same asset set
+# under the default signed policy must fail for the missing signature. Without
+# this the change would read as "the signature is now optional".
+rm -f \
+  "$FAKE_GH_STATE/release.json" \
+  "$FAKE_GH_STATE/assets.json" \
+  "$FAKE_GH_STATE/uploads"
+rm -rf "$FAKE_GH_STATE/asset-content"
+must_fail run_unsigned_publisher "$publisher"
+
+# An unknown distribution mode is refused rather than silently treated as signed.
+jq '.signingIdentities.windowsDistribution = "sometimes"' \
+  "$script_dir/../release/release-policy.json" \
+  >"$unsigned_root/release/release-policy.json"
+must_fail run_unsigned_publisher "$unsigned_root/tools/publish-release-draft.sh"
+
 echo "Release staging, finalization, and immutable-rerun regression tests passed."

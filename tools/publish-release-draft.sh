@@ -95,7 +95,7 @@ declare -A workflow_generated_assets
 while IFS= read -r generated_name; do
   generated_name=${generated_name%$'\r'}
   workflow_generated_assets[$generated_name]=1
-done < <(jq -r '.[]' <<<"$workflow_generated_json")
+done < <(jq -r '.[]' <<<"$workflow_generated_json" | tr -d '\r')
 
 # The handoff asset set follows artifactPolicy rather than a hard-coded platform
 # list, which stops this script demanding a Linux archive the Windows-only RC1
@@ -105,8 +105,30 @@ done < <(jq -r '.[]' <<<"$workflow_generated_json")
 # be lifted with the policy. See P0-LINUX-01 in docs/LaunchBlockers.md.
 required_handoff_assets=(
   release-handoff-v1.json
-  release-handoff-v1.json.p7s
 )
+# An unsigned distribution has no certificate and therefore no detached CMS
+# handoff signature. Demanding the P7S unconditionally is what made the hosted
+# path reject an unsigned candidate outright. See P0-WIN-01 in
+# docs/LaunchBlockers.md.
+windows_distribution=$(jq -er '
+  .signingIdentities.windowsDistribution // "signed"
+' "$release_policy" | tr -d '\r')
+case "$windows_distribution" in
+  signed) required_handoff_assets+=(release-handoff-v1.json.p7s) ;;
+  unsigned) ;;
+  *)
+    printf 'Unknown Windows distribution mode: %s\n' "$windows_distribution" >&2
+    exit 1
+    ;;
+esac
+# Every `jq | read` loop below strips \r. jq on Windows writes through CRT
+# text-mode translation, so each line it emits ends \r\n; `read -r` keeps that
+# byte, and the value is then used as a filename or as base64, both of which
+# fail on it. The failure names the value and looks correct, because \r is
+# invisible in a terminal -- this one reported the archive below as a missing
+# file while it sat in the assets directory. A no-op on Linux, where CI runs.
+# Process substitution already discards jq's exit status, so the added pipe
+# costs nothing that was being checked.
 while IFS= read -r policy_archive; do
   bundle_target=${policy_archive#TopiaForge-}
   bundle_target=${bundle_target%.zip}
@@ -117,7 +139,7 @@ while IFS= read -r policy_archive; do
 done < <(jq -er '
   .artifactPolicy.platformArchives |
   select(type == "array" and length > 0) | sort | .[]
-' "$release_policy")
+' "$release_policy" | tr -d '\r')
 for required in "${required_handoff_assets[@]}"; do
   [[ -f $assets_dir/$required && -s $assets_dir/$required ]] || {
     echo "Required local handoff asset is missing: $required" >&2
@@ -331,7 +353,7 @@ reconcile_assets() {
       exit 1
     }
     present[$name]=1
-  done < <(jq -r '.[] | @base64' "$assets_file")
+  done < <(jq -r '.[] | @base64' "$assets_file" | tr -d '\r')
   rm -f "$assets_file"
 
   if [[ $mode == publish ]]; then
@@ -375,7 +397,7 @@ reconcile_assets() {
       echo "Final release verification failed for $name." >&2
       exit 1
     }
-  done < <(jq -r '.[] | @base64' "$assets_file")
+  done < <(jq -r '.[] | @base64' "$assets_file" | tr -d '\r')
   rm -f "$assets_file"
 }
 
