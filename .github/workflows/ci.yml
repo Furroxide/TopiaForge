@@ -272,6 +272,12 @@ jobs:
       - name: Test generated-payload residue scanning
         run: python3 .github/scripts/test_check_topiaforge_residue.py
 
+      - name: Require every redistributed asset to be accounted for
+        run: python3 .github/scripts/check_asset_licence_coverage.py
+
+      - name: Test asset licence coverage audit
+        run: python3 .github/scripts/test_check_asset_licence_coverage.py
+
       - name: Test pinned Flutter setup
         shell: pwsh
         run: ./.github/actions/setup-flutter/test-setup-flutter.ps1
