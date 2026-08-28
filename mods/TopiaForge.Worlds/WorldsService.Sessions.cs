@@ -89,6 +89,7 @@ namespace TopiaForge.Worlds
             catalogWrite = null;
             ReleasePendingSceneClaim();
             levelBridge.Dispose();
+            DisposeLocalWorlds();
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.activeSceneChanged -= OnActiveSceneChanged;
             UnloadArena();

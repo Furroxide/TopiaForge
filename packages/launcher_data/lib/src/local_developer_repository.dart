@@ -119,7 +119,7 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
     if (root.existsSync()) {
       throw StateError('Project already exists: ${root.path}');
     }
-    // Live sync implies the Unity companion; some templates scaffold it too.
+    // The explicit flag, the scaffold option, or the template can each ask for the companion.
     final templates = await _listModTemplates();
     final templateInfo = templates.firstWhere(
       (template) => template.id == options.template,

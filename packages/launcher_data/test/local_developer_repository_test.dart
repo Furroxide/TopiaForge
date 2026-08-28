@@ -93,7 +93,7 @@ void main() {
     expect(fallbackEntry, contains('Context.Logger.Info'));
     expect(fallbackEntry, isNot(contains('ITopiaForgeMod')));
     expect(workspace.project!.packageSources, isEmpty);
-    // The Unity companion is scaffolded with a README + a sample runtime config, and the project records it.
+    // The Unity companion is scaffolded with a README, and the project records it.
     expect(workspace.project!.unityCompanion.enabled, isTrue);
     expect(
       File(
