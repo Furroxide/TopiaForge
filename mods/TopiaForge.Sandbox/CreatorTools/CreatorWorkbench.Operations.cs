@@ -35,7 +35,6 @@ namespace TopiaForge.CreatorTools.Shared
             if (result.Succeeded)
             {
                 RefreshUi();
-                recorder?.Observe(CreatorObservation.UndoRestoredInstance);
             }
             return result;
         }
@@ -204,7 +203,6 @@ namespace TopiaForge.CreatorTools.Shared
             status = entry.DisplayName + " spawned.";
             context.Ui.ShowToast(status, UiTone.Success);
             RefreshUi();
-            recorder?.Observe(CreatorObservation.SpawnedRobotKitRobot);
             return OperationResult<string>.Success(status);
         }
 
@@ -233,45 +231,7 @@ namespace TopiaForge.CreatorTools.Shared
             status = entry.DisplayName + " spawned.";
             context.Ui.ShowToast(status, UiTone.Success);
             RefreshUi();
-            ObserveCatalogSpawn(handle.Descriptor);
             return OperationResult<string>.Success(status);
-        }
-
-        /// <summary>
-        /// Classifies an observed catalog spawn by the source that produced it
-        /// and the kind it declared, which is exactly the vocabulary the
-        /// canonical case descriptions use.
-        /// </summary>
-        private void ObserveCatalogSpawn(CreatorContentDescriptor descriptor)
-        {
-            if (recorder == null) return;
-            if (string.Equals(
-                    descriptor.SourceId,
-                    CuratedItemsSourceId,
-                    StringComparison.Ordinal))
-            {
-                recorder.Observe(CreatorObservation.SpawnedCuratedItem);
-            }
-            else if (string.Equals(
-                    descriptor.SourceId,
-                    UgcPropsSourceId,
-                    StringComparison.Ordinal))
-            {
-                recorder.Observe(CreatorObservation.SpawnedUgcProp);
-            }
-            // A character or vehicle can only come from a custom mod source:
-            // the native vehicle source is empty and the curated sources serve
-            // items and props.
-            if (descriptor.Kind == CreatorContentKind.Character)
-            {
-                recorder.Observe(CreatorObservation.SpawnedCustomCharacter);
-                customFactorySources.Add(descriptor.SourceId);
-            }
-            else if (descriptor.Kind == CreatorContentKind.Vehicle)
-            {
-                recorder.Observe(CreatorObservation.SpawnedValidatedVehicle);
-                customFactorySources.Add(descriptor.SourceId);
-            }
         }
 
         private OperationResult<string> DuplicateSelected()
@@ -298,7 +258,6 @@ namespace TopiaForge.CreatorTools.Shared
                 var duplicatedRobot = Spawn(catalogEntry, offset);
                 if (duplicatedRobot.Succeeded)
                 {
-                    recorder?.Observe(CreatorObservation.DuplicatedInstance);
                 }
                 return duplicatedRobot;
             }
@@ -327,7 +286,6 @@ namespace TopiaForge.CreatorTools.Shared
                 SelectRoster(duplicate.Id);
                 status = duplicate.DisplayName + " duplicated.";
                 RefreshUi();
-                recorder?.Observe(CreatorObservation.DuplicatedInstance);
                 return OperationResult<string>.Success(status);
             }
             if (entry.NativeTarget != null
@@ -343,7 +301,6 @@ namespace TopiaForge.CreatorTools.Shared
                     offset);
                 if (duplicatedNative.Succeeded)
                 {
-                    recorder?.Observe(CreatorObservation.DuplicatedInstance);
                 }
                 return duplicatedNative;
             }
@@ -391,7 +348,6 @@ namespace TopiaForge.CreatorTools.Shared
             if (string.Equals(selectedRosterId, entry.Id, StringComparison.Ordinal)) selectedRosterId = string.Empty;
             status = entry.DisplayName + " removed.";
             RefreshUi();
-            recorder?.Observe(CreatorObservation.RemovedInstance);
             return OperationResult<string>.Success(status);
         }
 

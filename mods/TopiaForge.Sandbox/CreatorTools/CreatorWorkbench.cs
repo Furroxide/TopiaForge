@@ -31,7 +31,6 @@ namespace TopiaForge.CreatorTools.Shared
         private IUiSurface? window;
         private IUiSurface? hud;
         private IUiModal? confirmation;
-        private readonly CreatorAcceptanceRecorder? recorder;
         private CreatorEventGraphRunner? runner;
         private CreatorEventProject? activeProject;
         private Task<OperationResult<CreatorProjectLibrarySnapshot>>? projectListTask;
@@ -83,18 +82,8 @@ namespace TopiaForge.CreatorTools.Shared
             context.Extensions.TryGet(out objectives);
             context.Extensions.TryGet(out conversations);
             context.Extensions.TryGet(out mutationSafety);
-            recorder = CreatorAcceptanceRecorder.TryCreate(
-                context.Logger,
-                options.AcceptanceChallenge);
             updateSubscription = context.Events.SubscribeUpdate(Update);
         }
-
-        /// <summary>
-        /// Records challenge-bound acceptance evidence, or null in ordinary
-        /// play. Partial instrumentation fails closed: a case whose
-        /// observations are never reported simply never passes.
-        /// </summary>
-        internal CreatorAcceptanceRecorder? Recorder => recorder;
 
         public bool IsSessionActive => creatorSession?.IsAlive == true;
         public bool IsVisible => window?.IsVisible == true;
@@ -147,9 +136,6 @@ namespace TopiaForge.CreatorTools.Shared
             RefreshUi();
             // started.Value is true only when this Open began a new session, so
             // a false value is an observed reopen of the surviving session.
-            recorder?.Observe(started.Value
-                ? CreatorObservation.OpenedDuringStandaloneGameplay
-                : CreatorObservation.ReopenedSameSession);
             return OperationResult<bool>.Success(true);
         }
 
@@ -161,8 +147,6 @@ namespace TopiaForge.CreatorTools.Shared
             RefreshHud(force: true);
             if (changed && creatorSession?.IsAlive == true)
             {
-                recorder?.Observe(
-                    CreatorObservation.HiddenWithSessionPreserved);
             }
             return OperationResult<bool>.Success(changed);
         }
@@ -210,8 +194,6 @@ namespace TopiaForge.CreatorTools.Shared
                 && projectEntities.Count == 0
                 && projectBindings.Count == 0
                 && graphAudio.Count == 0;
-            if (clean) recorder?.Observe(CreatorObservation.RestoredRobotStateOnEnd);
-            recorder?.ObserveCompletedCycle(clean);
             return OperationResult<bool>.Success(true);
         }
 
@@ -264,7 +246,6 @@ namespace TopiaForge.CreatorTools.Shared
                 requestEnd();
                 status = problem;
                 context.Ui.ShowToast(problem, UiTone.Danger);
-                recorder?.Observe(CreatorObservation.RestoredAfterIsolationRevoked);
                 return;
             }
             if (creatorSession != null && !creatorSession.IsAlive)
@@ -296,8 +277,6 @@ namespace TopiaForge.CreatorTools.Shared
         private void RemoveDeadRosterEntries()
         {
             var changed = false;
-            var removedFromUnloadedSource = 0;
-            var removedFromCustomFactory = 0;
             // Snapshot first, in the reverse/LIFO order the source-unload case requires. runner.Fire below is a
             // synchronous re-entrant callback into consumer graph nodes, and those can both add to and remove
             // from `roster` (CreatorWorkbench.ProjectBindings.cs:135 and :150), so any index held across it is
@@ -314,11 +293,6 @@ namespace TopiaForge.CreatorTools.Shared
             {
                 // A re-entrant callback from an earlier iteration may already have pruned this one.
                 if (!roster.Contains(entry)) continue;
-                if (IsFromUnloadedSource(entry))
-                {
-                    removedFromUnloadedSource++;
-                    if (IsFromCustomFactory(entry)) removedFromCustomFactory++;
-                }
                 var projectId = ProjectTargetIdForRoster(entry.Id);
                 if (!string.IsNullOrEmpty(projectId))
                 {
@@ -333,48 +307,6 @@ namespace TopiaForge.CreatorTools.Shared
                 changed = true;
             }
             if (changed && window?.IsVisible == true) RefreshUi();
-            if (changed)
-            {
-                recorder?.Observe(
-                    CreatorObservation.PrunedStaleRosterWithoutCrash);
-            }
-            if (removedFromUnloadedSource > 0)
-            {
-                recorder?.Observe(
-                    CreatorObservation.RemovedSourceInstancesLifoOnce);
-            }
-            // Reaching here at all means the prune completed without throwing,
-            // which is the "unload safely" claim for custom factories.
-            if (removedFromCustomFactory > 0)
-            {
-                recorder?.Observe(
-                    CreatorObservation.UnloadedCustomFactoriesSafely);
-            }
-        }
-
-        /// <summary>
-        /// Reports whether a roster entry was produced by a content source that
-        /// has since disappeared from the catalog.
-        /// </summary>
-        private bool IsFromUnloadedSource(CreatorRosterEntry entry) =>
-            unloadedCatalogSources.Count != 0
-            && unloadedCatalogSources.Contains(SourceIdOf(entry));
-
-        /// <summary>
-        /// Reports whether a roster entry came from a custom character or
-        /// vehicle factory rather than a curated built-in source.
-        /// </summary>
-        private bool IsFromCustomFactory(CreatorRosterEntry entry) =>
-            customFactorySources.Count != 0
-            && customFactorySources.Contains(SourceIdOf(entry));
-
-        /// <summary>Extracts the source id from a qualified content id.</summary>
-        private static string SourceIdOf(CreatorRosterEntry entry)
-        {
-            var contentId = entry.SourceId;
-            if (string.IsNullOrEmpty(contentId)) return string.Empty;
-            var separator = contentId.IndexOf(':');
-            return separator > 0 ? contentId.Substring(0, separator) : string.Empty;
         }
 
         private CreatorCatalogEntry? FindCatalog(string id) =>
@@ -392,7 +324,6 @@ namespace TopiaForge.CreatorTools.Shared
         private OperationResult<bool> EnsureMutationAllowed()
         {
             if (CanMutate) return OperationResult<bool>.Success(true);
-            recorder?.Observe(CreatorObservation.MutationBlockedWithoutLease);
             var message = mutationSafety?.Status.Message;
             return OperationResult<bool>.Failure(
                 ModErrorCode.Unavailable,
@@ -428,8 +359,6 @@ namespace TopiaForge.CreatorTools.Shared
                 {
                     confirmation = null;
                     if (!confirmed) return;
-                    recorder?.Observe(
-                        CreatorObservation.AcknowledgedGlobalMutationOnce);
                     var acquired = mutationSafety.Acquire(new CreatorMutationLeaseRequest(
                         "Global Creator Tools session",
                         userAcknowledgedTemporaryChanges: true));
@@ -440,8 +369,6 @@ namespace TopiaForge.CreatorTools.Shared
                         status = "Persistence isolation enabled for this session.";
                         if (lease.IsAlive && lease.IsPersistenceIsolated)
                         {
-                            recorder?.Observe(CreatorObservation
-                                .AcquiredPersistenceIsolationLease);
                         }
                     }
                     else

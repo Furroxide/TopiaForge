@@ -92,7 +92,6 @@ namespace TopiaForge.CreatorTools.Shared
             search = value;
             if (FilteredCatalog().Count() < previousVisibleCount)
             {
-                recorder?.Observe(CreatorObservation.CatalogSearchNarrowed);
             }
         }
 
@@ -103,7 +102,6 @@ namespace TopiaForge.CreatorTools.Shared
             if (!string.Equals(value, "all", StringComparison.Ordinal)
                 && FilteredCatalog().Count() < previousVisibleCount)
             {
-                recorder?.Observe(CreatorObservation.CatalogKindFilterApplied);
             }
         }
 
