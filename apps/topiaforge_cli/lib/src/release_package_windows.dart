@@ -201,15 +201,18 @@ $stamp = if ($null -ne $signature.TimeStamperCertificate) { "stamp" } else { "no
             fields[1] == 'none' &&
             fields[2] == 'none') {
           return;
-        } else if (fields[0] == 'UnknownError' && fields[1] == 'none') {
-          // UnknownError with no signer is Windows saying it could not read the
-          // file, not that it found something wrong with a signature. A signer
-          // certificate is what separates the two, and the case below keeps it.
+        } else if (fields[0] == 'UnknownError' &&
+            fields[1] == 'none' &&
+            fields[2] == 'none') {
+          // UnknownError carrying no certificate at all is Windows saying it
+          // could not read the file, not that it found something wrong with a
+          // signature. Either certificate makes the answer conclusive, so both
+          // have to be absent before this is treated as a read to retry.
           lastDetail = 'the Authenticode status was UnknownError';
         } else {
-          // A signer certificate is present, so this file really is signed -
-          // an untrusted or self-signed certificate also lands here, reported
-          // by Windows as UnknownError. Retrying cannot change it.
+          // A certificate is present, so this file really is signed - an
+          // untrusted or self-signed one also lands here, reported by Windows
+          // as UnknownError. Retrying cannot change it.
           throw StateError(
             'This dry-run requires an entirely unsigned package, but '
             '${p.basename(target)} carries a signature: status '

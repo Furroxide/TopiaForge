@@ -279,6 +279,46 @@ void _registerReleaseWindowsSigningTests() {
   );
 
   test(
+    'Windows unsigned verification treats a lone timestamp as conclusive',
+    () async {
+      // A timestamper certificate without a signer is odd, but for a check
+      // that demands an entirely unsigned package any certificate settles the
+      // question. Retrying this as though it were an unreadable file would
+      // eventually report "could not determine" for a file that told us.
+      final stage = Directory(p.join(temp.path, 'windows-stamped-stage'))
+        ..createSync();
+      for (final relative in [
+        'topiaforge.exe',
+        'TopiaForge.GameCompat.Extractor.exe',
+        p.join('launcher', 'topiaforge_launcher.exe'),
+      ]) {
+        _writeFile(stage, p.split(relative), 'stamped executable fixture');
+      }
+      final runner = _RecordingProcessRunner(
+        onResult: (_) => ProcessResult(1, 0, 'UnknownError|none|stamp', ''),
+      );
+
+      await expectLater(
+        () => WindowsPackageSigner(
+          processRunner: runner,
+          isWindows: true,
+        ).verifyUnsignedExecutables(stage.path),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.toString(),
+            'message',
+            contains('with a timestamp'),
+          ),
+        ),
+      );
+      expect(
+        runner.calls.where((call) => call.executable == 'powershell.exe'),
+        hasLength(1),
+      );
+    },
+  );
+
+  test(
     'Windows unsigned verification retries a file it could not read',
     () async {
       // A freshly extracted executable is routinely held open by the antivirus
