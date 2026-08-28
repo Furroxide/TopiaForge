@@ -145,9 +145,6 @@ namespace TopiaForge.CreatorTools.Shared
             if (window?.IsVisible == true) window.Hide();
             ReleaseControl();
             RefreshHud(force: true);
-            if (changed && creatorSession?.IsAlive == true)
-            {
-            }
             return OperationResult<bool>.Success(changed);
         }
 
@@ -184,16 +181,6 @@ namespace TopiaForge.CreatorTools.Shared
             status = "Session ended; temporary edits restored.";
             RefreshUi();
             RefreshHud(force: true);
-            // A cycle only counts when teardown actually left nothing retained.
-            var clean = roster.Count == 0
-                && creatorSession == null
-                && mutationLease == null
-                && controlLease == null
-                && runner == null
-                && activeProject == null
-                && projectEntities.Count == 0
-                && projectBindings.Count == 0
-                && graphAudio.Count == 0;
             return OperationResult<bool>.Success(true);
         }
 
@@ -367,9 +354,6 @@ namespace TopiaForge.CreatorTools.Shared
                         mutationLease?.Dispose();
                         mutationLease = lease;
                         status = "Persistence isolation enabled for this session.";
-                        if (lease.IsAlive && lease.IsPersistenceIsolated)
-                        {
-                        }
                     }
                     else
                     {

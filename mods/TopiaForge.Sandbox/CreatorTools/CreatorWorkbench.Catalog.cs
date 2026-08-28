@@ -7,16 +7,9 @@ namespace TopiaForge.CreatorTools.Shared
 {
     internal sealed partial class CreatorWorkbench
     {
-        /// <summary>Built-in curated build-2409 item source.</summary>
-        private const string CuratedItemsSourceId = "robotopia.items";
-        /// <summary>Built-in UGC prop source.</summary>
-        private const string UgcPropsSourceId = "robotopia.ugc-props";
-        /// <summary>Native vehicle source, which has no validated adapter.</summary>
-        private const string NativeVehiclesSourceId = "robotopia.vehicles";
-
         /// <summary>
-        /// Sources observed producing a character or vehicle, i.e. custom
-        /// self-contained factories rather than the curated built-in sources.
+        /// Revision of the catalog snapshot last applied, so an unchanged
+        /// snapshot does not rebuild the list or disturb the selection.
         /// </summary>
         private long catalogRevision = -1;
 
