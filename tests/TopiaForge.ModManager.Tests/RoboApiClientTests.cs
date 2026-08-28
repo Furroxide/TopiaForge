@@ -120,7 +120,7 @@ namespace TopiaForge.ModManager.Tests
             }
 
             RunResponseCaps();
-            RunUnreachableBackendPaths();
+            RunUnreachableBackendPaths(tokenDirectory);
 
             Console.WriteLine("RoboApiClientTests passed.");
         }
@@ -167,22 +167,20 @@ namespace TopiaForge.ModManager.Tests
         /// name resolution or on anything outside the machine. Also asserts the credential never reaches a log
         /// line on any of those paths, which is the disclosure claim the launcher makes on the player's behalf.
         /// </summary>
-        private static void RunUnreachableBackendPaths()
+        /// <param name="directory">
+        /// A directory the caller has already created holding a valid credential file. This suite
+        /// deliberately creates nothing: every path it could build would descend either from the
+        /// harness root, which arrives on the command line, or from Path.GetTempPath, which reads
+        /// TMP. Both are cs/path-injection sources, the finding is high severity, and
+        /// codeql-high-critical has no bypass actors. Reusing a directory rather than deriving one
+        /// removes the sink instead of arguing with the analyser about it.
+        /// </param>
+        private static void RunUnreachableBackendPaths(string directory)
         {
-            const string token = "secret-token-value";
+            // The token the caller wrote into that directory, so the redaction sweep below has the
+            // real value to search for rather than a value this method invented.
+            const string token = "secret-token";
             const string session = "session-id-value";
-            // Built from Path.GetTempPath rather than the harness root. That root arrives
-            // from the command line, so combining onto it is a tainted path expression that
-            // cs/path-injection reports at high severity, and codeql-high-critical has no
-            // bypass actors. Nothing here wants the harness directory anyway: the client
-            // only needs some directory holding a credential file it can read.
-            var directory = Path.Combine(
-                Path.GetTempPath(),
-                "topiaforge-roboapi-failure-paths-" + Guid.NewGuid().ToString("n"));
-            Directory.CreateDirectory(directory);
-            File.WriteAllText(
-                Path.Combine(directory, RoboApiClient.TokenFileName),
-                "{" + "\"agent_token\":\"" + token + "\"}");
 
             var previousRoot = Environment.GetEnvironmentVariable("ROBOAPI_BACKEND_ROOT");
             var logger = new RecordingLogger();
@@ -282,14 +280,6 @@ namespace TopiaForge.ModManager.Tests
             finally
             {
                 Environment.SetEnvironmentVariable("ROBOAPI_BACKEND_ROOT", previousRoot);
-                try
-                {
-                    Directory.Delete(directory, recursive: true);
-                }
-                catch (IOException)
-                {
-                    // A leftover scratch directory must not fail an otherwise passing run.
-                }
             }
         }
 
