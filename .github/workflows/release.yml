@@ -640,6 +640,9 @@ jobs:
               sha256sum staged-assets/release-handoff-v1.json.p7s |
                 awk '{print $1}'
             )
+            # $handoffSignatureSha256 is a jq variable bound by --arg below, so it
+            # must reach jq unexpanded. Single quotes are the point.
+            # shellcheck disable=SC2016
             handoff_signature_filter='.handoffSignatureSha256 == $handoffSignatureSha256'
             windows_trust=authenticode
           fi
