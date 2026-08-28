@@ -47,8 +47,7 @@ namespace TopiaForge.ModManager.Tests
         // Pins the shared UGC export JSON contract (the surface the Unity exporter writes and the game
         // importer deserializes into UgcExportProject). GameCode-free on purpose: the test harness targets
         // net8.0 and never references the game's Mono assemblies, so this validates the golden fixture against
-        // the documented shape. The authoritative round-trip is exercised by the manual E2E (docs/UgcLiveSync.md)
-        // and the Unity exporter self-check.
+        // the documented shape. The authoritative round-trip is exercised by the Unity exporter self-check.
         internal static string FindRepoRoot()
         {
             var dir = new DirectoryInfo(AppContext.BaseDirectory);

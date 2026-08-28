@@ -64,7 +64,7 @@ from the thirteen-package release payload.
 - Unity world project template with the world companion and embedded VPM resolver.
 - Standalone Unity package template.
 - TopiaForgeUi bundle source project under `tools/unity-ui-bundle`.
-- Three first-party VPM packages/listings generated and validated by the CLI.
+- Two first-party VPM packages/listings generated and validated by the CLI.
 
 Templates are release inputs, not documentation snippets: every template is scaffolded, built, packed twice, and
 validated from its resulting archive. Default scaffolds adopt the project license and stay non-publishable until

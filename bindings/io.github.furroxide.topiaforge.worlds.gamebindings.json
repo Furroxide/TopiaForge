@@ -419,6 +419,334 @@
         }
       ],
       "returnType": ""
+    },
+    {
+      "id": "worlds.type.ugcImportHostConfig",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostConfig",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Overriding the import host's folder and file selection",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:51"
+    },
+    {
+      "id": "worlds.type.ugcImportHostSceneController",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostSceneController",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Loading a local .roboworld export through the game's own import host",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:52"
+    },
+    {
+      "id": "worlds.type.ugcExportLoader",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportLoader",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Parsing a local export before it touches the scene",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:53"
+    },
+    {
+      "id": "worlds.type.ugcImportFileIndex",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportFileIndex",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Listing local .roboworld exports in the configured folder",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:54"
+    },
+    {
+      "id": "worlds.method.ugcImportHostConfig.getDefaultImportFolderPath",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostConfig",
+      "member": "GetDefaultImportFolderPath",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Defaulting the local-world folder to the game's own",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:69",
+      "parameters": [],
+      "returnType": "System.String"
+    },
+    {
+      "id": "worlds.prop.ugcImportHostConfig.importFolderOverride",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostConfig",
+      "member": "ImportFolderOverride",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Overriding the import host's folder and file selection",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:285",
+      "returnType": "System.String"
+    },
+    {
+      "id": "worlds.prop.ugcImportHostConfig.selectedExportFilePath",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostConfig",
+      "member": "SelectedExportFilePath",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Overriding the import host's folder and file selection",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:286",
+      "returnType": "System.String"
+    },
+    {
+      "id": "worlds.prop.ugcImportHostConfig.selectedSceneId",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostConfig",
+      "member": "SelectedSceneId",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Overriding the import host's folder and file selection",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:287",
+      "returnType": "System.String"
+    },
+    {
+      "id": "worlds.field.ugcImportHostSceneController.config",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostSceneController",
+      "member": "config",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Overriding the import host's folder and file selection",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:279",
+      "returnType": "UgcImportHostConfig"
+    },
+    {
+      "id": "worlds.method.ugcImportHostSceneController.configureRuntimeImportFolder",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostSceneController",
+      "member": "ConfigureRuntimeImportFolder",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Overriding the import host's folder and file selection",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:200",
+      "parameters": [
+        {
+          "type": "System.String",
+          "constrained": true
+        }
+      ],
+      "returnType": "System.Void"
+    },
+    {
+      "id": "worlds.method.ugcImportHostSceneController.refreshImportFiles",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostSceneController",
+      "member": "RefreshImportFiles",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Listing local .roboworld exports in the configured folder",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:209",
+      "parameters": [],
+      "returnType": "System.Void"
+    },
+    {
+      "id": "worlds.method.ugcImportHostSceneController.importFile",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostSceneController",
+      "member": "ImportFile",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Loading a local .roboworld export through the game's own import host",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:212",
+      "parameters": [
+        {
+          "type": "System.String",
+          "constrained": true
+        }
+      ],
+      "returnType": "System.Void"
+    },
+    {
+      "id": "worlds.prop.ugcImportHostSceneController.lastImportedScene",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostSceneController",
+      "member": "LastImportedScene",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Confirming a local import actually produced a scene",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:225",
+      "returnType": "UgcExportScene"
+    },
+    {
+      "id": "worlds.prop.ugcImportHostSceneController.lastImportSourceLabel",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostSceneController",
+      "member": "LastImportSourceLabel",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Labelling the loaded local world in logs",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:233",
+      "returnType": "System.String"
+    },
+    {
+      "id": "worlds.prop.ugcImportHostSceneController.runtimeAssetConfig",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportHostSceneController",
+      "member": "RuntimeAssetConfig",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Substituting mod-supplied prefabs for authored asset ids on import",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:383",
+      "returnType": "UgcRuntimeAssetConfig"
+    },
+    {
+      "id": "worlds.method.ugcRuntimeAssetConfig.setRuntimeOverride",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcRuntimeAssetConfig",
+      "member": "SetRuntimeOverride",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Substituting mod-supplied prefabs for authored asset ids on import",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:303",
+      "parameters": [
+        {
+          "type": "System.String",
+          "constrained": true
+        },
+        {
+          "type": "UnityEngine.GameObject",
+          "constrained": true
+        },
+        {
+          "type": "System.Nullable<UnityEngine.Vector3>",
+          "constrained": true
+        }
+      ],
+      "returnType": "System.Void"
+    },
+    {
+      "id": "worlds.method.ugcRuntimeAssetConfig.clearRuntimeOverrides",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcRuntimeAssetConfig",
+      "member": "ClearRuntimeOverrides",
+      "matchMode": "StaticFullName",
+      "criticality": "Optional",
+      "feature": "Restoring the game's own catalog when the importer is released",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:373",
+      "parameters": [],
+      "returnType": "System.Void"
+    },
+    {
+      "id": "worlds.method.ugcExportLoader.tryLoadProject",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportLoader",
+      "member": "TryLoadProject",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Parsing a local export before it touches the scene",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:92",
+      "parameters": [
+        {
+          "type": "System.String",
+          "constrained": true
+        },
+        {
+          "type": "UgcExportProject&",
+          "constrained": true
+        },
+        {
+          "type": "System.String&",
+          "constrained": true
+        }
+      ],
+      "returnType": "System.Boolean"
+    },
+    {
+      "id": "worlds.field.ugcExportProject.name",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcExportProject",
+      "member": "name",
+      "matchMode": "DynamicInstance",
+      "criticality": "Degraded",
+      "feature": "Naming the loaded local world",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:314",
+      "returnType": "System.String"
+    },
+    {
+      "id": "worlds.method.ugcImportFileIndex.scan",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportFileIndex",
+      "member": "Scan",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Listing local .roboworld exports in the configured folder",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:123",
+      "parameters": [
+        {
+          "type": "System.String",
+          "constrained": true
+        }
+      ]
+    },
+    {
+      "id": "worlds.field.ugcImportFileRecord.path",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportFileRecord",
+      "member": "path",
+      "matchMode": "DynamicInstance",
+      "criticality": "Degraded",
+      "feature": "Listing local .roboworld exports in the configured folder",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:147",
+      "returnType": "System.String"
+    },
+    {
+      "id": "worlds.field.ugcImportFileRecord.fileName",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportFileRecord",
+      "member": "fileName",
+      "matchMode": "DynamicInstance",
+      "criticality": "Degraded",
+      "feature": "Listing local .roboworld exports in the configured folder",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:148",
+      "returnType": "System.String"
+    },
+    {
+      "id": "worlds.field.ugcImportFileRecord.projectName",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportFileRecord",
+      "member": "projectName",
+      "matchMode": "DynamicInstance",
+      "criticality": "Degraded",
+      "feature": "Listing local .roboworld exports in the configured folder",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:149",
+      "returnType": "System.String"
+    },
+    {
+      "id": "worlds.field.ugcImportFileRecord.loadError",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "UgcImportFileRecord",
+      "member": "loadError",
+      "matchMode": "DynamicInstance",
+      "criticality": "Degraded",
+      "feature": "Reporting why a local export could not be read",
+      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.cs:150",
+      "returnType": "System.String"
     }
   ]
 }

@@ -8,5 +8,4 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("TopiaForge.CreatorContent")]
 [assembly: InternalsVisibleTo("TopiaForge.Prompts")]
 [assembly: InternalsVisibleTo("TopiaForge.RobotKit")]
-[assembly: InternalsVisibleTo("TopiaForge.UgcLiveSync")]
 [assembly: InternalsVisibleTo("TopiaForge.Worlds")]

@@ -40,6 +40,8 @@ namespace TopiaForge.Worlds
             // Track native scene hooks immediately so any later discovery/UI/config failure still releases them.
             Context.Lifetime.Track(service);
             service.EndSessionOnMenuScene = config.EndSessionOnMenuScene;
+            service.EnableLocalWorlds = config.EnableLocalWorlds;
+            service.LocalWorldFolder = config.LocalWorldFolder;
             service.DiscoverBuiltIns();
             // Pin the entry to the Open Sandbox world: world routing is keyed on the world id (a blank id
             // would resolve to the first checkpoint level, i.e. the campaign tutorial), and an explicit world
