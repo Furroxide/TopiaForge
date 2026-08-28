@@ -14,7 +14,8 @@ Release, incident, revocation, and rollback ownership is documented in `docs/Rel
 
 TopiaForge is an independent, community-built modding toolkit. It is not developed, published, or endorsed by Tomato
 Cake or the Robotopia development team, and is not otherwise affiliated with them. "Robotopia" and "Tomato Cake" are
-the property of their respective owners and are used here only to identify the game this toolkit works with. See
-[TRADEMARKS.md](TRADEMARKS.md).
+the property of their respective owners and are used here only to identify the game this toolkit works with.
+
+The canonical wording is [TRADEMARKS.md](TRADEMARKS.md).
 
 Please do not contact Tomato Cake or the Robotopia development team about TopiaForge.

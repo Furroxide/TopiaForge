@@ -74,7 +74,9 @@ def audit() -> list[str]:
             continue
         if full not in normalize(path.read_text(encoding="utf-8")):
             failures.append(
-                f"{relative}: does not contain the full statement from {CANONICAL} verbatim"
+                f"{relative}: does not state the full statement from {CANONICAL}. "
+                "Whitespace is collapsed before comparing, so re-wrapping is fine "
+                "and the words themselves differ."
             )
 
     # The short form is a promise about UI surfaces. Nothing embeds it yet, so
