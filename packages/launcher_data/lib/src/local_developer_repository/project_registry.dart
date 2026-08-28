@@ -149,7 +149,7 @@ extension LocalDeveloperProjectRegistry on LocalDeveloperRepository {
             ),
           );
           if (lines.isNotEmpty && lines.first.startsWith('# ')) {
-            lines[0] = '# $name — TopiaForge UGC World';
+            lines[0] = '# $name — TopiaForge Custom World';
             _writeDeveloperTextAtomic(readme, '${lines.join('\n')}\n');
           }
         } on Object {

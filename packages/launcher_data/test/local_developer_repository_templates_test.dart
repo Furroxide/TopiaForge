@@ -343,15 +343,26 @@ void main() {
     expect(manifest.gameVersionRange.toString(), '>=0.1.0 <0.2.0');
   });
 
-  test('asset template scaffolds the unity companion by default', () async {
-    final workspace = await repository.createModProject(
-      parentDirectory: root.path,
-      id: 'test.assetpack',
-      name: 'Asset Pack',
-      options: const ModScaffoldOptions(template: 'asset'),
-    );
-    expect(workspace.project!.unityCompanion.enabled, isTrue);
-  });
+  test(
+    'asset template does not scaffold a companion folder by default',
+    () async {
+      final workspace = await repository.createModProject(
+        parentDirectory: root.path,
+        id: 'test.assetpack',
+        name: 'Asset Pack',
+        options: const ModScaffoldOptions(template: 'asset'),
+      );
+      // The folder used to hold only a README telling you to open it as a Unity
+      // project, which never worked. Opt in with --unity-companion instead.
+      expect(workspace.project!.unityCompanion.enabled, isFalse);
+      expect(
+        Directory(
+          p.join(workspace.projectRoot, 'unity-companion'),
+        ).existsSync(),
+        isFalse,
+      );
+    },
+  );
 
   test('unknown template fails loudly', () async {
     expect(

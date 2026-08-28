@@ -159,6 +159,7 @@
     <Compile Include="..\..\mods\TopiaForge.Worlds\SceneTransitionTracker.cs" />
     <Compile Include="..\..\mods\TopiaForge.Worlds\MainThreadDispatchQueue.cs" />
     <Compile Include="..\..\mods\TopiaForge.Worlds\WorldAutoLoadRouter.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Worlds\RoboWorldImportPlan.cs" />
   </ItemGroup>
 
   <!-- The manager's scene-transition arbiter is deliberately Unity-free claim bookkeeping, so the real

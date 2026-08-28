@@ -106,17 +106,14 @@ Machine setup and the resumable command sequence are in
       structural validation, race detection, and surfaced errors.
 - [ ] Diagnostics enforce 4 MiB/log and 16 MiB total caps, streaming tails, link rejection, secret redaction,
       truncation metadata, hashes, and atomic ZIP replacement.
-- [ ] Sidecar setup uses the checked-in lockfile, `npm ci --ignore-scripts --no-fund --no-audit`, trusted regular
-      paths, no shell, bounded/coalesced output, timeouts, and restrictive session access rules.
 - [ ] Download/registry/update paths require bounded reads, timeouts, HTTPS, no URL credentials/query/fragment,
       digest validation, partial-download recovery, atomic writes, and rollback.
 - [ ] Install/update confirmation shows source, SHA-256, aggregate dependency capabilities, and arbitrary-code risk.
 - [ ] Credentials exposed to any inherited Xcode scheme-pre-action log are revoked/rotated; affected logs are removed
       under the approved retention policy; a sanitized-launch sentinel build contains no credential values.
 
-## 5. Sidecar and repository hygiene
+## 5. Repository hygiene
 
-- [ ] Sidecar `npm ci`, every-module syntax check, 24 tests, production dependency tree, and `npm audit` pass.
 - [ ] actionlint passes every workflow; all external actions are pinned to full commit SHA values.
 - [ ] PSScriptAnalyzer `1.25.0`, PowerShell parser, bash syntax, and shellcheck pass for repository-owned scripts.
 - [ ] JSON, YAML, JSON Schema, Markdown-link, Git LFS, binary-attribute, conflict-marker, and LF audits pass.
