@@ -53,15 +53,16 @@
       "id": "P0-TRUST-01",
       "priority": "P0",
       "enforcement": "advisory",
-      "status": "blocked",
-      "reasonCode": "approval-evidence-missing",
+      "status": "approved",
+      "evidenceIds": [
+        "EVID-P0-TRUST-01-0001"
+      ],
       "reviewerRoles": [
         "product-owner",
         "registry-owner",
         "release-owner",
         "security-owner"
-      ],
-      "evidenceIds": []
+      ]
     },
     {
       "id": "P0-CRED-01",
@@ -154,15 +155,16 @@
       "id": "P1-SUPPORT-01",
       "priority": "P1",
       "enforcement": "advisory",
-      "status": "blocked",
-      "reasonCode": "ownership-evidence-missing",
+      "status": "approved",
+      "evidenceIds": [
+        "EVID-P1-SUPPORT-01-0001"
+      ],
       "reviewerRoles": [
         "incident-owner",
         "release-owner",
         "security-intake-owner",
         "support-owner"
-      ],
-      "evidenceIds": []
+      ]
     }
   ]
 }
