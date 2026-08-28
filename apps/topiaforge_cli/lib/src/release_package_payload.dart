@@ -64,22 +64,23 @@ class ReleasePackagePayloadWriter {
     );
     _noticeWriter.copyBepInExCorrespondingSource(destinationRoot);
     _copyTemplates(destinationRoot);
-    fileOps.copyFileIfExists(
-      p.join(repositoryRoot, 'README.md'),
-      p.join(destinationRoot, 'README.md'),
-    );
-    fileOps.copyFileIfExists(
-      p.join(repositoryRoot, 'LICENSE'),
-      p.join(destinationRoot, 'LICENSE'),
-    );
-    fileOps.copyFileIfExists(
-      p.join(repositoryRoot, 'DCO'),
-      p.join(destinationRoot, 'DCO'),
-    );
-    fileOps.copyFileIfExists(
-      p.join(repositoryRoot, 'THIRD_PARTY_NOTICES.md'),
-      p.join(destinationRoot, 'THIRD_PARTY_NOTICES.md'),
-    );
+    // Root documents the archive carries verbatim, so the licence and notices
+    // travel with the binaries. This copy is deliberately tolerant because
+    // presence is enforced upstream: LICENSE and DCO by the release legal
+    // inventory, README.md and TRADEMARKS.md by the trademark notice audit, and
+    // THIRD_PARTY_NOTICES.md again in the built package by the validator.
+    for (final document in const [
+      'README.md',
+      'LICENSE',
+      'DCO',
+      'THIRD_PARTY_NOTICES.md',
+      'TRADEMARKS.md',
+    ]) {
+      fileOps.copyFileIfExists(
+        p.join(repositoryRoot, document),
+        p.join(destinationRoot, document),
+      );
+    }
     _noticeWriter.copyDartCliNotices(destinationRoot);
     if (rebuildRuntimePayload) {
       await _publishGameCompatExtractor(destinationRoot);
