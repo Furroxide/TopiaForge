@@ -38,9 +38,16 @@ Reserved for constrained surfaces.
 """
 
 
+# Held open for the run and cleaned up at exit; mkdtemp alone would leave a
+# directory behind per test, which the sibling audits' tests do not do.
+_TEMP_DIRS: list[tempfile.TemporaryDirectory] = []
+
+
 def tree(canonical: str = CANONICAL, **surfaces: str) -> Path:
     """Builds a throwaway repository root and points the audit at it."""
-    root = Path(tempfile.mkdtemp(prefix="trademark-audit-test-"))
+    holder = tempfile.TemporaryDirectory(prefix="trademark-audit-test-")
+    _TEMP_DIRS.append(holder)
+    root = Path(holder.name)
     (root / "TRADEMARKS.md").write_text(canonical, encoding="utf-8")
     for name in AUDIT_MODULE.FULL_STATEMENT_FILES:
         body = surfaces.get(name.replace(".", "_"), f"# {name}\n\n{FULL}\n")
