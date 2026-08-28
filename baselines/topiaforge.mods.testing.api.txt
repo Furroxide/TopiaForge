@@ -612,15 +612,22 @@ type public sealed class TopiaForge.Mods.Testing.FakeWorldGamemodeService : Syst
   method [virtual,final,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.WorldSession>> LaunchMenuEntryAsync(System.String entryId, System.Threading.CancellationToken cancellationToken = null)
   method [virtual,final,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.WorldSession>> LoadAsync(TopiaForge.Mods.WorldLoadRequest request, System.Threading.CancellationToken cancellationToken = null)
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<System.Boolean> EndSession(TopiaForge.Mods.WorldSessionEndReason reason)
+  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<System.Boolean> LoadLocalWorld(System.String requestedPath)
+  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.LocalWorldFile>> ListLocalWorlds()
+  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<System.IDisposable> RegisterAssetOverride(TopiaForge.Mods.WorldAssetOverride assetOverride)
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IWorldRegistration> RegisterGamemode(TopiaForge.Mods.GamemodeDefinition gamemode)
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IWorldRegistration> RegisterMenuEntry(TopiaForge.Mods.GamemodeMenuEntry entry)
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IWorldRegistration> RegisterWorld(TopiaForge.Mods.WorldDefinition world, TopiaForge.Mods.ICustomWorldContent? content = null)
   property System.Boolean AutoCompleteLoads { get; set; }
   property System.Boolean HasPendingLoad { get; }
   property System.Boolean IsTransitionInFlight { get [virtual,final,newslot]; }
+  property System.Boolean LocalWorldsAvailable { get; set; }
+  property System.Collections.Generic.IReadOnlyList<System.String> LoadedLocalWorlds { get; }
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.GamemodeDefinition> Gamemodes { get [virtual,final,newslot]; }
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.GamemodeMenuEntry> MenuEntries { get [virtual,final,newslot]; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.WorldAssetOverride> AssetOverrides { get; }
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.WorldDefinition> Worlds { get [virtual,final,newslot]; }
+  property System.Collections.Generic.List<TopiaForge.Mods.LocalWorldFile> LocalWorlds { get; }
   property System.Int32 ActiveRegistrationCount { get; }
   property TopiaForge.Mods.WorldSession? CurrentSession { get [virtual,final,newslot]; }
 

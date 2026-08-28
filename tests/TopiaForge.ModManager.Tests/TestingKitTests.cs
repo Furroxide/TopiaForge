@@ -17,6 +17,8 @@ namespace TopiaForge.ModManager.Tests
             TestExpectedCancellationResults();
             TestBundleWorldContentOwnership();
             TestSpecialistModuleFakes();
+            TestWorldAssetOverrideFake();
+            TestLocalWorldFake();
             TestWorldPauseMenuFake();
             TestGameplayPause();
             TestCompleteCoreServiceContext();

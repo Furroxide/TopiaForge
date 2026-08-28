@@ -148,9 +148,10 @@ namespace $assembly
 
     await File(p.join(companion.path, 'README.md')).writeAsString(
       '# $name Unity Companion\n\n'
-      'Open this folder as a Unity project to author custom-world AssetBundles, '
-      'then build them with `topiaforge world build`. Scene and robot authoring '
-      'lives in the official Robotopia Creator at https://robotopia.gg/editor/.\n',
+      'Place a Unity project here to author AssetBundles for this mod. Scaffold one '
+      'with `topiaforge new unity-world <Name> --dir .`, then build its bundles with '
+      '`topiaforge world build`. Scene and robot authoring lives in the official '
+      'Robotopia Creator at https://robotopia.gg/editor/.\n',
     );
   }
 
