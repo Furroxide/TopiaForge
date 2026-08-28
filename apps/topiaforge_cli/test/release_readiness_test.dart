@@ -48,14 +48,27 @@ void main() {
       'P1-E2E-01',
       'P1-SUPPORT-01',
     ]);
+    // Two advisory gates carry a recorded owner approval (2026-08-28); the other
+    // ten are unmet and carry no evidence. Naming the approved pair here means a
+    // third approval appearing without a register entry fails this test.
+    final approved = {
+      for (final gate in decision.gates)
+        if (gate.status == 'approved') gate.id: gate.evidenceIds,
+    };
+    expect(approved, {
+      'P0-TRUST-01': ['EVID-P0-TRUST-01-0001'],
+      'P1-SUPPORT-01': ['EVID-P1-SUPPORT-01-0001'],
+    });
     expect(
-      decision.gates.every(
-        (gate) => gate.status == 'blocked' && gate.evidenceIds.isEmpty,
-      ),
+      decision.gates
+          .where((gate) => gate.status != 'approved')
+          .every(
+            (gate) => gate.status == 'blocked' && gate.evidenceIds.isEmpty,
+          ),
       isTrue,
     );
-    // Every gate is blocked, so the computed status is decided entirely by
-    // which of them the contract declares blocking. Pin that set: silently
+    // Every blocking gate is unmet, so the computed status is decided entirely
+    // by which of them the contract declares blocking. Pin that set: silently
     // downgrading one is exactly the change this file exists to catch.
     expect(
       decision.gates
@@ -237,7 +250,9 @@ void main() {
 
   test('advisory gates are reported but do not hold the candidate', () {
     // The 0.x posture: approving only the five blocking gates reaches `ready`
-    // while the seven advisory gates are still recorded as blocked.
+    // while the advisory gates that remain unmet are still recorded as blocked.
+    // Two of the seven advisory gates are already approved in the decision, so
+    // five stay blocked.
     final ready = _readinessJson(readinessBytes);
     const blocking = {
       'P0-IP-01',
@@ -260,7 +275,7 @@ void main() {
     expect(decision.isReady, isTrue);
     expect(
       decision.gates.where((gate) => gate.status == 'blocked'),
-      hasLength(7),
+      hasLength(5),
     );
 
     // One blocking gate left unapproved still stops the release.
