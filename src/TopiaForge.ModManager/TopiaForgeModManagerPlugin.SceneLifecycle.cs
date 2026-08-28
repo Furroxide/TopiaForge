@@ -73,7 +73,7 @@ namespace TopiaForge.ModManager
             }
             catch (Exception ex)
             {
-                managerLogger.Error(ex, "Failed to dispatch a scene-unloaded event.");
+                managerLogger.Error(ex, "Failed to dispatch a scene-unloaded event for '" + scene.name + "' (handle " + scene.handle + ").");
             }
         }
 
@@ -99,7 +99,7 @@ namespace TopiaForge.ModManager
             }
             catch (Exception ex)
             {
-                managerLogger.Error(ex, "Failed to dispatch an active-scene-changed event.");
+                managerLogger.Error(ex, "Failed to dispatch an active-scene-changed event from '" + previous.name + "' (handle " + previous.handle + ") to '" + current.name + "' (handle " + current.handle + ").");
             }
         }
 
