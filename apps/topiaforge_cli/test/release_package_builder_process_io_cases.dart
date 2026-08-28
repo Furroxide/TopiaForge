@@ -270,7 +270,7 @@ void _registerReleaseProcessAndIoTests() {
       }
       final runner = _RecordingProcessRunner(
         onResult: (call) => call.executable == 'powershell.exe'
-            ? ProcessResult(1, 0, 'unsigned', '')
+            ? ProcessResult(1, 0, 'NotSigned|none|none', '')
             : ProcessResult(1, 1, '', 'unexpected process'),
       );
 
@@ -299,7 +299,7 @@ void _registerReleaseProcessAndIoTests() {
         _writeFile(stage, p.split(relative), 'signed executable fixture');
       }
       final runner = _RecordingProcessRunner(
-        onResult: (_) => ProcessResult(1, 2, '', 'signed'),
+        onResult: (_) => ProcessResult(1, 0, 'Valid|signer|stamp', ''),
       );
 
       await expectLater(
@@ -311,7 +311,122 @@ void _registerReleaseProcessAndIoTests() {
           isA<StateError>().having(
             (error) => error.toString(),
             'message',
-            contains('technical dry-run requires an entirely unsigned package'),
+            contains('carries a signature: status Valid'),
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'Windows unsigned verification rejects an untrusted signature at once',
+    () async {
+      // Windows reports a self-signed or otherwise untrusted certificate as
+      // UnknownError, the same status it uses for a file it could not read.
+      // The signer certificate is what separates them, and a real signature
+      // must not be retried as though it were a transient read.
+      final stage = Directory(p.join(temp.path, 'windows-untrusted-stage'))
+        ..createSync();
+      for (final relative in [
+        'topiaforge.exe',
+        'TopiaForge.GameCompat.Extractor.exe',
+        p.join('launcher', 'topiaforge_launcher.exe'),
+      ]) {
+        _writeFile(stage, p.split(relative), 'untrusted executable fixture');
+      }
+      final runner = _RecordingProcessRunner(
+        onResult: (_) => ProcessResult(1, 0, 'UnknownError|signer|none', ''),
+      );
+
+      await expectLater(
+        () => WindowsPackageSigner(
+          processRunner: runner,
+          isWindows: true,
+        ).verifyUnsignedExecutables(stage.path),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.toString(),
+            'message',
+            contains('carries a signature: status UnknownError'),
+          ),
+        ),
+      );
+      // One probe per executable and no retries: the answer was conclusive.
+      expect(
+        runner.calls.where((call) => call.executable == 'powershell.exe'),
+        hasLength(1),
+      );
+    },
+  );
+
+  test(
+    'Windows unsigned verification retries a file it could not read',
+    () async {
+      // A freshly extracted executable is routinely held open by the antivirus
+      // scanner for a moment. That is not a signing violation, and the check
+      // used to report it as one.
+      final stage = Directory(p.join(temp.path, 'windows-locked-stage'))
+        ..createSync();
+      for (final relative in [
+        'topiaforge.exe',
+        'TopiaForge.GameCompat.Extractor.exe',
+        p.join('launcher', 'topiaforge_launcher.exe'),
+      ]) {
+        _writeFile(stage, p.split(relative), 'locked executable fixture');
+      }
+      var probes = 0;
+      final runner = _RecordingProcessRunner(
+        onResult: (_) {
+          probes++;
+          // Unreadable once per executable, then readable.
+          return probes.isOdd
+              ? ProcessResult(1, 0, 'unreadable:IOException', '')
+              : ProcessResult(1, 0, 'NotSigned|none|none', '');
+        },
+      );
+
+      await WindowsPackageSigner(
+        processRunner: runner,
+        isWindows: true,
+      ).verifyUnsignedExecutables(stage.path);
+
+      // Three executables, each needing a second probe.
+      expect(
+        runner.calls.where((call) => call.executable == 'powershell.exe'),
+        hasLength(6),
+      );
+    },
+  );
+
+  test(
+    'Windows unsigned verification does not call a persistent read failure signed',
+    () async {
+      final stage = Directory(p.join(temp.path, 'windows-unreadable-stage'))
+        ..createSync();
+      for (final relative in [
+        'topiaforge.exe',
+        'TopiaForge.GameCompat.Extractor.exe',
+        p.join('launcher', 'topiaforge_launcher.exe'),
+      ]) {
+        _writeFile(stage, p.split(relative), 'unreadable executable fixture');
+      }
+      final runner = _RecordingProcessRunner(
+        onResult: (_) => ProcessResult(1, 0, 'UnknownError|none|none', ''),
+      );
+
+      await expectLater(
+        () => WindowsPackageSigner(
+          processRunner: runner,
+          isWindows: true,
+        ).verifyUnsignedExecutables(stage.path),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.toString(),
+            'message',
+            allOf(
+              contains('Could not determine'),
+              contains('not a signing violation'),
+            ),
           ),
         ),
       );
