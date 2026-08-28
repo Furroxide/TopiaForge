@@ -425,6 +425,13 @@ class _RecordingProcessRunner extends ReleaseProcessRunner {
   Future<bool> commandExists(String executable) async =>
       availableCommands.contains(executable);
 
+  /// Mirrors the real resolver: a command that exists resolves to a launchable
+  /// path. The `.bat` suffix is what production returns on Windows, and the
+  /// builder is expected to invoke that rather than the bare name.
+  @override
+  Future<String?> resolveCommand(String executable) async =>
+      availableCommands.contains(executable) ? '$executable.bat' : null;
+
   @override
   Future<ProcessResult> runResult(
     String executable,
