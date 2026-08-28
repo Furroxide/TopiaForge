@@ -165,8 +165,6 @@ namespace TopiaForge.CreatorTools.Shared
 
             status = "Running " + activeProject.DisplayName + ".";
             RefreshUi();
-            recorder?.Observe(CreatorObservation.LoadedLocalEventProject);
-            recorder?.Observe(CreatorObservation.RanBoundedGraphBranches);
             return OperationResult<string>.Success(status);
         }
 
@@ -227,13 +225,9 @@ namespace TopiaForge.CreatorTools.Shared
             RefreshUi();
             if (wasRunning && removeProjectEntities)
             {
-                recorder?.Observe(
-                    CreatorObservation.StoppedGraphAndRolledBack);
                 if (manualBefore > 0
                     && roster.Count(entry => entry.Owned) >= manualBefore)
                 {
-                    recorder?.Observe(
-                        CreatorObservation.PreservedUnrelatedManualSpawns);
                 }
             }
             return OperationResult<string>.Success(status);

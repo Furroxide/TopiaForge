@@ -101,7 +101,6 @@ namespace TopiaForge.CreatorTools.Shared
             var result = SetTransform(entry, transform);
             if (result.Succeeded)
             {
-                recorder?.Observe(CreatorObservation.TransformedInstance);
             }
             return ToText(result, entry.DisplayName + " transform updated.");
         }
@@ -163,14 +162,11 @@ namespace TopiaForge.CreatorTools.Shared
             if (result.Succeeded)
             {
                 SelectRoster(entry.Id);
-                recorder?.Observe(CreatorObservation.TransformedInstance);
                 // Relocating a borrowed native robot is the location half of
                 // creator.personality-and-location-restore; owned spawns are
                 // not restored on End Session because they are removed.
                 if (!entry.Owned && entry.RobotTarget != null)
                 {
-                    recorder?.Observe(
-                        CreatorObservation.PreviewedRobotLocation);
                 }
             }
             return ToText(result, entry.DisplayName + " moved to the aim point.");
@@ -226,8 +222,6 @@ namespace TopiaForge.CreatorTools.Shared
             var previewed = edit.PreviewPersonality(draft);
             if (previewed.Succeeded && !entry.Owned && entry.RobotTarget != null)
             {
-                recorder?.Observe(
-                    CreatorObservation.PreviewedRobotPersonality);
             }
             return ToText(previewed, entry.DisplayName + " personality preview applied.");
         }
