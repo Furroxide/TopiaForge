@@ -188,13 +188,14 @@ VPM packages, `vpm-resolver` and `world-companion`, and that is now confirmed ag
 | GameCompat binding counts | 182 bindings, 161 verifiable | **206** bindings, **185** verifiable, 21 uncheckable offline. The tree grew after the 2409 cutover. |
 | CreatorTools removal size | "roughly 25 workbench call sites" | **42 references across 5 files**, and removing them exposes a second dead layer (three `HashSet`s, two predicates, two counters) that only the recorder ever populated. |
 
-### Follow-up work now in review
+### Follow-up work completed
 
-[#85](https://github.com/Furroxide/TopiaForge/pull/85) removes `CreatorAcceptanceRecorder` and
-`CreatorAcceptanceCases` from the shipping Sandbox mod. This register described them as inert; they
-are in fact **unreachable**. `SandboxController` is the only caller of `CreatorWorkbenchOptions` and
-never passes an `acceptanceChallenge`, so the optional parameter always takes its empty default and
-`TryCreate` always returns `null`. Not a release blocker, as recorded.
+[#85](https://github.com/Furroxide/TopiaForge/pull/85) landed, removing `CreatorAcceptanceRecorder`
+and `CreatorAcceptanceCases` from the shipping Sandbox mod. This register described them as inert;
+they were in fact **unreachable**. `SandboxController` is the only caller of
+`CreatorWorkbenchOptions` and never passed an `acceptanceChallenge`, so the optional parameter always
+took its empty default and `TryCreate` always returned `null`. Not a release blocker, as recorded —
+but it did ship, and it no longer does.
 
 ## Verification matrix
 
@@ -609,9 +610,10 @@ automated tests cannot close Unity object lifetime.
   `Assert-WindowsCreator*` verifiers and the `-WindowsCreatorEvidence`/`-WindowsCreatorEvidenceBundle` inputs in
   `tools/release-admin.ps1`, and the `release-windows-creator-evidence-v2` branch of the handoff QA contract.
 
-  `CreatorAcceptanceRecorder` and `CreatorAcceptanceCases` remain in `mods/TopiaForge.Sandbox/CreatorTools` until
-  [#85](https://github.com/Furroxide/TopiaForge/pull/85) lands. Two corrections to what this register said about
-  them, both found on 2026-08-28. They are not merely inert but **unreachable**: `SandboxController` is the only
+  `CreatorAcceptanceRecorder` and `CreatorAcceptanceCases` were removed from
+  `mods/TopiaForge.Sandbox/CreatorTools` by [#85](https://github.com/Furroxide/TopiaForge/pull/85) on 2026-08-28.
+  Two corrections to what this register said about them, both found while doing it. They were not merely inert but
+  **unreachable**: `SandboxController` is the only
   caller of `CreatorWorkbenchOptions` and never passes an `acceptanceChallenge`, so the optional parameter always
   takes its empty default and `TryCreate` always returns `null`. And they are woven through **42 references across
   five files**, not roughly 25 — and removing those exposes a second dead layer beneath, because the three
