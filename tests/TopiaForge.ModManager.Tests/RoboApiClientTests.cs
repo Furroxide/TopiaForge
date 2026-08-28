@@ -4,7 +4,6 @@ using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.Mods;
@@ -126,19 +125,29 @@ namespace TopiaForge.ModManager.Tests
         }
 
         /// <summary>
-        /// The three response caps in docs/PrivacyAndCapabilities.md: 256 KiB for a brain reply, 64 KiB for a
-        /// transcript, 2 MiB for a transcription request body. A backend that ignores them must not be able to
-        /// make the game allocate without bound, so both the declared-length short circuit and the streaming
-        /// path have to refuse.
+        /// Drives the shared bounded reader that enforces every response cap, using a small cap so the cases
+        /// stay fast. The production values it protects — 256 KiB for a brain reply, 64 KiB for a transcript —
+        /// are asserted at their call sites in RoboApiClient rather than here; what this covers is the reader's
+        /// behaviour at the boundary, which is the part both of them share. The transcription *request* cap is
+        /// a different check and is exercised in RunUnreachableBackendPaths.
+        ///
+        /// Both branches matter: the declared-length short circuit and the streaming check for a response that
+        /// hides its length.
         /// </summary>
         private static void RunResponseCaps()
         {
             const int cap = 4096;
 
-            // A declared Content-Length over the cap is refused before a single byte is read.
+            // A declared Content-Length over the cap is refused before a single byte is read. Assert the
+            // header is actually populated first: the short circuit only runs when ContentLength has a value,
+            // so without this the case could silently fall through to the streaming branch and cover nothing
+            // the next case does not already cover.
+            var declared = new ByteArrayContent(new byte[cap + 1]);
+            Assert(
+                declared.Headers.ContentLength == cap + 1,
+                "the declared-length case must present a Content-Length, or it is not testing that branch");
             AssertThrowsInvalidData(
-                () => RoboApiClient.ReadBoundedContentAsync(
-                    new ByteArrayContent(new byte[cap + 1]), cap, CancellationToken.None),
+                () => RoboApiClient.ReadBoundedContentAsync(declared, cap, CancellationToken.None),
                 "a response declaring more than the cap must be refused before reading it");
 
             // A response that hides its length is caught while streaming. This is the case that matters:
@@ -287,14 +296,37 @@ namespace TopiaForge.ModManager.Tests
         private static BrainQueryRequest SampleRequest() =>
             new BrainQueryRequest("ping", Array.Empty<BrainOutputField>());
 
-        /// <summary>Binds a loopback port, learns its number, then releases it so connecting is refused.</summary>
+        /// <summary>
+        /// Finds a loopback port that actively refuses connections. Binding a port, reading its number, and
+        /// releasing it is not enough on its own: anything on the machine may take it in the gap, which would
+        /// turn the offline case into a hang or a different failure. So the candidate is probed, and a port
+        /// that someone else has claimed is discarded rather than used.
+        /// </summary>
         private static int ReserveClosedPort()
         {
-            var listener = new TcpListener(IPAddress.Loopback, 0);
-            listener.Start();
-            var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-            listener.Stop();
-            return port;
+            for (var attempt = 0; attempt < 16; attempt++)
+            {
+                var listener = new TcpListener(IPAddress.Loopback, 0);
+                listener.Start();
+                var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+                listener.Stop();
+
+                using var probe = new TcpClient();
+                try
+                {
+                    probe.Connect(IPAddress.Loopback, port);
+                }
+                catch (SocketException)
+                {
+                    // Refused, which is exactly the condition the offline case needs.
+                    return port;
+                }
+
+                // Something answered. Try again rather than test against a live listener.
+            }
+
+            throw new InvalidOperationException(
+                "Could not find a loopback port that refuses connections.");
         }
 
         private static void AssertThrowsInvalidData(Func<Task<string>> call, string message)
