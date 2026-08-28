@@ -313,7 +313,10 @@ namespace TopiaForge.RobotKit
             return uri.GetLeftPart(UriPartial.Path).TrimEnd('/');
         }
 
-        private static async Task<string> ReadBoundedContentAsync(HttpContent content, int maximumBytes, CancellationToken token)
+        // internal rather than private so the response-cap regressions can drive it directly: the caps are a
+        // privacy/DoS boundary (P0-PRIV-01), and reaching them through a live HTTPS response would need a
+        // trusted local certificate fixture on every supported host.
+        internal static async Task<string> ReadBoundedContentAsync(HttpContent content, int maximumBytes, CancellationToken token)
         {
             if (content.Headers.ContentLength.HasValue && content.Headers.ContentLength.Value > maximumBytes)
             {
