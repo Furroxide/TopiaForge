@@ -64,29 +64,22 @@ class ReleasePackagePayloadWriter {
     );
     _noticeWriter.copyBepInExCorrespondingSource(destinationRoot);
     _copyTemplates(destinationRoot);
-    fileOps.copyFileIfExists(
-      p.join(repositoryRoot, 'README.md'),
-      p.join(destinationRoot, 'README.md'),
-    );
-    fileOps.copyFileIfExists(
-      p.join(repositoryRoot, 'LICENSE'),
-      p.join(destinationRoot, 'LICENSE'),
-    );
-    fileOps.copyFileIfExists(
-      p.join(repositoryRoot, 'DCO'),
-      p.join(destinationRoot, 'DCO'),
-    );
-    fileOps.copyFileIfExists(
-      p.join(repositoryRoot, 'THIRD_PARTY_NOTICES.md'),
-      p.join(destinationRoot, 'THIRD_PARTY_NOTICES.md'),
-    );
-    // Both files above link to it, and it is the canonical wording of a legal
-    // notice, so a reader unpacking the archive must be able to follow that
-    // link rather than be sent back to the repository for it.
-    fileOps.copyFileIfExists(
-      p.join(repositoryRoot, 'TRADEMARKS.md'),
-      p.join(destinationRoot, 'TRADEMARKS.md'),
-    );
+    // Root documents the archive carries verbatim. TRADEMARKS.md is here
+    // because README.md and THIRD_PARTY_NOTICES.md both link to it and it is
+    // the canonical wording of a legal notice: a reader unpacking the archive
+    // has to be able to follow that link rather than be sent to the repository.
+    for (final document in const [
+      'README.md',
+      'LICENSE',
+      'DCO',
+      'THIRD_PARTY_NOTICES.md',
+      'TRADEMARKS.md',
+    ]) {
+      fileOps.copyFileIfExists(
+        p.join(repositoryRoot, document),
+        p.join(destinationRoot, document),
+      );
+    }
     _noticeWriter.copyDartCliNotices(destinationRoot);
     if (rebuildRuntimePayload) {
       await _publishGameCompatExtractor(destinationRoot);
