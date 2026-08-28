@@ -120,7 +120,7 @@ namespace TopiaForge.ModManager.Tests
             }
 
             RunResponseCaps();
-            RunUnreachableBackendPaths(root);
+            RunUnreachableBackendPaths();
 
             Console.WriteLine("RoboApiClientTests passed.");
         }
@@ -167,11 +167,19 @@ namespace TopiaForge.ModManager.Tests
         /// name resolution or on anything outside the machine. Also asserts the credential never reaches a log
         /// line on any of those paths, which is the disclosure claim the launcher makes on the player's behalf.
         /// </summary>
-        private static void RunUnreachableBackendPaths(string root)
+        private static void RunUnreachableBackendPaths()
         {
             const string token = "secret-token-value";
             const string session = "session-id-value";
-            var directory = CreateScratchDirectory(root, "robo-token-failure-paths");
+            // Built from Path.GetTempPath rather than the harness root. That root arrives
+            // from the command line, so combining onto it is a tainted path expression that
+            // cs/path-injection reports at high severity, and codeql-high-critical has no
+            // bypass actors. Nothing here wants the harness directory anyway: the client
+            // only needs some directory holding a credential file it can read.
+            var directory = Path.Combine(
+                Path.GetTempPath(),
+                "topiaforge-roboapi-failure-paths-" + Guid.NewGuid().ToString("n"));
+            Directory.CreateDirectory(directory);
             File.WriteAllText(
                 Path.Combine(directory, RoboApiClient.TokenFileName),
                 "{" + "\"agent_token\":\"" + token + "\"}");
@@ -274,33 +282,20 @@ namespace TopiaForge.ModManager.Tests
             finally
             {
                 Environment.SetEnvironmentVariable("ROBOAPI_BACKEND_ROOT", previousRoot);
+                try
+                {
+                    Directory.Delete(directory, recursive: true);
+                }
+                catch (IOException)
+                {
+                    // A leftover scratch directory must not fail an otherwise passing run.
+                }
             }
         }
 
         /// <summary>The smallest request the protocol accepts; its content is irrelevant here.</summary>
         private static BrainQueryRequest SampleRequest() =>
             new BrainQueryRequest("ping", Array.Empty<BrainOutputField>());
-
-        /// <summary>
-        /// Creates a scratch directory under <paramref name="root"/> and proves it stayed there.
-        /// The harness takes its root from the command line, so combining a name onto it is a
-        /// tainted path expression; resolving both ends and comparing makes the containment a
-        /// checked property rather than an assumed one.
-        /// </summary>
-        private static string CreateScratchDirectory(string root, string name)
-        {
-            var basePath = Path.GetFullPath(root);
-            var prefix = basePath.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-            var candidate = Path.GetFullPath(Path.Combine(prefix, name));
-            if (!candidate.StartsWith(prefix, StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    "Scratch directory escaped the test root: " + name);
-            }
-
-            Directory.CreateDirectory(candidate);
-            return candidate;
-        }
 
         /// <summary>Binds a loopback port, learns its number, then releases it so connecting is refused.</summary>
         private static int ReserveClosedPort()
