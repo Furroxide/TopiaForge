@@ -105,8 +105,22 @@ done < <(jq -r '.[]' <<<"$workflow_generated_json" | tr -d '\r')
 # be lifted with the policy. See P0-LINUX-01 in docs/LaunchBlockers.md.
 required_handoff_assets=(
   release-handoff-v1.json
-  release-handoff-v1.json.p7s
 )
+# An unsigned distribution has no certificate and therefore no detached CMS
+# handoff signature. Demanding the P7S unconditionally is what made the hosted
+# path reject an unsigned candidate outright. See P0-WIN-01 in
+# docs/LaunchBlockers.md.
+windows_distribution=$(jq -er '
+  .signingIdentities.windowsDistribution // "signed"
+' "$release_policy" | tr -d '\r')
+case "$windows_distribution" in
+  signed) required_handoff_assets+=(release-handoff-v1.json.p7s) ;;
+  unsigned) ;;
+  *)
+    printf 'Unknown Windows distribution mode: %s\n' "$windows_distribution" >&2
+    exit 1
+    ;;
+esac
 # Every `jq | read` loop below strips \r. jq on Windows writes through CRT
 # text-mode translation, so each line it emits ends \r\n; `read -r` keeps that
 # byte, and the value is then used as a filename or as base64, both of which

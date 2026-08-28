@@ -207,38 +207,6 @@ jobs:
           staged-assets
           "${{ needs.verify-candidate.outputs.prerelease }}"
 
-      # The distribution mode is fully wired through policy validation, the
-      # Windows build, package trust verification, and handoff signing. What is
-      # NOT yet wired is the published trust envelope: the hosted-verification
-      # evidence, the final asset inventory, and the attestation subject all
-      # embed release-handoff-v1.json.p7s unconditionally, and reshaping them is
-      # a reviewed change of its own that needs a -Rehearsal run behind it.
-      #
-      # Until that lands this fails closed rather than publishing a candidate
-      # whose provenance record quietly lost its signature field. Deleting this
-      # step is the last move of that work, not the first.
-      - name: Reject an unsigned distribution until the trust envelope supports it
-        shell: pwsh
-        run: |
-          $policy = Get-Content -LiteralPath (
-            Join-Path $env:GITHUB_WORKSPACE "release/release-policy.json"
-          ) -Raw | ConvertFrom-Json
-          $windowsDistribution = "signed"
-          if ($policy.signingIdentities.PSObject.Properties.Name -contains
-              "windowsDistribution") {
-            $windowsDistribution =
-              [string]$policy.signingIdentities.windowsDistribution
-          }
-          if ($windowsDistribution -ceq "unsigned") {
-            throw (
-              "release-policy.json records an unsigned Windows distribution, " +
-              "but the hosted publication path still requires the detached CMS " +
-              "handoff signature in its evidence, asset inventory, and " +
-              "attestation subject. Finish that work before publishing " +
-              "unsigned. See P0-WIN-01 in docs/LaunchBlockers.md."
-            )
-          }
-
       - name: Verify authenticated admin handoff
         shell: pwsh
         run: |
@@ -401,12 +369,32 @@ jobs:
           archive_sha=$(sha256_file "$archive_path")
           archive_size=$(wc -c <"$archive_path" | tr -d ' ')
           handoff_sha=$(sha256_file staged-assets/release-handoff-v1.json)
-          handoff_signature_sha=$(
-            sha256_file staged-assets/release-handoff-v1.json.p7s
-          )
+          windows_distribution=$(jq -er '
+            .signingIdentities.windowsDistribution // "signed"
+          ' release/release-policy.json | tr -d '\r')
+          case "$windows_distribution" in
+            signed|unsigned) ;;
+            *) echo "Unknown Windows distribution mode: $windows_distribution" >&2; exit 1 ;;
+          esac
+          # An unsigned distribution produces no detached CMS handoff, so the field is
+          # omitted rather than emitted empty. An absent field cannot be mistaken for a
+          # signature that was present and went unverified; "" reads like both.
+          if [ "$windows_distribution" = unsigned ]; then
+            handoff_signature_json=null
+          else
+            handoff_signature_json=$(
+              jq -n --arg sha "$(sha256_file staged-assets/release-handoff-v1.json.p7s)" '$sha'
+            )
+          fi
           trust_check=$(
             case "$PLATFORM" in
-              windows) echo authenticode ;;
+              windows)
+                if [ "$windows_distribution" = unsigned ]; then
+                  echo unsigned
+                else
+                  echo authenticode
+                fi
+                ;;
               linux) echo not-applicable ;;
               *) exit 1 ;;
             esac
@@ -420,7 +408,7 @@ jobs:
             --arg archiveSha256 "$archive_sha" \
             --argjson archiveSize "$archive_size" \
             --arg handoffSha256 "$handoff_sha" \
-            --arg handoffSignatureSha256 "$handoff_signature_sha" \
+            --argjson handoffSignatureSha256 "$handoff_signature_json" \
             --arg trustCheck "$trust_check" \
             '{
               schema: "release-hosted-verification-v1",
@@ -433,8 +421,11 @@ jobs:
                 sha256: $archiveSha256,
                 size: $archiveSize
               },
-              handoffSha256: $handoffSha256,
-              handoffSignatureSha256: $handoffSignatureSha256,
+              handoffSha256: $handoffSha256
+            }
+            + (if $handoffSignatureSha256 == null then {}
+               else {handoffSignatureSha256: $handoffSignatureSha256} end)
+            + {
               packageValidation: "passed",
               trustCheck: $trustCheck,
               result: "passed"
@@ -630,11 +621,28 @@ jobs:
           )" -eq "${#expected_platforms[@]}"
           handoff_sha=$(sha256sum staged-assets/release-handoff-v1.json |
             awk '{print $1}')
-          handoff_signature_sha=$(
-            sha256sum staged-assets/release-handoff-v1.json.p7s |
-              awk '{print $1}'
-          )
-          windows_trust=authenticode
+          windows_distribution=$(jq -er '
+            .signingIdentities.windowsDistribution // "signed"
+          ' release/release-policy.json | tr -d '\r')
+          case "$windows_distribution" in
+            signed|unsigned) ;;
+            *) echo "Unknown Windows distribution mode: $windows_distribution" >&2; exit 1 ;;
+          esac
+          # Assert the shape the mode requires in both directions: a signed release must
+          # carry the signature digest, and an unsigned one must not carry the key at
+          # all. Checking only the signed direction would let an unsigned candidate
+          # publish evidence that silently dropped the field.
+          if [ "$windows_distribution" = unsigned ]; then
+            handoff_signature_filter='(has("handoffSignatureSha256") | not)'
+            windows_trust=unsigned
+          else
+            handoff_signature_sha=$(
+              sha256sum staged-assets/release-handoff-v1.json.p7s |
+                awk '{print $1}'
+            )
+            handoff_signature_filter='.handoffSignatureSha256 == $handoffSignatureSha256'
+            windows_trust=authenticode
+          fi
           declare -A seen_platforms
           for evidence in hosted-verification/hosted-verification-*.json; do
             jq -e \
@@ -642,13 +650,13 @@ jobs:
               --arg tag "${{ needs.verify-candidate.outputs.tag }}" \
               --arg targetSha "${{ needs.verify-candidate.outputs.target_sha }}" \
               --arg handoffSha256 "$handoff_sha" \
-              --arg handoffSignatureSha256 "$handoff_signature_sha" \
+              --arg handoffSignatureSha256 "${handoff_signature_sha:-}" \
               '.schema == "release-hosted-verification-v1" and
                .version == $version and
                .tag == $tag and
                .targetSha == $targetSha and
                .handoffSha256 == $handoffSha256 and
-               .handoffSignatureSha256 == $handoffSignatureSha256 and
+               '"$handoff_signature_filter"' and
                .packageValidation == "passed" and
                .result == "passed"' "$evidence" >/dev/null
             platform=$(jq -er '.platform' "$evidence")
@@ -727,8 +735,17 @@ jobs:
           set -euo pipefail
           handoff_names=(
             release-handoff-v1.json
-            release-handoff-v1.json.p7s
           )
+          windows_distribution=$(jq -er '
+            .signingIdentities.windowsDistribution // "signed"
+          ' release/release-policy.json | tr -d '\r')
+          case "$windows_distribution" in
+            signed|unsigned) ;;
+            *) echo "Unknown Windows distribution mode: $windows_distribution" >&2; exit 1 ;;
+          esac
+          if [ "$windows_distribution" != unsigned ]; then
+            handoff_names+=(release-handoff-v1.json.p7s)
+          fi
           while IFS= read -r bundle_name; do
             handoff_names+=("$bundle_name")
           done < <(jq -er '
@@ -779,10 +796,25 @@ jobs:
           set -euo pipefail
           handoff_sha=$(sha256sum release-assets/release-handoff-v1.json |
             awk '{print $1}')
-          handoff_signature_sha=$(
-            sha256sum release-assets/release-handoff-v1.json.p7s |
-              awk '{print $1}'
-          )
+          windows_distribution=$(jq -er '
+            .signingIdentities.windowsDistribution // "signed"
+          ' release/release-policy.json | tr -d '\r')
+          case "$windows_distribution" in
+            signed|unsigned) ;;
+            *) echo "Unknown Windows distribution mode: $windows_distribution" >&2; exit 1 ;;
+          esac
+          # The attestation subject describes what was actually published. An unsigned
+          # release has no detached CMS object, so `handoff.signature` is absent from
+          # the predicate rather than present with an empty digest.
+          if [ "$windows_distribution" = unsigned ]; then
+            handoff_signature_json=null
+          else
+            handoff_signature_json=$(
+              jq -n --arg sha "$(
+                sha256sum release-assets/release-handoff-v1.json.p7s | awk '{print $1}'
+              )" '{name: "release-handoff-v1.json.p7s", sha256: $sha, format: "CMS-detached"}'
+            )
+          fi
           bom_sha=$(sha256sum release-assets/release-bom.json |
             awk '{print $1}')
           readiness=$(
@@ -803,7 +835,7 @@ jobs:
             --arg tag "${{ needs.verify-candidate.outputs.tag }}" \
             --arg targetSha "${{ needs.verify-candidate.outputs.target_sha }}" \
             --arg handoffSha256 "$handoff_sha" \
-            --arg handoffSignatureSha256 "$handoff_signature_sha" \
+            --argjson handoffSignature "$handoff_signature_json" \
             --arg releaseBomSha256 "$bom_sha" \
             --argjson readiness "$readiness" \
             --argjson hostedVerification "$hosted_verification" \
@@ -823,13 +855,9 @@ jobs:
               targetSha: $targetSha,
               handoff: {
                 name: "release-handoff-v1.json",
-                sha256: $handoffSha256,
-                signature: {
-                  name: "release-handoff-v1.json.p7s",
-                  sha256: $handoffSignatureSha256,
-                  format: "CMS-detached"
-                }
-              },
+                sha256: $handoffSha256
+              } + (if $handoffSignature == null then {}
+                   else {signature: $handoffSignature} end),
               hostedVerification: $hostedVerification,
               releaseBomSha256: $releaseBomSha256,
               readiness: $readiness
