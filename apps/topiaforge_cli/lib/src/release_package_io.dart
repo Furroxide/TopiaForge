@@ -121,7 +121,8 @@ class ReleaseProcessRunner {
     // `where` reports every match, one per line, best first.
     final candidates = <String>[
       for (final line in const LineSplitter().convert(result.stdout.toString()))
-        if (line.trim().isNotEmpty && File(line.trim()).existsSync()) line.trim(),
+        if (line.trim().isNotEmpty && File(line.trim()).existsSync())
+          line.trim(),
     ];
     if (candidates.isEmpty) {
       return null;
