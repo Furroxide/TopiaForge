@@ -170,12 +170,6 @@ namespace TopiaForge.CreatorTools.Shared
 
         private OperationResult<string> StopProject(bool removeProjectEntities, bool removeProjectBindings = false)
         {
-            var wasRunning = runner != null;
-            // Manual spawns are owned entries the graph never produced. Their
-            // survival across Stop is the "unrelated spawns intact" half of
-            // creator.event-graph-and-rollback.
-            var manualBefore = roster.Count(entry =>
-                entry.Owned && !projectEntities.Values.Contains(entry.Id));
             runner?.Dispose();
             runner = null;
             if (graphConversationOwned) EndConversation();
@@ -223,13 +217,6 @@ namespace TopiaForge.CreatorTools.Shared
             }
             status = "Event project stopped.";
             RefreshUi();
-            if (wasRunning && removeProjectEntities)
-            {
-                if (manualBefore > 0
-                    && roster.Count(entry => entry.Owned) >= manualBefore)
-                {
-                }
-            }
             return OperationResult<string>.Success(status);
         }
 

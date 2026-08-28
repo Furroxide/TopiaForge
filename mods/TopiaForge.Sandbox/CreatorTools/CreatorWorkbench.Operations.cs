@@ -256,9 +256,6 @@ namespace TopiaForge.CreatorTools.Shared
                     string.Empty,
                     CreatorContentKind.Robot);
                 var duplicatedRobot = Spawn(catalogEntry, offset);
-                if (duplicatedRobot.Succeeded)
-                {
-                }
                 return duplicatedRobot;
             }
             if (entry.Spawn != null)
@@ -299,9 +296,6 @@ namespace TopiaForge.CreatorTools.Shared
                         string.Empty,
                         entry.Kind),
                     offset);
-                if (duplicatedNative.Succeeded)
-                {
-                }
                 return duplicatedNative;
             }
             return OperationResult<string>.Failure(ModErrorCode.Conflict, "Borrowed scene targets cannot be duplicated safely.");
