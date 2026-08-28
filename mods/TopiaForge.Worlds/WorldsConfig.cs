@@ -36,6 +36,17 @@ namespace TopiaForge.Worlds
         [DataMember(Name = "interceptPauseMenu")]
         public bool InterceptPauseMenu { get; set; } = true;
 
+        // Allow loading a .roboworld (or .json / .json.gz) export the player already has on disk through the
+        // game's own local import host. Strictly local: no sign-in, no publish, no backend call. Turning this
+        // off makes the local-world folder inert without changing anything else.
+        [DataMember(Name = "enableLocalWorlds")]
+        public bool EnableLocalWorlds { get; set; } = true;
+
+        // The folder scanned for local exports. Empty means "whatever the game itself scans by default",
+        // which is the setting that needs no explanation; set it to keep TopiaForge's worlds somewhere else.
+        [DataMember(Name = "localWorldFolder")]
+        public string LocalWorldFolder { get; set; } = string.Empty;
+
         public bool PreferSceneReplacement => LoadMode == "sceneReplacement";
 
         // DataContractJsonSerializer builds the instance with FormatterServices.GetUninitializedObject, which
@@ -56,6 +67,8 @@ namespace TopiaForge.Worlds
             AllowAdditiveFallback = true;
             EndSessionOnMenuScene = true;
             InterceptPauseMenu = true;
+            EnableLocalWorlds = true;
+            LocalWorldFolder = string.Empty;
         }
     }
 }
