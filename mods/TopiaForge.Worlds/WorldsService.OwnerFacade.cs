@@ -105,6 +105,46 @@ namespace TopiaForge.Worlds
 
             public OperationResult<bool> EndSession(WorldSessionEndReason reason) => service.EndSession(reason);
 
+            public OperationResult<IDisposable> RegisterAssetOverride(WorldAssetOverride assetOverride) =>
+                TrackDisposable(service.RegisterAssetOverride(assetOverride));
+
+            public OperationResult<IReadOnlyList<LocalWorldFile>> ListLocalWorlds() =>
+                service.ListLocalWorlds();
+
+            public OperationResult<bool> LoadLocalWorld(string requestedPath) =>
+                service.LoadLocalWorld(requestedPath);
+
+            private OperationResult<IDisposable> TrackDisposable(OperationResult<IDisposable> result)
+            {
+                if (lifetime.IsStopping)
+                {
+                    if (result.TryGetValue(out var stoppingResource))
+                    {
+                        stoppingResource.Dispose();
+                    }
+
+                    return OperationResult<IDisposable>.Failure(
+                        ModErrorCode.Cancelled,
+                        "The mod is stopping and cannot register an asset override.");
+                }
+
+                if (!result.TryGetValue(out var resource))
+                {
+                    return result;
+                }
+
+                try
+                {
+                    return OperationResult<IDisposable>.Success(lifetime.Track(resource));
+                }
+                catch (ObjectDisposedException)
+                {
+                    return OperationResult<IDisposable>.Failure(
+                        ModErrorCode.Cancelled,
+                        "The mod stopped before its asset override could be retained.");
+                }
+            }
+
             private OperationResult<IWorldRegistration> Track(OperationResult<IWorldRegistration> result)
             {
                 if (lifetime.IsStopping)

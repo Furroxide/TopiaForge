@@ -15,6 +15,8 @@ namespace TopiaForge.Mods.Testing
             new Dictionary<string, GamemodeDefinition>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, GamemodeMenuEntry> entries =
             new Dictionary<string, GamemodeMenuEntry>(StringComparer.OrdinalIgnoreCase);
+        private readonly List<AssetOverrideLease> assetOverrides = new List<AssetOverrideLease>();
+        private readonly List<string> loadedLocalWorlds = new List<string>();
         private PendingLoad? pending;
 
         /// <summary>Creates a fake Worlds service owned by a mod lifetime.</summary>
@@ -237,6 +239,133 @@ namespace TopiaForge.Mods.Testing
             CurrentSession = null;
             SessionEnded?.Invoke(new WorldSessionEnd(ended, reason));
             return OperationResult<bool>.Success(true);
+        }
+
+        /// <inheritdoc />
+        /// <remarks>
+        /// Mirrors the runtime provider: a second registration for the same asset id replaces the first and
+        /// deactivates its lease, because the game holds one prefab per id.
+        /// </remarks>
+        public OperationResult<IDisposable> RegisterAssetOverride(WorldAssetOverride assetOverride)
+        {
+            if (assetOverride == null)
+            {
+                throw new ArgumentNullException(nameof(assetOverride));
+            }
+
+            var lease = new AssetOverrideLease(this, assetOverride);
+            var existing = assetOverrides.FindIndex(candidate =>
+                string.Equals(candidate.Override.AssetId, assetOverride.AssetId, StringComparison.Ordinal));
+            if (existing >= 0)
+            {
+                assetOverrides[existing].Deactivate();
+                assetOverrides[existing] = lease;
+            }
+            else
+            {
+                assetOverrides.Add(lease);
+            }
+
+            return OperationResult<IDisposable>.Success(lifetime.Track(lease));
+        }
+
+        /// <summary>
+        /// Gets the overrides registered and not yet disposed, in registration order. Replacing an asset id
+        /// keeps the position of the override it replaced.
+        /// </summary>
+        public IReadOnlyList<WorldAssetOverride> AssetOverrides
+        {
+            get
+            {
+                var snapshot = new List<WorldAssetOverride>(assetOverrides.Count);
+                foreach (var lease in assetOverrides)
+                {
+                    snapshot.Add(lease.Override);
+                }
+
+                return snapshot;
+            }
+        }
+
+        /// <summary>Gets the local exports this fake reports; add to it to stage a scan result.</summary>
+        public List<LocalWorldFile> LocalWorlds { get; } = new List<LocalWorldFile>();
+
+        /// <summary>Gets or sets whether the fake pretends the game exposes a local importer.</summary>
+        public bool LocalWorldsAvailable { get; set; } = true;
+
+        /// <summary>Gets the paths passed to <see cref="LoadLocalWorld"/>, in call order.</summary>
+        public IReadOnlyList<string> LoadedLocalWorlds => loadedLocalWorlds;
+
+        /// <inheritdoc />
+        public OperationResult<IReadOnlyList<LocalWorldFile>> ListLocalWorlds()
+        {
+            if (!LocalWorldsAvailable)
+            {
+                return OperationResult<IReadOnlyList<LocalWorldFile>>.Failure(
+                    ModErrorCode.Unavailable,
+                    "This game build does not expose the local world importer.");
+            }
+
+            return OperationResult<IReadOnlyList<LocalWorldFile>>.Success(
+                new List<LocalWorldFile>(LocalWorlds));
+        }
+
+        /// <inheritdoc />
+        public OperationResult<bool> LoadLocalWorld(string requestedPath)
+        {
+            if (string.IsNullOrWhiteSpace(requestedPath))
+            {
+                return OperationResult<bool>.Failure(
+                    ModErrorCode.InvalidArgument, "A local world path is required.");
+            }
+
+            if (!LocalWorldsAvailable)
+            {
+                return OperationResult<bool>.Failure(
+                    ModErrorCode.Unavailable,
+                    "This game build does not expose the local world importer.");
+            }
+
+            var match = LocalWorlds.Find(world =>
+                string.Equals(world.Path, requestedPath, StringComparison.Ordinal) ||
+                string.Equals(world.FileName, requestedPath, StringComparison.Ordinal));
+            if (match == null)
+            {
+                return OperationResult<bool>.Failure(
+                    ModErrorCode.NotFound, "'" + requestedPath + "' is not in the local world folder.");
+            }
+
+            if (!match.IsLoadable)
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, match.LoadError);
+            }
+
+            loadedLocalWorlds.Add(match.Path);
+            return OperationResult<bool>.Success(true);
+        }
+
+        private void ReleaseAssetOverride(AssetOverrideLease lease) => assetOverrides.Remove(lease);
+
+        private sealed class AssetOverrideLease : IDisposable
+        {
+            private FakeWorldGamemodeService? owner;
+
+            public AssetOverrideLease(FakeWorldGamemodeService owner, WorldAssetOverride assetOverride)
+            {
+                this.owner = owner;
+                Override = assetOverride;
+            }
+
+            public WorldAssetOverride Override { get; }
+
+            public void Deactivate() => owner = null;
+
+            public void Dispose()
+            {
+                var service = owner;
+                owner = null;
+                service?.ReleaseAssetOverride(this);
+            }
         }
 
         private OperationResult<WorldSession> CompleteLoad(WorldLoadRequest request)

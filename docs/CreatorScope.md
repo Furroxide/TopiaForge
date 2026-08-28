@@ -53,10 +53,12 @@ The Creator exports `.roboworld` files and imports `.roboworld`, `.json`, and `.
 game reads the same formats — build 2409's import host describes "the folder scanned for .roboworld,
 .json, and .json.gz exports" — and exposes a local import path that needs no account.
 
-TopiaForge does not yet read or write that format. The world-format contract is already pinned by
-`tests/fixtures/ugc/sample-project.json` and its schema test, whose component keys (`transform`,
-`agent`, `poi`, `spawn-location`, `aoi`, `prefab-instance`, `model-renderer`) match the 2409 runtime.
-That fixture is the starting point, not leftover live-sync code.
+**Closing, in order.** Worlds can now load a local export through the game's own import host — see
+[Local `.roboworld` worlds](CustomWorlds.md#local-roboworld-worlds). TopiaForge still does not *read*
+the format itself; the world-format contract is pinned by `tests/fixtures/ugc/sample-project.json`
+and its schema test, whose component keys (`transform`, `agent`, `poi`, `spawn-location`, `aoi`,
+`prefab-instance`, `model-renderer`) match the 2409 runtime. That fixture is the starting point, not
+leftover live-sync code.
 
 Deliberately **not** planned: authoring the five components the Creator docs call hidden (Teleport,
 Toggle Trigger, Grabbable, Event Trigger, Kill Trigger). The shipped 2409 runtime has eight
