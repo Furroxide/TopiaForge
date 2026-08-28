@@ -171,8 +171,7 @@ namespace TopiaForge.ModManager.Tests
         {
             const string token = "secret-token-value";
             const string session = "session-id-value";
-            var directory = Path.Combine(root, "robo-token-failure-paths");
-            Directory.CreateDirectory(directory);
+            var directory = CreateScratchDirectory(root, "robo-token-failure-paths");
             File.WriteAllText(
                 Path.Combine(directory, RoboApiClient.TokenFileName),
                 "{" + "\"agent_token\":\"" + token + "\"}");
@@ -281,6 +280,27 @@ namespace TopiaForge.ModManager.Tests
         /// <summary>The smallest request the protocol accepts; its content is irrelevant here.</summary>
         private static BrainQueryRequest SampleRequest() =>
             new BrainQueryRequest("ping", Array.Empty<BrainOutputField>());
+
+        /// <summary>
+        /// Creates a scratch directory under <paramref name="root"/> and proves it stayed there.
+        /// The harness takes its root from the command line, so combining a name onto it is a
+        /// tainted path expression; resolving both ends and comparing makes the containment a
+        /// checked property rather than an assumed one.
+        /// </summary>
+        private static string CreateScratchDirectory(string root, string name)
+        {
+            var basePath = Path.GetFullPath(root);
+            var prefix = basePath.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            var candidate = Path.GetFullPath(Path.Combine(prefix, name));
+            if (!candidate.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "Scratch directory escaped the test root: " + name);
+            }
+
+            Directory.CreateDirectory(candidate);
+            return candidate;
+        }
 
         /// <summary>Binds a loopback port, learns its number, then releases it so connecting is refused.</summary>
         private static int ReserveClosedPort()
