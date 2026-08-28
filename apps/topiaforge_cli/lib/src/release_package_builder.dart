@@ -347,8 +347,9 @@ class ReleasePackageBuilder {
     if (File(projectDart).existsSync()) {
       return projectDart;
     }
-    if (await processRunner.commandExists('dart')) {
-      return 'dart';
+    final resolved = await processRunner.resolveCommand('dart');
+    if (resolved != null) {
+      return resolved;
     }
     throw StateError(
       'Dart was not found at $projectDart or on PATH. '
@@ -361,8 +362,9 @@ class ReleasePackageBuilder {
     if (File(projectFlutter).existsSync()) {
       return projectFlutter;
     }
-    if (await processRunner.commandExists('flutter')) {
-      return 'flutter';
+    final resolved = await processRunner.resolveCommand('flutter');
+    if (resolved != null) {
+      return resolved;
     }
     throw StateError(
       'Flutter was not found at $projectFlutter or on PATH. '

@@ -100,10 +100,58 @@ class ReleaseProcessRunner {
     return '> $executable ${redacted.join(' ')}';
   }
 
-  Future<bool> commandExists(String executable) async {
+  Future<bool> commandExists(String executable) async =>
+      await resolveCommand(executable) != null;
+
+  /// Resolves [executable] to a launchable path, or null when it is not on
+  /// PATH.
+  ///
+  /// Returning the resolved path matters on Windows, where the thing `where`
+  /// finds is often `flutter.bat` or `dart.bat`. `Process.start` does not run a
+  /// batch file unless it is named exactly or a shell is involved, so a caller
+  /// that asked "does this exist?" and then launched the bare name got
+  /// `ProcessException: The system cannot find the file specified` — a message
+  /// that names neither the tool nor the reason.
+  Future<String?> resolveCommand(String executable) async {
     final command = Platform.isWindows ? 'where' : 'which';
     final result = await runResult(command, [executable]);
-    return result.exitCode == 0;
+    if (result.exitCode != 0) {
+      return null;
+    }
+    // `where` reports every match, one per line, best first.
+    final candidates = <String>[
+      for (final line in const LineSplitter().convert(result.stdout.toString()))
+        if (line.trim().isNotEmpty && File(line.trim()).existsSync()) line.trim(),
+    ];
+    if (candidates.isEmpty) {
+      return null;
+    }
+    if (!Platform.isWindows) {
+      return candidates.first;
+    }
+    // On Windows the first match is often the extensionless POSIX script that
+    // ships beside the .bat - `flutter` next to `flutter.bat`. CreateProcess
+    // cannot run it and fails with "%1 is not a valid Win32 application", so
+    // prefer a candidate Windows will actually execute.
+    final runnable = _windowsExecutableExtensions();
+    for (final candidate in candidates) {
+      if (runnable.contains(p.extension(candidate).toLowerCase())) {
+        return candidate;
+      }
+    }
+    return candidates.first;
+  }
+
+  /// The extensions Windows treats as directly executable, from PATHEXT.
+  Set<String> _windowsExecutableExtensions() {
+    final raw = Platform.environment['PATHEXT'] ?? '';
+    final parsed = <String>{
+      for (final entry in raw.split(';'))
+        if (entry.trim().isNotEmpty) entry.trim().toLowerCase(),
+    };
+    // PATHEXT is user-editable and can be missing or trimmed down; these three
+    // are what the tools this resolves actually ship.
+    return parsed.isEmpty ? const {'.exe', '.bat', '.cmd'} : parsed;
   }
 
   List<String> _redactCommandArguments(
