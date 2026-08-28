@@ -232,7 +232,7 @@ check is silently skipped.
 | Repository and CI hygiene | PASS | actionlint `1.7.7`, PowerShell/bash parsing, 164 JSON/YAML files, 118 Markdown files, 1,943 built HTML links, action pins, conflict markers, LF policy, and the 381-file non-generated Dart line cap passed. PSScriptAnalyzer `1.25.0` is rerun after every release-script edit. |
 | Credential exposure containment | BLOCKED | The affected workspace DerivedData and launcher build logs were removed, and a scrubbed exact-toolchain sentinel build passed; 13 newly produced Xcode activity logs contained no credential-shaped variable names. Credential owners must still rotate the previously exposed values and confirm revocation. See `P0-CRED-01`. |
 | Strict distributable-release policy | NEEDS RERUN | RC1 policy is scoped to Windows x64 only, forbids signing exceptions, and requires an exact nonzero Windows certificate SHA-256 pin plus an authenticated detached CMS handoff. |
-| Windows x64 RC1 package and clean-host run | BLOCKED | Requires a reviewed code-signing certificate/PFX, RFC 3161 timestamp service, a frozen clean candidate, exact timestamped-signature verification, Unity/Robotopia evidence, and clean-machine QA; see `P0-WIN-01`. |
+| Windows x64 RC1 package and clean-host run | BLOCKED (unsigned archive built) | An unsigned 63.4 MB `TopiaForge-windows-x64.zip` was produced from `dev` on 2026-08-28 and passes `release test-package --require-windows-unsigned --run-embedded-cli`; doing it found and fixed two defects on the package-construction path, which CI never exercises. Still requires a reviewed code-signing certificate/PFX, RFC 3161 timestamp service, a frozen clean candidate, exact timestamped-signature verification, Unity/Robotopia evidence, and clean-machine QA; see `P0-WIN-01`. |
 | Linux x64 package and Proton run | OUT OF RC1 | The WSL2 builder is fully provisioned and every pinned Linux toolchain verifies, but no GPU-backed Vulkan implementation is reachable there: NVIDIA ships no Vulkan ICD for WSL2 and Ubuntu does not package Mesa's Dozen driver, leaving only software lavapipe. Robotopia's Direct3D 12 renderer reaches Proton through VKD3D, which requires Vulkan, so the working OpenGL-over-d3d12 path cannot serve it. RC1 is therefore Windows-only; see `P0-LINUX-01`. |
 | Authorized Robotopia acceptance on the pinned build | BLOCKED (current-tree evidence recorded) | The 2026-07-28 build-`2309` evidence stays void. All three re-scoped criteria were met on the current tree on 2026-08-28 — see `P0-GAME-01` for the captured log lines — but the gate binds its evidence to a frozen candidate SHA, and `P0-CAND-01` is open, so this remains **BLOCKED**. |
 | Native UX/accessibility acceptance | BLOCKED | Screen Recording permission prevented screenshot comparison; screen-reader and native-platform manual QA remain; see `P1-UX-01`. |
@@ -503,6 +503,41 @@ automated tests cannot close Unity object lifetime.
 
   Selecting `unsigned` now produces a publishable candidate. **The gate stays open**: nobody has recorded the
   decision to ship unsigned, and the signed path below still needs a purchased, reviewed certificate.
+
+  **First unsigned archive produced and validated, 2026-08-28.** `release build-package --platform windows`
+  completed from the `dev` tree and emitted a 63.4 MB `TopiaForge-windows-x64.zip` containing the launcher, the
+  CLI, the GameCompat extractor, 13 mod packages, and both VPM packages. `release test-package --platform windows
+  --require-windows-unsigned --run-embedded-cli` passes against it, and all three executables report
+  Authenticode `NotSigned` with no certificate.
+
+  This is the first time that command has been run to completion in this repository, and it found two defects that
+  stopped it, both fixed in [#90](https://github.com/Furroxide/TopiaForge/pull/90):
+
+  1. `_resolveFlutterCommand` and `_resolveDartCommand` asked `commandExists` and then invoked the bare name.
+     On Windows `where flutter` succeeds because `flutter.bat` is on PATH, but `Process.start` will not run a
+     `.bat` from the bare name, so the build died on `ProcessException: The system cannot find the file
+     specified` — a message naming neither Flutter nor PATH. Resolution now returns a real path and prefers an
+     extension in `PATHEXT`, because `where` lists the extensionless POSIX script first when both are present.
+  2. `_verifyUnsignedExecutable` encoded its verdict in an exit code, so every failure became "signed or has an
+     invalid signature". `Get-AuthenticodeSignature` returns `UnknownError` for a file it could not read, and a
+     freshly extracted executable is routinely held open by an antivirus scanner, so a genuinely unsigned package
+     intermittently failed as a signing violation. The probe now reports status and certificates, and the caller
+     separates signed, unsigned, and could-not-tell — treating any certificate as conclusive and retrying only a
+     read that did not happen.
+
+  **Why CI could not have caught either.** `release build-package` is never run by CI: GitHub verifies
+  admin-staged bytes rather than producing them, by design. Every defect on the package-construction path is
+  therefore found by a human building a package, or not at all. Both of these sat on the unsigned path that #87
+  had just made load-bearing.
+
+  **None of this closes the gate.** The archive was built from `dev` rather than a frozen candidate SHA, it is
+  unsigned by necessity rather than by a recorded decision, and no clean-host QA journey has been run against it.
+  What changed is that the Windows package path is now known to work end to end.
+
+  One environment constraint worth recording, because the failure it produces names the wrong component: MSBuild's
+  FileTracker refuses to create its `.tlog` files under the system temporary directory, so a build tree under
+  `%TEMP%` fails with `No CMAKE_CXX_COMPILER could be found` while the toolchain is entirely healthy. Only
+  `CMakeConfigureLog.yaml` names the real cause, `MSB8029` / `FTK1011`. Build from an ordinary path.
 
   Exit criteria for signed distribution: build from the frozen SHA on the administrator Windows
   workstation. Require the CLI, GameCompat extractor, and launcher to have
