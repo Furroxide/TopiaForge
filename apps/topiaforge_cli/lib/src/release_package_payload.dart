@@ -80,6 +80,13 @@ class ReleasePackagePayloadWriter {
       p.join(repositoryRoot, 'THIRD_PARTY_NOTICES.md'),
       p.join(destinationRoot, 'THIRD_PARTY_NOTICES.md'),
     );
+    // Both files above link to it, and it is the canonical wording of a legal
+    // notice, so a reader unpacking the archive must be able to follow that
+    // link rather than be sent back to the repository for it.
+    fileOps.copyFileIfExists(
+      p.join(repositoryRoot, 'TRADEMARKS.md'),
+      p.join(destinationRoot, 'TRADEMARKS.md'),
+    );
     _noticeWriter.copyDartCliNotices(destinationRoot);
     if (rebuildRuntimePayload) {
       await _publishGameCompatExtractor(destinationRoot);
