@@ -16,6 +16,7 @@ Runs from any working directory. Writes the four SVGs to assets/readme/.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -71,6 +72,168 @@ THEMES = {
         "shadow": 0.45,
     },
 }
+
+
+REPO = Path(__file__).resolve().parents[3]
+
+
+class FactError(RuntimeError):
+    """A repository fact could not be read, so the SVGs would go stale silently."""
+
+
+def _read(relative):
+    path = REPO / relative
+    if not path.is_file():
+        raise FactError(f"{relative} is missing; the SVGs cannot be built from it.")
+    return path.read_text(encoding="utf-8")
+
+
+def _require(items, relative, what):
+    if not items:
+        raise FactError(f"Found no {what} in {relative}. Did the format change?")
+    return items
+
+
+# Every number and label in the generated SVGs is read from the repository here.
+# Nothing below is typed by hand, because a hand-typed count is falsified by the
+# first merge that adds a command or a service and nobody notices. Each reader
+# raises rather than returning an empty list, so a rename fails the build
+# instead of quietly emitting a smaller number.
+
+def _services():
+    """The IModContext surface, in declaration order."""
+    source = _read("src/TopiaForge.Mods.Abstractions/IModContext.cs")
+    found = re.findall(r"^\s+([A-Za-z][A-Za-z0-9_]*)\s+([A-Za-z][A-Za-z0-9_]*)\s*\{ get; \}",
+                       source, re.MULTILINE)
+    return [name for _, name in _require(found, "IModContext.cs", "services")]
+
+
+def _cli_commands():
+    """Top-level CLI verbs, from the list that mirrors the dispatch switch.
+
+    `help` is counted: it is dispatched like any other command, and excluding it
+    would put this number one below the count the README has always published.
+    """
+    source = _read("apps/topiaforge_cli/bin/topiaforge_help.dart")
+    block = re.search(r"const _commands = \[(.*?)\];", source, re.DOTALL)
+    if not block:
+        raise FactError("Could not find `const _commands` in topiaforge_help.dart.")
+    found = re.findall(r"'([a-z][a-z-]*)'", block.group(1))
+    return _require(found, "topiaforge_help.dart", "CLI commands")
+
+
+def _mod_templates():
+    directory = REPO / "templates" / "mod"
+    if not directory.is_dir():
+        raise FactError("templates/mod/ is missing.")
+    found = sorted(p.name for p in directory.iterdir() if p.is_dir())
+    return _require(found, "templates/mod/", "mod templates")
+
+
+def _first_party_mods():
+    """Catalogued mods, which is the release payload plus the DevTool gallery."""
+    source = _read("docs/FirstPartyMods.md")
+    found = re.findall(r"^\| `io\.github\.furroxide\.topiaforge\.([a-z-]+)` \|",
+                       source, re.MULTILINE)
+    return _require(found, "docs/FirstPartyMods.md", "first-party mods")
+
+
+def _launcher_sections():
+    """Navigation rail labels, in the order the rail presents them."""
+    order = _read("apps/topiaforge_launcher_flutter/lib/src/launcher_section.dart")
+    names = re.findall(r"^  ([a-z]+),", order, re.MULTILINE)
+    _require(names, "launcher_section.dart", "launcher sections")
+
+    app = _read("apps/topiaforge_launcher_flutter/lib/src/launcher_app.dart")
+    labels = re.findall(
+        r"LauncherSection\.([a-z]+) =>.*?label:\s*(?:const\s+)?Text\('([^']+)'\)",
+        app, re.DOTALL)
+    by_section = dict(labels)
+    missing = [n for n in names if n not in by_section]
+    if missing:
+        raise FactError(f"launcher_app.dart has no label for: {', '.join(missing)}.")
+    return [by_section[n] for n in names]
+
+
+def _manager_tabs():
+    """In-game overlay tabs, in the order ManagerOverlay builds them."""
+    overlay = _read("src/TopiaForge.ModManager/Overlay/ManagerOverlay.cs")
+    order = re.findall(r"new (\w+Tab)\(", overlay)
+    _require(order, "ManagerOverlay.cs", "manager tabs")
+
+    titles = {}
+    for path in sorted((REPO / "src" / "TopiaForge.ModManager" / "Overlay").glob("*Tab.cs")):
+        match = re.search(r'public string Title => "([^"]+)";', path.read_text(encoding="utf-8"))
+        if match:
+            titles[path.stem] = match.group(1)
+    seen, tabs = set(), []
+    for name in order:
+        if name in seen:
+            continue
+        seen.add(name)
+        if name not in titles:
+            raise FactError(f"{name} has no `Title =>` to read.")
+        tabs.append(titles[name])
+    return tabs
+
+
+def _dev_stages():
+    """`topiaforge dev` stages, in the order the command runs them."""
+    source = _read("apps/topiaforge_cli/bin/topiaforge_dev_commands.dart")
+    found = re.findall(r"label: '([a-z-]+)'", source)
+    return _require(found, "topiaforge_dev_commands.dart", "dev stages")
+
+
+def _modules():
+    """Optional specialist modules, from the table that documents them."""
+    source = _read("docs/Modules.md")
+    found = re.findall(r"^\| ([A-Z][A-Za-z ]*?) \| `topiaforge mod add ([a-z]+)` \|",
+                       source, re.MULTILINE)
+    return _require(found, "docs/Modules.md", "specialist modules")
+
+
+def _guides():
+    directory = REPO / "docs"
+    found = sorted(p.name for p in directory.glob("*.md"))
+    return _require(found, "docs/", "guides")
+
+
+def _ui_surface_kinds():
+    """UiSurfaceKind members. Modals and toasts are separate calls, not kinds."""
+    source = _read("src/TopiaForge.Mods.Abstractions/UiServices.cs")
+    block = re.search(r"public enum UiSurfaceKind\s*\{(.*?)\n    \}", source, re.DOTALL)
+    if not block:
+        raise FactError("Could not find `enum UiSurfaceKind` in UiServices.cs.")
+    found = re.findall(r"^\s+([A-Z][A-Za-z]*) = \d+", block.group(1), re.MULTILINE)
+    return _require(found, "UiServices.cs", "UI surface kinds")
+
+
+def _analyzer_rules():
+    """Build-time diagnostic ids the analyzers can raise."""
+    directory = REPO / "src" / "TopiaForge.Mods.Analyzers"
+    if not directory.is_dir():
+        raise FactError("src/TopiaForge.Mods.Analyzers/ is missing.")
+    found = set()
+    for path in directory.rglob("*.cs"):
+        found.update(re.findall(r'"(TF[A-Z]*\d{3,4})"', path.read_text(encoding="utf-8")))
+    return sorted(_require(found, "TopiaForge.Mods.Analyzers/", "analyzer rules"))
+
+
+def facts():
+    """Everything the SVGs assert about this repository, read from the repository."""
+    return {
+        "services": _services(),
+        "commands": _cli_commands(),
+        "templates": _mod_templates(),
+        "mods": _first_party_mods(),
+        "sections": _launcher_sections(),
+        "tabs": _manager_tabs(),
+        "stages": _dev_stages(),
+        "modules": _modules(),
+        "guides": _guides(),
+        "surface_kinds": _ui_surface_kinds(),
+        "analyzer_rules": _analyzer_rules(),
+    }
 
 
 def text(x, y, body, size, fill, family=SANS, weight="400", spacing=None):
