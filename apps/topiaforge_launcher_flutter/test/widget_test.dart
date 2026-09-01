@@ -23,6 +23,7 @@ part 'widget_profile_launch_test_cases.dart';
 part 'widget_test_snapshots.dart';
 part 'widget_update_test_cases.dart';
 part 'widget_update_test_fakes.dart';
+part 'widget_reachability_test_cases.dart';
 
 Finder _devScrollable() => find
     .descendant(
@@ -38,6 +39,7 @@ void main() {
   registerModRepairTests();
   registerAccessibilityWidgetTests();
   registerLauncherUpdateWidgetTests();
+  registerReachabilityProbeWidgetTests();
 
   // Home's GlowButton pulses on a repeating AnimationController, which would
   // deadlock pumpAndSettle. Running the suite with reduced motion keeps every

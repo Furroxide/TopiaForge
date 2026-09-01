@@ -17,14 +17,18 @@ part 'launcher_developer_project_actions.dart';
 part 'launcher_developer_actions.dart';
 part 'launcher_runtime_constraints.dart';
 part 'launcher_update_actions.dart';
+part 'launcher_reachability_actions.dart';
+part 'launcher_bloc_helpers.dart';
 
 class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
   LauncherBloc(
     this._repository, {
     DeveloperRepository? developerRepository,
     LauncherUpdateRepository? updateRepository,
+    ReachabilityProbeGateway? reachabilityProbe,
   }) : _developerRepository = developerRepository,
        _updateRepository = updateRepository,
+       _reachabilityProbe = reachabilityProbe,
        super(LauncherState.initial()) {
     on<LauncherEvent>(_dispatchEvent, transformer: sequential());
     _updateStatusSub = _updateRepository?.statuses.listen((status) {
@@ -35,6 +39,7 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
   final LauncherRepository _repository;
   final DeveloperRepository? _developerRepository;
   final LauncherUpdateRepository? _updateRepository;
+  final ReachabilityProbeGateway? _reachabilityProbe;
   final DependencyPlanner _dependencyPlanner = const DependencyPlanner();
 
   StreamSubscription<LauncherUpdateStatus>? _updateStatusSub;
@@ -57,7 +62,13 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
   Future<void> _onLoad(LauncherEvent event, Emitter<LauncherState> emit) async {
     await _guard(emit, 'Refreshed launcher state.', () async {
       final snapshot = await _repository.loadSnapshot();
-      emit(_snapshotState(snapshot, 'Ready.'));
+      final probeSettings = await _reachabilityProbe?.loadSettings();
+      emit(
+        _snapshotState(
+          snapshot,
+          'Ready.',
+        ).copyWith(reachabilityProbe: probeSettings),
+      );
       if (event is LauncherStarted &&
           snapshot.launcherUpdates.enabled &&
           snapshot.launcherUpdates.checkAutomatically &&
@@ -373,83 +384,5 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
         statusMessage: 'Imported profile ${profile.name}.',
       ),
     );
-  }
-
-  LauncherState _snapshotState(
-    LauncherSnapshot snapshot,
-    String statusMessage, {
-    String? selectedModId,
-    IssueSeverity statusSeverity = IssueSeverity.info,
-  }) {
-    final selected =
-        selectedModId ??
-        (snapshot.installedMods.any((mod) => mod.id == state.selectedModId)
-            ? state.selectedModId
-            : null) ??
-        (snapshot.installedMods.isEmpty
-            ? null
-            : snapshot.installedMods.first.id);
-    return state.copyWith(
-      isBusy: false,
-      statusMessage: snapshot.gameInstall == null
-          ? 'Select or detect a Robotopia install to begin.'
-          : statusMessage,
-      statusSeverity: snapshot.gameInstall == null
-          ? IssueSeverity.info
-          : statusSeverity,
-      gameInstall: snapshot.gameInstall,
-      clearGameInstall: snapshot.gameInstall == null,
-      gameInstallCandidates: snapshot.gameInstallCandidates,
-      profiles: snapshot.profiles,
-      selectedProfileId: snapshot.selectedProfileId,
-      installedMods: snapshot.installedMods,
-      registryMods: snapshot.registryMods,
-      packageSources: snapshot.packageSources,
-      sourceStatuses: snapshot.sourceStatuses,
-      worldCatalog: snapshot.worldCatalog,
-      recentLog: snapshot.recentLog,
-      launcherLog: snapshot.launcherLog,
-      resolution: _dependencyPlanner.resolveInstalled(
-        snapshot.installedMods,
-        gameVersion: snapshot.gameInstall?.gameVersion,
-        requireKnownGameVersion: true,
-        platform: _launcherGamePlatform(snapshot.gameInstall),
-        architecture: _launcherGameArchitecture(snapshot.gameInstall),
-        contentTargets: _launcherGameContentTargets(snapshot.gameInstall),
-      ),
-      launcherUpdates: snapshot.launcherUpdates,
-      selectedModId: selected,
-      clearSelectedMod: selected == null,
-      developerMode: snapshot.developerMode,
-      clearError: true,
-    );
-  }
-
-  Future<void> _guard(
-    Emitter<LauncherState> emit,
-    String successMessage,
-    Future<void> Function() run,
-  ) async {
-    emit(state.copyWith(isBusy: true, clearError: true));
-    try {
-      await run();
-      if (state.isBusy) {
-        emit(
-          state.copyWith(
-            isBusy: false,
-            statusMessage: successMessage,
-            clearError: true,
-          ),
-        );
-      }
-    } on Object catch (error) {
-      emit(
-        state.copyWith(
-          isBusy: false,
-          errorMessage: error.toString(),
-          statusMessage: 'Action failed.',
-        ),
-      );
-    }
   }
 }

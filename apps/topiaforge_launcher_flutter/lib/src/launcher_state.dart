@@ -40,6 +40,8 @@ class LauncherState {
     this.unityResolved = const [],
     this.unityAvailable = const [],
     this.unityRepos = const [],
+    this.reachabilityProbe = const ReachabilityProbeSettings(),
+    this.reachabilityResult,
   });
 
   factory LauncherState.initial() => LauncherState(
@@ -93,6 +95,12 @@ class LauncherState {
 
   /// Opt-in developer mode (off by default). Controls whether the Developer tab is shown.
   final bool developerMode;
+
+  /// Opt-in reachability probe settings. Off by default; the probe is developer-mode only and never runs on its own.
+  final ReachabilityProbeSettings reachabilityProbe;
+
+  /// The last local probe classification, or null if the probe has not been run this session. Never persisted.
+  final NatClassification? reachabilityResult;
 
   /// Last developer-toolchain audit (.NET/Node/Unity/Git), shown in the Dev tab's Environment pane.
   final EnvironmentReport? developerEnvironment;
@@ -214,6 +222,8 @@ class LauncherState {
     List<VpmResolvedPackage>? unityResolved,
     List<VpmPackageInfo>? unityAvailable,
     List<PackageSource>? unityRepos,
+    ReachabilityProbeSettings? reachabilityProbe,
+    NatClassification? reachabilityResult,
   }) {
     return LauncherState(
       section: section ?? this.section,
@@ -263,6 +273,8 @@ class LauncherState {
       unityResolved: unityResolved ?? this.unityResolved,
       unityAvailable: unityAvailable ?? this.unityAvailable,
       unityRepos: unityRepos ?? this.unityRepos,
+      reachabilityProbe: reachabilityProbe ?? this.reachabilityProbe,
+      reachabilityResult: reachabilityResult ?? this.reachabilityResult,
     );
   }
 

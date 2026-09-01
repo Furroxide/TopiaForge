@@ -48,6 +48,8 @@ class DeveloperScreen extends StatelessWidget {
             children: [
               _ProjectsPane(state: state),
               const SizedBox(height: 16),
+              _ReachabilityPane(state: state),
+              const SizedBox(height: 16),
               if (!isUnity)
                 BorderedPane(
                   child: Column(

@@ -14,6 +14,7 @@ part 'screens/browse_profiles_screen.dart';
 part 'screens/developer_screen.dart';
 part 'screens/developer_environment_pane.dart';
 part 'screens/developer_packages_pane.dart';
+part 'screens/developer_reachability_pane.dart';
 part 'screens/diagnostics_settings_screen.dart';
 part 'screens/home_discovery.dart';
 part 'screens/home_first_run.dart';
