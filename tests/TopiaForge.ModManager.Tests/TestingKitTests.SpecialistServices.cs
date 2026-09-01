@@ -145,6 +145,92 @@ namespace TopiaForge.ModManager.Tests
             context.AssertNoLeaks();
         }
 
+        private static void TestWorldAssetOverrideFake()
+        {
+            var context = new FakeModContext();
+            var worlds = new FakeWorldGamemodeService(context.Lifetime);
+            var bundle = context.Assets.LoadBundleAsync("worlds/testing.bundle").Result.Value!;
+            var first = context.Assets.LoadPrefabAsync(bundle, "Tree").Result.Value!;
+            var second = context.Assets.LoadPrefabAsync(bundle, "Rock").Result.Value!;
+
+            var registered = worlds.RegisterAssetOverride(
+                new WorldAssetOverride("@author/tree", first, new Vec3(0f, 1f, 0f)));
+            Assert(registered.TryGetValue(out var lease) && worlds.AssetOverrides.Count == 1 &&
+                   worlds.AssetOverrides[0].AssetId == "@author/tree" &&
+                   worlds.AssetOverrides[0].LocalPositionOffset.HasValue,
+                "Registering an asset override should expose it with its offset.");
+
+            // One prefab per id, matching the game's own table: the second registration wins.
+            var replaced = worlds.RegisterAssetOverride(new WorldAssetOverride("@author/tree", second));
+            Assert(replaced.TryGetValue(out var replacementLease) && worlds.AssetOverrides.Count == 1 &&
+                   ReferenceEquals(worlds.AssetOverrides[0].Prefab, second),
+                "Re-registering an asset id should replace the earlier override rather than fail.");
+
+            // The superseded lease is inert: disposing it must not evict the override that replaced it.
+            lease!.Dispose();
+            Assert(worlds.AssetOverrides.Count == 1 &&
+                   ReferenceEquals(worlds.AssetOverrides[0].Prefab, second),
+                "Disposing a superseded override lease should not remove its replacement.");
+
+            // Registration order is a documented guarantee of the fake, and a replacement keeps the slot
+            // it replaced rather than moving to the end.
+            var third = worlds.RegisterAssetOverride(new WorldAssetOverride("@author/rock", first));
+            Assert(worlds.AssetOverrides.Count == 2 &&
+                   worlds.AssetOverrides[0].AssetId == "@author/tree" &&
+                   worlds.AssetOverrides[1].AssetId == "@author/rock",
+                "Overrides should be reported in registration order.");
+            worlds.RegisterAssetOverride(new WorldAssetOverride("@author/tree", first));
+            Assert(worlds.AssetOverrides[0].AssetId == "@author/tree",
+                "Replacing an override should keep its position.");
+            third!.Value!.Dispose();
+
+            replacementLease!.Dispose();
+            Assert(worlds.AssetOverrides.Count == 1,
+                "Disposing a superseded lease should not remove the override that replaced it.");
+
+            var rejected = false;
+            try
+            {
+                worlds.RegisterAssetOverride(new WorldAssetOverride(" ", first));
+            }
+            catch (ArgumentException)
+            {
+                rejected = true;
+            }
+
+            Assert(rejected, "A blank asset id should be rejected at construction.");
+        }
+
+        private static void TestLocalWorldFake()
+        {
+            var context = new FakeModContext();
+            var worlds = new FakeWorldGamemodeService(context.Lifetime);
+            worlds.LocalWorlds.Add(new LocalWorldFile("/worlds/town.roboworld", "town.roboworld", "Town", string.Empty));
+            worlds.LocalWorlds.Add(new LocalWorldFile("/worlds/broken.roboworld", "broken.roboworld", string.Empty, "Unexpected end of input."));
+
+            var listed = worlds.ListLocalWorlds();
+            Assert(listed.TryGetValue(out var files) && files!.Count == 2 &&
+                   files[0].IsLoadable && !files[1].IsLoadable,
+                "Listing local worlds should include unreadable exports with their error.");
+
+            Assert(worlds.LoadLocalWorld("town.roboworld").Succeeded &&
+                   worlds.LoadedLocalWorlds.Count == 1,
+                "Loading a listed local world should succeed and be recorded.");
+
+            // An export the scanner could not parse is refused with the scanner's own reason, not silently skipped.
+            var brokenLoad = worlds.LoadLocalWorld("broken.roboworld");
+            Assert(!brokenLoad.Succeeded && brokenLoad.ErrorCode == ModErrorCode.InvalidArgument,
+                "Loading an unreadable export should fail with the scanner's reason.");
+
+            Assert(worlds.LoadLocalWorld("missing.roboworld").ErrorCode == ModErrorCode.NotFound,
+                "Loading an unlisted file should report NotFound.");
+
+            worlds.LocalWorldsAvailable = false;
+            Assert(worlds.ListLocalWorlds().ErrorCode == ModErrorCode.Unavailable &&
+                   worlds.LoadLocalWorld("town.roboworld").ErrorCode == ModErrorCode.Unavailable,
+                "A build without the importer should report Unavailable rather than an empty list.");
+        }
+
         private static void TestWorldPauseMenuFake()
         {
             var context = new FakeModContext();

@@ -59,7 +59,8 @@ void main() {
     final runner = _RecordingProcessRunner(
       availableCommands: {'dart'},
       onRun: (call) async {
-        if (call.executable == 'dart' && call.arguments.contains('compile')) {
+        if (call.executable == 'dart.bat' &&
+            call.arguments.contains('compile')) {
           _writeCompiledCli(call.arguments);
         }
       },
@@ -76,7 +77,7 @@ void main() {
     ).build();
 
     final dartCalls = runner.calls
-        .where((call) => call.executable == 'dart')
+        .where((call) => call.executable == 'dart.bat')
         .toList();
     expect(dartCalls, hasLength(2));
     expect(dartCalls.first.arguments, ['pub', 'get', '--enforce-lockfile']);
@@ -383,6 +384,13 @@ class _RecordingProcessRunner extends ReleaseProcessRunner {
   @override
   Future<bool> commandExists(String executable) async =>
       availableCommands.contains(executable);
+
+  /// Production resolves a PATH hit to a launchable path rather than returning
+  /// the bare name, which on Windows is what makes the difference between
+  /// running flutter.bat and failing to run the extensionless script beside it.
+  @override
+  Future<String?> resolveCommand(String executable) async =>
+      availableCommands.contains(executable) ? '$executable.bat' : null;
 
   @override
   Future<void> runChecked(

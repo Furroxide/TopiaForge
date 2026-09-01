@@ -23,6 +23,30 @@ namespace TopiaForge.ModManager.Tests
             TestRejectsUnsupportedExtensions();
             TestRejectsMissingFilesAndEmptyInput();
             TestFolderNormalization();
+            TestRootFolderStaysAbsolute();
+        }
+
+        private static void TestRootFolderStaysAbsolute()
+        {
+            // A root is a legal folder, and trimming its separator used to leave "" on Unix and a bare
+            // "C:" on Windows. Path.Combine treats neither as absolute, so a bare file name resolved
+            // against the process working directory instead of the configured folder.
+            var root = Path.GetPathRoot(Path.GetFullPath(Path.Combine(Path.GetTempPath(), "probe")));
+            Assert(!string.IsNullOrEmpty(root), "the temp path should have a resolvable root");
+
+            var normalized = RoboWorldImportPlan.TryNormalizeFolder(root);
+            Assert(normalized != null, "a root folder should normalize rather than be refused");
+            Assert(
+                Path.IsPathRooted(Path.Combine(normalized!, "town.roboworld")),
+                "combining against a normalized root must stay absolute");
+
+            var expected = Path.GetFullPath(Path.Combine(root!, "town.roboworld"));
+            Assert(
+                RoboWorldImportPlan.TryPlan(root, "town.roboworld", Exists(expected), out var plan, out var error),
+                "a bare file name in a root folder should resolve: " + error);
+            Assert(
+                plan!.FilePath == expected,
+                "a root-folder request must resolve inside the root, not the working directory");
         }
 
         private static void TestAcceptsEveryDocumentedExtension()

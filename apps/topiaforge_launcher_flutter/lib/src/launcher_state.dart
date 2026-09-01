@@ -108,12 +108,6 @@ class LauncherState {
   /// Last setup/auto-fix result (action log), shown after running Setup in the Dev tab.
   final DeveloperSetupResult? developerSetup;
 
-  /// Scenes parsed from the newest exported project in the watch folder (drives the cockpit's scene dropdown).
-
-  /// Recent lines from the running Automerge publisher (Node sidecar), shown in the cockpit's console view.
-
-  /// The live Automerge document url auto-captured from the publisher's output (pre-populated into the game).
-
   /// The VCC-style tracked developer projects (mod + Unity), shown in the Dev tab's Projects list.
   final List<RegisteredProject> developerProjects;
 

@@ -36,6 +36,7 @@ ROBOTOPIA_GAME_INTEGRATION_CONTENT_ALLOWLIST = {
     "apps/topiaforge_cli/test/release_handoff_game_identity_test.dart",
     "apps/topiaforge_cli/test/release_handoff_qa_fixture.dart",
     "apps/topiaforge_cli/test/release_handoff_test.dart",
+    "apps/topiaforge_cli/test/release_handoff_unsigned_test.dart",
     "tools/release-admin.ps1",
     "tools/release/build-windows.ps1",
     "tools/release/test-verify-robotopia-install.ps1",

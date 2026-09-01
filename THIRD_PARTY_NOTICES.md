@@ -1,5 +1,17 @@
 # Third Party Notices
 
+## Trademarks and affiliation
+
+This file ships inside the release archive, so it states the notice for readers who never see the
+repository. The canonical wording is [TRADEMARKS.md](TRADEMARKS.md).
+
+TopiaForge is an independent, community-built modding toolkit. It is not developed, published, or
+endorsed by Tomato Cake or the Robotopia development team, and is not otherwise affiliated with
+them. "Robotopia" and "Tomato Cake" are the property of their respective owners and are used here
+only to identify the game this toolkit works with.
+
+## Bundled runtimes and assets
+
 This repository bundles BepInEx 5.4.23.5 binary runtime files under
 `third_party/BepInEx/win_x64_5.4.23.5` and `third_party/BepInEx/macos_universal_5.4.23.5` for local Robotopia
 loader installation.
@@ -29,7 +41,9 @@ Prism Launcher was used only as product maturity and UX inspiration. No Prism La
 TopiaForge launcher UI bundles Robotopia web brand assets from `https://robotopia.gg/` and local
 TopiaForge artwork for offline launcher theming.
 
-- Web-derived raster files: `topiaforge-city-header.webp`, `baby-stitch.webp`, and `sheriff.webp`
+- Web-derived raster files: `packages/launcher_ui/assets/brand/topiaforge-city-header.webp`,
+  `packages/launcher_ui/assets/brand/baby-stitch.webp`, and
+  `packages/launcher_ui/assets/brand/sheriff.webp`
 - Source: `https://robotopia.gg/`
 - Owner: **Tomato Cake.** These three files are Robotopia web brand assets and remain the property of
   Tomato Cake. TopiaForge does not claim any ownership of them, they are not covered by this project's
@@ -66,6 +80,20 @@ in `packages/launcher_ui/lib/src/pixel_robot.dart` are first-party project asset
 third-party artwork. The robot replaced a previously bundled `robot.webp` taken from the Robotopia web
 bundle; it is defined as a checked-in pixel grid rather than a raster file so its provenance is
 unambiguous.
+
+Those marks are the following files. They are listed by path because a prose description cannot be
+checked, and this section claims to cover every non-source file a user receives:
+
+- `packages/launcher_ui/assets/brand/topiaforge-icon.png` and
+  `packages/launcher_ui/assets/brand/topiaforge-wordmark.png` — the source marks. Clean pixel art with
+  six opaque colours and no anti-aliasing, which is what lets `assets/readme/source/pixel_marks.py`
+  convert them to exact SVG paths for the repository homepage.
+- `apps/topiaforge_launcher_flutter/assets/brand/topiaforge-app-icon.png` and
+  `apps/topiaforge_launcher_flutter/snap/gui/topiaforge.png` — the launcher application icon.
+- `apps/topiaforge_launcher_flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset` — the same icon at
+  the eight sizes macOS requires. Generated from the mark above, not drawn separately.
+- `website/public/favicon.png` and `website/src/assets/topiaforge-wordmark.png` — the documentation
+  site's copies of the same marks.
 
 TopiaForge bundles the Quicksand font for body typography in the launcher UI and Unity brand bundle.
 
