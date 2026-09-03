@@ -144,9 +144,10 @@ class ProfileLaunchConfiguration {
     required this.inheritManagerModState,
     required this.enabledMods,
     required this.selectedVersions,
+    required this.worldLaunch,
   });
 
-  static const int schemaVersion = 2;
+  static const int schemaVersion = 3;
   static const String environmentVariable = 'TOPIAFORGE_LAUNCH_PROFILE';
 
   final String profileId;
@@ -154,6 +155,16 @@ class ProfileLaunchConfiguration {
   final bool inheritManagerModState;
   final Set<String> enabledMods;
   final Map<String, String> selectedVersions;
+
+  /// The gamemode to start for this run, or null to boot the game normally.
+  ///
+  /// This rides the launch profile because the profile is the only channel that actually reaches the
+  /// runtime: it is validated, written into the manager's staging directory, read once and deleted.
+  /// The previous route — merging the selection into the Worlds mod's own config file — never worked,
+  /// because that document is a `{schemaVersion, value}` envelope owned by the mod and the launcher
+  /// wrote its keys beside `value` rather than inside it. The mod never read them and its next save
+  /// deleted them, so every gamemode the player picked was silently thrown away.
+  final WorldSelection? worldLaunch;
 
   factory ProfileLaunchConfiguration.fromProfile(LauncherProfile profile) {
     final profileId = profile.id;
@@ -165,12 +176,13 @@ class ProfileLaunchConfiguration {
     }
 
     final seenIds = <String>{};
-    if (!ModManifest.isValidId(profile.worldSelection.worldId)) {
+    final selection = profile.worldSelection;
+    if (!ModManifest.isValidId(selection.worldId)) {
       throw const FormatException(
         'Profile worldId must use the safe TopiaForge id format.',
       );
     }
-    if (!ModManifest.isValidId(profile.worldSelection.gamemodeId)) {
+    if (!ModManifest.isValidId(selection.gamemodeId)) {
       throw const FormatException(
         'Profile gamemodeId must use the safe TopiaForge id format.',
       );
@@ -210,6 +222,9 @@ class ProfileLaunchConfiguration {
       selectedVersions: Map.unmodifiable({
         for (final entry in selectedEntries) entry.key: entry.value,
       }),
+      // Only an explicit "launch into this gamemode" becomes an intent. A profile that merely remembers
+      // a world keeps booting to the game's own menu, which is what every existing profile does.
+      worldLaunch: selection.launchIntoGamemode ? selection : null,
     );
   }
 
@@ -220,6 +235,7 @@ class ProfileLaunchConfiguration {
     'inheritManagerModState': inheritManagerModState,
     'enabledMods': enabledMods.toList(growable: false),
     'selectedVersions': selectedVersions,
+    if (worldLaunch != null) 'worldLaunch': worldLaunch!.toLaunchIntentJson(),
   };
 
   static int _compareModIds(String left, String right) {

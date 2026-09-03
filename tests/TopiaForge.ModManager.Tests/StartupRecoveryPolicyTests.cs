@@ -11,6 +11,7 @@ namespace TopiaForge.ModManager.Tests
             TestAmbiguousRecoveryOverridesSuppliedProfile();
             TestAmbiguousRecoveryCreatesProfileWhenNoneWasSupplied();
             TestQuarantineOverridesExactProfileEnablement();
+            TestRecoveryPreservesTheLaunchIntent();
             TestCleanLaunchPreservesSuppliedProfile();
             Console.WriteLine("StartupRecoveryPolicyTests passed.");
         }
@@ -132,6 +133,50 @@ namespace TopiaForge.ModManager.Tests
                 "an exact profile must not re-enable the quarantined owner for the recovery launch");
             Assert(effective.Find("healthy.mod")!.Enabled,
                 "unrelated exact-profile selections must continue loading after precise quarantine");
+        }
+
+        /// <summary>
+        /// Recovery decides which mods load. What the player asked to play is a separate question, and
+        /// the rebuilt profile has to carry it: quarantining an unrelated mod must not quietly turn
+        /// "launch Zombies" into "boot to the menu" with nothing said about it anywhere.
+        /// </summary>
+        private static void TestRecoveryPreservesTheLaunchIntent()
+        {
+            var durable = State(Mod("crashing.mod", "1.0.0", enabled: true));
+            var intent = new WorldLaunchIntent
+            {
+                GamemodeId = "io.github.furroxide.topiaforge.zombies.survival",
+                WorldId = "io.github.furroxide.topiaforge.worlds.open_sandbox",
+                LoadMode = WorldLaunchSettings.SceneReplacement
+            };
+            var requested = new ProfileLaunchConfiguration
+            {
+                SchemaVersion = ProfileLaunchConfiguration.CurrentSchemaVersion,
+                ProfileId = "playing",
+                InheritManagerModState = false,
+                EnabledMods = new List<string> { "crashing.mod" },
+                WorldLaunch = intent
+            };
+
+            var applied = StartupRecoveryPolicy.Apply(
+                requested,
+                durable,
+                new StartupRecoveryDecision(
+                    safeMode: false,
+                    quarantineModId: "crashing.mod",
+                    reason: "The previous process ended while this mod was loading."),
+                new DateTime(2026, 7, 15, 13, 0, 0, DateTimeKind.Utc));
+
+            Assert(!ReferenceEquals(applied, requested),
+                "quarantine rebuilds the profile rather than mutating the caller's");
+            Assert(applied!.WorldLaunch != null,
+                "a rebuilt recovery profile must still carry the launch intent");
+            Assert(applied.WorldLaunch!.GamemodeId == intent.GamemodeId
+                && applied.WorldLaunch.WorldId == intent.WorldId
+                && applied.WorldLaunch.LoadMode == intent.LoadMode,
+                "the intent must survive recovery unchanged");
+            Assert(applied.Validate().Count == 0,
+                "the rebuilt profile must remain valid with its intent attached");
         }
 
         private static void TestCleanLaunchPreservesSuppliedProfile()

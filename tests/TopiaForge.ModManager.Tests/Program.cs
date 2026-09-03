@@ -275,7 +275,7 @@ namespace TopiaForge.ModManager.Tests
                 RobotTargetFactsTests.Run();
                 SandboxProgramDirectorTests.Run();
                 SandboxConfigTests.Run();
-                WorldAutoLoadRouterTests.Run();
+                WorldLaunchRouterTests.Run();
                 RoboWorldImportPlanTests.Run();
                 WorldsSafetyTests.Run();
                 PendingOperationTests.Run();

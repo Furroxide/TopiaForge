@@ -28,7 +28,43 @@ void main() {
       expect(first.selectedVersions, {'alpha.mod': '1.0.0'});
       expect(second.enabledMods, {'beta.mod'});
       expect(second.selectedVersions, {'beta.mod': '2.0.0'});
-      expect(first.toJson()['schemaVersion'], 2);
+      expect(first.toJson()['schemaVersion'], 3);
+    });
+
+    test('carries a game-mode intent only when the profile asks to launch one', () {
+      const remembered = LauncherProfile(
+        id: 'remembers',
+        name: 'Remembers a world',
+        worldSelection: WorldSelection(
+          worldId: 'io.github.furroxide.topiaforge.worlds.open_sandbox',
+          gamemodeId: 'io.github.furroxide.topiaforge.zombies.survival',
+        ),
+      );
+      // Remembering a selection is not the same as asking to launch into it. Every profile that
+      // predates the Home picker remembers one, and every one of them must still boot to the menu.
+      expect(
+        ProfileLaunchConfiguration.fromProfile(remembered).toJson(),
+        isNot(contains('worldLaunch')),
+      );
+
+      final launching = remembered.copyWith(
+        worldSelection: remembered.worldSelection.copyWith(
+          launchIntoGamemode: true,
+        ),
+      );
+      final intent =
+          ProfileLaunchConfiguration.fromProfile(
+                launching,
+              ).toJson()['worldLaunch']
+              as Map<String, Object?>;
+      expect(
+        intent['gamemodeId'],
+        'io.github.furroxide.topiaforge.zombies.survival',
+      );
+      expect(
+        intent['worldId'],
+        'io.github.furroxide.topiaforge.worlds.open_sandbox',
+      );
     });
 
     test('distinguishes exact empty profiles from manager inheritance', () {

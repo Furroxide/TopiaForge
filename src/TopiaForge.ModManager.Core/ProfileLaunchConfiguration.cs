@@ -13,7 +13,7 @@ namespace TopiaForge.ModManager.Core
     [DataContract]
     public sealed class ProfileLaunchConfiguration
     {
-        public const int CurrentSchemaVersion = 2;
+        public const int CurrentSchemaVersion = 3;
         public const string EnvironmentVariable = "TOPIAFORGE_LAUNCH_PROFILE";
 
         [DataMember(Name = "schemaVersion")]
@@ -34,6 +34,13 @@ namespace TopiaForge.ModManager.Core
         [DataMember(Name = "selectedVersions")]
         public Dictionary<string, string> SelectedVersions { get; set; }
             = new Dictionary<string, string>();
+
+        /// <summary>
+        /// The gamemode to start for this run, or null to boot the game normally. One-shot, like the
+        /// rest of this profile: it is consumed with the profile file and never becomes durable state.
+        /// </summary>
+        [DataMember(Name = "worldLaunch")]
+        public WorldLaunchIntent? WorldLaunch { get; set; }
 
         public IReadOnlyList<string> Validate()
         {
@@ -77,6 +84,11 @@ namespace TopiaForge.ModManager.Core
                 {
                     errors.Add("selectedVersions contains an invalid version for " + entry.Key + ".");
                 }
+            }
+
+            if (WorldLaunch != null)
+            {
+                errors.AddRange(WorldLaunch.Validate());
             }
 
             return errors;

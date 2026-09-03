@@ -363,11 +363,7 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
     final message = profile.launchSettings.safeMode
         ? 'Launched TopiaForge in safe mode for this run only.'
         : 'Launched TopiaForge.';
-    return _startGameWithWorldSelection(
-      launchInstall,
-      profile,
-      message: message,
-    );
+    return _startGame(launchInstall, profile, message: message);
   }
 
   @override
@@ -388,11 +384,7 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
         'Started TopiaForge in temporary safe mode. No running process was found.',
       (false, false) => 'Started TopiaForge. No running process was found.',
     };
-    return _startGameWithWorldSelection(
-      launchInstall,
-      profile,
-      message: message,
-    );
+    return _startGame(launchInstall, profile, message: message);
   }
 
   @override

@@ -94,6 +94,33 @@ LauncherSnapshot _singleRecoveryInstallSnapshot() {
   );
 }
 
+/// A catalog shaped like one a real runtime publishes: a game mode plus the menu entry that names
+/// the world it wants to start in.
+WorldCatalog _gamemodeCatalog() {
+  return const WorldCatalog(
+    worlds: [
+      WorldDefinition(
+        id: 'io.github.furroxide.topiaforge.worlds.open_sandbox',
+        name: 'Open Sandbox',
+      ),
+    ],
+    gamemodes: [
+      GamemodeDefinition(
+        id: 'io.github.furroxide.topiaforge.zombies.survival',
+        name: 'Zombies',
+      ),
+    ],
+    menuEntries: [
+      GamemodeMenuEntry(
+        id: 'io.github.furroxide.topiaforge.zombies.menu',
+        title: 'Zombies',
+        gamemodeId: 'io.github.furroxide.topiaforge.zombies.survival',
+        worldId: 'io.github.furroxide.topiaforge.worlds.open_sandbox',
+      ),
+    ],
+  );
+}
+
 /// A detected, launchable install. [needsRepair] flips the loader to missing
 /// so Home renders its "Almost ready" state.
 LauncherSnapshot _readySnapshot({
@@ -102,6 +129,7 @@ LauncherSnapshot _readySnapshot({
   List<InstalledMod> installedMods = const [],
   List<LauncherProfile>? profiles,
   String selectedProfileId = 'default',
+  WorldCatalog? worldCatalog,
 }) {
   return LauncherSnapshot(
     gameInstall: GameInstall(
@@ -115,7 +143,7 @@ LauncherSnapshot _readySnapshot({
     installedMods: installedMods,
     registryMods: registryMods,
     packageSources: const [],
-    worldCatalog: WorldCatalog.fallback(),
+    worldCatalog: worldCatalog ?? WorldCatalog.fallback(),
     recentLog: '',
     launcherUpdates: const LauncherUpdateSettings(enabled: false),
   );

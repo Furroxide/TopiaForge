@@ -121,58 +121,37 @@ void _environmentAndWorldModelTests() {
 
   group('WorldSelection', () {
     test(
-      'toRuntimeConfig emits exactly the keys the C# WorldsConfig expects',
+      'toLaunchIntentJson emits exactly what the launch profile carries',
       () {
-        final config = const WorldSelection(
+        final intent = const WorldSelection(
           worldId: 'w1',
           gamemodeId: 'g1',
           loadMode: WorldSelection.sceneReplacement,
-          autoLoadOnStart: true,
-        ).toRuntimeConfig();
+          launchIntoGamemode: true,
+        ).toLaunchIntentJson();
 
         expect(
-          config.keys.toSet(),
+          intent.keys.toSet(),
           equals({
-            'selectedWorldId',
-            'selectedGamemodeId',
+            'worldId',
+            'gamemodeId',
             'loadMode',
-            'autoLoadOnStart',
             'allowAdditiveFallback',
           }),
         );
-        expect(config['selectedWorldId'], 'w1');
-        expect(config['selectedGamemodeId'], 'g1');
-        expect(config['loadMode'], 'sceneReplacement');
-        expect(config['autoLoadOnStart'], isTrue);
-        expect(config['allowAdditiveFallback'], isTrue);
+        expect(intent['worldId'], 'w1');
+        expect(intent['gamemodeId'], 'g1');
+        expect(intent['loadMode'], 'sceneReplacement');
+        expect(intent['allowAdditiveFallback'], isTrue);
       },
     );
-
-    test('mergeRuntimeConfig preserves runtime-owned and future keys', () {
-      final merged =
-          const WorldSelection(
-            worldId: 'new-world',
-            gamemodeId: 'new-mode',
-          ).mergeRuntimeConfig({
-            'selectedWorldId': 'old-world',
-            'endSessionOnMenuScene': false,
-            'interceptPauseMenu': false,
-            'futureRuntimeOption': {'enabled': true},
-          });
-
-      expect(merged['selectedWorldId'], 'new-world');
-      expect(merged['selectedGamemodeId'], 'new-mode');
-      expect(merged['endSessionOnMenuScene'], isFalse);
-      expect(merged['interceptPauseMenu'], isFalse);
-      expect(merged['futureRuntimeOption'], {'enabled': true});
-    });
 
     test('round-trips through toJson and back', () {
       const selection = WorldSelection(
         worldId: 'io.github.furroxide.topiaforge.worlds.level.city',
         gamemodeId: 'io.github.furroxide.topiaforge.zombies.survival',
         loadMode: WorldSelection.sceneReplacement,
-        autoLoadOnStart: true,
+        launchIntoGamemode: true,
       );
 
       final restored = WorldSelection.fromJson(selection.toJson());
@@ -180,7 +159,7 @@ void _environmentAndWorldModelTests() {
       expect(restored.worldId, selection.worldId);
       expect(restored.gamemodeId, selection.gamemodeId);
       expect(restored.loadMode, selection.loadMode);
-      expect(restored.autoLoadOnStart, selection.autoLoadOnStart);
+      expect(restored.launchIntoGamemode, selection.launchIntoGamemode);
     });
 
     test('fromJson ignores runtime-only selected* keys', () {
@@ -218,7 +197,11 @@ void _environmentAndWorldModelTests() {
       expect(empty.worldId, WorldCatalog.openSandboxWorldId);
       expect(empty.gamemodeId, WorldCatalog.sandboxGamemodeId);
       expect(empty.loadMode, WorldSelection.additiveArena);
-      expect(empty.autoLoadOnStart, isFalse);
+      expect(
+        empty.launchIntoGamemode,
+        isFalse,
+        reason: 'a profile that never chose a game mode must boot normally',
+      );
     });
   });
 

@@ -281,18 +281,6 @@ class _WorldLaunchControls extends StatelessWidget {
                     : null,
               ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Auto-load'),
-                value: selection.autoLoadOnStart,
-                onChanged: (enabled) => _add(
-                  context,
-                  WorldSelectionChanged(autoLoadOnStart: enabled),
-                ),
-              ),
-            ),
           ],
         ),
       ],

@@ -16,6 +16,8 @@ class _HeroLaunchPane extends StatelessWidget {
         ? profile.enabledMods.length
         : state.resolution.orderedMods.length;
 
+    final selection = profile?.worldSelection ?? const WorldSelection();
+    final launchGamemode = _selectedLaunchGamemode(state, selection);
     final (String headline, String subline) = state.isBusy
         ? ('Working on it…', state.statusMessage)
         : !state.canLaunch
@@ -24,7 +26,7 @@ class _HeroLaunchPane extends StatelessWidget {
             'Ready for liftoff',
             '${profile?.name ?? 'Default'} profile · '
                 '$modCount ${modCount == 1 ? 'mod' : 'mods'} enabled · '
-                '${_worldNameFor(state, profile?.worldSelection ?? const WorldSelection())}',
+                '${launchGamemode?.name ?? _worldNameFor(state, selection)}',
           );
 
     return Stack(
@@ -109,8 +111,16 @@ class _HeroLaunchPane extends StatelessWidget {
                         runSpacing: 12,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
+                          _GamemodePicker(
+                            state: state,
+                            selected: launchGamemode,
+                          ),
                           GlowButton(
-                            label: safeMode ? 'Launch Safe' : 'Launch',
+                            label: safeMode
+                                ? 'Launch Safe'
+                                : launchGamemode == null
+                                ? 'Launch'
+                                : 'Launch ${launchGamemode.name}',
                             icon: Icons.rocket_launch,
                             onPressed: state.canStartLaunchFlow && !state.isBusy
                                 ? () =>
@@ -147,6 +157,78 @@ class _HeroLaunchPane extends StatelessWidget {
           child: IgnorePointer(child: const TopiaForgePixelRobot(width: 140)),
         ),
       ],
+    );
+  }
+}
+
+/// The game mode Launch will start, or null when the profile is set to play normally. Resolved
+/// against the live catalog, so a mode whose mod was uninstalled quietly stops being offered rather
+/// than being launched into nothing.
+GamemodeDefinition? _selectedLaunchGamemode(
+  LauncherState state,
+  WorldSelection selection,
+) {
+  if (!selection.launchIntoGamemode) {
+    return null;
+  }
+  for (final mode in state.worldCatalog.gamemodes) {
+    if (mode.id == selection.gamemodeId) {
+      return mode;
+    }
+  }
+  return null;
+}
+
+/// Picks what Launch does. "None" is a first-class choice rather than an absence: launching into the
+/// ordinary campaign with mods loaded is a thing people want, and it stays the default.
+class _GamemodePicker extends StatelessWidget {
+  const _GamemodePicker({required this.state, required this.selected});
+
+  final LauncherState state;
+  final GamemodeDefinition? selected;
+
+  static const _playNormallyLabel = 'None — play normally';
+
+  @override
+  Widget build(BuildContext context) {
+    final gamemodes = state.worldCatalog.gamemodes;
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 250),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0x4DFFFFFF), width: 2),
+        color: const Color(0x33000000),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String?>(
+          value: selected?.id,
+          isDense: true,
+          isExpanded: true,
+          dropdownColor: TopiaForgePalette.darkPanel,
+          iconEnabledColor: TopiaForgePalette.accent,
+          style: const TextStyle(
+            color: TopiaForgePalette.white,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+          hint: const Text(
+            _playNormallyLabel,
+            style: TextStyle(color: Color(0xB3FFFFFF), fontSize: 13),
+          ),
+          items: [
+            const DropdownMenuItem<String?>(
+              value: null,
+              child: Text(_playNormallyLabel),
+            ),
+            for (final mode in gamemodes)
+              DropdownMenuItem<String?>(value: mode.id, child: Text(mode.name)),
+          ],
+          onChanged: state.isBusy
+              ? null
+              : (value) => _add(context, LaunchGamemodeSelected(value)),
+        ),
+      ),
     );
   }
 }

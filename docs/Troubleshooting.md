@@ -84,6 +84,22 @@ Robotopia runs its Windows build under Proton/Wine:
 - In the launcher, select the Robotopia folder inside your prefix and run Repair to install the Windows BepInEx;
   setting `wineCommand` in the launcher settings lets the launcher start Robotopia directly.
 
+## Starting a game mode
+
+Pick the game mode next to **Launch** on the launcher's Home screen and press Launch. The button
+states what it will do (`Launch Zombies`), and **None - play normally** boots the ordinary campaign
+with your mods loaded. The same choice is available from the CLI:
+
+```sh
+topiaforge launch --gamemode io.github.furroxide.topiaforge.zombies.survival
+```
+
+`--gamemode none` forces an ordinary boot for one run without editing the saved profile.
+
+In game, the **GAMEMODES** button on Robotopia's main menu lists everything installed mods have
+registered, and **TOPIAFORGE** opens the mod manager. **F10** opens the manager overlay from
+anywhere, and its Gamemodes tab does the same job as the menu button.
+
 ## No TopiaForge buttons on the main menu
 
 TopiaForge draws those buttons on its own canvas, so they do not depend on the game's UI. If they

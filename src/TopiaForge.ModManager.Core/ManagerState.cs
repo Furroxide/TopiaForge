@@ -17,6 +17,15 @@ namespace TopiaForge.ModManager.Core
         public List<InstalledModState> Mods { get; set; } = new List<InstalledModState>();
 
         /// <summary>
+        /// The manager's remembered world/gamemode selection, edited from the in-game overlay. It lives
+        /// here rather than in the Worlds mod's config file because that file is owned by the mod: two
+        /// processes merging into one document is what silently discarded every selection the launcher
+        /// made. Manager-owned state belongs in manager-owned state.
+        /// </summary>
+        [DataMember(Name = "worldLaunch")]
+        public WorldLaunchSettings? WorldLaunch { get; set; }
+
+        /// <summary>
         /// Migrates the pre-envelope state and removes malformed or duplicate records before any package
         /// operation consumes them. The last record wins so an interrupted append/merge cannot resurrect an
         /// older selection later in the document.
@@ -32,6 +41,12 @@ namespace TopiaForge.ModManager.Core
                 throw new System.Runtime.Serialization.SerializationException(
                     "Unsupported manager state schemaVersion " + SchemaVersion + ". Expected " + CurrentSchemaVersion + ".");
             }
+
+            // GetUninitializedObject bypasses property initializers, so an absent member arrives null.
+            WorldLaunch = WorldLaunch ?? new WorldLaunchSettings();
+            WorldLaunch.LoadMode = WorldLaunchSettings.NormalizeLoadMode(WorldLaunch.LoadMode);
+            WorldLaunch.SelectedWorldId = WorldLaunch.SelectedWorldId ?? string.Empty;
+            WorldLaunch.SelectedGamemodeId = WorldLaunch.SelectedGamemodeId ?? string.Empty;
 
             var source = Mods ?? new List<InstalledModState>();
             if (source.Count > 4096)

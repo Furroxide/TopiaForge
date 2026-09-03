@@ -166,13 +166,21 @@ class WorldSelectionChanged extends LauncherEvent {
     this.worldId,
     this.gamemodeId,
     this.loadMode,
-    this.autoLoadOnStart,
+    this.launchIntoGamemode,
   });
 
   final String? worldId;
   final String? gamemodeId;
   final String? loadMode;
-  final bool? autoLoadOnStart;
+  final bool? launchIntoGamemode;
+}
+
+/// Home's gamemode picker. A null [gamemodeId] is the explicit "None — play normally" choice, which
+/// leaves the remembered world alone and simply stops Launch from starting a session.
+class LaunchGamemodeSelected extends LauncherEvent {
+  const LaunchGamemodeSelected(this.gamemodeId);
+
+  final String? gamemodeId;
 }
 
 class PackageSourceAdded extends LauncherEvent {
