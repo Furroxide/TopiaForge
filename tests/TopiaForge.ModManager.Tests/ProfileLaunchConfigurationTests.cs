@@ -13,6 +13,10 @@ namespace TopiaForge.ModManager.Tests
             TestExactProfileDoesNotMutateDurableState();
             TestSafeModeIsTemporary();
             TestDartJsonContract();
+            TestProfileWithoutWorldLaunchBootsNormally();
+            TestMainMenuCommandCrossesTheWire();
+            TestMainMenuCommandRejectsATarget();
+            TestUnsafeWorldLaunchRejected();
             TestRetiredSchemaRejected();
             TestRegistryHonorsSelectedVersion();
             TestUnsafeProfileIdRejected();
@@ -64,16 +68,92 @@ namespace TopiaForge.ModManager.Tests
 
         private static void TestDartJsonContract()
         {
-            const string json = "{\"schemaVersion\":2,\"profileId\":\"dart\","
+            const string json = "{\"schemaVersion\":3,\"profileId\":\"dart\","
                 + "\"safeMode\":false,\"inheritManagerModState\":false,"
                 + "\"enabledMods\":[\"alpha.mod\"],"
                 + "\"selectedVersions\":{\"alpha.mod\":\"1.2.3\"},"
+                + "\"worldLaunch\":{\"command\":\"launch-target\","
+                + "\"worldId\":\"a.b.world\",\"gamemodeId\":\"a.b.mode\","
+                + "\"loadMode\":\"sceneReplacement\",\"allowAdditiveFallback\":false},"
                 + "\"futureField\":{\"preservedByLauncher\":true}}";
             var profile = JsonUtil.Deserialize<ProfileLaunchConfiguration>(json);
 
             Assert(profile.Validate().Count == 0, "Dart profile JSON should validate in Core");
             Assert(profile.EnabledMods.Count == 1, "Dart enabledMods should deserialize");
             Assert(profile.SelectedVersions["alpha.mod"] == "1.2.3", "Dart selected version should deserialize");
+            Assert(profile.WorldLaunch != null, "the launcher's gamemode choice must survive the crossing");
+            Assert(profile.WorldLaunch!.GamemodeId == "a.b.mode" && profile.WorldLaunch.WorldId == "a.b.world",
+                "the world and gamemode ids must deserialize");
+            Assert(profile.WorldLaunch.PreferSceneReplacement && !profile.WorldLaunch.AllowAdditiveFallback,
+                "the load-mode preferences must deserialize");
+            Assert(!profile.WorldLaunch.IsMainMenu, "a launch-target command is not an ordinary boot");
+        }
+
+        /// <summary>
+        /// The launcher says "play normally" out loud. It has to: the manager remembers a selection of
+        /// its own, and cannot tell an absent instruction from a request for the ordinary menu.
+        /// </summary>
+        private static void TestMainMenuCommandCrossesTheWire()
+        {
+            const string json = "{\"schemaVersion\":3,\"profileId\":\"dart\","
+                + "\"safeMode\":false,\"inheritManagerModState\":true,"
+                + "\"enabledMods\":[],\"selectedVersions\":{},"
+                + "\"worldLaunch\":{\"command\":\"main-menu\"}}";
+            var profile = JsonUtil.Deserialize<ProfileLaunchConfiguration>(json);
+
+            Assert(profile.Validate().Count == 0,
+                "a main-menu command carries no target, so demanding one would reject every ordinary launch");
+            Assert(profile.WorldLaunch != null && profile.WorldLaunch!.IsMainMenu,
+                "the ordinary-boot command must survive the crossing");
+        }
+
+        /// <summary>A main-menu command must not smuggle a target past the empty-gamemode rule.</summary>
+        private static void TestMainMenuCommandRejectsATarget()
+        {
+            var profile = new ProfileLaunchConfiguration
+            {
+                SchemaVersion = ProfileLaunchConfiguration.CurrentSchemaVersion,
+                ProfileId = "contradictory",
+                InheritManagerModState = true,
+                WorldLaunch = new WorldLaunchIntent
+                {
+                    Command = WorldLaunchIntent.MainMenuCommand,
+                    GamemodeId = "a.b.mode"
+                }
+            };
+
+            Assert(profile.Validate().Any(error => error.Contains("worldLaunch.gamemodeId")),
+                "asking for the menu and for a gamemode at once is not a launch anyone meant");
+        }
+
+        /// <summary>
+        /// A profile from a launcher that predates the command must stay valid: it expressed no
+        /// instruction either way, and the manager falls back to its own remembered selection.
+        /// </summary>
+        private static void TestProfileWithoutWorldLaunchBootsNormally()
+        {
+            const string json = "{\"schemaVersion\":3,\"profileId\":\"dart\","
+                + "\"safeMode\":false,\"inheritManagerModState\":true,"
+                + "\"enabledMods\":[],\"selectedVersions\":{}}";
+            var profile = JsonUtil.Deserialize<ProfileLaunchConfiguration>(json);
+
+            Assert(profile.Validate().Count == 0, "a profile with no launch intent is valid");
+            Assert(profile.WorldLaunch == null, "an older launcher issues no instruction at all");
+        }
+
+        /// <summary>An intent naming an unsafe id must be refused rather than reaching the world service.</summary>
+        private static void TestUnsafeWorldLaunchRejected()
+        {
+            var profile = new ProfileLaunchConfiguration
+            {
+                SchemaVersion = ProfileLaunchConfiguration.CurrentSchemaVersion,
+                ProfileId = "bad-intent",
+                InheritManagerModState = true,
+                WorldLaunch = new WorldLaunchIntent { GamemodeId = "../../escape" }
+            };
+
+            Assert(profile.Validate().Any(error => error.Contains("worldLaunch.gamemodeId")),
+                "an unsafe gamemode id must be rejected");
         }
 
         private static void TestRegistryHonorsSelectedVersion()
@@ -117,13 +197,13 @@ namespace TopiaForge.ModManager.Tests
         {
             var profile = new ProfileLaunchConfiguration
             {
-                SchemaVersion = 1,
+                SchemaVersion = 2,
                 ProfileId = "retired-format"
             };
 
             Assert(
-                profile.Validate().Any(error => error.Contains("schemaVersion must be 2")),
-                "profile schemaVersion 1 must be rejected explicitly");
+                profile.Validate().Any(error => error.Contains("schemaVersion must be 3")),
+                "a retired profile schemaVersion must be rejected explicitly");
         }
 
         private static void TestUnsafeProfileIdRejected()

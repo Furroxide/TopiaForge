@@ -310,7 +310,7 @@ void _registerProfileLaunchTests({
       );
     });
 
-    test('world selection write rejects retired in-memory ids', () async {
+    test('a retired world id fails the launch instead of starting the game', () async {
       var processStarted = false;
       final prepared = await _prepareProfileLaunchRepository(
         dataRoot: dataRoot(),
@@ -325,19 +325,22 @@ void _registerProfileLaunchTests({
           'robo'
           'topia.world.retired';
 
-      await expectLater(
-        prepared.$1.launch(
-          prepared.$2,
-          LauncherProfile(
-            id: 'retired-world',
-            name: 'Retired world',
-            worldSelection: WorldSelection(worldId: retired),
-          ),
+      // The id is validated while the launch profile is built, and a bad one now surfaces as a failed
+      // launch the launcher can show rather than an exception it has to survive.
+      final result = await prepared.$1.launch(
+        prepared.$2,
+        LauncherProfile(
+          id: 'retired-world',
+          name: 'Retired world',
+          worldSelection: WorldSelection(worldId: retired),
         ),
-        throwsFormatException,
       );
 
+      expect(result.started, isFalse);
+      expect(result.message, contains('worldId'));
       expect(processStarted, isFalse);
+      // The launcher no longer writes the Worlds mod's config at all: that shared document is what
+      // silently swallowed every selection. The mod owns it; the launch profile carries the choice.
       expect(
         File(
           p.join(

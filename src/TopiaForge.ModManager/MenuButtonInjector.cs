@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using TopiaForge.Mods;
 using TopiaForge.Mods.UnityUi;
@@ -9,16 +10,35 @@ using UnityEngine.UI;
 
 namespace TopiaForge.ModManager
 {
+    /// <summary>
+    /// Puts the manager's GAMEMODES and TOPIAFORGE buttons on the game's main menu.
+    /// <para>
+    /// The buttons live on the kit's own band-allocated canvas rather than being parented onto one of
+    /// the game's canvases. That is the whole fix for their previous absence: Robotopia's main menu is
+    /// UI Toolkit (<c>StartMenuApp</c> on ClockworkLabs Rish) and its scene contains no uGUI canvas to
+    /// parent onto, so the old lookup could never succeed on any build of this game. Owning the canvas
+    /// also means the buttons keep the kit's scaler and sorting order instead of inheriting whatever
+    /// the game happened to configure. See <see cref="MenuSurfaceCensus"/>.
+    /// </para>
+    /// </summary>
     internal sealed class MenuButtonInjector : IDisposable
     {
-        // The main-menu gate keeps the component scan and the broad canvas fallback out of gameplay
-        // (which prevents false injection into HUD canvases).
+        // Retry cadence while the menu scene is active. Backed off once a failure has been reported so a
+        // build we genuinely cannot mount on does not spin a scan every second forever.
+        private const float RetrySeconds = 1f;
+        private const float RetrySecondsAfterWarning = 5f;
+
         private readonly ManagerOverlay overlay;
         private readonly ManagerFileLogger logger;
         private readonly List<TopiaForgeButton> injectedButtons = new List<TopiaForgeButton>();
         private UiHost? host;
+        private TopiaForgeContainer? bar;
         private string sceneName = string.Empty;
         private float nextAttemptTime;
+        private int attempts;
+        private bool mounted;
+        private bool censusLogged;
+        private bool warningLogged;
 
         public MenuButtonInjector(ManagerOverlay overlay, ManagerFileLogger logger)
         {
@@ -26,11 +46,22 @@ namespace TopiaForge.ModManager
             this.logger = logger;
         }
 
+        /// <summary>
+        /// Why the menu buttons are missing, or empty while they are present (or before the player has
+        /// reached the menu). Kept so callers can surface the condition without re-deriving it.
+        /// </summary>
+        public string MountFailure { get; private set; } = string.Empty;
+
         public void ResetForScene(string newSceneName)
         {
             ClearInjectedUi();
             sceneName = newSceneName;
             nextAttemptTime = 0f;
+            attempts = 0;
+            mounted = false;
+            censusLogged = false;
+            warningLogged = false;
+            MountFailure = string.Empty;
         }
 
         public void Dispose()
@@ -40,22 +71,30 @@ namespace TopiaForge.ModManager
 
         public void Update()
         {
-            // No permanent "done" latch: if the menu canvas is rebuilt within the scene, the throttled retry +
-            // per-button presence check re-injects. Gate on the live active scene (robust even if the menu's
-            // sceneLoaded event was missed because it was the startup scene) so gameplay is never scanned.
+            // Gate on the live active scene as well as the tracked one, so the menu is still handled when
+            // it is the startup scene and its sceneLoaded event was never delivered. Keeping the whole
+            // pass behind the menu gate is what keeps it out of gameplay.
             if (Time.unscaledTime < nextAttemptTime)
             {
                 return;
             }
 
-            nextAttemptTime = Time.unscaledTime + 1f;
+            nextAttemptTime = Time.unscaledTime + (warningLogged ? RetrySecondsAfterWarning : RetrySeconds);
 
             if (!IsMenuScene())
             {
                 return;
             }
 
-            TryInject();
+            // No permanent "done" latch: if our canvas is torn down within the scene, the throttled retry
+            // and the per-button presence check below rebuild it.
+            if (mounted && HasLiveButtons())
+            {
+                return;
+            }
+
+            attempts++;
+            TryMount();
         }
 
         private bool IsMenuScene()
@@ -64,43 +103,69 @@ namespace TopiaForge.ModManager
                 || GameScenes.IsMainMenuScene(SceneManager.GetActiveScene().name);
         }
 
-        private void TryInject()
+        private bool HasLiveButtons()
+        {
+            if (injectedButtons.Count == 0)
+            {
+                return false;
+            }
+
+            foreach (var button in injectedButtons)
+            {
+                if (button.Go == null)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private void TryMount()
         {
             try
             {
-                var canvas = FindMenuCanvas();
-                if (canvas == null)
-                {
-                    return;
-                }
+                ClearInjectedUi();
 
-                TopiaForgeEventSystems.EnsureEventSystem();
-                EnsureButton(canvas, "TopiaForgeGamemodesMenuButton", "GAMEMODES", () => overlay.ShowGamemodes(), 74f);
-                EnsureButton(canvas, "TopiaForgeModManagerMenuButton", "TOPIAFORGE", () => overlay.Show(), 24f);
+                host ??= TopiaForgeUi.Create(new TopiaForgeUiOptions
+                {
+                    OwnerId = "io.github.furroxide.topiaforge.modmanager.menu",
+                    LogInfo = logger.Info,
+                    LogWarn = logger.Warn,
+                    LogError = message => logger.Error(message),
+                });
+
+                // Persistent, so Unity does not destroy the canvas on scene unload and strand its
+                // sorting-order slot; ResetForScene owns the teardown instead.
+                bar = host.Layer(
+                    "menu-bar",
+                    TopiaForgeLayerBand.Hud,
+                    TopiaForgeScheme.Paper,
+                    interactive: true,
+                    persistent: true);
+
+                AddButton("TopiaForgeGamemodesMenuButton", "GAMEMODES", () => overlay.ShowGamemodes(), 74f);
+                AddButton("TopiaForgeModManagerMenuButton", "TOPIAFORGE", () => overlay.Show(), 24f);
+
+                mounted = true;
+                MountFailure = string.Empty;
+                LogCensusOnce();
             }
             catch (Exception ex)
             {
-                logger.Error(ex, "Failed to inject menu buttons.");
+                mounted = false;
+                logger.Error(ex, "Failed to mount the main-menu buttons.");
+            }
+
+            if (!mounted)
+            {
+                ReportMountFailure();
             }
         }
 
-        private void EnsureButton(Canvas canvas, string name, string label, Action onClick, float bottomOffset)
+        private void AddButton(string name, string label, Action onClick, float bottomOffset)
         {
-            if (canvas.transform.Find(name) != null)
-            {
-                return;
-            }
-
-            // Kit widgets render fine under the game's own canvas: wrap it in a container.
-            host ??= TopiaForgeUi.Create(new TopiaForgeUiOptions
-            {
-                OwnerId = "io.github.furroxide.topiaforge.modmanager.menu",
-                LogInfo = logger.Info,
-                LogWarn = logger.Warn,
-                LogError = message => logger.Error(message),
-            });
-            var parent = new TopiaForgeContainer(host, TopiaForgeScheme.Paper, canvas.gameObject);
-            var button = parent.Button(label, onClick, TopiaForgeButtonStyle.Filled);
+            var button = bar!.Button(label, onClick, TopiaForgeButtonStyle.Filled);
             injectedButtons.Add(button);
             button.Go.name = name;
 
@@ -113,6 +178,149 @@ namespace TopiaForge.ModManager
             logger.Info("Injected '" + label + "' menu button into scene '" + sceneName + "'.");
         }
 
+        /// <summary>
+        /// Records what the menu actually looked like, once per visit. The previous implementation logged
+        /// nothing at all when it could not find a home for its buttons, which is why a game whose menu
+        /// had no uGUI canvas produced a silently mod-less main menu and no diagnostic to explain it.
+        /// </summary>
+        private void LogCensusOnce()
+        {
+            if (censusLogged)
+            {
+                return;
+            }
+
+            censusLogged = true;
+            logger.Info(MenuSurfaceCensus.Describe(
+                sceneName,
+                mounted,
+                attempts,
+                CurrentSortingOrder(),
+                CollectSurfaces()));
+        }
+
+        private void ReportMountFailure()
+        {
+            if (!MenuSurfaceCensus.ShouldWarn(attempts, mounted, warningLogged))
+            {
+                return;
+            }
+
+            warningLogged = true;
+            MountFailure = "The TopiaForge menu buttons could not be mounted in scene '" + sceneName
+                + "' after " + attempts + " attempts. Press F10 to open the manager overlay.";
+            logger.Warn(MountFailure + " " + MenuSurfaceCensus.Describe(
+                sceneName,
+                mounted: false,
+                attempts,
+                CurrentSortingOrder(),
+                CollectSurfaces()));
+            censusLogged = true;
+
+            // Never strand the player: the overlay is on its own canvas and needs nothing from the game,
+            // so it still opens when everything else about the menu is unrecognisable.
+            overlay.ShowGamemodes();
+        }
+
+        private int CurrentSortingOrder()
+        {
+            var canvas = bar?.Go == null ? null : bar.Go.GetComponentInParent<Canvas>();
+            return canvas == null ? 0 : canvas.sortingOrder;
+        }
+
+        /// <summary>
+        /// Describes the game's own menu surfaces for the log. Diagnostics only — nothing here decides
+        /// whether the buttons mount — so both probes fail soft.
+        /// </summary>
+        private static List<MenuSurfaceCandidate> CollectSurfaces()
+        {
+            var surfaces = new List<MenuSurfaceCandidate>();
+            CollectCanvases(surfaces);
+            CollectUiToolkitPanels(surfaces);
+            return surfaces;
+        }
+
+        private static void CollectCanvases(List<MenuSurfaceCandidate> surfaces)
+        {
+            try
+            {
+                foreach (var canvas in Resources.FindObjectsOfTypeAll<Canvas>())
+                {
+                    if (canvas == null
+                        || !canvas.gameObject.activeInHierarchy
+                        || MenuSurfaceCensus.IsTopiaForgeOwned(canvas.name))
+                    {
+                        continue;
+                    }
+
+                    surfaces.Add(new MenuSurfaceCandidate(
+                        MenuSurfaceCandidate.UguiCanvasKind,
+                        canvas.name,
+                        canvas.sortingOrder,
+                        canvas.GetComponentsInChildren<Selectable>(true).Length));
+                }
+            }
+            catch (Exception)
+            {
+                // A census is never worth failing over.
+            }
+        }
+
+        /// <summary>
+        /// Counts UI Toolkit runtime panels by reflection, so the loader needs no UIElements reference
+        /// and degrades to reporting none if a future build drops the module.
+        /// </summary>
+        private static void CollectUiToolkitPanels(List<MenuSurfaceCandidate> surfaces)
+        {
+            try
+            {
+                var documentType = Type.GetType(
+                    "UnityEngine.UIElements.UIDocument, UnityEngine.UIElementsModule",
+                    throwOnError: false);
+                if (documentType == null)
+                {
+                    return;
+                }
+
+                var sortingOrderProperty = documentType.GetProperty("sortingOrder");
+                foreach (var document in Resources.FindObjectsOfTypeAll(documentType).OfType<Component>())
+                {
+                    if (document == null || !document.gameObject.activeInHierarchy)
+                    {
+                        continue;
+                    }
+
+                    // Accept any numeric type. UIDocument.sortingOrder is a float on the engine we
+                    // target, but this whole probe exists because an assumption about the game's UI
+                    // stopped holding silently -- a census that reports every panel at order 0 after a
+                    // type change would be the same failure in a new place.
+                    var order = 0;
+                    var rawOrder = sortingOrderProperty?.GetValue(document, null);
+                    if (rawOrder is IConvertible)
+                    {
+                        try
+                        {
+                            order = Convert.ToInt32(rawOrder, CultureInfo.InvariantCulture);
+                        }
+                        catch (Exception)
+                        {
+                            // Overflow or an unconvertible numeric: report 0 rather than lose the panel.
+                        }
+                    }
+
+                    surfaces.Add(new MenuSurfaceCandidate(
+                        MenuSurfaceCandidate.UiToolkitPanelKind,
+                        document.gameObject.name,
+                        order,
+                        0));
+                }
+            }
+            catch (Exception)
+            {
+                // Reflection into an engine module is best-effort by construction.
+            }
+        }
+
         private void ClearInjectedUi()
         {
             for (var index = injectedButtons.Count - 1; index >= 0; index--)
@@ -121,41 +329,9 @@ namespace TopiaForge.ModManager
             }
 
             injectedButtons.Clear();
+            bar = null;
             host?.Dispose();
             host = null;
-        }
-
-        private static Canvas? FindMenuCanvas()
-        {
-            // The game's LevelSelectController marks the menu. Its own panel may be inactive on the landing
-            // screen, so we do NOT require the controller to be active — only that it resolves to an active
-            // scene Canvas (a prefab-asset instance does not). This is gated to the menu scene by the caller.
-            var levelSelect = Resources.FindObjectsOfTypeAll<MonoBehaviour>()
-                .FirstOrDefault(m => m != null && m.GetType().Name == "LevelSelectController");
-            if (levelSelect != null)
-            {
-                var canvas = levelSelect.GetComponentInParent<Canvas>();
-                if (canvas != null && canvas.gameObject.activeInHierarchy)
-                {
-                    return canvas;
-                }
-            }
-
-            // Fallback (menu scene only): the first active canvas with at least two text buttons.
-            var canvases = Resources.FindObjectsOfTypeAll<Canvas>()
-                .Where(c => c != null && c.gameObject.activeInHierarchy && c.name != "TopiaForgeModManagerOverlay")
-                .ToArray();
-
-            foreach (var canvas in canvases)
-            {
-                var buttons = canvas.GetComponentsInChildren<Button>(true);
-                if (buttons.Length >= 2 && buttons.Any(b => b.GetComponentInChildren<Text>() != null))
-                {
-                    return canvas;
-                }
-            }
-
-            return null;
         }
     }
 }

@@ -65,6 +65,10 @@ namespace TopiaForge.Worlds
         // Best-effort diagnostic catalog write. A catalog failure must never take down the provider that
         // Zombies, Sandbox, UiGallery, and Creator Tools all depend on, so the result is drained and logged.
         private Task<OperationResult<bool>>? catalogWrite;
+        // Set whenever the registry changes. The catalog is written from the frame loop rather than at the
+        // point of registration, so a mod that registers a gamemode after Worlds has loaded (every gamemode
+        // does -- they all declare loadAfter: worlds) still reaches the file.
+        private bool catalogDirty;
         private readonly CancellationToken lifetimeToken;
 
         internal WorldsService(

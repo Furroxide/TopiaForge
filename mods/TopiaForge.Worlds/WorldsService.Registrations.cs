@@ -34,6 +34,7 @@ namespace TopiaForge.Worlds
 
             var registration = new Registration(this, world.Id, WorldRegistrationKind.World);
             worldRegistrations.Add(world.Id, registration);
+            MarkCatalogDirty();
             return OperationResult<IWorldRegistration>.Success(registration);
         }
 
@@ -66,6 +67,7 @@ namespace TopiaForge.Worlds
             gamemodes.Add(gamemode);
             var registration = new Registration(this, gamemode.Id, WorldRegistrationKind.Gamemode);
             gamemodeRegistrations.Add(gamemode.Id, registration);
+            MarkCatalogDirty();
             return OperationResult<IWorldRegistration>.Success(registration);
         }
 
@@ -87,6 +89,7 @@ namespace TopiaForge.Worlds
             menuEntries.Add(entry);
             var registration = new Registration(this, entry.Id, WorldRegistrationKind.MenuEntry);
             menuEntryRegistrations.Add(entry.Id, registration);
+            MarkCatalogDirty();
             return OperationResult<IWorldRegistration>.Success(registration);
         }
 
@@ -119,6 +122,9 @@ namespace TopiaForge.Worlds
 
             RegistrationMap(registration.Kind).Remove(registration.Id);
             registration.Deactivate();
+            // Removals matter to the catalog as much as additions do: leaving them out would let the
+            // published file keep offering a world or gamemode whose mod has already gone away.
+            catalogDirty = true;
             switch (registration.Kind)
             {
                 case WorldRegistrationKind.World:

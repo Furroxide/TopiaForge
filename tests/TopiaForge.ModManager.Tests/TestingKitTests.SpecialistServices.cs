@@ -257,6 +257,15 @@ namespace TopiaForge.ModManager.Tests
                 "an exit interceptor registers");
             Assert(pauseMenu.InvokeExit(WorldSessionFixture()) == WorldPauseExitDecision.Block,
                 "the registered interceptor decides the vanilla exit");
+
+            // The slot is exclusive. A silent replacement would leave the first gamemode believing it still had
+            // a veto over an exit it no longer sees, which is what the live provider used to do.
+            var second = pauseMenu.InterceptExit(_ => WorldPauseExitDecision.ExitWithoutEnding);
+            Assert(!second.Succeeded && second.ErrorCode == ModErrorCode.Conflict,
+                "a second exit interceptor is a conflict, not a silent replacement");
+            Assert(pauseMenu.InvokeExit(WorldSessionFixture()) == WorldPauseExitDecision.Block,
+                "the rejected interceptor never displaces the incumbent");
+
             interceptorHandle!.Dispose();
             Assert(!pauseMenu.HasExitInterceptor &&
                    pauseMenu.InvokeExit(WorldSessionFixture()) == WorldPauseExitDecision.EndSessionAndExit,

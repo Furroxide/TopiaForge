@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using TopiaForge.ModManager.Core;
 
 namespace TopiaForge.ModManager.Tests
@@ -9,8 +10,8 @@ namespace TopiaForge.ModManager.Tests
         {
             TestDeserializationSeedsRuntimeDefaults();
             TestLoadModeReconciliation();
-            TestMergePreservesProviderAndUnknownFields();
-            TestMergeRejectsMalformedUnknownValues();
+            TestManagerStateAlwaysCarriesWorldLaunch();
+            TestJsonObjectMergeRejectsMalformedValues();
         }
 
         private static void TestDeserializationSeedsRuntimeDefaults()
@@ -23,8 +24,6 @@ namespace TopiaForge.ModManager.Tests
                 "world launch settings should preserve allowAdditiveFallback default true when missing");
             Assert(!settings.AutoLoadOnStart,
                 "world launch settings should default autoLoadOnStart to false");
-            Assert(settings.EndSessionOnMenuScene && settings.InterceptPauseMenu,
-                "manager launch settings must preserve provider lifecycle defaults when fields are missing");
         }
 
         private static void TestLoadModeReconciliation()
@@ -51,55 +50,51 @@ namespace TopiaForge.ModManager.Tests
                 "unknown load modes should normalize to additiveArena");
         }
 
-        private static void TestMergePreservesProviderAndUnknownFields()
+        /// <summary>
+        /// The remembered selection is manager-owned state now, rather than keys merged into the Worlds
+        /// mod's own config document — that shared file is what silently discarded every launcher choice.
+        /// DataContractJsonSerializer builds state with GetUninitializedObject, so an absent member
+        /// arrives null and Normalize has to seed it; callers must never have to null-check it.
+        /// </summary>
+        private static void TestManagerStateAlwaysCarriesWorldLaunch()
         {
-            const string existing = "{\"selectedWorldId\":\"old\",\"endSessionOnMenuScene\":false,"
-                + "\"interceptPauseMenu\":false,\"retiredProviderState\":null,"
-                + "\"futureProviderState\":{\"nested\":[1,{\"x\":true}]}}";
-            var settings = new WorldLaunchSettings
-            {
-                SelectedWorldId = "new.world",
-                SelectedGamemodeId = "new.mode",
-                LoadMode = WorldLaunchSettings.SceneReplacement,
-                AutoLoadOnStart = true,
-                AllowAdditiveFallback = false,
-            };
+            var fresh = JsonUtil.Deserialize<ManagerState>("{\"schemaVersion\":1,\"mods\":[]}");
+            fresh.Normalize();
+            Assert(fresh.WorldLaunch != null, "a state document with no worldLaunch must still expose one");
+            Assert(fresh.WorldLaunch!.LoadMode == WorldLaunchSettings.AdditiveArena,
+                "a seeded selection must carry a usable load mode");
+            Assert(!fresh.WorldLaunch.AutoLoadOnStart,
+                "a fresh install must boot to the game's own menu, not into a gamemode nobody chose");
 
-            var merged = settings.MergeIntoJson(existing);
-            var round = JsonUtil.Deserialize<WorldLaunchSettings>(merged);
-            Assert(round.SelectedWorldId == "new.world" && round.SelectedGamemodeId == "new.mode",
-                "merge should replace manager-owned selection fields");
-            Assert(round.LoadMode == WorldLaunchSettings.SceneReplacement && round.AutoLoadOnStart
-                && !round.AllowAdditiveFallback, "merge should replace every launch preference");
-            Assert(merged.Contains("\"endSessionOnMenuScene\":false")
-                && merged.Contains("\"interceptPauseMenu\":false"),
-                "merge must retain provider lifecycle preferences");
-            Assert(merged.Contains("\"retiredProviderState\":null"),
-                "merge must preserve legitimate null-valued provider fields");
-            Assert(merged.Contains("\"futureProviderState\":{\"nested\":[1,{\"x\":true}]}"),
-                "merge must retain unknown nested provider JSON");
+            var stored = JsonUtil.Deserialize<ManagerState>(
+                "{\"schemaVersion\":1,\"mods\":[],\"worldLaunch\":{\"selectedGamemodeId\":\"a.b.c\","
+                + "\"loadMode\":\"bogus\",\"autoLoadOnStart\":true}}");
+            stored.Normalize();
+            Assert(stored.WorldLaunch!.SelectedGamemodeId == "a.b.c", "a stored selection must survive");
+            Assert(stored.WorldLaunch.AutoLoadOnStart, "a stored auto-load choice must survive");
+            Assert(stored.WorldLaunch.LoadMode == WorldLaunchSettings.AdditiveArena,
+                "an unusable stored load mode must be clamped, not carried into the runtime");
         }
 
-        private static void TestMergeRejectsMalformedUnknownValues()
+        private static void TestJsonObjectMergeRejectsMalformedValues()
         {
-            var settings = new WorldLaunchSettings();
-            AssertThrows<FormatException>(() => settings.MergeIntoJson("{\"future\":garbage}"),
+            var noChanges = new Dictionary<string, string>();
+            AssertThrows<FormatException>(() => JsonObjectMerge.Merge("{\"future\":garbage}", noChanges),
                 "merge must reject a malformed primitive instead of preserving invalid JSON");
-            AssertThrows<FormatException>(() => settings.MergeIntoJson("{\"future\":\"bad" + '\u0001' + "value\"}"),
+            AssertThrows<FormatException>(
+                () => JsonObjectMerge.Merge("{\"future\":\"bad" + '\u0001' + "value\"}", noChanges),
                 "merge must reject an unescaped control character instead of preserving invalid JSON");
-            AssertThrows<FormatException>(() => settings.MergeIntoJson("{\"future\":01}"),
+            AssertThrows<FormatException>(() => JsonObjectMerge.Merge("{\"future\":01}", noChanges),
                 "merge must reject a leading-zero JSON number");
-            AssertThrows<FormatException>(() => settings.MergeIntoJson("{\"future\":NaN}"),
+            AssertThrows<FormatException>(() => JsonObjectMerge.Merge("{\"future\":NaN}", noChanges),
                 "merge must reject the non-standard NaN literal");
-            AssertThrows<FormatException>(() => settings.MergeIntoJson("{\"future\":Infinity}"),
+            AssertThrows<FormatException>(() => JsonObjectMerge.Merge("{\"future\":Infinity}", noChanges),
                 "merge must reject the non-standard Infinity literal");
-            AssertThrows<FormatException>(() => settings.MergeIntoJson("{\"future\":true\f}"),
+            AssertThrows<FormatException>(() => JsonObjectMerge.Merge("{\"future\":true\f}", noChanges),
                 "merge must reject non-JSON whitespace between tokens");
 
             const string strictValid = "{\"exponent\":-1.25e+3,\"nothing\":null,\"yes\":true,\"no\":false}";
-            var retained = JsonObjectMerge.Merge(
-                strictValid,
-                new System.Collections.Generic.Dictionary<string, string>());
+            var retained = JsonObjectMerge.Merge(strictValid, noChanges);
             Assert(retained.Contains("\"exponent\":-1.25e+3")
                 && retained.Contains("\"nothing\":null")
                 && retained.Contains("\"yes\":true")
