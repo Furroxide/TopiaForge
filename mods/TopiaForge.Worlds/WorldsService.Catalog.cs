@@ -76,14 +76,26 @@ namespace TopiaForge.Worlds
         }
 
         /// <summary>
+        /// Requests a refresh of the published world catalog. Registration happens over many frames -- every
+        /// gamemode mod declares <c>loadAfter: worlds</c>, so Zombies and Sandbox register after this provider
+        /// has already loaded -- so the catalog is marked dirty here and written from the frame loop instead of
+        /// being snapshotted at one moment. Writing it once at load time was why a gamemode contributed by a
+        /// later-loading mod never appeared in the file, and therefore never appeared in the launcher.
+        /// </summary>
+        public void MarkCatalogDirty()
+        {
+            ThrowIfDisposed();
+            catalogDirty = true;
+        }
+
+        /// <summary>
         /// Starts a best-effort write of the diagnostic world catalog. The catalog is an inspection aid, not a
         /// runtime input, so a read-only data directory, a full disk, or a locked file must never fail the
         /// provider that Zombies, Sandbox, UiGallery, and Creator Tools all hard-depend on. The write is also
         /// never waited on: <see cref="UpdateTransition"/> drains its result on Unity's main thread.
         /// </summary>
-        public void WriteCatalog()
+        private void StartCatalogWrite()
         {
-            ThrowIfDisposed();
             if (catalogWrite != null)
             {
                 return;
@@ -108,10 +120,26 @@ namespace TopiaForge.Worlds
             }
         }
 
+        /// <summary>
+        /// Main-thread pump for the catalog. Drains a finished write, then starts a new one when the registry
+        /// has changed since the last write began. Requests that arrive while a write is in flight coalesce
+        /// into the next one rather than being dropped, so the file always converges on the live registry.
+        /// </summary>
         private void UpdateCatalogWrite()
         {
             var pending = catalogWrite;
-            if (pending == null || !pending.IsCompleted)
+            if (pending == null)
+            {
+                if (catalogDirty)
+                {
+                    catalogDirty = false;
+                    StartCatalogWrite();
+                }
+
+                return;
+            }
+
+            if (!pending.IsCompleted)
             {
                 return;
             }
@@ -141,6 +169,10 @@ namespace TopiaForge.Worlds
             AppendWorlds(builder);
             builder.Append("],\"gamemodes\":[");
             AppendGamemodes(builder);
+            // Menu entries carry the world a gamemode actually wants to start in. Publishing them lets the
+            // launcher offer "play this gamemode" without having to guess a world from the manifest.
+            builder.Append("],\"menuEntries\":[");
+            AppendMenuEntries(builder);
             builder.Append("]}");
             return builder.ToString();
         }
@@ -181,6 +213,26 @@ namespace TopiaForge.Worlds
                     .Append("{\"id\":\"").Append(Escape(gamemode.Id))
                     .Append("\",\"name\":\"").Append(Escape(gamemode.Name))
                     .Append("\",\"description\":\"").Append(Escape(gamemode.Description))
+                    .Append("\"}");
+            }
+        }
+
+        private void AppendMenuEntries(StringBuilder builder)
+        {
+            for (var index = 0; index < menuEntries.Count; index++)
+            {
+                if (index > 0)
+                {
+                    builder.Append(',');
+                }
+
+                var entry = menuEntries[index];
+                builder
+                    .Append("{\"id\":\"").Append(Escape(entry.Id))
+                    .Append("\",\"title\":\"").Append(Escape(entry.Title))
+                    .Append("\",\"description\":\"").Append(Escape(entry.Description))
+                    .Append("\",\"gamemodeId\":\"").Append(Escape(entry.GamemodeId))
+                    .Append("\",\"worldId\":\"").Append(Escape(entry.WorldId))
                     .Append("\"}");
             }
         }

@@ -382,10 +382,37 @@ class _TopiaForgeCli {
     if (install == null) {
       throw StateError(_noInstallRemedy);
     }
-    final profile = snapshot.profiles.firstWhere(
+    var profile = snapshot.profiles.firstWhere(
       (item) => item.id == snapshot.selectedProfileId,
       orElse: () => snapshot.profiles.first,
     );
+
+    // `--gamemode <id>` starts that game mode for this run only, without editing the saved profile.
+    // `--gamemode none` forces an ordinary boot even when the profile is set to launch into one.
+    final requestedGamemode = _option(args, '--gamemode');
+    if (requestedGamemode != null) {
+      final selection = profile.worldSelection;
+      if (requestedGamemode == 'none') {
+        profile = profile.copyWith(
+          worldSelection: selection.copyWith(launchIntoGamemode: false),
+        );
+      } else {
+        // Prefer the world the game mode's own menu entry declares over whatever the profile last
+        // remembered, so `--gamemode zombies` starts where Zombies expects to start.
+        final entry = snapshot.worldCatalog.menuEntryFor(requestedGamemode);
+        final worldId = entry != null && entry.worldId.isNotEmpty
+            ? entry.worldId
+            : selection.worldId;
+        profile = profile.copyWith(
+          worldSelection: selection.copyWith(
+            gamemodeId: requestedGamemode,
+            worldId: worldId,
+            launchIntoGamemode: true,
+          ),
+        );
+      }
+    }
+
     final result = restart
         ? await launcher.restart(install, profile)
         : await launcher.launch(install, profile);

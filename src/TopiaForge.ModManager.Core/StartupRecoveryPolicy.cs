@@ -69,7 +69,12 @@ namespace TopiaForge.ModManager.Core
                     .ToList(),
                 SelectedVersions = new Dictionary<string, string>(
                     requestedProfile.SelectedVersions ?? new Dictionary<string, string>(),
-                    StringComparer.OrdinalIgnoreCase)
+                    StringComparer.OrdinalIgnoreCase),
+                // Recovery decides which mods load, not what the player asked to play. Dropping the
+                // launch intent here would silently discard the requested gamemode whenever an unrelated
+                // mod happened to be quarantined. Safe mode leaves no world provider to launch into, and
+                // the manager reports that by name instead of losing the request without a word.
+                WorldLaunch = requestedProfile.WorldLaunch
             };
         }
 

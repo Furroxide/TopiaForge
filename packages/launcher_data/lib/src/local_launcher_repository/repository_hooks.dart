@@ -7,6 +7,13 @@ typedef RuntimeRepairCommitHook = FutureOr<void> Function(int committedCount);
 typedef UgcInspectionReadHook = FutureOr<void> Function(String snapshotPath);
 typedef GameProcessStarter = Future<int> Function(GameProcessRequest request);
 
+/// Reports whether a Robotopia process for this exact install is alive.
+///
+/// Implementations must fail closed: when liveness cannot be determined they
+/// answer true, so an unreadable process list never silently clears a restart
+/// requirement the user still needs to see.
+typedef GameRunningProbe = Future<bool> Function(GameInstall install);
+
 class GameProcessRequest {
   GameProcessRequest({
     required this.executable,

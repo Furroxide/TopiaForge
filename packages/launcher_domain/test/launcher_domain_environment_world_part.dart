@@ -121,50 +121,42 @@ void _environmentAndWorldModelTests() {
 
   group('WorldSelection', () {
     test(
-      'toRuntimeConfig emits exactly the keys the C# WorldsConfig expects',
+      'toLaunchIntentJson emits exactly what the launch profile carries',
       () {
-        final config = const WorldSelection(
+        final intent = const WorldSelection(
           worldId: 'w1',
           gamemodeId: 'g1',
           loadMode: WorldSelection.sceneReplacement,
-          autoLoadOnStart: true,
-        ).toRuntimeConfig();
+          launchIntoGamemode: true,
+        ).toLaunchIntentJson();
 
         expect(
-          config.keys.toSet(),
+          intent.keys.toSet(),
           equals({
-            'selectedWorldId',
-            'selectedGamemodeId',
+            'command',
+            'worldId',
+            'gamemodeId',
             'loadMode',
-            'autoLoadOnStart',
             'allowAdditiveFallback',
           }),
         );
-        expect(config['selectedWorldId'], 'w1');
-        expect(config['selectedGamemodeId'], 'g1');
-        expect(config['loadMode'], 'sceneReplacement');
-        expect(config['autoLoadOnStart'], isTrue);
-        expect(config['allowAdditiveFallback'], isTrue);
+        expect(intent['command'], WorldSelection.launchTargetCommand);
+        expect(intent['worldId'], 'w1');
+        expect(intent['gamemodeId'], 'g1');
+        expect(intent['loadMode'], 'sceneReplacement');
+        expect(intent['allowAdditiveFallback'], isTrue);
       },
     );
 
-    test('mergeRuntimeConfig preserves runtime-owned and future keys', () {
-      final merged =
-          const WorldSelection(
-            worldId: 'new-world',
-            gamemodeId: 'new-mode',
-          ).mergeRuntimeConfig({
-            'selectedWorldId': 'old-world',
-            'endSessionOnMenuScene': false,
-            'interceptPauseMenu': false,
-            'futureRuntimeOption': {'enabled': true},
-          });
+    test('play normally is a command, not an omission', () {
+      // The manager remembers a selection of its own. It cannot tell "the launcher said nothing"
+      // from "the launcher asked for the ordinary menu" unless the profile says which.
+      final intent = const WorldSelection(
+        worldId: 'w1',
+        gamemodeId: 'g1',
+      ).toLaunchIntentJson();
 
-      expect(merged['selectedWorldId'], 'new-world');
-      expect(merged['selectedGamemodeId'], 'new-mode');
-      expect(merged['endSessionOnMenuScene'], isFalse);
-      expect(merged['interceptPauseMenu'], isFalse);
-      expect(merged['futureRuntimeOption'], {'enabled': true});
+      expect(intent, {'command': WorldSelection.mainMenuCommand});
     });
 
     test('round-trips through toJson and back', () {
@@ -172,7 +164,7 @@ void _environmentAndWorldModelTests() {
         worldId: 'io.github.furroxide.topiaforge.worlds.level.city',
         gamemodeId: 'io.github.furroxide.topiaforge.zombies.survival',
         loadMode: WorldSelection.sceneReplacement,
-        autoLoadOnStart: true,
+        launchIntoGamemode: true,
       );
 
       final restored = WorldSelection.fromJson(selection.toJson());
@@ -180,7 +172,7 @@ void _environmentAndWorldModelTests() {
       expect(restored.worldId, selection.worldId);
       expect(restored.gamemodeId, selection.gamemodeId);
       expect(restored.loadMode, selection.loadMode);
-      expect(restored.autoLoadOnStart, selection.autoLoadOnStart);
+      expect(restored.launchIntoGamemode, selection.launchIntoGamemode);
     });
 
     test('fromJson ignores runtime-only selected* keys', () {
@@ -218,7 +210,11 @@ void _environmentAndWorldModelTests() {
       expect(empty.worldId, WorldCatalog.openSandboxWorldId);
       expect(empty.gamemodeId, WorldCatalog.sandboxGamemodeId);
       expect(empty.loadMode, WorldSelection.additiveArena);
-      expect(empty.autoLoadOnStart, isFalse);
+      expect(
+        empty.launchIntoGamemode,
+        isFalse,
+        reason: 'a profile that never chose a game mode must boot normally',
+      );
     });
   });
 

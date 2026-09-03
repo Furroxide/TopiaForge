@@ -399,7 +399,7 @@ void main() {
         worldId: 'io.github.furroxide.topiaforge.worlds.level.city',
         gamemodeId: 'io.github.furroxide.topiaforge.zombies.survival',
         loadMode: WorldSelection.sceneReplacement,
-        autoLoadOnStart: true,
+        launchIntoGamemode: true,
       );
       final profile = LauncherProfile(
         id: 'p',
@@ -412,7 +412,7 @@ void main() {
       expect(restored.worldSelection.worldId, selection.worldId);
       expect(restored.worldSelection.gamemodeId, selection.gamemodeId);
       expect(restored.worldSelection.loadMode, selection.loadMode);
-      expect(restored.worldSelection.autoLoadOnStart, isTrue);
+      expect(restored.worldSelection.launchIntoGamemode, isTrue);
     });
 
     test('profile parsing ignores runtime-only world selection keys', () {

@@ -226,7 +226,11 @@ extension _StorageHelpers on LocalLauncherRepository {
     List<RegistryMod> registryMods,
   ) async {
     final file = File(
-      p.join(_managerData(install).path, 'topiaforge.worlds', 'catalog.json'),
+      p.join(
+        _managerData(install).path,
+        WorldCatalog.worldsModId,
+        'catalog.json',
+      ),
     );
     WorldCatalog catalog;
     if (!file.existsSync()) {
@@ -282,39 +286,11 @@ extension _StorageHelpers on LocalLauncherRepository {
       }
     }
 
-    return WorldCatalog(worlds: catalog.worlds, gamemodes: gamemodes);
-  }
-
-  Future<void> _writeWorldSelection(
-    GameInstall install,
-    WorldSelection selection,
-  ) async {
-    WorldSelection.fromJson(selection.toJson());
-    final file = File(
-      p.join(_managerConfig(install).path, 'topiaforge.worlds.json'),
+    return WorldCatalog(
+      worlds: catalog.worlds,
+      gamemodes: gamemodes,
+      menuEntries: catalog.menuEntries,
     );
-    var existing = <String, Object?>{};
-    if (await file.exists()) {
-      try {
-        final decoded = jsonDecode(
-          utf8.decode(
-            await _readLauncherFileBounded(file, _maxWorldConfigBytes),
-          ),
-        );
-        if (decoded is Map<String, Object?>) {
-          existing = decoded;
-        } else {
-          await _appendLauncherLogBestEffort(
-            'World config was not a JSON object; replacing it.',
-          );
-        }
-      } on FormatException catch (error) {
-        await _appendLauncherLogBestEffort(
-          'World config was malformed and will be replaced: $error',
-        );
-      }
-    }
-    await _writeJsonFileAtomic(file, selection.mergeRuntimeConfig(existing));
   }
 }
 
