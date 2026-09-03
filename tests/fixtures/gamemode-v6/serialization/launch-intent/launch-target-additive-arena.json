@@ -1,0 +1,23 @@
+{
+  "id": "launch-target-additive-arena",
+  "channel": "serialization",
+  "kind": "launch-intent-round-trip",
+  "summary": "An opted-in selection writes the five-key launch-target intent the manager reads once and deletes.",
+  "selection": {
+    "worldId": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+    "gamemodeId": "io.github.furroxide.topiaforge.worlds.sandbox",
+    "loadMode": "additiveArena",
+    "launchIntoGamemode": true
+  },
+  "intent": {
+    "command": "launch-target",
+    "worldId": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+    "gamemodeId": "io.github.furroxide.topiaforge.worlds.sandbox",
+    "loadMode": "additiveArena",
+    "allowAdditiveFallback": true
+  },
+  "expect": {
+    "csharp": { "outcome": "accept" },
+    "dart": { "outcome": "accept" }
+  }
+}

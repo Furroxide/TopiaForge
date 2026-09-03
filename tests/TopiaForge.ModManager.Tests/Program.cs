@@ -103,6 +103,12 @@ namespace TopiaForge.ModManager.Tests
                 return 0;
             }
 
+            if (args.Length == 1 && string.Equals(args[0], "--gamemode-contract", StringComparison.Ordinal))
+            {
+                GamemodeContractConformanceTests.Run();
+                return 0;
+            }
+
             if (args.Length == 1 && string.Equals(args[0], "--manifest-v5", StringComparison.Ordinal))
             {
                 var manifestRoot = Path.Combine(
@@ -282,6 +288,7 @@ namespace TopiaForge.ModManager.Tests
                 PendingOperationTests.Run();
                 SceneCoordinatorTests.Run();
                 MenuSurfaceCensusTests.Run();
+                GamemodeContractConformanceTests.Run();
                 ModServiceRegistryTests.Run();
                 SceneTransitionTrackerTests.Run();
                 MainThreadDispatchQueueTests.Run();
