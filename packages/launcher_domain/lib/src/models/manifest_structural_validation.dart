@@ -257,13 +257,38 @@ List<String> _manifestStructuralIssues(Map<String, Object?> json) {
       stringValue('conflicts[$index].reason', conflict['reason'], maximum: 512);
     }
   }
+  // The two version-specific fields. Known keys are the union across schemas, so
+  // each version has to reject the other's by name; otherwise adding V6's key
+  // would silently widen the V5 reader. Mirrors ForeignFieldMessage in
+  // src/TopiaForge.ModManager.Core/ModManifestJson.Contributions.cs.
+  final declaredVersion = (json['schemaVersion'] as num?)?.toInt();
+  final isV6 = declaredVersion == ModManifest.manifestV6SchemaVersion;
+  if (isV6 && json.containsKey('worldGamemodes')) {
+    issues.add(
+      'worldGamemodes was retired in schemaVersion 6. Split it into '
+      'contributions.gamemodes (identity, implementation binding and world '
+      'requirements) and contributions.launchTargets (what the player picks, '
+      'and which world it starts in). Run `topiaforge migrate-manifest '
+      '--project <path>`.',
+    );
+  }
+  if (!isV6 && json.containsKey('contributions')) {
+    issues.add(
+      'contributions requires schemaVersion 6; schemaVersion 5 cannot declare '
+      'worlds, gamemodes or launch targets.',
+    );
+  }
+  if (isV6) {
+    _contributionStructuralIssues(json['contributions'], issues);
+  }
+
   closedObjectArray(
     'worldGamemodes',
     json['worldGamemodes'],
     const {'id', 'name', 'description'},
     const {'id', 'name'},
   );
-  final gamemodes = json['worldGamemodes'];
+  final gamemodes = isV6 ? null : json['worldGamemodes'];
   if (gamemodes is List) {
     if (gamemodes.length > 64) {
       issues.add('worldGamemodes cannot contain more than 64 entries.');

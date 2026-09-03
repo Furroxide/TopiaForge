@@ -6,6 +6,25 @@ part of '../models.dart';
 /// later schema does not push [ModManifest] past the repository's 500-line
 /// cap, and so each schema's field mapping can be read on its own.
 ModManifest _readV5Manifest(Map<String, Object?> json) {
+  return _readCommonManifestFields(
+    json,
+    worldGamemodes: _gamemodeList(json['worldGamemodes']),
+    contributions: null,
+  );
+}
+
+/// The field mapping both supported schemas share.
+///
+/// V5 and V6 differ in exactly two fields -- `worldGamemodes` and
+/// `contributions` -- so everything else is read in one place. A field that
+/// drifted between two hand-written readers of the same manifest would be a bug
+/// no fixture would think to look for, and the point of separate readers is that
+/// version-specific differences are deliberate, not accidental.
+ModManifest _readCommonManifestFields(
+  Map<String, Object?> json, {
+  required List<GamemodeDefinition> worldGamemodes,
+  required ModContributions? contributions,
+}) {
   return ModManifest(
     schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 0,
     schemaUrl: (json[r'$schema'] as String?) ?? '',
@@ -55,7 +74,8 @@ ModManifest _readV5Manifest(Map<String, Object?> json) {
     builtWith: json['builtWith'] == null
         ? null
         : ModBuildMetadata.fromJson(json['builtWith']),
-    worldGamemodes: _gamemodeList(json['worldGamemodes']),
+    worldGamemodes: worldGamemodes,
+    contributions: contributions,
     apiAssemblies: _stringList(json['apiAssemblies']),
     multiplayer: ModMultiplayerMetadata.tryFromJson(json['multiplayer']),
     multiplayerIsPresent: json.containsKey('multiplayer'),

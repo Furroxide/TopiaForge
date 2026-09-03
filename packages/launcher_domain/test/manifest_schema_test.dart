@@ -39,6 +39,94 @@ void main() {
     );
   });
 
+  test('versioned V6 schema carries the V5 body over verbatim', () {
+    final root = _repoRoot();
+    Map<String, Object?> readSchema(String name) =>
+        jsonDecode(File(_join(root.path, ['schemas', name])).readAsStringSync())
+            as Map<String, Object?>;
+
+    final v5 = readSchema('topiaforge.mod.v5.schema.json');
+    final v6 = readSchema('topiaforge.mod.v6.schema.json');
+    expect(
+      jsonEncode(v6),
+      isNot(contains('/schemas/topiaforge.mod.schema.json')),
+      reason:
+          'a frozen versioned schema must never reference the mutable latest schema',
+    );
+    expect(
+      ((v6['properties'] as Map)['schemaVersion'] as Map)['const'],
+      ModManifest.manifestV6SchemaVersion,
+    );
+
+    // V6 changes exactly two properties and adds one. Everything else is the V5
+    // body unchanged, and this is what makes that a fact rather than a claim: a
+    // hand edit that drifts one carried-over rule fails here.
+    final v5Properties = v5['properties']! as Map<String, Object?>;
+    final v6Properties = v6['properties']! as Map<String, Object?>;
+    for (final name in v5Properties.keys) {
+      if (name == 'schemaVersion' || name == 'worldGamemodes') {
+        continue;
+      }
+      expect(
+        v6Properties[name],
+        v5Properties[name],
+        reason: 'property $name must be carried over from V5 unchanged',
+      );
+    }
+    expect(v6Properties.keys.toSet().difference(v5Properties.keys.toSet()), {
+      'contributions',
+    });
+
+    final v5Definitions = v5['definitions']! as Map<String, Object?>;
+    final v6Definitions = v6['definitions']! as Map<String, Object?>;
+    for (final name in v5Definitions.keys) {
+      if (!v6Definitions.containsKey(name)) {
+        // `gamemode` described a V5 worldGamemodes entry. Nothing in V6 refers
+        // to it, and V5 keeps its own frozen copy, so carrying it would be dead
+        // schema.
+        expect(name, 'gamemode');
+        continue;
+      }
+      expect(
+        v6Definitions[name],
+        v5Definitions[name],
+        reason: 'definition $name must be carried over from V5 unchanged',
+      );
+    }
+    expect(
+      jsonEncode(v6),
+      isNot(contains('#/definitions/gamemode"')),
+      reason: 'a definition V6 dropped must not still be referenced',
+    );
+  });
+
+  test('the retired V6 worldGamemodes stub rejects any value', () {
+    final schema = JsonSchema.create(
+      jsonDecode(
+            File(
+              _join(_repoRoot().path, [
+                'schemas',
+                'topiaforge.mod.v6.schema.json',
+              ]),
+            ).readAsStringSync(),
+          )
+          as Map<String, Object?>,
+    );
+    for (final value in <Object?>[
+      <Object?>[],
+      [
+        {'id': 'sample.mod.mode', 'name': 'Mode'},
+      ],
+      null,
+    ]) {
+      expect(
+        schema.validate({..._v6Manifest(), 'worldGamemodes': value}).isValid,
+        isFalse,
+        reason: 'worldGamemodes: $value should be rejected outright',
+      );
+    }
+  });
+
   test('checked-in manifests satisfy schema V5', () {
     final root = _repoRoot();
     final schemaJson =
@@ -213,3 +301,16 @@ String _join(String root, List<String> parts) {
   final separator = Platform.pathSeparator;
   return [root, ...parts].join(separator);
 }
+
+Map<String, Object?> _v6Manifest() => {
+  'schemaVersion': 6,
+  'name': 'sample.schema-parity',
+  'displayName': 'Schema Parity',
+  'version': '1.0.0',
+  'author': {'name': 'Tester'},
+  'entryAssembly': 'Sample.SchemaParity.dll',
+  'entryType': 'Sample.SchemaParity.Mod',
+  'supportedGameVersionRange': '*',
+  'supportedLoaderVersionRange': '*',
+  'supportedSdkVersionRange': '*',
+};
