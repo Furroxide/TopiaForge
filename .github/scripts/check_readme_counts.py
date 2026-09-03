@@ -43,11 +43,26 @@ def _require(items, relative: str, what: str):
 
 
 def services() -> list[str]:
-    """Get-only properties on IModContext, which is the SDK surface README counts."""
+    """Get-only properties on IModContext, which is the SDK surface README counts.
+
+    Scoped to that interface's own body. The file declares IModLogger as well,
+    which happens to be all methods today -- so scanning the whole file gives
+    the right answer by luck, and would start counting the first get-only
+    property anyone adds to a sibling type as a service.
+    """
     source = _read("src/TopiaForge.Mods.Abstractions/IModContext.cs")
+    start = re.search(r"public interface IModContext\s*\n\s*\{", source)
+    if not start:
+        raise AuditToolError("Could not find `public interface IModContext` in IModContext.cs.")
+    body = source[start.end():]
+    # Interfaces sit one level inside the namespace block, so the first closing
+    # brace at that indentation ends this one.
+    end = re.search(r"\n    \}", body)
+    if not end:
+        raise AuditToolError("`interface IModContext` in IModContext.cs is not closed as expected.")
     found = re.findall(
         r"^\s+([A-Za-z][A-Za-z0-9_]*)\s+([A-Za-z][A-Za-z0-9_]*)\s*\{ get; \}",
-        source,
+        body[: end.start()],
         re.MULTILINE,
     )
     return [name for _, name in _require(found, "IModContext.cs", "services")]

@@ -42,9 +42,27 @@ what each one owns.
 _TEMP_DIRS: list[tempfile.TemporaryDirectory] = []
 
 
-def _context(services=SERVICES) -> str:
+def _context(services=SERVICES, sibling: str = "") -> str:
+    """The real file's shape: two interfaces inside one namespace block.
+
+    `sibling` adds members to IModLogger, which the audit must not count.
+    """
     body = "\n".join(f"        I{name}Service {name} {{ get; }}" for name in services)
-    return f"namespace TopiaForge.Mods.Abstractions;\n\npublic interface IModContext\n{{\n{body}\n}}\n"
+    return (
+        "namespace TopiaForge.Mods\n"
+        "{\n"
+        "    public interface IModContext\n"
+        "    {\n"
+        f"{body}\n"
+        "    }\n"
+        "\n"
+        "    public interface IModLogger\n"
+        "    {\n"
+        "        void Info(string message);\n"
+        f"{sibling}"
+        "    }\n"
+        "}\n"
+    )
 
 
 def _help(commands=COMMANDS) -> str:
@@ -130,12 +148,28 @@ class ReaderTests(unittest.TestCase):
             AUDIT_MODULE.cli_commands()
         self.assertIn("listed but not dispatched", str(caught.exception))
 
+    def test_a_property_on_a_sibling_interface_is_not_a_service(self):
+        # IModContext.cs also declares IModLogger. That is all methods today, so
+        # scanning the whole file gives the right answer by luck; the first
+        # get-only property added to it would inflate the count and demand a
+        # README edit that states something untrue.
+        tree(context=_context(sibling="        ILogSink Sink { get; }\n"))
+        self.assertEqual(AUDIT_MODULE.services(), list(SERVICES))
+        self.assertEqual(AUDIT_MODULE.audit(), [])
+
+    def test_a_missing_interface_declaration_is_a_tool_error(self):
+        tree(context="namespace TopiaForge.Mods\n{\n    public interface IOther\n    {\n    }\n}\n")
+        with self.assertRaises(AUDIT_MODULE.AuditToolError) as caught:
+            AUDIT_MODULE.services()
+        self.assertIn("public interface IModContext", str(caught.exception))
+
     def test_a_renamed_interface_member_format_is_a_tool_error(self):
         # The failure mode a hand-typed count has instead: an empty read must
         # not pass as "zero services", or the audit silently stops checking.
-        tree(context="public interface IModContext\n{\n}\n")
-        with self.assertRaises(AUDIT_MODULE.AuditToolError):
+        tree(context=_context(services=()))
+        with self.assertRaises(AUDIT_MODULE.AuditToolError) as caught:
             AUDIT_MODULE.services()
+        self.assertIn("Found no services", str(caught.exception))
 
     def test_a_missing_source_file_is_a_tool_error(self):
         root = tree()
