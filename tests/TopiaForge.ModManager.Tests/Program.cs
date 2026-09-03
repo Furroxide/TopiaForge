@@ -97,6 +97,12 @@ namespace TopiaForge.ModManager.Tests
                 return 0;
             }
 
+            if (args.Length == 1 && string.Equals(args[0], "--menu-entry-point", StringComparison.Ordinal))
+            {
+                MenuSurfaceCensusTests.Run();
+                return 0;
+            }
+
             if (args.Length == 1 && string.Equals(args[0], "--manifest-v5", StringComparison.Ordinal))
             {
                 var manifestRoot = Path.Combine(
@@ -274,6 +280,7 @@ namespace TopiaForge.ModManager.Tests
                 WorldsSafetyTests.Run();
                 PendingOperationTests.Run();
                 SceneCoordinatorTests.Run();
+                MenuSurfaceCensusTests.Run();
                 ModServiceRegistryTests.Run();
                 SceneTransitionTrackerTests.Run();
                 MainThreadDispatchQueueTests.Run();

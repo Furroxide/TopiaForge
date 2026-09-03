@@ -166,6 +166,9 @@
        implementation is compiled in and unit-tested (SceneCoordinatorTests + the live-sync deferral tests). -->
   <ItemGroup>
     <Compile Include="..\..\src\TopiaForge.ModManager\SceneCoordinator.cs" />
+    <!-- Compiling the menu census here both unit-tests it and mechanically keeps it Unity-free, so the
+         reporting that explains a missing main-menu entry point cannot regain a UnityEngine dependency. -->
+    <Compile Include="..\..\src\TopiaForge.ModManager\MenuSurfaceCensus.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\ModServiceRegistry.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\OwnerBoundModServiceRegistry.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\OwnerModLifetime.cs" />

@@ -147,7 +147,8 @@ namespace TopiaForge.ModManager
                 startupCompleted = true;
                 TryMarkStartupComplete();
                 WriteLastRunReport(null);
-                managerLogger.Info("TopiaForge ready. Press F10 to open the overlay.");
+                managerLogger.Info(
+                    "TopiaForge ready. Use the GAMEMODES and TOPIAFORGE buttons on the main menu, or press F10.");
             }
             catch (Exception ex)
             {
