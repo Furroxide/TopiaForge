@@ -125,15 +125,32 @@ jobs:
 
   dart-tests:
     name: Analyze and test Dart packages
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    runs-on: ${{ matrix.os }}
+    # Windows legs pay a cold managed-refs download the first time their
+    # OS-scoped cache key is populated, which does not fit in 20 minutes.
+    timeout-minutes: 30
+    defaults:
+      run:
+        # Windows runners default to pwsh; every step body here is bash.
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
-        package:
-          - packages/launcher_domain
-          - packages/launcher_data
-          - apps/topiaforge_cli
+        # Explicit legs rather than a package x os product. Only
+        # packages/launcher_data has Windows-only code paths worth a 2x-billed
+        # runner: multiplayer_contract_lock.dart sets runInShell for .bat/.cmd
+        # dotnet shims, and its test writes a .cmd/.ps1 fake dotnet there.
+        # packages/launcher_domain is pure Dart with no process spawning, and
+        # apps/topiaforge_cli would need the whole solution built on Windows.
+        include:
+          - package: packages/launcher_domain
+            os: ubuntu-latest
+          - package: packages/launcher_data
+            os: ubuntu-latest
+          - package: apps/topiaforge_cli
+            os: ubuntu-latest
+          - package: packages/launcher_data
+            os: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -153,10 +170,19 @@ jobs:
           dotnet-version: "10.0.301"
 
       - name: Install managed-reference archive dependency
-        if: matrix.package != 'packages/launcher_domain'
+        if: matrix.package != 'packages/launcher_domain' && runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y p7zip-full
+
+      - name: Install Windows managed-reference archive dependency
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (!(Get-Command 7z -ErrorAction SilentlyContinue) -and
+              !(Test-Path -LiteralPath (Join-Path $env:ProgramFiles "7-Zip/7z.exe"))) {
+            choco install 7zip -y --no-progress
+          }
 
       - name: Resolve Robotopia refs cache key
         if: matrix.package != 'packages/launcher_domain'
