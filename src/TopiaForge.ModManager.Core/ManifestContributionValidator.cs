@@ -626,7 +626,9 @@ namespace TopiaForge.ModManager.Core
                 }
             }
 
-            return true;
+            // A declaration id is namespaced under its own package, but a cross-package reference is
+            // not, so the retired-ecosystem rule has to be applied here as well as to package names.
+            return !ManifestValidator.IsRetiredEcosystemId(id);
         }
 
         private static bool IsValidTypeName(string type)

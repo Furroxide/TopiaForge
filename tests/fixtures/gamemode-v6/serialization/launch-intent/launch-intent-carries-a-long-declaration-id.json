@@ -1,0 +1,27 @@
+{
+  "id": "launch-intent-carries-a-long-declaration-id",
+  "channel": "serialization",
+  "kind": "launch-intent-round-trip",
+  "summary": "A 65-character target id is past what a package id may be, and both the writer and the reader must still accept it. If either half still validated at 64, a legal target would be an illegal launch.",
+  "selection": {
+    "worldId": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+    "gamemodeId": "io.github.furroxide.topiaforge.fixture.gggggggggggggggggggggggggg",
+    "loadMode": "additiveArena",
+    "launchIntoGamemode": true
+  },
+  "intent": {
+    "command": "launch-target",
+    "worldId": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+    "gamemodeId": "io.github.furroxide.topiaforge.fixture.gggggggggggggggggggggggggg",
+    "loadMode": "additiveArena",
+    "allowAdditiveFallback": true
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept"
+    },
+    "dart": {
+      "outcome": "accept"
+    }
+  }
+}

@@ -15,6 +15,18 @@
       "path": "serialization/launch-intent/empty-intent-object.json"
     },
     {
+      "id": "launch-intent-carries-a-long-declaration-id",
+      "channel": "serialization",
+      "kind": "launch-intent-round-trip",
+      "path": "serialization/launch-intent/launch-intent-carries-a-long-declaration-id.json"
+    },
+    {
+      "id": "launch-intent-overlong-gamemode-id",
+      "channel": "serialization",
+      "kind": "launch-intent-hostile",
+      "path": "serialization/launch-intent/launch-intent-overlong-gamemode-id.json"
+    },
+    {
       "id": "launch-target-additive-arena",
       "channel": "serialization",
       "kind": "launch-intent-round-trip",
@@ -111,10 +123,22 @@
       "path": "serialization/manifest/v6-launch-target-without-world.json"
     },
     {
+      "id": "v6-longest-declaration-id",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-longest-declaration-id.json"
+    },
+    {
       "id": "v6-minimal-gamemode",
       "channel": "serialization",
       "kind": "manifest-accepts",
       "path": "serialization/manifest/v6-minimal-gamemode.json"
+    },
+    {
+      "id": "v6-overlong-declaration-id",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-overlong-declaration-id.json"
     },
     {
       "id": "v6-retired-world-gamemodes",
