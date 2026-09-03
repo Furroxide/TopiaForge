@@ -28,7 +28,15 @@ void main() {
   late bool probeThrows;
 
   setUp(() {
-    root = Directory.systemTemp.createTempSync('topiaforge-launcher-data-');
+    // Canonicalise immediately: Windows hands back an 8.3 short path when the
+    // account name exceeds eight characters (C:\Users\RUNNER~1 on CI), and macOS
+    // symlinks /var to /private/var. The repository canonicalises the install it
+    // returns, so a raw temp root makes path comparisons environment-dependent.
+    root = Directory(
+      Directory.systemTemp
+          .createTempSync('topiaforge-launcher-data-')
+          .resolveSymbolicLinksSync(),
+    );
     dataRoot = Directory(p.join(root.path, 'data'))..createSync();
     repoRoot = Directory(p.join(root.path, 'repo'))..createSync();
     gameRoot = Directory(p.join(root.path, 'TopiaForge'))..createSync();
