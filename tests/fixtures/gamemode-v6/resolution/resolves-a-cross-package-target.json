@@ -1,0 +1,152 @@
+{
+  "id": "resolves-a-cross-package-target",
+  "channel": "resolution",
+  "kind": "launch-resolution",
+  "summary": "The ordinary case: a gamemode in one package, the world it runs in from another, paired by a launch target that depends on both.",
+  "profile": {
+    "packages": [
+      {
+        "id": "io.github.furroxide.topiaforge.worlds",
+        "version": "0.1.0",
+        "manifest": {
+          "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+          "schemaVersion": 6,
+          "name": "io.github.furroxide.topiaforge.worlds",
+          "displayName": "worlds",
+          "version": "0.1.0",
+          "author": {
+            "name": "TopiaForge"
+          },
+          "entryAssembly": "Fixture.dll",
+          "entryType": "Fixture.Mod",
+          "supportedGameVersionRange": "*",
+          "supportedLoaderVersionRange": "*",
+          "supportedSdkVersionRange": "*",
+          "capabilities": [
+            "world-service"
+          ],
+          "contributions": {
+            "worlds": [
+              {
+                "id": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+                "name": "open_sandbox",
+                "content": {
+                  "kind": "game-scene",
+                  "sceneName": "UgcPlay"
+                },
+                "transitions": [
+                  "additive-arena"
+                ],
+                "spawn": {
+                  "kind": "provider-default"
+                },
+                "openToAnyCompatible": true
+              }
+            ],
+            "gamemodes": [
+              {
+                "id": "io.github.furroxide.topiaforge.worlds.freeplay",
+                "name": "freeplay",
+                "implementation": {
+                  "type": "Fixture.Gamemode"
+                }
+              }
+            ],
+            "launchTargets": [
+              {
+                "id": "io.github.furroxide.topiaforge.worlds.freeplay.menu",
+                "title": "menu",
+                "gamemode": "io.github.furroxide.topiaforge.worlds.freeplay",
+                "world": {
+                  "policy": "open",
+                  "default": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+                  "allowPlayerOverride": true
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "io.github.furroxide.topiaforge.zombies",
+        "version": "0.1.0",
+        "manifest": {
+          "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+          "schemaVersion": 6,
+          "name": "io.github.furroxide.topiaforge.zombies",
+          "displayName": "zombies",
+          "version": "0.1.0",
+          "author": {
+            "name": "TopiaForge"
+          },
+          "entryAssembly": "Fixture.dll",
+          "entryType": "Fixture.Mod",
+          "supportedGameVersionRange": "*",
+          "supportedLoaderVersionRange": "*",
+          "supportedSdkVersionRange": "*",
+          "dependencies": {
+            "io.github.furroxide.topiaforge.worlds": ">=0.1.0 <0.2.0"
+          },
+          "capabilities": [
+            "world-service"
+          ],
+          "contributions": {
+            "gamemodes": [
+              {
+                "id": "io.github.furroxide.topiaforge.zombies.survival",
+                "name": "survival",
+                "implementation": {
+                  "type": "Fixture.Gamemode"
+                }
+              }
+            ],
+            "launchTargets": [
+              {
+                "id": "io.github.furroxide.topiaforge.zombies.menu",
+                "title": "menu",
+                "gamemode": "io.github.furroxide.topiaforge.zombies.survival",
+                "world": {
+                  "policy": "fixed",
+                  "default": "io.github.furroxide.topiaforge.worlds.open_sandbox"
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "request": {
+    "targetId": "io.github.furroxide.topiaforge.zombies.menu"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "launchTargetId": "io.github.furroxide.topiaforge.zombies.menu",
+        "gamemodeId": "io.github.furroxide.topiaforge.zombies.survival",
+        "worldId": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+        "worldInstanceId": "",
+        "transition": "additive-arena",
+        "resolvedPackages": [
+          "io.github.furroxide.topiaforge.worlds@0.1.0",
+          "io.github.furroxide.topiaforge.zombies@0.1.0"
+        ]
+      }
+    },
+    "dart": {
+      "outcome": "accept",
+      "normalized": {
+        "launchTargetId": "io.github.furroxide.topiaforge.zombies.menu",
+        "gamemodeId": "io.github.furroxide.topiaforge.zombies.survival",
+        "worldId": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+        "worldInstanceId": "",
+        "transition": "additive-arena",
+        "resolvedPackages": [
+          "io.github.furroxide.topiaforge.worlds@0.1.0",
+          "io.github.furroxide.topiaforge.zombies@0.1.0"
+        ]
+      }
+    }
+  }
+}

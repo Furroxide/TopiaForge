@@ -1,6 +1,7 @@
 library;
 
 export 'src/dependency_planner.dart';
+export 'src/launch_resolution.dart';
 export 'src/developer_project_resolver.dart';
 export 'src/models.dart';
 export 'src/multiplayer_admission.dart';

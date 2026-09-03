@@ -55,7 +55,7 @@ KNOWN_KINDS = {
         "manifest-rejects",
     },
     "schema": set(),
-    "resolution": set(),
+    "resolution": {"launch-resolution"},
 }
 
 

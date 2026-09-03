@@ -32,7 +32,8 @@
         "launch-intent-round-trip",
         "launch-intent-hostile",
         "manifest-accepts",
-        "manifest-rejects"
+        "manifest-rejects",
+        "launch-resolution"
       ],
       "description": "Selects the runner's dispatch arm. Both runners dispatch exhaustively with a failing default, so adding a kind here without teaching both runners fails the harness rather than silently skipping."
     },
@@ -72,6 +73,18 @@
     "manifest": {
       "type": "object",
       "description": "A whole topiaforge.mod.json document. Required by the manifest kinds; forbidden elsewhere."
+    },
+    "profile": {
+      "type": "object",
+      "description": "The effective profile: the enabled package set, optionally the installed-but-disabled set and what this installation is."
+    },
+    "request": {
+      "type": "object",
+      "description": "What the player asked to launch."
+    },
+    "observation": {
+      "type": "object",
+      "description": "What a previous run reported. It may narrow a plan and may never invent one."
     }
   },
   "allOf": [
@@ -171,6 +184,43 @@
             {
               "required": [
                 "intent"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "launch-resolution"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "required": [
+          "profile",
+          "request"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "selection"
+              ]
+            },
+            {
+              "required": [
+                "intent"
+              ]
+            },
+            {
+              "required": [
+                "manifest"
               ]
             }
           ]
