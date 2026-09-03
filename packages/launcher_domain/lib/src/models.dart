@@ -19,6 +19,7 @@ part 'models/manifest_structural_validation.dart';
 part 'models/manifest_contract_validation.dart';
 part 'models/manifest_multiplayer_models.dart';
 part 'models/manifest_multiplayer_validation.dart';
+part 'models/manifest_v5_reader.dart';
 part 'models/manifest_models.dart';
 part 'models/manifest_world_validation.dart';
 part 'models/manifest_license_validation.dart';
