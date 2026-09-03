@@ -15,6 +15,8 @@ part 'devtool_installation_test_part.dart';
 part 'profile_launch_test_part.dart';
 part 'runtime_repair_security_test_part.dart';
 part 'runtime_loader_payload_test_part.dart';
+part 'restart_requirement_test_part.dart';
+part 'world_catalog_test_part.dart';
 
 void main() {
   late Directory root;
@@ -80,6 +82,19 @@ void main() {
     root: () => root,
     gameRoot: () => gameRoot,
   );
+  _registerRestartRequirementTests(
+    root: () => root,
+    gameRoot: () => gameRoot,
+    repository: () => repository,
+    setGameRunning: (value) => gameRunning = value,
+    setProbeThrows: (value) => probeThrows = value,
+  );
+  _registerWorldCatalogTests(
+    root: () => root,
+    gameRoot: () => gameRoot,
+    repository: () => repository,
+  );
+
   _registerInstalledBuildProvenanceTests(
     repository: () => repository,
     root: () => root,
@@ -232,104 +247,6 @@ void main() {
     expect(mods.single.restartRequired, isTrue);
   });
 
-  test('clears the restart requirement when the game is not running', () async {
-    final install = await repository.selectGameDirectory(gameRoot.path);
-    final package = _createPackage(root, id: 'alpha.mod', version: '1.0.0');
-    await repository.installPackage(package.path, install);
-
-    gameRunning = true;
-    var mods = await repository.setModEnabled(install, 'alpha.mod', false);
-    expect(mods.single.restartRequired, isTrue);
-
-    gameRunning = false;
-    mods = await repository.setModEnabled(install, 'alpha.mod', true);
-    expect(
-      mods.single.restartRequired,
-      isFalse,
-      reason: 'With no loader alive there is no stale state to restart past.',
-    );
-  });
-
-  test(
-    'an install records its restart requirement regardless of the probe',
-    () async {
-      final install = await repository.selectGameDirectory(gameRoot.path);
-      final package = _createPackage(root, id: 'alpha.mod', version: '1.0.0');
-
-      // The install receipt in state.json is read back by the release scaffold
-      // validator, so it must not depend on whether a game process happened to be
-      // running while the CLI installed. Retiring the flag is the next read's job.
-      gameRunning = false;
-      final mods = await repository.installPackage(package.path, install);
-      expect(
-        mods.single.restartRequired,
-        isTrue,
-        reason: 'a requirement this operation just wrote is not stale',
-      );
-    },
-  );
-
-  test('retires a restart requirement left by an external exit', () async {
-    final install = await repository.selectGameDirectory(gameRoot.path);
-    final package = _createPackage(root, id: 'alpha.mod', version: '1.0.0');
-    await repository.installPackage(package.path, install);
-
-    gameRunning = true;
-    var mods = await repository.setModEnabled(install, 'alpha.mod', false);
-    expect(mods.single.restartRequired, isTrue);
-
-    // The player closes the game outside the launcher, so nothing rewrites
-    // the flag: only a reconciling read can retire it.
-    gameRunning = false;
-    final snapshot = await repository.loadSnapshot();
-    expect(snapshot.installedMods.single.restartRequired, isFalse);
-  });
-
-  test('keeps the restart requirement when the probe cannot tell', () async {
-    final install = await repository.selectGameDirectory(gameRoot.path);
-    final package = _createPackage(root, id: 'alpha.mod', version: '1.0.0');
-    await repository.installPackage(package.path, install);
-
-    gameRunning = true;
-    var mods = await repository.setModEnabled(install, 'alpha.mod', false);
-    expect(mods.single.restartRequired, isTrue);
-
-    probeThrows = true;
-    final snapshot = await repository.loadSnapshot();
-    expect(
-      snapshot.installedMods.single.restartRequired,
-      isTrue,
-      reason: 'A probe that failed must not be read as "looked, found none".',
-    );
-  });
-
-  test('leaves uninstall-pending mods their restart requirement', () async {
-    final install = await repository.selectGameDirectory(gameRoot.path);
-    final package = _createPackage(root, id: 'alpha.mod', version: '1.0.0');
-    await repository.installPackage(package.path, install);
-
-    // Only the in-game path stages an uninstall, so write the state the
-    // runtime would have left behind.
-    final stateFile = File(
-      p.join(gameRoot.path, 'BepInEx', 'TopiaForge', 'state.json'),
-    );
-    final state =
-        jsonDecode(stateFile.readAsStringSync()) as Map<String, Object?>;
-    for (final item in (state['mods'] as List).whereType<Map>()) {
-      item['restartRequired'] = true;
-      item['uninstallPending'] = true;
-    }
-    stateFile.writeAsStringSync(jsonEncode(state));
-
-    gameRunning = false;
-    final snapshot = await repository.loadSnapshot();
-    expect(
-      snapshot.installedMods.single.restartRequired,
-      isTrue,
-      reason: 'Package removal really is deferred to the next game start.',
-    );
-  });
-
   test('re-enables disabled dependencies for dependent installs', () async {
     final install = await repository.selectGameDirectory(gameRoot.path);
     final dependencyPackage = _createPackage(
@@ -468,112 +385,6 @@ void main() {
     expect(
       mods.map((mod) => mod.id),
       containsAll(['dependency.mod', 'main.mod']),
-    );
-  });
-
-  test('adds installed manifest gamemodes to world catalog', () async {
-    final install = await repository.selectGameDirectory(gameRoot.path);
-    final package = _createPackage(
-      root,
-      id: 'mode.mod',
-      version: '1.0.0',
-      worldGamemodes: [
-        {
-          'id': 'mode.mod.survival',
-          'name': 'Survival',
-          'description': 'Static gamemode metadata.',
-        },
-      ],
-    );
-
-    await repository.installPackage(package.path, install);
-    final snapshot = await repository.loadSnapshot();
-
-    expect(
-      snapshot.worldCatalog.gamemodes.map((mode) => mode.id),
-      contains('mode.mod.survival'),
-    );
-  });
-
-  test('reads the world catalog the runtime actually publishes', () async {
-    final install = await repository.selectGameDirectory(gameRoot.path);
-    // The runtime writes this through its mod-scoped data service, which keys the directory by the
-    // raw mod id. The launcher used to look under the shortened config-file name instead, found
-    // nothing, and silently fell back to a one-world built-in catalog -- so every real Robotopia
-    // level the runtime published was unreachable from the launcher, with no error anywhere.
-    final catalogFile = File(
-      p.join(
-        gameRoot.path,
-        'BepInEx',
-        'TopiaForge',
-        'data',
-        'io.github.furroxide.topiaforge.worlds',
-        'catalog.json',
-      ),
-    );
-    catalogFile.parent.createSync(recursive: true);
-    catalogFile.writeAsStringSync(
-      jsonEncode({
-        'worlds': [
-          {
-            'id': 'io.github.furroxide.topiaforge.worlds.level.introsewer',
-            'name': 'The Sewer',
-            'sceneName': 'IntroSewer',
-            'firstParty': true,
-            'supportsSceneReplacement': true,
-            'supportsAdditiveArena': false,
-          },
-        ],
-        'gamemodes': [
-          {
-            'id': 'io.github.furroxide.topiaforge.worlds.sandbox',
-            'name': 'Sandbox',
-          },
-        ],
-        'menuEntries': [
-          {
-            'id': 'io.github.furroxide.topiaforge.zombies.menu',
-            'title': 'Zombies',
-            'gamemodeId': 'io.github.furroxide.topiaforge.zombies.survival',
-            'worldId': 'io.github.furroxide.topiaforge.worlds.level.introsewer',
-          },
-        ],
-      }),
-    );
-
-    final snapshot = await repository.loadSnapshot();
-
-    expect(
-      snapshot.worldCatalog.worlds.map((world) => world.id),
-      contains('io.github.furroxide.topiaforge.worlds.level.introsewer'),
-      reason: 'the published world list must reach the launcher',
-    );
-    final entry = snapshot.worldCatalog.menuEntryFor(
-      'io.github.furroxide.topiaforge.zombies.survival',
-    );
-    expect(entry, isNotNull);
-    expect(
-      entry!.worldId,
-      'io.github.furroxide.topiaforge.worlds.level.introsewer',
-      reason: 'a menu entry names the world its gamemode wants to start in',
-    );
-    expect(install.path, gameRoot.path);
-  });
-
-  test('adds installed registry gamemodes to world catalog', () async {
-    final install = await repository.selectGameDirectory(gameRoot.path);
-    final package = _createPackage(
-      root,
-      id: 'registry.sample',
-      version: '1.0.0',
-    );
-
-    await repository.installPackage(package.path, install);
-    final snapshot = await repository.loadSnapshot();
-
-    expect(
-      snapshot.worldCatalog.gamemodes.map((mode) => mode.id),
-      contains('registry.sample.survival'),
     );
   });
 
