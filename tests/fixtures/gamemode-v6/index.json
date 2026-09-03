@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": ".github/scripts/check_fixture_index.py",
+  "channelRunners": {
+    "serialization": [
+      "csharp",
+      "dart"
+    ]
+  },
+  "cases": [
+    {
+      "id": "empty-intent-object",
+      "channel": "serialization",
+      "kind": "launch-intent-hostile",
+      "path": "serialization/launch-intent/empty-intent-object.json"
+    },
+    {
+      "id": "launch-target-additive-arena",
+      "channel": "serialization",
+      "kind": "launch-intent-round-trip",
+      "path": "serialization/launch-intent/launch-target-additive-arena.json"
+    },
+    {
+      "id": "launch-target-scene-replacement",
+      "channel": "serialization",
+      "kind": "launch-intent-round-trip",
+      "path": "serialization/launch-intent/launch-target-scene-replacement.json"
+    },
+    {
+      "id": "main-menu-carrying-a-gamemode",
+      "channel": "serialization",
+      "kind": "launch-intent-hostile",
+      "path": "serialization/launch-intent/main-menu-carrying-a-gamemode.json"
+    },
+    {
+      "id": "main-menu-command",
+      "channel": "serialization",
+      "kind": "launch-intent-round-trip",
+      "path": "serialization/launch-intent/main-menu-command.json"
+    },
+    {
+      "id": "unknown-command",
+      "channel": "serialization",
+      "kind": "launch-intent-hostile",
+      "path": "serialization/launch-intent/unknown-command.json"
+    },
+    {
+      "id": "unknown-load-mode-clamped-by-writer",
+      "channel": "serialization",
+      "kind": "launch-intent-round-trip",
+      "path": "serialization/launch-intent/unknown-load-mode-clamped-by-writer.json"
+    },
+    {
+      "id": "unknown-load-mode-on-the-wire",
+      "channel": "serialization",
+      "kind": "launch-intent-hostile",
+      "path": "serialization/launch-intent/unknown-load-mode-on-the-wire.json"
+    }
+  ]
+}
