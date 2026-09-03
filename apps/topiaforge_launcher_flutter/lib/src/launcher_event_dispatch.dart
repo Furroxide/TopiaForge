@@ -28,6 +28,7 @@ extension LauncherEventDispatch on LauncherBloc {
         emit,
       ),
       WorldSelectionChanged() => _onWorldSelectionChanged(event, emit),
+      LaunchGamemodeSelected() => _onLaunchGamemodeSelected(event, emit),
       KnownInstallDetected() => _onKnownInstallDetected(event, emit),
       GameDirectorySelected() => _onGameDirectorySelected(event, emit),
       RuntimeRepaired() => _onRuntimeRepaired(event, emit),

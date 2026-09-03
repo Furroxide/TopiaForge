@@ -85,7 +85,7 @@ namespace TopiaForge.Worlds
 
             public OperationResult<IDisposable> InterceptExit(
                 Func<WorldPauseExitContext, WorldPauseExitDecision> interceptor) =>
-                Track(bridge.InterceptExit(interceptor));
+                Track(bridge.InterceptExit(interceptor, ownerModId));
 
             private OperationResult<IDisposable> Track(OperationResult<IDisposable> result)
             {

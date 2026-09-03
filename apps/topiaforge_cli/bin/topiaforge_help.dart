@@ -163,10 +163,13 @@ extension _HelpCommand on _TopiaForgeCli {
       '  topiaforge dev-install [--game-dir p]  Install the loader + dev mods into the game.',
     );
     stdout.writeln(
-      '  topiaforge launch [--game-dir p]       Launch Robotopia.',
+      '  topiaforge launch [--game-dir p] [--gamemode id|none]  Launch Robotopia.',
     );
     stdout.writeln(
-      '  topiaforge restart                     Restart Robotopia.',
+      '  topiaforge restart [--gamemode id|none] Restart Robotopia.',
+    );
+    stdout.writeln(
+      '      --gamemode starts that game mode for one run; none forces a normal boot.',
     );
     stdout.writeln(
       '  topiaforge compat [--json]             Resolve declared game bindings against the install.',

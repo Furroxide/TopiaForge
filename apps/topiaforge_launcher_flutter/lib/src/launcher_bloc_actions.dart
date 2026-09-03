@@ -13,13 +13,18 @@ extension LauncherBlocActions on LauncherBloc {
     // runtime's allowed set. This is the single authoritative place that guards persisted world state: an
     // unknown world/gamemode id is ignored (keeps the prior value) and loadMode is clamped to a known mode.
     final catalog = state.worldCatalog;
-    final worldId = catalog.worlds.any((world) => world.id == event.worldId)
-        ? event.worldId
-        : null;
-    final gamemodeId =
-        catalog.gamemodes.any((mode) => mode.id == event.gamemodeId)
-        ? event.gamemodeId
-        : null;
+    final knownWorld = catalog.worlds.any((world) => world.id == event.worldId);
+    final knownGamemode = catalog.gamemodes.any(
+      (mode) => mode.id == event.gamemodeId,
+    );
+    final worldId = knownWorld ? event.worldId : null;
+    final gamemodeId = knownGamemode ? event.gamemodeId : null;
+    // Say so when a choice is dropped. Silently keeping the prior value is how a stale catalog looks
+    // exactly like a launcher that ignores you.
+    final discarded = <String>[
+      if (event.worldId != null && !knownWorld) 'world',
+      if (event.gamemodeId != null && !knownGamemode) 'gamemode',
+    ];
     // Reconcile the load mode against the world this selection will actually point at. The load-mode
     // control in the UI only clamps for DISPLAY, so without this a world change (or an untouched default)
     // could leave a load mode the world cannot honour persisted and written to the runtime config — e.g.
@@ -36,7 +41,7 @@ extension LauncherBlocActions on LauncherBloc {
         worldId: worldId,
         gamemodeId: gamemodeId,
         loadMode: loadMode,
-        autoLoadOnStart: event.autoLoadOnStart,
+        launchIntoGamemode: event.launchIntoGamemode,
       ),
     );
     final profiles = [
@@ -48,7 +53,58 @@ extension LauncherBlocActions on LauncherBloc {
       state.copyWith(
         profiles: profiles,
         selectedProfileId: updated.id,
-        statusMessage: 'Updated world launch settings.',
+        statusMessage: discarded.isEmpty
+            ? 'Updated world launch settings.'
+            : 'Ignored an unknown ${discarded.join(' and ')} — '
+                  'launch the game once so TopiaForge can publish its world list.',
+      ),
+    );
+  }
+
+  /// Home's gamemode picker. Selecting a gamemode also points the profile's world at the one that
+  /// gamemode's own menu entry declares, so "Launch Zombies" starts in the world Zombies expects
+  /// rather than in whatever world happened to be remembered.
+  Future<void> _onLaunchGamemodeSelected(
+    LaunchGamemodeSelected event,
+    Emitter<LauncherState> emit,
+  ) async {
+    final selected = state.selectedProfile;
+    if (selected == null) {
+      return;
+    }
+    final prior = selected.worldSelection;
+    final gamemodeId = event.gamemodeId;
+    final catalog = state.worldCatalog;
+
+    late final WorldSelection selection;
+    if (gamemodeId == null) {
+      selection = prior.copyWith(launchIntoGamemode: false);
+    } else {
+      final entry = catalog.menuEntryFor(gamemodeId);
+      final worldId = entry != null && entry.worldId.isNotEmpty
+          ? entry.worldId
+          : prior.worldId;
+      selection = prior.copyWith(
+        worldId: worldId,
+        gamemodeId: gamemodeId,
+        loadMode: catalog.reconcileLoadMode(worldId, prior.loadMode),
+        launchIntoGamemode: true,
+      );
+    }
+
+    final updated = selected.copyWith(worldSelection: selection);
+    final profiles = [
+      for (final profile in state.profiles)
+        if (profile.id == updated.id) updated else profile,
+    ];
+    await _repository.saveProfiles(profiles, updated.id);
+    emit(
+      state.copyWith(
+        profiles: profiles,
+        selectedProfileId: updated.id,
+        statusMessage: gamemodeId == null
+            ? 'Launch will start the game normally.'
+            : 'Launch will start this game mode.',
       ),
     );
   }

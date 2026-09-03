@@ -27,6 +27,12 @@ namespace TopiaForge.Mods
         /// Null (the default) behaves as <see cref="WorldPauseExitDecision.EndSessionAndExit"/>. A throwing
         /// interceptor is treated as the default decision so it can never eat the vanilla button.
         /// </summary>
+        /// <remarks>
+        /// The slot is exclusive: while one interceptor is registered, a second request fails with
+        /// <see cref="ModErrorCode.Conflict"/> naming the current holder rather than replacing it, because a
+        /// silent replacement would leave the first gamemode believing it still had a veto. Dispose the returned
+        /// lease to release the slot; it is also released when the session ends.
+        /// </remarks>
         OperationResult<IDisposable> InterceptExit(
             Func<WorldPauseExitContext, WorldPauseExitDecision> interceptor);
     }

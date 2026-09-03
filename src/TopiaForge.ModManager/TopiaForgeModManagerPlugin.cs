@@ -124,6 +124,9 @@ namespace TopiaForge.ModManager
                     validationContext,
                     startupJournal == null ? null : new StartupJournalLoadObserver(startupJournal, managerLogger));
                 runtime.Load(loadOrder.OrderedPackages);
+                // Every mod's OnLoad has now run, so gamemodes contributed by mods that load after Worlds
+                // (all of them -- they declare loadAfter: worlds) are registered and can be launched into.
+                ArmWorldLaunch();
                 RecordStartupStage("mod-loading", stageStart);
                 if (launchProfile == null)
                 {
@@ -147,7 +150,8 @@ namespace TopiaForge.ModManager
                 startupCompleted = true;
                 TryMarkStartupComplete();
                 WriteLastRunReport(null);
-                managerLogger.Info("TopiaForge ready. Press F10 to open the overlay.");
+                managerLogger.Info(
+                    "TopiaForge ready. Use the GAMEMODES and TOPIAFORGE buttons on the main menu, or press F10.");
             }
             catch (Exception ex)
             {
@@ -286,6 +290,7 @@ namespace TopiaForge.ModManager
             }
 
             runtime.DispatchUpdate(Time.deltaTime);
+            UpdatePendingWorldLaunch(Time.deltaTime);
             overlay.Tick();
             menuButtonInjector.Update();
         }
