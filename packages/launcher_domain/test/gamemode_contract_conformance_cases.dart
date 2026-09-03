@@ -103,6 +103,127 @@ List<Map<String, Object?>> _writerShapesFor(Map<String, Object?> intent) {
   return shapes;
 }
 
+/// Reads a whole manifest exactly as the launcher does, and renders a digest of
+/// what came out.
+///
+/// The digest is the point. The older shared-manifest corpus compares only the
+/// accept/reject verdict, so two readers can agree a manifest is valid while
+/// disagreeing about what it said -- and for an absent flag against an explicit
+/// false, that disagreement is a behaviour change nothing would report.
+ConformanceOutcome runManifest(Map<String, Object?> body) {
+  final json = body['manifest']! as Map<String, Object?>;
+  ModManifest manifest;
+  try {
+    manifest = ModManifest.fromJson(json);
+  } on FormatException catch (error) {
+    return ConformanceOutcome(false, {
+      _codeFor(error.message),
+    }, detail: 'the reader threw: ${error.message}');
+  } on TypeError catch (error) {
+    return ConformanceOutcome(false, const {
+      'unreadable',
+    }, detail: 'the reader could not bind the document: $error');
+  }
+
+  final blocking = manifest
+      .validate()
+      .where((issue) => issue.isBlocking)
+      .toList(growable: false);
+  if (blocking.isNotEmpty) {
+    return ConformanceOutcome(
+      false,
+      blocking.map((issue) => _codeFor(issue.message)).toSet(),
+      detail: blocking.map((issue) => issue.message).join(' | '),
+    );
+  }
+  return ConformanceOutcome.accepted(detail: 'accepted');
+}
+
+/// Every complaint opens with the field it is about, so the leading token is a
+/// stable code without inventing a second vocabulary the prose could drift
+/// from. The C# runner projects its own messages the same way.
+String _codeFor(String message) {
+  final space = message.indexOf(' ');
+  return space > 0 ? message.substring(0, space) : message;
+}
+
+/// What each reader parsed out of a manifest's contributions, one line per
+/// declaration. Absence is spelled `absent` and an empty value `-`, so "not
+/// stated" and "stated as false" can never render the same. The C# runner
+/// builds the identical strings in
+/// `tests/TopiaForge.ModManager.Tests/DeclarationDigest.cs`.
+Map<String, List<String>> declarationDigest(Map<String, Object?> body) {
+  final contributions = ModManifest.fromJson(
+    body['manifest']! as Map<String, Object?>,
+  ).contributions;
+  return {
+    'worlds': (contributions?.worlds ?? const []).map(_worldLine).toList(),
+    'gamemodes': (contributions?.gamemodes ?? const [])
+        .map(_gamemodeLine)
+        .toList(),
+    'launchTargets': (contributions?.launchTargets ?? const [])
+        .map(_launchTargetLine)
+        .toList(),
+  };
+}
+
+String _worldLine(ModWorldDeclaration world) {
+  final content = world.content;
+  final spawn = world.spawn;
+  return [
+    world.id,
+    _text(content?.kind),
+    _text(content?.bundle),
+    _text(content?.prefab),
+    _binding(content?.implementation),
+    _text(content?.sceneName),
+    _list(world.transitions),
+    spawn == null ? '-' : '${_text(spawn.kind)}>${_text(spawn.markerName)}',
+    _list(world.openTo),
+    _flag(world.openToAnyCompatible),
+  ].join('|');
+}
+
+String _gamemodeLine(ModGamemodeDeclaration gamemode) {
+  final requirements = gamemode.worldRequirements;
+  return [
+    gamemode.id,
+    _binding(gamemode.implementation),
+    requirements == null
+        ? '-'
+        : '${_list(requirements.transitions)}>${_text(requirements.spawn)}',
+    _text(gamemode.sceneChangePolicy),
+  ].join('|');
+}
+
+String _launchTargetLine(ModLaunchTargetDeclaration target) {
+  final policy = target.world;
+  return [
+    target.id,
+    _text(target.gamemode),
+    _text(policy?.policy),
+    _text(policy?.defaultWorldId),
+    _list(policy?.allow),
+    _flag(policy?.allowPlayerOverride),
+    _text(target.transition),
+    target.sortKey == null ? 'absent' : '${target.sortKey}',
+  ].join('|');
+}
+
+/// An absent binding is `-`; a present one is always `assembly>type`, with an
+/// empty assembly meaning the manifest's own entryAssembly. Rendering the
+/// separator either way keeps "no binding" and "a binding that defaults its
+/// assembly" distinguishable.
+String _binding(ModImplementationBinding? binding) =>
+    binding == null ? '-' : '${binding.assembly}>${binding.type}';
+
+String _flag(bool? value) => value == null ? 'absent' : '$value';
+
+String _text(String? value) => value == null || value.isEmpty ? '-' : value;
+
+String _list(List<String>? values) =>
+    values == null || values.isEmpty ? '-' : values.join(',');
+
 bool deepEquals(Object? left, Object? right) {
   if (left is Map && right is Map) {
     if (left.length != right.length) {

@@ -85,8 +85,8 @@ bool _validateManifestForAdmission(
   List<MultiplayerAdmissionMismatch> mismatches,
 ) {
   final errors = <String>[];
-  if (manifest.schemaVersion != ModManifest.manifestV5SchemaVersion) {
-    errors.add('schemaVersion must be 5');
+  if (!ModManifest.isSupportedSchemaVersion(manifest.schemaVersion)) {
+    errors.add('schemaVersion must be 5 or 6');
   } else if (SemanticVersion.tryParse(manifest.version) == null) {
     errors.add('package version must be an exact semantic version');
   }
