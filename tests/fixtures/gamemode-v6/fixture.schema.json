@@ -1,0 +1,90 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/tests/fixtures/gamemode-v6/fixture.schema.json",
+  "title": "TopiaForge Gamemode Contract Conformance Fixture",
+  "description": "One cross-language conformance case. There is deliberately no 'skip', 'only' or 'runners' field: which runners must execute a case is declared once per channel in index.json, so a case can never quietly exempt itself from one language.",
+  "type": "object",
+  "required": ["id", "channel", "kind", "summary", "expect"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 96,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "Unique within the whole fixture tree, and equal to the file stem."
+    },
+    "channel": { "enum": ["serialization", "schema", "resolution"] },
+    "kind": {
+      "enum": ["launch-intent-round-trip", "launch-intent-hostile"],
+      "description": "Selects the runner's dispatch arm. Both runners dispatch exhaustively with a failing default, so adding a kind here without teaching both runners fails the harness rather than silently skipping."
+    },
+    "summary": { "type": "string", "minLength": 8, "maxLength": 240 },
+    "selection": {
+      "type": "object",
+      "description": "The launcher-side WorldSelection JSON. Required by 'launch-intent-round-trip'; forbidden elsewhere."
+    },
+    "intent": {
+      "type": "object",
+      "description": "The one-shot worldLaunch intent carried on the launch profile."
+    },
+    "expect": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "description": "Keyed by runner. index.json's channelRunners decides which keys are required; a missing or extra runner key fails the harness.",
+      "properties": {
+        "csharp": { "$ref": "#/definitions/outcome" },
+        "dart": { "$ref": "#/definitions/outcome" }
+      }
+    },
+    "divergenceReason": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 512,
+      "description": "Mandatory whenever two runners expect different outcomes for the same operation. Both runners enforce it, so an unexplained divergence cannot land."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "kind": { "const": "launch-intent-round-trip" } }, "required": ["kind"] },
+      "then": { "required": ["selection", "intent"] }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "launch-intent-hostile" } }, "required": ["kind"] },
+      "then": { "required": ["intent"], "not": { "required": ["selection"] } }
+    }
+  ],
+  "definitions": {
+    "outcome": {
+      "type": "object",
+      "required": ["outcome"],
+      "additionalProperties": false,
+      "properties": {
+        "outcome": { "enum": ["accept", "reject"] },
+        "errorCodes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 3, "maxLength": 96 },
+          "description": "Compared as a set, not a prefix or a count. The existing tests/fixtures/manifests corpus compares only the accept/reject verdict; that is what let the two hand-written readers drift."
+        },
+        "normalized": {
+          "type": "object",
+          "description": "Deep-equality check on the value the runner produces. What 'produces' means is fixed per kind by both runners."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "outcome": { "const": "reject" } }, "required": ["outcome"] },
+          "then": { "required": ["errorCodes"], "not": { "required": ["normalized"] } }
+        },
+        {
+          "if": { "properties": { "outcome": { "const": "accept" } }, "required": ["outcome"] },
+          "then": { "not": { "required": ["errorCodes"] } }
+        }
+      ]
+    }
+  }
+}
