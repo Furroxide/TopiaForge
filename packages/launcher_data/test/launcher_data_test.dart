@@ -22,6 +22,8 @@ void main() {
   late Directory repoRoot;
   late Directory gameRoot;
   late LocalLauncherRepository repository;
+  late bool gameRunning;
+  late bool probeThrows;
 
   setUp(() {
     root = Directory.systemTemp.createTempSync('topiaforge-launcher-data-');
@@ -31,11 +33,19 @@ void main() {
     _createGame(gameRoot);
     _createRuntimeSources(repoRoot);
     _createRegistry(repoRoot);
+    gameRunning = true;
+    probeThrows = false;
     repository = LocalLauncherRepository(
       dataRoot: dataRoot.path,
       repositoryRoot: repoRoot.path,
       knownGamePath: gameRoot.path,
       packageMetadataValidator: _acceptPackageMetadata,
+      gameRunningProbe: (_) async {
+        if (probeThrows) {
+          throw StateError('Process list unavailable.');
+        }
+        return gameRunning;
+      },
     );
   });
 
@@ -220,6 +230,104 @@ void main() {
     expect(mods.single.version, '1.1.0');
     expect(mods.single.enabled, isFalse);
     expect(mods.single.restartRequired, isTrue);
+  });
+
+  test('clears the restart requirement when the game is not running', () async {
+    final install = await repository.selectGameDirectory(gameRoot.path);
+    final package = _createPackage(root, id: 'alpha.mod', version: '1.0.0');
+    await repository.installPackage(package.path, install);
+
+    gameRunning = true;
+    var mods = await repository.setModEnabled(install, 'alpha.mod', false);
+    expect(mods.single.restartRequired, isTrue);
+
+    gameRunning = false;
+    mods = await repository.setModEnabled(install, 'alpha.mod', true);
+    expect(
+      mods.single.restartRequired,
+      isFalse,
+      reason: 'With no loader alive there is no stale state to restart past.',
+    );
+  });
+
+  test(
+    'an install records its restart requirement regardless of the probe',
+    () async {
+      final install = await repository.selectGameDirectory(gameRoot.path);
+      final package = _createPackage(root, id: 'alpha.mod', version: '1.0.0');
+
+      // The install receipt in state.json is read back by the release scaffold
+      // validator, so it must not depend on whether a game process happened to be
+      // running while the CLI installed. Retiring the flag is the next read's job.
+      gameRunning = false;
+      final mods = await repository.installPackage(package.path, install);
+      expect(
+        mods.single.restartRequired,
+        isTrue,
+        reason: 'a requirement this operation just wrote is not stale',
+      );
+    },
+  );
+
+  test('retires a restart requirement left by an external exit', () async {
+    final install = await repository.selectGameDirectory(gameRoot.path);
+    final package = _createPackage(root, id: 'alpha.mod', version: '1.0.0');
+    await repository.installPackage(package.path, install);
+
+    gameRunning = true;
+    var mods = await repository.setModEnabled(install, 'alpha.mod', false);
+    expect(mods.single.restartRequired, isTrue);
+
+    // The player closes the game outside the launcher, so nothing rewrites
+    // the flag: only a reconciling read can retire it.
+    gameRunning = false;
+    final snapshot = await repository.loadSnapshot();
+    expect(snapshot.installedMods.single.restartRequired, isFalse);
+  });
+
+  test('keeps the restart requirement when the probe cannot tell', () async {
+    final install = await repository.selectGameDirectory(gameRoot.path);
+    final package = _createPackage(root, id: 'alpha.mod', version: '1.0.0');
+    await repository.installPackage(package.path, install);
+
+    gameRunning = true;
+    var mods = await repository.setModEnabled(install, 'alpha.mod', false);
+    expect(mods.single.restartRequired, isTrue);
+
+    probeThrows = true;
+    final snapshot = await repository.loadSnapshot();
+    expect(
+      snapshot.installedMods.single.restartRequired,
+      isTrue,
+      reason: 'A probe that failed must not be read as "looked, found none".',
+    );
+  });
+
+  test('leaves uninstall-pending mods their restart requirement', () async {
+    final install = await repository.selectGameDirectory(gameRoot.path);
+    final package = _createPackage(root, id: 'alpha.mod', version: '1.0.0');
+    await repository.installPackage(package.path, install);
+
+    // Only the in-game path stages an uninstall, so write the state the
+    // runtime would have left behind.
+    final stateFile = File(
+      p.join(gameRoot.path, 'BepInEx', 'TopiaForge', 'state.json'),
+    );
+    final state =
+        jsonDecode(stateFile.readAsStringSync()) as Map<String, Object?>;
+    for (final item in (state['mods'] as List).whereType<Map>()) {
+      item['restartRequired'] = true;
+      item['uninstallPending'] = true;
+    }
+    stateFile.writeAsStringSync(jsonEncode(state));
+
+    gameRunning = false;
+    final snapshot = await repository.loadSnapshot();
+    expect(
+      snapshot.installedMods.single.restartRequired,
+      isTrue,
+      reason: 'Package removal really is deferred to the next game start.',
+    );
   });
 
   test('re-enables disabled dependencies for dependent installs', () async {
