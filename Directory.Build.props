@@ -12,6 +12,17 @@
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
 
+    <!-- Release packages are built on an administrator workstation, never by CI
+         (GitHub verifies staged bytes rather than producing them). Anything
+         conditioned on $(CI) is therefore absent from every shipped binary, so
+         source-path normalisation must not be. Without this, Roslyn records the
+         absolute PDB path in each assembly's CodeView debug directory and the
+         build host's username and folder layout ship inside the package.
+         Mapping the repository root keeps line numbers in stack traces while
+         emitting the same paths from any checkout. -->
+    <PathMap Condition="'$(PathMap)' == ''">$(MSBuildThisFileDirectory)=/_/</PathMap>
+    <PathMap Condition="'$(PathMap)' != '' and !$(PathMap.Contains('/_/'))">$(MSBuildThisFileDirectory)=/_/,$(PathMap)</PathMap>
+
     <!-- Explicit override always wins: set ROBOTOPIA_GAME_DIR (or pass -p:RobotopiaGameDir=...) to point at any
          game install. CI sets RobotopiaManagedDir directly from its reference-assembly archive. On Linux the
          game runs under Proton, so there is no default — set ROBOTOPIA_GAME_DIR to the Windows-layout game

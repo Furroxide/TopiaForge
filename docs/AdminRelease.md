@@ -91,6 +91,52 @@ directory is prepended to `PATH` for the shell verifiers only. Install it with:
 winget install jqlang.jq
 ```
 
+## Build from a neutral root
+
+Compilers record where they ran. Roslyn writes the absolute PDB path into every
+assembly's CodeView debug directory, and the Dart AOT snapshot records a
+`file:///` URI for each library outside a `package:` root. A build run straight
+from `C:\Users\<account>\...` therefore ships the administrator's account name
+and folder layout inside the binaries, where nothing in the package listing
+shows it. That contradicts the rule in `ReleaseOperations.md` that usernames,
+hostnames, and local paths stay off GitHub.
+
+Two mechanisms keep it out, and `release test-package` fails the package if
+either is missed:
+
+- **.NET** needs nothing extra. `Directory.Build.props` sets `PathMap` for every
+  project, so assemblies record `/_/...` from any checkout. It is deliberately
+  unconditional rather than tied to `$(CI)`, because release packages are built
+  on this workstation and never by CI.
+- **Dart and Flutter** have no equivalent switch. `dart compile exe -S` strips
+  debugging information but leaves the library URIs, and Flutter's
+  `--split-debug-info` does not remove them at all. The only fix is to compile
+  from a path that names nobody. Map the checkout to a spare drive letter
+  first — `subst` needs no elevation and copies nothing:
+
+```powershell
+subst T: C:\path\to\TopiaForge
+Push-Location                         # remember where you were, so a failure still returns here
+try {
+    Set-Location T:\apps\topiaforge_launcher_flutter
+    flutter clean                     # stale C:-path objects otherwise fail MSB8028
+    flutter build windows --release --dart-define=TOPIAFORGE_PRODUCT_VERSION=<version>
+    Set-Location T:\apps\topiaforge_cli
+    dart compile exe bin/topiaforge.dart -o <staging>\topiaforge.exe
+}
+finally {
+    Pop-Location                      # leave T: before removing it, or the shell is stranded
+    subst T: /D
+}
+```
+
+`flutter clean` is not optional: a `build/` directory left from a `C:`-path
+build makes MSBuild fail with `MSB8028` about shared intermediate directories,
+and the reported error names neither the drive letter nor the cause.
+
+The Linux builder already satisfies this — it checks out at
+`/root/topiaforge-build`, which identifies no account.
+
 ## Signed or unsigned distribution
 
 `signingIdentities.windowsDistribution` in `release/release-policy.json` records
