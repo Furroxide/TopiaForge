@@ -34,6 +34,7 @@ namespace TopiaForge.Worlds
         private readonly PauseActionOverlay actionOverlay;
 
         private Func<WorldPauseExitContext, WorldPauseExitDecision>? exitInterceptor;
+        private string exitInterceptorOwner = string.Empty;
         private Component? pauseRoot;
         private bool pauseWasActive;
         private float pollTimer;
@@ -79,7 +80,19 @@ namespace TopiaForge.Worlds
         }
 
         public OperationResult<IDisposable> InterceptExit(
-            Func<WorldPauseExitContext, WorldPauseExitDecision> interceptor)
+            Func<WorldPauseExitContext, WorldPauseExitDecision> interceptor) =>
+            InterceptExit(interceptor, string.Empty);
+
+        /// <summary>Claims the single exit-interceptor slot for one owner.</summary>
+        /// <remarks>
+        /// Only one interceptor may be active at a time. The slot decides what the vanilla exit button does, so
+        /// accepting a second writer silently would leave the first gamemode believing it still held a veto over
+        /// an exit it no longer sees. Every other registration surface reports that as a conflict; so does this
+        /// one. The slot is released when its lease is disposed and when the session ends.
+        /// </remarks>
+        internal OperationResult<IDisposable> InterceptExit(
+            Func<WorldPauseExitContext, WorldPauseExitDecision> interceptor,
+            string ownerModId)
         {
             if (interceptor == null)
             {
@@ -93,7 +106,17 @@ namespace TopiaForge.Worlds
                     "Pause service is disposed.");
             }
 
+            if (exitInterceptor != null)
+            {
+                return OperationResult<IDisposable>.Failure(
+                    ModErrorCode.Conflict,
+                    "The pause exit interceptor is already held by "
+                        + (exitInterceptorOwner.Length > 0 ? "'" + exitInterceptorOwner + "'" : "another mod")
+                        + "; only one interceptor can decide what the vanilla exit button does.");
+            }
+
             exitInterceptor = interceptor;
+            exitInterceptorOwner = ownerModId ?? string.Empty;
             return OperationResult<IDisposable>.Success(new ExitInterceptorLease(this, interceptor));
         }
 
@@ -192,6 +215,7 @@ namespace TopiaForge.Worlds
             // The session's pause customizations must not outlive it (the menu scene has its own UI).
             RestoreAll();
             exitInterceptor = null;
+            exitInterceptorOwner = string.Empty;
             pauseRoot = null;
             pauseWasActive = false;
             IsAvailable = false;
@@ -315,6 +339,7 @@ namespace TopiaForge.Worlds
             if (ReferenceEquals(exitInterceptor, interceptor))
             {
                 exitInterceptor = null;
+                exitInterceptorOwner = string.Empty;
             }
         }
 
