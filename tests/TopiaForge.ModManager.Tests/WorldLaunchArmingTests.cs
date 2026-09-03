@@ -9,7 +9,7 @@ namespace TopiaForge.ModManager.Tests
     internal static class WorldLaunchArmingTests
     {
         private const string ZombiesGamemodeId = "io.github.furroxide.topiaforge.zombies.survival";
-        private const string SandboxGamemodeId = "io.github.furroxide.topiaforge.worlds.sandbox";
+        private const string SandboxGamemodeId = "io.github.furroxide.topiaforge.sandbox.creator";
 
         public static void Run()
         {

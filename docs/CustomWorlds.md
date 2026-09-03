@@ -25,9 +25,16 @@ from the extracted release in CI.
 
 1. Build a Robotopia-compatible prefab bundle for a declared `contentTargets` value.
 2. Place it under the mod's `AssetBundles/` content root.
-3. Register a `WorldDefinition` and `ICustomWorldContent` through `IWorldGamemodeService`.
-4. Register a `GamemodeMenuEntry` that pairs the world with a gamemode.
+3. Declare the world under `contributions.worlds` in `topiaforge.mod.json`: its content binding, the
+   transitions it supports, and where the player spawns. See [Manifest V6](ManifestV6.md).
+4. Declare a launch target naming a gamemode. `io.github.furroxide.topiaforge.worlds.freeplay` is the
+   neutral mode the Worlds provider implements, so shipping a world needs no gameplay dependency of
+   its own.
 5. Test create, session start/end, unload, and reload with `TopiaForge.Mods.Testing`.
+
+A world is a declaration plus content. Registering one from code is not the authoring path: the
+launcher reads the manifest before anything loads, which is what lets it list your world and report a
+broken declaration to you rather than to a player.
 
 `BundleWorldContent.CreateAsync()` loads and spawns through opaque asset/entity handles. Returned
 content and registrations are released automatically after session teardown, unload, or failed load.
@@ -80,17 +87,43 @@ loading with a stated reason and nothing else in Worlds changes behaviour.
 
 ## Hosting a gamemode
 
-`GamemodeHost<TController>` owns the wiring between a Worlds gamemode and the object that runs one round
-of it, so an entry point keeps only the parts that are about the gamemode:
+The gamemode, the worlds it can run in, and the target the player picks are declared in
+`topiaforge.mod.json`. The declaration names the type that implements it:
+
+```json
+"contributions": {
+  "gamemodes": [
+    {
+      "id": "author.mod.mode",
+      "name": "My Mode",
+      "implementation": { "type": "Author.Mod.MyGamemode" },
+      "worldRequirements": { "transitions": ["additive-arena"], "spawn": "any" }
+    }
+  ]
+}
+```
+
+```csharp
+public sealed class MyGamemode : IGamemodeFactory
+{
+    public string GamemodeId => MyMod.GamemodeId;
+
+    public OperationResult<IGamemodeController> CreateController(IGamemodeSession session) =>
+        OperationResult<IGamemodeController>.Success(new MyRound(session.Mod, session.World));
+}
+```
+
+`GamemodeHost<TController>` still owns session wiring — subscribing, replaying a session already
+running, one controller per session, and teardown — and is what drives sessions today. Pass it no
+`GamemodeDefinition` or `GamemodeMenuEntry`: those live in the manifest now, and a second copy in code
+is a second source of truth.
 
 ```csharp
 var hosted = GamemodeHost<MyRound>.Create(
     Context,
     Context.RequireExtension<IWorldGamemodeService>(),
     GamemodeId,
-    session => new MyRound(Context, session),
-    new GamemodeDefinition(GamemodeId, "My Mode", "..."),
-    new GamemodeMenuEntry(MenuId, "My Mode", "...", GamemodeId));
+    session => new MyRound(Context, session));
 if (hosted.TryGetValue(out var host))
 {
     host.AddPauseAction(new WorldPauseAction(
