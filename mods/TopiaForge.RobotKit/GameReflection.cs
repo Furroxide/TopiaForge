@@ -555,12 +555,17 @@ namespace TopiaForge.RobotKit
             }
         }
 
-        // Resolve the RobotBody root GameObject from any component on (or under) a robot: prefer the Body/MaybeBody
-        // property, then walk parents for a RobotBody, then fall back to the transform root.
+        // Resolve the RobotBody root GameObject from any component on (or under) a robot: prefer the
+        // MaybeBody/Body property, then walk parents for a RobotBody, then fall back to the transform root.
+        //
+        // MaybeBody is read first deliberately. On build 2409 the Body getter throws when the robot has no
+        // body yet, and asking it first meant every campaign scene load paid a TargetInvocationException
+        // that was caught, logged once at Debug, and then silently resolved through a different path than
+        // intended. The "Maybe" sibling is the non-throwing accessor; ask it first and Body never throws.
         public static GameObject GetRobotBodyRoot(Component component)
         {
-            var body = GetPropertyValue(component, "Body") as Component ??
-                GetPropertyValue(component, "MaybeBody") as Component;
+            var body = GetPropertyValue(component, "MaybeBody") as Component ??
+                GetPropertyValue(component, "Body") as Component;
             if (body != null)
             {
                 return body.gameObject;
