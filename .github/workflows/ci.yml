@@ -316,6 +316,12 @@ jobs:
       - name: Test README count audit
         run: python3 .github/scripts/test_check_readme_counts.py
 
+      - name: Keep the gamemode contract fixture index closed over its fixtures
+        run: python3 .github/scripts/check_fixture_index.py
+
+      - name: Test fixture index audit
+        run: python3 .github/scripts/test_check_fixture_index.py
+
       - name: Test pinned Flutter setup
         shell: pwsh
         run: ./.github/actions/setup-flutter/test-setup-flutter.ps1
