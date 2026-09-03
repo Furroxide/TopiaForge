@@ -119,7 +119,7 @@ class GamemodeMenuEntry {
 class WorldSelection {
   const WorldSelection({
     this.worldId = WorldCatalog.openSandboxWorldId,
-    this.gamemodeId = WorldCatalog.sandboxGamemodeId,
+    this.gamemodeId = WorldCatalog.freePlayGamemodeId,
     this.loadMode = additiveArena,
     this.launchIntoGamemode = false,
   });
@@ -150,7 +150,7 @@ class WorldSelection {
     final worldId =
         (json['worldId'] as String?) ?? WorldCatalog.openSandboxWorldId;
     final gamemodeId =
-        (json['gamemodeId'] as String?) ?? WorldCatalog.sandboxGamemodeId;
+        (json['gamemodeId'] as String?) ?? WorldCatalog.freePlayGamemodeId;
     // Declaration ids, not package ids: a launch target is namespaced under its
     // package, so it uses the wider 96-character grammar. Validating at the
     // package width here would reject a target the manifest contract calls
@@ -229,7 +229,24 @@ class WorldCatalog {
 
   static const openSandboxWorldId =
       'io.github.furroxide.topiaforge.worlds.open_sandbox';
-  static const sandboxGamemodeId =
+
+  /// The neutral gamemode the Worlds provider itself implements: a world, and no
+  /// rules. It is the default because it is the only mode that can play any
+  /// world without the package that owns the world depending on gameplay it has
+  /// nothing to do with.
+  static const freePlayGamemodeId =
+      'io.github.furroxide.topiaforge.worlds.freeplay';
+
+  /// The gamemode id the Worlds provider used to publish on the Sandbox mod's
+  /// behalf.
+  ///
+  /// Retired: the creator sandbox is gameplay and now belongs to the package
+  /// that implements it. Kept so a profile saved before the move can still be
+  /// recognised, rather than reading as a selection of nothing. A stored
+  /// selection naming it resolves to no declared gamemode, which is a state the
+  /// player can be told about and act on -- unlike a silent fall back to a
+  /// different mode than the one they chose.
+  static const retiredSandboxGamemodeId =
       'io.github.furroxide.topiaforge.worlds.sandbox';
 
   /// The Worlds provider's mod id. Its published catalog lives under the manager data directory,
@@ -282,9 +299,9 @@ class WorldCatalog {
       ],
       gamemodes: [
         GamemodeDefinition(
-          id: sandboxGamemodeId,
-          name: 'Sandbox',
-          description: 'Freeform world loading for creator mods.',
+          id: freePlayGamemodeId,
+          name: 'Free Play',
+          description: 'Explore a world with no gameplay rules.',
         ),
       ],
     );

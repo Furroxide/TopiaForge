@@ -6,8 +6,16 @@ namespace TopiaForge.Sandbox
     /// <summary>Freeform Robotopia sandbox authored entirely against V1 SDK contracts.</summary>
     public sealed class SandboxMod : TopiaForgeMod
     {
-        /// <summary>Gets the Worlds provider's built-in sandbox gamemode id.</summary>
-        public const string GamemodeId = WellKnownWorldIds.SandboxGamemode;
+        /// <summary>Gets the Sandbox creator gamemode id.</summary>
+        /// <remarks>
+        /// Owned by this package, not by the Worlds provider. Sandbox used to attach to a gamemode Worlds
+        /// declared on its behalf, which gave the creator gameplay and the world infrastructure one shared
+        /// identity: neither could be enabled, disabled or launched without the other, and the manifest of
+        /// the package that implements the gameplay said nothing about it at all.
+        /// </remarks>
+        public const string GamemodeId = "io.github.furroxide.topiaforge.sandbox.creator";
+
+        internal const string MenuEntryId = "io.github.furroxide.topiaforge.sandbox.creator.menu";
 
         private static readonly ConfigDefinition<SandboxConfig> ConfigContract =
             new ConfigDefinition<SandboxConfig>(
@@ -57,13 +65,24 @@ namespace TopiaForge.Sandbox
                 return;
             }
 
-            // Sandbox attaches to the Worlds provider's built-in sandbox gamemode, so it publishes no definition
-            // or menu entry of its own — only the per-session controller.
+            // Sandbox publishes its own gamemode now. The world is pinned to the generated Open Sandbox
+            // arena because world routing is keyed on the world id: a blank id resolves to the first
+            // checkpoint level, which is the campaign tutorial.
             var hosted = GamemodeHost<SandboxController>.Create(
                 Context,
                 worldsService,
                 GamemodeId,
-                session => CreateController(session, robotService, contentService, routerService));
+                session => CreateController(session, robotService, contentService, routerService),
+                new GamemodeDefinition(
+                    GamemodeId,
+                    "Sandbox",
+                    "Freeform creator sandbox: an open arena with a spawn menu for props and robots."),
+                new GamemodeMenuEntry(
+                    MenuEntryId,
+                    "Sandbox",
+                    "Freeform creator sandbox: an open arena with a spawn menu for props and robots.",
+                    GamemodeId,
+                    WellKnownWorldIds.OpenSandboxWorld));
             if (!hosted.TryGetValue(out var gamemodeHost))
             {
                 Context.Logger.Warn("Sandbox could not host the sandbox gamemode: " + hosted.ErrorMessage);
@@ -125,25 +144,37 @@ namespace TopiaForge.Sandbox
             return created;
         }
 
-        private void LoadConfig()
+        private void LoadConfig() => config = ReadNormalizedConfig(Context);
+
+        /// <summary>
+        /// Loads and normalizes the stored configuration, writing the normalized form back so the next
+        /// read is already bounded.
+        /// </summary>
+        /// <remarks>
+        /// Static because <see cref="SandboxGamemode"/> needs the same value from a session context and has
+        /// no reference to the mod instance. Normalization is idempotent and the document is saved
+        /// normalized, so reading it twice yields the same configuration.
+        /// </remarks>
+        internal static SandboxConfig ReadNormalizedConfig(IModContext context)
         {
-            var loaded = Context.Config.Load(ConfigContract);
+            var loaded = context.Config.Load(ConfigContract);
             if (!loaded.TryGetValue(out var value))
             {
-                Context.Logger.Warn("Sandbox config could not be loaded: " + loaded.ErrorMessage);
-                config = new SandboxConfig();
-                config.Normalize();
-                Context.Config.Save(ConfigContract, config);
-                return;
+                context.Logger.Warn("Sandbox config could not be loaded: " + loaded.ErrorMessage);
+                var fallback = new SandboxConfig();
+                fallback.Normalize();
+                context.Config.Save(ConfigContract, fallback);
+                return fallback;
             }
 
-            config = value;
-            config.Normalize();
-            var saved = Context.Config.Save(ConfigContract, config);
+            value.Normalize();
+            var saved = context.Config.Save(ConfigContract, value);
             if (!saved.Succeeded)
             {
-                Context.Logger.Warn("Sandbox config normalization could not be saved: " + saved.ErrorMessage);
+                context.Logger.Warn("Sandbox config normalization could not be saved: " + saved.ErrorMessage);
             }
+
+            return value;
         }
 
         private void RegisterCommands()

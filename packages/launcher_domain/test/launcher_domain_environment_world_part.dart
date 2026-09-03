@@ -182,7 +182,7 @@ void _environmentAndWorldModelTests() {
       });
 
       expect(selection.worldId, WorldCatalog.openSandboxWorldId);
-      expect(selection.gamemodeId, WorldCatalog.sandboxGamemodeId);
+      expect(selection.gamemodeId, WorldCatalog.freePlayGamemodeId);
     });
 
     test('fromJson rejects retired canonical world and gamemode ids', () {
@@ -202,13 +202,32 @@ void _environmentAndWorldModelTests() {
       }
     });
 
+    test('a profile saved before the sandbox move stays recognisable', () {
+      // The creator sandbox moved to the package that implements it, so this id
+      // declares nothing now. Reading it back must preserve it rather than
+      // substituting a different mode: a player who chose Sandbox and silently
+      // got Free Play has been overruled without being told.
+      final stored = WorldSelection.fromJson({
+        'gamemodeId': WorldCatalog.retiredSandboxGamemodeId,
+        'launchIntoGamemode': true,
+      });
+
+      expect(stored.gamemodeId, WorldCatalog.retiredSandboxGamemodeId);
+      expect(stored.launchIntoGamemode, isTrue);
+      expect(
+        stored.gamemodeId,
+        isNot(WorldCatalog.freePlayGamemodeId),
+        reason: 'a retired selection must not quietly become a different one',
+      );
+    });
+
     test('fromJson clamps an unknown loadMode and applies defaults', () {
       final bad = WorldSelection.fromJson({'loadMode': 'totally-bogus'});
       expect(bad.loadMode, WorldSelection.additiveArena);
 
       final empty = WorldSelection.fromJson(const {});
       expect(empty.worldId, WorldCatalog.openSandboxWorldId);
-      expect(empty.gamemodeId, WorldCatalog.sandboxGamemodeId);
+      expect(empty.gamemodeId, WorldCatalog.freePlayGamemodeId);
       expect(empty.loadMode, WorldSelection.additiveArena);
       expect(
         empty.launchIntoGamemode,
@@ -223,7 +242,7 @@ void _environmentAndWorldModelTests() {
       final catalog = WorldCatalog.fromJson(const {});
 
       expect(catalog.worlds.single.id, WorldCatalog.openSandboxWorldId);
-      expect(catalog.gamemodes.single.id, WorldCatalog.sandboxGamemodeId);
+      expect(catalog.gamemodes.single.id, WorldCatalog.freePlayGamemodeId);
     });
 
     test('fromJson filters retired gamemode identifiers', () {
@@ -242,7 +261,7 @@ void _environmentAndWorldModelTests() {
       });
 
       expect(catalog.worlds.single.id, 'author.world');
-      expect(catalog.gamemodes.single.id, WorldCatalog.sandboxGamemodeId);
+      expect(catalog.gamemodes.single.id, WorldCatalog.freePlayGamemodeId);
     });
 
     test('fromJson filters retired world identifiers', () {
@@ -280,7 +299,7 @@ void _environmentAndWorldModelTests() {
           catalog.worlds.single.id,
           'io.github.furroxide.topiaforge.worlds.level.city',
         );
-        expect(catalog.gamemodes.single.id, WorldCatalog.sandboxGamemodeId);
+        expect(catalog.gamemodes.single.id, WorldCatalog.freePlayGamemodeId);
       },
     );
 

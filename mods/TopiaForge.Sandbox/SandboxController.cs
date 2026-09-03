@@ -5,7 +5,7 @@ using TopiaForge.Mods;
 namespace TopiaForge.Sandbox
 {
     /// <summary>Hosts the shared F5 creator workbench while the managed Sandbox gamemode is active.</summary>
-    internal sealed class SandboxController : ICreatorToolHost, IDisposable
+    internal sealed class SandboxController : ICreatorToolHost, IGamemodeController
     {
         private readonly ICreatorToolHostService router;
         private readonly CreatorWorkbench workbench;

@@ -105,6 +105,7 @@ namespace TopiaForge.ModManager.Tests
 
             if (args.Length == 1 && string.Equals(args[0], "--gamemode-contract", StringComparison.Ordinal))
             {
+                GamemodeBindingTests.Run();
                 GamemodeContractConformanceTests.Run();
                 return 0;
             }
@@ -288,6 +289,7 @@ namespace TopiaForge.ModManager.Tests
                 PendingOperationTests.Run();
                 SceneCoordinatorTests.Run();
                 MenuSurfaceCensusTests.Run();
+                GamemodeBindingTests.Run();
                 GamemodeContractConformanceTests.Run();
                 ModServiceRegistryTests.Run();
                 SceneTransitionTrackerTests.Run();

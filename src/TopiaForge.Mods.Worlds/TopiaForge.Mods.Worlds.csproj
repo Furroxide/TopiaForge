@@ -18,6 +18,7 @@
     <ProjectReference Include="..\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
     <Compile Include="..\TopiaForge.Mods.Abstractions\CustomWorlds.cs" Link="CustomWorlds.cs" />
     <Compile Include="..\TopiaForge.Mods.Abstractions\GamemodeHost.cs" Link="GamemodeHost.cs" />
+    <Compile Include="..\TopiaForge.Mods.Abstractions\Gamemodes.cs" Link="Gamemodes.cs" />
     <Compile Include="..\TopiaForge.Mods.Abstractions\PauseMenu.cs" Link="PauseMenu.cs" />
     <Compile Include="..\TopiaForge.Mods.Abstractions\Shop.cs" Link="Shop.cs" />
     <Compile Include="..\TopiaForge.Mods.Abstractions\Worlds.cs" Link="Worlds.cs" />

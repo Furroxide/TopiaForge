@@ -16,10 +16,12 @@ namespace TopiaForge.Worlds
                 "Open Sandbox",
                 "Generated open-world sandbox arena.",
                 supportsAdditiveArena: true));
+            // Free play is the one gamemode this provider implements: a world, and no rules. The creator
+            // sandbox is gameplay and belongs to the Sandbox package, which owns a controller for it.
             RegisterGamemode(new GamemodeDefinition(
-                SandboxGamemodeId,
-                "Sandbox",
-                "Freeform creator sandbox."));
+                FreePlayGamemode.FreePlayGamemodeId,
+                "Free Play",
+                "Explore a world with no gameplay rules."));
 
             // Prefer the game's curated level entry points: these carry a checkpoint asset, so we can launch
             // them through the game's own loader and they come up in correct play state (player + HDRP).

@@ -7,9 +7,6 @@ namespace TopiaForge.Mods
     /// <summary>Stable ids supplied by the first-party Worlds provider.</summary>
     public static class WellKnownWorldIds
     {
-        /// <summary>Gets the freeform sandbox gamemode id.</summary>
-        public const string SandboxGamemode = "io.github.furroxide.topiaforge.worlds.sandbox";
-
         /// <summary>Gets the generated open-sandbox world id.</summary>
         public const string OpenSandboxWorld = "io.github.furroxide.topiaforge.worlds.open_sandbox";
     }
