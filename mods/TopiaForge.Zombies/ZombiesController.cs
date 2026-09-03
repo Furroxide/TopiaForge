@@ -8,7 +8,7 @@ using TopiaForge.Mods;
 namespace TopiaForge.Zombies
 {
     /// <summary>Safe-SDK wave-survival session using opaque, owner-scoped framework services.</summary>
-    internal sealed partial class ZombiesController : IDisposable
+    internal sealed partial class ZombiesController : IGamemodeController
     {
         private const int MaximumConsecutiveSpawnFailures = 10;
 

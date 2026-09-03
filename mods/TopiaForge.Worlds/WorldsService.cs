@@ -17,7 +17,6 @@ namespace TopiaForge.Worlds
         // Aliases of the SDK's WellKnownIds so consumers that cannot reference this assembly and this
         // service always agree on the ids (SdkSurfaceTests pins the WellKnownIds values).
         public const string OpenSandboxWorldId = WellKnownWorldIds.OpenSandboxWorld;
-        public const string SandboxGamemodeId = WellKnownWorldIds.SandboxGamemode;
 
         private readonly IModLogger logger;
         private readonly IModFiles files;

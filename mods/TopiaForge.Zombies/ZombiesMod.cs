@@ -95,25 +95,37 @@ namespace TopiaForge.Zombies
             Context.Logger.Info("Zombies V1 registered with safe Worlds, RobotKit, Chronos, input, physics, and UI APIs.");
         }
 
-        private void LoadConfig()
+        private void LoadConfig() => config = ReadNormalizedConfig(Context);
+
+        /// <summary>
+        /// Loads and normalizes the stored configuration, writing the normalized form back so the next
+        /// read is already bounded.
+        /// </summary>
+        /// <remarks>
+        /// Static because <see cref="ZombiesGamemode"/> needs the same value from a session context and
+        /// has no reference to the mod instance. Normalization is idempotent and the document is saved
+        /// normalized, so reading it twice yields the same configuration.
+        /// </remarks>
+        internal static ZombiesConfig ReadNormalizedConfig(IModContext context)
         {
-            var loaded = Context.Config.Load(ConfigContract);
+            var loaded = context.Config.Load(ConfigContract);
             if (!loaded.TryGetValue(out var value))
             {
-                Context.Logger.Warn("Zombies config could not be loaded: " + loaded.ErrorMessage);
-                config = new ZombiesConfig();
-                config.Normalize();
-                Context.Config.Save(ConfigContract, config);
-                return;
+                context.Logger.Warn("Zombies config could not be loaded: " + loaded.ErrorMessage);
+                var fallback = new ZombiesConfig();
+                fallback.Normalize();
+                context.Config.Save(ConfigContract, fallback);
+                return fallback;
             }
 
-            config = value;
-            config.Normalize();
-            var saved = Context.Config.Save(ConfigContract, config);
+            value.Normalize();
+            var saved = context.Config.Save(ConfigContract, value);
             if (!saved.Succeeded)
             {
-                Context.Logger.Warn("Zombies config normalization could not be saved: " + saved.ErrorMessage);
+                context.Logger.Warn("Zombies config normalization could not be saved: " + saved.ErrorMessage);
             }
+
+            return value;
         }
 
         private void RegisterCommands()

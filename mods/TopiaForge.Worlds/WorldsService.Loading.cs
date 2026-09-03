@@ -139,11 +139,11 @@ namespace TopiaForge.Worlds
             // Resolve the route before claiming or mutating the active session. Most importantly, automatic
             // startup loads must be refused before LaunchLevel/LoadScene/LaunchOpenSandbox has any side effect.
             var hasCustomContent = customWorldContent.TryGetValue(world.Id, out var content);
-            // Custom content always wins, including when paired with the Sandbox gamemode. Otherwise Sandbox is
-            // a story-free creator mode regardless of which catalog world the UI happened to retain.
+            // Custom content always wins. The generated arena is now reached by naming its world, not by
+            // naming a gamemode: a mode that overrode the requested world was how a launch could land
+            // somewhere the player did not choose, and V6 makes the world a launch target's own decision.
             var useOpenSandbox = !hasCustomContent
-                && (string.Equals(world.Id, OpenSandboxWorldId, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(gamemode.Id, SandboxGamemodeId, StringComparison.OrdinalIgnoreCase));
+                && string.Equals(world.Id, OpenSandboxWorldId, StringComparison.OrdinalIgnoreCase);
             var hasCheckpoint = worldCheckpoints.TryGetValue(world.Id, out var checkpoint);
             var useSceneReplacement = !hasCustomContent && !useOpenSandbox
                 && (hasCheckpoint

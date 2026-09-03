@@ -43,6 +43,21 @@ type public interface TopiaForge.Mods.ICustomWorldContent
   method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.IWorldContent>> CreateAsync(System.Threading.CancellationToken cancellationToken = null)
   property TopiaForge.Mods.CustomWorldOptions Options { get [abstract,virtual,newslot]; }
 
+type public interface TopiaForge.Mods.IGamemodeController : System.IDisposable
+
+type public interface TopiaForge.Mods.IGamemodeFactory
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IGamemodeController> CreateController(TopiaForge.Mods.IGamemodeSession session)
+  property System.String GamemodeId { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IGamemodeSession
+  method [abstract,virtual,newslot] System.Void End(TopiaForge.Mods.WorldSessionEndReason reason)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.IDisposable> AddPauseAction(TopiaForge.Mods.WorldPauseAction action)
+  property System.String GamemodeId { get [abstract,virtual,newslot]; }
+  property System.String LaunchTargetId { get [abstract,virtual,newslot]; }
+  property System.String WorldId { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IModContext Mod { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.WorldSession World { get [abstract,virtual,newslot]; }
+
 type public interface TopiaForge.Mods.IShopWallet
   event System.Action<System.Int32>? BalanceChanged { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
   method [abstract,virtual,newslot] System.Boolean TrySpend(System.Int32 amount)
@@ -119,7 +134,6 @@ type public sealed class TopiaForge.Mods.ShopWallet : System.Object, TopiaForge.
 
 type public static class TopiaForge.Mods.WellKnownWorldIds : System.Object
   field const System.String OpenSandboxWorld = "io.github.furroxide.topiaforge.worlds.open_sandbox"
-  field const System.String SandboxGamemode = "io.github.furroxide.topiaforge.worlds.sandbox"
 
 type public sealed class TopiaForge.Mods.WorldAssetOverride : System.Object
   constructor .ctor(System.String assetId, TopiaForge.Mods.IPrefabAsset prefab, System.Nullable<TopiaForge.Mods.Vec3> localPositionOffset = null)

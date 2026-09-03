@@ -424,7 +424,10 @@ void main() {
       });
 
       expect(profile.worldSelection.worldId, WorldCatalog.openSandboxWorldId);
-      expect(profile.worldSelection.gamemodeId, WorldCatalog.sandboxGamemodeId);
+      expect(
+        profile.worldSelection.gamemodeId,
+        WorldCatalog.freePlayGamemodeId,
+      );
     });
 
     test('profile parsing rejects retired canonical world selection ids', () {
