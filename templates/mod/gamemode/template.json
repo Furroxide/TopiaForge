@@ -1,22 +1,56 @@
 {
   "id": "gamemode",
   "label": "Gamemode mod",
-  "description": "World gamemode that registers with the Worlds service and appears in the level-select menu (modeled on the Zombies mod).",
+  "description": "World gamemode declared in the manifest and bound to an IGamemodeFactory, with its own launch target (modeled on the Zombies mod).",
   "manifestDefaults": {
     "category": "Gameplay",
     "description": "A world gamemode for Robotopia.",
-    "tags": ["gameplay", "gamemode"],
-    "capabilities": ["world-service", "hud"],
+    "tags": [
+      "gameplay",
+      "gamemode"
+    ],
+    "capabilities": [
+      "world-service",
+      "hud"
+    ],
     "dependencies": {
       "io.github.furroxide.topiaforge.worlds": ">=0.1.0-rc.1 <0.2.0"
     },
-    "loadAfter": ["io.github.furroxide.topiaforge.worlds"],
-    "worldGamemodes": [
-      {
-        "id": "{{MOD_ID}}.mode",
-        "name": "{{DISPLAY_NAME}}",
-        "description": "Custom gamemode scaffolded from the gamemode template."
-      }
-    ]
+    "loadAfter": [
+      "io.github.furroxide.topiaforge.worlds"
+    ],
+    "contributions": {
+      "gamemodes": [
+        {
+          "id": "{{MOD_ID}}.mode",
+          "name": "{{DISPLAY_NAME}}",
+          "description": "Custom gamemode scaffolded from the gamemode template.",
+          "implementation": {
+            "type": "{{ASSEMBLY_NAME}}.{{TYPE_NAME}}Gamemode"
+          },
+          "worldRequirements": {
+            "transitions": [
+              "additive-arena"
+            ],
+            "spawn": "any"
+          },
+          "sceneChangePolicy": "end-session"
+        }
+      ],
+      "launchTargets": [
+        {
+          "id": "{{MOD_ID}}.menu",
+          "title": "{{DISPLAY_NAME}}",
+          "description": "Custom gamemode scaffolded from the gamemode template.",
+          "gamemode": "{{MOD_ID}}.mode",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+            "allowPlayerOverride": false
+          },
+          "transition": "auto"
+        }
+      ]
+    }
   }
 }

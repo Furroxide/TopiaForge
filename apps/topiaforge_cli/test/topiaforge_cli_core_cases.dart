@@ -185,7 +185,9 @@ void _coreCliTests(_CliTestHarness Function() currentHarness) {
       // Likewise, declared capabilities must match what the scaffold actually reaches for.
       expect(manifest['capabilities'], containsAll(['world-service', 'hud']));
       expect(manifest['capabilities'], isNot(contains('robot-spawning')));
-      expect(manifest['worldGamemodes'], isNotEmpty);
+      final contributions = manifest['contributions']! as Map<String, Object?>;
+      expect(contributions['gamemodes'], isNotEmpty);
+      expect(contributions['launchTargets'], isNotEmpty);
 
       final checked = await currentHarness().runCli([
         'check',
@@ -435,7 +437,7 @@ void _coreCliTests(_CliTestHarness Function() currentHarness) {
 
       final migrated =
           jsonDecode(manifestFile.readAsStringSync()) as Map<String, Object?>;
-      expect(migrated['schemaVersion'], 5);
+      expect(migrated['schemaVersion'], ModManifest.currentSchemaVersion);
       expect(migrated, isNot(contains('vpmDependencies')));
       expect(migrated, isNot(contains('permissions')));
       expect(migrated['dependencies'], {
@@ -487,9 +489,12 @@ void _coreCliTests(_CliTestHarness Function() currentHarness) {
       expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
       final migrated =
           jsonDecode(manifestFile.readAsStringSync()) as Map<String, Object?>;
-      expect(migrated['schemaVersion'], 5);
+      expect(migrated['schemaVersion'], ModManifest.currentSchemaVersion);
       expect(migrated, isNot(contains('multiplayer')));
-      expect(result.stdout, contains('retired schema V4 to V5'));
+      expect(
+        result.stdout,
+        contains('retired schema V4 to V${ModManifest.currentSchemaVersion}'),
+      );
     },
   );
 }

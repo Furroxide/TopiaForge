@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using TopiaForge.ModManager.Core;
 using TopiaForge.Mods;
 using TopiaForge.Worlds;
 
@@ -25,6 +26,7 @@ namespace TopiaForge.ModManager.Tests
             FreePlayRunsNoRulesAndReleasesNothing();
             FreePlayRejectsAMissingSession();
             TheWorldsProviderNoLongerOwnsTheSandboxGamemode();
+            AManifestThisSideWritesIsOneItCanReadBack();
             Console.WriteLine("Gamemode binding tests passed.");
         }
 
@@ -97,6 +99,49 @@ namespace TopiaForge.ModManager.Tests
                 "the retired sandbox gamemode id must not remain a well-known id");
             Assert(constants.Contains("io.github.furroxide.topiaforge.worlds.open_sandbox", StringComparer.Ordinal),
                 "the open sandbox world id stays: it is a world, and Worlds still owns it");
+        }
+
+        /// <summary>
+        /// A writer that emits a field its own reader rejects produces documents nothing can install.
+        /// </summary>
+        /// <remarks>
+        /// This is not hypothetical. <c>worldGamemodes</c> is a list, so it serialized as an empty array
+        /// rather than being omitted, and every V6 manifest this side wrote was refused on the way back
+        /// in -- with an error about the retired field, from a document that never declared one.
+        /// </remarks>
+        private static void AManifestThisSideWritesIsOneItCanReadBack()
+        {
+            foreach (var schemaVersion in new[]
+                     {
+                         ModManifest.ManifestV5SchemaVersion,
+                         ModManifest.ManifestV6SchemaVersion
+                     })
+            {
+                var written = JsonUtil.Serialize(new ModManifest
+                {
+                    SchemaVersion = schemaVersion,
+                    Id = "example.round-trip",
+                    Name = "Round Trip",
+                    Version = "1.0.0",
+                    Author = new ModAuthor { Name = "TopiaForge Tests" },
+                    EntryAssembly = "Example.dll",
+                    EntryType = "Example.Mod"
+                });
+
+                var reread = ModManifestJson.Deserialize(written);
+                Assert(reread.SchemaVersion == schemaVersion,
+                    "a manifest written as V" + schemaVersion + " must read back as V" + schemaVersion);
+                Assert(ManifestValidator.Validate(reread).Count == 0,
+                    "a manifest this side wrote must be one it accepts");
+            }
+
+            var v6 = JsonUtil.Serialize(new ModManifest
+            {
+                SchemaVersion = ModManifest.ManifestV6SchemaVersion,
+                WorldGamemodes = { new ModGamemode { Id = "example.round-trip.mode", Name = "Mode" } }
+            });
+            Assert(!v6.Contains("worldGamemodes", StringComparison.Ordinal),
+                "V6 must not emit the retired list even when the in-memory model still carries one");
         }
 
         private static void Assert(bool condition, string message)

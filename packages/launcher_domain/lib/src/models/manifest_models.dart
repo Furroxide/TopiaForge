@@ -57,7 +57,7 @@ class ModManifest {
   /// targets as separate things, each with an implementation owner, rather than
   /// V5's display-only `worldGamemodes` list.
   static const manifestV6SchemaVersion = 6;
-  static const currentSchemaVersion = manifestV5SchemaVersion;
+  static const currentSchemaVersion = manifestV6SchemaVersion;
 
   /// Whether a version has a reader at all. Every version gate routes through
   /// here, so admitting a new schema cannot leave one of them behind still
