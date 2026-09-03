@@ -284,6 +284,12 @@ jobs:
       - name: Test trademark notice audit
         run: python3 .github/scripts/test_check_trademark_notice.py
 
+      - name: Keep the counts README.md states true
+        run: python3 .github/scripts/check_readme_counts.py
+
+      - name: Test README count audit
+        run: python3 .github/scripts/test_check_readme_counts.py
+
       - name: Test pinned Flutter setup
         shell: pwsh
         run: ./.github/actions/setup-flutter/test-setup-flutter.ps1
