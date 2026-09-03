@@ -18,8 +18,18 @@ class _HeroLaunchPane extends StatelessWidget {
 
     final selection = profile?.worldSelection ?? const WorldSelection();
     final launchGamemode = _selectedLaunchGamemode(state, selection);
+    // A mod conflict is not "one quick fix": that copy points at the runtime-repair button, which does
+    // nothing here. Name the real reason and send the player where the detail lives.
+    final blockingMods = state.blockingLaunchIssues;
     final (String headline, String subline) = state.isBusy
         ? ('Working on it…', state.statusMessage)
+        : blockingMods.isNotEmpty
+        ? (
+            'Mods need attention',
+            '${blockingMods.length} '
+                '${blockingMods.length == 1 ? 'problem stops' : 'problems stop'} '
+                'this profile loading · open Mods for details.',
+          )
         : !state.canLaunch
         ? ('Almost ready', 'One quick fix and TopiaForge is good to go.')
         : (
@@ -280,6 +290,12 @@ class _SystemsCheckStrip extends StatelessWidget {
         install.bepInExStatus == ComponentState.missing ||
         install.loaderStatus == ComponentState.missing;
     final modCount = state.resolution.orderedMods.length;
+    // Blocked mods drop out of orderedMods, so a bare count quietly shrinks and never says why.
+    // Show the shortfall instead: a number that went down is the only clue a player otherwise gets.
+    final candidateCount = state.installedMods
+        .where((mod) => mod.enabled && !mod.uninstallPending)
+        .length;
+    final excludedCount = candidateCount - modCount;
     final updates = _updatesAvailable(state);
 
     return Container(
@@ -327,9 +343,16 @@ class _SystemsCheckStrip extends StatelessWidget {
                   : () => _add(context, const RuntimeRepaired()),
             ),
           StatusPill(
-            label: '$modCount ${modCount == 1 ? 'mod' : 'mods'} enabled',
-            tone: StatusTone.info,
+            label: excludedCount > 0
+                ? '$modCount of $candidateCount mods enabled'
+                : '$modCount ${modCount == 1 ? 'mod' : 'mods'} enabled',
+            tone: excludedCount > 0 ? StatusTone.warning : StatusTone.info,
             icon: Icons.extension,
+            tooltip: excludedCount > 0
+                ? '$excludedCount enabled '
+                      '${excludedCount == 1 ? 'mod is' : 'mods are'} not loading. '
+                      'Open Mods to see why.'
+                : null,
             onPressed: () => _add(
               context,
               const LauncherSectionSelected(LauncherSection.mods),

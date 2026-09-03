@@ -119,21 +119,34 @@ class SetupScreen extends StatelessWidget {
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 8),
+                      // The resolver owns this order: it is derived from dependencies, and a mod
+                      // moved by hand would just be moved back. The drag handle that used to lead
+                      // each row promised a reorder that has never existed anywhere in the product.
+                      Text(
+                        'Set by dependencies between mods, not editable.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 8),
                       if (state.resolution.orderedMods.isEmpty)
                         Text(
                           'No enabled mods in the current load order.',
                           style: Theme.of(context).textTheme.bodySmall,
                         )
                       else
-                        ...state.resolution.orderedMods.map(
-                          (mod) => ListTile(
-                            leading: const Icon(Icons.drag_indicator),
+                        ...state.resolution.orderedMods.indexed.map(
+                          (entry) => ListTile(
+                            leading: Text(
+                              '${entry.$1 + 1}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
                             title: Text(
-                              mod.name,
+                              entry.$2.name,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            subtitle: Text('${mod.id} ${mod.version}'),
-                            trailing: mod.restartRequired
+                            subtitle: Text(
+                              '${entry.$2.id} ${entry.$2.version}',
+                            ),
+                            trailing: entry.$2.restartRequired
                                 ? _restartPill(context, state)
                                 : null,
                           ),

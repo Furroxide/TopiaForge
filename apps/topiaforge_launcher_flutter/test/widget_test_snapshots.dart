@@ -202,6 +202,7 @@ ModManifest _manifest(
   String name = 'Timer Mod',
   String category = '',
   List<ModDependency> dependencies = const [],
+  List<ModConflict> conflicts = const [],
 }) {
   return ModManifest(
     schemaVersion: 5,
@@ -213,8 +214,28 @@ ModManifest _manifest(
     entryType: 'Timer.Entry',
     category: category,
     dependencies: dependencies,
+    conflicts: conflicts,
   );
 }
+
+/// Two enabled mods that refuse to load together.
+List<InstalledMod> _conflictingMods() => [
+  _installedMod(
+    _manifest(
+      'example.gravity',
+      version: '1.0.0',
+      name: 'Gravity Mod',
+      conflicts: const [
+        ModConflict(id: 'example.zombies', reason: 'both bind primary fire'),
+      ],
+    ),
+    enabled: true,
+  ),
+  _installedMod(
+    _manifest('example.zombies', version: '1.0.0', name: 'Zombies'),
+    enabled: true,
+  ),
+];
 
 InstalledMod _installedMod(ModManifest manifest, {bool enabled = false}) =>
     InstalledMod(

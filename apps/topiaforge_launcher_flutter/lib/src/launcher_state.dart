@@ -18,6 +18,7 @@ class LauncherState {
     required this.recentLog,
     required this.launcherLog,
     required this.resolution,
+    required this.profileResolution,
     required this.launcherUpdates,
     this.launcherUpdateStatus = const LauncherUpdateStatus(),
     this.gameInstall,
@@ -60,6 +61,11 @@ class LauncherState {
       issues: [],
       graph: {},
     ),
+    profileResolution: const DependencyResolutionResult(
+      orderedMods: [],
+      issues: [],
+      graph: {},
+    ),
     launcherUpdates: const LauncherUpdateSettings(),
   );
 
@@ -79,6 +85,14 @@ class LauncherState {
   final String recentLog;
   final String launcherLog;
   final DependencyResolutionResult resolution;
+
+  /// Resolution over only what the selected profile will actually load.
+  ///
+  /// [resolution] covers every installed mod, which is what the Mods screen shows. Launch is gated on
+  /// this narrower result instead, so a profile that already excludes a conflicting mod is not blocked
+  /// by a conflict it will never load. It mirrors the repository's own pre-launch check, so the button
+  /// and the launch attempt agree rather than disagreeing one screen apart.
+  final DependencyResolutionResult profileResolution;
   final LauncherUpdateSettings launcherUpdates;
   final LauncherUpdateStatus launcherUpdateStatus;
   final String? selectedModId;
@@ -139,17 +153,36 @@ class LauncherState {
     return installedMods.first;
   }
 
+  /// Blocking issues among the mods the selected profile will load.
+  ///
+  /// Safe mode bypasses every mod, so nothing can block it.
+  List<LauncherIssue> get blockingLaunchIssues {
+    if (selectedProfile?.launchSettings.safeMode ?? false) {
+      return const [];
+    }
+    return profileResolution.issues
+        .where((issue) => issue.isBlocking)
+        .toList(growable: false);
+  }
+
   bool get canLaunch {
     return gameInstall != null &&
         gameInstall!.canLaunch &&
         !gameInstall!.needsRepair &&
-        selectedProfile != null;
+        selectedProfile != null &&
+        blockingLaunchIssues.isEmpty;
   }
 
+  /// Whether a launch attempt is worth starting.
+  ///
+  /// Deliberately ignores [GameInstall.needsRepair], because launching repairs a stale runtime on the
+  /// way. A blocking mod issue is different: the repository refuses the launch outright, so leaving the
+  /// button live only turns a visible problem into a one-line failure after the click.
   bool get canStartLaunchFlow {
     return gameInstall != null &&
         gameInstall!.canLaunch &&
-        selectedProfile != null;
+        selectedProfile != null &&
+        blockingLaunchIssues.isEmpty;
   }
 
   int get availableModUpdateCount {
@@ -189,6 +222,7 @@ class LauncherState {
     String? recentLog,
     String? launcherLog,
     DependencyResolutionResult? resolution,
+    DependencyResolutionResult? profileResolution,
     LauncherUpdateSettings? launcherUpdates,
     LauncherUpdateStatus? launcherUpdateStatus,
     String? selectedModId,
@@ -235,6 +269,7 @@ class LauncherState {
       recentLog: recentLog ?? this.recentLog,
       launcherLog: launcherLog ?? this.launcherLog,
       resolution: resolution ?? this.resolution,
+      profileResolution: profileResolution ?? this.profileResolution,
       launcherUpdates: launcherUpdates ?? this.launcherUpdates,
       launcherUpdateStatus: launcherUpdateStatus ?? this.launcherUpdateStatus,
       selectedModId: clearSelectedMod

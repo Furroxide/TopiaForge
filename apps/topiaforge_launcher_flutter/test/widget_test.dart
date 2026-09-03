@@ -203,6 +203,28 @@ void main() {
     );
   });
 
+  testWidgets('conflicting mods block launch and say so', (tester) async {
+    final repository = _FakeLauncherRepository(
+      snapshot: _readySnapshot(installedMods: _conflictingMods()),
+    );
+    await pumpHome(tester, repository);
+
+    // The game itself is fine, so the old copy would have claimed "Almost ready" and pointed at the
+    // runtime-repair button, which cannot fix a mod conflict.
+    expect(find.text('Mods need attention'), findsOneWidget);
+    expect(find.text('Almost ready'), findsNothing);
+
+    final glowButton = tester.widget<GlowButton>(find.byType(GlowButton));
+    expect(
+      glowButton.onPressed,
+      isNull,
+      reason: 'launch must be blocked before the attempt, not after it fails',
+    );
+
+    // A bare count would read "0 mods enabled" and leave the player to notice a number went down.
+    expect(find.text('0 of 2 mods enabled'), findsOneWidget);
+  });
+
   testWidgets('home shows almost-ready state and one-click runtime fix', (
     tester,
   ) async {
