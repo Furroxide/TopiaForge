@@ -67,11 +67,12 @@ README = _picture("hero", HERO_ALT) + "\n## How it fits together\n\n" + _picture
 _TEMP_DIRS: list[tempfile.TemporaryDirectory] = []
 
 
-def tree(readme: str = README, generator: str = GENERATOR, **svgs) -> Path:
+def tree(readme: str = README, generator: str = GENERATOR) -> Path:
     """Builds a throwaway repository root whose SVGs match the stub generator.
 
     Seeding the committed SVGs from the generator is the state the audit calls
-    correct, so each test states its own drift as an override rather than
+    correct, so each test states its own drift as a change to that state --
+    `edit` for a committed SVG, `generator` for the composition -- rather than
     restating four files.
     """
     holder = tempfile.TemporaryDirectory(prefix="readme-diagram-test-")
@@ -86,12 +87,6 @@ def tree(readme: str = README, generator: str = GENERATOR, **svgs) -> Path:
     AUDIT_MODULE.ROOT = root
     for name, body in AUDIT_MODULE.regenerated().items():
         (root / "assets" / "readme" / name).write_bytes(body)
-    for name, body in svgs.items():
-        path = root / "assets" / "readme" / name.replace("_", "-") + ".svg"
-        if body is None:
-            path.unlink()
-        else:
-            path.write_text(body, encoding="utf-8")
     return root
 
 
