@@ -2,12 +2,130 @@
   "schemaVersion": 1,
   "generatedBy": ".github/scripts/check_fixture_index.py",
   "channelRunners": {
+    "resolution": [
+      "csharp",
+      "dart"
+    ],
     "serialization": [
       "csharp",
       "dart"
     ]
   },
   "cases": [
+    {
+      "id": "a-policy-cannot-name-a-discovered-family",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/a-policy-cannot-name-a-discovered-family.json"
+    },
+    {
+      "id": "a-transition-the-target-does-not-offer",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/a-transition-the-target-does-not-offer.json"
+    },
+    {
+      "id": "an-observed-level-is-launchable-under-its-family",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/an-observed-level-is-launchable-under-its-family.json"
+    },
+    {
+      "id": "an-unobserved-level-is-not-launchable",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/an-unobserved-level-is-not-launchable.json"
+    },
+    {
+      "id": "auto-transition-prefers-scene-replacement",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/auto-transition-prefers-scene-replacement.json"
+    },
+    {
+      "id": "dependency-pins-an-unsatisfied-version",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/dependency-pins-an-unsatisfied-version.json"
+    },
+    {
+      "id": "every-admissible-world-is-unavailable",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/every-admissible-world-is-unavailable.json"
+    },
+    {
+      "id": "gamemode-declared-but-not-bound",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/gamemode-declared-but-not-bound.json"
+    },
+    {
+      "id": "gamemode-package-disabled",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/gamemode-package-disabled.json"
+    },
+    {
+      "id": "gamemode-reference-is-not-a-dependency",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/gamemode-reference-is-not-a-dependency.json"
+    },
+    {
+      "id": "no-shared-transition",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/no-shared-transition.json"
+    },
+    {
+      "id": "open-policy-without-world-consent",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/open-policy-without-world-consent.json"
+    },
+    {
+      "id": "player-choice-honours-an-offered-transition",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/player-choice-honours-an-offered-transition.json"
+    },
+    {
+      "id": "resolves-a-cross-package-target",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/resolves-a-cross-package-target.json"
+    },
+    {
+      "id": "spawn-requirement-unsatisfied",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/spawn-requirement-unsatisfied.json"
+    },
+    {
+      "id": "target-not-declared",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/target-not-declared.json"
+    },
+    {
+      "id": "target-package-disabled",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/target-package-disabled.json"
+    },
+    {
+      "id": "world-outside-a-fixed-policy",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/world-outside-a-fixed-policy.json"
+    },
+    {
+      "id": "world-package-does-not-support-this-install",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/world-package-does-not-support-this-install.json"
+    },
     {
       "id": "empty-intent-object",
       "channel": "serialization",

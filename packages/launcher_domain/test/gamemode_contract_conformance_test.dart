@@ -16,6 +16,7 @@ import 'package:json_schema/json_schema.dart';
 import 'package:test/test.dart';
 
 import 'gamemode_contract_conformance_cases.dart';
+import 'gamemode_contract_resolution_cases.dart';
 
 const _runnerName = 'dart';
 
@@ -159,7 +160,7 @@ void main() {
         reason: '$path: ${actual.detail}',
       );
       final normalized = expected['normalized'] as Map<String, Object?>?;
-      if (normalized != null) {
+      if (normalized != null && channel == 'serialization') {
         final digest = declarationDigest(body);
         for (final kind in const ['worlds', 'gamemodes', 'launchTargets']) {
           expect(
@@ -167,6 +168,32 @@ void main() {
             (normalized[kind]! as List).cast<String>(),
             reason:
                 '$path: $kind parsed differently from what the fixture pins',
+          );
+        }
+      }
+      if (normalized != null && channel == 'resolution') {
+        expect(
+          digestAgreesWithItsPackages(body),
+          isTrue,
+          reason:
+              '$path: a plan digest must accept the package set it was built '
+              'from and reject a different one, or revalidating before '
+              'preparing proves nothing',
+        );
+        final plan = launchPlanDigest(body);
+        for (final field in const [
+          'launchTargetId',
+          'gamemodeId',
+          'worldId',
+          'worldInstanceId',
+          'transition',
+          'resolvedPackages',
+        ]) {
+          expect(
+            plan[field],
+            normalized[field],
+            reason:
+                '$path: $field resolved to something the fixture does not pin',
           );
         }
       }
@@ -212,6 +239,8 @@ ConformanceOutcome _execute(
     case 'manifest-accepts':
     case 'manifest-rejects':
       return runManifest(body);
+    case 'launch-resolution':
+      return runLaunchResolution(body);
     default:
       fail(
         '$path has kind "$kind", which the Dart conformance runner does '
