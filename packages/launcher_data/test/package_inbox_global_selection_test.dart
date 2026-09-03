@@ -144,7 +144,7 @@ class _GlobalInboxFixture {
   }) {
     final assembly = id.replaceAll('.', '_');
     final manifest = <String, Object?>{
-      'schemaVersion': 5,
+      'schemaVersion': ModManifest.currentSchemaVersion,
       'name': id,
       'displayName': id,
       'version': version,

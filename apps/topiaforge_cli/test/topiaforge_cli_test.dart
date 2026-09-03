@@ -11,6 +11,7 @@ part 'topiaforge_cli_test_harness.dart';
 part 'topiaforge_cli_acceptance_cases.dart';
 part 'topiaforge_cli_creator_content_cases.dart';
 part 'topiaforge_cli_core_cases.dart';
+part 'topiaforge_cli_migration_cases.dart';
 part 'topiaforge_cli_dev_cases.dart';
 part 'topiaforge_cli_world_cases.dart';
 part 'topiaforge_cli_world_contract_cases.dart';
@@ -30,6 +31,7 @@ void main() {
   });
 
   _coreCliTests(() => harness);
+  _migrationCliTests(() => harness);
   _creatorContentCliTests(() => harness);
   _acceptanceCliTests(() => harness);
   _devCliTests(() => harness);

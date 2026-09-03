@@ -205,7 +205,7 @@ ModManifest _manifest(
   List<ModConflict> conflicts = const [],
 }) {
   return ModManifest(
-    schemaVersion: 5,
+    schemaVersion: ModManifest.currentSchemaVersion,
     id: id,
     name: name,
     version: version,
@@ -275,7 +275,7 @@ LauncherSnapshot _discoverySnapshot({bool developerMode = false}) {
 RegistryMod _registryMod(String id, String name, String category) {
   return RegistryMod(
     manifest: ModManifest(
-      schemaVersion: 5,
+      schemaVersion: ModManifest.currentSchemaVersion,
       id: id,
       name: name,
       version: '1.0.0',

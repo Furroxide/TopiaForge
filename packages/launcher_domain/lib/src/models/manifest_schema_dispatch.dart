@@ -1,6 +1,6 @@
 part of '../models.dart';
 
-enum _ManifestSchemaContract { v5, v6 }
+enum _ManifestSchemaContract { v6 }
 
 _ManifestSchemaContract _dispatchManifestSchema(Map<String, Object?> json) {
   if (!json.containsKey('schemaVersion')) {
@@ -22,15 +22,21 @@ _ManifestSchemaContract _dispatchManifestSchema(Map<String, Object?> json) {
       'multiplayer for a standalone-only mod.',
     );
   }
+  if (schemaVersion == ModManifest.manifestV5SchemaVersion) {
+    throw const FormatException(
+      'Manifest schemaVersion 5 was retired before TopiaForge 1.0. Its '
+      'worldGamemodes list named gamemodes without an implementation owner, a '
+      'world, or a launch identity. Run `topiaforge migrate-manifest --project '
+      '<path>` to move to schemaVersion 6.',
+    );
+  }
   switch (schemaVersion) {
-    case ModManifest.manifestV5SchemaVersion:
-      return _ManifestSchemaContract.v5;
     case ModManifest.manifestV6SchemaVersion:
       return _ManifestSchemaContract.v6;
     default:
       throw FormatException(
-        'Unsupported manifest schemaVersion $schemaVersion; schemaVersion 5 '
-        'or 6 is required.',
+        'Unsupported manifest schemaVersion $schemaVersion; schemaVersion 6 '
+        'is required.',
       );
   }
 }

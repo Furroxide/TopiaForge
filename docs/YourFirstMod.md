@@ -89,5 +89,5 @@ Edit the default greeting in `ExampleFirstModConfig.cs`, add a test assertion, a
 - Use [Creator Content](Modules.md#creator-content) when your mod should contribute safe catalog content or work
   with reversible creator sessions.
 - Read [Test a mod](TestingMods.md) before adding behavior with several resource handles.
-- Use [Manifest V5](ManifestV5.md) for dependencies, constraints, capabilities, optional multiplayer metadata, and exported contracts.
+- Use [Manifest V6](ManifestV6.md) for dependencies, constraints, capabilities, declared worlds and gamemodes, optional multiplayer metadata, and exported contracts.
 - See [Diagnostics](Diagnostics.md) when a stable `TF` code appears.

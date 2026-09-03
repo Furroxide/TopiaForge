@@ -26,7 +26,7 @@ namespace TopiaForge.ModManager.Tests
         {
             return new ModManifest
             {
-                SchemaVersion = 5,
+                SchemaVersion = ModManifest.CurrentSchemaVersion,
                 Id = id,
                 Name = id,
                 Version = "1.0.0",
@@ -106,7 +106,7 @@ namespace TopiaForge.ModManager.Tests
             {
                 WriteEntry(zip, "topiaforge.mod.json", JsonUtil.Serialize(new ModManifest
                 {
-                    SchemaVersion = 5,
+                    SchemaVersion = ModManifest.CurrentSchemaVersion,
                     Id = id,
                     Name = name,
                     Author = new ModAuthor { Name = "TopiaForge" },

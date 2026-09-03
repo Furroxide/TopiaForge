@@ -1,21 +1,44 @@
 ---
-title: Manifest V5
-description: Canonical TopiaForge package manifest, including optional multiplayer metadata.
+title: Manifest V5 (retired)
+description: The retired V5 package manifest, why it was replaced, and how to move a project to V6.
 ---
 
-# Manifest V5
+# Manifest V5 (retired)
 
-Manifest V5 is the sole manifest schema supported by TopiaForge. It is strict: unknown fields are
-rejected unless their name begins with `x-`, and collections, strings, paths, and dependency graphs are
-bounded before an assembly loads. The `multiplayer` object is optional. Omitting it is the canonical
-standalone-only declaration.
+**Manifest V5 was retired before the first public release. Use [Manifest V6](ManifestV6.md).**
 
-Manifest V4 was retired before the first public release. Tooling rejects it with a migration command
-instead of carrying a second permanent contract.
+```bash
+topiaforge migrate-manifest --project <path>
+```
 
-The editor-friendly `topiaforge.mod.schema.json` URL names the latest supported schema. The immutable
-`topiaforge.mod.v5.schema.json` file is a self-contained V5 contract and never references that moving alias.
-Future loaders add a new version-specific reader and schema without changing the V5 parser or file.
+`schemas/topiaforge.mod.v5.schema.json` now rejects every document, and both readers refuse a V5
+`schemaVersion` with the command above rather than a bare "unsupported version". This page stays
+because manifests written against V5 still exist, and a reader who lands here needs to know where the
+contract went.
+
+## What V5 could not say
+
+A V5 gamemode declaration was three fields:
+
+```json
+"worldGamemodes": [
+  { "id": "author.mod.survival", "name": "Survival", "description": "Wave survival." }
+]
+```
+
+No implementation owner, no world, no launch identity. Everything that actually decided what ran lived
+in C# — so a manifest could declare a gamemode nothing implemented, or a mod could implement one the
+manifest never mentioned, and the two cases were indistinguishable from outside. That is the defect
+V6's `contributions` exists to close: a declaration names the type that runs it, the worlds it can run
+in, and the target the player picks.
+
+The migration carries everything mechanical and **refuses** when the parts only an author knows are
+missing, naming each one. [Manifest V6](ManifestV6.md) lists exactly what it refuses and why.
+
+## The rest of V5
+
+Everything below described V5 and is kept for reference. V6 carries all of it unchanged except
+`worldGamemodes`, which has no successor.
 
 ## Minimal standalone manifest
 

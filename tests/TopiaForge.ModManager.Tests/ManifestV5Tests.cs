@@ -26,28 +26,32 @@ namespace TopiaForge.ModManager.Tests
 
         private static void SchemaDispatchRejectsRetiredV4AndAllowsStandaloneV5()
         {
-            Assert(ManifestSchemaDispatch.Resolve(ModManifest.ManifestV5SchemaVersion) == ManifestSchemaContract.V5,
-                "the immutable V5 selector must dispatch to its dedicated reader branch");
-
-            try
+            foreach (var retired in new[] { 4, ModManifest.ManifestV5SchemaVersion })
             {
-                ModManifestJson.Deserialize(ManifestJson(4, string.Empty));
-                throw new InvalidOperationException("retired schema V4 unexpectedly loaded");
-            }
-            catch (InvalidDataException exception)
-            {
-                Assert(exception.Message.Contains("retired") && exception.Message.Contains("schemaVersion 5"),
-                    "schema V4 rejection must provide an actionable V5 migration message");
+                try
+                {
+                    ModManifestJson.Deserialize(ManifestJson(retired, string.Empty));
+                    throw new InvalidOperationException(
+                        "retired schema V" + retired + " unexpectedly loaded");
+                }
+                catch (InvalidDataException exception)
+                {
+                    // A retired version has to say what to run, not just that it is unsupported. An
+                    // author whose manifest stopped loading needs the next command, not a verdict.
+                    Assert(exception.Message.Contains("retired")
+                            && exception.Message.Contains("migrate-manifest"),
+                        "schema V" + retired + " rejection must name the migration command");
+                }
             }
 
-            var standalone = ModManifestJson.Deserialize(ManifestJson(5, string.Empty));
+            var standalone = ModManifestJson.Deserialize(ManifestJson(6, string.Empty));
             Assert(standalone.IsStandaloneOnly && !standalone.DeclaresMultiplayer,
-                "schema V5 without multiplayer metadata must be standalone-only");
+                "a manifest without multiplayer metadata must be standalone-only");
             Assert(ManifestValidator.Validate(standalone).Count == 0,
-                "a canonical standalone V5 manifest must remain valid");
+                "a canonical standalone manifest must remain valid");
 
             Assert(ManifestSchemaDispatch.Resolve(ModManifest.ManifestV6SchemaVersion) == ManifestSchemaContract.V6,
-                "the V6 selector must dispatch to its own reader branch, never to V5's");
+                "the V6 selector must dispatch to its own reader branch");
 
             AssertThrows<InvalidDataException>(
                 () => ModManifestJson.Deserialize(ManifestJson(7, string.Empty)),
@@ -58,29 +62,23 @@ namespace TopiaForge.ModManager.Tests
                 SchemaVersion = 7,
                 Multiplayer = new ModMultiplayerMetadata { Mode = "future-mode" }
             });
-            Assert(futureErrors.Count == 1 && futureErrors[0].Contains("schemaVersion must be 5 or 6"),
+            Assert(futureErrors.Count == 1 && futureErrors[0].Contains("schemaVersion must be 6"),
                 "an unsupported future schema must fail on its selector without interpreting supported fields");
 
-            // Each version rejects the other's one distinguishing field by name. Known fields are
-            // the union across schemas, so without this a V5 manifest would silently accept a
-            // declaration set no V5 reader understands.
-            AssertThrows<InvalidDataException>(
-                () => ModManifestJson.Deserialize(ManifestJson(
-                    6,
-                    ",\"worldGamemodes\":[{\"id\":\"sample.mod.mode\",\"name\":\"Mode\"}]")),
-                "a V6 manifest must not carry the retired worldGamemodes list");
-            AssertThrows<InvalidDataException>(
-                () => ModManifestJson.Deserialize(ManifestJson(
-                    5,
-                    ",\"contributions\":{\"gamemodes\":[{\"id\":\"sample.mod.mode\"," +
-                    "\"name\":\"Mode\",\"implementation\":{\"type\":\"Sample.Mode\"}}]}")),
-                "a V5 manifest must not declare contributions");
+            // The retired list is decoded only so the error can name it. Reaching the closed-field
+            // check instead would report an unknown field, which tells the author nothing about
+            // where those entries went.
+            var retiredList = ManifestValidator.Validate(new ModManifest
+            {
+                SchemaVersion = ModManifest.ManifestV5SchemaVersion
+            });
+            Assert(retiredList.Count == 1 && retiredList[0].Contains("migrate-manifest"),
+                "a V5 manifest reaching the validator must be told how to move to V6");
         }
 
         private static void V5SessionMetadataRoundTrips()
         {
-            var manifest = ModManifestJson.Deserialize(ManifestJson(
-                5,
+            var manifest = ModManifestJson.Deserialize(ManifestJson(6,
                 ",\"multiplayer\":{" +
                 "\"mode\":\"session\",\"presence\":\"required\"," +
                 "\"protocol\":{\"version\":\"1.2.3\",\"peerVersionRange\":\">=1.0.0 <2.0.0\"}," +
@@ -120,15 +118,13 @@ namespace TopiaForge.ModManager.Tests
                          ModMultiplayerMetadata.ServerOnlyMode,
                      })
             {
-                var manifest = ModManifestJson.Deserialize(ManifestJson(
-                    5,
+                var manifest = ModManifestJson.Deserialize(ManifestJson(6,
                     ",\"multiplayer\":{\"mode\":\"" + mode + "\"}"));
                 Assert(ManifestValidator.Validate(manifest).Count == 0,
                     mode + " must be valid without session-only metadata");
             }
 
-            var clientWithSessionFields = ModManifestJson.Deserialize(ManifestJson(
-                5,
+            var clientWithSessionFields = ModManifestJson.Deserialize(ManifestJson(6,
                 ",\"multiplayer\":{" +
                 "\"mode\":\"client-local\",\"presence\":\"optional\"," +
                 "\"protocol\":{\"version\":\"1.0.0\"},\"synchronizedFiles\":[]}"));
@@ -139,20 +135,17 @@ namespace TopiaForge.ModManager.Tests
                 "client-local must reject every session-only field, including an explicitly empty list");
 
             AssertThrows<InvalidDataException>(
-                () => ModManifestJson.Deserialize(ManifestJson(
-                    5,
+                () => ModManifestJson.Deserialize(ManifestJson(6,
                     ",\"multiplayer\":{\"mode\":\"client-local\",\"protocol\":null}")),
                 "session-only fields cannot bypass closed mode semantics with null");
             AssertThrows<InvalidDataException>(
-                () => ModManifestJson.Deserialize(ManifestJson(
-                    5,
+                () => ModManifestJson.Deserialize(ManifestJson(6,
                     ",\"multiplayer\":{" +
                     "\"mode\":\"session\",\"presence\":\"required\"," +
                     "\"protocol\":{\"version\":\"1.0.0\"},\"synchronizedFiles\":null}")),
                 "synchronizedFiles must be an array when present");
 
-            var incompleteSession = ModManifestJson.Deserialize(ManifestJson(
-                5,
+            var incompleteSession = ModManifestJson.Deserialize(ManifestJson(6,
                 ",\"multiplayer\":{\"mode\":\"session\"}"));
             var sessionErrors = ManifestValidator.Validate(incompleteSession);
             Assert(sessionErrors.Any(error => error.Contains("presence must be")) &&
@@ -162,8 +155,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static void ProtocolAndSynchronizedPathsAreValidated()
         {
-            var invalid = ModManifestJson.Deserialize(ManifestJson(
-                5,
+            var invalid = ModManifestJson.Deserialize(ManifestJson(6,
                 ",\"multiplayer\":{" +
                 "\"mode\":\"session\",\"presence\":\"required\"," +
                 "\"protocol\":{\"version\":\"1.0\",\"peerVersionRange\":\"nope\"}," +

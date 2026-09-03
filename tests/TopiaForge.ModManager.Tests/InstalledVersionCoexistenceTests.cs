@@ -151,7 +151,7 @@ namespace TopiaForge.ModManager.Tests
         {
             return new ModManifest
             {
-                SchemaVersion = 5,
+                SchemaVersion = ModManifest.CurrentSchemaVersion,
                 Id = ModId,
                 Name = "Coexistence",
                 Author = new ModAuthor { Name = "TopiaForge" },

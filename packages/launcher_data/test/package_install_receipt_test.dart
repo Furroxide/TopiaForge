@@ -314,7 +314,7 @@ void _createGame(Directory game) {
 
 File _createPackage(Directory root) {
   final manifest = <String, Object?>{
-    'schemaVersion': 5,
+    'schemaVersion': ModManifest.currentSchemaVersion,
     'name': _modId,
     'displayName': 'Receipt fixture',
     'version': _version,
@@ -342,7 +342,7 @@ File _createMultiplayerPackage(Directory root) {
   const synchronizedRules = '{"difficulty":2}';
   const localContent = 'not synchronized';
   final manifest = <String, Object?>{
-    'schemaVersion': 5,
+    'schemaVersion': ModManifest.currentSchemaVersion,
     'name': _modId,
     'displayName': 'Multiplayer receipt fixture',
     'version': _version,

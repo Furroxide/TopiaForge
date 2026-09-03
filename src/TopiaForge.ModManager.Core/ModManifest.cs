@@ -6,7 +6,9 @@ namespace TopiaForge.ModManager.Core
     [DataContract]
     public sealed class ModManifest
     {
-        /// <summary>The immutable schema selector for the TopiaForge 1.0 manifest contract.</summary>
+        /// <summary>
+        /// The retired schema selector. Kept so the dispatcher can name it and say what replaced it.
+        /// </summary>
         public const int ManifestV5SchemaVersion = 5;
 
         /// <summary>
@@ -25,7 +27,7 @@ namespace TopiaForge.ModManager.Core
         /// silently stops applying is worse than one that rejects.
         /// </summary>
         public static bool IsSupportedSchemaVersion(int schemaVersion) =>
-            schemaVersion == ManifestV5SchemaVersion || schemaVersion == ManifestV6SchemaVersion;
+            schemaVersion == ManifestV6SchemaVersion;
 
         [DataMember(Name = "$schema", EmitDefaultValue = false)]
         public string SchemaUrl { get; set; } = string.Empty;
@@ -169,27 +171,15 @@ namespace TopiaForge.ModManager.Core
         [DataMember(Name = "contributions", EmitDefaultValue = false)]
         public ModContributions? Contributions { get; set; }
 
-        /// <summary>The V5 display-only gamemode list. Always empty on a V6 manifest.</summary>
-        [IgnoreDataMember]
-        public List<ModGamemode> WorldGamemodes { get; set; } = new List<ModGamemode>();
-
         /// <summary>
-        /// Writes <see cref="WorldGamemodes"/> only for the version that has the field.
+        /// Decoded only so validation can name the field and say what replaced it.
         /// </summary>
         /// <remarks>
-        /// V6 retired <c>worldGamemodes</c> and its reader rejects the key by name, so emitting it on a
-        /// V6 manifest would make this type a writer of documents its own reader refuses. The list is a
-        /// reference type, so <c>EmitDefaultValue = false</c> alone would not have helped: an empty list
-        /// is not the default, and the serializer would have written <c>"worldGamemodes":[]</c>.
+        /// Not <c>"gamemodes"</c>: that name is already taken by an older retired field, and two
+        /// sentinels cannot share one member.
         /// </remarks>
         [DataMember(Name = "worldGamemodes", EmitDefaultValue = false)]
-        private List<ModGamemode>? SerializedWorldGamemodes
-        {
-            get => SchemaVersion == ManifestV5SchemaVersion && WorldGamemodes != null && WorldGamemodes.Count > 0
-                ? WorldGamemodes
-                : null;
-            set => WorldGamemodes = value ?? new List<ModGamemode>();
-        }
+        private List<object>? UnsupportedWorldGamemodes { get; set; }
 
         [DataMember(Name = "multiplayer", EmitDefaultValue = false)]
         public ModMultiplayerMetadata? Multiplayer { get; set; }
@@ -256,6 +246,7 @@ namespace TopiaForge.ModManager.Core
             if (UnsupportedSdkVersionRange != null) yield return "sdkVersionRange";
             if (UnsupportedPackageHashes != null) yield return "packageHashes";
             if (UnsupportedGamemodes != null) yield return "gamemodes";
+            if (UnsupportedWorldGamemodes != null) yield return "worldGamemodes";
             if (UnsupportedLegacyFolders != null) yield return "legacyFolders";
             if (UnsupportedLegacyFiles != null) yield return "legacyFiles";
             if (UnsupportedLegacyPackages != null) yield return "legacyPackages";

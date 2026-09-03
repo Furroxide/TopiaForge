@@ -91,11 +91,11 @@ effect dynamically, so unloading the consumer restores normal planning without r
 ## Multiplayer
 
 Multiplayer is a stable API preview with a generated contract, standalone loopback provider, and deterministic
-multi-peer test rig. The add command keeps the mod on Manifest V5, pins all three multiplayer components to the same
+multi-peer test rig. The add command keeps the mod on the current manifest contract, pins all three multiplayer components to the same
 release, and adds multiplayer metadata; removing
 the module leaves a valid standalone V5 manifest. Shared state is
 server-canonical with optional owner prediction. See [Multiplayer API preview](Multiplayer.md) and
-[Manifest V5](ManifestV5.md). Live transport is not part of the current release.
+[Manifest V6](ManifestV6.md). Live transport is not part of the current release.
 
 Advanced native interop is deliberately not a specialist safe module. Read
 [Advanced interop](UnityInterop.md) before adding that separate package.

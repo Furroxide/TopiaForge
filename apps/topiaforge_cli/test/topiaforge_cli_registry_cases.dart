@@ -97,7 +97,7 @@ void _registryCliTests(_CliTestHarness Function() currentHarness) {
     final good = _writeTestPackage(
       currentHarness().temp,
       manifest: {
-        'schemaVersion': 5,
+        'schemaVersion': ModManifest.currentSchemaVersion,
         'name': 'cli.checkable',
         'displayName': 'Checkable',
         'version': '1.0.0',
@@ -144,7 +144,7 @@ void _registryCliTests(_CliTestHarness Function() currentHarness) {
       currentHarness().temp,
       fileName: 'bad-pe.topiaforgemod',
       manifest: {
-        'schemaVersion': 5,
+        'schemaVersion': ModManifest.currentSchemaVersion,
         'name': 'cli.bad-pe',
         'displayName': 'Bad PE',
         'version': '1.0.0',
@@ -196,7 +196,7 @@ void _registryCliTests(_CliTestHarness Function() currentHarness) {
       final package = _writeTestPackage(
         currentHarness().temp,
         manifest: {
-          'schemaVersion': 5,
+          'schemaVersion': ModManifest.currentSchemaVersion,
           'name': 'cli.publishable',
           'displayName': 'Publishable',
           'version': '1.0.0',
@@ -260,7 +260,7 @@ void _registryCliTests(_CliTestHarness Function() currentHarness) {
         currentHarness().temp,
         fileName: 'warned.topiaforgemod',
         manifest: {
-          'schemaVersion': 5,
+          'schemaVersion': ModManifest.currentSchemaVersion,
           'name': 'cli.warned',
           'displayName': 'Warned',
           'version': '1.0.0',

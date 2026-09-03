@@ -15,7 +15,7 @@ namespace TopiaForge.ModManager.Tests
         {
             var manifest = new ModManifest
             {
-                SchemaVersion = 5,
+                SchemaVersion = ModManifest.CurrentSchemaVersion,
                 Id = "eta.mod",
                 Name = "Eta",
                 Version = "1.0.0",
@@ -46,7 +46,7 @@ namespace TopiaForge.ModManager.Tests
             var state = new ManagerState();
             var depManifest = new ModManifest
             {
-                SchemaVersion = 5,
+                SchemaVersion = ModManifest.CurrentSchemaVersion,
                 Id = "dependency.mod",
                 Name = "Dependency",
                 Version = "1.0.0",
@@ -55,7 +55,7 @@ namespace TopiaForge.ModManager.Tests
             };
             var mainManifest = new ModManifest
             {
-                SchemaVersion = 5,
+                SchemaVersion = ModManifest.CurrentSchemaVersion,
                 Id = "main.mod",
                 Name = "Main",
                 Version = "1.0.0",
@@ -78,7 +78,7 @@ namespace TopiaForge.ModManager.Tests
             var state = new ManagerState();
             var worldsManifest = new ModManifest
             {
-                SchemaVersion = 5,
+                SchemaVersion = ModManifest.CurrentSchemaVersion,
                 Id = "io.github.furroxide.topiaforge.worlds",
                 Name = "TopiaForge Worlds",
                 Version = "0.1.0-rc.1",
@@ -87,7 +87,7 @@ namespace TopiaForge.ModManager.Tests
             };
             var promptsManifest = new ModManifest
             {
-                SchemaVersion = 5,
+                SchemaVersion = ModManifest.CurrentSchemaVersion,
                 Id = "io.github.furroxide.topiaforge.prompts",
                 Name = "TopiaForge Prompts",
                 Version = "0.1.0-rc.1",
@@ -96,7 +96,7 @@ namespace TopiaForge.ModManager.Tests
             };
             var consumerManifest = new ModManifest
             {
-                SchemaVersion = 5,
+                SchemaVersion = ModManifest.CurrentSchemaVersion,
                 Id = "consumer.mod",
                 Name = "Consumer",
                 Version = "1.0.0",
