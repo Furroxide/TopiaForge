@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using TopiaForge.Mods;
 using TopiaForge.Mods.UnityUi;
@@ -289,11 +290,22 @@ namespace TopiaForge.ModManager
                         continue;
                     }
 
+                    // Accept any numeric type. UIDocument.sortingOrder is a float on the engine we
+                    // target, but this whole probe exists because an assumption about the game's UI
+                    // stopped holding silently -- a census that reports every panel at order 0 after a
+                    // type change would be the same failure in a new place.
                     var order = 0;
-                    if (sortingOrderProperty != null
-                        && sortingOrderProperty.GetValue(document, null) is float value)
+                    var rawOrder = sortingOrderProperty?.GetValue(document, null);
+                    if (rawOrder is IConvertible)
                     {
-                        order = (int)value;
+                        try
+                        {
+                            order = Convert.ToInt32(rawOrder, CultureInfo.InvariantCulture);
+                        }
+                        catch (Exception)
+                        {
+                            // Overflow or an unconvertible numeric: report 0 rather than lose the panel.
+                        }
                     }
 
                     surfaces.Add(new MenuSurfaceCandidate(
