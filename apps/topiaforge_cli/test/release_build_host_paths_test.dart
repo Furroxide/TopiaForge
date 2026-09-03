@@ -7,9 +7,13 @@ import 'package:test/test.dart';
 /// Minimal PE-shaped bytes. The scanner reads content, not structure, so the
 /// header only has to keep the file from looking like text to a reader.
 List<int> _binaryCarrying(String payload) => <int>[
-  0x4D, 0x5A, 0x90, 0x00,
+  0x4D,
+  0x5A,
+  0x90,
+  0x00,
   ...payload.codeUnits,
-  0x00, 0x00,
+  0x00,
+  0x00,
 ];
 
 File _write(Directory root, String name, List<int> bytes) {
@@ -31,8 +35,15 @@ void main() {
 
   test('accepts a payload whose binaries carry no home directory', () {
     _write(temp, 'topiaforge.dll', _binaryCarrying(r'/_/src/Thing/obj/a.pdb'));
-    _write(temp, 'launcher.exe', _binaryCarrying('file:///t:/apps/cli/bin/x.dart'));
-    expect(() => const BuildHostPathScanner().assertClean(temp.path), returnsNormally);
+    _write(
+      temp,
+      'launcher.exe',
+      _binaryCarrying('file:///t:/apps/cli/bin/x.dart'),
+    );
+    expect(
+      () => const BuildHostPathScanner().assertClean(temp.path),
+      returnsNormally,
+    );
   });
 
   test('rejects a Windows profile path recorded by the compiler', () {
@@ -79,26 +90,43 @@ void main() {
   test('allows machine accounts that identify no person', () {
     _write(temp, 'shared.dll', _binaryCarrying(r'C:\Users\Public\Documents\x'));
     _write(temp, 'other.dll', _binaryCarrying(r'C:\Users\Default\AppData\y'));
-    expect(() => const BuildHostPathScanner().assertClean(temp.path), returnsNormally);
+    expect(
+      () => const BuildHostPathScanner().assertClean(temp.path),
+      returnsNormally,
+    );
   });
 
   test('allows a neutral absolute build root such as the WSL builder', () {
-    _write(temp, 'cli.so', _binaryCarrying('file:///root/topiaforge-build/bin/x.dart'));
+    _write(
+      temp,
+      'cli.so',
+      _binaryCarrying('file:///root/topiaforge-build/bin/x.dart'),
+    );
     _write(temp, 'other.so', _binaryCarrying('/build/src/y.dart'));
-    expect(() => const BuildHostPathScanner().assertClean(temp.path), returnsNormally);
+    expect(
+      () => const BuildHostPathScanner().assertClean(temp.path),
+      returnsNormally,
+    );
   });
 
   test('ignores documentation, which legitimately shows example paths', () {
     File(p.join(temp.path, 'Troubleshooting.md'))
       ..createSync(recursive: true)
-      ..writeAsStringSync(r'Set ROBOTOPIA_GAME_DIR, e.g. C:\Users\alice\Games\Robotopia.');
-    expect(() => const BuildHostPathScanner().assertClean(temp.path), returnsNormally);
+      ..writeAsStringSync(
+        r'Set ROBOTOPIA_GAME_DIR, e.g. C:\Users\alice\Games\Robotopia.',
+      );
+    expect(
+      () => const BuildHostPathScanner().assertClean(temp.path),
+      returnsNormally,
+    );
   });
 
   test('finds a path stored as UTF-16, as PE resources do', () {
     final utf16 = <int>[];
     for (final unit in r'C:\Users\buildacct\obj\a.pdb'.codeUnits) {
-      utf16..add(unit)..add(0x00);
+      utf16
+        ..add(unit)
+        ..add(0x00);
     }
     _write(temp, 'resource.dll', <int>[0x4D, 0x5A, ...utf16]);
     expect(
@@ -110,12 +138,92 @@ void main() {
   test('scans extension-less Unix executables by magic number', () {
     // ELF header, then the leaked path.
     _write(temp, 'topiaforge', <int>[
-      0x7F, 0x45, 0x4C, 0x46,
+      0x7F,
+      0x45,
+      0x4C,
+      0x46,
       ...'file:///home/buildacct/x.dart'.codeUnits,
     ]);
     expect(
       () => const BuildHostPathScanner().assertClean(temp.path),
       throwsA(isA<StateError>()),
+    );
+  });
+
+  test(
+    'recognises every Mach-O header form, thin and fat, in either byte order',
+    () {
+      const headers = <String, List<int>>{
+        'MH_MAGIC': [0xFE, 0xED, 0xFA, 0xCE],
+        'MH_CIGAM': [0xCE, 0xFA, 0xED, 0xFE],
+        'MH_MAGIC_64': [0xFE, 0xED, 0xFA, 0xCF],
+        'MH_CIGAM_64': [0xCF, 0xFA, 0xED, 0xFE],
+        'FAT_MAGIC': [0xCA, 0xFE, 0xBA, 0xBE],
+        'FAT_CIGAM': [0xBE, 0xBA, 0xFE, 0xCA],
+        'FAT_MAGIC_64': [0xCA, 0xFE, 0xBA, 0xBF],
+        'FAT_CIGAM_64': [0xBF, 0xBA, 0xFE, 0xCA],
+      };
+      for (final entry in headers.entries) {
+        // One payload per header so a miss names the form that slipped through.
+        final payload = Directory(p.join(temp.path, entry.key))..createSync();
+        _write(payload, 'launcher', <int>[
+          ...entry.value,
+          ...'/Users/buildacct/src/x.dart'.codeUnits,
+        ]);
+        expect(
+          () => const BuildHostPathScanner().assertClean(payload.path),
+          throwsA(isA<StateError>()),
+          reason: '${entry.key} was not scanned',
+        );
+      }
+    },
+  );
+
+  test('finds a path that straddles a chunk boundary', () {
+    // A tiny chunk puts a boundary inside the path: the path starts 4 bytes
+    // before the 1024-byte mark, so the window ending there holds only "C:\U",
+    // where nothing matches, and only the carried-over tail lets the next
+    // window see the account name.
+    const chunk = 16;
+    const header = <int>[0x4D, 0x5A];
+    // Padded with 'A' so no NULs take part.
+    final padding = List<int>.filled(1024 - 4 - header.length, 0x41);
+    _write(temp, 'launcher.exe', <int>[
+      ...header,
+      ...padding,
+      ...r'C:\Users\buildacct\obj\a.pdb'.codeUnits,
+    ]);
+    expect(
+      () => const BuildHostPathScanner(chunkSize: chunk).assertClean(temp.path),
+      throwsA(
+        isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          contains(r'C:\Users\buildacct'),
+        ),
+      ),
+    );
+  });
+
+  test('scans a binary that spans many chunks', () {
+    const chunk = 64;
+    final body = List<int>.filled(chunk * 40, 0x41);
+    _write(temp, 'clean.exe', <int>[0x4D, 0x5A, ...body]);
+    _write(temp, 'leaky.exe', <int>[
+      0x4D,
+      0x5A,
+      ...body,
+      ...'/home/buildacct/x'.codeUnits,
+    ]);
+    expect(
+      () => const BuildHostPathScanner(chunkSize: chunk).assertClean(temp.path),
+      throwsA(
+        isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          contains('leaky.exe'),
+        ),
+      ),
     );
   });
 }

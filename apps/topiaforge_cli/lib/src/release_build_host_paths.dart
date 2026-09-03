@@ -23,7 +23,29 @@ import 'package:path/path.dart' as p;
 /// this stays a privacy gate rather than an unwinnable "no absolute paths"
 /// rule.
 class BuildHostPathScanner {
-  const BuildHostPathScanner();
+  const BuildHostPathScanner({this.chunkSize = defaultChunkSize})
+    : assert(chunkSize > 0, 'chunkSize must be positive');
+
+  /// Bytes read per pass over a binary.
+  ///
+  /// Package binaries run to tens of megabytes, and reading one whole would
+  /// usually be fine. A bounded window keeps the gate's memory independent of
+  /// whatever the toolchain happens to emit, so an unexpectedly large file
+  /// slows the scan instead of exhausting the process. Skipping large files
+  /// was not an option: this is a privacy gate, and a size cap would be a
+  /// bypass.
+  static const int defaultChunkSize = 4 * 1024 * 1024;
+
+  /// Bytes carried from one window into the next so a path straddling the
+  /// boundary is still seen whole.
+  ///
+  /// The longest match is a drive prefix, the `Users` segment, and a
+  /// 64-character account: under 80 bytes as Latin-1 and under 160 as
+  /// UTF-16LE. 256 covers both with room to spare.
+  static const int _overlap = 256;
+
+  /// Bytes read per pass; see [defaultChunkSize].
+  final int chunkSize;
 
   /// Account names that belong to the operating system rather than a person.
   static const _impersonalAccounts = {
@@ -34,9 +56,26 @@ class BuildHostPathScanner {
     'shared',
   };
 
+  /// Mach-O magic numbers, read big-endian from the first four bytes.
+  ///
+  /// Mach-O writes its magic in the file's own byte order, so every header is
+  /// listed in both orders: the thin 32- and 64-bit headers, and the fat
+  /// header in its 32- and 64-bit forms. A fat header is defined as
+  /// big-endian, so its swapped forms should never occur on disk, but listing
+  /// them costs nothing and a miss here skips the file silently.
+  static const _machOMagic = <int>{
+    0xFEEDFACE, 0xCEFAEDFE, // MH_MAGIC, MH_CIGAM
+    0xFEEDFACF, 0xCFFAEDFE, // MH_MAGIC_64, MH_CIGAM_64
+    0xCAFEBABE, 0xBEBAFECA, // FAT_MAGIC, FAT_CIGAM
+    0xCAFEBABF, 0xBFBAFECA, // FAT_MAGIC_64, FAT_CIGAM_64
+  };
+
   static final List<RegExp> _homeDirectoryPatterns = <RegExp>[
     // C:\Users\name  /  c:/users/name
-    RegExp(r'[A-Za-z]:[\\/]Users[\\/]([A-Za-z0-9._\- ]{1,64})', caseSensitive: false),
+    RegExp(
+      r'[A-Za-z]:[\\/]Users[\\/]([A-Za-z0-9._\- ]{1,64})',
+      caseSensitive: false,
+    ),
     // /home/name/
     RegExp(r'/home/([A-Za-z0-9._\-]{1,64})/'),
     // /Users/name/ (macOS)
@@ -96,10 +135,9 @@ class BuildHostPathScanner {
           header[3] == 0x46) {
         return true;
       }
-      // Mach-O, both endiannesses and the fat header.
-      const machO = <int>[0xFEEDFACF, 0xCFFAEDFE, 0xFEEDFACE, 0xCEFAEDFE, 0xCAFEBABE];
-      final magic = (header[0] << 24) | (header[1] << 16) | (header[2] << 8) | header[3];
-      return machO.contains(magic);
+      final magic =
+          (header[0] << 24) | (header[1] << 16) | (header[2] << 8) | header[3];
+      return _machOMagic.contains(magic);
     } on FileSystemException {
       return false;
     } finally {
@@ -107,22 +145,49 @@ class BuildHostPathScanner {
     }
   }
 
+  /// Walks the file in [chunkSize] windows, each prefixed with the tail of the
+  /// previous one, and returns the first match.
   String? _scan(File file) {
-    final Uint8List bytes;
+    RandomAccessFile? handle;
     try {
-      bytes = file.readAsBytesSync();
+      handle = file.openSync();
+      var carry = Uint8List(0);
+      while (true) {
+        final read = handle.readSync(chunkSize);
+        if (read.isEmpty) return null;
+        final Uint8List window;
+        if (carry.isEmpty) {
+          window = read;
+        } else {
+          window = Uint8List(carry.length + read.length)
+            ..setRange(0, carry.length, carry)
+            ..setRange(carry.length, carry.length + read.length, read);
+        }
+        final finding = _scanWindow(window);
+        if (finding != null) return finding;
+        carry = window.length > _overlap
+            ? window.sublist(window.length - _overlap)
+            : window;
+      }
     } on FileSystemException {
       return null;
+    } finally {
+      handle?.closeSync();
     }
-    // Latin-1 keeps a 1:1 byte-to-code-unit mapping, so offsets stay honest and
-    // no byte sequence is lost to replacement characters.
+  }
+
+  String? _scanWindow(Uint8List bytes) {
+    // Latin-1 keeps a 1:1 byte-to-code-unit mapping, so no byte sequence is
+    // lost to replacement characters.
     final raw = String.fromCharCodes(bytes);
     final finding = _match(raw);
     if (finding != null) return finding;
     // PE resources and some toolchains store paths as UTF-16LE; dropping NULs
-    // exposes those to the same patterns without a second full decode pass.
-    final widened = raw.replaceAll('\u0000', '');
-    return identical(widened, raw) ? null : _match(widened);
+    // exposes those to the same patterns without a second decode. Nearly every
+    // binary contains NULs, so this pass is the rule rather than the
+    // exception; the check only spares an all-text window the extra work.
+    if (!bytes.contains(0)) return null;
+    return _match(raw.replaceAll('\u0000', ''));
   }
 
   String? _match(String haystack) {

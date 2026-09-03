@@ -116,16 +116,18 @@ either is missed:
 
 ```powershell
 subst T: C:\path\to\TopiaForge
+Push-Location                         # remember where you were, so a failure still returns here
 try {
-    Push-Location T:\apps\topiaforge_launcher_flutter
+    Set-Location T:\apps\topiaforge_launcher_flutter
     flutter clean                     # stale C:-path objects otherwise fail MSB8028
     flutter build windows --release --dart-define=TOPIAFORGE_PRODUCT_VERSION=<version>
-    Pop-Location
-    Push-Location T:\apps\topiaforge_cli
+    Set-Location T:\apps\topiaforge_cli
     dart compile exe bin/topiaforge.dart -o <staging>\topiaforge.exe
-    Pop-Location
 }
-finally { subst T: /D }
+finally {
+    Pop-Location                      # leave T: before removing it, or the shell is stranded
+    subst T: /D
+}
 ```
 
 `flutter clean` is not optional: a `build/` directory left from a `C:`-path
