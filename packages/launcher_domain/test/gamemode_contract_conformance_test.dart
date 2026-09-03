@@ -158,6 +158,18 @@ void main() {
         ((expected['errorCodes'] as List?) ?? const []).cast<String>().toSet(),
         reason: '$path: ${actual.detail}',
       );
+      final normalized = expected['normalized'] as Map<String, Object?>?;
+      if (normalized != null) {
+        final digest = declarationDigest(body);
+        for (final kind in const ['worlds', 'gamemodes', 'launchTargets']) {
+          expect(
+            digest[kind],
+            (normalized[kind]! as List).cast<String>(),
+            reason:
+                '$path: $kind parsed differently from what the fixture pins',
+          );
+        }
+      }
       executed[channel] = (executed[channel] ?? 0) + 1;
     }
 
@@ -197,6 +209,9 @@ ConformanceOutcome _execute(
       return runLaunchIntentRoundTrip(body);
     case 'launch-intent-hostile':
       return runLaunchIntentHostile(body);
+    case 'manifest-accepts':
+    case 'manifest-rejects':
+      return runManifest(body);
     default:
       fail(
         '$path has kind "$kind", which the Dart conformance runner does '

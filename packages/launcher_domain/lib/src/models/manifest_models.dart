@@ -38,6 +38,7 @@ class ModManifest {
     this.contentTargets = const [],
     this.builtWith,
     this.worldGamemodes = const [],
+    this.contributions,
     this.apiAssemblies = const [],
     this.multiplayer,
     bool? multiplayerIsPresent,
@@ -51,7 +52,20 @@ class ModManifest {
   static const canonicalSchemaUrl =
       'https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json';
   static const manifestV5SchemaVersion = 5;
+
+  /// The schema that declares `contributions`: worlds, gamemodes and launch
+  /// targets as separate things, each with an implementation owner, rather than
+  /// V5's display-only `worldGamemodes` list.
+  static const manifestV6SchemaVersion = 6;
   static const currentSchemaVersion = manifestV5SchemaVersion;
+
+  /// Whether a version has a reader at all. Every version gate routes through
+  /// here, so admitting a new schema cannot leave one of them behind still
+  /// testing for a single version. A gate that silently stops applying is worse
+  /// than one that rejects.
+  static bool isSupportedSchemaVersion(int schemaVersion) =>
+      schemaVersion == manifestV5SchemaVersion ||
+      schemaVersion == manifestV6SchemaVersion;
 
   static bool isValidId(String id) {
     if (!_modIdPattern.hasMatch(id)) {
@@ -97,6 +111,10 @@ class ModManifest {
   final List<String> contentTargets;
   final ModBuildMetadata? builtWith;
   final List<GamemodeDefinition> worldGamemodes;
+
+  /// The worlds, gamemodes and launch targets this package declares. V6 only;
+  /// null on a V5 manifest, which had no way to express any of them.
+  final ModContributions? contributions;
   final List<String> apiAssemblies;
 
   /// Optional multiplayer admission metadata. Its absence means the mod is
@@ -124,6 +142,8 @@ class ModManifest {
     switch (_dispatchManifestSchema(json)) {
       case _ManifestSchemaContract.v5:
         return _readV5Manifest(json);
+      case _ManifestSchemaContract.v6:
+        return _readV6Manifest(json);
     }
   }
 
@@ -170,6 +190,8 @@ class ModManifest {
     if (builtWith != null) 'builtWith': builtWith!.toJson(),
     if (worldGamemodes.isNotEmpty)
       'worldGamemodes': worldGamemodes.map((item) => item.toJson()).toList(),
+    if (contributions != null && !contributions!.isEmpty)
+      'contributions': contributions!.toJson(),
     if (apiAssemblies.isNotEmpty) 'apiAssemblies': apiAssemblies,
     if (multiplayerIsPresent && multiplayer != null)
       'multiplayer': multiplayer!.toJson(),
@@ -185,11 +207,11 @@ class ModManifest {
         ),
       ];
     }
-    if (schemaVersion != manifestV5SchemaVersion) {
+    if (!isSupportedSchemaVersion(schemaVersion)) {
       return const [
         LauncherIssue(
           severity: IssueSeverity.error,
-          message: 'schemaVersion must be 5.',
+          message: 'schemaVersion must be 5 or 6.',
         ),
       ];
     }
@@ -200,7 +222,11 @@ class ModManifest {
     _validateConflicts(issues);
     _validateOrderHints(issues);
     _validateApiAssemblies(issues);
-    _validateManifestWorldGamemodes(this, issues);
+    if (schemaVersion == manifestV5SchemaVersion) {
+      _validateManifestWorldGamemodes(this, issues);
+    } else {
+      _validateManifestContributions(this, issues);
+    }
     _validateUnsupportedAliases(issues);
     _validateUnknownFields(issues);
     for (final message in _structuralIssues) {
