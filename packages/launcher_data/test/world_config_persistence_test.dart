@@ -78,6 +78,7 @@ void main() {
     final profile =
         jsonDecode(profileFile.readAsStringSync()) as Map<String, Object?>;
     final intent = profile['worldLaunch'] as Map<String, Object?>;
+    expect(intent['command'], WorldSelection.launchTargetCommand);
     expect(
       intent['gamemodeId'],
       'io.github.furroxide.topiaforge.zombies.survival',
@@ -132,10 +133,14 @@ void main() {
         ).listSync().whereType<File>().singleWhere(
           (entry) => p.basename(entry.path).startsWith('launch-profile-'),
         );
+    final profile =
+        jsonDecode(profileFile.readAsStringSync()) as Map<String, Object?>;
     expect(
-      jsonDecode(profileFile.readAsStringSync()) as Map<String, Object?>,
-      isNot(contains('worldLaunch')),
-      reason: 'remembering a world is not asking to launch into it',
+      profile['worldLaunch'],
+      {'command': WorldSelection.mainMenuCommand},
+      reason:
+          'remembering a world is not asking to launch into it, and the '
+          'manager must be told so rather than left to its own memory',
     );
   });
 }

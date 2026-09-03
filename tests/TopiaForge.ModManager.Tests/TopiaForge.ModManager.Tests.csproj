@@ -169,6 +169,7 @@
          reporting that explains a missing main-menu entry point cannot regain a UnityEngine dependency. -->
     <Compile Include="..\..\src\TopiaForge.ModManager\MenuSurfaceCensus.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\WorldLaunchRouter.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\WorldLaunchArming.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\ModServiceRegistry.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\OwnerBoundModServiceRegistry.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\OwnerModLifetime.cs" />

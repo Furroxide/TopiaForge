@@ -46,27 +46,17 @@ namespace TopiaForge.ModManager
 
         /// <summary>
         /// Arms the launcher's one-shot "start this gamemode" instruction, or the remembered selection
-        /// when the player asked for that instead. Mods have all loaded by the time this runs, so every
-        /// gamemode -- including one contributed by a mod that loads after Worlds -- is already registered.
+        /// when the game was started without the launcher. Mods have all loaded by the time this runs,
+        /// so every gamemode -- including one contributed by a mod that loads after Worlds -- is already
+        /// registered. See <see cref="WorldLaunchArming"/> for why "play normally" is a command rather
+        /// than a silence.
         /// </summary>
         private void ArmWorldLaunch()
         {
-            var intent = launchProfile?.WorldLaunch;
+            var intent = WorldLaunchArming.Resolve(launchProfile, state?.WorldLaunch);
             if (intent == null)
             {
-                var remembered = ReadWorldLaunchSettings();
-                if (!remembered.AutoLoadOnStart || string.IsNullOrEmpty(remembered.SelectedGamemodeId))
-                {
-                    return;
-                }
-
-                intent = new WorldLaunchIntent
-                {
-                    WorldId = remembered.SelectedWorldId ?? string.Empty,
-                    GamemodeId = remembered.SelectedGamemodeId,
-                    LoadMode = WorldLaunchSettings.NormalizeLoadMode(remembered.LoadMode),
-                    AllowAdditiveFallback = remembered.AllowAdditiveFallback
-                };
+                return;
             }
 
             pendingWorldLaunch = intent;

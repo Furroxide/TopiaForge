@@ -171,6 +171,12 @@ The None wire omission was reproduced; manager precedence and UI divergence were
 only when there was no launcher command at all. Preserve unavailable saved selections as visible
 errors. Home, Setup, CLI, and the repository must use one domain selection/planning operation.
 
+**Status:** the wire half is done. `worldLaunch` now always carries `command`, and the manager
+applies its remembered selection only when a run supplied no profile at all, so Home's None and
+`--gamemode none` reach the ordinary menu. The rest of this finding stands: an unavailable saved
+selection is still shown as None rather than as an error, and Home and Setup still interpret the
+same dropdown differently.
+
 Sources: [None selection](../apps/topiaforge_launcher_flutter/lib/src/launcher_bloc_actions.dart#L80),
 [wire omission](../packages/launcher_domain/lib/src/models/profile_models.dart#L226),
 [manager fallback](../src/TopiaForge.ModManager/TopiaForgeModManagerPlugin.Gamemodes.cs#L54),

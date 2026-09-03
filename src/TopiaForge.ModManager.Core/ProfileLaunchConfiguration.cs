@@ -36,8 +36,13 @@ namespace TopiaForge.ModManager.Core
             = new Dictionary<string, string>();
 
         /// <summary>
-        /// The gamemode to start for this run, or null to boot the game normally. One-shot, like the
-        /// rest of this profile: it is consumed with the profile file and never becomes durable state.
+        /// What this run should start: a gamemode, or the game's ordinary menu. One-shot, like the rest
+        /// of this profile -- consumed with the profile file, never durable state.
+        /// <para>
+        /// Null means the launcher issued no instruction at all, which is not the same as asking for
+        /// the ordinary menu: the manager has a remembered selection of its own, and only a silence
+        /// leaves it in charge. See <see cref="WorldLaunchIntent"/>.
+        /// </para>
         /// </summary>
         [DataMember(Name = "worldLaunch")]
         public WorldLaunchIntent? WorldLaunch { get; set; }

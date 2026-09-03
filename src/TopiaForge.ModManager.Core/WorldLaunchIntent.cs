@@ -17,13 +17,30 @@ namespace TopiaForge.ModManager.Core
     /// </para>
     /// <para>
     /// The launch profile is the right home for it: already validated, already scoped to the manager's
-    /// staging directory, already consumed exactly once and deleted. Absence of an intent means "boot
-    /// normally", so a profile that carries none behaves exactly as before.
+    /// staging directory, already consumed exactly once and deleted.
+    /// </para>
+    /// <para>
+    /// The instruction is always explicit. "Play normally" is a command in its own right
+    /// (<see cref="MainMenuCommand"/>), not the absence of one, because the manager also has a
+    /// remembered selection of its own and the two need to be distinguishable: starting the game
+    /// directly should honour that memory, while a launcher that asked for the ordinary menu must
+    /// override it. Only a launch with no profile at all leaves the manager's own default in charge.
     /// </para>
     /// </summary>
     [DataContract]
     public sealed class WorldLaunchIntent
     {
+        /// <summary>Start <see cref="GamemodeId"/> for this run.</summary>
+        public const string LaunchTargetCommand = "launch-target";
+
+        /// <summary>Boot to the game's ordinary menu, whatever the manager remembers.</summary>
+        public const string MainMenuCommand = "main-menu";
+
+        [DataMember(Name = "command")]
+        public string Command { get; set; } = LaunchTargetCommand;
+
+        public bool IsMainMenu => Command == MainMenuCommand;
+
         [DataMember(Name = "worldId")]
         public string WorldId { get; set; } = string.Empty;
 
@@ -39,13 +56,33 @@ namespace TopiaForge.ModManager.Core
         public bool PreferSceneReplacement => LoadMode == WorldLaunchSettings.SceneReplacement;
 
         /// <summary>
-        /// The gamemode is the whole point of the intent, so it is required. The world is optional:
-        /// when it is empty the manager falls back to the gamemode's own registered menu entry, which
-        /// knows the world its author intended.
+        /// A launch target needs its gamemode -- that is the whole point of the intent -- and must not
+        /// name a world it cannot use. The world itself is optional: when it is empty the manager falls
+        /// back to the gamemode's own registered menu entry, which knows the world its author intended.
+        /// A main-menu command carries no target at all, so requiring one would reject every ordinary
+        /// launch.
         /// </summary>
         public IReadOnlyList<string> Validate()
         {
             var errors = new List<string>();
+            if (Command != LaunchTargetCommand && Command != MainMenuCommand)
+            {
+                errors.Add("worldLaunch.command must be "
+                    + LaunchTargetCommand + " or " + MainMenuCommand + ".");
+                return errors;
+            }
+
+            if (IsMainMenu)
+            {
+                if (GamemodeId.Length > 0)
+                {
+                    errors.Add("worldLaunch.gamemodeId must be empty for a "
+                        + MainMenuCommand + " command.");
+                }
+
+                return errors;
+            }
+
             if (!ManifestValidator.IsValidId(GamemodeId))
             {
                 errors.Add("worldLaunch.gamemodeId must be a valid TopiaForge id.");
@@ -71,6 +108,7 @@ namespace TopiaForge.ModManager.Core
         [OnDeserializing]
         private void OnDeserializing(StreamingContext context)
         {
+            Command = LaunchTargetCommand;
             WorldId = string.Empty;
             GamemodeId = string.Empty;
             LoadMode = WorldLaunchSettings.AdditiveArena;

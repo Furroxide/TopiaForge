@@ -133,18 +133,31 @@ void _environmentAndWorldModelTests() {
         expect(
           intent.keys.toSet(),
           equals({
+            'command',
             'worldId',
             'gamemodeId',
             'loadMode',
             'allowAdditiveFallback',
           }),
         );
+        expect(intent['command'], WorldSelection.launchTargetCommand);
         expect(intent['worldId'], 'w1');
         expect(intent['gamemodeId'], 'g1');
         expect(intent['loadMode'], 'sceneReplacement');
         expect(intent['allowAdditiveFallback'], isTrue);
       },
     );
+
+    test('play normally is a command, not an omission', () {
+      // The manager remembers a selection of its own. It cannot tell "the launcher said nothing"
+      // from "the launcher asked for the ordinary menu" unless the profile says which.
+      final intent = const WorldSelection(
+        worldId: 'w1',
+        gamemodeId: 'g1',
+      ).toLaunchIntentJson();
+
+      expect(intent, {'command': WorldSelection.mainMenuCommand});
+    });
 
     test('round-trips through toJson and back', () {
       const selection = WorldSelection(

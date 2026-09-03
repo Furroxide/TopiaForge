@@ -14,6 +14,8 @@ namespace TopiaForge.ModManager.Tests
             TestSafeModeIsTemporary();
             TestDartJsonContract();
             TestProfileWithoutWorldLaunchBootsNormally();
+            TestMainMenuCommandCrossesTheWire();
+            TestMainMenuCommandRejectsATarget();
             TestUnsafeWorldLaunchRejected();
             TestRetiredSchemaRejected();
             TestRegistryHonorsSelectedVersion();
@@ -70,7 +72,8 @@ namespace TopiaForge.ModManager.Tests
                 + "\"safeMode\":false,\"inheritManagerModState\":false,"
                 + "\"enabledMods\":[\"alpha.mod\"],"
                 + "\"selectedVersions\":{\"alpha.mod\":\"1.2.3\"},"
-                + "\"worldLaunch\":{\"worldId\":\"a.b.world\",\"gamemodeId\":\"a.b.mode\","
+                + "\"worldLaunch\":{\"command\":\"launch-target\","
+                + "\"worldId\":\"a.b.world\",\"gamemodeId\":\"a.b.mode\","
                 + "\"loadMode\":\"sceneReplacement\",\"allowAdditiveFallback\":false},"
                 + "\"futureField\":{\"preservedByLauncher\":true}}";
             var profile = JsonUtil.Deserialize<ProfileLaunchConfiguration>(json);
@@ -83,11 +86,49 @@ namespace TopiaForge.ModManager.Tests
                 "the world and gamemode ids must deserialize");
             Assert(profile.WorldLaunch.PreferSceneReplacement && !profile.WorldLaunch.AllowAdditiveFallback,
                 "the load-mode preferences must deserialize");
+            Assert(!profile.WorldLaunch.IsMainMenu, "a launch-target command is not an ordinary boot");
         }
 
         /// <summary>
-        /// Absence is the "boot normally" signal, so a profile that carries no intent must stay valid.
-        /// This is what keeps an ordinary Launch — and the acceptance harness — on the game's own menu.
+        /// The launcher says "play normally" out loud. It has to: the manager remembers a selection of
+        /// its own, and cannot tell an absent instruction from a request for the ordinary menu.
+        /// </summary>
+        private static void TestMainMenuCommandCrossesTheWire()
+        {
+            const string json = "{\"schemaVersion\":3,\"profileId\":\"dart\","
+                + "\"safeMode\":false,\"inheritManagerModState\":true,"
+                + "\"enabledMods\":[],\"selectedVersions\":{},"
+                + "\"worldLaunch\":{\"command\":\"main-menu\"}}";
+            var profile = JsonUtil.Deserialize<ProfileLaunchConfiguration>(json);
+
+            Assert(profile.Validate().Count == 0,
+                "a main-menu command carries no target, so demanding one would reject every ordinary launch");
+            Assert(profile.WorldLaunch != null && profile.WorldLaunch!.IsMainMenu,
+                "the ordinary-boot command must survive the crossing");
+        }
+
+        /// <summary>A main-menu command must not smuggle a target past the empty-gamemode rule.</summary>
+        private static void TestMainMenuCommandRejectsATarget()
+        {
+            var profile = new ProfileLaunchConfiguration
+            {
+                SchemaVersion = ProfileLaunchConfiguration.CurrentSchemaVersion,
+                ProfileId = "contradictory",
+                InheritManagerModState = true,
+                WorldLaunch = new WorldLaunchIntent
+                {
+                    Command = WorldLaunchIntent.MainMenuCommand,
+                    GamemodeId = "a.b.mode"
+                }
+            };
+
+            Assert(profile.Validate().Any(error => error.Contains("worldLaunch.gamemodeId")),
+                "asking for the menu and for a gamemode at once is not a launch anyone meant");
+        }
+
+        /// <summary>
+        /// A profile from a launcher that predates the command must stay valid: it expressed no
+        /// instruction either way, and the manager falls back to its own remembered selection.
         /// </summary>
         private static void TestProfileWithoutWorldLaunchBootsNormally()
         {
@@ -97,7 +138,7 @@ namespace TopiaForge.ModManager.Tests
             var profile = JsonUtil.Deserialize<ProfileLaunchConfiguration>(json);
 
             Assert(profile.Validate().Count == 0, "a profile with no launch intent is valid");
-            Assert(profile.WorldLaunch == null, "no intent means boot to the game's own menu");
+            Assert(profile.WorldLaunch == null, "an older launcher issues no instruction at all");
         }
 
         /// <summary>An intent naming an unsafe id must be refused rather than reaching the world service.</summary>

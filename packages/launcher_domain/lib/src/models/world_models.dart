@@ -176,15 +176,28 @@ class WorldSelection {
     'launchIntoGamemode': launchIntoGamemode,
   };
 
+  /// Start this game mode for one run.
+  static const launchTargetCommand = 'launch-target';
+
+  /// Boot to the game's own menu for one run, whatever the manager remembers.
+  static const mainMenuCommand = 'main-menu';
+
   /// The one-shot instruction carried on the launch profile. The launcher no longer writes into the
   /// Worlds mod's own config file at all: that file belongs to the mod, and two writers merging into
   /// one document is exactly what used to discard the player's choice without a trace.
-  Map<String, Object?> toLaunchIntentJson() => {
-    'worldId': worldId,
-    'gamemodeId': gamemodeId,
-    'loadMode': loadMode,
-    'allowAdditiveFallback': true,
-  };
+  ///
+  /// "Play normally" is sent as a command rather than as silence. The manager also remembers a
+  /// selection, edited from its in-game overlay, and it cannot tell "the launcher said nothing" from
+  /// "the launcher asked for the ordinary menu" unless we say which one we mean.
+  Map<String, Object?> toLaunchIntentJson() => launchIntoGamemode
+      ? {
+          'command': launchTargetCommand,
+          'worldId': worldId,
+          'gamemodeId': gamemodeId,
+          'loadMode': loadMode,
+          'allowAdditiveFallback': true,
+        }
+      : {'command': mainMenuCommand};
 
   WorldSelection copyWith({
     String? worldId,

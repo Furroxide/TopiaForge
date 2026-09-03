@@ -41,10 +41,14 @@ void main() {
         ),
       );
       // Remembering a selection is not the same as asking to launch into it. Every profile that
-      // predates the Home picker remembers one, and every one of them must still boot to the menu.
+      // predates the Home picker remembers one, and every one of them must still boot to the menu --
+      // and must say so, because the manager has a remembered selection of its own that an omission
+      // would leave in charge.
       expect(
-        ProfileLaunchConfiguration.fromProfile(remembered).toJson(),
-        isNot(contains('worldLaunch')),
+        ProfileLaunchConfiguration.fromProfile(
+          remembered,
+        ).toJson()['worldLaunch'],
+        {'command': WorldSelection.mainMenuCommand},
       );
 
       final launching = remembered.copyWith(
@@ -65,6 +69,7 @@ void main() {
         intent['worldId'],
         'io.github.furroxide.topiaforge.worlds.open_sandbox',
       );
+      expect(intent['command'], WorldSelection.launchTargetCommand);
     });
 
     test('distinguishes exact empty profiles from manager inheritance', () {

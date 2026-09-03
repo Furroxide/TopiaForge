@@ -156,7 +156,7 @@ class ProfileLaunchConfiguration {
   final Set<String> enabledMods;
   final Map<String, String> selectedVersions;
 
-  /// The gamemode to start for this run, or null to boot the game normally.
+  /// What this run should start: the chosen game mode, or the game's ordinary menu.
   ///
   /// This rides the launch profile because the profile is the only channel that actually reaches the
   /// runtime: it is validated, written into the manager's staging directory, read once and deleted.
@@ -164,7 +164,11 @@ class ProfileLaunchConfiguration {
   /// because that document is a `{schemaVersion, value}` envelope owned by the mod and the launcher
   /// wrote its keys beside `value` rather than inside it. The mod never read them and its next save
   /// deleted them, so every gamemode the player picked was silently thrown away.
-  final WorldSelection? worldLaunch;
+  ///
+  /// Always present. The manager remembers a selection of its own, so an omitted instruction means
+  /// "started without the launcher, use what you remember" — which is not what a player who picked
+  /// None on Home asked for.
+  final WorldSelection worldLaunch;
 
   factory ProfileLaunchConfiguration.fromProfile(LauncherProfile profile) {
     final profileId = profile.id;
@@ -222,9 +226,7 @@ class ProfileLaunchConfiguration {
       selectedVersions: Map.unmodifiable({
         for (final entry in selectedEntries) entry.key: entry.value,
       }),
-      // Only an explicit "launch into this gamemode" becomes an intent. A profile that merely remembers
-      // a world keeps booting to the game's own menu, which is what every existing profile does.
-      worldLaunch: selection.launchIntoGamemode ? selection : null,
+      worldLaunch: selection,
     );
   }
 
@@ -235,7 +237,7 @@ class ProfileLaunchConfiguration {
     'inheritManagerModState': inheritManagerModState,
     'enabledMods': enabledMods.toList(growable: false),
     'selectedVersions': selectedVersions,
-    if (worldLaunch != null) 'worldLaunch': worldLaunch!.toLaunchIntentJson(),
+    'worldLaunch': worldLaunch.toLaunchIntentJson(),
   };
 
   static int _compareModIds(String left, String right) {
