@@ -48,7 +48,12 @@ CHANNEL_RUNNERS = {
 # failing default, so a kind added here without teaching both runners fails the
 # harness rather than skipping.
 KNOWN_KINDS = {
-    "serialization": {"launch-intent-round-trip", "launch-intent-hostile"},
+    "serialization": {
+        "launch-intent-round-trip",
+        "launch-intent-hostile",
+        "manifest-accepts",
+        "manifest-rejects",
+    },
     "schema": set(),
     "resolution": set(),
 }

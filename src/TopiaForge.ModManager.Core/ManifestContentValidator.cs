@@ -27,7 +27,7 @@ namespace TopiaForge.ModManager.Core
 
             var errors = new List<string>();
             var synchronizedFiles = manifest.Multiplayer?.SynchronizedFiles ?? new List<string>();
-            if (manifest.SchemaVersion != ModManifest.CurrentSchemaVersion ||
+            if (!ModManifest.IsSupportedSchemaVersion(manifest.SchemaVersion) ||
                 !string.Equals(
                     manifest.Multiplayer?.Mode,
                     ModMultiplayerMetadata.SessionMode,

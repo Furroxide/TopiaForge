@@ -31,7 +31,8 @@ namespace TopiaForge.ModManager.Tests
 
         private static readonly HashSet<string> CaseFields = new HashSet<string>(StringComparer.Ordinal)
         {
-            "id", "channel", "kind", "summary", "selection", "intent", "expect", "divergenceReason"
+            "id", "channel", "kind", "summary", "selection", "intent", "manifest", "expect",
+            "divergenceReason"
         };
         private static readonly HashSet<string> OutcomeFields = new HashSet<string>(StringComparer.Ordinal)
         {
@@ -168,6 +169,10 @@ namespace TopiaForge.ModManager.Tests
                 case "launch-intent-hostile":
                     ExecuteLaunchIntent(indexed, body, expectation);
                     break;
+                case "manifest-accepts":
+                case "manifest-rejects":
+                    ExecuteManifest(indexed, body, expectation);
+                    break;
                 default:
                     // Deliberately fatal. A kind this runner does not know must fail the build rather
                     // than fall through as a pass, which is how a fixture becomes decorative.
@@ -274,11 +279,88 @@ namespace TopiaForge.ModManager.Tests
         }
 
         /// <summary>
+        /// Reads a whole manifest exactly as the installer does, and compares both the verdict and a
+        /// digest of what was parsed. The digest is the point: the older corpus mechanism compares only
+        /// accept/reject, so both readers can agree a manifest is fine while disagreeing about what it
+        /// said -- which for an absent flag against an explicit false is a silent behaviour change.
+        /// </summary>
+        private static void ExecuteManifest(
+            IndexedCase indexed,
+            JsonElement body,
+            Expectation expected)
+        {
+            var accepted = false;
+            var codes = new SortedSet<string>(StringComparer.Ordinal);
+            ModManifest? manifest = null;
+            try
+            {
+                manifest = ModManifestJson.Deserialize(body.GetProperty("manifest").GetRawText());
+                var errors = ManifestValidator.Validate(manifest);
+                accepted = errors.Count == 0;
+                foreach (var error in errors)
+                {
+                    codes.Add(FieldNamedBy(error));
+                }
+            }
+            catch (InvalidDataException exception)
+            {
+                codes.Add(FieldNamedBy(exception.Message));
+            }
+            catch (FormatException exception)
+            {
+                codes.Add(FieldNamedBy(exception.Message));
+            }
+
+            Assert(
+                accepted == expected.Accepted,
+                indexed.Path + ": the manifest reader " + (accepted ? "accepted" : "rejected") +
+                " a fixture expecting " + (expected.Accepted ? "accept" : "reject") +
+                (codes.Count == 0 ? "." : "; it named [" + string.Join(", ", codes) + "]."));
+            Assert(
+                codes.SetEquals(expected.ErrorCodes),
+                indexed.Path + ": expected error codes [" + string.Join(", ", expected.ErrorCodes) +
+                "] but the reader named [" + string.Join(", ", codes) + "].");
+
+            if (!accepted)
+            {
+                return;
+            }
+
+            var actual = DeclarationDigest.Of(manifest!);
+            var declared = body.GetProperty("expect").GetProperty(RunnerName).GetProperty("normalized");
+            foreach (var kind in DeclarationDigest.Kinds)
+            {
+                var expectedLines = declared.GetProperty(kind).EnumerateArray()
+                    .Select(item => item.GetString() ?? string.Empty)
+                    .ToList();
+                Assert(
+                    actual[kind].SequenceEqual(expectedLines, StringComparer.Ordinal),
+                    indexed.Path + ": " + kind + " parsed as [" + string.Join("; ", actual[kind]) +
+                    "] but the fixture expects [" + string.Join("; ", expectedLines) + "].");
+            }
+        }
+
+        /// <summary>
         /// Every launch-intent complaint opens with the field it is about, so the leading token is a
         /// stable code without inventing a second vocabulary the messages could drift from.
         /// </summary>
         private static string FieldNamedBy(string error)
         {
+            // Reader messages name the field in quotes ("Manifest field 'x' ..."); validator messages
+            // open with it ("schemaVersion must be ..."). Both give the same answer -- the field the
+            // complaint is about -- without a second vocabulary to keep in step with the prose.
+            var open = error.StartsWith("Manifest field ", StringComparison.Ordinal)
+                ? error.IndexOf('\'')
+                : -1;
+            if (open >= 0)
+            {
+                var close = error.IndexOf('\'', open + 1);
+                if (close > open + 1)
+                {
+                    return error.Substring(open + 1, close - open - 1);
+                }
+            }
+
             var space = error.IndexOf(' ');
             return space > 0 ? error.Substring(0, space) : error;
         }

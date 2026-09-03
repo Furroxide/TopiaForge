@@ -428,7 +428,7 @@ namespace TopiaForge.ModManager.Tests
             }
 
             var result = new PackageInstaller().Install(package, paths, new ManagerState(), restartRequired: false);
-            Assert(!result.Ok && result.Errors.Any(e => e.Contains("schemaVersion 5 is required")),
+            Assert(!result.Ok && result.Errors.Any(e => e.Contains("schemaVersion 5 or 6 is required")),
                 "schema v1 should be rejected without being reinterpreted");
         }
 

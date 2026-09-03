@@ -4,11 +4,12 @@ namespace TopiaForge.ModManager.Core
 {
     /// <summary>
     /// Selects an immutable manifest contract before any version-specific field is interpreted. Adding a future
-    /// schema means adding a new enum value, reader branch, and validator; it must never widen the V5 branch.
+    /// schema means adding a new enum value, reader branch, and validator; it must never widen an existing branch.
     /// </summary>
     internal enum ManifestSchemaContract
     {
-        V5 = ModManifest.ManifestV5SchemaVersion
+        V5 = ModManifest.ManifestV5SchemaVersion,
+        V6 = ModManifest.ManifestV6SchemaVersion
     }
 
     internal static class ManifestSchemaDispatch
@@ -28,8 +29,13 @@ namespace TopiaForge.ModManager.Core
                 return ManifestSchemaContract.V5;
             }
 
+            if (schemaVersion == ModManifest.ManifestV6SchemaVersion)
+            {
+                return ManifestSchemaContract.V6;
+            }
+
             throw new InvalidDataException(
-                "Unsupported manifest schemaVersion " + schemaVersion + "; schemaVersion 5 is required.");
+                "Unsupported manifest schemaVersion " + schemaVersion + "; schemaVersion 5 or 6 is required.");
         }
     }
 }

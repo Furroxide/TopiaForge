@@ -1,6 +1,6 @@
 part of '../models.dart';
 
-enum _ManifestSchemaContract { v5 }
+enum _ManifestSchemaContract { v5, v6 }
 
 _ManifestSchemaContract _dispatchManifestSchema(Map<String, Object?> json) {
   if (!json.containsKey('schemaVersion')) {
@@ -25,10 +25,12 @@ _ManifestSchemaContract _dispatchManifestSchema(Map<String, Object?> json) {
   switch (schemaVersion) {
     case ModManifest.manifestV5SchemaVersion:
       return _ManifestSchemaContract.v5;
+    case ModManifest.manifestV6SchemaVersion:
+      return _ManifestSchemaContract.v6;
     default:
       throw FormatException(
         'Unsupported manifest schemaVersion $schemaVersion; schemaVersion 5 '
-        'is required.',
+        'or 6 is required.',
       );
   }
 }
