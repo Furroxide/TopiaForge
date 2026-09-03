@@ -201,7 +201,11 @@ bool _isValidDeclarationId(String id) {
       return false;
     }
   }
-  return true;
+  // A declaration id is namespaced under its own package, but a cross-package
+  // reference is not, so the retired-ecosystem rule applies here as well as to
+  // package names.
+  final normalized = id.toLowerCase();
+  return !_retiredEcosystemIdPrefixes.any(normalized.startsWith);
 }
 
 bool _isValidTypeName(String type) {

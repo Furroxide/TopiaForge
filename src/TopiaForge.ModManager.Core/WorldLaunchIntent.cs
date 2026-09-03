@@ -83,14 +83,18 @@ namespace TopiaForge.ModManager.Core
                 return errors;
             }
 
-            if (!ManifestValidator.IsValidId(GamemodeId))
+            // Declaration ids, not package ids: a launch target is namespaced under its package, so
+            // it uses the wider 96-character grammar. Validating at the package width here would
+            // reject a target the manifest contract calls legal.
+            if (!ManifestContributionValidator.IsValidDeclarationId(GamemodeId))
             {
-                errors.Add("worldLaunch.gamemodeId must be a valid TopiaForge id.");
+                errors.Add("worldLaunch.gamemodeId must be a valid TopiaForge declaration id.");
             }
 
-            if (!string.IsNullOrEmpty(WorldId) && !ManifestValidator.IsValidId(WorldId))
+            if (!string.IsNullOrEmpty(WorldId)
+                && !ManifestContributionValidator.IsValidDeclarationId(WorldId))
             {
-                errors.Add("worldLaunch.worldId must be a valid TopiaForge id when present.");
+                errors.Add("worldLaunch.worldId must be a valid TopiaForge declaration id when present.");
             }
 
             if (LoadMode != WorldLaunchSettings.AdditiveArena
