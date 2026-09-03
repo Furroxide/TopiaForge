@@ -32,7 +32,7 @@ void main() {
         for (final mode in const ['client-local', 'server-only']) {
           final manifest = ModManifest.fromJson({
             ..._manifest(),
-            'schemaVersion': 5,
+            'schemaVersion': ModManifest.currentSchemaVersion,
             'multiplayer': {'mode': mode},
           });
 
@@ -46,7 +46,7 @@ void main() {
     test('rejects session-only fields on non-session modes', () {
       final manifest = ModManifest.fromJson({
         ..._manifest(),
-        'schemaVersion': 5,
+        'schemaVersion': ModManifest.currentSchemaVersion,
         'multiplayer': {
           'mode': 'client-local',
           'presence': 'optional',
@@ -61,7 +61,7 @@ void main() {
     test('round-trips a complete session declaration', () {
       final manifest = ModManifest.fromJson({
         ..._manifest(),
-        'schemaVersion': 5,
+        'schemaVersion': ModManifest.currentSchemaVersion,
         'multiplayer': {
           'mode': 'session',
           'presence': 'required',
@@ -87,7 +87,7 @@ void main() {
     test('allows exact protocol matching by omitting the peer range', () {
       final manifest = ModManifest.fromJson({
         ..._manifest(),
-        'schemaVersion': 5,
+        'schemaVersion': ModManifest.currentSchemaVersion,
         'multiplayer': {
           'mode': 'session',
           'presence': 'optional',
@@ -105,7 +105,7 @@ void main() {
     test('rejects malformed protocols and synchronized paths', () {
       final manifest = ModManifest.fromJson({
         ..._manifest(),
-        'schemaVersion': 5,
+        'schemaVersion': ModManifest.currentSchemaVersion,
         'multiplayer': {
           'mode': 'session',
           'presence': 'sometimes',
@@ -152,7 +152,7 @@ void main() {
 }
 
 Map<String, Object?> _manifest() => {
-  'schemaVersion': 5,
+  'schemaVersion': ModManifest.currentSchemaVersion,
   'name': 'sample.multiplayer',
   'displayName': 'Sample Multiplayer',
   'version': '1.0.0',

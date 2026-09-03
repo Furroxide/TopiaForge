@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:launcher_data/launcher_data.dart';
+import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
@@ -108,7 +109,7 @@ class _Fixture {
         ArchiveFile.string(
           'topiaforge.mod.json',
           jsonEncode({
-            'schemaVersion': 5,
+            'schemaVersion': ModManifest.currentSchemaVersion,
             'name': id,
             'displayName': id,
             'version': '1.0.0',

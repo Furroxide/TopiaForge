@@ -351,7 +351,7 @@ ModManifest _manifest(
   List<String> capabilities = const [],
 }) {
   return ModManifest(
-    schemaVersion: 5,
+    schemaVersion: ModManifest.currentSchemaVersion,
     id: id,
     name: id,
     version: version,

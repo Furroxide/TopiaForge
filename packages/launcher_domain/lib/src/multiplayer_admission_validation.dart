@@ -86,7 +86,7 @@ bool _validateManifestForAdmission(
 ) {
   final errors = <String>[];
   if (!ModManifest.isSupportedSchemaVersion(manifest.schemaVersion)) {
-    errors.add('schemaVersion must be 5 or 6');
+    errors.add('schemaVersion must be 6');
   } else if (SemanticVersion.tryParse(manifest.version) == null) {
     errors.add('package version must be an exact semantic version');
   }

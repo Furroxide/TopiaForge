@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 6,
+  "name": "fixtures.v5-missing-protocol",
+  "displayName": "Invalid V5 Protocol Fixture",
+  "version": "1.0.0",
+  "author": {
+    "name": "TopiaForge Tests"
+  },
+  "entryAssembly": "Fixture.dll",
+  "entryType": "Fixtures.InvalidMod",
+  "supportedGameVersionRange": "*",
+  "supportedLoaderVersionRange": "*",
+  "supportedSdkVersionRange": "*",
+  "multiplayer": {
+    "mode": "session",
+    "presence": "required"
+  }
+}

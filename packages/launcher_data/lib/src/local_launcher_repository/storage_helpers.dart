@@ -249,48 +249,13 @@ extension _StorageHelpers on LocalLauncherRepository {
       }
     }
 
-    return _mergeManifestGamemodes(catalog, installedMods, registryMods);
-  }
-
-  WorldCatalog _mergeManifestGamemodes(
-    WorldCatalog catalog,
-    List<InstalledMod> installedMods,
-    List<RegistryMod> registryMods,
-  ) {
-    final gamemodes = [...catalog.gamemodes];
-    final seen = {for (final gamemode in gamemodes) gamemode.id.toLowerCase()};
-    final installedIds = {
-      for (final mod in installedMods.where((mod) => mod.enabled))
-        mod.id.toLowerCase(),
-    };
-
-    for (final mod in installedMods.where((mod) => mod.enabled)) {
-      for (final gamemode in mod.manifest?.worldGamemodes ?? const []) {
-        if (ModManifest.isValidId(gamemode.id) &&
-            gamemode.name.trim().isNotEmpty &&
-            seen.add(gamemode.id.toLowerCase())) {
-          gamemodes.add(gamemode);
-        }
-      }
-    }
-
-    for (final mod in registryMods.where(
-      (mod) => installedIds.contains(mod.manifest.id.toLowerCase()),
-    )) {
-      for (final gamemode in mod.manifest.worldGamemodes) {
-        if (ModManifest.isValidId(gamemode.id) &&
-            gamemode.name.trim().isNotEmpty &&
-            seen.add(gamemode.id.toLowerCase())) {
-          gamemodes.add(gamemode);
-        }
-      }
-    }
-
-    return WorldCatalog(
-      worlds: catalog.worlds,
-      gamemodes: gamemodes,
-      menuEntries: catalog.menuEntries,
-    );
+    // The catalog is what the game reported, and that is all it is. This used to
+    // be merged with every enabled manifest's worldGamemodes list, which meant a
+    // gamemode appeared in the launcher because some package mentioned it -- not
+    // because anything could run it. A declaration now names its implementation,
+    // so a launch surface the runtime cannot honour is a resolution failure the
+    // player can be told about rather than a menu entry that does nothing.
+    return catalog;
   }
 }
 

@@ -28,9 +28,12 @@ extension _TopiaForgeManifestMigrationCommands on _TopiaForgeCli {
       );
       return 0;
     }
+    if (schemaVersion == ModManifest.manifestV5SchemaVersion) {
+      return _migrateV5(args, file, projectPath, map);
+    }
     if (schemaVersion != 3 && schemaVersion != 4) {
       throw StateError(
-        'Only schema V3 or retired V4 manifests can be migrated; found ${schemaVersion ?? 'no schemaVersion'}.',
+        'Only schema V3, V4 or V5 manifests can be migrated; found ${schemaVersion ?? 'no schemaVersion'}.',
       );
     }
 
@@ -156,6 +159,135 @@ extension _TopiaForgeManifestMigrationCommands on _TopiaForgeCli {
       'Review any compatibility range defaulted to * before publishing.',
     );
     return 0;
+  }
+
+  /// Migrates a V5 manifest, and refuses when the parts only an author knows are
+  /// missing.
+  ///
+  /// Everything mechanical is carried: the version, the schema URL, every other
+  /// field byte for byte, and `world-service` added to capabilities because a
+  /// package that declares a launch surface owns world content at runtime.
+  ///
+  /// What it will not do is invent the rest. A V6 gamemode names the type that
+  /// implements it, the worlds it can run in, and the target a player picks. A V5
+  /// manifest records none of those: `entryType` is the mod class, not the
+  /// factory; the world a gamemode started in lived in runtime configuration a
+  /// player could edit; and the launch entry existed only in C#. A tool that
+  /// guessed would produce a manifest that validates and then fails at first
+  /// launch, which is worse than one that refuses and says what is missing.
+  Future<int> _migrateV5(
+    List<String> args,
+    File file,
+    String projectPath,
+    Map<String, Object?> map,
+  ) async {
+    final retired = _jsonMapList(map['worldGamemodes']);
+    final stub = args.contains('--stub');
+
+    map
+      ..remove('worldGamemodes')
+      ..['schemaVersion'] = ModManifest.currentSchemaVersion
+      ..[r'$schema'] = ModManifest.canonicalSchemaUrl;
+
+    if (retired.isEmpty) {
+      final migrated = ModManifest.fromJson(map);
+      final issues = migrated.validate();
+      if (issues.any((issue) => issue.isBlocking)) {
+        stderr.writeln('The V5 manifest could not be migrated automatically:');
+        _printIssues(issues);
+        return 1;
+      }
+      await developerRepository.updateModManifest(projectPath, migrated);
+      stdout.writeln(
+        'Migrated topiaforge.mod.json from schema V5 to '
+        'V${ModManifest.currentSchemaVersion}. It declared no gamemodes, so '
+        'there was nothing that needed a human decision.',
+      );
+      return 0;
+    }
+
+    final capabilities = <String>{
+      ..._jsonStringList(map['capabilities']),
+      'world-service',
+    };
+    map['capabilities'] = capabilities.toList()..sort();
+
+    stderr.writeln(
+      'topiaforge.mod.json declares ${retired.length} '
+      '${retired.length == 1 ? 'gamemode' : 'gamemodes'} that cannot be '
+      'migrated automatically. Schema V${ModManifest.currentSchemaVersion} '
+      'needs facts the V5 manifest never recorded:',
+    );
+    for (final gamemode in retired) {
+      final id = gamemode['id']?.toString() ?? '(no id)';
+      stderr.writeln('  $id');
+      stderr.writeln(
+        '    - implementation.type: the class implementing IGamemodeFactory. '
+        'entryType is the mod, not the gamemode.',
+      );
+      stderr.writeln(
+        '    - a launch target: its id, title, and the world it starts in. The '
+        'world your mod launched into was runtime configuration, not a '
+        'declaration, and TopiaForge will not promote a config default into a '
+        'manifest.',
+      );
+      stderr.writeln(
+        '    - worldRequirements.transitions: which of scene-replacement and '
+        'additive-arena this gamemode can run under.',
+      );
+    }
+
+    if (!stub) {
+      stderr.writeln(
+        'Nothing was written. Re-run with --stub to write the mechanical half '
+        'plus an x-migration-todo block; the result still fails validation on '
+        'purpose, so a half-migrated project cannot be packed by accident.',
+      );
+      return 1;
+    }
+
+    // The skeleton carries the three fields V5 recorded and omits the one it
+    // never had. That is what makes the result genuinely unpublishable rather
+    // than merely incomplete: the reader rejects a gamemode with no
+    // implementation, naming the field, so the normal validation path tells the
+    // author what to write next.
+    map['contributions'] = {
+      'gamemodes': [
+        for (final gamemode in retired)
+          {
+            'id': gamemode['id']?.toString() ?? '',
+            'name': gamemode['name']?.toString() ?? '',
+            if (gamemode['description'] != null)
+              'description': gamemode['description'].toString(),
+          },
+      ],
+    };
+    map['x-migration-todo'] = {
+      'from': 'schemaVersion 5',
+      'gamemodes': [
+        for (final gamemode in retired)
+          {
+            'id': gamemode['id']?.toString() ?? '',
+            'name': gamemode['name']?.toString() ?? '',
+            if (gamemode['description'] != null)
+              'description': gamemode['description'].toString(),
+            'needs': const [
+              'implementation.type',
+              'launchTarget',
+              'worldRequirements.transitions',
+            ],
+          },
+      ],
+    };
+    await file.writeAsString(
+      '${const JsonEncoder.withIndent('  ').convert(map)}\n',
+    );
+    stdout.writeln(
+      'Wrote the mechanical half and an x-migration-todo block. The manifest '
+      'does not validate yet, by design: fill in the entries above under '
+      'contributions.gamemodes and contributions.launchTargets.',
+    );
+    return 1;
   }
 
   /// Removes the retired `worldGamemodes` list, reporting every entry it drops.

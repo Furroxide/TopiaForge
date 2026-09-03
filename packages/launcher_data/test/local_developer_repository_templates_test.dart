@@ -303,7 +303,6 @@ void main() {
       manifest.loadAfter,
       contains('io.github.furroxide.topiaforge.worlds'),
     );
-    expect(manifest.worldGamemodes, isEmpty);
     final gamemode = manifest.contributions!.gamemodes.single;
     expect(gamemode.id, 'test.waves.mode');
     expect(gamemode.name, 'Waves');

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+  "schemaVersion": 5,
+  "name": "example.retired.v5",
+  "displayName": "Retired V5",
+  "version": "1.0.0",
+  "author": {
+    "name": "TopiaForge"
+  },
+  "entryAssembly": "Retired.dll",
+  "entryType": "Retired.Mod",
+  "supportedGameVersionRange": "*",
+  "supportedLoaderVersionRange": "*",
+  "supportedSdkVersionRange": "*",
+  "worldGamemodes": [
+    {
+      "id": "example.retired.v5.mode",
+      "name": "Retired Mode"
+    }
+  ]
+}

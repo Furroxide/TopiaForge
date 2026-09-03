@@ -37,7 +37,7 @@ topiaforge restore
 topiaforge mod sync multiplayer
 ```
 
-This adds the stable contract, source generator, provider dependency, Manifest V5 metadata, and generated contract
+This adds the stable contract, source generator, provider dependency, manifest multiplayer metadata, and generated contract
 lock. Resolve the provider through the existing extension boundary:
 
 ```csharp

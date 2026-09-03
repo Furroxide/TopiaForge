@@ -32,13 +32,13 @@ const _knownManifestJsonKeys = <String>{
   'architectures',
   'contentTargets',
   'builtWith',
-  'worldGamemodes',
   'contributions',
   'apiAssemblies',
   'multiplayer',
 };
 
 const _unsupportedManifestFields = <String>{
+  'worldGamemodes',
   'id',
   'title',
   'gameVersion',

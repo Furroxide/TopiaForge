@@ -31,4 +31,4 @@ assemblies. Published player content is repacked and validated through the ordin
 `.topiaforgemod` pipeline.
 
 See [Custom worlds](CustomWorlds.md) and
-[Manifest V5](ManifestV5.md#package-contract).
+[Manifest V6](ManifestV6.md).

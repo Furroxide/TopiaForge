@@ -78,4 +78,8 @@ $rows = @(); foreach ($file in rg --files -g "*.dart") { $count = (Get-Content -
 - Preserve `.topiaforgemod`, `topiaforge.mod.json`, dependency ordering, package inbox, manager logs, enable/disable state, and restart-required behavior.
 - Keep Unity/BepInEx-specific work in `src/TopiaForge.ModManager`.
 - Keep `src/TopiaForge.ModManager.Core` free of Unity references.
-- SDK conveniences in `TopiaForge.Mods.Abstractions` must remain additive and clean-room.
+- SDK conveniences compiled into `TopiaForge.Mods.Abstractions` must remain additive and
+  clean-room. Assembly membership governs, not directory: `Worlds.cs`, `Gamemodes.cs`,
+  `GamemodeHost.cs`, `CustomWorlds.cs`, `PauseMenu.cs` and `Shop.cs` sit in that folder but are
+  `<Compile Remove>`d from it and link-compiled into `TopiaForge.Mods.Worlds`, which
+  `ModuleContractSurfaceTests` enforces. This rule does not reach them.
