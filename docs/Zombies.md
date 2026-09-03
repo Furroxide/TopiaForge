@@ -52,7 +52,8 @@ remain authoritative.
 
 | Source | Responsibility | Pattern to reuse |
 | --- | --- | --- |
-| [`ZombiesMod.cs`](../mods/TopiaForge.Zombies/ZombiesMod.cs) | Config migration, service discovery, and gamemode registration through `GamemodeHost<T>` | Keep the entry point thin; let the SDK own session wiring rather than hand-writing it. |
+| [`ZombiesMod.cs`](../mods/TopiaForge.Zombies/ZombiesMod.cs) | Config migration, service discovery, and session hosting through `GamemodeHost<T>` | Keep the entry point thin; let the SDK own session wiring rather than hand-writing it. |
+| [`ZombiesGamemode.cs`](../mods/TopiaForge.Zombies/ZombiesGamemode.cs) | The `IGamemodeFactory` the manifest's `implementation.type` names | A declared gamemode names the type that runs it, so "declared but unimplemented" is a reportable state rather than a menu entry that does nothing. |
 | [`ZombiesController.cs`](../mods/TopiaForge.Zombies/ZombiesController.cs) | Session dependencies, construction, command surface, and idempotent teardown | Keep the coordinator's public surface small and make every acquired resource visible at construction or disposal. |
 | [`ZombiesController.Loop.cs`](../mods/TopiaForge.Zombies/ZombiesController.Loop.cs) | Phase dispatch and scaled/unscaled clock selection | Keep the frame callback as orchestration; move feature rules into named methods and models. |
 | [`ZombiesController.Waves.cs`](../mods/TopiaForge.Zombies/ZombiesController.Waves.cs) and [`ZombiesController.Enemies.cs`](../mods/TopiaForge.Zombies/ZombiesController.Enemies.cs) | Wave budgets, bounded spawning, pursuit, attacks, and roster cleanup | Bound work per frame and drive every asynchronous SDK call with `PendingOperation<T>`. |
