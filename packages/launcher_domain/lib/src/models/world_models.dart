@@ -79,12 +79,49 @@ class GamemodeDefinition {
   };
 }
 
+/// One launchable entry as the Worlds provider publishes it. A gamemode on its own does not say
+/// *where* it should start; the entry carries the world its author intended, which is what "play this
+/// gamemode" needs.
+class GamemodeMenuEntry {
+  const GamemodeMenuEntry({
+    required this.id,
+    required this.title,
+    required this.gamemodeId,
+    this.description = '',
+    this.worldId = '',
+  });
+
+  final String id;
+  final String title;
+  final String gamemodeId;
+  final String description;
+  final String worldId;
+
+  factory GamemodeMenuEntry.fromJson(Map<String, Object?> json) {
+    return GamemodeMenuEntry(
+      id: (json['id'] as String?) ?? '',
+      title: (json['title'] as String?) ?? '',
+      gamemodeId: (json['gamemodeId'] as String?) ?? '',
+      description: (json['description'] as String?) ?? '',
+      worldId: (json['worldId'] as String?) ?? '',
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'title': title,
+    'gamemodeId': gamemodeId,
+    if (description.isNotEmpty) 'description': description,
+    if (worldId.isNotEmpty) 'worldId': worldId,
+  };
+}
+
 class WorldSelection {
   const WorldSelection({
     this.worldId = WorldCatalog.openSandboxWorldId,
     this.gamemodeId = WorldCatalog.sandboxGamemodeId,
     this.loadMode = additiveArena,
-    this.autoLoadOnStart = false,
+    this.launchIntoGamemode = false,
   });
 
   static const additiveArena = 'additiveArena';
@@ -101,7 +138,11 @@ class WorldSelection {
   final String worldId;
   final String gamemodeId;
   final String loadMode;
-  final bool autoLoadOnStart;
+
+  /// Whether pressing Launch starts [gamemodeId] instead of booting the game normally. This is the
+  /// Home screen's gamemode picker: "None" leaves it false, which is what every profile that predates
+  /// the picker does, so an ordinary launch still lands on the game's own menu.
+  final bool launchIntoGamemode;
 
   bool get preferSceneReplacement => loadMode == sceneReplacement;
 
@@ -124,7 +165,7 @@ class WorldSelection {
       worldId: worldId,
       gamemodeId: gamemodeId,
       loadMode: normalizeLoadMode(json['loadMode'] as String?),
-      autoLoadOnStart: (json['autoLoadOnStart'] as bool?) ?? false,
+      launchIntoGamemode: (json['launchIntoGamemode'] as bool?) ?? false,
     );
   }
 
@@ -132,49 +173,68 @@ class WorldSelection {
     'worldId': worldId,
     'gamemodeId': gamemodeId,
     'loadMode': loadMode,
-    'autoLoadOnStart': autoLoadOnStart,
+    'launchIntoGamemode': launchIntoGamemode,
   };
 
-  Map<String, Object?> toRuntimeConfig() => {
-    'selectedWorldId': worldId,
-    'selectedGamemodeId': gamemodeId,
-    'loadMode': loadMode,
-    'autoLoadOnStart': autoLoadOnStart,
-    'allowAdditiveFallback': true,
-  };
+  /// Start this game mode for one run.
+  static const launchTargetCommand = 'launch-target';
 
-  /// Applies launcher-owned selection keys without erasing runtime-owned or
-  /// future fields from an existing `topiaforge.worlds.json` object.
-  Map<String, Object?> mergeRuntimeConfig(Map<String, Object?> existing) => {
-    ...existing,
-    ...toRuntimeConfig(),
-  };
+  /// Boot to the game's own menu for one run, whatever the manager remembers.
+  static const mainMenuCommand = 'main-menu';
+
+  /// The one-shot instruction carried on the launch profile. The launcher no longer writes into the
+  /// Worlds mod's own config file at all: that file belongs to the mod, and two writers merging into
+  /// one document is exactly what used to discard the player's choice without a trace.
+  ///
+  /// "Play normally" is sent as a command rather than as silence. The manager also remembers a
+  /// selection, edited from its in-game overlay, and it cannot tell "the launcher said nothing" from
+  /// "the launcher asked for the ordinary menu" unless we say which one we mean.
+  Map<String, Object?> toLaunchIntentJson() => launchIntoGamemode
+      ? {
+          'command': launchTargetCommand,
+          'worldId': worldId,
+          'gamemodeId': gamemodeId,
+          'loadMode': loadMode,
+          'allowAdditiveFallback': true,
+        }
+      : {'command': mainMenuCommand};
 
   WorldSelection copyWith({
     String? worldId,
     String? gamemodeId,
     String? loadMode,
-    bool? autoLoadOnStart,
+    bool? launchIntoGamemode,
   }) {
     return WorldSelection(
       worldId: worldId ?? this.worldId,
       gamemodeId: gamemodeId ?? this.gamemodeId,
       loadMode: loadMode ?? this.loadMode,
-      autoLoadOnStart: autoLoadOnStart ?? this.autoLoadOnStart,
+      launchIntoGamemode: launchIntoGamemode ?? this.launchIntoGamemode,
     );
   }
 }
 
 class WorldCatalog {
-  const WorldCatalog({required this.worlds, required this.gamemodes});
+  const WorldCatalog({
+    required this.worlds,
+    required this.gamemodes,
+    this.menuEntries = const [],
+  });
 
   static const openSandboxWorldId =
       'io.github.furroxide.topiaforge.worlds.open_sandbox';
   static const sandboxGamemodeId =
       'io.github.furroxide.topiaforge.worlds.sandbox';
 
+  /// The Worlds provider's mod id. Its published catalog lives under the manager data directory,
+  /// which is keyed by the **raw** mod id -- unlike the config directory, whose file stem shortens
+  /// `io.github.furroxide.topiaforge.` to `topiaforge.`. Reading the catalog from the shortened name
+  /// is why the launcher never found it and silently fell back to a one-world catalog.
+  static const worldsModId = 'io.github.furroxide.topiaforge.worlds';
+
   final List<WorldDefinition> worlds;
   final List<GamemodeDefinition> gamemodes;
+  final List<GamemodeMenuEntry> menuEntries;
 
   /// Clamps [requestedMode] to a load mode the world [worldId] can actually honour. The UI's load-mode
   /// control only clamps for display, so this is what keeps the *persisted/written* selection coherent:
@@ -193,6 +253,16 @@ class WorldCatalog {
       return requested;
     }
     return supported.first;
+  }
+
+  /// The menu entry that launches [gamemodeId], when the provider published one.
+  GamemodeMenuEntry? menuEntryFor(String gamemodeId) {
+    for (final entry in menuEntries) {
+      if (entry.gamemodeId == gamemodeId) {
+        return entry;
+      }
+    }
+    return null;
   }
 
   factory WorldCatalog.fallback() {
@@ -232,6 +302,17 @@ class WorldCatalog {
         )
         .toList();
 
+    final menuEntries = (json['menuEntries'] as List? ?? const [])
+        .whereType<Map>()
+        .map((item) => GamemodeMenuEntry.fromJson(_objectMap(item)))
+        .where(
+          (entry) =>
+              ModManifest.isValidId(entry.id) &&
+              ModManifest.isValidId(entry.gamemodeId) &&
+              entry.title.trim().isNotEmpty,
+        )
+        .toList();
+
     // Backfill only the missing side from the built-in catalog rather than discarding both: a catalog with
     // real worlds but no gamemodes (or vice versa) keeps the valid side instead of collapsing to Open Sandbox.
     if (worlds.isEmpty && gamemodes.isEmpty) {
@@ -241,6 +322,7 @@ class WorldCatalog {
     return WorldCatalog(
       worlds: worlds.isEmpty ? fallback.worlds : worlds,
       gamemodes: gamemodes.isEmpty ? fallback.gamemodes : gamemodes,
+      menuEntries: menuEntries,
     );
   }
 }

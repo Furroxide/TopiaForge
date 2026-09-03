@@ -193,6 +193,66 @@ Future<int> _startDetachedGameProcess(GameProcessRequest request) async {
   return process.pid;
 }
 
+/// Exit code the probe script reserves for "no matching process", mirroring
+/// the not-running code the stop script already uses.
+const int _gameNotRunningExitCode = 2;
+
+/// Read-only counterpart of the stop path: reports whether a Robotopia process
+/// for this exact install is alive, without touching it.
+///
+/// Matching is by full executable path and never by basename, for the same
+/// reason the stop path refuses a basename fallback: two installs may both
+/// contain Robotopia.exe, and this must never answer for the other one.
+///
+/// Every failure path answers true. A probe that could not read the process
+/// list must not be mistaken for one that looked and found nothing, or an
+/// unrelated environment fault would silently clear a pending restart warning.
+Future<bool> _defaultGameRunningProbe(GameInstall install) async {
+  if (!Platform.isWindows) {
+    final layout = GameLayout.resolve(install.path);
+    if (layout == null) {
+      return true;
+    }
+    try {
+      return (await findUnixGameProcessIds(layout.executablePath)).isNotEmpty;
+    } on Object {
+      return true;
+    }
+  }
+
+  try {
+    final result = await runBoundedProcess('powershell.exe', [
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-Command',
+      _probeTopiaForgeScript,
+      install.executablePath,
+    ], timeout: const Duration(seconds: 10));
+    return result.exitCode != _gameNotRunningExitCode;
+  } on Object {
+    return true;
+  }
+}
+
+const String _probeTopiaForgeScript = r'''
+param([string]$TargetPath)
+
+$target = [System.IO.Path]::GetFullPath($TargetPath)
+
+$running = @(
+  Get-CimInstance Win32_Process -Filter "Name = 'Robotopia.exe'" |
+    Where-Object {
+      $_.ExecutablePath -and
+      ([System.IO.Path]::GetFullPath($_.ExecutablePath) -ieq $target)
+    }
+)
+
+if ($running.Count -eq 0) { exit 2 }
+exit 0
+''';
+
 const String _stopTopiaForgeScript = r'''
 param([string]$TargetPath)
 

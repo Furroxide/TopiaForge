@@ -13,7 +13,7 @@ namespace TopiaForge.ModManager.Core
     [DataContract]
     public sealed class ProfileLaunchConfiguration
     {
-        public const int CurrentSchemaVersion = 2;
+        public const int CurrentSchemaVersion = 3;
         public const string EnvironmentVariable = "TOPIAFORGE_LAUNCH_PROFILE";
 
         [DataMember(Name = "schemaVersion")]
@@ -34,6 +34,18 @@ namespace TopiaForge.ModManager.Core
         [DataMember(Name = "selectedVersions")]
         public Dictionary<string, string> SelectedVersions { get; set; }
             = new Dictionary<string, string>();
+
+        /// <summary>
+        /// What this run should start: a gamemode, or the game's ordinary menu. One-shot, like the rest
+        /// of this profile -- consumed with the profile file, never durable state.
+        /// <para>
+        /// Null means the launcher issued no instruction at all, which is not the same as asking for
+        /// the ordinary menu: the manager has a remembered selection of its own, and only a silence
+        /// leaves it in charge. See <see cref="WorldLaunchIntent"/>.
+        /// </para>
+        /// </summary>
+        [DataMember(Name = "worldLaunch")]
+        public WorldLaunchIntent? WorldLaunch { get; set; }
 
         public IReadOnlyList<string> Validate()
         {
@@ -77,6 +89,11 @@ namespace TopiaForge.ModManager.Core
                 {
                     errors.Add("selectedVersions contains an invalid version for " + entry.Key + ".");
                 }
+            }
+
+            if (WorldLaunch != null)
+            {
+                errors.AddRange(WorldLaunch.Validate());
             }
 
             return errors;

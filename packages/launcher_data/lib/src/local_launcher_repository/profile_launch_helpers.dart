@@ -1,55 +1,6 @@
 part of '../local_launcher_repository.dart';
 
 extension _ProfileLaunchHelpers on LocalLauncherRepository {
-  Future<LaunchResult> _startGameWithWorldSelection(
-    GameInstall install,
-    LauncherProfile profile, {
-    required String message,
-  }) async {
-    final snapshot = await _captureWorldSelection(install);
-    late final LaunchResult result;
-    try {
-      await _writeWorldSelection(install, profile.worldSelection);
-      result = await _startGame(install, profile, message: message);
-    } on Object {
-      await _restoreWorldSelection(snapshot);
-      rethrow;
-    }
-    if (!result.started) {
-      await _restoreWorldSelection(snapshot);
-    }
-    return result;
-  }
-
-  Future<_WorldSelectionSnapshot> _captureWorldSelection(
-    GameInstall install,
-  ) async {
-    final file = File(
-      p.join(_managerConfig(install).path, 'topiaforge.worlds.json'),
-    );
-    final type = await FileSystemEntity.type(file.path, followLinks: false);
-    if (type == FileSystemEntityType.notFound) {
-      return _WorldSelectionSnapshot(file, null);
-    }
-    if (type != FileSystemEntityType.file) {
-      throw StateError('World selection config must be a regular file.');
-    }
-    return _WorldSelectionSnapshot(
-      file,
-      await _readLauncherFileBounded(file, _maxWorldConfigBytes),
-    );
-  }
-
-  Future<void> _restoreWorldSelection(_WorldSelectionSnapshot snapshot) async {
-    if (snapshot.contents == null) {
-      if (await snapshot.file.exists()) {
-        await snapshot.file.delete();
-      }
-      return;
-    }
-    await _writeFileBytesAtomic(snapshot.file, snapshot.contents!);
-  }
-
   Future<File> _writeProfileLaunchConfiguration(
     GameInstall install,
     ProfileLaunchConfiguration configuration,
@@ -243,13 +194,6 @@ extension _ProfileLaunchHelpers on LocalLauncherRepository {
   }
 }
 
-class _WorldSelectionSnapshot {
-  const _WorldSelectionSnapshot(this.file, this.contents);
-
-  final File file;
-  final Uint8List? contents;
-}
-
 Future<Uint8List> _readLauncherFileBounded(File file, int maxBytes) async {
   if (maxBytes < 0) {
     throw ArgumentError.value(maxBytes, 'maxBytes', 'must not be negative');
@@ -275,5 +219,3 @@ Future<Uint8List> _readLauncherFileBounded(File file, int maxBytes) async {
   }
   return bytes.takeBytes();
 }
-
-const _maxWorldConfigBytes = 1024 * 1024;

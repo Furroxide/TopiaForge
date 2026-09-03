@@ -58,6 +58,7 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
     PackageInstallCommitHook? packageInstallCommitHook,
     RuntimeRepairCommitHook? runtimeRepairCommitHook,
     GameProcessStarter? gameProcessStarter,
+    GameRunningProbe? gameRunningProbe,
   }) : _dataRoot = Directory(dataRoot ?? resolveTopiaForgeDataRoot()),
        _repositoryRoot = Directory(
          repositoryRoot ?? _findRepositoryRoot(workingDirectory),
@@ -70,7 +71,8 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
        _packageMetadataValidator = packageMetadataValidator,
        _packageInstallCommitHook = packageInstallCommitHook,
        _runtimeRepairCommitHook = runtimeRepairCommitHook,
-       _gameProcessStarter = gameProcessStarter ?? _startDetachedGameProcess;
+       _gameProcessStarter = gameProcessStarter ?? _startDetachedGameProcess,
+       _gameRunningProbe = gameRunningProbe ?? _defaultGameRunningProbe;
   final Directory _dataRoot;
   final Directory _repositoryRoot;
   final String? _knownGamePath;
@@ -81,6 +83,7 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
   final PackageInstallCommitHook? _packageInstallCommitHook;
   final RuntimeRepairCommitHook? _runtimeRepairCommitHook;
   final GameProcessStarter _gameProcessStarter;
+  final GameRunningProbe _gameRunningProbe;
   Future<void> _settingsMutationTail = Future<void>.value();
   Future<void> _launcherLogMutationTail = Future<void>.value();
   bool _disposed = false;
@@ -360,11 +363,7 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
     final message = profile.launchSettings.safeMode
         ? 'Launched TopiaForge in safe mode for this run only.'
         : 'Launched TopiaForge.';
-    return _startGameWithWorldSelection(
-      launchInstall,
-      profile,
-      message: message,
-    );
+    return _startGame(launchInstall, profile, message: message);
   }
 
   @override
@@ -385,11 +384,7 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
         'Started TopiaForge in temporary safe mode. No running process was found.',
       (false, false) => 'Started TopiaForge. No running process was found.',
     };
-    return _startGameWithWorldSelection(
-      launchInstall,
-      profile,
-      message: message,
-    );
+    return _startGame(launchInstall, profile, message: message);
   }
 
   @override

@@ -1,7 +1,13 @@
 part of '../local_launcher_repository.dart';
 
 extension _ManagerStateHelpers on LocalLauncherRepository {
-  Future<List<InstalledMod>> _loadInstalledMods(GameInstall install) async {
+  Future<List<InstalledMod>> _loadInstalledMods(
+    GameInstall install, {
+    bool reconcileRestartRequirements = true,
+  }) async {
+    if (reconcileRestartRequirements) {
+      await _reconcileRestartRequirements(install);
+    }
     final packages = <InstalledMod>[];
     final state = await _readManagerState(install);
     final stateById = _stateByModId(state);
@@ -28,6 +34,52 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
           : left.packagePath.compareTo(right.packagePath);
     });
     return packages;
+  }
+
+  /// Drops restart requirements that nothing is waiting on.
+  ///
+  /// `restartRequired` means "a running loader holds older state than disk".
+  /// With no process alive that is vacuous: the next launch reads this state
+  /// anyway, so the change is already applied and the launcher must stop
+  /// claiming a restart is owed.
+  ///
+  /// Mirrors ManagerState.ClearAppliedRestartRequirements on the runtime side,
+  /// including its exclusion of uninstall-pending mods. Those genuinely do
+  /// defer file removal to the next game start, and carry their own pill.
+  Future<void> _reconcileRestartRequirements(GameInstall install) async {
+    final state = await _readManagerState(install);
+    final stale = (state['mods'] as List)
+        .whereType<Map>()
+        .where(
+          (item) =>
+              item['restartRequired'] == true &&
+              item['uninstallPending'] != true,
+        )
+        .toList();
+    if (stale.isEmpty) {
+      // Nothing is staged, so the common path never pays for a process probe.
+      return;
+    }
+    bool running;
+    try {
+      running = await _gameRunningProbe(install);
+    } on Object {
+      // The probe contract is fail-closed; enforce it here too, so a
+      // faulty probe degrades to keeping the warning rather than
+      // breaking the whole mod load.
+      running = true;
+    }
+    if (running) {
+      return;
+    }
+    for (final item in stale) {
+      item['restartRequired'] = false;
+    }
+    await _saveManagerState(install, state);
+    await _appendLauncherLogBestEffort(
+      'Cleared ${stale.length} pending restart requirement(s); no running '
+      'Robotopia process found.',
+    );
   }
 
   Future<Map<String, List<InstalledMod>>> _loadInstalledVersionCatalog(

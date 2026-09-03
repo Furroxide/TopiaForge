@@ -15,6 +15,8 @@ part 'devtool_installation_test_part.dart';
 part 'profile_launch_test_part.dart';
 part 'runtime_repair_security_test_part.dart';
 part 'runtime_loader_payload_test_part.dart';
+part 'restart_requirement_test_part.dart';
+part 'world_catalog_test_part.dart';
 
 void main() {
   late Directory root;
@@ -22,6 +24,8 @@ void main() {
   late Directory repoRoot;
   late Directory gameRoot;
   late LocalLauncherRepository repository;
+  late bool gameRunning;
+  late bool probeThrows;
 
   setUp(() {
     root = Directory.systemTemp.createTempSync('topiaforge-launcher-data-');
@@ -31,11 +35,19 @@ void main() {
     _createGame(gameRoot);
     _createRuntimeSources(repoRoot);
     _createRegistry(repoRoot);
+    gameRunning = true;
+    probeThrows = false;
     repository = LocalLauncherRepository(
       dataRoot: dataRoot.path,
       repositoryRoot: repoRoot.path,
       knownGamePath: gameRoot.path,
       packageMetadataValidator: _acceptPackageMetadata,
+      gameRunningProbe: (_) async {
+        if (probeThrows) {
+          throw StateError('Process list unavailable.');
+        }
+        return gameRunning;
+      },
     );
   });
 
@@ -70,6 +82,19 @@ void main() {
     root: () => root,
     gameRoot: () => gameRoot,
   );
+  _registerRestartRequirementTests(
+    root: () => root,
+    gameRoot: () => gameRoot,
+    repository: () => repository,
+    setGameRunning: (value) => gameRunning = value,
+    setProbeThrows: (value) => probeThrows = value,
+  );
+  _registerWorldCatalogTests(
+    root: () => root,
+    gameRoot: () => gameRoot,
+    repository: () => repository,
+  );
+
   _registerInstalledBuildProvenanceTests(
     repository: () => repository,
     root: () => root,
@@ -360,47 +385,6 @@ void main() {
     expect(
       mods.map((mod) => mod.id),
       containsAll(['dependency.mod', 'main.mod']),
-    );
-  });
-
-  test('adds installed manifest gamemodes to world catalog', () async {
-    final install = await repository.selectGameDirectory(gameRoot.path);
-    final package = _createPackage(
-      root,
-      id: 'mode.mod',
-      version: '1.0.0',
-      worldGamemodes: [
-        {
-          'id': 'mode.mod.survival',
-          'name': 'Survival',
-          'description': 'Static gamemode metadata.',
-        },
-      ],
-    );
-
-    await repository.installPackage(package.path, install);
-    final snapshot = await repository.loadSnapshot();
-
-    expect(
-      snapshot.worldCatalog.gamemodes.map((mode) => mode.id),
-      contains('mode.mod.survival'),
-    );
-  });
-
-  test('adds installed registry gamemodes to world catalog', () async {
-    final install = await repository.selectGameDirectory(gameRoot.path);
-    final package = _createPackage(
-      root,
-      id: 'registry.sample',
-      version: '1.0.0',
-    );
-
-    await repository.installPackage(package.path, install);
-    final snapshot = await repository.loadSnapshot();
-
-    expect(
-      snapshot.worldCatalog.gamemodes.map((mode) => mode.id),
-      contains('registry.sample.survival'),
     );
   });
 

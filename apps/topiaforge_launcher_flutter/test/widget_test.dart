@@ -20,6 +20,7 @@ part 'widget_install_test_cases.dart';
 part 'widget_mod_repair_test_cases.dart';
 part 'widget_accessibility_test_cases.dart';
 part 'widget_profile_launch_test_cases.dart';
+part 'widget_home_launch_test_cases.dart';
 part 'widget_test_snapshots.dart';
 part 'widget_update_test_cases.dart';
 part 'widget_update_test_fakes.dart';
@@ -91,6 +92,7 @@ void main() {
   }
 
   _registerProfileLaunchWidgetTests(pumpHome);
+  _registerHomeLaunchTests(pumpHome);
 
   testWidgets('home launch pad renders ready state and update pill', (
     tester,

@@ -48,7 +48,10 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
       packagePath,
       expectedSha256: expectedSha256,
     );
-    final installed = await _loadInstalledMods(currentInstall);
+    final installed = await _loadInstalledMods(
+      currentInstall,
+      reconcileRestartRequirements: false,
+    );
     final sources = await _loadPackageSources();
     final registryMods = await _loadRegistryCandidates(installed, sources);
     return _dependencyPlanner.previewInstall(
@@ -86,7 +89,10 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
       packagePath,
       expectedSha256: expectedSha256,
     );
-    final installed = await _loadInstalledMods(currentInstall);
+    final installed = await _loadInstalledMods(
+      currentInstall,
+      reconcileRestartRequirements: false,
+    );
     final sources = await _loadPackageSources();
     final registryMods = await _loadRegistryCandidates(installed, sources);
     final plan = _dependencyPlanner.previewInstall(
@@ -231,7 +237,16 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
     await _appendLauncherLogBestEffort(
       'Installed ${plan.installActions.length} package(s) for ${package.manifest.id} from $packagePath.',
     );
-    return _loadInstalledMods(commitInstall);
+    // Do not reconcile here. Reconciliation retires requirements left by an
+    // *earlier* session; the one this commit just wrote is the current truth.
+    // Letting a process probe erase it would also make the install receipt in
+    // state.json depend on whether the game happened to be running, which the
+    // release scaffold validator reads as a receipt that does not match policy.
+    // The next snapshot load retires it if nothing is alive to restart.
+    return _loadInstalledMods(
+      commitInstall,
+      reconcileRestartRequirements: false,
+    );
   }
 
   Future<_StagedPackageInstall> _stagePackageInstall(

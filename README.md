@@ -9,7 +9,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="License: AGPL-3.0-or-later" src="https://img.shields.io/badge/license-AGPL--3.0--or--later-FF7A11?style=flat-square"></a>
   <a href="https://github.com/Furroxide/TopiaForge/actions/workflows/ci.yml"><img alt="CI status" src="https://img.shields.io/github/actions/workflow/status/Furroxide/TopiaForge/ci.yml?branch=dev&style=flat-square&label=ci&color=20F6FE"></a>
-  <a href="docs/"><img alt="Documentation" src="https://img.shields.io/badge/docs-43%20guides-20F6FE?style=flat-square"></a>
+  <a href="docs/"><img alt="Documentation" src="https://img.shields.io/badge/docs-44%20guides-20F6FE?style=flat-square"></a>
   <img alt="Project status: 0.x early" src="https://img.shields.io/badge/status-0.x%20early-E4B373?style=flat-square">
 </p>
 

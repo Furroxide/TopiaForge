@@ -245,8 +245,8 @@
       "member": "Body",
       "matchMode": "DynamicInstance",
       "criticality": "Optional",
-      "feature": "Robot root resolution (Body property)",
-      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:224",
+      "feature": "Robot root resolution (Body fallback; MaybeBody is asked first because Body throws when a robot has no body)",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:568",
       "returnType": "RobotBody"
     },
     {
@@ -257,8 +257,8 @@
       "member": "MaybeBody",
       "matchMode": "DynamicInstance",
       "criticality": "Optional",
-      "feature": "Robot root resolution (MaybeBody fallback)",
-      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:225",
+      "feature": "Robot root resolution (MaybeBody, the non-throwing accessor asked first)",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:567",
       "returnType": "RobotBody"
     },
     {
