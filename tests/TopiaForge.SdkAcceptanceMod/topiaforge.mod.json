@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "name": "dev.topiaforge.sdk-acceptance",
   "displayName": "TopiaForge SDK Live Acceptance",
   "version": "0.1.0-rc.1",
@@ -24,11 +24,22 @@
   "supportedGameVersionRange": ">=0.0.2409 <0.0.2600",
   "supportedLoaderVersionRange": ">=0.1.0-rc.1 <0.2.0",
   "supportedSdkVersionRange": ">=0.1.0-rc.1 <0.2.0",
-  "platforms": ["windows", "linux"],
-  "architectures": ["x64"],
-  "contentTargets": ["code"],
+  "platforms": [
+    "windows",
+    "linux"
+  ],
+  "architectures": [
+    "x64"
+  ],
+  "contentTargets": [
+    "code"
+  ],
   "category": "Developer",
-  "tags": ["acceptance", "safe-sdk", "non-distributable"],
+  "tags": [
+    "acceptance",
+    "safe-sdk",
+    "non-distributable"
+  ],
   "license": "AGPL-3.0-or-later",
   "licenseFiles": [
     "LICENSE"

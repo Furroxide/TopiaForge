@@ -18,7 +18,11 @@ extension _TopiaForgeManifestMigrationCommands on _TopiaForgeCli {
     );
     final rawSchemaVersion = map['schemaVersion'];
     final schemaVersion = rawSchemaVersion is int ? rawSchemaVersion : null;
-    if (schemaVersion == 5) {
+    // Both supported contracts are readable, so neither is something to migrate
+    // away from here. The V5 to V6 path is its own change, with its own refusals
+    // for the parts no tool can derive.
+    if (schemaVersion != null &&
+        ModManifest.isSupportedSchemaVersion(schemaVersion)) {
       stdout.writeln(
         'topiaforge.mod.json already uses supported schema V$schemaVersion.',
       );
@@ -31,6 +35,7 @@ extension _TopiaForgeManifestMigrationCommands on _TopiaForgeCli {
     }
 
     if (schemaVersion == 4) {
+      _dropRetiredWorldGamemodes(map);
       map
         ..['schemaVersion'] = ModManifest.currentSchemaVersion
         ..[r'$schema'] = ModManifest.canonicalSchemaUrl;
@@ -43,7 +48,8 @@ extension _TopiaForgeManifestMigrationCommands on _TopiaForgeCli {
       }
       await developerRepository.updateModManifest(projectPath, migrated);
       stdout.writeln(
-        'Migrated topiaforge.mod.json from retired schema V4 to V5.',
+        'Migrated topiaforge.mod.json from retired schema V4 to '
+        'V${ModManifest.currentSchemaVersion}.',
       );
       return 0;
     }
@@ -80,6 +86,7 @@ extension _TopiaForgeManifestMigrationCommands on _TopiaForgeCli {
       }
     }
 
+    _dropRetiredWorldGamemodes(map);
     readDependencyMap(map['vpmDependencies'], required);
     if (map['dependencies'] is Map) {
       readDependencyMap(map['dependencies'], required);
@@ -141,10 +148,41 @@ extension _TopiaForgeManifestMigrationCommands on _TopiaForgeCli {
       return 1;
     }
     await developerRepository.updateModManifest(projectPath, migrated);
-    stdout.writeln('Migrated topiaforge.mod.json from schema V3 to V5.');
+    stdout.writeln(
+      'Migrated topiaforge.mod.json from schema V3 to '
+      'V${ModManifest.currentSchemaVersion}.',
+    );
     stdout.writeln(
       'Review any compatibility range defaulted to * before publishing.',
     );
     return 0;
+  }
+
+  /// Removes the retired `worldGamemodes` list, reporting every entry it drops.
+  ///
+  /// A V5 entry was an id, a name and a description. A V6 gamemode declaration
+  /// additionally names the type that implements it, the worlds it can run in and
+  /// what a scene change means -- none of which is anywhere in the old document.
+  /// The tool could produce a declaration that validates, but it would be one that
+  /// binds to nothing and fails at first launch, so it says what it dropped and
+  /// leaves the author to write the part only they know.
+  void _dropRetiredWorldGamemodes(Map<String, Object?> map) {
+    final retired = _jsonMapList(map.remove('worldGamemodes'));
+    if (retired.isEmpty) {
+      return;
+    }
+
+    stdout.writeln(
+      'Dropped ${retired.length} worldGamemodes '
+      '${retired.length == 1 ? 'entry' : 'entries'}: schema '
+      'V${ModManifest.currentSchemaVersion} needs an implementation type, world '
+      'requirements and a launch target, none of which the old manifest records. '
+      'Declare each one under contributions.gamemodes:',
+    );
+    for (final gamemode in retired) {
+      final id = gamemode['id']?.toString() ?? '(no id)';
+      final name = gamemode['name']?.toString() ?? '';
+      stdout.writeln('  - $id${name.isEmpty ? '' : ' ($name)'}');
+    }
   }
 }

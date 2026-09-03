@@ -5,6 +5,7 @@ import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+import 'package:launcher_domain/launcher_domain.dart';
 
 part 'topiaforge_cli_test_harness.dart';
 part 'topiaforge_cli_acceptance_cases.dart';

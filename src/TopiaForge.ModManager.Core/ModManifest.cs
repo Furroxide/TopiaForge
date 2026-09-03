@@ -17,7 +17,7 @@ namespace TopiaForge.ModManager.Core
         public const int ManifestV6SchemaVersion = 6;
 
         /// <summary>The newest schema emitted by current tooling. Older supported readers must not depend on this.</summary>
-        public const int CurrentSchemaVersion = ManifestV5SchemaVersion;
+        public const int CurrentSchemaVersion = ManifestV6SchemaVersion;
 
         /// <summary>
         /// Whether a version has a reader at all. Every version gate routes through here, so admitting
@@ -169,8 +169,27 @@ namespace TopiaForge.ModManager.Core
         [DataMember(Name = "contributions", EmitDefaultValue = false)]
         public ModContributions? Contributions { get; set; }
 
-        [DataMember(Name = "worldGamemodes")]
+        /// <summary>The V5 display-only gamemode list. Always empty on a V6 manifest.</summary>
+        [IgnoreDataMember]
         public List<ModGamemode> WorldGamemodes { get; set; } = new List<ModGamemode>();
+
+        /// <summary>
+        /// Writes <see cref="WorldGamemodes"/> only for the version that has the field.
+        /// </summary>
+        /// <remarks>
+        /// V6 retired <c>worldGamemodes</c> and its reader rejects the key by name, so emitting it on a
+        /// V6 manifest would make this type a writer of documents its own reader refuses. The list is a
+        /// reference type, so <c>EmitDefaultValue = false</c> alone would not have helped: an empty list
+        /// is not the default, and the serializer would have written <c>"worldGamemodes":[]</c>.
+        /// </remarks>
+        [DataMember(Name = "worldGamemodes", EmitDefaultValue = false)]
+        private List<ModGamemode>? SerializedWorldGamemodes
+        {
+            get => SchemaVersion == ManifestV5SchemaVersion && WorldGamemodes != null && WorldGamemodes.Count > 0
+                ? WorldGamemodes
+                : null;
+            set => WorldGamemodes = value ?? new List<ModGamemode>();
+        }
 
         [DataMember(Name = "multiplayer", EmitDefaultValue = false)]
         public ModMultiplayerMetadata? Multiplayer { get; set; }
