@@ -31,8 +31,8 @@ namespace TopiaForge.ModManager.Tests
 
         private static readonly HashSet<string> CaseFields = new HashSet<string>(StringComparer.Ordinal)
         {
-            "id", "channel", "kind", "summary", "selection", "intent", "manifest", "expect",
-            "divergenceReason"
+            "id", "channel", "kind", "summary", "selection", "intent", "manifest", "profile",
+            "request", "observation", "expect", "divergenceReason"
         };
         private static readonly HashSet<string> OutcomeFields = new HashSet<string>(StringComparer.Ordinal)
         {
@@ -172,6 +172,9 @@ namespace TopiaForge.ModManager.Tests
                 case "manifest-accepts":
                 case "manifest-rejects":
                     ExecuteManifest(indexed, body, expectation);
+                    break;
+                case "launch-resolution":
+                    ExecuteResolution(indexed, body, expectation);
                     break;
                 default:
                     // Deliberately fatal. A kind this runner does not know must fail the build rather
@@ -338,6 +341,64 @@ namespace TopiaForge.ModManager.Tests
                     indexed.Path + ": " + kind + " parsed as [" + string.Join("; ", actual[kind]) +
                     "] but the fixture expects [" + string.Join("; ", expectedLines) + "].");
             }
+        }
+
+        /// <summary>
+        /// Resolves one launch against one profile and compares the plan, or every reason there is
+        /// none.
+        /// </summary>
+        /// <remarks>
+        /// Reasons are compared as a set, and the resolver reports all of them rather than the first,
+        /// so a change that stops detecting one shows up here even when the launch is still blocked
+        /// for some other reason.
+        /// </remarks>
+        private static void ExecuteResolution(
+            IndexedCase indexed,
+            JsonElement body,
+            Expectation expected)
+        {
+            var (accepted, codes, detail) = ResolutionFixtureRunner.Execute(body);
+
+            Assert(
+                accepted == expected.Accepted,
+                indexed.Path + ": the resolver " + (accepted ? "resolved" : "blocked") +
+                " a fixture expecting " + (expected.Accepted ? "a plan" : "a block") + "; it said " + detail);
+            Assert(
+                codes.SetEquals(expected.ErrorCodes),
+                indexed.Path + ": expected reasons [" + string.Join(", ", expected.ErrorCodes) +
+                "] but the resolver gave [" + string.Join(", ", codes) + "].");
+
+            if (!accepted)
+            {
+                return;
+            }
+
+            Assert(
+                ResolutionFixtureRunner.DigestAgreesWithItsPackages(body),
+                indexed.Path + ": a plan's digest must accept the package set it was built from and " +
+                "reject a different one, or the revalidation before preparing proves nothing.");
+
+            var actual = ResolutionFixtureRunner.Normalize(body);
+            var declared = body.GetProperty("expect").GetProperty(RunnerName).GetProperty("normalized");
+            foreach (var field in new[]
+                     {
+                         "launchTargetId", "gamemodeId", "worldId", "worldInstanceId", "transition"
+                     })
+            {
+                var expectedValue = declared.GetProperty(field).GetString() ?? string.Empty;
+                Assert(
+                    string.Equals((string)actual[field], expectedValue, StringComparison.Ordinal),
+                    indexed.Path + ": " + field + " resolved to '" + actual[field] +
+                    "' but the fixture expects '" + expectedValue + "'.");
+            }
+
+            var expectedPackages = declared.GetProperty("resolvedPackages").EnumerateArray()
+                .Select(item => item.GetString() ?? string.Empty).ToList();
+            Assert(
+                ((List<string>)actual["resolvedPackages"]).SequenceEqual(expectedPackages, StringComparer.Ordinal),
+                indexed.Path + ": the plan resolved against [" +
+                string.Join(", ", (List<string>)actual["resolvedPackages"]) + "] but the fixture expects [" +
+                string.Join(", ", expectedPackages) + "].");
         }
 
         /// <summary>

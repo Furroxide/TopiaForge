@@ -1,0 +1,110 @@
+{
+  "id": "an-observed-level-is-launchable-under-its-family",
+  "channel": "resolution",
+  "kind": "launch-resolution",
+  "summary": "A discovered family is a prefix, not a world. Its members become launchable only once the game has reported them, and then by their full instance id.",
+  "profile": {
+    "packages": [
+      {
+        "id": "io.github.furroxide.topiaforge.worlds",
+        "version": "0.1.0",
+        "manifest": {
+          "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+          "schemaVersion": 6,
+          "name": "io.github.furroxide.topiaforge.worlds",
+          "displayName": "worlds",
+          "version": "0.1.0",
+          "author": {
+            "name": "TopiaForge"
+          },
+          "entryAssembly": "Fixture.dll",
+          "entryType": "Fixture.Mod",
+          "supportedGameVersionRange": "*",
+          "supportedLoaderVersionRange": "*",
+          "supportedSdkVersionRange": "*",
+          "capabilities": [
+            "world-service"
+          ],
+          "contributions": {
+            "worlds": [
+              {
+                "id": "io.github.furroxide.topiaforge.worlds.level",
+                "name": "level",
+                "content": {
+                  "kind": "discovered",
+                  "implementation": {
+                    "type": "Fixture.LevelSource"
+                  }
+                },
+                "transitions": [
+                  "scene-replacement"
+                ],
+                "spawn": {
+                  "kind": "provider-default"
+                },
+                "openToAnyCompatible": true
+              }
+            ],
+            "gamemodes": [
+              {
+                "id": "io.github.furroxide.topiaforge.worlds.freeplay",
+                "name": "freeplay",
+                "implementation": {
+                  "type": "Fixture.Gamemode"
+                }
+              }
+            ],
+            "launchTargets": [
+              {
+                "id": "io.github.furroxide.topiaforge.worlds.freeplay.menu",
+                "title": "menu",
+                "gamemode": "io.github.furroxide.topiaforge.worlds.freeplay",
+                "world": {
+                  "policy": "open",
+                  "default": "io.github.furroxide.topiaforge.worlds.level.city",
+                  "allowPlayerOverride": true
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "request": {
+    "targetId": "io.github.furroxide.topiaforge.worlds.freeplay.menu"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "launchTargetId": "io.github.furroxide.topiaforge.worlds.freeplay.menu",
+        "gamemodeId": "io.github.furroxide.topiaforge.worlds.freeplay",
+        "worldId": "io.github.furroxide.topiaforge.worlds.level",
+        "worldInstanceId": "io.github.furroxide.topiaforge.worlds.level.city",
+        "transition": "scene-replacement",
+        "resolvedPackages": [
+          "io.github.furroxide.topiaforge.worlds@0.1.0"
+        ]
+      }
+    },
+    "dart": {
+      "outcome": "accept",
+      "normalized": {
+        "launchTargetId": "io.github.furroxide.topiaforge.worlds.freeplay.menu",
+        "gamemodeId": "io.github.furroxide.topiaforge.worlds.freeplay",
+        "worldId": "io.github.furroxide.topiaforge.worlds.level",
+        "worldInstanceId": "io.github.furroxide.topiaforge.worlds.level.city",
+        "transition": "scene-replacement",
+        "resolvedPackages": [
+          "io.github.furroxide.topiaforge.worlds@0.1.0"
+        ]
+      }
+    }
+  },
+  "observation": {
+    "discoveredWorldIds": [
+      "io.github.furroxide.topiaforge.worlds.level.city"
+    ]
+  }
+}
