@@ -291,6 +291,21 @@ jobs:
       - name: Test repository governance audit
         run: python3 .github/scripts/test_audit_repository_governance.py
 
+      # The diagram audit regenerates the README SVGs to compare them, so it
+      # needs the generator's own dependency. Built outside the workspace: a
+      # later step in this job parses every JSON and YAML file in the tree.
+      - name: Set up the README diagram audit environment
+        run: |
+          python3 -m venv "$RUNNER_TEMP/readme-diagrams"
+          "$RUNNER_TEMP/readme-diagrams/bin/python" -m pip install \
+            --no-input --disable-pip-version-check "Pillow==12.2.0"
+
+      - name: Keep the README diagrams generated and accurately described
+        run: '"$RUNNER_TEMP/readme-diagrams/bin/python" .github/scripts/check_readme_diagrams.py'
+
+      - name: Test README diagram audit
+        run: '"$RUNNER_TEMP/readme-diagrams/bin/python" .github/scripts/test_check_readme_diagrams.py'
+
       - name: Test protected release evidence gates
         run: |
           bash tools/test-verify-release-tag.sh
