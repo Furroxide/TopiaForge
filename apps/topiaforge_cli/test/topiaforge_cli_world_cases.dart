@@ -75,13 +75,34 @@ void _worldCliTests(_CliTestHarness Function() currentHarness) {
     expect(manifest['capabilities'], contains('asset-bundles'));
     expect(manifest['capabilities'], contains('world-service'));
 
-    // The scaffold uses the owner-bound Worlds contract and SDK asset service.
+    // The world is declared, not registered: the bundle, the prefab, the
+    // transitions and the spawn marker all live in the manifest, so the launcher
+    // can read them before any code runs.
+    final world =
+        ((manifest['contributions']! as Map)['worlds']! as List).single
+            as Map<String, Object?>;
+    final content = world['content']! as Map<String, Object?>;
+    expect(content['kind'], 'bundle');
+    expect(content['bundle'], 'AssetBundles/t-island.bundle');
+    expect(content['prefab'], 'assets/world/world.prefab');
+    expect((world['spawn']! as Map)['markerName'], 'SpawnPoint');
+
+    // Free play is the Worlds provider's own mode, so a world mod stays a world
+    // mod: it borrows no gameplay and takes on no extra dependency to be played.
+    final target =
+        ((manifest['contributions']! as Map)['launchTargets']! as List).single
+            as Map<String, Object?>;
+    expect(
+      target['gamemode'],
+      'io.github.furroxide.topiaforge.worlds.freeplay',
+    );
+    expect((manifest['dependencies'] as Map).keys, hasLength(1));
+
     final modSource = File(
       p.join(projectDir, 'TIslandMod.cs'),
     ).readAsStringSync();
-    expect(modSource, contains('new BundleWorldContent('));
-    expect(modSource, contains('worlds.RegisterWorld('));
-    expect(modSource, contains('AssetBundles/t-island.bundle'));
+    expect(modSource, isNot(contains('RegisterWorld(')));
+    expect(modSource, isNot(contains('RegisterMenuEntry(')));
 
     final checked = await currentHarness().runCli([
       'check',

@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "name": "io.github.furroxide.topiaforge.zombies",
   "displayName": "Zombies",
   "version": "0.1.0-rc.1",
@@ -59,11 +59,38 @@
     "microphone",
     "speech-to-text"
   ],
-  "worldGamemodes": [
-    {
-      "id": "io.github.furroxide.topiaforge.zombies.survival",
-      "name": "Zombies",
-      "description": "Survive escalating waves of infected robots with a built-in zapper."
-    }
-  ]
+  "contributions": {
+    "gamemodes": [
+      {
+        "id": "io.github.furroxide.topiaforge.zombies.survival",
+        "name": "Zombies",
+        "description": "Survive escalating waves of infected robots with a built-in zapper.",
+        "implementation": {
+          "type": "TopiaForge.Zombies.ZombiesGamemode"
+        },
+        "worldRequirements": {
+          "transitions": [
+            "additive-arena"
+          ],
+          "spawn": "any"
+        },
+        "sceneChangePolicy": "end-session"
+      }
+    ],
+    "launchTargets": [
+      {
+        "id": "io.github.furroxide.topiaforge.zombies.menu",
+        "title": "Zombies",
+        "description": "Safe-SDK robot wave survival.",
+        "sortKey": 20,
+        "gamemode": "io.github.furroxide.topiaforge.zombies.survival",
+        "world": {
+          "policy": "fixed",
+          "default": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+          "allowPlayerOverride": false
+        },
+        "transition": "auto"
+      }
+    ]
+  }
 }

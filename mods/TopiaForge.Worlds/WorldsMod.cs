@@ -43,15 +43,14 @@ namespace TopiaForge.Worlds
             service.EnableLocalWorlds = config.EnableLocalWorlds;
             service.LocalWorldFolder = config.LocalWorldFolder;
             service.DiscoverBuiltIns();
-            // Pin the entry to the Open Sandbox world: world routing is keyed on the world id (a blank id
-            // would resolve to the first checkpoint level, i.e. the campaign tutorial), and an explicit world
-            // selection with the Sandbox gamemode is honoured. The TopiaForge.Sandbox mod layers the actual
-            // creator gameplay (spawn menu, tools) onto this session.
+            // Pin the entry to the Open Sandbox world: world routing is keyed on the world id, and a blank
+            // id would resolve to the first checkpoint level, which is the campaign tutorial. The creator
+            // sandbox entry moved to the TopiaForge.Sandbox package, which owns that gameplay.
             service.RegisterMenuEntry(new GamemodeMenuEntry(
-                "io.github.furroxide.topiaforge.worlds.sandbox.menu",
-                "Sandbox",
-                "Freeform creator sandbox: an open arena with a spawn menu for props and robots.",
-                WorldsService.SandboxGamemodeId,
+                FreePlayGamemode.MenuEntryId,
+                "Free Play",
+                "Explore any installed world with no gameplay rules.",
+                FreePlayGamemode.FreePlayGamemodeId,
                 WorldsService.OpenSandboxWorldId));
             service.MarkCatalogDirty();
 

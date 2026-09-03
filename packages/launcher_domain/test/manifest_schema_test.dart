@@ -6,13 +6,40 @@ import 'package:launcher_domain/launcher_domain.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test('versioned V5 schema is frozen and self-contained', () {
+  test('the canonical alias is the current versioned schema', () {
     final root = _repoRoot();
     Map<String, Object?> readSchema(String name) =>
         jsonDecode(File(_join(root.path, ['schemas', name])).readAsStringSync())
             as Map<String, Object?>;
 
-    final latest = readSchema('topiaforge.mod.schema.json');
+    final alias = readSchema('topiaforge.mod.schema.json');
+    final versioned = readSchema('topiaforge.mod.v6.schema.json');
+    expect(
+      ((alias['properties'] as Map)['schemaVersion'] as Map)['const'],
+      ModManifest.currentSchemaVersion,
+      reason: 'the alias must declare the version current tooling emits',
+    );
+
+    for (final schema in [alias, versioned]) {
+      schema.remove(r'$id');
+      schema.remove('title');
+      schema.remove('description');
+    }
+    expect(
+      versioned,
+      alias,
+      reason:
+          'the alias editors resolve and the frozen schema readers dispatch on '
+          'must not be able to disagree',
+    );
+  });
+
+  test('versioned V5 schema stays frozen beside the current one', () {
+    final root = _repoRoot();
+    Map<String, Object?> readSchema(String name) =>
+        jsonDecode(File(_join(root.path, ['schemas', name])).readAsStringSync())
+            as Map<String, Object?>;
+
     final versioned = readSchema('topiaforge.mod.v5.schema.json');
     expect(
       jsonEncode(versioned),
@@ -23,19 +50,19 @@ void main() {
     expect(versioned['properties'], isA<Map>());
     expect(
       ((versioned['properties'] as Map)['schemaVersion'] as Map)['const'],
-      ModManifest.currentSchemaVersion,
+      ModManifest.manifestV5SchemaVersion,
+      reason: 'V5 is frozen at 5; the alias moved on without it',
     );
-
-    for (final schema in [latest, versioned]) {
-      schema.remove(r'$id');
-      schema.remove('title');
-      schema.remove('description');
-    }
     expect(
-      versioned,
-      latest,
+      (versioned['properties'] as Map).containsKey('contributions'),
+      isFalse,
+      reason: 'V5 never gains a field it had no reader for',
+    );
+    expect(
+      (versioned['properties'] as Map).containsKey('worldGamemodes'),
+      isTrue,
       reason:
-          'while V5 is latest, its frozen schema and editor alias must remain semantically identical',
+          'V5 keeps the list V6 retired, or manifests still on it cannot be read',
     );
   });
 
@@ -127,7 +154,7 @@ void main() {
     }
   });
 
-  test('checked-in manifests satisfy schema V5', () {
+  test('checked-in manifests satisfy the current schema', () {
     final root = _repoRoot();
     final schemaJson =
         jsonDecode(
@@ -216,7 +243,7 @@ void main() {
 
   test('shared V5 fixtures agree across schema and domain validators', () {
     final root = _repoRoot();
-    final schema = _manifestSchema();
+    final schema = _manifestSchema('topiaforge.mod.v5.schema.json');
     final fixtureRoot = _join(root.path, ['tests', 'fixtures', 'manifests']);
     final cases = File(_join(fixtureRoot, ['corpus.txt']))
         .readAsLinesSync()
@@ -258,14 +285,10 @@ void main() {
   });
 }
 
-JsonSchema _manifestSchema() {
+JsonSchema _manifestSchema([String name = 'topiaforge.mod.schema.json']) {
   final root = _repoRoot();
   return JsonSchema.create(
-    jsonDecode(
-          File(
-            _join(root.path, ['schemas', 'topiaforge.mod.schema.json']),
-          ).readAsStringSync(),
-        )
+    jsonDecode(File(_join(root.path, ['schemas', name])).readAsStringSync())
         as Map<String, Object?>,
   );
 }

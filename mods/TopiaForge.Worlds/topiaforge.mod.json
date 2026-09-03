@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "name": "io.github.furroxide.topiaforge.worlds",
   "displayName": "TopiaForge Worlds",
   "version": "0.1.0-rc.1",
@@ -29,5 +29,51 @@
     "scene-management",
     "world-service",
     "hud"
-  ]
+  ],
+  "contributions": {
+    "worlds": [
+      {
+        "id": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+        "name": "Open Sandbox",
+        "description": "Generated open-world sandbox arena.",
+        "content": {
+          "kind": "game-scene",
+          "sceneName": "UgcPlay"
+        },
+        "transitions": [
+          "additive-arena"
+        ],
+        "spawn": {
+          "kind": "provider-default"
+        },
+        "openToAnyCompatible": true
+      }
+    ],
+    "gamemodes": [
+      {
+        "id": "io.github.furroxide.topiaforge.worlds.freeplay",
+        "name": "Free Play",
+        "description": "Explore a world with no gameplay rules.",
+        "implementation": {
+          "type": "TopiaForge.Worlds.FreePlayGamemode"
+        },
+        "sceneChangePolicy": "end-session"
+      }
+    ],
+    "launchTargets": [
+      {
+        "id": "io.github.furroxide.topiaforge.worlds.freeplay.menu",
+        "title": "Free Play",
+        "description": "Explore any installed world with no gameplay rules.",
+        "sortKey": 90,
+        "gamemode": "io.github.furroxide.topiaforge.worlds.freeplay",
+        "world": {
+          "policy": "open",
+          "default": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+          "allowPlayerOverride": true
+        },
+        "transition": "auto"
+      }
+    ]
+  }
 }

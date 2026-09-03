@@ -23,6 +23,7 @@
     <Compile Remove="CustomWorlds.cs" />
     <Compile Remove="Dialogue.cs" />
     <Compile Remove="GamemodeHost.cs" />
+    <Compile Remove="Gamemodes.cs" />
     <Compile Remove="PauseMenu.cs" />
     <Compile Remove="Prompts.cs" />
     <Compile Remove="RobotAgent.cs" />

@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using NUnit.Framework;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Testing;
@@ -9,36 +6,28 @@ namespace {{ASSEMBLY_NAME}}.Tests
 {
     public sealed class {{TYPE_NAME}}ModTests
     {
+        /// <summary>
+        /// A world mod declares its world; it does not register one. The declaration in
+        /// topiaforge.mod.json is what the launcher reads, so this mod registering anything at load
+        /// would mean the same world existed twice, described two ways, with nothing keeping the two
+        /// descriptions equal.
+        /// </summary>
         [Test]
-        public async Task Load_RegistersBundleWorldAndLifetimeReleasesContentAndDefinitions()
+        public void Load_DeclaresItsWorldWithoutRegisteringAnything()
         {
             var context = new FakeModContext();
             var worlds = new FakeWorldGamemodeService(context.Lifetime);
-            var extension = context.Extensions.Register<IWorldGamemodeService>(worlds);
-            Assert.That(extension.Succeeded, Is.True);
+            Assert.That(context.Extensions.Register<IWorldGamemodeService>(worlds).Succeeded, Is.True);
 
             using var runner = ModLifecycleRunner.Create<{{TYPE_NAME}}Mod>(context);
             runner.Load();
 
-            var registeredWorld = worlds.Worlds.Single();
-            var registeredMenuEntry = worlds.MenuEntries.Single();
-            Assert.That(worlds.TryGetWorldContent(registeredWorld.Id, out var registeredContent), Is.True);
             Assert.Multiple(() =>
             {
-                Assert.That(registeredContent, Is.TypeOf<BundleWorldContent>());
-                Assert.That(registeredMenuEntry.GamemodeId, Is.EqualTo(WellKnownWorldIds.SandboxGamemode));
-                Assert.That(worlds.ActiveRegistrationCount, Is.EqualTo(2));
+                Assert.That(worlds.Worlds, Is.Empty);
+                Assert.That(worlds.MenuEntries, Is.Empty);
+                Assert.That(worlds.ActiveRegistrationCount, Is.Zero);
             });
-
-            var created = await registeredContent!.CreateAsync();
-            Assert.That(created.TryGetValue(out var content), Is.True);
-            Assert.Multiple(() =>
-            {
-                Assert.That(content!.IsAlive, Is.True);
-                Assert.That(context.Assets.ActiveSpawnCount, Is.EqualTo(1));
-            });
-            content!.Dispose();
-            Assert.That(context.Assets.ActiveSpawnCount, Is.Zero);
 
             runner.Unload();
 

@@ -11,23 +11,15 @@ namespace {{ASSEMBLY_NAME}}
 
         protected override void OnLoad()
         {
-            // GamemodeHost owns registration rollback, the session subscription and its lifetime-deferred
-            // unsubscribe, replay of a session that is already running, one-controller-per-session, and teardown.
+            // The gamemode, its world policy and its launch target are declared in
+            // topiaforge.mod.json, so nothing is published from code. GamemodeHost still owns the
+            // session subscription, replay of a session already running, one-controller-per-session,
+            // and teardown.
             var hosted = GamemodeHost<{{TYPE_NAME}}Session>.Create(
                 Context,
                 Context.RequireExtension<IWorldGamemodeService>(),
                 GamemodeId,
-                session => new {{TYPE_NAME}}Session(Context, session),
-                new GamemodeDefinition(
-                    GamemodeId,
-                    "{{DISPLAY_NAME}}",
-                    "Custom gamemode scaffolded from the gamemode template."),
-                new GamemodeMenuEntry(
-                    "{{MOD_ID}}.menu",
-                    "{{DISPLAY_NAME}}",
-                    "Custom gamemode scaffolded from the gamemode template.",
-                    GamemodeId,
-                    WellKnownWorldIds.OpenSandboxWorld));
+                session => new {{TYPE_NAME}}Session(Context, session));
             if (!hosted.TryGetValue(out var gamemodeHost))
             {
                 Context.Logger.Warn("{{DISPLAY_NAME}} could not register: " + hosted.ErrorMessage);
@@ -47,8 +39,34 @@ namespace {{ASSEMBLY_NAME}}
         }
     }
 
+    /// <summary>
+    /// The type the manifest's <c>contributions.gamemodes[0].implementation</c> names.
+    /// </summary>
+    /// <remarks>
+    /// The declaration says which type runs this gamemode; this is that type. Keeping the id on
+    /// <see cref="{{TYPE_NAME}}Mod"/> means the manifest and the code cannot drift to two different
+    /// strings without the compiler noticing.
+    /// </remarks>
+    public sealed class {{TYPE_NAME}}Gamemode : IGamemodeFactory
+    {
+        /// <inheritdoc />
+        public string GamemodeId => {{TYPE_NAME}}Mod.GamemodeId;
+
+        /// <inheritdoc />
+        public OperationResult<IGamemodeController> CreateController(IGamemodeSession session)
+        {
+            if (session == null)
+            {
+                throw new System.ArgumentNullException(nameof(session));
+            }
+
+            return OperationResult<IGamemodeController>.Success(
+                new {{TYPE_NAME}}Session(session.Mod, session.World));
+        }
+    }
+
     /// <summary>Runs one round. Created when a session starts, disposed when it ends.</summary>
-    internal sealed class {{TYPE_NAME}}Session : System.IDisposable
+    internal sealed class {{TYPE_NAME}}Session : IGamemodeController
     {
         private readonly IModContext context;
         private readonly WorldSession session;
