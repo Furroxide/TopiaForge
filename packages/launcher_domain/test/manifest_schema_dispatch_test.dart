@@ -3,7 +3,30 @@ import 'package:test/test.dart';
 
 void main() {
   group('manifest schema dispatch', () {
-    test('rejects retired V4 before interpreting V5 multiplayer fields', () {
+    test('rejects a retired V5 with the command that moves it forward', () {
+      expect(
+        () => ModManifest.fromJson({..._manifest(), 'schemaVersion': 5}),
+        throwsA(
+          isA<FormatException>()
+              .having((error) => error.message, 'message', contains('retired'))
+              .having(
+                (error) => error.message,
+                'message',
+                contains('migrate-manifest'),
+              )
+              .having(
+                (error) => error.message,
+                'message',
+                contains('worldGamemodes'),
+              ),
+        ),
+        reason:
+            'an author whose manifest stopped loading needs the next command, '
+            'not a verdict',
+      );
+    });
+
+    test('rejects retired V4 before interpreting later multiplayer fields', () {
       expect(
         () => ModManifest.fromJson({
           ..._manifest(),
@@ -65,7 +88,7 @@ void main() {
 
       final issues = manifest.validate();
       expect(issues, hasLength(1));
-      expect(issues.single.message, contains('schemaVersion must be 5 or 6'));
+      expect(issues.single.message, contains('schemaVersion must be 6'));
     });
 
     test('rejects missing and non-integer schema selectors', () {
@@ -98,17 +121,18 @@ void main() {
       });
 
       expect(manifest.schemaVersion, 6);
-      expect(manifest.worldGamemodes, isEmpty);
       expect(
         manifest.contributions?.gamemodes.single.implementation?.type,
         'Sample.SchemaDispatch.Mode',
       );
     });
 
-    test('a V6 manifest cannot carry the retired worldGamemodes list', () {
+    test('the retired list is named, not reported as an unknown field', () {
+      // Decoded only so the error can say where those entries went. Falling
+      // through to the closed-field check would report an unknown field, which
+      // tells the author nothing.
       final issues = ModManifest.fromJson({
         ..._manifest(),
-        'schemaVersion': 6,
         'worldGamemodes': [
           {'id': 'sample.schema-dispatch.mode', 'name': 'Dispatch Mode'},
         ],
@@ -116,31 +140,11 @@ void main() {
 
       expect(
         issues.map((issue) => issue.message),
-        contains(contains('worldGamemodes was retired in schemaVersion 6')),
+        contains(contains('worldGamemodes is not supported')),
       );
     });
 
-    test('a V5 manifest cannot declare contributions', () {
-      final issues = ModManifest.fromJson({
-        ..._manifest(),
-        'contributions': {
-          'gamemodes': [
-            {
-              'id': 'sample.schema-dispatch.mode',
-              'name': 'Dispatch Mode',
-              'implementation': {'type': 'Sample.SchemaDispatch.Mode'},
-            },
-          ],
-        },
-      }).validate();
-
-      expect(
-        issues.map((issue) => issue.message),
-        contains(contains('contributions requires schemaVersion 6')),
-      );
-    });
-
-    test('dispatches V5 to the multiplayer decoder', () {
+    test('dispatches to the multiplayer decoder', () {
       final manifest = ModManifest.fromJson({
         ..._manifest(),
         'multiplayer': {
@@ -151,7 +155,7 @@ void main() {
         },
       });
 
-      expect(manifest.schemaVersion, 5);
+      expect(manifest.schemaVersion, ModManifest.currentSchemaVersion);
       expect(manifest.multiplayer?.mode, ModMultiplayerMode.session);
       expect(manifest.multiplayer?.protocol?.version, '1.2.3');
     });
@@ -159,7 +163,7 @@ void main() {
 }
 
 Map<String, Object?> _manifest() => {
-  'schemaVersion': 5,
+  'schemaVersion': ModManifest.currentSchemaVersion,
   'name': 'sample.schema-dispatch',
   'displayName': 'Schema Dispatch',
   'version': '1.0.0',

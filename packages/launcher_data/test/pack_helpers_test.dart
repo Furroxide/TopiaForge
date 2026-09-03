@@ -35,7 +35,7 @@ void main() {
   });
 
   Map<String, Object?> manifestJson() => {
-    'schemaVersion': 5,
+    'schemaVersion': ModManifest.currentSchemaVersion,
     'name': 'sample.mod',
     'displayName': 'Sample Mod',
     'version': '1.2.3',

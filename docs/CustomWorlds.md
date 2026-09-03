@@ -143,5 +143,5 @@ future authoritative world-state service. End the current session with an explic
 Live acceptance for custom Robotopia worlds is Windows/Proton-only on the 0.x line. Other Robotopia code mods
 remain portable when their manifest constraints and content are portable.
 
-See [Specialist modules](Modules.md#worlds), [Manifest V5](ManifestV5.md#package-contract),
+See [Specialist modules](Modules.md#worlds), [Manifest V6](ManifestV6.md),
 and [Test a mod](TestingMods.md).

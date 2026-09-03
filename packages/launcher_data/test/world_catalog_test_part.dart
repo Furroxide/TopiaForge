@@ -6,27 +6,22 @@ void _registerWorldCatalogTests({
   required Directory Function() gameRoot,
   required LocalLauncherRepository Function() repository,
 }) {
-  test('adds installed manifest gamemodes to world catalog', () async {
+  test('a manifest cannot add a gamemode to the world catalog', () async {
     final install = await repository().selectGameDirectory(gameRoot().path);
-    final package = _createPackage(
-      root(),
-      id: 'mode.mod',
-      version: '1.0.0',
-      worldGamemodes: [
-        {
-          'id': 'mode.mod.survival',
-          'name': 'Survival',
-          'description': 'Static gamemode metadata.',
-        },
-      ],
-    );
+    // The catalog is what the game reported, and that is all it is. It used to be
+    // merged with every enabled manifest's gamemode list, so a mode appeared in
+    // the launcher because a package mentioned it -- not because anything could
+    // run it. A declaration now names its implementation, so an unrunnable
+    // launch is a resolution failure the player can be told about rather than a
+    // menu entry that quietly does nothing.
+    final package = _createPackage(root(), id: 'mode.mod', version: '1.0.0');
 
     await repository().installPackage(package.path, install);
     final snapshot = await repository().loadSnapshot();
 
     expect(
       snapshot.worldCatalog.gamemodes.map((mode) => mode.id),
-      contains('mode.mod.survival'),
+      isNot(contains('mode.mod.survival')),
     );
   });
 
@@ -95,7 +90,7 @@ void _registerWorldCatalogTests({
     expect(install.path, gameRoot().path);
   });
 
-  test('adds installed registry gamemodes to world catalog', () async {
+  test('a registry entry cannot add a gamemode either', () async {
     final install = await repository().selectGameDirectory(gameRoot().path);
     final package = _createPackage(
       root(),
@@ -106,9 +101,12 @@ void _registerWorldCatalogTests({
     await repository().installPackage(package.path, install);
     final snapshot = await repository().loadSnapshot();
 
+    // Registry metadata describes a package that could be installed. Letting it
+    // populate the catalog meant the launcher offered launches whose code was
+    // never on this machine at all.
     expect(
       snapshot.worldCatalog.gamemodes.map((mode) => mode.id),
-      contains('registry.sample.survival'),
+      isNot(contains('registry.sample.survival')),
     );
   });
 }

@@ -7,7 +7,7 @@ void main() {
       'preserves namespaced extension fields through canonical serialization',
       () {
         final manifest = ModManifest.fromJson({
-          'schemaVersion': 5,
+          'schemaVersion': ModManifest.currentSchemaVersion,
           'name': 'sample.forward-compatible',
           'displayName': 'Forward Compatible',
           'version': '1.2.3',
@@ -135,15 +135,14 @@ void main() {
       }
     });
 
-    test('rejects retired or incomplete world gamemode identities', () {
-      final retiredId =
-          'robo'
-          'topia.mode.old';
+    test('names the retired world gamemode list rather than the key', () {
+      // Decoded only so the error can say what the field was. Falling through
+      // to the unknown-field check would report a typo, which is not what
+      // happened and does not say where those entries went.
       final manifest = ModManifest.fromJson({
         ..._manifestJson(),
         'worldGamemodes': [
-          {'id': retiredId, 'name': 'Old Mode'},
-          {'id': 'author.unnamed', 'name': ''},
+          {'id': 'author.mode.old', 'name': 'Old Mode'},
         ],
       });
 
@@ -151,10 +150,12 @@ void main() {
 
       expect(
         blocking.map((issue) => issue.message),
-        containsAll([
-          contains('worldGamemodes id $retiredId'),
-          contains('worldGamemodes name is required'),
-        ]),
+        contains(contains('worldGamemodes is not supported')),
+      );
+      expect(
+        blocking.map((issue) => issue.message),
+        isNot(contains(contains('extensions must use x-*'))),
+        reason: 'a retired field is not an unknown one',
       );
     });
 
@@ -281,7 +282,7 @@ Map<String, Object?> _manifestJson({
   String entryAssembly = 'Validation.dll',
   String version = '1.0.0',
 }) => {
-  'schemaVersion': 5,
+  'schemaVersion': ModManifest.currentSchemaVersion,
   'name': 'validation.mod',
   'displayName': 'Validation Mod',
   'version': version,

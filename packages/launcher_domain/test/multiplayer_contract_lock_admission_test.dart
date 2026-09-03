@@ -13,7 +13,7 @@ void main() {
         mods: [
           MultiplayerAdmissionMod(
             manifest: ModManifest(
-              schemaVersion: 5,
+              schemaVersion: ModManifest.currentSchemaVersion,
               id: modId,
               name: 'Handcrafted session',
               version: '1.0.0',

@@ -22,7 +22,7 @@ namespace TopiaForge.ModManager.Tests
 
             var manifest = new ModManifest
             {
-                SchemaVersion = 5,
+                SchemaVersion = ModManifest.CurrentSchemaVersion,
                 Id = "io.github.furroxide.topiaforge.robotkit",
                 Name = "RobotKit",
                 Version = "1.2.3-beta.1+acceptance",
@@ -53,7 +53,7 @@ namespace TopiaForge.ModManager.Tests
 
             var customProvider = new ModManifest
             {
-                SchemaVersion = 5,
+                SchemaVersion = ModManifest.CurrentSchemaVersion,
                 Id = "example.weather-provider",
                 Name = "Weather Provider",
                 Version = "1.4.0+provider.7",

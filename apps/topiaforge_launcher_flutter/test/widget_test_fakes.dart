@@ -262,7 +262,7 @@ class _FakeDeveloperRepository implements DeveloperRepository {
   Future<ModManifest> readModManifest(String projectPath) {
     return Future.value(
       const ModManifest(
-        schemaVersion: 5,
+        schemaVersion: ModManifest.currentSchemaVersion,
         id: 'sample.mod',
         name: 'Sample Mod',
         version: '0.1.0',

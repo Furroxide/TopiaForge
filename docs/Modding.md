@@ -91,7 +91,7 @@ Mods should disable only the affected feature and show a useful message.
 `topiaforge.mod.json` schema V5 is canonical. Omit `multiplayer` for a standalone-only mod; add it through the multiplayer module command when needed. Required dependencies and optional dependencies are
 ID-to-range maps. Compatibility ranges, platform/architecture/content constraints, capabilities,
 load-order hints, exported API assemblies, and namespaced `x-*` metadata are validated before code
-executes. Read [Manifest V5](ManifestV5.md) for every field and
+executes. Read [Manifest V6](ManifestV6.md) for every field and
 [Multiplayer API preview](Multiplayer.md) before opting in.
 
 ```sh
@@ -127,7 +127,7 @@ staged when required and take effect after a Robotopia restart.
 
 ## Next steps
 
-- [Manifest V5](ManifestV5.md)
+- [Manifest V6](ManifestV6.md)
 - [Multiplayer API preview](Multiplayer.md)
 - [Core services](CoreServices.md)
 - [Specialist modules](Modules.md)

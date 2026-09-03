@@ -6,7 +6,7 @@ description: Migration notice for the pre-release TopiaForge manifest schema.
 # Retired Manifest V4
 
 Manifest V4 was retired before TopiaForge's first public release. TopiaForge accepts only
-[Manifest V5](ManifestV5.md). This is an intentional pre-release break: there is no released V4
+[Manifest V6](ManifestV6.md). This is an intentional pre-release break: there is no released V4
 ecosystem to preserve, and keeping two schemas would make authoring, validation, and multiplayer
 admission harder to understand.
 

@@ -37,7 +37,6 @@ class ModManifest {
     this.architectures = const [],
     this.contentTargets = const [],
     this.builtWith,
-    this.worldGamemodes = const [],
     this.contributions,
     this.apiAssemblies = const [],
     this.multiplayer,
@@ -64,7 +63,6 @@ class ModManifest {
   /// testing for a single version. A gate that silently stops applying is worse
   /// than one that rejects.
   static bool isSupportedSchemaVersion(int schemaVersion) =>
-      schemaVersion == manifestV5SchemaVersion ||
       schemaVersion == manifestV6SchemaVersion;
 
   static bool isValidId(String id) {
@@ -110,10 +108,8 @@ class ModManifest {
   final List<String> architectures;
   final List<String> contentTargets;
   final ModBuildMetadata? builtWith;
-  final List<GamemodeDefinition> worldGamemodes;
 
-  /// The worlds, gamemodes and launch targets this package declares. V6 only;
-  /// null on a V5 manifest, which had no way to express any of them.
+  /// The worlds, gamemodes and launch targets this package declares.
   final ModContributions? contributions;
   final List<String> apiAssemblies;
 
@@ -140,8 +136,6 @@ class ModManifest {
   /// version-specific fields are interpreted.
   factory ModManifest.fromJson(Map<String, Object?> json) {
     switch (_dispatchManifestSchema(json)) {
-      case _ManifestSchemaContract.v5:
-        return _readV5Manifest(json);
       case _ManifestSchemaContract.v6:
         return _readV6Manifest(json);
     }
@@ -188,8 +182,6 @@ class ModManifest {
     if (architectures.isNotEmpty) 'architectures': architectures,
     if (contentTargets.isNotEmpty) 'contentTargets': contentTargets,
     if (builtWith != null) 'builtWith': builtWith!.toJson(),
-    if (worldGamemodes.isNotEmpty)
-      'worldGamemodes': worldGamemodes.map((item) => item.toJson()).toList(),
     if (contributions != null && !contributions!.isEmpty)
       'contributions': contributions!.toJson(),
     if (apiAssemblies.isNotEmpty) 'apiAssemblies': apiAssemblies,
@@ -203,7 +195,16 @@ class ModManifest {
         LauncherIssue(
           severity: IssueSeverity.error,
           message:
-              'schemaVersion 4 was retired before TopiaForge 1.0; migrate to schemaVersion 5. The multiplayer field is optional for standalone-only mods.',
+              'schemaVersion 4 was retired before TopiaForge 1.0; migrate to schemaVersion 6. The multiplayer field is optional for standalone-only mods.',
+        ),
+      ];
+    }
+    if (schemaVersion == manifestV5SchemaVersion) {
+      return const [
+        LauncherIssue(
+          severity: IssueSeverity.error,
+          message:
+              'schemaVersion 5 was retired before TopiaForge 1.0; migrate this manifest to schemaVersion 6 with `topiaforge migrate-manifest --project <path>`. Its worldGamemodes list becomes contributions.gamemodes and contributions.launchTargets.',
         ),
       ];
     }
@@ -211,7 +212,7 @@ class ModManifest {
       return const [
         LauncherIssue(
           severity: IssueSeverity.error,
-          message: 'schemaVersion must be 5 or 6.',
+          message: 'schemaVersion must be 6.',
         ),
       ];
     }
@@ -222,11 +223,7 @@ class ModManifest {
     _validateConflicts(issues);
     _validateOrderHints(issues);
     _validateApiAssemblies(issues);
-    if (schemaVersion == manifestV5SchemaVersion) {
-      _validateManifestWorldGamemodes(this, issues);
-    } else {
-      _validateManifestContributions(this, issues);
-    }
+    _validateManifestContributions(this, issues);
     _validateUnsupportedAliases(issues);
     _validateUnknownFields(issues);
     for (final message in _structuralIssues) {

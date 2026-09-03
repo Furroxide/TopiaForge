@@ -53,20 +53,6 @@ namespace TopiaForge.ModManager.Core
             "policy", "default", "allow", "allowPlayerOverride"
         };
 
-        private static string ForeignFieldMessage(string field)
-        {
-            if (string.Equals(field, "worldGamemodes", StringComparison.Ordinal))
-            {
-                return "Manifest field 'worldGamemodes' was retired in schemaVersion 6. Split it into " +
-                    "contributions.gamemodes (identity, implementation binding and world requirements) " +
-                    "and contributions.launchTargets (what the player picks, and which world it starts " +
-                    "in). Run 'topiaforge migrate-manifest --project <path>'.";
-            }
-
-            return "Manifest field 'contributions' requires schemaVersion 6; schemaVersion 5 cannot " +
-                "declare worlds, gamemodes or launch targets.";
-        }
-
         private static void ValidateContributionsObject(
             IReadOnlyList<JsonObjectMerge.RawJsonProperty> properties)
         {

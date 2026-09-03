@@ -111,11 +111,7 @@ namespace TopiaForge.ModManager.Tests
         /// </remarks>
         private static void AManifestThisSideWritesIsOneItCanReadBack()
         {
-            foreach (var schemaVersion in new[]
-                     {
-                         ModManifest.ManifestV5SchemaVersion,
-                         ModManifest.ManifestV6SchemaVersion
-                     })
+            foreach (var schemaVersion in new[] { ModManifest.ManifestV6SchemaVersion })
             {
                 var written = JsonUtil.Serialize(new ModManifest
                 {
@@ -135,13 +131,11 @@ namespace TopiaForge.ModManager.Tests
                     "a manifest this side wrote must be one it accepts");
             }
 
-            var v6 = JsonUtil.Serialize(new ModManifest
-            {
-                SchemaVersion = ModManifest.ManifestV6SchemaVersion,
-                WorldGamemodes = { new ModGamemode { Id = "example.round-trip.mode", Name = "Mode" } }
-            });
-            Assert(!v6.Contains("worldGamemodes", StringComparison.Ordinal),
-                "V6 must not emit the retired list even when the in-memory model still carries one");
+            Assert(!JsonUtil.Serialize(new ModManifest
+                {
+                    SchemaVersion = ModManifest.ManifestV6SchemaVersion
+                }).Contains("worldGamemodes", StringComparison.Ordinal),
+                "the retired list has no in-memory home left to leak from");
         }
 
         private static void Assert(bool condition, string message)

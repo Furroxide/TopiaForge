@@ -47,15 +47,7 @@ void _createRegistry(Directory repoRoot) {
     ..addFile(
       ArchiveFile.string(
         'topiaforge.mod.json',
-        jsonEncode(
-          _manifestJson(
-            'registry.sample',
-            '1.0.0',
-            worldGamemodes: [
-              {'id': 'registry.sample.survival', 'name': 'Registry Survival'},
-            ],
-          ),
-        ),
+        jsonEncode(_manifestJson('registry.sample', '1.0.0')),
       ),
     )
     ..addFile(
@@ -90,7 +82,6 @@ File _createPackage(
   required String id,
   required String version,
   List<Map<String, Object?>> dependencies = const [],
-  List<Map<String, Object?>> worldGamemodes = const [],
   List<String> apiAssemblies = const [],
   String? gameVersionRange,
   String? loaderVersionRange,
@@ -107,7 +98,6 @@ File _createPackage(
             id,
             version,
             dependencies: dependencies,
-            worldGamemodes: worldGamemodes,
             apiAssemblies: apiAssemblies,
             gameVersionRange: gameVersionRange,
             loaderVersionRange: loaderVersionRange,
@@ -129,14 +119,13 @@ Map<String, Object?> _manifestJson(
   String id,
   String version, {
   List<Map<String, Object?>> dependencies = const [],
-  List<Map<String, Object?>> worldGamemodes = const [],
   List<String> apiAssemblies = const [],
   String? gameVersionRange,
   String? loaderVersionRange,
   String? sdkVersionRange,
   String category = '',
 }) => {
-  'schemaVersion': 5,
+  'schemaVersion': ModManifest.currentSchemaVersion,
   'name': id,
   'displayName': id,
   'version': version,
@@ -153,7 +142,6 @@ Map<String, Object?> _manifestJson(
         item['id'] as String: (item['versionRange'] ?? item['version'] ?? '*')
             .toString(),
     },
-  if (worldGamemodes.isNotEmpty) 'worldGamemodes': worldGamemodes,
   if (apiAssemblies.isNotEmpty) 'apiAssemblies': apiAssemblies,
 };
 

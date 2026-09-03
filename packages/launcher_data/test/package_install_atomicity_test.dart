@@ -420,7 +420,7 @@ Map<String, Object?> _manifest(
   String version, {
   Map<String, String> dependencies = const {},
 }) => {
-  'schemaVersion': 5,
+  'schemaVersion': ModManifest.currentSchemaVersion,
   'name': id,
   'displayName': id,
   'version': version,

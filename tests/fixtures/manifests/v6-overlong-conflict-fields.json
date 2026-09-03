@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 6,
+  "name": "fixtures.conflict-fields",
+  "displayName": "V5 Adversarial Fixture",
+  "version": "1.0.0",
+  "author": {
+    "name": "TopiaForge Tests"
+  },
+  "entryAssembly": "Fixture.dll",
+  "entryType": "Fixtures.V5Mod",
+  "supportedGameVersionRange": "*",
+  "supportedLoaderVersionRange": "*",
+  "supportedSdkVersionRange": "*",
+  "conflicts": [
+    {
+      "id": "fixtures.other",
+      "versionRange": ">=1.0.0                                                                                                                                                                                                                                                          ",
+      "reason": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    }
+  ]
+}

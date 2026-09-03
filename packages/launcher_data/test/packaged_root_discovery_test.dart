@@ -164,7 +164,7 @@ File _createPackage(
 }
 
 Map<String, Object?> _manifestJson(String id, String version) => {
-  'schemaVersion': 5,
+  'schemaVersion': ModManifest.currentSchemaVersion,
   'name': id,
   'displayName': id,
   'version': version,

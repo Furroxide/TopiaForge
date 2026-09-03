@@ -34,96 +34,78 @@ void main() {
     );
   });
 
-  test('versioned V5 schema stays frozen beside the current one', () {
+  test('the retired V5 schema rejects every document', () {
     final root = _repoRoot();
-    Map<String, Object?> readSchema(String name) =>
-        jsonDecode(File(_join(root.path, ['schemas', name])).readAsStringSync())
-            as Map<String, Object?>;
+    final retired = _manifestSchema('topiaforge.mod.v5.schema.json');
 
-    final versioned = readSchema('topiaforge.mod.v5.schema.json');
+    // The same shape V4 was retired into. A schema that merely stopped matching
+    // would report an unknown field; one that refuses outright can carry the
+    // sentence that says what to run instead.
+    for (final document in <Map<String, Object?>>[
+      const {},
+      _v6Manifest(),
+      {..._v6Manifest(), 'schemaVersion': 5},
+    ]) {
+      expect(
+        retired.validate(document).isValid,
+        isFalse,
+        reason: 'the retired V5 schema must reject $document',
+      );
+    }
+
+    final raw =
+        jsonDecode(
+              File(
+                _join(root.path, ['schemas', 'topiaforge.mod.v5.schema.json']),
+              ).readAsStringSync(),
+            )
+            as Map<String, Object?>;
+    expect(raw['not'], isEmpty);
+    expect(raw['description'], contains('migrate-manifest'));
     expect(
-      jsonEncode(versioned),
-      isNot(contains('/schemas/topiaforge.mod.schema.json')),
-      reason:
-          'a frozen versioned schema must never reference the mutable latest schema',
-    );
-    expect(versioned['properties'], isA<Map>());
-    expect(
-      ((versioned['properties'] as Map)['schemaVersion'] as Map)['const'],
-      ModManifest.manifestV5SchemaVersion,
-      reason: 'V5 is frozen at 5; the alias moved on without it',
-    );
-    expect(
-      (versioned['properties'] as Map).containsKey('contributions'),
+      raw.containsKey('properties'),
       isFalse,
-      reason: 'V5 never gains a field it had no reader for',
-    );
-    expect(
-      (versioned['properties'] as Map).containsKey('worldGamemodes'),
-      isTrue,
       reason:
-          'V5 keeps the list V6 retired, or manifests still on it cannot be read',
+          'a retired schema keeps no shape anyone could still author against',
     );
   });
 
-  test('versioned V6 schema carries the V5 body over verbatim', () {
+  test('the versioned V6 schema is frozen and self-contained', () {
     final root = _repoRoot();
-    Map<String, Object?> readSchema(String name) =>
-        jsonDecode(File(_join(root.path, ['schemas', name])).readAsStringSync())
+    final v6 =
+        jsonDecode(
+              File(
+                _join(root.path, ['schemas', 'topiaforge.mod.v6.schema.json']),
+              ).readAsStringSync(),
+            )
             as Map<String, Object?>;
 
-    final v5 = readSchema('topiaforge.mod.v5.schema.json');
-    final v6 = readSchema('topiaforge.mod.v6.schema.json');
     expect(
       jsonEncode(v6),
       isNot(contains('/schemas/topiaforge.mod.schema.json')),
       reason:
-          'a frozen versioned schema must never reference the mutable latest schema',
+          'a frozen versioned schema must never reference the mutable alias',
     );
+
+    final properties = v6['properties']! as Map<String, Object?>;
     expect(
-      ((v6['properties'] as Map)['schemaVersion'] as Map)['const'],
+      (properties['schemaVersion']! as Map)['const'],
       ModManifest.manifestV6SchemaVersion,
     );
+    expect(properties.containsKey('contributions'), isTrue);
 
-    // V6 changes exactly two properties and adds one. Everything else is the V5
-    // body unchanged, and this is what makes that a fact rather than a claim: a
-    // hand edit that drifts one carried-over rule fails here.
-    final v5Properties = v5['properties']! as Map<String, Object?>;
-    final v6Properties = v6['properties']! as Map<String, Object?>;
-    for (final name in v5Properties.keys) {
-      if (name == 'schemaVersion' || name == 'worldGamemodes') {
-        continue;
-      }
-      expect(
-        v6Properties[name],
-        v5Properties[name],
-        reason: 'property $name must be carried over from V5 unchanged',
-      );
-    }
-    expect(v6Properties.keys.toSet().difference(v5Properties.keys.toSet()), {
-      'contributions',
-    });
+    // Declared, and rejecting. additionalProperties alone would only say
+    // "unknown field", which does not tell an author where those entries went.
+    expect((properties['worldGamemodes']! as Map)['not'], isEmpty);
+    expect(
+      (properties['worldGamemodes']! as Map)['description'],
+      contains('migrate-manifest'),
+    );
 
-    final v5Definitions = v5['definitions']! as Map<String, Object?>;
-    final v6Definitions = v6['definitions']! as Map<String, Object?>;
-    for (final name in v5Definitions.keys) {
-      if (!v6Definitions.containsKey(name)) {
-        // `gamemode` described a V5 worldGamemodes entry. Nothing in V6 refers
-        // to it, and V5 keeps its own frozen copy, so carrying it would be dead
-        // schema.
-        expect(name, 'gamemode');
-        continue;
-      }
-      expect(
-        v6Definitions[name],
-        v5Definitions[name],
-        reason: 'definition $name must be carried over from V5 unchanged',
-      );
-    }
     expect(
       jsonEncode(v6),
       isNot(contains('#/definitions/gamemode"')),
-      reason: 'a definition V6 dropped must not still be referenced',
+      reason: 'the V5 gamemode definition has no referent left in V6',
     );
   });
 
@@ -241,9 +223,9 @@ void main() {
     }
   });
 
-  test('shared V5 fixtures agree across schema and domain validators', () {
+  test('shared fixtures agree across schema and domain validators', () {
     final root = _repoRoot();
-    final schema = _manifestSchema('topiaforge.mod.v5.schema.json');
+    final schema = _manifestSchema();
     final fixtureRoot = _join(root.path, ['tests', 'fixtures', 'manifests']);
     final cases = File(_join(fixtureRoot, ['corpus.txt']))
         .readAsLinesSync()
@@ -294,7 +276,7 @@ JsonSchema _manifestSchema([String name = 'topiaforge.mod.schema.json']) {
 }
 
 Map<String, Object?> _validManifest() => {
-  'schemaVersion': 5,
+  'schemaVersion': ModManifest.currentSchemaVersion,
   'name': 'sample.schema-parity',
   'displayName': 'Schema parity',
   'version': '1.2.3',

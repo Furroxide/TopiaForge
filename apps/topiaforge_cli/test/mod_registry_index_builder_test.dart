@@ -334,7 +334,7 @@ Map<String, Object?> _manifestJson({
   required String version,
 }) {
   return {
-    'schemaVersion': 5,
+    'schemaVersion': ModManifest.currentSchemaVersion,
     'name': id,
     'displayName': id,
     'version': version,

@@ -7,7 +7,7 @@ ModManifest _manifest({
   Map<String, Object?> extra = const {},
 }) {
   return ModManifest.fromJson({
-    'schemaVersion': 5,
+    'schemaVersion': ModManifest.currentSchemaVersion,
     'name': id,
     'displayName': 'Jetpack',
     'version': version,

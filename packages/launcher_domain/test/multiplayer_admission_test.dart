@@ -286,7 +286,7 @@ void main() {
 
   test('invalid profiles fail structurally and deterministically', () {
     final invalidSession = ModManifest(
-      schemaVersion: 5,
+      schemaVersion: ModManifest.currentSchemaVersion,
       id: 'example.invalid',
       name: 'Invalid',
       version: '1.0.0',
@@ -448,7 +448,7 @@ MultiplayerAdmissionMod _session(
   return MultiplayerAdmissionMod(
     packageSha256: archive ?? _hash('f'),
     manifest: ModManifest(
-      schemaVersion: 5,
+      schemaVersion: ModManifest.currentSchemaVersion,
       id: id,
       name: id,
       version: package,
@@ -470,7 +470,7 @@ MultiplayerAdmissionMod _mode(String id, ModMultiplayerMode mode) =>
     MultiplayerAdmissionMod(
       packageSha256: _hash('f'),
       manifest: ModManifest(
-        schemaVersion: 5,
+        schemaVersion: ModManifest.currentSchemaVersion,
         id: id,
         name: id,
         version: '1.0.0',
@@ -480,7 +480,7 @@ MultiplayerAdmissionMod _mode(String id, ModMultiplayerMode mode) =>
 
 ModManifest _manifest(
   String id, {
-  int schemaVersion = 5,
+  int schemaVersion = ModManifest.currentSchemaVersion,
   String version = '1.0.0',
 }) => ModManifest(
   schemaVersion: schemaVersion,

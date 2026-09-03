@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:archive/archive.dart';
 import 'package:topiaforge/src/registry_entry_builder.dart';
 import 'package:test/test.dart';
+import 'package:launcher_domain/launcher_domain.dart';
 
 void main() {
   test('registry reader rejects traversal and portable case collisions', () {
@@ -52,7 +53,7 @@ void main() {
 
 List<int> _package({List<ArchiveFile> extraEntries = const []}) {
   final manifest = {
-    'schemaVersion': 5,
+    'schemaVersion': ModManifest.currentSchemaVersion,
     'name': 'test.secure',
     'displayName': 'Secure test',
     'version': '1.0.0',

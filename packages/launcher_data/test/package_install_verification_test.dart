@@ -314,7 +314,7 @@ Map<String, Object?> _manifest(
   Map<String, String> dependencies = const {},
   List<String> capabilities = const [],
 }) => {
-  'schemaVersion': 5,
+  'schemaVersion': ModManifest.currentSchemaVersion,
   'name': id,
   'displayName': id,
   'version': '1.0.0',

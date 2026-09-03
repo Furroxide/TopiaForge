@@ -311,7 +311,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static ModManifest Manifest(string id, string version = "1.0.0") => new ModManifest
         {
-            SchemaVersion = 5,
+            SchemaVersion = ModManifest.CurrentSchemaVersion,
             Id = id,
             Name = id,
             Version = version

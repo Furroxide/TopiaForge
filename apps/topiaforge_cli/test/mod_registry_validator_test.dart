@@ -249,7 +249,7 @@ Map<String, Object?> _manifestJson({
   Map<String, String> dependencies = const {},
 }) {
   return {
-    'schemaVersion': 5,
+    'schemaVersion': ModManifest.currentSchemaVersion,
     'name': id,
     'displayName': id,
     'version': version,

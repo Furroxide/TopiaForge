@@ -169,7 +169,7 @@ namespace TopiaForge.ModManager.Tests
                 var registry = new ModServiceRegistry();
                 var providerManifest = new TopiaForge.ModManager.Core.ModManifest
                 {
-                    SchemaVersion = 5,
+                    SchemaVersion = TopiaForge.ModManager.Core.ModManifest.CurrentSchemaVersion,
                     Id = "provider.optional",
                     Name = "Optional Provider",
                     Version = "1.0.0",
@@ -184,7 +184,7 @@ namespace TopiaForge.ModManager.Tests
 
                 var consumerManifest = new TopiaForge.ModManager.Core.ModManifest
                 {
-                    SchemaVersion = 5,
+                    SchemaVersion = TopiaForge.ModManager.Core.ModManifest.CurrentSchemaVersion,
                     Id = "consumer.optional",
                     Name = "Optional Consumer",
                     Version = "1.0.0",

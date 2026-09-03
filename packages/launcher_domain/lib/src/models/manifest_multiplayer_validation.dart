@@ -14,7 +14,10 @@ void _validateManifestMultiplayer(
     );
   }
 
-  if (manifest.schemaVersion != 5) return;
+  // Routed through the shared predicate rather than a literal: a gate that
+  // silently stops applying when the contract moves is worse than one that
+  // rejects, and this one had already stopped.
+  if (!ModManifest.isSupportedSchemaVersion(manifest.schemaVersion)) return;
 
   final multiplayer = manifest.multiplayer;
   if (!manifest.multiplayerIsPresent || multiplayer == null) {

@@ -52,7 +52,6 @@ void _validateManifestConstraints(
   count('tags', manifest.tags.length, 64);
   count('screenshots', manifest.screenshots.length, 32);
   count('hashes', manifest.hashes.length, 8192);
-  count('worldGamemodes', manifest.worldGamemodes.length, 64);
   count('apiAssemblies', manifest.apiAssemblies.length, 64);
   count('x-* extensions', manifest.extraFields.length, 32);
   count('top-level manifest fields', manifest.toJson().length, 64);

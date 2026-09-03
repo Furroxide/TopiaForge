@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:launcher_data/launcher_data.dart';
+import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
@@ -30,13 +31,11 @@ void main() {
     );
   });
 
-  tearDown(() {
-    if (root.existsSync()) root.deleteSync(recursive: true);
-  });
+  tearDown(() => root.existsSync() ? root.deleteSync(recursive: true) : null);
 
   void writeManifest([Map<String, Object?>? overrides]) {
     final manifest = <String, Object?>{
-      'schemaVersion': 5,
+      'schemaVersion': ModManifest.currentSchemaVersion,
       'name': 'sample.mod',
       'displayName': 'Sample Mod',
       'version': '1.2.3',
