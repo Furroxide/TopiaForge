@@ -1,0 +1,27 @@
+{
+  "id": "launch-intent-overlong-gamemode-id",
+  "channel": "serialization",
+  "kind": "launch-intent-hostile",
+  "summary": "Past 96 characters the reader rejects the target, and the writer cannot produce one either.",
+  "intent": {
+    "command": "launch-target",
+    "worldId": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+    "gamemodeId": "io.github.furroxide.topiaforge.fixture.gggggggggggggggggggggggggggggggggggggggggggggggggggggggggg",
+    "loadMode": "additiveArena",
+    "allowAdditiveFallback": true
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "worldLaunch.gamemodeId"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "writer-cannot-emit"
+      ]
+    }
+  }
+}

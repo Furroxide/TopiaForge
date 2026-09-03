@@ -735,6 +735,19 @@ namespace TopiaForge.ModManager.Core
             }
         }
 
+        internal static bool IsRetiredEcosystemId(string id)
+        {
+            foreach (var prefix in RetiredEcosystemIdPrefixes)
+            {
+                if (id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         internal static bool IsValidId(string? id)
         {
             if (string.IsNullOrWhiteSpace(id) || !IdRegex.IsMatch(id))
