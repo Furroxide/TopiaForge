@@ -21,10 +21,58 @@
       "path": "serialization/launch-intent/launch-intent-carries-a-long-declaration-id.json"
     },
     {
+      "id": "launch-intent-gamemode-length-65",
+      "channel": "serialization",
+      "kind": "launch-intent-round-trip",
+      "path": "serialization/launch-intent/launch-intent-gamemode-length-65.json"
+    },
+    {
+      "id": "launch-intent-gamemode-length-96",
+      "channel": "serialization",
+      "kind": "launch-intent-round-trip",
+      "path": "serialization/launch-intent/launch-intent-gamemode-length-96.json"
+    },
+    {
+      "id": "launch-intent-gamemode-length-97",
+      "channel": "serialization",
+      "kind": "launch-intent-hostile",
+      "path": "serialization/launch-intent/launch-intent-gamemode-length-97.json"
+    },
+    {
       "id": "launch-intent-overlong-gamemode-id",
       "channel": "serialization",
       "kind": "launch-intent-hostile",
       "path": "serialization/launch-intent/launch-intent-overlong-gamemode-id.json"
+    },
+    {
+      "id": "launch-intent-unicode-gamemode",
+      "channel": "serialization",
+      "kind": "launch-intent-hostile",
+      "path": "serialization/launch-intent/launch-intent-unicode-gamemode.json"
+    },
+    {
+      "id": "launch-intent-unicode-world",
+      "channel": "serialization",
+      "kind": "launch-intent-hostile",
+      "path": "serialization/launch-intent/launch-intent-unicode-world.json"
+    },
+    {
+      "id": "launch-intent-world-length-65",
+      "channel": "serialization",
+      "kind": "launch-intent-round-trip",
+      "path": "serialization/launch-intent/launch-intent-world-length-65.json"
+    },
+    {
+      "id": "launch-intent-world-length-96",
+      "channel": "serialization",
+      "kind": "launch-intent-round-trip",
+      "path": "serialization/launch-intent/launch-intent-world-length-96.json"
+    },
+    {
+      "id": "launch-intent-world-length-97",
+      "channel": "serialization",
+      "kind": "launch-intent-hostile",
+      "path": "serialization/launch-intent/launch-intent-world-length-97.json"
     },
     {
       "id": "launch-target-additive-arena",
@@ -75,16 +123,184 @@
       "path": "serialization/manifest/v6-absent-flags-are-not-false.json"
     },
     {
+      "id": "v6-authored-marker-without-name",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-authored-marker-without-name.json"
+    },
+    {
+      "id": "v6-boolean-sort-key",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-boolean-sort-key.json"
+    },
+    {
+      "id": "v6-bundle-without-prefab",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-bundle-without-prefab.json"
+    },
+    {
+      "id": "v6-capabilities-must-contain-world-service",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-capabilities-must-contain-world-service.json"
+    },
+    {
+      "id": "v6-consent-over-limit",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-consent-over-limit.json"
+    },
+    {
       "id": "v6-contributions-without-world-service",
       "channel": "serialization",
       "kind": "manifest-rejects",
       "path": "serialization/manifest/v6-contributions-without-world-service.json"
     },
     {
+      "id": "v6-control-character-id-carriage-return",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-control-character-id-carriage-return.json"
+    },
+    {
+      "id": "v6-control-character-id-line-feed",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-control-character-id-line-feed.json"
+    },
+    {
+      "id": "v6-control-character-id-tab",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-control-character-id-tab.json"
+    },
+    {
+      "id": "v6-control-character-type-carriage-return",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-control-character-type-carriage-return.json"
+    },
+    {
+      "id": "v6-control-character-type-line-feed",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-control-character-type-line-feed.json"
+    },
+    {
+      "id": "v6-control-character-type-tab",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-control-character-type-tab.json"
+    },
+    {
+      "id": "v6-dangling-local-consent",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-dangling-local-consent.json"
+    },
+    {
+      "id": "v6-declaration-equals-package-id",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-declaration-equals-package-id.json"
+    },
+    {
+      "id": "v6-declaration-id-length-64",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-declaration-id-length-64.json"
+    },
+    {
+      "id": "v6-declaration-id-length-65",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-declaration-id-length-65.json"
+    },
+    {
+      "id": "v6-declaration-id-length-96",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-declaration-id-length-96.json"
+    },
+    {
       "id": "v6-declaration-is-not-an-object",
       "channel": "serialization",
       "kind": "manifest-rejects",
       "path": "serialization/manifest/v6-declaration-is-not-an-object.json"
+    },
+    {
+      "id": "v6-description-and-consent-explicit-empty",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-description-and-consent-explicit-empty.json"
+    },
+    {
+      "id": "v6-description-over-limit",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-description-over-limit.json"
+    },
+    {
+      "id": "v6-discovered-family-as-default",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-discovered-family-as-default.json"
+    },
+    {
+      "id": "v6-discovered-family-in-allow",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-discovered-family-in-allow.json"
+    },
+    {
+      "id": "v6-discovered-instance-as-default",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-discovered-instance-as-default.json"
+    },
+    {
+      "id": "v6-discovered-with-prohibited-bundle",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-discovered-with-prohibited-bundle.json"
+    },
+    {
+      "id": "v6-discovered-without-implementation",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-discovered-without-implementation.json"
+    },
+    {
+      "id": "v6-display-metadata-and-explicit-defaults",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-display-metadata-and-explicit-defaults.json"
+    },
+    {
+      "id": "v6-duplicate-consent",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-duplicate-consent.json"
+    },
+    {
+      "id": "v6-duplicate-id-across-kinds",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-duplicate-id-across-kinds.json"
+    },
+    {
+      "id": "v6-duplicate-id-case-insensitive",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-duplicate-id-case-insensitive.json"
+    },
+    {
+      "id": "v6-duplicate-transitions",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-duplicate-transitions.json"
     },
     {
       "id": "v6-empty-contributions",
@@ -99,6 +315,54 @@
       "path": "serialization/manifest/v6-empty-declaration-array.json"
     },
     {
+      "id": "v6-empty-implementation-assembly",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-empty-implementation-assembly.json"
+    },
+    {
+      "id": "v6-empty-prohibited-bundle-field",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-empty-prohibited-bundle-field.json"
+    },
+    {
+      "id": "v6-empty-prohibited-consent",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-empty-prohibited-consent.json"
+    },
+    {
+      "id": "v6-empty-prohibited-policy-allow",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-empty-prohibited-policy-allow.json"
+    },
+    {
+      "id": "v6-empty-prohibited-spawn-marker",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-empty-prohibited-spawn-marker.json"
+    },
+    {
+      "id": "v6-empty-requirement-transitions",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-empty-requirement-transitions.json"
+    },
+    {
+      "id": "v6-empty-scene-change-policy",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-empty-scene-change-policy.json"
+    },
+    {
+      "id": "v6-empty-target-transition",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-empty-target-transition.json"
+    },
+    {
       "id": "v6-empty-world-requirements",
       "channel": "serialization",
       "kind": "manifest-rejects",
@@ -111,16 +375,94 @@
       "path": "serialization/manifest/v6-every-content-kind.json"
     },
     {
+      "id": "v6-explicit-binding-in-hashes",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-explicit-binding-in-hashes.json"
+    },
+    {
+      "id": "v6-explicit-binding-not-in-hashes",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-explicit-binding-not-in-hashes.json"
+    },
+    {
+      "id": "v6-fixed-policy-allows-override",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-fixed-policy-allows-override.json"
+    },
+    {
+      "id": "v6-fractional-sort-key",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-fractional-sort-key.json"
+    },
+    {
+      "id": "v6-game-scene-with-prohibited-implementation",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-game-scene-with-prohibited-implementation.json"
+    },
+    {
+      "id": "v6-game-scene-without-scene-name",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-game-scene-without-scene-name.json"
+    },
+    {
       "id": "v6-gamemode-without-implementation",
       "channel": "serialization",
       "kind": "manifest-rejects",
       "path": "serialization/manifest/v6-gamemode-without-implementation.json"
     },
     {
+      "id": "v6-gamemodes-over-limit",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-gamemodes-over-limit.json"
+    },
+    {
+      "id": "v6-integral-decimal-sort-key",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-integral-decimal-sort-key.json"
+    },
+    {
+      "id": "v6-integral-exponent-sort-key",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-integral-exponent-sort-key.json"
+    },
+    {
       "id": "v6-launch-target-without-world",
       "channel": "serialization",
       "kind": "manifest-rejects",
       "path": "serialization/manifest/v6-launch-target-without-world.json"
+    },
+    {
+      "id": "v6-launch-targets-over-limit",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-launch-targets-over-limit.json"
+    },
+    {
+      "id": "v6-list-default-not-allowed",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-list-default-not-allowed.json"
+    },
+    {
+      "id": "v6-list-policy-duplicate-allow",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-list-policy-duplicate-allow.json"
+    },
+    {
+      "id": "v6-list-policy-without-allow",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-list-policy-without-allow.json"
     },
     {
       "id": "v6-longest-declaration-id",
@@ -135,10 +477,256 @@
       "path": "serialization/manifest/v6-minimal-gamemode.json"
     },
     {
+      "id": "v6-model-empty-contributions",
+      "channel": "serialization",
+      "kind": "manifest-model-rejects",
+      "path": "serialization/manifest/v6-model-empty-contributions.json"
+    },
+    {
+      "id": "v6-model-empty-requirements",
+      "channel": "serialization",
+      "kind": "manifest-model-rejects",
+      "path": "serialization/manifest/v6-model-empty-requirements.json"
+    },
+    {
+      "id": "v6-model-missing-content",
+      "channel": "serialization",
+      "kind": "manifest-model-rejects",
+      "path": "serialization/manifest/v6-model-missing-content.json"
+    },
+    {
+      "id": "v6-model-missing-implementation",
+      "channel": "serialization",
+      "kind": "manifest-model-rejects",
+      "path": "serialization/manifest/v6-model-missing-implementation.json"
+    },
+    {
+      "id": "v6-model-missing-spawn",
+      "channel": "serialization",
+      "kind": "manifest-model-rejects",
+      "path": "serialization/manifest/v6-model-missing-spawn.json"
+    },
+    {
+      "id": "v6-model-missing-world",
+      "channel": "serialization",
+      "kind": "manifest-model-rejects",
+      "path": "serialization/manifest/v6-model-missing-world.json"
+    },
+    {
+      "id": "v6-null-contributions",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-null-contributions.json"
+    },
+    {
+      "id": "v6-null-declaration-array",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-null-declaration-array.json"
+    },
+    {
+      "id": "v6-null-implementation",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-null-implementation.json"
+    },
+    {
+      "id": "v6-null-open-to",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-null-open-to.json"
+    },
+    {
+      "id": "v6-null-optional-boolean",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-null-optional-boolean.json"
+    },
+    {
+      "id": "v6-null-optional-description",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-null-optional-description.json"
+    },
+    {
+      "id": "v6-null-policy-allow-override",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-null-policy-allow-override.json"
+    },
+    {
+      "id": "v6-null-policy-default",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-null-policy-default.json"
+    },
+    {
+      "id": "v6-null-sort-key",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-null-sort-key.json"
+    },
+    {
+      "id": "v6-null-world-content",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-null-world-content.json"
+    },
+    {
+      "id": "v6-null-world-requirements",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-null-world-requirements.json"
+    },
+    {
+      "id": "v6-numeric-name-is-not-text",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-numeric-name-is-not-text.json"
+    },
+    {
+      "id": "v6-numeric-transition-item",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-numeric-transition-item.json"
+    },
+    {
+      "id": "v6-object-instead-of-transitions",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-object-instead-of-transitions.json"
+    },
+    {
+      "id": "v6-open-policy-with-allow",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-open-policy-with-allow.json"
+    },
+    {
+      "id": "v6-option-values-remain-excluded",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-option-values-remain-excluded.json"
+    },
+    {
+      "id": "v6-optional-foreign-consent",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-optional-foreign-consent.json"
+    },
+    {
+      "id": "v6-optional-foreign-mode-reference",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-optional-foreign-mode-reference.json"
+    },
+    {
+      "id": "v6-optional-foreign-world-reference",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-optional-foreign-world-reference.json"
+    },
+    {
+      "id": "v6-options-remain-excluded",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-options-remain-excluded.json"
+    },
+    {
       "id": "v6-overlong-declaration-id",
       "channel": "serialization",
       "kind": "manifest-rejects",
       "path": "serialization/manifest/v6-overlong-declaration-id.json"
+    },
+    {
+      "id": "v6-owner-declaration-under-optional-package",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-owner-declaration-under-optional-package.json"
+    },
+    {
+      "id": "v6-owner-declaration-under-required-package",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-owner-declaration-under-required-package.json"
+    },
+    {
+      "id": "v6-owner-longer-optional-over-required",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-owner-longer-optional-over-required.json"
+    },
+    {
+      "id": "v6-owner-longer-optional-over-self",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-owner-longer-optional-over-self.json"
+    },
+    {
+      "id": "v6-owner-longer-required-consent-over-self",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-owner-longer-required-consent-over-self.json"
+    },
+    {
+      "id": "v6-owner-longer-required-mode-over-self",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-owner-longer-required-mode-over-self.json"
+    },
+    {
+      "id": "v6-owner-longer-required-over-self",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-owner-longer-required-over-self.json"
+    },
+    {
+      "id": "v6-owner-required-under-discovered-prefix",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-owner-required-under-discovered-prefix.json"
+    },
+    {
+      "id": "v6-owner-self-longer-than-required",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-owner-self-longer-than-required.json"
+    },
+    {
+      "id": "v6-policy-allow-over-limit",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-policy-allow-over-limit.json"
+    },
+    {
+      "id": "v6-provider-with-prohibited-prefab",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-provider-with-prohibited-prefab.json"
+    },
+    {
+      "id": "v6-provider-without-implementation",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-provider-without-implementation.json"
+    },
+    {
+      "id": "v6-required-foreign-consent",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-required-foreign-consent.json"
+    },
+    {
+      "id": "v6-required-foreign-mode-reference",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-required-foreign-mode-reference.json"
+    },
+    {
+      "id": "v6-required-foreign-world-reference",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-required-foreign-world-reference.json"
     },
     {
       "id": "v6-retired-world-gamemodes",
@@ -147,10 +735,118 @@
       "path": "serialization/manifest/v6-retired-world-gamemodes.json"
     },
     {
+      "id": "v6-session-extensions-remain-excluded",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-session-extensions-remain-excluded.json"
+    },
+    {
+      "id": "v6-sort-key-at-limit",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-sort-key-at-limit.json"
+    },
+    {
+      "id": "v6-sort-key-boolean",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-sort-key-boolean.json"
+    },
+    {
+      "id": "v6-sort-key-negative",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-sort-key-negative.json"
+    },
+    {
+      "id": "v6-sort-key-over-limit",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-sort-key-over-limit.json"
+    },
+    {
+      "id": "v6-string-boolean-is-not-boolean",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-string-boolean-is-not-boolean.json"
+    },
+    {
+      "id": "v6-string-sort-key-is-not-integer",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-string-sort-key-is-not-integer.json"
+    },
+    {
+      "id": "v6-type-assembly-qualified",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-type-assembly-qualified.json"
+    },
+    {
+      "id": "v6-type-digit-start-segment",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-type-digit-start-segment.json"
+    },
+    {
+      "id": "v6-type-nested-class",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-type-nested-class.json"
+    },
+    {
+      "id": "v6-type-underscore-segment",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-type-underscore-segment.json"
+    },
+    {
+      "id": "v6-unicode-declaration-id",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-unicode-declaration-id.json"
+    },
+    {
+      "id": "v6-unicode-description-at-limit",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-unicode-description-at-limit.json"
+    },
+    {
+      "id": "v6-unicode-implementation-type",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-unicode-implementation-type.json"
+    },
+    {
+      "id": "v6-unicode-name-at-limit",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-unicode-name-at-limit.json"
+    },
+    {
+      "id": "v6-unicode-name-over-limit",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-unicode-name-over-limit.json"
+    },
+    {
       "id": "v6-unknown-declaration-field",
       "channel": "serialization",
       "kind": "manifest-rejects",
       "path": "serialization/manifest/v6-unknown-declaration-field.json"
+    },
+    {
+      "id": "v6-unowned-foreign-mode-reference",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-unowned-foreign-mode-reference.json"
+    },
+    {
+      "id": "v6-unsafe-binding-path",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-unsafe-binding-path.json"
     },
     {
       "id": "v6-without-contributions",
@@ -165,6 +861,12 @@
       "path": "serialization/manifest/v6-world-gamemode-target.json"
     },
     {
+      "id": "v6-world-outside-owner-namespace",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-world-outside-owner-namespace.json"
+    },
+    {
       "id": "v6-world-policy-without-default",
       "channel": "serialization",
       "kind": "manifest-rejects",
@@ -175,6 +877,30 @@
       "channel": "serialization",
       "kind": "manifest-accepts",
       "path": "serialization/manifest/v6-world-requirements-and-policies.json"
+    },
+    {
+      "id": "v6-worlds-over-limit",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-worlds-over-limit.json"
+    },
+    {
+      "id": "v6-wrong-kind-consent",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-wrong-kind-consent.json"
+    },
+    {
+      "id": "v6-wrong-kind-default",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-wrong-kind-default.json"
+    },
+    {
+      "id": "v6-wrong-kind-target-gamemode",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-wrong-kind-target-gamemode.json"
     }
   ]
 }

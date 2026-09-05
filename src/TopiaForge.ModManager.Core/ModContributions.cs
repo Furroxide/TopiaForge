@@ -21,15 +21,32 @@ namespace TopiaForge.ModManager.Core
     [DataContract]
     public sealed class ModContributions
     {
-        [DataMember(Name = "worlds", EmitDefaultValue = false)]
         public List<ModWorldDeclaration> Worlds { get; set; } = new List<ModWorldDeclaration>();
 
-        [DataMember(Name = "gamemodes", EmitDefaultValue = false)]
+        [DataMember(Name = "worlds", EmitDefaultValue = false)]
+        private List<ModWorldDeclaration>? SerializedWorlds
+        {
+            get => Worlds?.Count > 0 ? Worlds : null;
+            set => Worlds = value ?? new List<ModWorldDeclaration>();
+        }
+
         public List<ModGamemodeDeclaration> Gamemodes { get; set; } = new List<ModGamemodeDeclaration>();
 
+        [DataMember(Name = "gamemodes", EmitDefaultValue = false)]
+        private List<ModGamemodeDeclaration>? SerializedGamemodes
+        {
+            get => Gamemodes?.Count > 0 ? Gamemodes : null;
+            set => Gamemodes = value ?? new List<ModGamemodeDeclaration>();
+        }
+
+        public List<ModLaunchTargetDeclaration> LaunchTargets { get; set; } = new List<ModLaunchTargetDeclaration>();
+
         [DataMember(Name = "launchTargets", EmitDefaultValue = false)]
-        public List<ModLaunchTargetDeclaration> LaunchTargets { get; set; } =
-            new List<ModLaunchTargetDeclaration>();
+        private List<ModLaunchTargetDeclaration>? SerializedLaunchTargets
+        {
+            get => LaunchTargets?.Count > 0 ? LaunchTargets : null;
+            set => LaunchTargets = value ?? new List<ModLaunchTargetDeclaration>();
+        }
     }
 
     /// <summary>
@@ -44,9 +61,9 @@ namespace TopiaForge.ModManager.Core
     [DataContract]
     public sealed class ModImplementationBinding
     {
-        /// <summary>Empty means this manifest's <c>entryAssembly</c>.</summary>
-        [DataMember(Name = "assembly")]
-        public string Assembly { get; set; } = string.Empty;
+        /// <summary>Null means this manifest's <c>entryAssembly</c>.</summary>
+        [DataMember(Name = "assembly", EmitDefaultValue = false)]
+        public string? Assembly { get; set; }
 
         [DataMember(Name = "type")]
         public string Type { get; set; } = string.Empty;
@@ -62,30 +79,31 @@ namespace TopiaForge.ModManager.Core
 
         /// <summary>
         /// A family of worlds enumerated at runtime rather than declared one by one. The declaration's
-        /// id is the family prefix; instances are <c>&lt;id&gt;.&lt;slug&gt;</c> and are never
-        /// launchable on their own, so a stored selection cannot name content that has never existed.
+        /// id is the family prefix; observed instances are <c>&lt;id&gt;.&lt;slug&gt;</c>.
+        /// Neither a family nor an instance may appear in a static default or allow list.
+        /// A player override may select a concrete observed instance when the target policy permits it.
         /// </summary>
         public const string DiscoveredKind = "discovered";
 
         [DataMember(Name = "kind")]
         public string Kind { get; set; } = string.Empty;
 
-        [DataMember(Name = "bundle")]
-        public string Bundle { get; set; } = string.Empty;
+        [DataMember(Name = "bundle", EmitDefaultValue = false)]
+        public string? Bundle { get; set; }
 
-        [DataMember(Name = "prefab")]
-        public string Prefab { get; set; } = string.Empty;
+        [DataMember(Name = "prefab", EmitDefaultValue = false)]
+        public string? Prefab { get; set; }
 
         [DataMember(Name = "implementation", EmitDefaultValue = false)]
         public ModImplementationBinding? Implementation { get; set; }
 
-        [DataMember(Name = "sceneName")]
-        public string SceneName { get; set; } = string.Empty;
+        [DataMember(Name = "sceneName", EmitDefaultValue = false)]
+        public string? SceneName { get; set; }
     }
 
     /// <summary>
-    /// Where the player starts. Deliberately not a transform: V5 declares no numeric fields at all,
-    /// and a spawn point drifting in the last bits is the bug nobody attributes to the manifest.
+    /// Selects an authored marker or the provider's default spawn. World loading must resolve
+    /// and apply this spawn after scene, content, and player readiness before gameplay starts.
     /// </summary>
     [DataContract]
     public sealed class ModSpawnPolicy
@@ -96,8 +114,8 @@ namespace TopiaForge.ModManager.Core
         [DataMember(Name = "kind")]
         public string Kind { get; set; } = string.Empty;
 
-        [DataMember(Name = "markerName")]
-        public string MarkerName { get; set; } = string.Empty;
+        [DataMember(Name = "markerName", EmitDefaultValue = false)]
+        public string? MarkerName { get; set; }
     }
 
     /// <summary>One world this package owns.</summary>
@@ -110,8 +128,8 @@ namespace TopiaForge.ModManager.Core
         [DataMember(Name = "name")]
         public string Name { get; set; } = string.Empty;
 
-        [DataMember(Name = "description")]
-        public string Description { get; set; } = string.Empty;
+        [DataMember(Name = "description", EmitDefaultValue = false)]
+        public string? Description { get; set; }
 
         [DataMember(Name = "content", EmitDefaultValue = false)]
         public ModWorldContent? Content { get; set; }
@@ -127,8 +145,8 @@ namespace TopiaForge.ModManager.Core
         /// to that one policy on purpose: requiring it for every pairing would make a world's package
         /// depend on the gamemodes that use it, and the first-party graph already runs the other way.
         /// </summary>
-        [DataMember(Name = "openTo")]
-        public List<string> OpenTo { get; set; } = new List<string>();
+        [DataMember(Name = "openTo", EmitDefaultValue = false)]
+        public List<string>? OpenTo { get; set; }
 
         /// <summary>Null means absent, which is not the same as an explicit false.</summary>
         [DataMember(Name = "openToAnyCompatible", EmitDefaultValue = false)]
@@ -144,11 +162,17 @@ namespace TopiaForge.ModManager.Core
     {
         public const string AnySpawn = "any";
 
-        [DataMember(Name = "transitions")]
         public List<string> Transitions { get; set; } = new List<string>();
 
-        [DataMember(Name = "spawn")]
-        public string Spawn { get; set; } = string.Empty;
+        [DataMember(Name = "transitions", EmitDefaultValue = false)]
+        private List<string>? SerializedTransitions
+        {
+            get => Transitions?.Count > 0 ? Transitions : null;
+            set => Transitions = value ?? new List<string>();
+        }
+
+        [DataMember(Name = "spawn", EmitDefaultValue = false)]
+        public string? Spawn { get; set; }
     }
 
     /// <summary>One gamemode this package implements.</summary>
@@ -167,8 +191,8 @@ namespace TopiaForge.ModManager.Core
         [DataMember(Name = "name")]
         public string Name { get; set; } = string.Empty;
 
-        [DataMember(Name = "description")]
-        public string Description { get; set; } = string.Empty;
+        [DataMember(Name = "description", EmitDefaultValue = false)]
+        public string? Description { get; set; }
 
         [DataMember(Name = "implementation", EmitDefaultValue = false)]
         public ModImplementationBinding? Implementation { get; set; }
@@ -176,8 +200,8 @@ namespace TopiaForge.ModManager.Core
         [DataMember(Name = "worldRequirements", EmitDefaultValue = false)]
         public ModWorldRequirements? WorldRequirements { get; set; }
 
-        [DataMember(Name = "sceneChangePolicy")]
-        public string SceneChangePolicy { get; set; } = string.Empty;
+        [DataMember(Name = "sceneChangePolicy", EmitDefaultValue = false)]
+        public string? SceneChangePolicy { get; set; }
     }
 
     /// <summary>Which worlds a launch target admits.</summary>
@@ -187,12 +211,12 @@ namespace TopiaForge.ModManager.Core
         /// <summary>Only <see cref="Default"/>.</summary>
         public const string FixedPolicy = "fixed";
 
-        /// <summary><see cref="Default"/> plus <see cref="Allow"/>, with no world-side consent.</summary>
+        /// <summary>Members of <see cref="Allow"/>, including <see cref="Default"/>, with no world-side consent.</summary>
         public const string ListPolicy = "list";
 
         /// <summary>
-        /// <see cref="Default"/> plus any profile world that meets the gamemode's requirements and
-        /// consents to the pairing itself.
+        /// The static <see cref="Default"/> and any permitted player-selected profile world must
+        /// meet the gamemode's requirements and consent to the pairing.
         /// </summary>
         public const string OpenPolicy = "open";
 
@@ -202,8 +226,14 @@ namespace TopiaForge.ModManager.Core
         [DataMember(Name = "default")]
         public string Default { get; set; } = string.Empty;
 
-        [DataMember(Name = "allow")]
         public List<string> Allow { get; set; } = new List<string>();
+
+        [DataMember(Name = "allow", EmitDefaultValue = false)]
+        private List<string>? SerializedAllow
+        {
+            get => Allow?.Count > 0 ? Allow : null;
+            set => Allow = value ?? new List<string>();
+        }
 
         /// <summary>Null means absent, which is not the same as an explicit false.</summary>
         [DataMember(Name = "allowPlayerOverride", EmitDefaultValue = false)]
@@ -232,12 +262,20 @@ namespace TopiaForge.ModManager.Core
         [DataMember(Name = "title")]
         public string Title { get; set; } = string.Empty;
 
-        [DataMember(Name = "description")]
-        public string Description { get; set; } = string.Empty;
+        [DataMember(Name = "description", EmitDefaultValue = false)]
+        public string? Description { get; set; }
 
         /// <summary>Null means absent, which is not the same as an explicit 0.</summary>
-        [DataMember(Name = "sortKey", EmitDefaultValue = false)]
         public int? SortKey { get; set; }
+
+        // JSON Schema accepts integral JSON numbers such as 1.0 and 1e0. The raw reader
+        // checks integrality and range before this serializer bridge converts the value.
+        [DataMember(Name = "sortKey", EmitDefaultValue = false)]
+        private double? SerializedSortKey
+        {
+            get => SortKey;
+            set => SortKey = value.HasValue ? checked((int)value.Value) : (int?)null;
+        }
 
         [DataMember(Name = "gamemode")]
         public string Gamemode { get; set; } = string.Empty;
@@ -245,8 +283,8 @@ namespace TopiaForge.ModManager.Core
         [DataMember(Name = "world", EmitDefaultValue = false)]
         public ModWorldPolicy? World { get; set; }
 
-        [DataMember(Name = "transition")]
-        public string Transition { get; set; } = string.Empty;
+        [DataMember(Name = "transition", EmitDefaultValue = false)]
+        public string? Transition { get; set; }
     }
 
     /// <summary>The two ways a world can be entered.</summary>

@@ -23,5 +23,9 @@
     "dart": {
       "outcome": "accept"
     }
+  },
+  "operations": {
+    "csharp": "read-intent",
+    "dart": "write-intent"
   }
 }

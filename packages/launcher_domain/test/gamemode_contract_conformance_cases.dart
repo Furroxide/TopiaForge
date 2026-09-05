@@ -7,6 +7,8 @@
 
 import 'package:launcher_domain/launcher_domain.dart';
 
+import 'gamemode_contract_conformance_model_mutations.dart';
+
 /// What one runner did with one fixture. `errorCodes` is compared as a set, not
 /// as a count or a prefix -- comparing only the accept/reject verdict is what let
 /// the two hand-written readers drift in the first place.
@@ -115,6 +117,9 @@ ConformanceOutcome runManifest(Map<String, Object?> body) {
   ModManifest manifest;
   try {
     manifest = ModManifest.fromJson(json);
+    if (body['modelMutation'] case final String mutation) {
+      manifest = mutateConformanceModel(manifest, mutation);
+    }
   } on FormatException catch (error) {
     return ConformanceOutcome(false, {
       _codeFor(error.message),
@@ -147,82 +152,89 @@ String _codeFor(String message) {
   return space > 0 ? message.substring(0, space) : message;
 }
 
-/// What each reader parsed out of a manifest's contributions, one line per
-/// declaration. Absence is spelled `absent` and an empty value `-`, so "not
-/// stated" and "stated as false" can never render the same. The C# runner
-/// builds the identical strings in
-/// `tests/TopiaForge.ModManager.Tests/DeclarationDigest.cs`.
-Map<String, List<String>> declarationDigest(Map<String, Object?> body) {
-  final contributions = ModManifest.fromJson(
-    body['manifest']! as Map<String, Object?>,
-  ).contributions;
+/// Normalize every typed contribution field, including display metadata and presence.
+Map<String, Object?> declarationDigest(Map<String, Object?> body) =>
+    normalizeContributions(
+      ModManifest.fromJson(
+            body['manifest']! as Map<String, Object?>,
+          ).contributions?.toJson() ??
+          const {},
+    );
+
+Map<String, Object?> normalizeContributions(Map<String, Object?> source) => {
+  for (final kind in const ['worlds', 'gamemodes', 'launchTargets'])
+    kind: ((source[kind] as List?) ?? const [])
+        .map((item) => _normalize(item as Map, kind))
+        .toList(),
+};
+
+Map<String, Object?> _normalize(Map source, String kind) {
+  final fields = contributionNormalizationFields[kind]!;
+  for (final key in source.keys) {
+    if (!fields.contains(key)) {
+      throw StateError('Normalization is missing $kind.$key');
+    }
+  }
   return {
-    'worlds': (contributions?.worlds ?? const []).map(_worldLine).toList(),
-    'gamemodes': (contributions?.gamemodes ?? const [])
-        .map(_gamemodeLine)
-        .toList(),
-    'launchTargets': (contributions?.launchTargets ?? const [])
-        .map(_launchTargetLine)
-        .toList(),
+    for (final field in fields)
+      field:
+          source[field] is Map &&
+              contributionNormalizationFields.containsKey(field)
+          ? _normalize(source[field] as Map, field)
+          : source[field],
   };
 }
 
-String _worldLine(ModWorldDeclaration world) {
-  final content = world.content;
-  final spawn = world.spawn;
-  return [
-    world.id,
-    _text(content?.kind),
-    _text(content?.bundle),
-    _text(content?.prefab),
-    _binding(content?.implementation),
-    _text(content?.sceneName),
-    _list(world.transitions),
-    spawn == null ? '-' : '${_text(spawn.kind)}>${_text(spawn.markerName)}',
-    _list(world.openTo),
-    _flag(world.openToAnyCompatible),
-  ].join('|');
+const contributionNormalizationFields = {
+  'worlds': [
+    'id',
+    'name',
+    'description',
+    'content',
+    'transitions',
+    'spawn',
+    'openTo',
+    'openToAnyCompatible',
+  ],
+  'gamemodes': [
+    'id',
+    'name',
+    'description',
+    'implementation',
+    'worldRequirements',
+    'sceneChangePolicy',
+  ],
+  'launchTargets': [
+    'id',
+    'title',
+    'description',
+    'sortKey',
+    'gamemode',
+    'world',
+    'transition',
+  ],
+  'content': ['kind', 'bundle', 'prefab', 'implementation', 'sceneName'],
+  'implementation': ['assembly', 'type'],
+  'spawn': ['kind', 'markerName'],
+  'worldRequirements': ['transitions', 'spawn'],
+  'world': ['policy', 'default', 'allow', 'allowPlayerOverride'],
+};
+
+Map<String, Object?> roundTripDigest(Map<String, Object?> body) {
+  final original = body['manifest']! as Map<String, Object?>;
+  final parsed = ModManifest.fromJson(original);
+  final serialized = <String, Object?>{
+    ...original,
+    if (parsed.contributions != null)
+      'contributions': parsed.contributions!.toJson(),
+  };
+  final restored = ModManifest.fromJson(serialized);
+  final failures = restored.validate().where((issue) => issue.isBlocking);
+  if (failures.isNotEmpty) {
+    throw StateError('Serialized contributions fail validation: $failures');
+  }
+  return normalizeContributions(restored.contributions?.toJson() ?? const {});
 }
-
-String _gamemodeLine(ModGamemodeDeclaration gamemode) {
-  final requirements = gamemode.worldRequirements;
-  return [
-    gamemode.id,
-    _binding(gamemode.implementation),
-    requirements == null
-        ? '-'
-        : '${_list(requirements.transitions)}>${_text(requirements.spawn)}',
-    _text(gamemode.sceneChangePolicy),
-  ].join('|');
-}
-
-String _launchTargetLine(ModLaunchTargetDeclaration target) {
-  final policy = target.world;
-  return [
-    target.id,
-    _text(target.gamemode),
-    _text(policy?.policy),
-    _text(policy?.defaultWorldId),
-    _list(policy?.allow),
-    _flag(policy?.allowPlayerOverride),
-    _text(target.transition),
-    target.sortKey == null ? 'absent' : '${target.sortKey}',
-  ].join('|');
-}
-
-/// An absent binding is `-`; a present one is always `assembly>type`, with an
-/// empty assembly meaning the manifest's own entryAssembly. Rendering the
-/// separator either way keeps "no binding" and "a binding that defaults its
-/// assembly" distinguishable.
-String _binding(ModImplementationBinding? binding) =>
-    binding == null ? '-' : '${binding.assembly}>${binding.type}';
-
-String _flag(bool? value) => value == null ? 'absent' : '$value';
-
-String _text(String? value) => value == null || value.isEmpty ? '-' : value;
-
-String _list(List<String>? values) =>
-    values == null || values.isEmpty ? '-' : values.join(',');
 
 bool deepEquals(Object? left, Object? right) {
   if (left is Map && right is Map) {

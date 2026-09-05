@@ -110,13 +110,112 @@
       "outcome": "accept",
       "normalized": {
         "worlds": [
-          "io.github.furroxide.topiaforge.fixture.arena|bundle|Content/arena.bundle|Arena|-|-|additive-arena|provider-default>-|-|absent",
-          "io.github.furroxide.topiaforge.fixture.generated|provider|-|-|Fixture.Worlds.dll>Fixture.GeneratedWorld|-|additive-arena,scene-replacement|authored-marker>SpawnPoint|-|true",
-          "io.github.furroxide.topiaforge.fixture.native|game-scene|-|-|-|Level_01|scene-replacement|provider-default>-|io.github.furroxide.topiaforge.fixture.survival|absent",
-          "io.github.furroxide.topiaforge.fixture.level|discovered|-|-|>Fixture.LevelSource|-|scene-replacement|provider-default>-|-|absent"
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.arena",
+            "name": "Arena",
+            "description": null,
+            "content": {
+              "kind": "bundle",
+              "bundle": "Content/arena.bundle",
+              "prefab": "Arena",
+              "implementation": null,
+              "sceneName": null
+            },
+            "transitions": [
+              "additive-arena"
+            ],
+            "spawn": {
+              "kind": "provider-default",
+              "markerName": null
+            },
+            "openTo": null,
+            "openToAnyCompatible": null
+          },
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.generated",
+            "name": "Generated",
+            "description": null,
+            "content": {
+              "kind": "provider",
+              "bundle": null,
+              "prefab": null,
+              "implementation": {
+                "assembly": "Fixture.Worlds.dll",
+                "type": "Fixture.GeneratedWorld"
+              },
+              "sceneName": null
+            },
+            "transitions": [
+              "additive-arena",
+              "scene-replacement"
+            ],
+            "spawn": {
+              "kind": "authored-marker",
+              "markerName": "SpawnPoint"
+            },
+            "openTo": null,
+            "openToAnyCompatible": true
+          },
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.native",
+            "name": "Native Scene",
+            "description": null,
+            "content": {
+              "kind": "game-scene",
+              "bundle": null,
+              "prefab": null,
+              "implementation": null,
+              "sceneName": "Level_01"
+            },
+            "transitions": [
+              "scene-replacement"
+            ],
+            "spawn": {
+              "kind": "provider-default",
+              "markerName": null
+            },
+            "openTo": [
+              "io.github.furroxide.topiaforge.fixture.survival"
+            ],
+            "openToAnyCompatible": null
+          },
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.level",
+            "name": "Levels",
+            "description": null,
+            "content": {
+              "kind": "discovered",
+              "bundle": null,
+              "prefab": null,
+              "implementation": {
+                "assembly": null,
+                "type": "Fixture.LevelSource"
+              },
+              "sceneName": null
+            },
+            "transitions": [
+              "scene-replacement"
+            ],
+            "spawn": {
+              "kind": "provider-default",
+              "markerName": null
+            },
+            "openTo": null,
+            "openToAnyCompatible": null
+          }
         ],
         "gamemodes": [
-          "io.github.furroxide.topiaforge.fixture.survival|>Fixture.SurvivalGamemode|-|-"
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.survival",
+            "name": "Survival",
+            "description": null,
+            "implementation": {
+              "assembly": null,
+              "type": "Fixture.SurvivalGamemode"
+            },
+            "worldRequirements": null,
+            "sceneChangePolicy": null
+          }
         ],
         "launchTargets": []
       }
@@ -125,16 +224,116 @@
       "outcome": "accept",
       "normalized": {
         "worlds": [
-          "io.github.furroxide.topiaforge.fixture.arena|bundle|Content/arena.bundle|Arena|-|-|additive-arena|provider-default>-|-|absent",
-          "io.github.furroxide.topiaforge.fixture.generated|provider|-|-|Fixture.Worlds.dll>Fixture.GeneratedWorld|-|additive-arena,scene-replacement|authored-marker>SpawnPoint|-|true",
-          "io.github.furroxide.topiaforge.fixture.native|game-scene|-|-|-|Level_01|scene-replacement|provider-default>-|io.github.furroxide.topiaforge.fixture.survival|absent",
-          "io.github.furroxide.topiaforge.fixture.level|discovered|-|-|>Fixture.LevelSource|-|scene-replacement|provider-default>-|-|absent"
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.arena",
+            "name": "Arena",
+            "description": null,
+            "content": {
+              "kind": "bundle",
+              "bundle": "Content/arena.bundle",
+              "prefab": "Arena",
+              "implementation": null,
+              "sceneName": null
+            },
+            "transitions": [
+              "additive-arena"
+            ],
+            "spawn": {
+              "kind": "provider-default",
+              "markerName": null
+            },
+            "openTo": null,
+            "openToAnyCompatible": null
+          },
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.generated",
+            "name": "Generated",
+            "description": null,
+            "content": {
+              "kind": "provider",
+              "bundle": null,
+              "prefab": null,
+              "implementation": {
+                "assembly": "Fixture.Worlds.dll",
+                "type": "Fixture.GeneratedWorld"
+              },
+              "sceneName": null
+            },
+            "transitions": [
+              "additive-arena",
+              "scene-replacement"
+            ],
+            "spawn": {
+              "kind": "authored-marker",
+              "markerName": "SpawnPoint"
+            },
+            "openTo": null,
+            "openToAnyCompatible": true
+          },
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.native",
+            "name": "Native Scene",
+            "description": null,
+            "content": {
+              "kind": "game-scene",
+              "bundle": null,
+              "prefab": null,
+              "implementation": null,
+              "sceneName": "Level_01"
+            },
+            "transitions": [
+              "scene-replacement"
+            ],
+            "spawn": {
+              "kind": "provider-default",
+              "markerName": null
+            },
+            "openTo": [
+              "io.github.furroxide.topiaforge.fixture.survival"
+            ],
+            "openToAnyCompatible": null
+          },
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.level",
+            "name": "Levels",
+            "description": null,
+            "content": {
+              "kind": "discovered",
+              "bundle": null,
+              "prefab": null,
+              "implementation": {
+                "assembly": null,
+                "type": "Fixture.LevelSource"
+              },
+              "sceneName": null
+            },
+            "transitions": [
+              "scene-replacement"
+            ],
+            "spawn": {
+              "kind": "provider-default",
+              "markerName": null
+            },
+            "openTo": null,
+            "openToAnyCompatible": null
+          }
         ],
         "gamemodes": [
-          "io.github.furroxide.topiaforge.fixture.survival|>Fixture.SurvivalGamemode|-|-"
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.survival",
+            "name": "Survival",
+            "description": null,
+            "implementation": {
+              "assembly": null,
+              "type": "Fixture.SurvivalGamemode"
+            },
+            "worldRequirements": null,
+            "sceneChangePolicy": null
+          }
         ],
         "launchTargets": []
       }
     }
-  }
+  },
+  "schemaOutcome": "accept"
 }

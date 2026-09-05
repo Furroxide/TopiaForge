@@ -67,7 +67,32 @@ namespace TopiaForge.ModManager.Core
                 "declare worlds, gamemodes or launch targets.";
         }
 
+        internal static void ValidateContributionModel(ModContributions contributions)
+        {
+            // Reuse the raw contract for programmatically constructed models as well.
+            // Serialization preserves optional presence, so required/conditional fields
+            // cannot bypass validation simply by skipping the manifest reader.
+            ValidateContributionsObject(JsonObjectMerge.ReadProperties(
+                "{\"contributions\":" + JsonUtil.Serialize(contributions) + "}"));
+        }
+
         private static void ValidateContributionsObject(
+            IReadOnlyList<JsonObjectMerge.RawJsonProperty> properties)
+        {
+            try
+            {
+                ValidateContributionShape(properties);
+            }
+            catch (InvalidDataException exception)
+            {
+                // Both readers expose one structural category while retaining the precise
+                // nested path in the actionable explanation. Semantic errors stay field-specific.
+                throw new InvalidDataException(
+                    "Manifest field 'contributions' is invalid: " + exception.Message, exception);
+            }
+        }
+
+        private static void ValidateContributionShape(
             IReadOnlyList<JsonObjectMerge.RawJsonProperty> properties)
         {
             var raw = RequireRawProperty(properties, "contributions");
@@ -114,6 +139,8 @@ namespace TopiaForge.ModManager.Core
                         new[] { "type" },
                         requireAtLeastOne: false);
                 }
+
+                ValidateRawWorld(fields, world.Path);
             }
 
             foreach (var gamemode in ArrayItems(contributions, "contributions.gamemodes", "gamemodes"))
@@ -142,6 +169,7 @@ namespace TopiaForge.ModManager.Core
                     WorldRequirementFields,
                     Array.Empty<string>(),
                     requireAtLeastOne: true);
+                ValidateRawGamemode(fields, gamemode.Path);
             }
 
             foreach (var target in ArrayItems(contributions, "contributions.launchTargets", "launchTargets"))
@@ -159,6 +187,7 @@ namespace TopiaForge.ModManager.Core
                     WorldPolicyFields,
                     new[] { "policy", "default" },
                     requireAtLeastOne: false);
+                ValidateRawTarget(ReadObject(target.Path, target.Raw), target.Path);
             }
         }
 
@@ -220,6 +249,13 @@ namespace TopiaForge.ModManager.Core
                     "Manifest field '" + path + "' must declare at least one entry or be omitted.");
             }
 
+            var maximum = name == "gamemodes" ? 16 : 64;
+            if (values.Count > maximum)
+            {
+                throw new InvalidDataException(
+                    "Manifest field '" + path + "' cannot contain more than " + maximum + " entries.");
+            }
+
             for (var index = 0; index < values.Count; index++)
             {
                 yield return new RawArrayItem(path + "[" + index + "]", values[index]);
@@ -249,22 +285,16 @@ namespace TopiaForge.ModManager.Core
             {
                 world.Id = world.Id ?? string.Empty;
                 world.Name = world.Name ?? string.Empty;
-                world.Description = world.Description ?? string.Empty;
                 world.Transitions = world.Transitions ?? new List<string>();
-                world.OpenTo = world.OpenTo ?? new List<string>();
                 if (world.Content != null)
                 {
                     world.Content.Kind = world.Content.Kind ?? string.Empty;
-                    world.Content.Bundle = world.Content.Bundle ?? string.Empty;
-                    world.Content.Prefab = world.Content.Prefab ?? string.Empty;
-                    world.Content.SceneName = world.Content.SceneName ?? string.Empty;
                     NormalizeBinding(world.Content.Implementation);
                 }
 
                 if (world.Spawn != null)
                 {
                     world.Spawn.Kind = world.Spawn.Kind ?? string.Empty;
-                    world.Spawn.MarkerName = world.Spawn.MarkerName ?? string.Empty;
                 }
             }
 
@@ -272,14 +302,11 @@ namespace TopiaForge.ModManager.Core
             {
                 gamemode.Id = gamemode.Id ?? string.Empty;
                 gamemode.Name = gamemode.Name ?? string.Empty;
-                gamemode.Description = gamemode.Description ?? string.Empty;
-                gamemode.SceneChangePolicy = gamemode.SceneChangePolicy ?? string.Empty;
                 NormalizeBinding(gamemode.Implementation);
                 if (gamemode.WorldRequirements != null)
                 {
                     gamemode.WorldRequirements.Transitions =
                         gamemode.WorldRequirements.Transitions ?? new List<string>();
-                    gamemode.WorldRequirements.Spawn = gamemode.WorldRequirements.Spawn ?? string.Empty;
                 }
             }
 
@@ -287,9 +314,7 @@ namespace TopiaForge.ModManager.Core
             {
                 target.Id = target.Id ?? string.Empty;
                 target.Title = target.Title ?? string.Empty;
-                target.Description = target.Description ?? string.Empty;
                 target.Gamemode = target.Gamemode ?? string.Empty;
-                target.Transition = target.Transition ?? string.Empty;
                 if (target.World != null)
                 {
                     target.World.Policy = target.World.Policy ?? string.Empty;
@@ -306,7 +331,6 @@ namespace TopiaForge.ModManager.Core
                 return;
             }
 
-            binding.Assembly = binding.Assembly ?? string.Empty;
             binding.Type = binding.Type ?? string.Empty;
         }
 

@@ -1,0 +1,31 @@
+{
+  "id": "launch-intent-unicode-gamemode",
+  "channel": "serialization",
+  "kind": "launch-intent-hostile",
+  "summary": "Wire gamemodeId rejects non-ASCII declaration IDs independently.",
+  "intent": {
+    "command": "launch-target",
+    "worldId": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+    "gamemodeId": "io.fixture.m\u00f6de",
+    "loadMode": "additiveArena",
+    "allowAdditiveFallback": true
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "worldLaunch.gamemodeId"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "writer-cannot-emit"
+      ]
+    }
+  },
+  "operations": {
+    "csharp": "read-intent",
+    "dart": "write-intent"
+  }
+}

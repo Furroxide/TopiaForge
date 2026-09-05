@@ -63,15 +63,15 @@
     "csharp": {
       "outcome": "reject",
       "errorCodes": [
-        "contributions.launchTargets[0].world"
+        "contributions"
       ]
     },
     "dart": {
       "outcome": "reject",
       "errorCodes": [
-        "contributions.launchTargets[0].world",
-        "contributions.launchTargets[0].world.default"
+        "contributions"
       ]
     }
-  }
+  },
+  "schemaOutcome": "reject"
 }

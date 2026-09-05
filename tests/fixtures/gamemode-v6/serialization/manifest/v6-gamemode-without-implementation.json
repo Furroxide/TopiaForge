@@ -33,14 +33,15 @@
     "csharp": {
       "outcome": "reject",
       "errorCodes": [
-        "contributions.gamemodes[0]"
+        "contributions"
       ]
     },
     "dart": {
       "outcome": "reject",
       "errorCodes": [
-        "contributions.gamemodes[0]"
+        "contributions"
       ]
     }
-  }
+  },
+  "schemaOutcome": "reject"
 }
