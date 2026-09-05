@@ -62,9 +62,9 @@ namespace TopiaForge.ModManager.Core
                     "The multiplayer field is optional for standalone-only mods.");
                 return errors;
             }
-            else if (manifest.SchemaVersion != ModManifest.ManifestV5SchemaVersion)
+            else if (!ModManifest.IsSupportedSchemaVersion(manifest.SchemaVersion))
             {
-                errors.Add("schemaVersion must be 5.");
+                errors.Add("schemaVersion must be 5 or 6.");
                 return errors;
             }
 
@@ -184,7 +184,14 @@ namespace TopiaForge.ModManager.Core
             ValidateStringList(manifest.Tags, "tags", 64, 1, 64, validatePaths: false, errors);
             ValidateStringList(manifest.Screenshots, "screenshots", 32, 1, 1024, validatePaths: true, errors);
             ValidateHashes(manifest.Hashes, errors);
-            ValidateWorldGamemodes(manifest.WorldGamemodes, errors);
+            if (manifest.SchemaVersion == ModManifest.ManifestV5SchemaVersion)
+            {
+                ValidateWorldGamemodes(manifest.WorldGamemodes, errors);
+            }
+            else
+            {
+                ManifestContributionValidator.Validate(manifest, errors);
+            }
             ValidateBuiltWith(manifest.BuiltWith, errors);
             ValidateMultiplayer(manifest, errors);
 
@@ -193,7 +200,7 @@ namespace TopiaForge.ModManager.Core
 
         private static void ValidateMultiplayer(ModManifest manifest, List<string> errors)
         {
-            if (manifest.SchemaVersion != ModManifest.CurrentSchemaVersion)
+            if (!ModManifest.IsSupportedSchemaVersion(manifest.SchemaVersion))
             {
                 return;
             }
@@ -726,6 +733,19 @@ namespace TopiaForge.ModManager.Core
             {
                 errors.Add(fieldName + " cannot contain more than " + maximum + " entries.");
             }
+        }
+
+        internal static bool IsRetiredEcosystemId(string id)
+        {
+            foreach (var prefix in RetiredEcosystemIdPrefixes)
+            {
+                if (id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         internal static bool IsValidId(string? id)

@@ -1,0 +1,29 @@
+{
+  "id": "unknown-load-mode-on-the-wire",
+  "channel": "serialization",
+  "kind": "launch-intent-hostile",
+  "summary": "The reader rejects a load mode it does not implement rather than clamping it. Only the writer's own clamp keeps that disagreement off the wire.",
+  "intent": {
+    "command": "launch-target",
+    "gamemodeId": "io.github.furroxide.topiaforge.worlds.sandbox",
+    "loadMode": "orbitalDropPod"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "worldLaunch.loadMode"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "writer-cannot-emit"
+      ]
+    }
+  },
+  "operations": {
+    "csharp": "read-intent",
+    "dart": "write-intent"
+  }
+}

@@ -151,14 +151,20 @@ class WorldSelection {
         (json['worldId'] as String?) ?? WorldCatalog.openSandboxWorldId;
     final gamemodeId =
         (json['gamemodeId'] as String?) ?? WorldCatalog.sandboxGamemodeId;
-    if (!ModManifest.isValidId(worldId)) {
+    // Declaration ids, not package ids: a launch target is namespaced under its
+    // package, so it uses the wider 96-character grammar. Validating at the
+    // package width here would reject a target the manifest contract calls
+    // legal, and the intent this selection writes would never reach the game.
+    if (!_isValidDeclarationId(worldId)) {
       throw const FormatException(
-        'World selection worldId must use the safe TopiaForge id format.',
+        'World selection worldId must use the safe TopiaForge declaration id '
+        'format.',
       );
     }
-    if (!ModManifest.isValidId(gamemodeId)) {
+    if (!_isValidDeclarationId(gamemodeId)) {
       throw const FormatException(
-        'World selection gamemodeId must use the safe TopiaForge id format.',
+        'World selection gamemodeId must use the safe TopiaForge declaration '
+        'id format.',
       );
     }
     return WorldSelection(
@@ -290,7 +296,7 @@ class WorldCatalog {
         .map((item) => WorldDefinition.fromJson(_objectMap(item)))
         .where(
           (world) =>
-              ModManifest.isValidId(world.id) && world.name.trim().isNotEmpty,
+              _isValidDeclarationId(world.id) && world.name.trim().isNotEmpty,
         )
         .toList();
     final gamemodes = (json['gamemodes'] as List? ?? const [])
@@ -298,7 +304,7 @@ class WorldCatalog {
         .map((item) => GamemodeDefinition.fromJson(_objectMap(item)))
         .where(
           (mode) =>
-              ModManifest.isValidId(mode.id) && mode.name.trim().isNotEmpty,
+              _isValidDeclarationId(mode.id) && mode.name.trim().isNotEmpty,
         )
         .toList();
 
@@ -307,8 +313,9 @@ class WorldCatalog {
         .map((item) => GamemodeMenuEntry.fromJson(_objectMap(item)))
         .where(
           (entry) =>
-              ModManifest.isValidId(entry.id) &&
-              ModManifest.isValidId(entry.gamemodeId) &&
+              _isValidDeclarationId(entry.id) &&
+              _isValidDeclarationId(entry.gamemodeId) &&
+              (entry.worldId.isEmpty || _isValidDeclarationId(entry.worldId)) &&
               entry.title.trim().isNotEmpty,
         )
         .toList();

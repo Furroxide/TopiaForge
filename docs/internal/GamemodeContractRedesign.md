@@ -55,7 +55,7 @@ historical R-numbers:
 
 | Rule | Required behavior |
 | --- | --- |
-| Ownership | A declaration belongs beneath `package.name + "."`, with a nonempty suffix. |
+| Ownership | A declaration belongs beneath `package.name + "."`, with a nonempty suffix, and cannot occupy a longer required/optional dependency namespace already known to that manifest. Reference ownership uses the longest matching self/required/optional prefix; an optional owner never qualifies through a shorter required owner. |
 | Uniqueness | Declaration IDs are unique across all contribution arrays, ordinal case-insensitive. |
 | Binding | Omitted assembly means entryAssembly; explicit assembly is a safe package-relative DLL present in hashes. |
 | Required references | Foreign manifest references belong to a required dependency, never an optional dependency. |
@@ -73,9 +73,10 @@ the schema. Optional false/zero values survive parsing and round trips.
 
 The harness is a prerequisite for validation fixes:
 
-- Index every JSON fixture recursively, excluding only the root `index.json` and
-  root `fixture.schema.json`. Unknown/misspelled channel directories and root-level
-  cases fail rather than disappear.
+- Enumerate every file in the fixture directory recursively, excluding only the
+  root `index.json` and root `fixture.schema.json`. Unexpected non-JSON files,
+  unknown/misspelled channel directories, misplaced cases, and root-level cases
+  fail rather than disappear.
 - Every manifest fixture states schema validity separately from shared semantic
   reader expectations. Execute the actual pinned Dart JSON Schema validator on
   the payload, including `contains`. Schema-valid semantic failures are normal.

@@ -364,9 +364,9 @@ namespace TopiaForge.ModManager.Core
             ICollection<MultiplayerAdmissionMismatch> mismatches)
         {
             var errors = new List<string>();
-            if (manifest.SchemaVersion != ModManifest.ManifestV5SchemaVersion)
+            if (!ModManifest.IsSupportedSchemaVersion(manifest.SchemaVersion))
             {
-                errors.Add("schemaVersion must be 5");
+                errors.Add("schemaVersion must be 5 or 6");
             }
             else if (!VersionUtil.TryParse(manifest.Version, out _))
             {

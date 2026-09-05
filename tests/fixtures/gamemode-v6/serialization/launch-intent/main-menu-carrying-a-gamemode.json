@@ -1,0 +1,28 @@
+{
+  "id": "main-menu-carrying-a-gamemode",
+  "channel": "serialization",
+  "kind": "launch-intent-hostile",
+  "summary": "Asking for the ordinary menu while naming a gamemode is two contradictory instructions, and the manager has a remembered selection of its own that the ambiguity would resolve against the player.",
+  "intent": {
+    "command": "main-menu",
+    "gamemodeId": "io.github.furroxide.topiaforge.worlds.sandbox"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "worldLaunch.gamemodeId"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "writer-cannot-emit"
+      ]
+    }
+  },
+  "operations": {
+    "csharp": "read-intent",
+    "dart": "write-intent"
+  }
+}

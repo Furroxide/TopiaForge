@@ -1,0 +1,1022 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.v6.schema.json",
+  "title": "TopiaForge Mod Manifest V6",
+  "description": "TopiaForge Manifest V6 for trusted, in-process mods. Worlds, gamemodes and launch targets are declared separately under `contributions`, so a launch entry names its implementation owner and its world policy instead of carrying display metadata alone. Multiplayer metadata is optional; absence means standalone-only. Capabilities are disclosure metadata, not a security sandbox.",
+  "type": "object",
+  "maxProperties": 64,
+  "required": [
+    "schemaVersion",
+    "name",
+    "displayName",
+    "version",
+    "author",
+    "entryAssembly",
+    "entryType",
+    "supportedGameVersionRange",
+    "supportedLoaderVersionRange",
+    "supportedSdkVersionRange"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "maxLength": 512
+    },
+    "schemaVersion": {
+      "const": 6
+    },
+    "name": {
+      "$ref": "#/definitions/modId"
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "version": {
+      "$ref": "#/definitions/semver"
+    },
+    "author": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "email": {
+          "type": "string",
+          "maxLength": 254
+        },
+        "url": {
+          "type": "string",
+          "maxLength": 2048
+        }
+      }
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "entryAssembly": {
+      "$ref": "#/definitions/dllPath"
+    },
+    "entryType": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "dependencies": {
+      "$ref": "#/definitions/dependencyMap"
+    },
+    "optionalDependencies": {
+      "$ref": "#/definitions/dependencyMap"
+    },
+    "conflicts": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "$ref": "#/definitions/conflict"
+      }
+    },
+    "loadAfter": {
+      "$ref": "#/definitions/orderHints"
+    },
+    "loadBefore": {
+      "$ref": "#/definitions/orderHints"
+    },
+    "supportedGameVersionRange": {
+      "$ref": "#/definitions/versionRange"
+    },
+    "supportedLoaderVersionRange": {
+      "$ref": "#/definitions/versionRange"
+    },
+    "supportedSdkVersionRange": {
+      "$ref": "#/definitions/versionRange"
+    },
+    "category": {
+      "type": "string",
+      "maxLength": 64
+    },
+    "tags": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      }
+    },
+    "icon": {
+      "$ref": "#/definitions/portablePath"
+    },
+    "screenshots": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/definitions/portablePath"
+      }
+    },
+    "homepage": {
+      "type": "string",
+      "maxLength": 2048
+    },
+    "source": {
+      "type": "string",
+      "maxLength": 2048
+    },
+    "license": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "SPDX license expression. Public registry submissions must use a concrete expression."
+    },
+    "licenseFiles": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/definitions/portablePath"
+      }
+    },
+    "hashes": {
+      "type": "object",
+      "maxProperties": 8192,
+      "propertyNames": {
+        "$ref": "#/definitions/portablePath"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[A-Fa-f0-9]{64}$"
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/definitions/capability"
+      }
+    },
+    "platforms": {
+      "type": "array",
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "windows",
+          "macos",
+          "linux"
+        ]
+      }
+    },
+    "architectures": {
+      "type": "array",
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "x64",
+          "arm64"
+        ]
+      }
+    },
+    "contentTargets": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+      }
+    },
+    "builtWith": {
+      "$ref": "#/definitions/builtWith"
+    },
+    "worldGamemodes": {
+      "not": {},
+      "description": "Retired in V6. A V5 worldGamemodes entry carried display metadata only, with no implementation owner, no world, and no launch identity. Split it into contributions.gamemodes (identity, implementation binding and world requirements) and contributions.launchTargets (what the player picks, and which world it starts in). Run 'topiaforge migrate-manifest --project <path>'."
+    },
+    "contributions": {
+      "$ref": "#/definitions/contributions"
+    },
+    "apiAssemblies": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/definitions/dllPath"
+      }
+    },
+    "multiplayer": {
+      "$ref": "#/definitions/multiplayer"
+    }
+  },
+  "patternProperties": {
+    "^x-[A-Za-z0-9_.-]{1,64}$": true
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "modId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+    },
+    "versionRange": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "dependencyMap": {
+      "type": "object",
+      "maxProperties": 128,
+      "propertyNames": {
+        "$ref": "#/definitions/modId"
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/versionRange"
+      }
+    },
+    "orderHints": {
+      "type": "array",
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/definitions/modId"
+      }
+    },
+    "portablePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*:)(?!.*[\\u0000-\\u001F])(?!.*(?:^|/)(?:\\.{1,2}|[Cc][Oo][Nn]|[Pp][Rr][Nn]|[Aa][Uu][Xx]|[Nn][Uu][Ll]|[Cc][Oo][Mm][1-9]|[Ll][Pp][Tt][1-9])(?:\\.|/|$))(?!.*[. ](?:/|$))(?!.*//).+$"
+    },
+    "dllPath": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/portablePath"
+        },
+        {
+          "pattern": "\\.[dD][lL][lL]$"
+        }
+      ]
+    },
+    "capability": {
+      "enum": [
+        "asset-bundles",
+        "filesystem",
+        "filesystem-watch",
+        "harmony-patch",
+        "hud",
+        "input",
+        "navigation",
+        "network",
+        "microphone",
+        "particles",
+        "physics",
+        "physics-settings",
+        "player-control",
+        "player-token",
+        "prompt-overrides",
+        "quality-settings",
+        "remote-ai",
+        "render-settings",
+        "robot-spawning",
+        "scene-management",
+        "speech-to-text",
+        "time",
+        "ugc-livesync",
+        "unsafe-native",
+        "world-service"
+      ]
+    },
+    "conflict": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/modId"
+        },
+        "versionRange": {
+          "$ref": "#/definitions/versionRange"
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 512
+        }
+      }
+    },
+    "builtWith": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "sdkVersion": {
+          "$ref": "#/definitions/semver"
+        },
+        "loaderVersion": {
+          "$ref": "#/definitions/semver"
+        },
+        "gameVersion": {
+          "$ref": "#/definitions/semver"
+        },
+        "toolVersion": {
+          "$ref": "#/definitions/semver"
+        }
+      }
+    },
+    "multiplayer": {
+      "type": "object",
+      "required": [
+        "mode"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "client-local",
+            "server-only",
+            "session"
+          ]
+        },
+        "presence": {
+          "enum": [
+            "required",
+            "optional"
+          ]
+        },
+        "protocol": {
+          "$ref": "#/definitions/multiplayerProtocol"
+        },
+        "synchronizedFiles": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/definitions/portablePath"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "mode"
+            ],
+            "properties": {
+              "mode": {
+                "const": "session"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "presence",
+              "protocol"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "mode"
+            ],
+            "properties": {
+              "mode": {
+                "enum": [
+                  "client-local",
+                  "server-only"
+                ]
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "presence"
+                  ]
+                },
+                {
+                  "required": [
+                    "protocol"
+                  ]
+                },
+                {
+                  "required": [
+                    "synchronizedFiles"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "multiplayerProtocol": {
+      "type": "object",
+      "required": [
+        "version"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "$ref": "#/definitions/semver"
+        },
+        "peerVersionRange": {
+          "$ref": "#/definitions/versionRange"
+        }
+      }
+    },
+    "declarationId": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 96,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{2,95}$",
+      "description": "Identity of one world, gamemode or launch target. Wider than modId because it is always namespaced under the declaring package's `name`, and modId's 64 characters are nearly spent by a package name alone. Reader rule R1 enforces that ownership; JSON Schema cannot."
+    },
+    "typeName": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 512,
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)+$",
+      "description": "Namespace-qualified CLR type name. The pattern rejects assembly-qualified names (comma) and nested-type syntax (plus), so a binding can never name a type outside the assembly this declaration points at."
+    },
+    "implementationBinding": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "assembly": {
+          "$ref": "#/definitions/dllPath",
+          "description": "Package-relative assembly. Omit to mean this manifest's `entryAssembly`. When present it must also be a key of `hashes`, so a binding can only point at bytes the installer verified."
+        },
+        "type": {
+          "$ref": "#/definitions/typeName"
+        }
+      }
+    },
+    "transition": {
+      "enum": [
+        "scene-replacement",
+        "additive-arena"
+      ]
+    },
+    "transitionList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/definitions/transition"
+      }
+    },
+    "spawnPolicy": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false,
+      "description": "Where the player starts. Deliberately not a transform: V5 declares no numeric fields at all, and a spawn point drifting in the last bits is the bug nobody attributes to the manifest.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "authored-marker",
+            "provider-default"
+          ]
+        },
+        "markerName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "authored-marker"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "markerName"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "provider-default"
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "markerName"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "worldContent": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "bundle",
+            "provider",
+            "game-scene",
+            "discovered"
+          ]
+        },
+        "bundle": {
+          "$ref": "#/definitions/portablePath"
+        },
+        "prefab": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "implementation": {
+          "$ref": "#/definitions/implementationBinding"
+        },
+        "sceneName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "bundle"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "bundle",
+              "prefab"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "implementation"
+                  ]
+                },
+                {
+                  "required": [
+                    "sceneName"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "provider"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "implementation"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "bundle"
+                  ]
+                },
+                {
+                  "required": [
+                    "prefab"
+                  ]
+                },
+                {
+                  "required": [
+                    "sceneName"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "game-scene"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "sceneName"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "bundle"
+                  ]
+                },
+                {
+                  "required": [
+                    "prefab"
+                  ]
+                },
+                {
+                  "required": [
+                    "implementation"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "discovered"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "implementation"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "bundle"
+                  ]
+                },
+                {
+                  "required": [
+                    "prefab"
+                  ]
+                },
+                {
+                  "required": [
+                    "sceneName"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "worldDeclaration": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "content",
+        "transitions",
+        "spawn"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/declarationId",
+          "description": "For content.kind 'discovered' this id is the family prefix: instances observed at runtime are '<id>.<slug>' and are never independently launchable targets."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "content": {
+          "$ref": "#/definitions/worldContent"
+        },
+        "transitions": {
+          "$ref": "#/definitions/transitionList"
+        },
+        "spawn": {
+          "$ref": "#/definitions/spawnPolicy"
+        },
+        "openTo": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/definitions/declarationId"
+          },
+          "description": "Gamemode ids this world consents to be paired with by a launch target whose world policy is 'open'. Cross-package entries must resolve through this package's required `dependencies`. Irrelevant to 'fixed' and 'list' policies, which are one-directional and so cannot make the world's package depend on the gamemode's."
+        },
+        "openToAnyCompatible": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "openToAnyCompatible"
+            ],
+            "properties": {
+              "openToAnyCompatible": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "openTo"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "worldRequirements": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "description": "Omit entirely to mean no requirement. An empty object would be indistinguishable from a requirement the author forgot to fill in.",
+      "properties": {
+        "transitions": {
+          "$ref": "#/definitions/transitionList"
+        },
+        "spawn": {
+          "enum": [
+            "authored-marker",
+            "any"
+          ]
+        }
+      }
+    },
+    "gamemodeDeclaration": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "implementation"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/declarationId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "implementation": {
+          "$ref": "#/definitions/implementationBinding"
+        },
+        "worldRequirements": {
+          "$ref": "#/definitions/worldRequirements"
+        },
+        "sceneChangePolicy": {
+          "enum": [
+            "end-session",
+            "keep-controller"
+          ],
+          "description": "What a scene change during a running session means. Absent means 'keep-controller'. A scene update is not a new session, and reading it as one is what recreated controllers underneath a running gamemode."
+        }
+      }
+    },
+    "worldPolicy": {
+      "type": "object",
+      "required": [
+        "policy",
+        "default"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "policy": {
+          "enum": [
+            "fixed",
+            "list",
+            "open"
+          ],
+          "description": "fixed: only `default`. list: `default` plus `allow`, one-directional, no world-side consent. open: `default` plus any profile world that satisfies the gamemode's worldRequirements AND consents through its own openTo/openToAnyCompatible."
+        },
+        "default": {
+          "$ref": "#/definitions/declarationId"
+        },
+        "allow": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/definitions/declarationId"
+          }
+        },
+        "allowPlayerOverride": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "policy"
+            ],
+            "properties": {
+              "policy": {
+                "const": "list"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "allow"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "allow"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "policy"
+            ],
+            "properties": {
+              "policy": {
+                "const": "fixed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "allowPlayerOverride": {
+                "const": false
+              }
+            }
+          }
+        }
+      ]
+    },
+    "launchTargetDeclaration": {
+      "type": "object",
+      "required": [
+        "id",
+        "title",
+        "gamemode",
+        "world"
+      ],
+      "additionalProperties": false,
+      "description": "What the player picks. Menus, Home, Setup and the CLI all select one of these, so its identity is user-facing and outlives any one menu.",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/declarationId"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "sortKey": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999
+        },
+        "gamemode": {
+          "$ref": "#/definitions/declarationId"
+        },
+        "world": {
+          "$ref": "#/definitions/worldPolicy"
+        },
+        "transition": {
+          "enum": [
+            "auto",
+            "scene-replacement",
+            "additive-arena",
+            "player-choice"
+          ],
+          "description": "Absent means 'auto'. 'auto' selects the highest-precedence member of (world.transitions INTERSECT gamemode.worldRequirements.transitions), where scene-replacement outranks additive-arena; the precedence is fixed so a world offering both is never ambiguous. An explicit value must be a member of that intersection; 'player-choice' offers the whole intersection."
+        }
+      }
+    },
+    "contributions": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "description": "Wrapped rather than declared as top-level `worlds`/`gamemodes` keys: `gamemodes` is already a live retired-field sentinel that both readers reject on sight.",
+      "properties": {
+        "worlds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/definitions/worldDeclaration"
+          }
+        },
+        "gamemodes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/definitions/gamemodeDeclaration"
+          }
+        },
+        "launchTargets": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/definitions/launchTargetDeclaration"
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "contributions"
+        ]
+      },
+      "then": {
+        "required": [
+          "capabilities"
+        ],
+        "properties": {
+          "capabilities": {
+            "contains": {
+              "const": "world-service"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

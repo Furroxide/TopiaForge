@@ -46,17 +46,35 @@ namespace TopiaForge.ModManager.Tests
             Assert(ManifestValidator.Validate(standalone).Count == 0,
                 "a canonical standalone V5 manifest must remain valid");
 
+            Assert(ManifestSchemaDispatch.Resolve(ModManifest.ManifestV6SchemaVersion) == ManifestSchemaContract.V6,
+                "the V6 selector must dispatch to its own reader branch, never to V5's");
+
             AssertThrows<InvalidDataException>(
-                () => ModManifestJson.Deserialize(ManifestJson(6, string.Empty)),
-                "unknown schema versions must fail without being treated as V5");
+                () => ModManifestJson.Deserialize(ManifestJson(7, string.Empty)),
+                "unknown schema versions must fail without being treated as a supported one");
 
             var futureErrors = ManifestValidator.Validate(new ModManifest
             {
-                SchemaVersion = 6,
+                SchemaVersion = 7,
                 Multiplayer = new ModMultiplayerMetadata { Mode = "future-mode" }
             });
-            Assert(futureErrors.Count == 1 && futureErrors[0].Contains("schemaVersion must be 5"),
-                "an unsupported future schema must fail on its selector without interpreting V5 fields");
+            Assert(futureErrors.Count == 1 && futureErrors[0].Contains("schemaVersion must be 5 or 6"),
+                "an unsupported future schema must fail on its selector without interpreting supported fields");
+
+            // Each version rejects the other's one distinguishing field by name. Known fields are
+            // the union across schemas, so without this a V5 manifest would silently accept a
+            // declaration set no V5 reader understands.
+            AssertThrows<InvalidDataException>(
+                () => ModManifestJson.Deserialize(ManifestJson(
+                    6,
+                    ",\"worldGamemodes\":[{\"id\":\"sample.mod.mode\",\"name\":\"Mode\"}]")),
+                "a V6 manifest must not carry the retired worldGamemodes list");
+            AssertThrows<InvalidDataException>(
+                () => ModManifestJson.Deserialize(ManifestJson(
+                    5,
+                    ",\"contributions\":{\"gamemodes\":[{\"id\":\"sample.mod.mode\"," +
+                    "\"name\":\"Mode\",\"implementation\":{\"type\":\"Sample.Mode\"}}]}")),
+                "a V5 manifest must not declare contributions");
         }
 
         private static void V5SessionMetadataRoundTrips()

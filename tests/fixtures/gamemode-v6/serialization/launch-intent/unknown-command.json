@@ -1,0 +1,27 @@
+{
+  "id": "unknown-command",
+  "channel": "serialization",
+  "kind": "launch-intent-hostile",
+  "summary": "Only launch-target and main-menu are commands. An unrecognised one stops validation rather than falling through to the launch-target rules.",
+  "intent": {
+    "command": "resume-last-session"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "worldLaunch.command"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "writer-cannot-emit"
+      ]
+    }
+  },
+  "operations": {
+    "csharp": "read-intent",
+    "dart": "write-intent"
+  }
+}
