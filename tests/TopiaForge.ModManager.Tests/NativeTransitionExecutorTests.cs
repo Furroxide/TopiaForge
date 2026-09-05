@@ -12,7 +12,7 @@ namespace TopiaForge.ModManager.Tests
         {
             var failures = new System.Collections.Generic.List<Exception>();
             foreach (var test in new Action[] {
-                LocalImportRequiresFreshResult, LocalImportPreservesAdmission, CrossRouteCancellationRetainsNative,
+                NativeLoaderDrainTests.Run, OwnerCheckpointSubscriptionTests.Run, LocalImportRequiresFreshResult, LocalImportPreservesAdmission, CrossRouteCancellationRetainsNative,
                 RevokedProviderGrantCannotReenter, OwnerReloadSharesOutstandingNative,
                 WorkerCompletionWaitsForHost, UncertainDispatchAndLateArrival,
                 SynchronousAndPreflightCompletion, LifecycleStopGateAndAuthority,

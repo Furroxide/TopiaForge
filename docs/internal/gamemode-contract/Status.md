@@ -9,14 +9,14 @@ The [canonical brief](../GamemodeContractRedesign.md) is normative. The
 | Revision or artifact | Meaning | Integration status at this update |
 | --- | --- | --- |
 | `9811ff8f78697f1302760b57918e942613f2fc43` and the 2026-09-03 working tree | Historical architecture investigation; its uncommitted state is part of its evidence | Historical, not a description of today's checkout |
-| `f3de112` | Reviewed tip of the original Manifest V6 stack | Source material only; PRs #102Ã¢â‚¬â€œ105 were open and unmerged when reviewed |
+| `f3de112` | Reviewed tip of the original Manifest V6 stack | Source material only; PRs #102–105 were open and unmerged when reviewed |
 | `768fb0f386b5c16ac35d124e12819d58b60816b7` (`origin/dev` when the replacement slice was cut) | Base of `docs/gamemode-redesign-plan` in the registered `TopiaForge-gm` worktree | First replacement slice contains documentation only |
 | `f2ec48b14a86adc93c8079fd1216e91a2d6a2764` | Slice 1 squash merge of PR #106 into `dev` | Canonical documents integrated; no production or live acceptance claim |
 | `c61d5fcf821ef726c2aea3ba35c092e314e1f6c4` | Slice 2 squash merge of PR #107, reviewed head `055a7d4` | Unused V6 contract integrated; alias and production manifests/templates remain V5 |
 | `41f14d078dca1830749f70cac9f72083c4fedd8c` | Slice 3 merged through PR #108; corrected pure resolver, immutable plans and inactive transport models | Full CI passed at reviewed head `63540e2`; no production caller or wire activation |
-| `feat/gamemode-runtime-foundations`, based on `41f14d0` | Slice 4; lifecycle, scopes, native admission and shutdown foundations | Implementation in progress; V6 activation and game verification remain pending |
+| `feat/gamemode-runtime-foundations`, based on `41f14d0` | Slice 4, PR #109; lifecycle, scopes, native admission and shutdown foundations | First head `6caceb9` passed full CI; independent review corrections pass local gates and await exact-head CI |
 
-On 2026-09-05, PRs #102Ã¢â‚¬â€œ105 were converted to draft for the approved re-cut.
+On 2026-09-05, PRs #102–105 were converted to draft for the approved re-cut.
 Their branch tips and existing review history were preserved. Both external
 ManifestV6 briefs were replaced with supersession pointers; their original contents
 remain in adjacent `.superseded-2026-09-05.md` files.
@@ -285,11 +285,72 @@ Local logs are retained in the temporary directory under `tf-slice4-*` names.
 load warnings only). `node scripts/build-reference.mjs` in website built the C#
 reference with zero warnings/errors: 388 managed-reference inputs, 392 models and
 391 HTML files. Full website publication remains an exact-head Linux CI gate;
-the previously matched Windows Dartdoc baseline limitation is unchanged. Branch
-CI is still pending.
+the previously matched Windows Dartdoc baseline limitation is unchanged. First-head
+[CI run 33986323680](https://github.com/Furroxide/TopiaForge/actions/runs/33986323680)
+passed at `6caceb9f7163b1b5532b645c5e2d25af7226b740`, including all five required
+checks, Flutter, Windows data, seven templates and full Linux publication. This
+result does not certify the subsequent review corrections.
 Production V6 binding/activation and every game/visual/native-timing acceptance
 remain pending; the new orchestrator is exercised through controlled foundation
 tests, while V5 production scene requests already use the shared executor.
+
+## Slice 4 independent review corrections
+
+Review of `6caceb9` reproduced additional failures before their fixes:
+
+- Matching scene arrival could release native ownership before the managed game
+  loader completed; a later loader fault then disappeared. Both completion signals
+  are now required. Structured cancellation/authority/busy refusals no longer turn
+  into fallback scene loads, and borrowed admission checks current authority.
+- An undefined SDK error enum could interrupt wire-outcome construction and strand
+  the session in Stopping. Author results are normalized before command completion
+  and notification; positive and negative unknown codes have regression cases.
+- Checkpoint subscriptions outlived cancellation. Callback delivery and subscription
+  creation now check owner liveness.
+- A disposer could submit another resource after the scope was marked disposed,
+  escaping the final drain and its aggregated failure. Scope cleanup now seals
+  ownership only after the rejected-resource and queued-work drain is empty.
+- Runtime shutdown without a session hook disposed V5 package services while native
+  work remained active. Missing, throwing, faulted and failed hooks all pass through
+  the native drain; host attachment remains until package teardown completes.
+- Unity does not await an `async void OnDestroy`. The plugin now starts shutdown
+  synchronously and gives the process host an observed completion task. Controlled
+  tests verify host-thread, exactly-once final cleanup after success or failure,
+  including a throwing diagnostic sink. Process-exit timing is still unverified.
+
+Independent cross-review then reproduced pending-constructor scope cleanup and
+checkpoint diagnostic isolation failures, plus eleven native timeout/admission
+failures. Async-only scope creation now awaits failed initialization cleanup and
+returns a successfully created scope before the caller handles cancellation. Native
+admission rechecks revocation, competing work, token/lifetime cancellation and the
+session gate after provider-backed authority callbacks. A loader timeout completes
+the caller while native ownership remains quarantined until both signals drain.
+
+The scope control that disposed its lifetime midway through initialization initially
+expected success incorrectly: later facade initialization correctly threw
+ObjectDisposedException. It now explicitly checks failed initialization, retained
+error evidence and cleanup. A separate completed-creation/cancel-before-consumption
+control verifies that successful scope ownership is preserved.
+
+Final local verification of the review follow-up to `6caceb9` passed: fresh full
+Release with zero warnings/errors; rebuilt eleven-SDK-package and all seven
+no-argument harnesses; whole-solution format verification; bundled-Dart fatal-info
+analysis and format verification (348 files, zero changes); 353-fixture closure and
+31 self-tests; 410 non-generated Dart files at or below 500 lines; README, residue,
+trademark and asset-licence audits; 33 website tests, 124 Markdown-link checks and
+25-page/five-snippet content preparation. The unchanged Dart test results above
+remain scoped evidence; C# tests were rerun after the final corrections. Logs use
+`tf-slice4-followup-*` in the temporary directory. The follow-up requires fresh
+exact-head CI before merge; no game or native-timing result is implied.
+
+Three CodeQL review annotations at the first head concern test fixture paths:
+`Program.cs` creates a fresh GUID-named directory under `Path.GetTempPath`, and
+`Program.SessionSceneTests.cs` reads trace paths created by the private fixture
+helper under that test root with constant package names. These paths do not come
+from a package manifest, wire request, or external user input. This assessment is
+limited to those test sites; no global security rule or production path check was
+relaxed. Review also corrected accidental mojibake in owned comments and this ledger;
+UTF-8 decoding and a targeted encoding audit pass for the follow-up source files.
 
 ## Live acceptance isolation prerequisite
 
@@ -333,10 +394,10 @@ P1 blocks safe integration; P2 blocks treating the published contract as complet
 | V6-06 | P1 | Resolver requires target dependencies for open-policy player choices, exempts the default from open consent, and does not consistently default override permission to false. `LaunchResolver.ResolveWorld`, `AdmittedByPolicy`, `AdmitsChoice`; Dart world-policy helpers. | Require dependencies/versions for declared references, compatibility and consent for open player choices, consent for open defaults, and explicit override permission. Correct discovered-default fixtures and record concrete instance identity separately from its family. | 3 |
 | V6-07 | P1 | Early resolver returns hide independently determinable blockers; `LaunchPlan.ResolvedPackages` retains mutable `ResolvedPackage.Manifest`. `src/TopiaForge.ModManager.Core/LaunchResolution.cs`, both resolvers. | Return deduplicated ordinal-sorted blockers; copy immutable package identities. Mutate source collections/manifests after resolution in tests and verify plan stability. Revalidate identities and resolve loaded declarations again before scene work. | 3, 5, 7 |
 | V6-08 | P1 | V3/V4 and V5 migration use different preservation paths; legacy arrays can be filtered by `whereType<Map>`, and stub writes are direct. `apps/topiaforge_cli/bin/topiaforge_manifest_migration_commands.dart`. | Preserve untouched JSON values/presence, reject malformed entries with original index and ID, require author-only facts, share preservation/refusal rules, and write atomically. Test no-write failure paths and deliberately invalid incomplete stubs. | 8 |
-| V6-09 | P1 | Declaration schemas and resolver types exist without an authoritative production launch consumer. Historical `GamemodeHost` startup, Worlds loading/session paths, launch repository, and manager routes remain the execution mechanism. | Connect binding, one session lifecycle, one transition executor, readiness, exact-profile resolution, and all launch surfaces before claiming the redesign runs. Use production integration fixtures and isolated-profile game acceptance. | 4Ã¢â‚¬â€œ7 |
+| V6-09 | P1 | Declaration schemas and resolver types exist without an authoritative production launch consumer. Historical `GamemodeHost` startup, Worlds loading/session paths, launch repository, and manager routes remain the execution mechanism. | Connect binding, one session lifecycle, one transition executor, readiness, exact-profile resolution, and all launch surfaces before claiming the redesign runs. Use production integration fixtures and isolated-profile game acceptance. | 4–7 |
 | V6-10 | P2 | Old authoring commands and templates can still imply metadata alone creates a gamemode; reference and publication wiring lag the new schema. Migration commands, scaffold paths, `docs/ManifestV6.md`, `website/scripts/docs/catalog.mjs`. | Reject obsolete authoring inputs before filesystem writes; migrate templates with runtime activation; publish a complete V6 reference and corrected compatibility/retirement guidance; pass documentation publication. | 1, 6, 8 |
 
-## GM-01Ã¢â‚¬â€œGM-10 acceptance map
+## GM-01–GM-10 acceptance map
 
 These identifiers retain the architecture report's original meanings. None is closed merely
 because a proposed schema contains a related field.
@@ -364,7 +425,7 @@ The old four-PR stack is source material; it does not satisfy these eight delive
 | 1 | Review/brief/status/prompts and premature-claim corrections | Merged in PR #106 (`f2ec48b`) | Not applicable | Documentation checks and required CI passed at `16c75ba`; baseline Release/seven-harness checks passed | Not applicable |
 | 2 | Unused V6 contract/readers/validators/conformance; alias stays V5 | Merged in PR #107 (`c61d5fc`) | Intentionally unused | 149 C# fixtures; 479 domain, 358 data, 227 CLI tests; seven Release harnesses and required CI/publication passed at `055a7d4` | Not required for pure contract |
 | 3 | Pure resolution and immutable transport models | Merged in PR #108 (`41f14d0`) | Intentionally no production switch | 353 shared fixtures; 791 domain, 358 data, 227 CLI tests; full Release/seven harnesses and required CI/publication passed at `63540e2` | Not required for pure models |
-| 4 | Scoped ownership, lifecycle, shared transition foundations | Implemented on `feat/gamemode-runtime-foundations`; PR/CI integration pending | Existing V5 scene routes use the shared executor; V6 orchestration activation remains pending | Full Release, rebuilt SDK baselines/seven harnesses, Dart suites and audits pass locally; CI pending | Native behavior pending |
+| 4 | Scoped ownership, lifecycle, shared transition foundations | Implemented in PR #109; review corrections await exact-head CI | Existing V5 scene routes use the shared executor; V6 orchestration activation remains pending | First head `6caceb9` passed full CI; final review corrections pass local Release/seven harnesses, formatting, analyzers and audits; new CI pending | Native behavior pending |
 | 5 | Verified factory bindings, providers/discovery, readiness adapters | Pending | Pending | Synthetic package and production-adapter coverage pending | World/readiness checks pending |
 | 6 | Activate runtime and atomically flip manifests/templates | Original-stack migration is partial source material only | Pending | Rebuilt API baselines, generated package and consumer coverage pending | First-party gameplay pending |
 | 7 | Launcher/CLI/overlay preflight, wire V4, observations, durable state | Pending | Pending | Cross-language wire/profile/process/progress integration pending | Cold launch and multi-surface selection pending |

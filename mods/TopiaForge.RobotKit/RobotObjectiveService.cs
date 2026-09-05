@@ -8,8 +8,8 @@ namespace TopiaForge.RobotKit
 {
     // Publishes IRobotObjectiveService: persistent robot programs (go-to / follow / patrol / wander / flee /
     // reprogram-courier / idle) executed frame-to-frame on top of IRobotAgent movement intents, plus the
-    // session-scoped named-target registry that both the runners and LLM payloads draw from. Unity-free â€” it only
-    // touches the SDK contracts and ObjectiveRunner â€” so the whole flow unit-tests on net8.0 with a fake agent.
+    // session-scoped named-target registry that both the runners and LLM payloads draw from. Unity-free — it only
+    // touches the SDK contracts and ObjectiveRunner — so the whole flow unit-tests on net8.0 with a fake agent.
     // Ticked after the agent service (agents step first, then objectives react to fresh reached/moving state).
     // Never throws.
     internal sealed class RobotObjectiveService : IRobotObjectiveService,
@@ -339,7 +339,7 @@ namespace TopiaForge.RobotKit
             clock += deltaTime;
 
             // Step from a copied buffer: a Reprogram delivery calls SetObjective(recipient, payload) mid-step,
-            // which mutates the runner map. A runner replaced mid-tick may still sit in the buffer â€” harmless,
+            // which mutates the runner map. A runner replaced mid-tick may still sit in the buffer — harmless,
             // cancelled runners return from Step immediately.
             stepBuffer.Clear();
             foreach (var runner in runners.Values)
@@ -399,7 +399,7 @@ namespace TopiaForge.RobotKit
         }
 
         // Applies a courier's payload to the recipient and announces the hand-over. Runs inside the courier
-        // runner's Step (via its delivery callback) â€” hence Tick stepping from a buffer, not the live map.
+        // runner's Step (via its delivery callback) — hence Tick stepping from a buffer, not the live map.
         private void DeliverProgram(
             string ownerModId,
             IRobotAgent sender,

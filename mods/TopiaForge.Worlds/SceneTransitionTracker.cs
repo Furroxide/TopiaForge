@@ -14,6 +14,7 @@ namespace TopiaForge.Worlds
         private bool pending;
         private bool quarantined;
         private bool terminalFailurePending;
+        private bool resolvedGenerationActive;
         private float startedAt;
         private string expectedScene = string.Empty;
         private string failure = string.Empty;
@@ -57,6 +58,7 @@ namespace TopiaForge.Worlds
 
                 generation = generation == int.MaxValue ? 1 : generation + 1;
                 pending = true;
+                resolvedGenerationActive = false;
                 startedAt = now;
                 expectedScene = expectedSceneName;
                 failure = string.Empty;
@@ -68,7 +70,7 @@ namespace TopiaForge.Worlds
         {
             lock (gate)
             {
-                if ((!pending && !quarantined) || token != generation)
+                if ((!pending && !quarantined && !resolvedGenerationActive) || token != generation)
                 {
                     return;
                 }
@@ -122,7 +124,9 @@ namespace TopiaForge.Worlds
                     return false;
                 }
 
+                var stillOwned = pending;
                 ClearToIdle();
+                resolvedGenerationActive = stillOwned;
                 return true;
             }
         }
@@ -136,6 +140,7 @@ namespace TopiaForge.Worlds
         {
             lock (gate)
             {
+                resolvedGenerationActive = false;
                 if (pending)
                 {
                     Quarantine();
@@ -203,6 +208,7 @@ namespace TopiaForge.Worlds
 
         private void ClearToIdle()
         {
+            resolvedGenerationActive = false;
             pending = false;
             quarantined = false;
             terminalFailurePending = false;

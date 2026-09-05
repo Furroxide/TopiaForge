@@ -17,7 +17,9 @@ namespace TopiaForge.ModManager
         private readonly List<Task> pending = new List<Task>();
         private readonly CancellationTokenRegistration sessionStopping;
         private ModContext? context;
-        private bool disposed;
+        private CleanupPhase cleanupPhase;
+        private int activeDrains;
+        private enum CleanupPhase { Active, Disposing, Draining, Sealed }
         private int stopRequested;
 
         internal ModContextScope(ModContext parent, string sessionId, CancellationToken stoppingToken,
@@ -63,7 +65,7 @@ namespace TopiaForge.ModManager
         {
             lock (sync)
             {
-                if (!disposed)
+                if (cleanupPhase != CleanupPhase.Sealed)
                 {
                     rejected.Add(resource);
                     return;
@@ -85,9 +87,10 @@ namespace TopiaForge.ModManager
                 action();
                 return;
             }
+            var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             lock (sync)
             {
-                if (disposed)
+                if (cleanupPhase == CleanupPhase.Sealed)
                 {
                     dispatcher.Post(() =>
                     {
@@ -96,9 +99,9 @@ namespace TopiaForge.ModManager
                     });
                     return;
                 }
+                // Enrol before releasing the phase lock, so sealing cannot miss a worker submission.
+                pending.Add(completion.Task);
             }
-            var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            lock (sync) pending.Add(completion.Task);
             try
             {
                 dispatcher.Post(() =>
@@ -115,46 +118,96 @@ namespace TopiaForge.ModManager
         {
             AssertHost();
             var failures = new List<Exception>();
-            while (true)
+            lock (sync) activeDrains++;
+            try
             {
-                IDisposable[] resources;
-                Task[] tasks;
-                lock (sync)
+                while (true)
                 {
-                    resources = rejected.ToArray();
-                    rejected.Clear();
-                    tasks = pending.ToArray();
-                    pending.Clear();
+                    IDisposable[] resources;
+                    Task[] tasks;
+                    var releaseParent = false;
+                    lock (sync)
+                    {
+                        resources = rejected.ToArray();
+                        rejected.Clear();
+                        tasks = pending.ToArray();
+                        pending.Clear();
+                        if (resources.Length == 0 && tasks.Length == 0
+                            && cleanupPhase == CleanupPhase.Draining && activeDrains == 1)
+                        {
+                            // The empty check and seal share the submission lock. No worker can enqueue
+                            // an unobserved resource between the last drain and terminal ownership release.
+                            cleanupPhase = CleanupPhase.Sealed;
+                            releaseParent = true;
+                        }
+                    }
+                    if (releaseParent) parent.ReleaseChildScope(this);
+                    if (resources.Length == 0 && tasks.Length == 0) break;
+                    var current = new List<Task>(tasks);
+                    foreach (var resource in resources) current.Add(dispatcher.InvokeAsync(resource.Dispose));
+                    try { await Task.WhenAll(current).ConfigureAwait(false); }
+                    catch
+                    {
+                        foreach (var task in current)
+                            if (task.Exception != null) failures.AddRange(task.Exception.Flatten().InnerExceptions);
+                    }
                 }
-                if (resources.Length == 0 && tasks.Length == 0) break;
-                var current = new List<Task>(tasks);
-                foreach (var resource in resources) current.Add(dispatcher.InvokeAsync(resource.Dispose));
-                try { await Task.WhenAll(current).ConfigureAwait(false); }
-                catch
-                {
-                    foreach (var task in current)
-                        if (task.Exception != null) failures.AddRange(task.Exception.Flatten().InnerExceptions);
-                }
+            }
+            finally
+            {
+                lock (sync) activeDrains--;
+                SealIfDrained();
             }
             if (failures.Count > 0) throw new AggregateException("Scoped resource cleanup failed.", failures);
         }
+
+        // Failed initialization has no returned owner. Keep the parent registration and host callback
+        // alive until queued/rejected resources have drained, then propagate every cleanup failure.
+        internal Task CleanupFailedConstructionAsync() => dispatcher.InvokeCallbackAsync(async () =>
+        {
+            var failures = new List<Exception>();
+            Try(BeginStop, failures);
+            try { await DrainRejectedResourcesAsync(); } catch (Exception error) { failures.Add(error); }
+            Try(Dispose, failures);
+            try { await DrainRejectedResourcesAsync(); } catch (Exception error) { failures.Add(error); }
+            if (failures.Count != 0) throw new AggregateException("Failed scope initialization cleanup failed.", failures);
+            return true;
+        });
 
         public void Dispose()
         {
             AssertHost();
             lock (sync)
             {
-                if (disposed) return;
-                disposed = true;
+                if (cleanupPhase != CleanupPhase.Active) return;
+                cleanupPhase = CleanupPhase.Disposing;
             }
             var failures = new List<Exception>();
             Try(() => sessionStopping.Dispose(), failures);
             Try(OwnerLifetime.Dispose, failures);
-            IDisposable[] remainder;
-            lock (sync) { remainder = rejected.ToArray(); rejected.Clear(); }
-            foreach (var resource in remainder) Try(resource.Dispose, failures);
-            parent.ReleaseChildScope(this);
+            // Disposers may submit more resources even though Track rejects them. They still belong to
+            // this cleanup transaction; only submissions after the complete drain use terminal posting.
+            while (true)
+            {
+                IDisposable[] remainder;
+                lock (sync) { remainder = rejected.ToArray(); rejected.Clear(); }
+                if (remainder.Length == 0) break;
+                foreach (var resource in remainder) Try(resource.Dispose, failures);
+            }
+            lock (sync) cleanupPhase = CleanupPhase.Draining;
+            SealIfDrained();
             if (failures.Count > 0) throw new AggregateException("Scoped resource cleanup failed.", failures);
+        }
+
+        private void SealIfDrained()
+        {
+            lock (sync)
+            {
+                if (cleanupPhase != CleanupPhase.Draining || activeDrains != 0
+                    || rejected.Count != 0 || pending.Count != 0) return;
+                cleanupPhase = CleanupPhase.Sealed;
+            }
+            parent.ReleaseChildScope(this);
         }
 
         private void AssertHost()

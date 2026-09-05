@@ -30,6 +30,7 @@ namespace TopiaForge.ModManager.Tests
         internal readonly EffectiveProfile Profile;
         internal readonly List<LaunchOutcome> Outcomes = new List<LaunchOutcome>();
         internal bool InvalidBindings;
+        internal Action<IModLifetime>? ScopeFactory;
         internal int MenuLoads;
         internal Func<CancellationToken, Task<OperationResult<bool>>>? Menu;
 
@@ -64,7 +65,7 @@ namespace TopiaForge.ModManager.Tests
         public GameplayContextServices Create(string ownerModId, string packagePath, string dataPath,
             IModLifetime lifetime, IModLogger logger, NativeTransitionAccessSlot? transitionAccess = null)
         {
-            if (transitionAccess != null) { ChildLifetime = lifetime; Slot = transitionAccess; }
+            if (transitionAccess != null) { ChildLifetime = lifetime; Slot = transitionAccess; ScopeFactory?.Invoke(lifetime); }
             return GameplayContextServices.Unavailable(lifetime);
         }
         public RuntimeSessionSnapshot Capture()

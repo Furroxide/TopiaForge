@@ -28,8 +28,10 @@ namespace TopiaForge.ModManager.Tests
             var factory = new Factory();
             var parent = new ModContext(new ModManifest { Id = "assets.mod", Name = "Assets", Version = "1.0.0" },
                 paths, "package", new OwnerFacadeStoppingTests.Logger(), new ModServiceRegistry(), null, factory);
-            var scope = parent.CreateChildScope("assets-session", CancellationToken.None, () => { },
+            var creation = parent.CreateChildScopeAsync("assets-session", CancellationToken.None, () => { },
                 new NativeTransitionAccessSlot("assets-session:assets.mod", "assets-session", () => true), dispatcher);
+            HostDispatcherTests.Pump(dispatcher, creation);
+            var scope = creation.Result;
             var parentAssets = (Assets)parent.Assets;
             var childAssets = (Assets)scope.Context.Assets;
             var prefab = parentAssets.MakePrefab();

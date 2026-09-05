@@ -112,28 +112,28 @@ namespace TopiaForge.Worlds
             return levels;
         }
 
-        public bool LaunchLevel(object checkpointAsset, Action<string>? onFailure = null,
+        public WorldNativeDispatchResult LaunchLevel(object checkpointAsset, Action<string>? onFailure = null,
             IInternalSceneTransitionService? transitionOverride = null)
         {
             string? sceneName;
             try { sceneName = checkpointAsset?.GetType().GetProperty("SceneName", AnyInstance)?.GetValue(checkpointAsset) as string; }
-            catch { return false; }
-            if (string.IsNullOrWhiteSpace(sceneName)) return false;
+            catch { return WorldNativeDispatchResult.Refused(ModErrorCode.InvalidArgument, "The checkpoint scene could not be read."); }
+            if (string.IsNullOrWhiteSpace(sceneName)) return WorldNativeDispatchResult.Refused(ModErrorCode.InvalidArgument, "The checkpoint has no scene.");
             return Dispatch(sceneName!, onFailure, transitionOverride,
                 (sink, mark) => LaunchLevelCore(checkpointAsset!, onFailure, sink, mark));
         }
 
-        public bool LoadSceneByName(string sceneName, Action<string>? onFailure = null,
+        public WorldNativeDispatchResult LoadSceneByName(string sceneName, Action<string>? onFailure = null,
             IInternalSceneTransitionService? transitionOverride = null) =>
             Dispatch(sceneName, onFailure, transitionOverride,
                 (sink, mark) => LoadSceneByNameCore(sceneName, onFailure, sink, mark));
 
-        public bool LaunchOpenSandbox(Action<string>? onFailure = null,
+        public WorldNativeDispatchResult LaunchOpenSandbox(Action<string>? onFailure = null,
             IInternalSceneTransitionService? transitionOverride = null) =>
             Dispatch(SandboxSceneName, onFailure, transitionOverride,
                 (sink, mark) => LaunchOpenSandboxCore(onFailure, sink, mark));
 
-        public bool LoadSceneDirect(string sceneName, Action<string>? onFailure,
+        public WorldNativeDispatchResult LoadSceneDirect(string sceneName, Action<string>? onFailure,
             IInternalSceneTransitionService? transitionOverride) =>
             Dispatch(sceneName, onFailure, transitionOverride, (sink, mark) =>
             {
@@ -145,31 +145,37 @@ namespace TopiaForge.Worlds
                 return true;
             });
 
-        private bool Dispatch(string sceneName, Action<string>? onFailure,
+        private WorldNativeDispatchResult Dispatch(string sceneName, Action<string>? onFailure,
             IInternalSceneTransitionService? transitionOverride,
             Func<IInternalNativeSceneCompletion, Action, bool> begin)
         {
-            if (string.IsNullOrWhiteSpace(sceneName)) return false;
+            if (string.IsNullOrWhiteSpace(sceneName)) return WorldNativeDispatchResult.Refused(ModErrorCode.InvalidArgument, "A native scene is required.");
             var result = (transitionOverride ?? sceneTransitions).TryDispatch(
                 new NativeSceneRequest(sceneName, false, "world native load"),
                 new DelegateNativeSceneDispatch(sink =>
                 {
                     var entered = false;
+                    var failed = false;
                     try
                     {
                         if (begin(sink, () => entered = true)) return NativeSceneDispatchStatus.Dispatched;
                     }
                     catch (Exception error)
                     {
+                        failed = true;
                         sink.FailCaller(ModErrorCode.External, error.Message);
                         NotifyFailure(onFailure, error.Message);
                     }
-                    if (!entered) return NativeSceneDispatchStatus.NotDispatched;
+                    if (!entered)
+                    {
+                        if (!failed) sink.FailCaller(ModErrorCode.Unavailable, "The native load route is unavailable.");
+                        return NativeSceneDispatchStatus.NotDispatched;
+                    }
                     sink.FailCaller(ModErrorCode.External, "The game loader failed after possible native effects; awaiting native drain.");
                     NotifyFailure(onFailure, "The game loader failed after possible native effects.");
                     return NativeSceneDispatchStatus.Indeterminate;
                 }));
-            return result.Succeeded;
+            return WorldNativeDispatchResult.From(result);
         }
 
         /// <summary>Launches a real level the same way the game's menu does (correct play state).</summary>
@@ -234,6 +240,7 @@ namespace TopiaForge.Worlds
                 // attach a plain continuation, keeping the result inspection in ordinary, non-reflective code.
                 if (TryObserveViaTask(loadTask, sceneName, onFailure, nativeCompletion))
                 {
+                    nativeCompletion.RequireManagedCompletion();
                     return;
                 }
 
@@ -241,6 +248,7 @@ namespace TopiaForge.Worlds
                 // which UniTask must implement to be awaitable even if AsTask is renamed/absent in this build.
                 if (TryObserveViaAwaiter(loadTask, sceneName, onFailure, nativeCompletion))
                 {
+                    nativeCompletion.RequireManagedCompletion();
                     return;
                 }
 
@@ -339,9 +347,10 @@ namespace TopiaForge.Worlds
             string sceneName,
             Action<string>? onFailure, IInternalNativeSceneCompletion nativeCompletion)
         {
-            if (faulted || canceled)
-                nativeCompletion.FailCaller(canceled ? ModErrorCode.Cancelled : ModErrorCode.External,
-                    "The game loader failed after dispatch: " + (error ?? sceneName));
+            nativeCompletion.ManagedCompleted(faulted || canceled
+                ? OperationResult<bool>.Failure(canceled ? ModErrorCode.Cancelled : ModErrorCode.External,
+                    "The game loader failed after dispatch: " + (error ?? sceneName))
+                : OperationResult<bool>.Success(true));
             loadOutcomes.TryEnqueue(new AsyncLoadOutcome(faulted, canceled, error, sceneName, onFailure));
         }
 

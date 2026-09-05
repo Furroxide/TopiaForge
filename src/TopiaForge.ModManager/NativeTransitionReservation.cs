@@ -68,6 +68,27 @@ namespace TopiaForge.ModManager
             Grant grant, NativeSceneRequest request, IInternalNativeSceneDispatch dispatch, CancellationToken token)
         {
             coordinator.AssertCurrent();
+            var refused = CheckDispatchState(grant, token);
+            if (refused != null) return refused;
+            var denied = coordinator.CheckAuthority(new SceneTransitionRequest(
+                grant.PackageId, request.SceneName,
+                request.Automatic ? SceneTransitionPriority.Automatic : SceneTransitionPriority.UserInitiated,
+                request.Reason));
+            if (denied != null) return Failure(ModErrorCode.NotAuthoritative, denied);
+            // Authority is provider-backed code and may revoke or reenter this reservation.
+            refused = CheckDispatchState(grant, token);
+            if (refused != null) return refused;
+
+            var started = new NativeSceneOperation(coordinator, this, grant.PackageId, request, token);
+            operation = started; // Publish before Begin: callbacks may complete synchronously.
+            started.Begin(dispatch);
+            return started.DispatchStatus == NativeSceneDispatchStatus.NotDispatched
+                ? Failure(started.InitialErrorCode, started.InitialErrorMessage)
+                : OperationResult<IInternalNativeSceneOperation>.Success(started);
+        }
+
+        private OperationResult<IInternalNativeSceneOperation>? CheckDispatchState(Grant grant, CancellationToken token)
+        {
             if (closed || grant.Revoked)
                 return Failure(ModErrorCode.InvalidState, "The native transition grant has been revoked.");
             if (operation != null)
@@ -76,18 +97,7 @@ namespace TopiaForge.ModManager
                 return Failure(ModErrorCode.Conflict, "Another provider route holds native admission.");
             if (token.IsCancellationRequested)
                 return Failure(ModErrorCode.Cancelled, "The transition was cancelled before native dispatch.");
-            var denied = coordinator.CheckAuthority(new SceneTransitionRequest(
-                grant.PackageId, request.SceneName,
-                request.Automatic ? SceneTransitionPriority.Automatic : SceneTransitionPriority.UserInitiated,
-                request.Reason));
-            if (denied != null) return Failure(ModErrorCode.NotAuthoritative, denied);
-
-            var started = new NativeSceneOperation(coordinator, this, grant.PackageId, request, token);
-            operation = started; // Publish before Begin: callbacks may complete synchronously.
-            started.Begin(dispatch);
-            return started.DispatchStatus == NativeSceneDispatchStatus.NotDispatched
-                ? Failure(started.InitialErrorCode, started.InitialErrorMessage)
-                : OperationResult<IInternalNativeSceneOperation>.Success(started);
+            return null;
         }
 
         internal void OperationDrained(NativeSceneOperation finished)
@@ -131,17 +141,29 @@ namespace TopiaForge.ModManager
             public OperationResult<IInternalSceneTransitionLease> Acquire(string sceneName, bool automatic, string reason)
             {
                 reservation.coordinator.AssertCurrent();
+                var refused = CheckAcquireState();
+                if (refused != null) return refused;
+                var denied = reservation.coordinator.CheckAuthority(new SceneTransitionRequest(PackageId, sceneName,
+                    automatic ? SceneTransitionPriority.Automatic : SceneTransitionPriority.UserInitiated, reason));
+                if (denied != null)
+                    return OperationResult<IInternalSceneTransitionLease>.Failure(ModErrorCode.NotAuthoritative, denied);
+                refused = CheckAcquireState();
+                if (refused != null) return refused;
+                // Reserve before returning: the caller may invoke reentrant teardown callbacks before dispatch.
+                // Closing this child revokes access without releasing the orchestrator's native reservation.
+                var child = new Grant(reservation, PackageId, sessionId, this);
+                reservation.borrowedLease = child;
+                return OperationResult<IInternalSceneTransitionLease>.Success(child);
+            }
+            private OperationResult<IInternalSceneTransitionLease>? CheckAcquireState()
+            {
                 if (Revoked || reservation.closed)
                     return OperationResult<IInternalSceneTransitionLease>.Failure(ModErrorCode.InvalidState, "The native transition grant has been revoked.");
                 if (reservation.operation != null
                     || (reservation.borrowedLease != null && !reservation.borrowedLease.Revoked))
                     return OperationResult<IInternalSceneTransitionLease>.Failure(ModErrorCode.Conflict,
                         "Another provider route holds native admission or its native work is still draining.");
-                // Reserve before returning: the caller may invoke reentrant teardown callbacks before dispatch.
-                // Closing this child revokes access without releasing the orchestrator's native reservation.
-                var child = new Grant(reservation, PackageId, sessionId, this);
-                reservation.borrowedLease = child;
-                return OperationResult<IInternalSceneTransitionLease>.Success(child);
+                return null;
             }
             public OperationResult<IInternalNativeSceneOperation> TryDispatch(
                 NativeSceneRequest request, IInternalNativeSceneDispatch dispatch, CancellationToken callerToken = default) =>

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 using TopiaForge.Mods;
 
 namespace TopiaForge.ModManager
@@ -12,7 +13,7 @@ namespace TopiaForge.ModManager
         private readonly List<ModContextScope> childScopes = new List<ModContextScope>();
         internal int ActiveChildScopeCount { get { lock (scopeSync) return childScopes.Count; } }
 
-        internal ModContextScope CreateChildScope(string sessionId, CancellationToken sessionStoppingToken,
+        internal async Task<ModContextScope> CreateChildScopeAsync(string sessionId, CancellationToken sessionStoppingToken,
             Action requestSessionStop, NativeTransitionAccessSlot transitionAccess, IHostDispatcher dispatcher)
         {
             if (string.IsNullOrWhiteSpace(sessionId)) throw new ArgumentException("A session identity is required.", nameof(sessionId));
@@ -37,7 +38,7 @@ namespace TopiaForge.ModManager
             }
             catch (Exception constructionFailure)
             {
-                try { scope.Dispose(); }
+                try { await scope.CleanupFailedConstructionAsync().ConfigureAwait(false); }
                 catch (Exception cleanupFailure)
                 { throw new AggregateException("Scoped context construction and cleanup failed.", constructionFailure, cleanupFailure); }
                 throw;

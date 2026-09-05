@@ -35,6 +35,7 @@ namespace TopiaForge.ModManager
             if (shutdownCompletion != null) return shutdownCompletion.Task;
             shutdownCompletion = new TaskCompletionSource<OperationResult<bool>>(TaskCreationOptions.RunContinuationsAsynchronously);
             var failures = new List<Exception>();
+            sceneCoordinator.SetSessionAdmissionGate(() => true);
             // Publish the shutdown request before callbacks so reentrant unload requests share this completion.
             foreach (var loaded in loadedMods)
                 Attempt(() => loaded.Context.BeginStopping(), failures, "Mod cancellation failed for " + loaded.Manifest.Id + ".");
@@ -53,7 +54,7 @@ namespace TopiaForge.ModManager
             else
             {
                 // The host dispatcher outlives both package scopes and the runtime's gameplay services.
-                _ = drain.ContinueWith(completed => sessionDispatcher!.Post(
+                _ = drain.ContinueWith(completed => (sessionDispatcher ?? nativeDispatcher).Post(
                     () => CompleteAfterSessionDrain(completed, failures)), CancellationToken.None,
                     TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
             }
@@ -73,10 +74,24 @@ namespace TopiaForge.ModManager
                 }, failures, "Session cleanup reported a failure.");
             }
 
-            // Keep the active runtime generation attached until ignored-cancellation session work has drained.
-            // Native records survive detachment, so a replacement still encounters their Busy/quarantine state.
-            Attempt(() => nativeHost?.DetachRuntime(runtimeOwnershipId), failures, "Native runtime access could not be revoked.");
+            // V5 production has no session hook. A failed hook also cannot establish native drain.
+            // Capture this barrier after session work: it may have dispatched native work while stopping.
+            var nativeDrain = sceneCoordinator.WaitForIdleAsync();
+            if (nativeDrain.IsCompleted) CompleteAfterNativeDrain(nativeDrain, failures);
+            else
+                _ = nativeDrain.ContinueWith(completed => nativeDispatcher.Post(
+                    () => CompleteAfterNativeDrain(completed, failures)), CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        }
 
+        private void CompleteAfterNativeDrain(Task<NativeDrainResult> drain, List<Exception> failures)
+        {
+            UnityMainThreadGuard.AssertCurrent();
+            Attempt(() => drain.GetAwaiter().GetResult(), failures, "Native cleanup reported a failure.");
+            Attempt(() => sceneCoordinator.RevokeOwnership(runtimeOwnershipId), failures,
+                "Native runtime access could not be revoked.");
+            // The host stays attached until every package callback and disposer has completed.
+            // Reentrant OnUnload cannot attach a replacement to this still-active runtime generation.
             for (var index = loadedMods.Count - 1; index >= 0; index--)
             {
                 var loaded = loadedMods[index];
@@ -107,6 +122,7 @@ namespace TopiaForge.ModManager
             coreGameplayServices.LateUpdate -= DispatchLateUpdate;
             Attempt(coreGameplayServices.Dispose, failures, "Gameplay host cleanup failed.");
             AppDomain.CurrentDomain.AssemblyResolve -= ResolveAssembly;
+            Attempt(() => nativeHost?.DetachRuntime(runtimeOwnershipId), failures, "Native runtime attachment could not be released.");
             sessionShutdown = null;
             sessionDispatcher = null;
             ShutdownFailures = failures.AsReadOnly();

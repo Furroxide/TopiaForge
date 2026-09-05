@@ -20,6 +20,8 @@ namespace TopiaForge.ModRuntime.Tests
             Directory.CreateDirectory(root);
             try
             {
+                TestShutdownAlwaysWaitsForNativeDrain(root);
+                RuntimeShutdownCompletionTests.Run();
                 TestSessionSceneObserverUsesNormalizedEvents(root);
                 TestPartialLoadLoggingFailureDoesNotBlockNextPackage(root);
                 TestPartialLoadCancelsBeforeCleanup(root);

@@ -295,8 +295,9 @@ namespace TopiaForge.ModManager
             menuButtonInjector.Update();
         }
 
-        private async void OnDestroy()
+        private void OnDestroy()
         {
+            ready = false;
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.sceneUnloaded -= OnSceneUnloaded;
             SceneManager.activeSceneChanged -= OnActiveSceneChanged;
@@ -318,22 +319,28 @@ namespace TopiaForge.ModManager
                 LogCleanupFailure(ex, "Menu button teardown failed.");
             }
 
+            if (runtime == null)
+            {
+                FinishPluginTeardown(OperationResult<bool>.Success(true));
+                return;
+            }
+            try
+            {
+                _ = RuntimeShutdownCompletion.Observe(runtime.NativeDispatcher, runtime.UnloadAllAsync(),
+                    FinishPluginTeardown, exception => LogCleanupFailure(exception, "Runtime shutdown completion failed."));
+            }
+            catch (Exception exception)
+            {
+                LogCleanupFailure(exception, "Runtime teardown could not be scheduled on the process host.");
+            }
+        }
+
+        private void FinishPluginTeardown(OperationResult<bool> shutdown)
+        {
+            if (!shutdown.Succeeded)
+                LogCleanupFailure(new InvalidOperationException(shutdown.ErrorMessage), "Mod runtime teardown completed with failures.");
             if (runtime != null)
             {
-                try
-                {
-                    var shutdown = await runtime.UnloadAllAsync();
-                    if (!shutdown.Succeeded)
-                    {
-                        LogCleanupFailure(new InvalidOperationException(shutdown.ErrorMessage),
-                            "Mod runtime teardown completed with cleanup failures.");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    LogCleanupFailure(ex, "Mod runtime teardown failed.");
-                }
-
                 try
                 {
                     SaveState();
@@ -377,14 +384,12 @@ namespace TopiaForge.ModManager
 
         private void LogCleanupFailure(Exception exception, string message)
         {
-            if (managerLogger != null)
+            try
             {
-                managerLogger.Error(exception, message);
+                if (managerLogger != null) managerLogger.Error(exception, message);
+                else Logger.LogError(message + " " + exception);
             }
-            else
-            {
-                Logger.LogError(message + " " + exception);
-            }
+            catch { /* Teardown must attempt every independent cleanup even after logging stops. */ }
         }
     }
 }

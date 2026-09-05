@@ -171,6 +171,8 @@
   <ItemGroup>
     <Compile Include="..\..\src\TopiaForge.ModManager\SceneCoordinator.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/OwnerSceneTransitionService.cs" Link="Runtime/OwnerSceneTransitionService.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/OwnerCheckpointSubscription.cs" Link="Runtime/OwnerCheckpointSubscription.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/WorldNativeDispatchResult.cs" Link="Worlds/WorldNativeDispatchResult.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/AssetScopeOwnership.cs" Link="Runtime/AssetScopeOwnership.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/AssetSpawnTransaction.cs" Link="Runtime/AssetSpawnTransaction.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/ModContext.ScopedGameplay.cs" Link="Runtime/ModContext.ScopedGameplay.cs" />

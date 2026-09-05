@@ -36,7 +36,7 @@ namespace TopiaForge.ModManager
                     var slot = new NativeTransitionAccessSlot(record.Identity.SessionId + ":" + package.Id,
                         record.Identity.SessionId, () => !record.StopRequested);
                     record.Slots.Add(package.Id, slot);
-                    var scope = record.Snapshot.Contexts[package.Id].CreateChildScope(record.Identity.SessionId,
+                    var scope = await record.Snapshot.Contexts[package.Id].CreateChildScopeAsync(record.Identity.SessionId,
                         record.Cancellation.Token, () => RequestBoundStop(record.Identity.SessionId), slot, dispatcher);
                     record.Scopes.Add(package.Id, scope);
                 }
