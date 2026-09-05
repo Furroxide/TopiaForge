@@ -1,0 +1,93 @@
+{
+  "id": "v6-world-gamemode-target",
+  "channel": "serialization",
+  "kind": "manifest-accepts",
+  "summary": "A whole launch surface: one world, one gamemode, and the target that pairs them.",
+  "manifest": {
+    "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.v6.schema.json",
+    "schemaVersion": 6,
+    "name": "io.github.furroxide.topiaforge.fixture",
+    "displayName": "Contract Fixture",
+    "version": "1.0.0",
+    "author": {
+      "name": "TopiaForge"
+    },
+    "entryAssembly": "Fixture.dll",
+    "entryType": "Fixture.Mod",
+    "supportedGameVersionRange": "*",
+    "supportedLoaderVersionRange": "*",
+    "supportedSdkVersionRange": "*",
+    "capabilities": [
+      "world-service"
+    ],
+    "contributions": {
+      "worlds": [
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.arena",
+          "name": "Arena",
+          "content": {
+            "kind": "bundle",
+            "bundle": "Content/arena.bundle",
+            "prefab": "Arena"
+          },
+          "transitions": [
+            "additive-arena"
+          ],
+          "spawn": {
+            "kind": "provider-default"
+          }
+        }
+      ],
+      "gamemodes": [
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.survival",
+          "name": "Survival",
+          "implementation": {
+            "type": "Fixture.SurvivalGamemode"
+          }
+        }
+      ],
+      "launchTargets": [
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.play",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        }
+      ]
+    }
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "worlds": [
+          "io.github.furroxide.topiaforge.fixture.arena|bundle|Content/arena.bundle|Arena|-|-|additive-arena|provider-default>-|-|absent"
+        ],
+        "gamemodes": [
+          "io.github.furroxide.topiaforge.fixture.survival|>Fixture.SurvivalGamemode|-|-"
+        ],
+        "launchTargets": [
+          "io.github.furroxide.topiaforge.fixture.play|io.github.furroxide.topiaforge.fixture.survival|fixed|io.github.furroxide.topiaforge.fixture.arena|-|absent|-|absent"
+        ]
+      }
+    },
+    "dart": {
+      "outcome": "accept",
+      "normalized": {
+        "worlds": [
+          "io.github.furroxide.topiaforge.fixture.arena|bundle|Content/arena.bundle|Arena|-|-|additive-arena|provider-default>-|-|absent"
+        ],
+        "gamemodes": [
+          "io.github.furroxide.topiaforge.fixture.survival|>Fixture.SurvivalGamemode|-|-"
+        ],
+        "launchTargets": [
+          "io.github.furroxide.topiaforge.fixture.play|io.github.furroxide.topiaforge.fixture.survival|fixed|io.github.furroxide.topiaforge.fixture.arena|-|absent|-|absent"
+        ]
+      }
+    }
+  }
+}

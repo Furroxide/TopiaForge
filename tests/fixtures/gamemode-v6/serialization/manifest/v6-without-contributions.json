@@ -1,0 +1,39 @@
+{
+  "id": "v6-without-contributions",
+  "channel": "serialization",
+  "kind": "manifest-accepts",
+  "summary": "A V6 manifest need not contribute anything. Most first-party packages declare no launch surface, and requiring one would make the version bump a rewrite.",
+  "manifest": {
+    "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.v6.schema.json",
+    "schemaVersion": 6,
+    "name": "io.github.furroxide.topiaforge.fixture",
+    "displayName": "Contract Fixture",
+    "version": "1.0.0",
+    "author": {
+      "name": "TopiaForge"
+    },
+    "entryAssembly": "Fixture.dll",
+    "entryType": "Fixture.Mod",
+    "supportedGameVersionRange": "*",
+    "supportedLoaderVersionRange": "*",
+    "supportedSdkVersionRange": "*"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "worlds": [],
+        "gamemodes": [],
+        "launchTargets": []
+      }
+    },
+    "dart": {
+      "outcome": "accept",
+      "normalized": {
+        "worlds": [],
+        "gamemodes": [],
+        "launchTargets": []
+      }
+    }
+  }
+}

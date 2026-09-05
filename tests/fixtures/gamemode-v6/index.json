@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": ".github/scripts/check_fixture_index.py",
+  "channelRunners": {
+    "serialization": [
+      "csharp",
+      "dart"
+    ]
+  },
+  "cases": [
+    {
+      "id": "empty-intent-object",
+      "channel": "serialization",
+      "kind": "launch-intent-hostile",
+      "path": "serialization/launch-intent/empty-intent-object.json"
+    },
+    {
+      "id": "launch-intent-carries-a-long-declaration-id",
+      "channel": "serialization",
+      "kind": "launch-intent-round-trip",
+      "path": "serialization/launch-intent/launch-intent-carries-a-long-declaration-id.json"
+    },
+    {
+      "id": "launch-intent-overlong-gamemode-id",
+      "channel": "serialization",
+      "kind": "launch-intent-hostile",
+      "path": "serialization/launch-intent/launch-intent-overlong-gamemode-id.json"
+    },
+    {
+      "id": "launch-target-additive-arena",
+      "channel": "serialization",
+      "kind": "launch-intent-round-trip",
+      "path": "serialization/launch-intent/launch-target-additive-arena.json"
+    },
+    {
+      "id": "launch-target-scene-replacement",
+      "channel": "serialization",
+      "kind": "launch-intent-round-trip",
+      "path": "serialization/launch-intent/launch-target-scene-replacement.json"
+    },
+    {
+      "id": "main-menu-carrying-a-gamemode",
+      "channel": "serialization",
+      "kind": "launch-intent-hostile",
+      "path": "serialization/launch-intent/main-menu-carrying-a-gamemode.json"
+    },
+    {
+      "id": "main-menu-command",
+      "channel": "serialization",
+      "kind": "launch-intent-round-trip",
+      "path": "serialization/launch-intent/main-menu-command.json"
+    },
+    {
+      "id": "unknown-command",
+      "channel": "serialization",
+      "kind": "launch-intent-hostile",
+      "path": "serialization/launch-intent/unknown-command.json"
+    },
+    {
+      "id": "unknown-load-mode-clamped-by-writer",
+      "channel": "serialization",
+      "kind": "launch-intent-round-trip",
+      "path": "serialization/launch-intent/unknown-load-mode-clamped-by-writer.json"
+    },
+    {
+      "id": "unknown-load-mode-on-the-wire",
+      "channel": "serialization",
+      "kind": "launch-intent-hostile",
+      "path": "serialization/launch-intent/unknown-load-mode-on-the-wire.json"
+    },
+    {
+      "id": "v6-absent-flags-are-not-false",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-absent-flags-are-not-false.json"
+    },
+    {
+      "id": "v6-contributions-without-world-service",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-contributions-without-world-service.json"
+    },
+    {
+      "id": "v6-declaration-is-not-an-object",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-declaration-is-not-an-object.json"
+    },
+    {
+      "id": "v6-empty-contributions",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-empty-contributions.json"
+    },
+    {
+      "id": "v6-empty-declaration-array",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-empty-declaration-array.json"
+    },
+    {
+      "id": "v6-empty-world-requirements",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-empty-world-requirements.json"
+    },
+    {
+      "id": "v6-every-content-kind",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-every-content-kind.json"
+    },
+    {
+      "id": "v6-gamemode-without-implementation",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-gamemode-without-implementation.json"
+    },
+    {
+      "id": "v6-launch-target-without-world",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-launch-target-without-world.json"
+    },
+    {
+      "id": "v6-longest-declaration-id",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-longest-declaration-id.json"
+    },
+    {
+      "id": "v6-minimal-gamemode",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-minimal-gamemode.json"
+    },
+    {
+      "id": "v6-overlong-declaration-id",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-overlong-declaration-id.json"
+    },
+    {
+      "id": "v6-retired-world-gamemodes",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-retired-world-gamemodes.json"
+    },
+    {
+      "id": "v6-unknown-declaration-field",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-unknown-declaration-field.json"
+    },
+    {
+      "id": "v6-without-contributions",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-without-contributions.json"
+    },
+    {
+      "id": "v6-world-gamemode-target",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-world-gamemode-target.json"
+    },
+    {
+      "id": "v6-world-policy-without-default",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-world-policy-without-default.json"
+    },
+    {
+      "id": "v6-world-requirements-and-policies",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-world-requirements-and-policies.json"
+    }
+  ]
+}

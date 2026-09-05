@@ -151,14 +151,20 @@ class WorldSelection {
         (json['worldId'] as String?) ?? WorldCatalog.openSandboxWorldId;
     final gamemodeId =
         (json['gamemodeId'] as String?) ?? WorldCatalog.sandboxGamemodeId;
-    if (!ModManifest.isValidId(worldId)) {
+    // Declaration ids, not package ids: a launch target is namespaced under its
+    // package, so it uses the wider 96-character grammar. Validating at the
+    // package width here would reject a target the manifest contract calls
+    // legal, and the intent this selection writes would never reach the game.
+    if (!_isValidDeclarationId(worldId)) {
       throw const FormatException(
-        'World selection worldId must use the safe TopiaForge id format.',
+        'World selection worldId must use the safe TopiaForge declaration id '
+        'format.',
       );
     }
-    if (!ModManifest.isValidId(gamemodeId)) {
+    if (!_isValidDeclarationId(gamemodeId)) {
       throw const FormatException(
-        'World selection gamemodeId must use the safe TopiaForge id format.',
+        'World selection gamemodeId must use the safe TopiaForge declaration '
+        'id format.',
       );
     }
     return WorldSelection(
