@@ -5,6 +5,13 @@ description: Evidence, root causes, and a pre-release redesign of gamemode disco
 
 # Gamemode architecture investigation
 
+> Historical investigation, retained as evidence. Status and recommendations below describe
+> the 2026-09-03 investigation and its working tree; they are not current completion claims.
+> The [gamemode contract redesign brief](internal/GamemodeContractRedesign.md) now governs
+> implementation, and the [evidence ledger](internal/gamemode-contract/Status.md) tracks each
+> GM-01–GM-10 finding. In particular, typed options/session extensions are excluded, the old
+> launch API is to be retired, and `TopiaForge.Mods.Worlds` keeps assembly identity `0.1.0.0`.
+
 Date: 2026-09-03. HEAD at investigation start: `9811ff8f78697f1302760b57918e942613f2fc43`.
 Scope: the **current working tree, including existing uncommitted changes**, across manifests,
 launcher domain/data/Flutter/CLI, the manager, Worlds, SDK contracts, first-party consumers,
