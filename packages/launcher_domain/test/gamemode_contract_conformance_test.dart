@@ -9,6 +9,10 @@ import 'package:json_schema/json_schema.dart';
 import 'package:test/test.dart';
 
 import 'gamemode_contract_conformance_cases.dart';
+import 'gamemode_contract_resolution_cases.dart';
+import 'gamemode_contract_transport_cases.dart';
+import 'gamemode_contract_model_invariants.dart';
+import 'gamemode_contract_transport_invariants.dart';
 
 const _runnerName = 'dart';
 
@@ -27,6 +31,13 @@ void main() {
       entry.key: (entry.value! as List).cast<String>().toSet(),
   };
   final cases = (index['cases']! as List).cast<Map<String, Object?>>();
+  registerLaunchTransportInvariants();
+  registerLaunchModelInvariants(
+    _readCase(
+      fixtureRoot,
+      'resolution/auto-transition-prefers-scene-replacement.json',
+    ),
+  );
 
   test('the fixture index is closed over the fixtures on disk', () {
     expect(cases, isNotEmpty, reason: 'an empty index asserts nothing');
@@ -90,9 +101,15 @@ void main() {
       );
       final directory = (body['kind']! as String).startsWith('manifest-')
           ? 'manifest'
+          : body['kind'] == 'transport-codec'
+          ? 'transport'
           : 'launch-intent';
       expect(
-        path.startsWith('${body['channel']}/$directory/'),
+        path.startsWith(
+          body['channel'] == 'resolution'
+              ? 'resolution/'
+              : '${body['channel']}/$directory/',
+        ),
         isTrue,
         reason: '$path is misplaced for its kind',
       );
@@ -114,7 +131,9 @@ void main() {
         channelRunners[entry['channel']!],
         reason: path,
       );
-      if (body.containsKey('manifest')) {
+      if (body.containsKey('manifest') ||
+          body['channel'] == 'resolution' ||
+          body['kind'] == 'transport-codec') {
         expect(
           expected['csharp'],
           expected['dart'],
@@ -177,6 +196,49 @@ void main() {
   for (final entry in cases) {
     final path = entry['path']! as String;
     final body = _readCase(fixtureRoot, path);
+    if (body['channel'] == 'resolution') {
+      test('$path package schemas', () {
+        for (final section in ['packages', 'disabledPackages']) {
+          for (final package
+              in ((body['profile']! as Map)[section] as List?) ?? const []) {
+            expect(
+              package['schemaOutcome'],
+              anyOf('accept', 'reject'),
+              reason: path,
+            );
+            final result = manifestSchema.validate(package['manifest']);
+            expect(
+              result.isValid,
+              package['schemaOutcome'] == 'accept',
+              reason: '$path ${package['id']}: ${result.errors}',
+            );
+          }
+        }
+      });
+      test('$path resolver', () {
+        final expected = (body['expect']! as Map)['dart']! as Map;
+        expect(resolutionSnapshot(body), expected, reason: path);
+        if (body['verifyImmutability'] == true) {
+          expect(
+            resolutionCopiesPackageIdentities(body),
+            isTrue,
+            reason: 'plan retains caller package objects',
+          );
+        }
+      });
+      continue;
+    }
+    if (body['kind'] == 'transport-codec') {
+      test(
+        '$path codec',
+        () => expect(
+          transportSnapshot(body),
+          (body['expect']! as Map)['dart'],
+          reason: path,
+        ),
+      );
+      continue;
+    }
     if (!body.containsKey('manifest')) continue;
     test('$path schema', () {
       expect(
@@ -233,7 +295,11 @@ void main() {
         reason: '$path: ${actual.detail}',
       );
       final normalized = expected['normalized'] as Map<String, Object?>?;
-      if (normalized != null) {
+      if (body['channel'] == 'resolution') {
+        expect(resolutionSnapshot(body), expected, reason: path);
+      } else if (body['kind'] == 'transport-codec') {
+        expect(transportSnapshot(body), expected, reason: path);
+      } else if (normalized != null) {
         expect(
           declarationDigest(body),
           normalized,
@@ -288,6 +354,14 @@ ConformanceOutcome _execute(
     case 'manifest-rejects':
     case 'manifest-model-rejects':
       return runManifest(body);
+    case 'transport-codec':
+      final actual = transportSnapshot(body);
+      return ConformanceOutcome(
+        actual['outcome'] == 'accept',
+        ((actual['errorCodes'] as List?) ?? const []).cast<String>().toSet(),
+      );
+    case 'launch-resolution':
+      return runLaunchResolution(body);
     default:
       fail(
         '$path has kind "$kind", which the Dart conformance runner does '

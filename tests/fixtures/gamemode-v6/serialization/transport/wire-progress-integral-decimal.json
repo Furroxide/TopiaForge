@@ -1,0 +1,28 @@
+{
+  "id": "wire-progress-integral-decimal",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Strict progress integral-decimal",
+  "transport": "progress",
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "schemaVersion": 1,
+        "requestId": "r",
+        "sequence": 2,
+        "phase": "idle"
+      }
+    },
+    "dart": {
+      "outcome": "accept",
+      "normalized": {
+        "schemaVersion": 1,
+        "requestId": "r",
+        "sequence": 2,
+        "phase": "idle"
+      }
+    }
+  },
+  "wireJson": "{\"schemaVersion\":1.0,\"requestId\":\"r\",\"sequence\":2.0,\"phase\":\"idle\"}"
+}

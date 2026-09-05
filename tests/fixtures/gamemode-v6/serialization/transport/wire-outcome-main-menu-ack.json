@@ -1,0 +1,45 @@
+{
+  "id": "wire-outcome-main-menu-ack",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive outcome codec main menu ack",
+  "transport": "outcome",
+  "payload": {
+    "schemaVersion": 1,
+    "kind": "launch",
+    "command": "main-menu",
+    "requestId": "request-01",
+    "sequence": 5,
+    "phase": "idle",
+    "status": "succeeded",
+    "blocks": []
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "schemaVersion": 1,
+        "kind": "launch",
+        "command": "main-menu",
+        "requestId": "request-01",
+        "sequence": 5,
+        "phase": "idle",
+        "status": "succeeded",
+        "blocks": []
+      }
+    },
+    "dart": {
+      "outcome": "accept",
+      "normalized": {
+        "schemaVersion": 1,
+        "kind": "launch",
+        "command": "main-menu",
+        "requestId": "request-01",
+        "sequence": 5,
+        "phase": "idle",
+        "status": "succeeded",
+        "blocks": []
+      }
+    }
+  }
+}

@@ -1,0 +1,195 @@
+{
+  "id": "longest-target-owner-valid-ignores-shorter-declaration",
+  "channel": "resolution",
+  "kind": "launch-resolution",
+  "summary": "longest target owner valid ignores shorter declaration",
+  "profile": {
+    "packages": [
+      {
+        "id": "base.mod",
+        "version": "1.0.0",
+        "manifest": {
+          "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+          "schemaVersion": 6,
+          "name": "base.mod",
+          "displayName": "worlds",
+          "version": "1.0.0",
+          "author": {
+            "name": "TopiaForge"
+          },
+          "entryAssembly": "Fixture.dll",
+          "entryType": "Fixture.Mod",
+          "supportedGameVersionRange": "*",
+          "supportedLoaderVersionRange": "*",
+          "supportedSdkVersionRange": "*",
+          "capabilities": [
+            "world-service"
+          ],
+          "contributions": {
+            "worlds": [
+              {
+                "id": "base.mod.open_sandbox",
+                "name": "open_sandbox",
+                "content": {
+                  "kind": "game-scene",
+                  "sceneName": "UgcPlay"
+                },
+                "transitions": [
+                  "additive-arena",
+                  "scene-replacement"
+                ],
+                "spawn": {
+                  "kind": "provider-default"
+                },
+                "openToAnyCompatible": true
+              }
+            ],
+            "gamemodes": [
+              {
+                "id": "base.mod.freeplay",
+                "name": "freeplay",
+                "implementation": {
+                  "type": "Fixture.Gamemode"
+                }
+              }
+            ],
+            "launchTargets": [
+              {
+                "id": "base.mod.extra.menu",
+                "title": "menu",
+                "gamemode": "base.mod.freeplay",
+                "world": {
+                  "policy": "open",
+                  "default": "base.mod.open_sandbox",
+                  "allowPlayerOverride": true
+                }
+              }
+            ]
+          }
+        },
+        "schemaOutcome": "accept",
+        "validation": {
+          "outcome": "accept"
+        }
+      },
+      {
+        "id": "base.mod.extra",
+        "version": "1.0.0",
+        "manifest": {
+          "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+          "schemaVersion": 6,
+          "name": "base.mod.extra",
+          "displayName": "worlds",
+          "version": "1.0.0",
+          "author": {
+            "name": "TopiaForge"
+          },
+          "entryAssembly": "Fixture.dll",
+          "entryType": "Fixture.Mod",
+          "supportedGameVersionRange": "*",
+          "supportedLoaderVersionRange": "*",
+          "supportedSdkVersionRange": "*",
+          "capabilities": [
+            "world-service"
+          ],
+          "contributions": {
+            "worlds": [
+              {
+                "id": "base.mod.extra.open_sandbox",
+                "name": "open_sandbox",
+                "content": {
+                  "kind": "game-scene",
+                  "sceneName": "UgcPlay"
+                },
+                "transitions": [
+                  "additive-arena",
+                  "scene-replacement"
+                ],
+                "spawn": {
+                  "kind": "provider-default"
+                },
+                "openToAnyCompatible": true
+              }
+            ],
+            "gamemodes": [
+              {
+                "id": "base.mod.extra.freeplay",
+                "name": "freeplay",
+                "implementation": {
+                  "type": "Fixture.Gamemode"
+                }
+              }
+            ],
+            "launchTargets": [
+              {
+                "id": "base.mod.extra.menu",
+                "title": "menu",
+                "gamemode": "base.mod.extra.freeplay",
+                "world": {
+                  "policy": "open",
+                  "default": "base.mod.extra.open_sandbox",
+                  "allowPlayerOverride": true
+                }
+              }
+            ]
+          }
+        },
+        "schemaOutcome": "accept",
+        "validation": {
+          "outcome": "accept"
+        }
+      }
+    ]
+  },
+  "request": {
+    "targetId": "base.mod.extra.menu"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "targetId": "base.mod.extra.menu",
+        "gamemodeId": "base.mod.extra.freeplay",
+        "worldId": "base.mod.extra.open_sandbox",
+        "transition": "scene-replacement",
+        "request": {
+          "targetId": "base.mod.extra.menu"
+        },
+        "packages": [
+          {
+            "id": "base.mod",
+            "version": "1.0.0"
+          },
+          {
+            "id": "base.mod.extra",
+            "version": "1.0.0"
+          }
+        ],
+        "digest": "777f3c3a976e0ec9"
+      }
+    },
+    "dart": {
+      "outcome": "accept",
+      "normalized": {
+        "targetId": "base.mod.extra.menu",
+        "gamemodeId": "base.mod.extra.freeplay",
+        "worldId": "base.mod.extra.open_sandbox",
+        "transition": "scene-replacement",
+        "request": {
+          "targetId": "base.mod.extra.menu"
+        },
+        "packages": [
+          {
+            "id": "base.mod",
+            "version": "1.0.0"
+          },
+          {
+            "id": "base.mod.extra",
+            "version": "1.0.0"
+          }
+        ],
+        "digest": "777f3c3a976e0ec9"
+      }
+    }
+  }
+}

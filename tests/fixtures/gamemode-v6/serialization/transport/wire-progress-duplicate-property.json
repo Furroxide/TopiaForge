@@ -1,0 +1,22 @@
+{
+  "id": "wire-progress-duplicate-property",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Strict progress duplicate-property",
+  "transport": "progress",
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    }
+  },
+  "wireJson": "{\"schemaVersion\":1,\"requestId\":\"r\",\"requestId\":\"r\",\"sequence\":0,\"phase\":\"idle\"}"
+}

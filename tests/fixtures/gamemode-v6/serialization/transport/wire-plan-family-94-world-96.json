@@ -1,0 +1,81 @@
+{
+  "id": "wire-plan-family-94-world-96",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "A 94-character family leaves room for a separator and one-character suffix within the 96-character instance limit.",
+  "transport": "plan",
+  "payload": {
+    "targetId": "base.mod.menu",
+    "gamemodeId": "mode.mod.play",
+    "worldId": "base.mod.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.a",
+    "worldFamilyId": "base.mod.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "transition": "scene-replacement",
+    "request": {
+      "targetId": "BASE.MOD.MENU",
+      "worldOverride": "base.mod.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.a"
+    },
+    "packages": [
+      {
+        "id": "base.mod",
+        "version": "1.0.0"
+      },
+      {
+        "id": "mode.mod",
+        "version": "2.3.4"
+      }
+    ],
+    "digest": "6a4a1aa84ed69e17"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "targetId": "base.mod.menu",
+        "gamemodeId": "mode.mod.play",
+        "worldId": "base.mod.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.a",
+        "worldFamilyId": "base.mod.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "transition": "scene-replacement",
+        "request": {
+          "targetId": "BASE.MOD.MENU",
+          "worldOverride": "base.mod.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.a"
+        },
+        "packages": [
+          {
+            "id": "base.mod",
+            "version": "1.0.0"
+          },
+          {
+            "id": "mode.mod",
+            "version": "2.3.4"
+          }
+        ],
+        "digest": "6a4a1aa84ed69e17"
+      }
+    },
+    "dart": {
+      "outcome": "accept",
+      "normalized": {
+        "targetId": "base.mod.menu",
+        "gamemodeId": "mode.mod.play",
+        "worldId": "base.mod.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.a",
+        "worldFamilyId": "base.mod.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "transition": "scene-replacement",
+        "request": {
+          "targetId": "BASE.MOD.MENU",
+          "worldOverride": "base.mod.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.a"
+        },
+        "packages": [
+          {
+            "id": "base.mod",
+            "version": "1.0.0"
+          },
+          {
+            "id": "mode.mod",
+            "version": "2.3.4"
+          }
+        ],
+        "digest": "6a4a1aa84ed69e17"
+      }
+    }
+  }
+}

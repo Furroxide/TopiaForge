@@ -1,0 +1,153 @@
+{
+  "id": "longer-disabled-world-owner-cannot-fall-through",
+  "channel": "resolution",
+  "kind": "launch-resolution",
+  "summary": "longer disabled world owner cannot fall through",
+  "profile": {
+    "packages": [
+      {
+        "id": "base.mod",
+        "version": "1.0.0",
+        "manifest": {
+          "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+          "schemaVersion": 6,
+          "name": "base.mod",
+          "displayName": "worlds",
+          "version": "1.0.0",
+          "author": {
+            "name": "TopiaForge"
+          },
+          "entryAssembly": "Fixture.dll",
+          "entryType": "Fixture.Mod",
+          "supportedGameVersionRange": "*",
+          "supportedLoaderVersionRange": "*",
+          "supportedSdkVersionRange": "*",
+          "capabilities": [
+            "world-service"
+          ],
+          "contributions": {
+            "worlds": [
+              {
+                "id": "base.mod.open_sandbox",
+                "name": "open_sandbox",
+                "content": {
+                  "kind": "game-scene",
+                  "sceneName": "UgcPlay"
+                },
+                "transitions": [
+                  "additive-arena",
+                  "scene-replacement"
+                ],
+                "spawn": {
+                  "kind": "provider-default"
+                },
+                "openToAnyCompatible": true
+              }
+            ],
+            "gamemodes": [
+              {
+                "id": "base.mod.freeplay",
+                "name": "freeplay",
+                "implementation": {
+                  "type": "Fixture.Gamemode"
+                }
+              }
+            ],
+            "launchTargets": [
+              {
+                "id": "base.mod.freeplay.menu",
+                "title": "menu",
+                "gamemode": "base.mod.freeplay",
+                "world": {
+                  "policy": "open",
+                  "default": "base.mod.extra.item",
+                  "allowPlayerOverride": true
+                }
+              }
+            ]
+          },
+          "dependencies": {
+            "base.mod.extra": "*"
+          }
+        },
+        "schemaOutcome": "accept",
+        "validation": {
+          "outcome": "accept"
+        }
+      }
+    ],
+    "disabledPackages": [
+      {
+        "id": "base.mod.extra",
+        "version": "1.0.0",
+        "manifest": {
+          "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+          "schemaVersion": 6,
+          "name": "base.mod.extra",
+          "displayName": "extra",
+          "version": "1.0.0",
+          "author": {
+            "name": "TopiaForge"
+          },
+          "entryAssembly": "Fixture.dll",
+          "entryType": "Fixture.Mod",
+          "supportedGameVersionRange": "*",
+          "supportedLoaderVersionRange": "*",
+          "supportedSdkVersionRange": "*",
+          "capabilities": [
+            "world-service"
+          ],
+          "contributions": {
+            "worlds": [
+              {
+                "id": "base.mod.extra.item",
+                "name": "open_sandbox",
+                "content": {
+                  "kind": "game-scene",
+                  "sceneName": "UgcPlay"
+                },
+                "transitions": [
+                  "additive-arena",
+                  "scene-replacement"
+                ],
+                "spawn": {
+                  "kind": "provider-default"
+                },
+                "openToAnyCompatible": true
+              }
+            ]
+          }
+        },
+        "schemaOutcome": "accept",
+        "validation": {
+          "outcome": "accept"
+        }
+      }
+    ]
+  },
+  "request": {
+    "targetId": "base.mod.freeplay.menu"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "blocks": [
+        {
+          "code": "worldPackageDisabled",
+          "subject": "base.mod.extra",
+          "subjectVersion": "1.0.0"
+        }
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "blocks": [
+        {
+          "code": "worldPackageDisabled",
+          "subject": "base.mod.extra",
+          "subjectVersion": "1.0.0"
+        }
+      ]
+    }
+  }
+}

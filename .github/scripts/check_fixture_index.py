@@ -54,9 +54,10 @@ KNOWN_KINDS = {
         "manifest-accepts",
         "manifest-rejects",
         "manifest-model-rejects",
+        "transport-codec",
     },
     "schema": set(),
-    "resolution": set(),
+    "resolution": {"launch-resolution"},
 }
 
 
@@ -119,6 +120,18 @@ def _load_case(path: Path) -> dict:
     for runner, expectation in case["expect"].items():
         if not isinstance(expectation, dict) or expectation.get("outcome") not in ("accept", "reject"):
             raise FixtureIndexError(f"{relative} requires an accept/reject outcome for {runner}.")
+        if expectation["outcome"] == "reject" and case["channel"] == "resolution":
+            blocks = expectation.get("blocks")
+            if not isinstance(blocks, list) or not blocks:
+                raise FixtureIndexError(f"{relative} requires ordered full blocks for {runner}.")
+            tuples = []
+            for block in blocks:
+                if not isinstance(block, dict) or set(block) != {"code", "subject", "subjectVersion"} or any(not isinstance(block[key], str) for key in block):
+                    raise FixtureIndexError(f"{relative} requires closed string block tuples for {runner}.")
+                tuples.append((block["code"], block["subject"], block["subjectVersion"]))
+            if tuples != sorted(set(tuples)):
+                raise FixtureIndexError(f"{relative} requires ordinal sorted unique blocks for {runner}.")
+            continue
         if expectation["outcome"] == "reject":
             codes = expectation.get("errorCodes")
             if not isinstance(codes, list) or not codes or any(not isinstance(code, str) or not code for code in codes):
@@ -127,12 +140,13 @@ def _load_case(path: Path) -> dict:
                 raise FixtureIndexError(f"{relative} repeats errorCodes for {runner}.")
         elif "errorCodes" in expectation:
             raise FixtureIndexError(f"{relative} cannot accept with errorCodes for {runner}.")
-    directory = "manifest" if case["kind"].startswith("manifest-") else "launch-intent"
-    if not relative.startswith(f"{channel}/{directory}/"):
+    directory = "manifest" if case["kind"].startswith("manifest-") else "transport" if case["kind"] == "transport-codec" else "launch-intent"
+    if channel == "resolution": directory = ""
+    if not relative.startswith(f"{channel}/" + (f"{directory}/" if directory else "")):
         raise FixtureIndexError(f"{relative} is misplaced; its kind belongs under {channel}/{directory}/.")
 
     mutation = case.get("modelMutation")
-    mutations = {"empty-contributions", "missing-content", "missing-spawn", "missing-implementation", "missing-world", "empty-requirements"}
+    mutations = {"empty-contributions", "missing-content", "missing-spawn", "missing-implementation", "missing-world", "empty-requirements", "discovered-family"}
     if case["kind"] == "manifest-model-rejects":
         if mutation not in mutations:
             raise FixtureIndexError(f"{relative} requires a known modelMutation.")
@@ -149,9 +163,42 @@ def _load_case(path: Path) -> dict:
             raise FixtureIndexError(f"{relative} requires a structured normalized result.")
         if "divergenceReason" in case:
             raise FixtureIndexError(f"{relative} cannot exempt manifest-reader parity.")
+    elif channel == "resolution" or case["kind"] == "transport-codec":
+        if case["expect"]["csharp"] != case["expect"]["dart"]:
+            raise FixtureIndexError(f"{relative} has divergent same-operation expectations.")
     else:
         if case.get("operations") != {"csharp": "read-intent", "dart": "write-intent"}:
             raise FixtureIndexError(f"{relative} requires explicit wire operations.")
+    if case["kind"] == "transport-codec" or channel == "resolution":
+        expectation = case["expect"]["csharp"]
+        if expectation["outcome"] == "accept" and not isinstance(expectation.get("normalized"), dict):
+            raise FixtureIndexError(f"{relative} requires a structured normalized result.")
+        if "divergenceReason" in case or "operations" in case:
+            raise FixtureIndexError(f"{relative} cannot exempt same-operation parity.")
+    if case["kind"] == "transport-codec":
+        if case.get("transport") not in {"plan", "profile", "progress", "outcome", "observation"} or (("payload" in case) == ("wireJson" in case)):
+            raise FixtureIndexError(f"{relative} requires a known transport and payload.")
+        if "operations" in case or "divergenceReason" in case:
+            raise FixtureIndexError(f"{relative} cannot exempt transport codec parity.")
+    if channel == "resolution":
+        profile = case.get("profile")
+        if not isinstance(profile, dict) or not isinstance(case.get("request"), dict):
+            raise FixtureIndexError(f"{relative} requires profile and request objects.")
+        for field in ("packages", "disabledPackages"):
+            packages = profile.get(field, [])
+            if not isinstance(packages, list):
+                raise FixtureIndexError(f"{relative} requires a {field} array.")
+            for package in packages:
+                if not isinstance(package, dict) or package.get("schemaOutcome") not in ("accept", "reject") or not isinstance(package.get("validation"), dict):
+                    raise FixtureIndexError(f"{relative} requires schemaOutcome and validation for every package manifest.")
+                validity = package["validation"]
+                if validity.get("outcome") not in ("accept", "reject"):
+                    raise FixtureIndexError(f"{relative} requires manifest validation accept/reject outcomes.")
+                codes = validity.get("errorCodes", [])
+                if not isinstance(codes, list) or any(not isinstance(code, str) or not code for code in codes) or codes != sorted(set(codes)) or (validity["outcome"] == "reject") != bool(codes):
+                    raise FixtureIndexError(f"{relative} requires exact sorted manifest validation codes.")
+                if case["expect"]["csharp"]["outcome"] == "accept" and (package["schemaOutcome"] != "accept" or validity["outcome"] != "accept"):
+                    raise FixtureIndexError(f"{relative} cannot accept an operational resolution with invalid input manifests.")
     return case
 
 

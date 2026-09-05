@@ -1,0 +1,187 @@
+{
+  "id": "v6-static-world-id-length-96",
+  "channel": "serialization",
+  "kind": "manifest-accepts",
+  "summary": "Static world ids retain length 96; gamemode and target ids retain the full 96-character limit.",
+  "manifest": {
+    "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.v6.schema.json",
+    "schemaVersion": 6,
+    "name": "io.github.furroxide.topiaforge.fixture",
+    "displayName": "Contract Fixture",
+    "version": "1.0.0",
+    "author": {
+      "name": "TopiaForge"
+    },
+    "entryAssembly": "Fixture.dll",
+    "entryType": "Fixture.Mod",
+    "supportedGameVersionRange": "*",
+    "supportedLoaderVersionRange": "*",
+    "supportedSdkVersionRange": "*",
+    "capabilities": [
+      "world-service"
+    ],
+    "contributions": {
+      "worlds": [
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+          "name": "Arena",
+          "content": {
+            "kind": "provider",
+            "implementation": {
+              "type": "Fixture.Source"
+            }
+          },
+          "transitions": [
+            "additive-arena"
+          ],
+          "spawn": {
+            "kind": "provider-default"
+          }
+        }
+      ],
+      "gamemodes": [
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "name": "Survival",
+          "implementation": {
+            "type": "Fixture.SurvivalGamemode"
+          }
+        }
+      ],
+      "launchTargets": [
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.ttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww"
+          }
+        }
+      ]
+    }
+  },
+  "schemaOutcome": "accept",
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "worlds": [
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+            "name": "Arena",
+            "description": null,
+            "content": {
+              "kind": "provider",
+              "bundle": null,
+              "prefab": null,
+              "implementation": {
+                "assembly": null,
+                "type": "Fixture.Source"
+              },
+              "sceneName": null
+            },
+            "transitions": [
+              "additive-arena"
+            ],
+            "spawn": {
+              "kind": "provider-default",
+              "markerName": null
+            },
+            "openTo": null,
+            "openToAnyCompatible": null
+          }
+        ],
+        "gamemodes": [
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "name": "Survival",
+            "description": null,
+            "implementation": {
+              "assembly": null,
+              "type": "Fixture.SurvivalGamemode"
+            },
+            "worldRequirements": null,
+            "sceneChangePolicy": null
+          }
+        ],
+        "launchTargets": [
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.ttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+            "title": "Play",
+            "description": null,
+            "sortKey": null,
+            "gamemode": "io.github.furroxide.topiaforge.fixture.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "world": {
+              "policy": "fixed",
+              "default": "io.github.furroxide.topiaforge.fixture.wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+              "allow": null,
+              "allowPlayerOverride": null
+            },
+            "transition": null
+          }
+        ]
+      }
+    },
+    "dart": {
+      "outcome": "accept",
+      "normalized": {
+        "worlds": [
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+            "name": "Arena",
+            "description": null,
+            "content": {
+              "kind": "provider",
+              "bundle": null,
+              "prefab": null,
+              "implementation": {
+                "assembly": null,
+                "type": "Fixture.Source"
+              },
+              "sceneName": null
+            },
+            "transitions": [
+              "additive-arena"
+            ],
+            "spawn": {
+              "kind": "provider-default",
+              "markerName": null
+            },
+            "openTo": null,
+            "openToAnyCompatible": null
+          }
+        ],
+        "gamemodes": [
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "name": "Survival",
+            "description": null,
+            "implementation": {
+              "assembly": null,
+              "type": "Fixture.SurvivalGamemode"
+            },
+            "worldRequirements": null,
+            "sceneChangePolicy": null
+          }
+        ],
+        "launchTargets": [
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.ttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+            "title": "Play",
+            "description": null,
+            "sortKey": null,
+            "gamemode": "io.github.furroxide.topiaforge.fixture.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "world": {
+              "policy": "fixed",
+              "default": "io.github.furroxide.topiaforge.fixture.wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+              "allow": null,
+              "allowPlayerOverride": null
+            },
+            "transition": null
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "id": "wire-plan-version-newline",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Package version rejects trailing newline",
+  "transport": "plan",
+  "payload": {
+    "targetId": "base.mod.menu",
+    "gamemodeId": "mode.mod.play",
+    "worldId": "base.mod.world",
+    "transition": "scene-replacement",
+    "request": {
+      "targetId": "BASE.MOD.MENU"
+    },
+    "packages": [
+      {
+        "id": "base.mod",
+        "version": "1.0.0\n"
+      },
+      {
+        "id": "mode.mod",
+        "version": "2.3.4"
+      }
+    ],
+    "digest": "e71b0a890491f3ed"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    }
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "id": "wire-profile-safe-main-menu",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive profile codec safe main menu",
+  "transport": "profile",
+  "payload": {
+    "schemaVersion": 4,
+    "profileId": "profile-01",
+    "profileRevision": 7,
+    "requestId": "request-01",
+    "command": "main-menu",
+    "safeMode": true,
+    "inheritManagerModState": false,
+    "enabledMods": [
+      "base.mod",
+      "mode.mod"
+    ],
+    "selectedVersions": {
+      "base.mod": "1.0.0",
+      "mode.mod": "2.3.4"
+    },
+    "packages": [
+      {
+        "id": "base.mod",
+        "version": "1.0.0"
+      },
+      {
+        "id": "mode.mod",
+        "version": "2.3.4"
+      }
+    ],
+    "digest": "6a4a1aa84ed69e17"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "schemaVersion": 4,
+        "profileId": "profile-01",
+        "profileRevision": 7,
+        "requestId": "request-01",
+        "command": "main-menu",
+        "safeMode": true,
+        "inheritManagerModState": false,
+        "enabledMods": [
+          "base.mod",
+          "mode.mod"
+        ],
+        "selectedVersions": {
+          "base.mod": "1.0.0",
+          "mode.mod": "2.3.4"
+        },
+        "packages": [
+          {
+            "id": "base.mod",
+            "version": "1.0.0"
+          },
+          {
+            "id": "mode.mod",
+            "version": "2.3.4"
+          }
+        ],
+        "digest": "6a4a1aa84ed69e17"
+      }
+    },
+    "dart": {
+      "outcome": "accept",
+      "normalized": {
+        "schemaVersion": 4,
+        "profileId": "profile-01",
+        "profileRevision": 7,
+        "requestId": "request-01",
+        "command": "main-menu",
+        "safeMode": true,
+        "inheritManagerModState": false,
+        "enabledMods": [
+          "base.mod",
+          "mode.mod"
+        ],
+        "selectedVersions": {
+          "base.mod": "1.0.0",
+          "mode.mod": "2.3.4"
+        },
+        "packages": [
+          {
+            "id": "base.mod",
+            "version": "1.0.0"
+          },
+          {
+            "id": "mode.mod",
+            "version": "2.3.4"
+          }
+        ],
+        "digest": "6a4a1aa84ed69e17"
+      }
+    }
+  }
+}
