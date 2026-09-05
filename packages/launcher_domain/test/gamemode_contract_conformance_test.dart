@@ -1,13 +1,6 @@
-// The Dart half of the cross-language gamemode-contract fixture harness. The C#
-// half is tests/TopiaForge.ModManager.Tests/GamemodeContractConformanceTests.cs
-// and makes the same five assertions, so neither language can quietly stop
-// executing a case the other still runs.
-//
-// This side additionally owns the `schema` channel and validates every case file
-// against fixture.schema.json, because C# has no JSON Schema validator at all --
-// `grep -rn "topiaforge.mod.schema.json" --include=*.cs` returns nothing. The
-// schema constrains Dart alone, which is exactly why the fixtures, not the
-// schema, are what hold the two readers to one contract.
+// Independent V6 JSON Schema evaluation plus both readers' shared expectations.
+// Every file is indexed, every operation is explicit, and normalization preserves
+// all declaration fields and meaningful presence through serialization.
 
 import 'dart:convert';
 import 'dart:io';
@@ -38,18 +31,22 @@ void main() {
   test('the fixture index is closed over the fixtures on disk', () {
     expect(cases, isNotEmpty, reason: 'an empty index asserts nothing');
     final onDisk = <String>{};
-    for (final channel in channelRunners.keys) {
-      final directory = Directory(_join(fixtureRoot, [channel]));
-      if (!directory.existsSync()) {
-        continue;
-      }
-      for (final file
-          in directory.listSync(recursive: true).whereType<File>()) {
-        if (!file.path.endsWith('.json')) {
-          continue;
-        }
-        onDisk.add(_relative(fixtureRoot, file.path));
-      }
+    for (final file in Directory(
+      fixtureRoot,
+    ).listSync(recursive: true).whereType<File>()) {
+      final path = _relative(fixtureRoot, file.path);
+      if (const {'index.json', 'fixture.schema.json'}.contains(path)) continue;
+      expect(
+        path.endsWith('.json'),
+        isTrue,
+        reason: '$path is an unexpected non-JSON fixture file',
+      );
+      onDisk.add(path);
+      expect(
+        path.contains('/') && channelRunners.containsKey(path.split('/').first),
+        isTrue,
+        reason: '$path is outside a known channel',
+      );
     }
 
     final indexed = cases.map((item) => item['path']! as String).toSet();
@@ -87,6 +84,19 @@ void main() {
       );
       expect(body['id'], entry['id'], reason: '$path disagrees with the index');
       expect(
+        body['channel'],
+        entry['channel'],
+        reason: '$path disagrees with the index',
+      );
+      final directory = (body['kind']! as String).startsWith('manifest-')
+          ? 'manifest'
+          : 'launch-intent';
+      expect(
+        path.startsWith('${body['channel']}/$directory/'),
+        isTrue,
+        reason: '$path is misplaced for its kind',
+      );
+      expect(
         body['kind'],
         entry['kind'],
         reason: '$path declares a kind the index disagrees with',
@@ -94,44 +104,108 @@ void main() {
     }
   });
 
-  test('a divergence between the two readers is stated, not implied', () {
+  test('equivalent operations require identical expectations', () {
     for (final entry in cases) {
       final path = entry['path']! as String;
       final body = _readCase(fixtureRoot, path);
       final expected = body['expect']! as Map<String, Object?>;
-      final obliged = channelRunners[entry['channel']!]!;
-      for (final runner in obliged) {
-        expect(
-          expected.containsKey(runner),
-          isTrue,
-          reason: '$path is missing the expectation for obliged $runner',
-        );
-      }
-
-      // A divergence is one side accepting what the other rejects. Differing
-      // error codes for the same verdict are ordinary: a kind may give each
-      // runner a different operation to perform.
-      final verdicts = obliged
-          .map((runner) => (expected[runner]! as Map)['outcome'] as String)
-          .toSet();
-      final explained = (body['divergenceReason'] as String? ?? '').isNotEmpty;
       expect(
-        verdicts.length == 1 || explained,
-        isTrue,
-        reason:
-            '$path expects different verdicts per runner without a '
-            'divergenceReason. A divergence between the two readers is a '
-            'finding, not a detail.',
+        expected.keys.toSet(),
+        channelRunners[entry['channel']!],
+        reason: path,
       );
+      if (body.containsKey('manifest')) {
+        expect(
+          expected['csharp'],
+          expected['dart'],
+          reason: '$path has divergent reader expectations',
+        );
+        expect(body.containsKey('divergenceReason'), isFalse, reason: path);
+        if ((expected['dart']! as Map)['outcome'] == 'accept') {
+          expect(
+            (expected['dart']! as Map)['normalized'],
+            isA<Map>(),
+            reason: path,
+          );
+        }
+      } else {
+        expect(body['operations'], {
+          'csharp': 'read-intent',
+          'dart': 'write-intent',
+        }, reason: path);
+      }
+    }
+  });
+
+  final schemaDocument =
+      jsonDecode(
+            File(
+              _join(_repoRoot().path, [
+                'schemas',
+                'topiaforge.mod.v6.schema.json',
+              ]),
+            ).readAsStringSync(),
+          )
+          as Map<String, Object?>;
+  final manifestSchema = JsonSchema.create(schemaDocument);
+  test('normalization explicitly covers every contribution schema field', () {
+    const definitions = {
+      'worlds': 'worldDeclaration',
+      'gamemodes': 'gamemodeDeclaration',
+      'launchTargets': 'launchTargetDeclaration',
+      'content': 'worldContent',
+      'implementation': 'implementationBinding',
+      'spawn': 'spawnPolicy',
+      'worldRequirements': 'worldRequirements',
+      'world': 'worldPolicy',
+    };
+    final schemaDefinitions = schemaDocument['definitions']! as Map;
+    expect(
+      contributionNormalizationFields.keys.toSet(),
+      definitions.keys.toSet(),
+    );
+    for (final entry in definitions.entries) {
+      final properties =
+          (schemaDefinitions[entry.value]! as Map)['properties']! as Map;
       expect(
-        verdicts.length > 1 || !explained,
-        isTrue,
-        reason:
-            '$path carries a divergenceReason but every runner reaches the '
-            'same verdict; delete it so a real divergence stays visible.',
+        contributionNormalizationFields[entry.key]!.toSet(),
+        properties.keys.toSet(),
+        reason: entry.key,
       );
     }
   });
+  for (final entry in cases) {
+    final path = entry['path']! as String;
+    final body = _readCase(fixtureRoot, path);
+    if (!body.containsKey('manifest')) continue;
+    test('$path schema', () {
+      expect(
+        body['schemaOutcome'],
+        anyOf('accept', 'reject'),
+        reason: 'schemaOutcome is mandatory',
+      );
+      final result = manifestSchema.validate(body['manifest']);
+      expect(
+        result.isValid,
+        body['schemaOutcome'] == 'accept',
+        reason: result.errors.join('\n'),
+      );
+    });
+    test('$path reader', () {
+      final expected = (body['expect']! as Map)['dart']! as Map;
+      final actual = runManifest(body);
+      expect(
+        actual.accepted,
+        expected['outcome'] == 'accept',
+        reason: actual.detail,
+      );
+      expect(
+        actual.errorCodes,
+        ((expected['errorCodes'] as List?) ?? const []).cast<String>().toSet(),
+        reason: actual.detail,
+      );
+    });
+  }
 
   test('this runner executes every case the index obliges it to', () {
     final executed = <String, int>{};
@@ -160,15 +234,16 @@ void main() {
       );
       final normalized = expected['normalized'] as Map<String, Object?>?;
       if (normalized != null) {
-        final digest = declarationDigest(body);
-        for (final kind in const ['worlds', 'gamemodes', 'launchTargets']) {
-          expect(
-            digest[kind],
-            (normalized[kind]! as List).cast<String>(),
-            reason:
-                '$path: $kind parsed differently from what the fixture pins',
-          );
-        }
+        expect(
+          declarationDigest(body),
+          normalized,
+          reason: '$path parsed fields or presence differ',
+        );
+        expect(
+          roundTripDigest(body),
+          normalized,
+          reason: '$path serialized fields or presence differ',
+        );
       }
       executed[channel] = (executed[channel] ?? 0) + 1;
     }
@@ -211,6 +286,7 @@ ConformanceOutcome _execute(
       return runLaunchIntentHostile(body);
     case 'manifest-accepts':
     case 'manifest-rejects':
+    case 'manifest-model-rejects':
       return runManifest(body);
     default:
       fail(

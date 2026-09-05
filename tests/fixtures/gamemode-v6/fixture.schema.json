@@ -32,7 +32,8 @@
         "launch-intent-round-trip",
         "launch-intent-hostile",
         "manifest-accepts",
-        "manifest-rejects"
+        "manifest-rejects",
+        "manifest-model-rejects"
       ],
       "description": "Selects the runner's dispatch arm. Both runners dispatch exhaustively with a failing default, so adding a kind here without teaching both runners fails the harness rather than silently skipping."
     },
@@ -67,11 +68,43 @@
       "type": "string",
       "minLength": 16,
       "maxLength": 512,
-      "description": "Mandatory whenever two runners expect different outcomes for the same operation. Both runners enforce it, so an unexplained divergence cannot land."
+      "description": "Explains a deliberate wire producer/consumer difference. Manifest reader/model operations cannot exempt equivalent-operation parity."
     },
     "manifest": {
       "type": "object",
       "description": "A whole topiaforge.mod.json document. Required by the manifest kinds; forbidden elsewhere."
+    },
+    "schemaOutcome": {
+      "enum": [
+        "accept",
+        "reject"
+      ]
+    },
+    "operations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "csharp",
+        "dart"
+      ],
+      "properties": {
+        "csharp": {
+          "const": "read-intent"
+        },
+        "dart": {
+          "const": "write-intent"
+        }
+      }
+    },
+    "modelMutation": {
+      "enum": [
+        "empty-contributions",
+        "missing-content",
+        "missing-spawn",
+        "missing-implementation",
+        "missing-world",
+        "empty-requirements"
+      ]
     }
   },
   "allOf": [
@@ -89,8 +122,28 @@
       "then": {
         "required": [
           "selection",
-          "intent"
-        ]
+          "intent",
+          "operations"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "manifest"
+              ]
+            },
+            {
+              "required": [
+                "schemaOutcome"
+              ]
+            },
+            {
+              "required": [
+                "modelMutation"
+              ]
+            }
+          ]
+        }
       }
     },
     {
@@ -106,11 +159,31 @@
       },
       "then": {
         "required": [
-          "intent"
+          "intent",
+          "operations"
         ],
         "not": {
-          "required": [
-            "selection"
+          "anyOf": [
+            {
+              "required": [
+                "selection"
+              ]
+            },
+            {
+              "required": [
+                "manifest"
+              ]
+            },
+            {
+              "required": [
+                "schemaOutcome"
+              ]
+            },
+            {
+              "required": [
+                "modelMutation"
+              ]
+            }
           ]
         }
       }
@@ -128,7 +201,8 @@
       },
       "then": {
         "required": [
-          "manifest"
+          "manifest",
+          "schemaOutcome"
         ],
         "not": {
           "anyOf": [
@@ -140,6 +214,21 @@
             {
               "required": [
                 "intent"
+              ]
+            },
+            {
+              "required": [
+                "operations"
+              ]
+            },
+            {
+              "required": [
+                "divergenceReason"
+              ]
+            },
+            {
+              "required": [
+                "modelMutation"
               ]
             }
           ]
@@ -159,7 +248,8 @@
       },
       "then": {
         "required": [
-          "manifest"
+          "manifest",
+          "schemaOutcome"
         ],
         "not": {
           "anyOf": [
@@ -171,6 +261,64 @@
             {
               "required": [
                 "intent"
+              ]
+            },
+            {
+              "required": [
+                "operations"
+              ]
+            },
+            {
+              "required": [
+                "divergenceReason"
+              ]
+            },
+            {
+              "required": [
+                "modelMutation"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "manifest-model-rejects"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "required": [
+          "manifest",
+          "schemaOutcome",
+          "modelMutation"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "selection"
+              ]
+            },
+            {
+              "required": [
+                "intent"
+              ]
+            },
+            {
+              "required": [
+                "operations"
+              ]
+            },
+            {
+              "required": [
+                "divergenceReason"
               ]
             }
           ]

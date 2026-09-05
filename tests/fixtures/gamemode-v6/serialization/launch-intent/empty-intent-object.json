@@ -5,7 +5,21 @@
   "summary": "An empty object is not a launch. DataContractJsonSerializer bypasses the constructor, so the reader's OnDeserializing defaults decide what absent means, and an absent gamemode must not default into a launchable one.",
   "intent": {},
   "expect": {
-    "csharp": { "outcome": "reject", "errorCodes": ["worldLaunch.gamemodeId"] },
-    "dart": { "outcome": "reject", "errorCodes": ["writer-cannot-emit"] }
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "worldLaunch.gamemodeId"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "writer-cannot-emit"
+      ]
+    }
+  },
+  "operations": {
+    "csharp": "read-intent",
+    "dart": "write-intent"
   }
 }

@@ -296,7 +296,7 @@ class WorldCatalog {
         .map((item) => WorldDefinition.fromJson(_objectMap(item)))
         .where(
           (world) =>
-              ModManifest.isValidId(world.id) && world.name.trim().isNotEmpty,
+              _isValidDeclarationId(world.id) && world.name.trim().isNotEmpty,
         )
         .toList();
     final gamemodes = (json['gamemodes'] as List? ?? const [])
@@ -304,7 +304,7 @@ class WorldCatalog {
         .map((item) => GamemodeDefinition.fromJson(_objectMap(item)))
         .where(
           (mode) =>
-              ModManifest.isValidId(mode.id) && mode.name.trim().isNotEmpty,
+              _isValidDeclarationId(mode.id) && mode.name.trim().isNotEmpty,
         )
         .toList();
 
@@ -313,8 +313,9 @@ class WorldCatalog {
         .map((item) => GamemodeMenuEntry.fromJson(_objectMap(item)))
         .where(
           (entry) =>
-              ModManifest.isValidId(entry.id) &&
-              ModManifest.isValidId(entry.gamemodeId) &&
+              _isValidDeclarationId(entry.id) &&
+              _isValidDeclarationId(entry.gamemodeId) &&
+              (entry.worldId.isEmpty || _isValidDeclarationId(entry.worldId)) &&
               entry.title.trim().isNotEmpty,
         )
         .toList();

@@ -38,7 +38,17 @@
       "normalized": {
         "worlds": [],
         "gamemodes": [
-          "io.github.furroxide.topiaforge.fixture.survival|>Fixture.SurvivalGamemode|-|-"
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.survival",
+            "name": "Survival",
+            "description": null,
+            "implementation": {
+              "assembly": null,
+              "type": "Fixture.SurvivalGamemode"
+            },
+            "worldRequirements": null,
+            "sceneChangePolicy": null
+          }
         ],
         "launchTargets": []
       }
@@ -48,10 +58,21 @@
       "normalized": {
         "worlds": [],
         "gamemodes": [
-          "io.github.furroxide.topiaforge.fixture.survival|>Fixture.SurvivalGamemode|-|-"
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.survival",
+            "name": "Survival",
+            "description": null,
+            "implementation": {
+              "assembly": null,
+              "type": "Fixture.SurvivalGamemode"
+            },
+            "worldRequirements": null,
+            "sceneChangePolicy": null
+          }
         ],
         "launchTargets": []
       }
     }
-  }
+  },
+  "schemaOutcome": "accept"
 }

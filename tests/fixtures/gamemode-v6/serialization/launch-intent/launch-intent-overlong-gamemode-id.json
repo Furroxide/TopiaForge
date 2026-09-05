@@ -23,5 +23,9 @@
         "writer-cannot-emit"
       ]
     }
+  },
+  "operations": {
+    "csharp": "read-intent",
+    "dart": "write-intent"
   }
 }

@@ -23,6 +23,7 @@ def _case(**overrides) -> dict:
         "kind": "launch-intent-hostile",
         "summary": "A case that exists only to exercise the index audit.",
         "intent": {},
+        "operations": {"csharp": "read-intent", "dart": "write-intent"},
         "expect": {
             "csharp": {"outcome": "reject", "errorCodes": ["worldLaunch.gamemodeId"]},
             "dart": {"outcome": "reject", "errorCodes": ["writer-cannot-emit"]},
@@ -57,7 +58,9 @@ class FixtureIndexAuditTests(unittest.TestCase):
         AUDIT_MODULE.ROOT, AUDIT_MODULE.FIXTURE_ROOT, AUDIT_MODULE.INDEX = self._restore
 
     def _write(self, name: str, case: dict) -> None:
-        (self.cases / name).write_text(json.dumps(case, indent=2), encoding="utf-8")
+        directory = self.fixtures / "serialization" / "manifest" if str(case.get("kind", "")).startswith("manifest-") else self.cases
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / name).write_text(json.dumps(case, indent=2), encoding="utf-8")
 
     def _expect_failure(self, fragment: str) -> None:
         with self.assertRaises(AUDIT_MODULE.FixtureIndexError) as raised:
@@ -128,6 +131,59 @@ class FixtureIndexAuditTests(unittest.TestCase):
             json.dumps(_case(), indent=2), encoding="utf-8"
         )
         self._expect_failure("reuses id")
+
+    def test_unknown_channel_is_not_silently_ignored(self) -> None:
+        unknown = self.fixtures / "serializaton"
+        unknown.mkdir()
+        (unknown / "a-case.json").write_text(json.dumps(_case()), encoding="utf-8")
+        self._expect_failure("outside a known channel")
+
+    def test_root_level_fixture_is_not_silently_ignored(self) -> None:
+        (self.fixtures / "a-case.json").write_text(json.dumps(_case()), encoding="utf-8")
+        self._expect_failure("outside a known channel")
+
+    def test_nested_index_json_is_a_case_not_an_exclusion(self) -> None:
+        self._write("index.json", {})
+        self._expect_failure("missing a string")
+
+    def test_manifest_requires_schema_outcome(self) -> None:
+        self._write("a-case.json", _case(kind="manifest-rejects"))
+        self._expect_failure("requires schemaOutcome")
+
+    def test_manifest_cannot_have_different_codes(self) -> None:
+        self._write("a-case.json", _case(kind="manifest-rejects", schemaOutcome="reject"))
+        self._expect_failure("divergent same-operation")
+
+    def test_manifest_acceptance_requires_normalization(self) -> None:
+        self._write("a-case.json", _case(kind="manifest-accepts", schemaOutcome="accept",
+            expect={"csharp": {"outcome": "accept"}, "dart": {"outcome": "accept"}}))
+        self._expect_failure("requires a structured normalized")
+
+    def test_non_json_file_is_not_silently_ignored(self) -> None:
+        (self.cases / "notes.txt").write_text("unexecuted fixture", encoding="utf-8")
+        self._expect_failure("unexpected non-JSON")
+
+    def test_uppercase_extension_is_not_silently_ignored(self) -> None:
+        self._write("a-case.JSON", _case())
+        self._expect_failure("unexpected non-JSON")
+
+    def test_case_cannot_be_in_another_kind_directory(self) -> None:
+        directory = self.fixtures / "serialization" / "manifest"
+        directory.mkdir()
+        (directory / "a-case.json").write_text(json.dumps(_case()), encoding="utf-8")
+        self._expect_failure("misplaced")
+
+    def test_expectations_must_be_objects(self) -> None:
+        self._write("a-case.json", _case(expect=[]))
+        self._expect_failure("expectation object")
+
+    def test_missing_runner_outcome_is_not_silently_indexed(self) -> None:
+        self._write("a-case.json", _case(expect={"csharp": {}, "dart": {}}))
+        self._expect_failure("accept/reject outcome")
+
+    def test_reject_requires_nonempty_codes(self) -> None:
+        self._write("a-case.json", _case(expect={"csharp": {"outcome": "reject"}, "dart": {"outcome": "reject"}}))
+        self._expect_failure("nonempty errorCodes")
 
     def test_malformed_json_names_the_file(self) -> None:
         (self.cases / "a-case.json").write_text("{not json", encoding="utf-8")

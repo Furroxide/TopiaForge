@@ -8,22 +8,9 @@ using TopiaForge.ModManager.Core;
 namespace TopiaForge.ModManager.Tests
 {
     /// <summary>
-    /// Executes the cross-language gamemode-contract fixtures from the C# side.
-    /// <para>
-    /// The manifest contract is read by two hand-written readers, and this one never sees a JSON
-    /// Schema: nothing under src/ or tests/ mentions topiaforge.mod.schema.json. The schema constrains
-    /// Dart alone. So the fixtures are the only artefact that holds both readers to one contract, and
-    /// a fixture that no runner executes is worse than no fixture -- it reads as coverage and asserts
-    /// nothing.
-    /// </para>
-    /// <para>
-    /// The older tests/fixtures/manifests corpus shows both failure modes this harness exists to close.
-    /// It compares only the accept/reject verdict, so two readers can disagree about <em>why</em> and
-    /// still both pass; and neither runner enumerates the directory, so a fixture added without a
-    /// corpus.txt line is silently dead. Here the index is generated and checked for closure over the
-    /// tree, error codes are compared as a set, and every runner obliged by a channel must execute
-    /// every case on it.
-    /// </para>
+    /// Executes every indexed C# contract operation and rejects unindexed or misplaced files.
+    /// The Dart runner independently validates each manifest payload against the V6 JSON Schema;
+    /// both language operations share exact verdicts, codes, and structured normalized results.
     /// </summary>
     internal static class GamemodeContractConformanceTests
     {
@@ -32,7 +19,7 @@ namespace TopiaForge.ModManager.Tests
         private static readonly HashSet<string> CaseFields = new HashSet<string>(StringComparer.Ordinal)
         {
             "id", "channel", "kind", "summary", "selection", "intent", "manifest", "expect",
-            "divergenceReason"
+            "divergenceReason", "schemaOutcome", "operations", "modelMutation"
         };
         private static readonly HashSet<string> OutcomeFields = new HashSet<string>(StringComparer.Ordinal)
         {
@@ -115,19 +102,16 @@ namespace TopiaForge.ModManager.Tests
             IReadOnlyList<IndexedCase> cases)
         {
             var onDisk = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var channel in channels)
+            var knownChannels = new HashSet<string>(channels, StringComparer.Ordinal);
+            foreach (var file in Directory.EnumerateFiles(fixtureRoot, "*", SearchOption.AllDirectories))
             {
-                var channelRoot = Path.Combine(fixtureRoot, channel);
-                if (!Directory.Exists(channelRoot))
-                {
-                    continue;
-                }
-
-                foreach (var file in Directory.EnumerateFiles(channelRoot, "*.json", SearchOption.AllDirectories))
-                {
-                    onDisk.Add(
-                        Path.GetRelativePath(fixtureRoot, file).Replace(Path.DirectorySeparatorChar, '/'));
-                }
+                var relative = Path.GetRelativePath(fixtureRoot, file).Replace(Path.DirectorySeparatorChar, '/');
+                if (relative == "index.json" || relative == "fixture.schema.json") continue;
+                Assert(relative.EndsWith(".json", StringComparison.Ordinal),
+                    relative + " is an unexpected non-JSON fixture file.");
+                Assert(relative.Contains('/') && knownChannels.Contains(relative.Split('/')[0]),
+                    relative + " is outside a known channel directory.");
+                onDisk.Add(relative);
             }
 
             var indexed = new HashSet<string>(cases.Select(item => item.Path), StringComparer.Ordinal);
@@ -160,8 +144,15 @@ namespace TopiaForge.ModManager.Tests
                 (body.GetProperty("kind").GetString() ?? string.Empty) == indexed.Kind,
                 indexed.Path + " declares a kind the index disagrees with");
 
-            AssertDivergenceIsExplained(indexed, body, obligedRunners);
+            Assert(body.GetProperty("channel").GetString() == indexed.Channel,
+                indexed.Path + " declares a channel the index disagrees with.");
+            var directory = indexed.Kind.StartsWith("manifest-", StringComparison.Ordinal) ? "manifest" : "launch-intent";
+            Assert(indexed.Path.StartsWith(indexed.Channel + "/" + directory + "/", StringComparison.Ordinal),
+                indexed.Path + " is misplaced for its kind.");
+            AssertEquivalentOperations(indexed, body, obligedRunners);
 
+            Assert(indexed.Kind == "manifest-model-rejects" || !body.TryGetProperty("modelMutation", out _),
+                indexed.Path + " cannot change a model in a reader operation.");
             var expectation = ReadExpectation(indexed, body);
             switch (indexed.Kind)
             {
@@ -171,6 +162,7 @@ namespace TopiaForge.ModManager.Tests
                     break;
                 case "manifest-accepts":
                 case "manifest-rejects":
+                case "manifest-model-rejects":
                     ExecuteManifest(indexed, body, expectation);
                     break;
                 default:
@@ -182,13 +174,8 @@ namespace TopiaForge.ModManager.Tests
             }
         }
 
-        /// <summary>
-        /// Two runners are allowed to disagree, but never quietly. A divergence is one side accepting
-        /// what the other rejects; differing error codes for the same verdict are ordinary, because a
-        /// kind may give each runner a different operation to perform. Both runners enforce this, so an
-        /// unexplained divergence cannot land from either side.
-        /// </summary>
-        private static void AssertDivergenceIsExplained(
+        /// <summary>Manifest operations share complete expectations; wire operations name producer and consumer.</summary>
+        private static void AssertEquivalentOperations(
             IndexedCase indexed,
             JsonElement body,
             IReadOnlyCollection<string> obligedRunners)
@@ -201,20 +188,23 @@ namespace TopiaForge.ModManager.Tests
                     indexed.Path + " is missing the expectation for obliged runner '" + runner + "'.");
             }
 
-            var rendered = obligedRunners
-                .Select(runner => expect.GetProperty(runner).GetProperty("outcome").GetString())
-                .Distinct(StringComparer.Ordinal)
-                .Count();
-            var explained = body.TryGetProperty("divergenceReason", out var reason)
-                && !string.IsNullOrWhiteSpace(reason.GetString());
-            Assert(
-                rendered == 1 || explained,
-                indexed.Path + " expects different outcomes per runner without a divergenceReason. " +
-                "A divergence between the two readers is a finding, not a detail.");
-            Assert(
-                rendered > 1 || !explained,
-                indexed.Path + " carries a divergenceReason but every runner reaches the same verdict; " +
-                "delete the reason so a real divergence is visible when one appears.");
+            if (indexed.Kind.StartsWith("manifest-", StringComparison.Ordinal))
+            {
+                Assert(body.TryGetProperty("schemaOutcome", out var schemaOutcome)
+                    && (schemaOutcome.GetString() == "accept" || schemaOutcome.GetString() == "reject"),
+                    indexed.Path + " requires schemaOutcome for its manifest payload.");
+                Assert(DeclarationDigest.Equal(expect.GetProperty("csharp"), expect.GetProperty("dart")),
+                    indexed.Path + " has divergent same-operation expectations.");
+                Assert(!body.TryGetProperty("divergenceReason", out _),
+                    indexed.Path + " cannot exempt manifest-reader parity.");
+            }
+            else
+            {
+                var operations = body.GetProperty("operations");
+                Assert(operations.GetProperty("csharp").GetString() == "read-intent"
+                    && operations.GetProperty("dart").GetString() == "write-intent",
+                    indexed.Path + " requires explicit wire operations.");
+            }
         }
 
         private static Expectation ReadExpectation(IndexedCase indexed, JsonElement body)
@@ -295,6 +285,8 @@ namespace TopiaForge.ModManager.Tests
             try
             {
                 manifest = ModManifestJson.Deserialize(body.GetProperty("manifest").GetRawText());
+                if (body.TryGetProperty("modelMutation", out var mutation))
+                    MutateModel(manifest, mutation.GetString()!);
                 var errors = ManifestValidator.Validate(manifest);
                 accepted = errors.Count == 0;
                 foreach (var error in errors)
@@ -328,15 +320,38 @@ namespace TopiaForge.ModManager.Tests
 
             var actual = DeclarationDigest.Of(manifest!);
             var declared = body.GetProperty("expect").GetProperty(RunnerName).GetProperty("normalized");
-            foreach (var kind in DeclarationDigest.Kinds)
+            Assert(DeclarationDigest.Equal(actual, declared),
+                indexed.Path + ": parsed contribution fields " + actual.GetRawText()
+                + " differ from expected " + declared.GetRawText());
+
+            // Round-trip the contribution DTOs through the production reader without unrelated
+            // historical common-manifest serialization defaults obscuring this contract.
+            var fields = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
+                body.GetProperty("manifest").GetRawText())!;
+            if (manifest!.Contributions != null)
             {
-                var expectedLines = declared.GetProperty(kind).EnumerateArray()
-                    .Select(item => item.GetString() ?? string.Empty)
-                    .ToList();
-                Assert(
-                    actual[kind].SequenceEqual(expectedLines, StringComparer.Ordinal),
-                    indexed.Path + ": " + kind + " parsed as [" + string.Join("; ", actual[kind]) +
-                    "] but the fixture expects [" + string.Join("; ", expectedLines) + "].");
+                using var serialized = JsonDocument.Parse(JsonUtil.Serialize(manifest.Contributions));
+                fields["contributions"] = serialized.RootElement.Clone();
+            }
+            var restored = ModManifestJson.Deserialize(JsonSerializer.Serialize(fields));
+            Assert(ManifestValidator.Validate(restored).Count == 0,
+                indexed.Path + ": serialized contribution DTOs no longer validate.");
+            Assert(DeclarationDigest.Equal(DeclarationDigest.Of(restored), declared),
+                indexed.Path + ": contribution serialization loses fields or presence.");
+        }
+
+        private static void MutateModel(ModManifest manifest, string mutation)
+        {
+            var contributions = manifest.Contributions!;
+            switch (mutation)
+            {
+                case "empty-contributions": manifest.Contributions = new ModContributions(); break;
+                case "missing-content": contributions.Worlds[0].Content = null; break;
+                case "missing-spawn": contributions.Worlds[0].Spawn = null; break;
+                case "missing-implementation": contributions.Gamemodes[0].Implementation = null; break;
+                case "missing-world": contributions.LaunchTargets[0].World = null; break;
+                case "empty-requirements": contributions.Gamemodes[0].WorldRequirements = new ModWorldRequirements(); break;
+                default: throw new InvalidOperationException("Unknown fixture model mutation " + mutation);
             }
         }
 

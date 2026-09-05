@@ -1,0 +1,31 @@
+{
+  "id": "launch-intent-gamemode-length-97",
+  "channel": "serialization",
+  "kind": "launch-intent-hostile",
+  "summary": "The gamemodeId field independently enforces the 96-character declaration boundary.",
+  "intent": {
+    "command": "launch-target",
+    "worldId": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+    "gamemodeId": "io.fixture.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "loadMode": "additiveArena",
+    "allowAdditiveFallback": true
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "worldLaunch.gamemodeId"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "writer-cannot-emit"
+      ]
+    }
+  },
+  "operations": {
+    "csharp": "read-intent",
+    "dart": "write-intent"
+  }
+}

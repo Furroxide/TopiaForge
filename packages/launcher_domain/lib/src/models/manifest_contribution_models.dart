@@ -22,7 +22,14 @@ class ModContributions {
     this.launchTargets = const [],
   });
 
+  static bool isValidDeclarationId(String id) => _isValidDeclarationId(id);
+
   factory ModContributions.fromJson(Object? json) {
+    final issues = <String>[];
+    _contributionStructuralIssues(json, issues);
+    if (issues.isNotEmpty) {
+      throw FormatException('contributions is invalid: ${issues.join(' ')}');
+    }
     final map = json is Map ? json : const <String, Object?>{};
     return ModContributions(
       worlds: _declarationList(map['worlds'], ModWorldDeclaration.fromJson),
@@ -159,35 +166,41 @@ class ModWorldDeclaration {
   const ModWorldDeclaration({
     this.id = '',
     this.name = '',
-    this.description = '',
+    String? description,
     this.content,
     this.transitions = const [],
     this.spawn,
-    this.openTo = const [],
+    List<String>? openTo,
     this.openToAnyCompatible,
-  });
+  }) : _description = description,
+       _openTo = openTo;
 
   factory ModWorldDeclaration.fromJson(Object? json) {
     final map = json is Map ? json : const <String, Object?>{};
     return ModWorldDeclaration(
       id: (map['id'] as String?) ?? '',
       name: (map['name'] as String?) ?? '',
-      description: (map['description'] as String?) ?? '',
+      description: map['description'] as String?,
       content: map.containsKey('content')
           ? ModWorldContent.fromJson(map['content'])
           : null,
-      transitions: _stringList(map['transitions']),
+      transitions: _contributionStrings(map['transitions']),
       spawn: map.containsKey('spawn')
           ? ModSpawnPolicy.fromJson(map['spawn'])
           : null,
-      openTo: _stringList(map['openTo']),
+      openTo: map.containsKey('openTo')
+          ? _contributionStrings(map['openTo'])
+          : null,
       openToAnyCompatible: map['openToAnyCompatible'] as bool?,
     );
   }
 
   final String id;
   final String name;
-  final String description;
+  final String? _description;
+
+  String get description => _description ?? '';
+  bool get hasDescription => _description != null;
   final ModWorldContent? content;
   final List<String> transitions;
   final ModSpawnPolicy? spawn;
@@ -196,7 +209,10 @@ class ModWorldDeclaration {
   /// is scoped to that one policy on purpose: requiring it for every pairing
   /// would make a world's package depend on the gamemodes that use it, and the
   /// first-party graph already runs the other way.
-  final List<String> openTo;
+  final List<String>? _openTo;
+
+  List<String> get openTo => _openTo ?? const [];
+  bool get hasOpenTo => _openTo != null;
 
   /// Null means absent, which is not the same as an explicit false.
   final bool? openToAnyCompatible;
@@ -204,11 +220,11 @@ class ModWorldDeclaration {
   Map<String, Object?> toJson() => {
     'id': id,
     'name': name,
-    if (description.isNotEmpty) 'description': description,
+    if (hasDescription) 'description': description,
     if (content != null) 'content': content!.toJson(),
     'transitions': transitions,
     if (spawn != null) 'spawn': spawn!.toJson(),
-    if (openTo.isNotEmpty) 'openTo': openTo,
+    if (hasOpenTo) 'openTo': openTo,
     if (openToAnyCompatible != null) 'openToAnyCompatible': openToAnyCompatible,
   };
 }
@@ -222,7 +238,7 @@ class ModWorldRequirements {
   factory ModWorldRequirements.fromJson(Object? json) {
     final map = json is Map ? json : const <String, Object?>{};
     return ModWorldRequirements(
-      transitions: _stringList(map['transitions']),
+      transitions: _contributionStrings(map['transitions']),
       spawn: (map['spawn'] as String?) ?? '',
     );
   }
@@ -243,18 +259,18 @@ class ModGamemodeDeclaration {
   const ModGamemodeDeclaration({
     this.id = '',
     this.name = '',
-    this.description = '',
+    String? description,
     this.implementation,
     this.worldRequirements,
     this.sceneChangePolicy = '',
-  });
+  }) : _description = description;
 
   factory ModGamemodeDeclaration.fromJson(Object? json) {
     final map = json is Map ? json : const <String, Object?>{};
     return ModGamemodeDeclaration(
       id: (map['id'] as String?) ?? '',
       name: (map['name'] as String?) ?? '',
-      description: (map['description'] as String?) ?? '',
+      description: map['description'] as String?,
       implementation: map.containsKey('implementation')
           ? ModImplementationBinding.fromJson(map['implementation'])
           : null,
@@ -273,7 +289,10 @@ class ModGamemodeDeclaration {
 
   final String id;
   final String name;
-  final String description;
+  final String? _description;
+
+  String get description => _description ?? '';
+  bool get hasDescription => _description != null;
   final ModImplementationBinding? implementation;
   final ModWorldRequirements? worldRequirements;
   final String sceneChangePolicy;
@@ -281,7 +300,7 @@ class ModGamemodeDeclaration {
   Map<String, Object?> toJson() => {
     'id': id,
     'name': name,
-    if (description.isNotEmpty) 'description': description,
+    if (hasDescription) 'description': description,
     if (implementation != null) 'implementation': implementation!.toJson(),
     if (worldRequirements != null)
       'worldRequirements': worldRequirements!.toJson(),
@@ -303,7 +322,7 @@ class ModWorldPolicy {
     return ModWorldPolicy(
       policy: (map['policy'] as String?) ?? '',
       defaultWorldId: (map['default'] as String?) ?? '',
-      allow: _stringList(map['allow']),
+      allow: _contributionStrings(map['allow']),
       allowPlayerOverride: map['allowPlayerOverride'] as bool?,
     );
   }
@@ -341,20 +360,20 @@ class ModLaunchTargetDeclaration {
   const ModLaunchTargetDeclaration({
     this.id = '',
     this.title = '',
-    this.description = '',
+    String? description,
     this.sortKey,
     this.gamemode = '',
     this.world,
     this.transition = '',
-  });
+  }) : _description = description;
 
   factory ModLaunchTargetDeclaration.fromJson(Object? json) {
     final map = json is Map ? json : const <String, Object?>{};
     return ModLaunchTargetDeclaration(
       id: (map['id'] as String?) ?? '',
       title: (map['title'] as String?) ?? '',
-      description: (map['description'] as String?) ?? '',
-      sortKey: (map['sortKey'] as num?)?.toInt(),
+      description: map['description'] as String?,
+      sortKey: _contributionSortKey(map['sortKey']),
       gamemode: (map['gamemode'] as String?) ?? '',
       world: map.containsKey('world')
           ? ModWorldPolicy.fromJson(map['world'])
@@ -373,7 +392,10 @@ class ModLaunchTargetDeclaration {
 
   final String id;
   final String title;
-  final String description;
+  final String? _description;
+
+  String get description => _description ?? '';
+  bool get hasDescription => _description != null;
 
   /// Null means absent, which is not the same as an explicit 0.
   final int? sortKey;
@@ -384,7 +406,7 @@ class ModLaunchTargetDeclaration {
   Map<String, Object?> toJson() => {
     'id': id,
     'title': title,
-    if (description.isNotEmpty) 'description': description,
+    if (hasDescription) 'description': description,
     if (sortKey != null) 'sortKey': sortKey,
     'gamemode': gamemode,
     if (world != null) 'world': world!.toJson(),
@@ -408,4 +430,22 @@ List<T> _declarationList<T>(Object? value, T Function(Object?) read) {
     return const [];
   }
   return List.unmodifiable(value.map(read));
+}
+
+List<String> _contributionStrings(Object? value) => value == null
+    ? const []
+    : List<String>.unmodifiable((value as List).cast<String>());
+
+int? _contributionSortKey(Object? value) {
+  if (value == null) return null;
+  if (value is! num ||
+      !value.isFinite ||
+      value != value.truncateToDouble() ||
+      value < 0 ||
+      value > 999) {
+    throw const FormatException(
+      'contributions sortKey must be an integer from 0 to 999.',
+    );
+  }
+  return value.toInt();
 }

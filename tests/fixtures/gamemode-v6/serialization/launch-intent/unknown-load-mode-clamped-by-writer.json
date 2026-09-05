@@ -17,7 +17,15 @@
     "allowAdditiveFallback": true
   },
   "expect": {
-    "csharp": { "outcome": "accept" },
-    "dart": { "outcome": "accept" }
+    "csharp": {
+      "outcome": "accept"
+    },
+    "dart": {
+      "outcome": "accept"
+    }
+  },
+  "operations": {
+    "csharp": "read-intent",
+    "dart": "write-intent"
   }
 }

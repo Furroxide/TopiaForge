@@ -278,7 +278,7 @@ List<String> _manifestStructuralIssues(Map<String, Object?> json) {
       'worlds, gamemodes or launch targets.',
     );
   }
-  if (isV6) {
+  if (isV6 && json.containsKey('contributions')) {
     _contributionStructuralIssues(json['contributions'], issues);
   }
 

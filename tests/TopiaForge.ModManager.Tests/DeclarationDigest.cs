@@ -1,110 +1,80 @@
+using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
+using System.Text.Json;
 using TopiaForge.ModManager.Core;
 
 namespace TopiaForge.ModManager.Tests
 {
-    /// <summary>
-    /// A flat, line-per-declaration rendering of what a reader actually parsed out of a V6 manifest.
-    /// <para>
-    /// The existing shared-manifest corpus compares only the accept/reject verdict, so two readers can
-    /// agree a manifest is valid while disagreeing about what it said. That is not a hypothetical: an
-    /// absent <c>openToAnyCompatible</c> and an explicit <c>false</c> mean different things, and
-    /// DataContractJsonSerializer builds instances with GetUninitializedObject, so a non-nullable
-    /// property would collapse the two with nothing to show for it.
-    /// </para>
-    /// <para>
-    /// So absence is spelled out as the literal <c>absent</c> and an empty value as <c>-</c>, and the
-    /// Dart runner renders the identical strings in
-    /// <c>packages/launcher_domain/test/gamemode_contract_conformance_cases.dart</c>. A disagreement
-    /// shows up as a diff of two readable lines rather than as a boolean that stayed true.
-    /// </para>
-    /// </summary>
+    /// <summary>Every contribution field, with null for absence and JSON values kept distinct.</summary>
     internal static class DeclarationDigest
     {
-        public const string Absent = "absent";
-        public const string Empty = "-";
-
-        public static readonly string[] Kinds = { "worlds", "gamemodes", "launchTargets" };
-
-        public static Dictionary<string, List<string>> Of(ModManifest manifest)
-        {
-            var contributions = manifest.Contributions;
-            return new Dictionary<string, List<string>>
+        private static readonly IReadOnlyDictionary<string, string[]> Fields =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
-                ["worlds"] = (contributions?.Worlds ?? new List<ModWorldDeclaration>())
-                    .Select(World).ToList(),
-                ["gamemodes"] = (contributions?.Gamemodes ?? new List<ModGamemodeDeclaration>())
-                    .Select(Gamemode).ToList(),
-                ["launchTargets"] = (contributions?.LaunchTargets ?? new List<ModLaunchTargetDeclaration>())
-                    .Select(LaunchTarget).ToList()
+                ["worlds"] = new[] { "id", "name", "description", "content", "transitions", "spawn", "openTo", "openToAnyCompatible" },
+                ["gamemodes"] = new[] { "id", "name", "description", "implementation", "worldRequirements", "sceneChangePolicy" },
+                ["launchTargets"] = new[] { "id", "title", "description", "sortKey", "gamemode", "world", "transition" },
+                ["content"] = new[] { "kind", "bundle", "prefab", "implementation", "sceneName" },
+                ["implementation"] = new[] { "assembly", "type" },
+                ["spawn"] = new[] { "kind", "markerName" },
+                ["worldRequirements"] = new[] { "transitions", "spawn" },
+                ["world"] = new[] { "policy", "default", "allow", "allowPlayerOverride" }
             };
-        }
 
-        private static string World(ModWorldDeclaration world)
+        public static JsonElement Of(ModManifest manifest)
         {
-            var content = world.Content;
-            return Join(
-                world.Id,
-                Text(content?.Kind),
-                Text(content?.Bundle),
-                Text(content?.Prefab),
-                Binding(content?.Implementation),
-                Text(content?.SceneName),
-                List(world.Transitions),
-                world.Spawn == null
-                    ? Empty
-                    : Text(world.Spawn.Kind) + ">" + Text(world.Spawn.MarkerName),
-                List(world.OpenTo),
-                Flag(world.OpenToAnyCompatible));
+            using var document = JsonDocument.Parse(manifest.Contributions == null
+                ? "{}" : JsonUtil.Serialize(manifest.Contributions));
+            var result = new Dictionary<string, object?>();
+            foreach (var kind in new[] { "worlds", "gamemodes", "launchTargets" })
+            {
+                result[kind] = document.RootElement.TryGetProperty(kind, out var entries)
+                    ? entries.EnumerateArray().Select(entry => Normalize(entry, kind)).ToArray()
+                    : Array.Empty<object>();
+            }
+            using var normalized = JsonDocument.Parse(JsonSerializer.Serialize(result));
+            return normalized.RootElement.Clone();
         }
 
-        private static string Gamemode(ModGamemodeDeclaration gamemode)
+        private static object Normalize(JsonElement source, string kind)
         {
-            var requirements = gamemode.WorldRequirements;
-            return Join(
-                gamemode.Id,
-                Binding(gamemode.Implementation),
-                requirements == null
-                    ? Empty
-                    : List(requirements.Transitions) + ">" + Text(requirements.Spawn),
-                Text(gamemode.SceneChangePolicy));
+            var result = new Dictionary<string, object?>();
+            foreach (var property in source.EnumerateObject())
+            {
+                if (!Fields[kind].Contains(property.Name, StringComparer.Ordinal))
+                    throw new InvalidOperationException("Normalization is missing contribution field " + kind + "." + property.Name);
+            }
+            foreach (var field in Fields[kind])
+            {
+                result[field] = !source.TryGetProperty(field, out var value) ? null
+                    : value.ValueKind == JsonValueKind.Object && Fields.ContainsKey(field)
+                        ? Normalize(value, field) : value.Clone();
+            }
+            return result;
         }
 
-        private static string LaunchTarget(ModLaunchTargetDeclaration target)
+        public static bool Equal(JsonElement left, JsonElement right)
         {
-            var policy = target.World;
-            return Join(
-                target.Id,
-                Text(target.Gamemode),
-                Text(policy?.Policy),
-                Text(policy?.Default),
-                List(policy?.Allow),
-                Flag(policy?.AllowPlayerOverride),
-                Text(target.Transition),
-                target.SortKey == null
-                    ? Absent
-                    : target.SortKey.Value.ToString(CultureInfo.InvariantCulture));
+            if (left.ValueKind != right.ValueKind) return false;
+            if (left.ValueKind == JsonValueKind.Object)
+            {
+                var properties = left.EnumerateObject().ToArray();
+                return properties.Length == right.EnumerateObject().Count()
+                    && properties.All(property => right.TryGetProperty(property.Name, out var value)
+                        && Equal(property.Value, value));
+            }
+            if (left.ValueKind == JsonValueKind.Array)
+            {
+                var a = left.EnumerateArray().ToArray();
+                var b = right.EnumerateArray().ToArray();
+                return a.Length == b.Length && a.Zip(b, Equal).All(equal => equal);
+            }
+            if (left.ValueKind == JsonValueKind.Number)
+                return left.GetDecimal() == right.GetDecimal();
+            if (left.ValueKind == JsonValueKind.String)
+                return left.GetString() == right.GetString();
+            return true;
         }
-
-        /// <summary>
-        /// An absent binding is <c>-</c>; a present one is always <c>assembly&gt;type</c>, with an empty
-        /// assembly meaning the manifest's own entryAssembly. Rendering the separator either way keeps
-        /// "no binding" and "a binding that defaults its assembly" distinguishable.
-        /// </summary>
-        private static string Binding(ModImplementationBinding? binding) =>
-            binding == null ? Empty : binding.Assembly + ">" + binding.Type;
-
-        private static string Flag(bool? value) =>
-            value == null ? Absent : value.Value ? "true" : "false";
-
-        private static string Text(string? value) =>
-            string.IsNullOrEmpty(value) ? Empty : value;
-
-        private static string List(IReadOnlyCollection<string>? values) =>
-            values == null || values.Count == 0 ? Empty : string.Join(",", values);
-
-        private static string Join(params string[] parts) => string.Join("|", parts);
     }
 }

@@ -53,6 +53,7 @@ KNOWN_KINDS = {
         "launch-intent-hostile",
         "manifest-accepts",
         "manifest-rejects",
+        "manifest-model-rejects",
     },
     "schema": set(),
     "resolution": set(),
@@ -71,7 +72,7 @@ def _load_case(path: Path) -> dict:
     relative = _relative(path)
     try:
         case = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as error:
+    except (json.JSONDecodeError, UnicodeError) as error:
         raise FixtureIndexError(f"{relative} is not valid JSON: {error}") from error
     if not isinstance(case, dict):
         raise FixtureIndexError(f"{relative} must be a JSON object.")
@@ -88,6 +89,8 @@ def _load_case(path: Path) -> dict:
         )
 
     channel = relative.split("/", 1)[0]
+    if "/" not in relative or channel not in CHANNEL_RUNNERS:
+        raise FixtureIndexError(f"{relative} is outside a known channel directory.")
     if case["channel"] != channel:
         raise FixtureIndexError(
             f"{relative} declares channel '{case['channel']}' but sits under "
@@ -103,7 +106,9 @@ def _load_case(path: Path) -> dict:
         )
 
     expected = set(CHANNEL_RUNNERS[channel])
-    declared = set(case.get("expect", {}))
+    if not isinstance(case.get("expect"), dict):
+        raise FixtureIndexError(f"{relative} requires an expectation object.")
+    declared = set(case["expect"])
     if declared != expected:
         raise FixtureIndexError(
             f"{relative} declares expectations for {sorted(declared)} but the "
@@ -111,6 +116,42 @@ def _load_case(path: Path) -> dict:
             "runner states its own outcome; there is no way to omit one."
         )
 
+    for runner, expectation in case["expect"].items():
+        if not isinstance(expectation, dict) or expectation.get("outcome") not in ("accept", "reject"):
+            raise FixtureIndexError(f"{relative} requires an accept/reject outcome for {runner}.")
+        if expectation["outcome"] == "reject":
+            codes = expectation.get("errorCodes")
+            if not isinstance(codes, list) or not codes or any(not isinstance(code, str) or not code for code in codes):
+                raise FixtureIndexError(f"{relative} requires nonempty errorCodes for {runner}.")
+            if len(codes) != len(set(codes)):
+                raise FixtureIndexError(f"{relative} repeats errorCodes for {runner}.")
+        elif "errorCodes" in expectation:
+            raise FixtureIndexError(f"{relative} cannot accept with errorCodes for {runner}.")
+    directory = "manifest" if case["kind"].startswith("manifest-") else "launch-intent"
+    if not relative.startswith(f"{channel}/{directory}/"):
+        raise FixtureIndexError(f"{relative} is misplaced; its kind belongs under {channel}/{directory}/.")
+
+    mutation = case.get("modelMutation")
+    mutations = {"empty-contributions", "missing-content", "missing-spawn", "missing-implementation", "missing-world", "empty-requirements"}
+    if case["kind"] == "manifest-model-rejects":
+        if mutation not in mutations:
+            raise FixtureIndexError(f"{relative} requires a known modelMutation.")
+    elif "modelMutation" in case:
+        raise FixtureIndexError(f"{relative} cannot change a model in a reader operation.")
+
+    if case["kind"].startswith("manifest-"):
+        if case.get("schemaOutcome") not in ("accept", "reject"):
+            raise FixtureIndexError(f"{relative} requires schemaOutcome for its manifest payload.")
+        if case["expect"]["csharp"] != case["expect"]["dart"]:
+            raise FixtureIndexError(f"{relative} has divergent same-operation expectations.")
+        expectation = case["expect"]["csharp"]
+        if expectation.get("outcome") == "accept" and not isinstance(expectation.get("normalized"), dict):
+            raise FixtureIndexError(f"{relative} requires a structured normalized result.")
+        if "divergenceReason" in case:
+            raise FixtureIndexError(f"{relative} cannot exempt manifest-reader parity.")
+    else:
+        if case.get("operations") != {"csharp": "read-intent", "dart": "write-intent"}:
+            raise FixtureIndexError(f"{relative} requires explicit wire operations.")
     return case
 
 
@@ -123,27 +164,22 @@ def build_index() -> dict:
 
     cases = []
     seen_ids: dict[str, str] = {}
-    for channel in sorted(CHANNEL_RUNNERS):
-        channel_root = FIXTURE_ROOT / channel
-        if not channel_root.is_dir():
+    for path in sorted(FIXTURE_ROOT.rglob("*")):
+        if not path.is_file():
             continue
-        for path in sorted(channel_root.rglob("*.json")):
-            case = _load_case(path)
-            relative = _relative(path)
-            if case["id"] in seen_ids:
-                raise FixtureIndexError(
-                    f"{relative} reuses id '{case['id']}', already used by "
-                    f"{seen_ids[case['id']]}. Ids are unique across the tree."
-                )
-            seen_ids[case["id"]] = relative
-            cases.append(
-                {
-                    "id": case["id"],
-                    "channel": case["channel"],
-                    "kind": case["kind"],
-                    "path": relative,
-                }
+        if path.suffix != ".json":
+            raise FixtureIndexError(f"{_relative(path)} is an unexpected non-JSON fixture file.")
+        if path.parent == FIXTURE_ROOT and path.name in ("index.json", "fixture.schema.json"):
+            continue
+        case = _load_case(path)
+        relative = _relative(path)
+        if case["id"] in seen_ids:
+            raise FixtureIndexError(
+                f"{relative} reuses id '{case['id']}', already used by "
+                f"{seen_ids[case['id']]}. Ids are unique across the tree."
             )
+        seen_ids[case["id"]] = relative
+        cases.append({key: case[key] for key in ("id", "channel", "kind")} | {"path": relative})
 
     if not cases:
         raise FixtureIndexError(

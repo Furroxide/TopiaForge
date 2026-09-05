@@ -34,32 +34,20 @@ void _validateDeclarationReference(
     );
     return;
   }
-  if (_isLocalReference(manifest, reference)) {
+  final owners = _declarationReferenceOwners(manifest, reference);
+  if (owners.length > 1) {
+    error('$path names $reference, which multiple packages claim to own.');
     return;
   }
-
-  final lowered = reference.toLowerCase();
-  final owners =
-      manifest.dependencies
-          .map((dependency) => dependency.id)
-          .where((id) => lowered.startsWith('${id.toLowerCase()}.'))
-          .toList()
-        ..sort((left, right) => right.length.compareTo(left.length));
-  if (owners.isEmpty) {
-    final optional = manifest.optionalDependencies.any(
-      (dependency) => lowered.startsWith('${dependency.id.toLowerCase()}.'),
-    );
-    final tail = optional
-        ? '. An optional dependency cannot own a reference: a launch that '
-              'resolves only when it happens to be installed is a launch that '
-              'fails without warning.'
-        : '.';
-    error('$path names $reference, which no required dependency owns$tail');
+  if (owners.isNotEmpty &&
+      (owners.single.local || owners.single.requiredDependency)) {
     return;
   }
-  if (owners.length > 1 && owners[0].length == owners[1].length) {
-    error('$path names $reference, which two dependencies both claim to own.');
-  }
+  final tail = owners.isNotEmpty
+      ? '. Its longest matching owner is an optional dependency, which cannot '
+            'satisfy a required declaration reference.'
+      : '.';
+  error('$path names $reference, which no required dependency owns$tail');
 }
 
 /// R7's last clause. A discovered family is a prefix, not a world: nothing
@@ -69,7 +57,7 @@ void _validateWorldReference(
   ModManifest manifest,
   String reference,
   String path,
-  Set<String> owned,
+  Set<String> ownedWorlds,
   Set<String> discovered,
   void Function(String) error,
 ) {
@@ -79,7 +67,8 @@ void _validateWorldReference(
   }
 
   final lowered = reference.toLowerCase();
-  for (final family in discovered) {
+  final isLocal = _isLocalReference(manifest, reference);
+  for (final family in isLocal ? discovered : const <String>{}) {
     if (lowered == family || lowered.startsWith('$family.')) {
       error(
         '$path names $family, a discovered world family. Its instances only '
@@ -89,8 +78,8 @@ void _validateWorldReference(
     }
   }
 
-  if (_isLocalReference(manifest, reference) &&
-      !owned.contains(lowered) &&
+  if (isLocal &&
+      !ownedWorlds.contains(lowered) &&
       _isValidDeclarationId(reference)) {
     error(
       '$path names an id inside this package that this manifest does not '
@@ -177,15 +166,47 @@ void _contributionText(
   int maximum,
   void Function(String) error,
 ) {
-  if (value.length < minimum || value.length > maximum) {
+  final length = value.runes.length;
+  if (length < minimum || length > maximum) {
     error('$path must contain between $minimum and $maximum characters.');
   }
 }
 
-bool _isLocalReference(ModManifest manifest, String reference) =>
-    reference.toLowerCase().startsWith('${manifest.id.toLowerCase()}.');
+// Every reference and local-kind check uses the same owner selection. A longer
+// optional owner is still an owner: never fall through it to a shorter package.
+List<({String id, bool local, bool requiredDependency})>
+_declarationReferenceOwners(ModManifest manifest, String reference) {
+  final lowered = reference.toLowerCase();
+  final candidates =
+      <({String id, bool local, bool requiredDependency})>[
+            (id: manifest.id, local: true, requiredDependency: false),
+            for (final dependency in manifest.dependencies)
+              (id: dependency.id, local: false, requiredDependency: true),
+            for (final dependency in manifest.optionalDependencies)
+              (id: dependency.id, local: false, requiredDependency: false),
+          ]
+          .where((owner) => lowered.startsWith('${owner.id.toLowerCase()}.'))
+          .toList()
+        ..sort((left, right) => right.id.length.compareTo(left.id.length));
+  if (candidates.isEmpty) return const [];
+  final longest = candidates.first.id.length;
+  return candidates
+      .where((owner) => owner.id.length == longest)
+      .toList(growable: false);
+}
+
+bool _isLocalReference(ModManifest manifest, String reference) {
+  final owners = _declarationReferenceOwners(manifest, reference);
+  return owners.length == 1 && owners.single.local;
+}
 
 bool _isValidDeclarationId(String id) {
+  if (!_isDeclarationIdShape(id)) return false;
+  final normalized = id.toLowerCase();
+  return !_retiredEcosystemIdPrefixes.any(normalized.startsWith);
+}
+
+bool _isDeclarationIdShape(String id) {
   if (id.length < _minDeclarationIdLength ||
       id.length > _maxDeclarationIdLength) {
     return false;
@@ -201,11 +222,7 @@ bool _isValidDeclarationId(String id) {
       return false;
     }
   }
-  // A declaration id is namespaced under its own package, but a cross-package
-  // reference is not, so the retired-ecosystem rule applies here as well as to
-  // package names.
-  final normalized = id.toLowerCase();
-  return !_retiredEcosystemIdPrefixes.any(normalized.startsWith);
+  return true;
 }
 
 bool _isValidTypeName(String type) {

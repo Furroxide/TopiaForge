@@ -97,14 +97,86 @@
       "outcome": "accept",
       "normalized": {
         "worlds": [
-          "io.github.furroxide.topiaforge.fixture.arena|bundle|Content/arena.bundle|Arena|-|-|scene-replacement,additive-arena|authored-marker>Start|-|absent",
-          "io.github.furroxide.topiaforge.fixture.other|bundle|Content/arena.bundle|Arena|-|-|scene-replacement|authored-marker>Start|-|absent"
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.arena",
+            "name": "Arena",
+            "description": null,
+            "content": {
+              "kind": "bundle",
+              "bundle": "Content/arena.bundle",
+              "prefab": "Arena",
+              "implementation": null,
+              "sceneName": null
+            },
+            "transitions": [
+              "scene-replacement",
+              "additive-arena"
+            ],
+            "spawn": {
+              "kind": "authored-marker",
+              "markerName": "Start"
+            },
+            "openTo": null,
+            "openToAnyCompatible": null
+          },
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.other",
+            "name": "Other Arena",
+            "description": null,
+            "content": {
+              "kind": "bundle",
+              "bundle": "Content/arena.bundle",
+              "prefab": "Arena",
+              "implementation": null,
+              "sceneName": null
+            },
+            "transitions": [
+              "scene-replacement"
+            ],
+            "spawn": {
+              "kind": "authored-marker",
+              "markerName": "Start"
+            },
+            "openTo": null,
+            "openToAnyCompatible": null
+          }
         ],
         "gamemodes": [
-          "io.github.furroxide.topiaforge.fixture.survival|>Fixture.SurvivalGamemode|scene-replacement>authored-marker|end-session"
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.survival",
+            "name": "Survival",
+            "description": null,
+            "implementation": {
+              "assembly": null,
+              "type": "Fixture.SurvivalGamemode"
+            },
+            "worldRequirements": {
+              "transitions": [
+                "scene-replacement"
+              ],
+              "spawn": "authored-marker"
+            },
+            "sceneChangePolicy": "end-session"
+          }
         ],
         "launchTargets": [
-          "io.github.furroxide.topiaforge.fixture.play|io.github.furroxide.topiaforge.fixture.survival|list|io.github.furroxide.topiaforge.fixture.arena|io.github.furroxide.topiaforge.fixture.arena,io.github.furroxide.topiaforge.fixture.other|true|scene-replacement|10"
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.play",
+            "title": "Play",
+            "description": null,
+            "sortKey": 10,
+            "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+            "world": {
+              "policy": "list",
+              "default": "io.github.furroxide.topiaforge.fixture.arena",
+              "allow": [
+                "io.github.furroxide.topiaforge.fixture.arena",
+                "io.github.furroxide.topiaforge.fixture.other"
+              ],
+              "allowPlayerOverride": true
+            },
+            "transition": "scene-replacement"
+          }
         ]
       }
     },
@@ -112,16 +184,89 @@
       "outcome": "accept",
       "normalized": {
         "worlds": [
-          "io.github.furroxide.topiaforge.fixture.arena|bundle|Content/arena.bundle|Arena|-|-|scene-replacement,additive-arena|authored-marker>Start|-|absent",
-          "io.github.furroxide.topiaforge.fixture.other|bundle|Content/arena.bundle|Arena|-|-|scene-replacement|authored-marker>Start|-|absent"
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.arena",
+            "name": "Arena",
+            "description": null,
+            "content": {
+              "kind": "bundle",
+              "bundle": "Content/arena.bundle",
+              "prefab": "Arena",
+              "implementation": null,
+              "sceneName": null
+            },
+            "transitions": [
+              "scene-replacement",
+              "additive-arena"
+            ],
+            "spawn": {
+              "kind": "authored-marker",
+              "markerName": "Start"
+            },
+            "openTo": null,
+            "openToAnyCompatible": null
+          },
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.other",
+            "name": "Other Arena",
+            "description": null,
+            "content": {
+              "kind": "bundle",
+              "bundle": "Content/arena.bundle",
+              "prefab": "Arena",
+              "implementation": null,
+              "sceneName": null
+            },
+            "transitions": [
+              "scene-replacement"
+            ],
+            "spawn": {
+              "kind": "authored-marker",
+              "markerName": "Start"
+            },
+            "openTo": null,
+            "openToAnyCompatible": null
+          }
         ],
         "gamemodes": [
-          "io.github.furroxide.topiaforge.fixture.survival|>Fixture.SurvivalGamemode|scene-replacement>authored-marker|end-session"
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.survival",
+            "name": "Survival",
+            "description": null,
+            "implementation": {
+              "assembly": null,
+              "type": "Fixture.SurvivalGamemode"
+            },
+            "worldRequirements": {
+              "transitions": [
+                "scene-replacement"
+              ],
+              "spawn": "authored-marker"
+            },
+            "sceneChangePolicy": "end-session"
+          }
         ],
         "launchTargets": [
-          "io.github.furroxide.topiaforge.fixture.play|io.github.furroxide.topiaforge.fixture.survival|list|io.github.furroxide.topiaforge.fixture.arena|io.github.furroxide.topiaforge.fixture.arena,io.github.furroxide.topiaforge.fixture.other|true|scene-replacement|10"
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.play",
+            "title": "Play",
+            "description": null,
+            "sortKey": 10,
+            "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+            "world": {
+              "policy": "list",
+              "default": "io.github.furroxide.topiaforge.fixture.arena",
+              "allow": [
+                "io.github.furroxide.topiaforge.fixture.arena",
+                "io.github.furroxide.topiaforge.fixture.other"
+              ],
+              "allowPlayerOverride": true
+            },
+            "transition": "scene-replacement"
+          }
         ]
       }
     }
-  }
+  },
+  "schemaOutcome": "accept"
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 namespace TopiaForge.ModManager.Core
@@ -46,6 +47,16 @@ namespace TopiaForge.ModManager.Core
                 return;
             }
 
+            try
+            {
+                ModManifestJson.ValidateContributionModel(contributions);
+            }
+            catch (InvalidDataException exception)
+            {
+                errors.Add(exception.Message);
+                return;
+            }
+
             // Declaring a launch surface means owning worlds at runtime, and world-service is the
             // capability that discloses it. The schema says this with `contains`; the manager would
             // not know it otherwise.
@@ -60,7 +71,9 @@ namespace TopiaForge.ModManager.Core
             ValidateCount(contributions.Gamemodes.Count, "contributions.gamemodes", 16, errors);
             ValidateCount(contributions.LaunchTargets.Count, "contributions.launchTargets", 64, errors);
 
-            var owned = OwnedIds(manifest, errors);
+            OwnedIds(manifest, errors);
+            var ownedWorlds = new HashSet<string>(
+                contributions.Worlds.Select(world => world.Id), StringComparer.OrdinalIgnoreCase);
             var discovered = new HashSet<string>(
                 contributions.Worlds
                     .Where(world => world.Content != null
@@ -85,14 +98,14 @@ namespace TopiaForge.ModManager.Core
                     manifest,
                     contributions.LaunchTargets[index],
                     "contributions.launchTargets[" + index + "]",
-                    owned,
+                    ownedWorlds,
                     discovered,
                     errors);
             }
         }
 
         /// <summary>
-        /// R1 ownership and R2 uniqueness, together because both are about the id alone. An id must be
+        /// Declaration ownership and uniqueness, together because both are about the id alone. An id must be
         /// namespaced under the declaring package and strictly longer than that prefix, so a package
         /// can never declare something in a namespace it does not own -- and <c>id == name</c> is not
         /// a declaration, it is the package.
@@ -112,12 +125,11 @@ namespace TopiaForge.ModManager.Core
                     continue;
                 }
 
-                if (!declaration.Id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
-                    || declaration.Id.Length <= prefix.Length)
+                if (!IsLocal(manifest, declaration.Id) || declaration.Id.Length <= prefix.Length)
                 {
                     errors.Add(
-                        path + " must be namespaced under this package: it has to start with '" +
-                        prefix + "' and name something beyond it.");
+                        path + " must belong to this package: it has to start with '" +
+                        prefix + "', name something beyond it, and not be owned by a longer dependency namespace.");
                     continue;
                 }
 
@@ -157,7 +169,7 @@ namespace TopiaForge.ModManager.Core
                 {
                     ValidateText(spawn.MarkerName, path + ".spawn.markerName", 1, 128, errors);
                 }
-                else if (spawn.MarkerName.Length > 0)
+                else if (spawn.MarkerName != null)
                 {
                     errors.Add(
                         path + ".spawn.markerName only means something for an authored-marker spawn.");
@@ -166,21 +178,27 @@ namespace TopiaForge.ModManager.Core
 
             // A world either names the gamemodes it consents to or consents to all compatible ones.
             // Saying both leaves the narrower list looking authoritative when it is not.
-            if (world.OpenToAnyCompatible == true && world.OpenTo.Count > 0)
+            if (world.OpenToAnyCompatible == true && world.OpenTo != null)
             {
                 errors.Add(
                     path + ".openTo cannot be listed alongside openToAnyCompatible: the list would " +
                     "read as a limit it is not.");
             }
 
-            if (world.OpenTo.Count > 32)
+            if (world.OpenTo?.Count > 32)
             {
                 errors.Add(path + ".openTo cannot contain more than 32 entries.");
             }
 
-            foreach (var consent in world.OpenTo)
+            foreach (var consent in world.OpenTo ?? Enumerable.Empty<string>())
             {
                 ValidateReference(manifest, consent, path + ".openTo", errors);
+                if (IsValidDeclarationId(consent) && IsLocal(manifest, consent)
+                    && !manifest.Contributions!.Gamemodes.Any(mode =>
+                        string.Equals(mode.Id, consent, StringComparison.OrdinalIgnoreCase)))
+                {
+                    errors.Add(path + ".openTo names a gamemode inside this package that this manifest does not declare.");
+                }
             }
         }
 
@@ -212,9 +230,9 @@ namespace TopiaForge.ModManager.Core
             }
 
             var present = new List<string>();
-            if (content.Bundle.Length > 0) present.Add("bundle");
-            if (content.Prefab.Length > 0) present.Add("prefab");
-            if (content.SceneName.Length > 0) present.Add("sceneName");
+            if (content.Bundle != null) present.Add("bundle");
+            if (content.Prefab != null) present.Add("prefab");
+            if (content.SceneName != null) present.Add("sceneName");
             if (content.Implementation != null) present.Add("implementation");
 
             foreach (var field in required.Where(field => !present.Contains(field)))
@@ -227,9 +245,9 @@ namespace TopiaForge.ModManager.Core
                 errors.Add(path + " of kind " + content.Kind + " cannot also carry " + field + ".");
             }
 
-            ValidateText(content.Prefab, path + ".prefab", 0, 512, errors);
-            ValidateText(content.SceneName, path + ".sceneName", 0, 128, errors);
-            if (content.Bundle.Length > 0 && !IsPortablePath(content.Bundle))
+            if (content.Prefab != null) ValidateText(content.Prefab, path + ".prefab", 1, 512, errors);
+            if (content.SceneName != null) ValidateText(content.SceneName, path + ".sceneName", 1, 128, errors);
+            if (content.Bundle != null && !IsPortablePath(content.Bundle))
             {
                 errors.Add(path + ".bundle must be a safe relative path inside the package.");
             }
@@ -253,7 +271,7 @@ namespace TopiaForge.ModManager.Core
                 ValidateBinding(manifest, gamemode.Implementation, path + ".implementation", errors);
             }
 
-            if (gamemode.SceneChangePolicy.Length > 0
+            if (gamemode.SceneChangePolicy != null
                 && gamemode.SceneChangePolicy != ModGamemodeDeclaration.EndSessionPolicy
                 && gamemode.SceneChangePolicy != ModGamemodeDeclaration.KeepControllerPolicy)
             {
@@ -272,7 +290,7 @@ namespace TopiaForge.ModManager.Core
                     requirements.Transitions, path + ".worldRequirements.transitions", required: false, errors);
             }
 
-            if (requirements.Spawn.Length > 0
+            if (requirements.Spawn != null
                 && requirements.Spawn != ModSpawnPolicy.AuthoredMarkerKind
                 && requirements.Spawn != ModWorldRequirements.AnySpawn)
             {
@@ -295,7 +313,7 @@ namespace TopiaForge.ModManager.Core
                 errors.Add(path + ".sortKey must be between 0 and 999.");
             }
 
-            if (target.Transition.Length > 0
+            if (target.Transition != null
                 && target.Transition != ModLaunchTargetDeclaration.AutoTransition
                 && target.Transition != ModLaunchTargetDeclaration.PlayerChoiceTransition
                 && target.Transition != ModTransitions.SceneReplacement
@@ -370,7 +388,7 @@ namespace TopiaForge.ModManager.Core
         }
 
         /// <summary>
-        /// R10, and only where it can actually be checked. When the world and the gamemode are declared
+        /// Pairing compatibility, only where it can actually be checked. When the world and the gamemode are declared
         /// in different packages this manifest cannot see both sides, so compatibility is the
         /// resolver's job; checking it here would pass every first-party pairing without looking.
         /// </summary>
@@ -380,6 +398,12 @@ namespace TopiaForge.ModManager.Core
             string path,
             List<string> errors)
         {
+            if (target.World == null || !IsLocal(manifest, target.World.Default)
+                || !IsLocal(manifest, target.Gamemode))
+            {
+                return;
+            }
+
             var contributions = manifest.Contributions!;
             var world = contributions.Worlds.FirstOrDefault(item =>
                 string.Equals(item.Id, target.World?.Default, StringComparison.OrdinalIgnoreCase));
@@ -409,7 +433,7 @@ namespace TopiaForge.ModManager.Core
                 errors.Add(
                     path + ".world.default names a world that shares no transition with " + gamemode.Id + ".");
             }
-            else if (target.Transition.Length > 0
+            else if (target.Transition != null
                 && target.Transition != ModLaunchTargetDeclaration.AutoTransition
                 && target.Transition != ModLaunchTargetDeclaration.PlayerChoiceTransition
                 && !offered.Contains(target.Transition, StringComparer.Ordinal))
@@ -420,7 +444,7 @@ namespace TopiaForge.ModManager.Core
         }
 
         /// <summary>
-        /// R7's last clause. A discovered family is a prefix, not a world: nothing under it exists
+        /// Static-world references. A discovered family is a prefix, not a world: nothing under it exists
         /// until the game has run and reported it, so a policy that names one is naming content that
         /// may never appear.
         /// </summary>
@@ -433,7 +457,7 @@ namespace TopiaForge.ModManager.Core
             List<string> errors)
         {
             ValidateReference(manifest, reference, path, errors);
-            if (reference.Length == 0)
+            if (reference.Length == 0 || !IsLocal(manifest, reference))
             {
                 return;
             }
@@ -459,7 +483,7 @@ namespace TopiaForge.ModManager.Core
         }
 
         /// <summary>
-        /// R4 and R11. A reference this package does not own must be prefix-owned by a package it
+        /// Required references and ownership. A reference this package does not own must be owned by a package it
         /// requires -- optionalDependencies never qualifies, because a reference that resolves only
         /// sometimes is a launch that fails only sometimes. Ownership goes to the longest matching
         /// name, so a package cannot squat inside a longer-named one's namespace.
@@ -484,35 +508,69 @@ namespace TopiaForge.ModManager.Core
                 return;
             }
 
-            if (IsLocal(manifest, reference))
+            var owners = ReferenceOwners(manifest, reference);
+            if (owners.Count > 1 && owners[0].Id.Length == owners[1].Id.Length)
+            {
+                errors.Add(path + " names " + reference + ", which two packages both claim to own.");
+                return;
+            }
+
+            if (owners.Count > 0 && (owners[0].Local || owners[0].Required))
             {
                 return;
             }
 
-            var owners = manifest.Dependencies.Keys
-                .Where(key => reference.StartsWith(key + ".", StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(key => key.Length)
-                .ToList();
-            if (owners.Count == 0)
-            {
-                var optional = manifest.OptionalDependencies.Keys.Any(
-                    key => reference.StartsWith(key + ".", StringComparison.OrdinalIgnoreCase));
-                errors.Add(
-                    path + " names " + reference + ", which no required dependency owns" +
-                    (optional
-                        ? ". An optional dependency cannot own a reference: a launch that resolves only when it happens to be installed is a launch that fails without warning."
-                        : "."));
-                return;
-            }
-
-            if (owners.Count > 1 && owners[0].Length == owners[1].Length)
-            {
-                errors.Add(path + " names " + reference + ", which two dependencies both claim to own.");
-            }
+            errors.Add(
+                path + " names " + reference + ", which no required dependency owns" +
+                (owners.Count > 0
+                    ? ". An optional dependency cannot own a reference: a launch that resolves only when it happens to be installed is a launch that fails without warning."
+                    : "."));
         }
 
-        private static bool IsLocal(ModManifest manifest, string reference) =>
-            reference.StartsWith(manifest.Id + ".", StringComparison.OrdinalIgnoreCase);
+        private static bool IsLocal(ModManifest manifest, string reference)
+        {
+            var owners = ReferenceOwners(manifest, reference);
+            return owners.Count > 0 && owners[0].Local
+                && (owners.Count == 1 || owners[1].Id.Length < owners[0].Id.Length);
+        }
+
+        private static List<ReferenceOwner> ReferenceOwners(ModManifest manifest, string reference)
+        {
+            var owners = new List<ReferenceOwner>();
+            if (reference.StartsWith(manifest.Id + ".", StringComparison.OrdinalIgnoreCase))
+            {
+                owners.Add(new ReferenceOwner(manifest.Id, local: true, required: false));
+            }
+
+            foreach (var id in manifest.Dependencies.Keys)
+            {
+                if (reference.StartsWith(id + ".", StringComparison.OrdinalIgnoreCase))
+                    owners.Add(new ReferenceOwner(id, local: false, required: true));
+            }
+
+            foreach (var id in manifest.OptionalDependencies.Keys)
+            {
+                if (reference.StartsWith(id + ".", StringComparison.OrdinalIgnoreCase))
+                    owners.Add(new ReferenceOwner(id, local: false, required: false));
+            }
+
+            return owners.OrderByDescending(owner => owner.Id.Length)
+                .ThenBy(owner => owner.Id, StringComparer.Ordinal).ToList();
+        }
+
+        private sealed class ReferenceOwner
+        {
+            public ReferenceOwner(string id, bool local, bool required)
+            {
+                Id = id;
+                Local = local;
+                Required = required;
+            }
+
+            public string Id { get; }
+            public bool Local { get; }
+            public bool Required { get; }
+        }
 
         private static void ValidateBinding(
             ModManifest manifest,
@@ -527,7 +585,7 @@ namespace TopiaForge.ModManager.Core
                     "qualifier and no nested-type syntax.");
             }
 
-            if (binding.Assembly.Length == 0)
+            if (binding.Assembly == null)
             {
                 return;
             }
@@ -539,7 +597,7 @@ namespace TopiaForge.ModManager.Core
                 return;
             }
 
-            // R3. A binding may only point at bytes the installer verified, so naming an assembly the
+            // Binding integrity. A binding may only point at bytes the installer verified, so naming an assembly the
             // manifest does not hash would let a declaration bind to something never checked.
             if (!manifest.Hashes.Keys.Any(key => string.Equals(key, binding.Assembly, StringComparison.OrdinalIgnoreCase)))
             {
@@ -592,9 +650,9 @@ namespace TopiaForge.ModManager.Core
             }
         }
 
-        private static void ValidateText(string value, string path, int minimum, int maximum, List<string> errors)
+        private static void ValidateText(string? value, string path, int minimum, int maximum, List<string> errors)
         {
-            var length = value?.Length ?? 0;
+            var length = UnicodeScalarLength(value);
             if (length < minimum || length > maximum)
             {
                 errors.Add(path + " must contain between " + minimum + " and " + maximum + " characters.");
@@ -604,7 +662,10 @@ namespace TopiaForge.ModManager.Core
         private static bool IsPortablePath(string path) =>
             PortablePackagePath.TryValidate(path, out _, out _, out _);
 
-        internal static bool IsValidDeclarationId(string id)
+        internal static bool IsValidDeclarationId(string id) =>
+            HasDeclarationIdGrammar(id) && !ManifestValidator.IsRetiredEcosystemId(id);
+
+        internal static bool HasDeclarationIdGrammar(string id)
         {
             if (string.IsNullOrEmpty(id)
                 || id.Length < MinDeclarationIdLength
@@ -613,25 +674,23 @@ namespace TopiaForge.ModManager.Core
                 return false;
             }
 
-            if (!char.IsLetterOrDigit(id[0]))
+            if (!IsAsciiLetterOrDigit(id[0]))
             {
                 return false;
             }
 
             foreach (var character in id)
             {
-                if (!char.IsLetterOrDigit(character) && character != '_' && character != '.' && character != '-')
+                if (!IsAsciiLetterOrDigit(character) && character != '_' && character != '.' && character != '-')
                 {
                     return false;
                 }
             }
 
-            // A declaration id is namespaced under its own package, but a cross-package reference is
-            // not, so the retired-ecosystem rule has to be applied here as well as to package names.
-            return !ManifestValidator.IsRetiredEcosystemId(id);
+            return true;
         }
 
-        private static bool IsValidTypeName(string type)
+        internal static bool IsValidTypeName(string type)
         {
             if (string.IsNullOrEmpty(type) || type.Length < 3 || type.Length > 512)
             {
@@ -646,18 +705,37 @@ namespace TopiaForge.ModManager.Core
 
             foreach (var segment in segments)
             {
-                if (segment.Length == 0 || (!char.IsLetter(segment[0]) && segment[0] != '_'))
+                if (segment.Length == 0 || (!IsAsciiLetter(segment[0]) && segment[0] != '_'))
                 {
                     return false;
                 }
 
-                if (segment.Any(character => !char.IsLetterOrDigit(character) && character != '_'))
+                if (segment.Any(character => !IsAsciiLetterOrDigit(character) && character != '_'))
                 {
                     return false;
                 }
             }
 
             return true;
+        }
+
+        private static bool IsAsciiLetter(char value) =>
+            (value >= 'A' && value <= 'Z') || (value >= 'a' && value <= 'z');
+
+        private static bool IsAsciiLetterOrDigit(char value) =>
+            IsAsciiLetter(value) || (value >= '0' && value <= '9');
+
+        internal static int UnicodeScalarLength(string? value)
+        {
+            if (value == null) return 0;
+            var count = 0;
+            for (var index = 0; index < value.Length; index++, count++)
+            {
+                if (char.IsHighSurrogate(value[index]) && index + 1 < value.Length
+                    && char.IsLowSurrogate(value[index + 1])) index++;
+            }
+
+            return count;
         }
 
         private static IEnumerable<Declaration> AllDeclarations(ModManifest manifest)
