@@ -178,28 +178,36 @@ resolved tuple. Inactive wire V4, progress, separate launch/session outcomes and
 versioned observations have strict shared string-codec fixtures. Runtime binding
 proof is separate from cached observations and must match the loaded profile.
 Exact package identities and literal cross-language digest vectors are checked in
-addition to re-resolution. The final corpus contains 340 shared cases: 149 preserved contract/legacy-wire,
-67 resolution and 124 new transport cases. Both runners execute exact results and
+addition to re-resolution. The corpus contains 353 shared cases: 156 contract/legacy-wire,
+67 resolution and 130 new transport cases. Both runners execute exact results and
 input-order permutations; direct model suites additionally check copied snapshots,
 constructor invariants, 4096/4097 collection limits and fresh binding revalidation.
 These checks do not certify a production launch or live game behavior.
 
-Final local checks on the slice 3 worktree, 5 September 2026:
+A final boundary review reproduced four Dart transport failures: empty discovery
+suffixes were accepted while C# rejected them. Two valid 94-character-family /
+96-character-instance controls passed. The manifest contract also allowed families
+of 95/96 characters, which cannot represent any nonempty-suffix instance within
+96. Six schema/reader/direct-model checks failed before the conditional max94
+repair; static world95/96 and mode/target96 controls remained valid. All twenty
+added checks pass after the fixes. The normative brief now states this reserve.
+
+Local checks on the slice 3 boundary follow-up to `84a7f6d`, 5 September 2026:
 
 | Command or check | Result |
 | --- | --- |
 | Fresh `dotnet build TopiaForge.slnx -c Release` | Passed, zero warnings/errors |
-| Rebuilt `bash tools/verify-csharp-release-surface.sh` | All eleven SDK packages and seven harnesses passed, including 340 C# conformance cases and direct model tests |
+| Rebuilt `bash tools/verify-csharp-release-surface.sh` | All eleven SDK packages and seven harnesses passed, including 353 C# conformance cases and direct model tests |
 | `dotnet format TopiaForge.slnx --verify-no-changes --no-restore` | Passed after formatting owned files and two unchanged local line-ending cases |
-| Full launcher_domain `dart test` | 771 passed, including 559 focused conformance/model checks |
+| Full launcher_domain `dart test` | 791 passed, including 579 conformance/model checks |
 | Full launcher_data / topiaforge_cli `dart test`, verified short Windows PATH | 358 / 227 passed, four expected platform skips in each |
 | Fatal-info analysis in domain/data/CLI | Passed; final full-domain analysis found one missing brace pair, corrected before handoff |
-| Dart format verification across those lib/test/bin trees | 348 files, zero changes |
-| Fixture closure and Python self-tests | 340 cases; 31 self-tests passed |
+| Dart format verification across those lib/test/bin trees | Original three-package check: 348 files; boundary follow-up: 97 domain files, zero changes |
+| Fixture closure and Python self-tests | 353 cases; 31 self-tests passed |
 | Tracked plus new non-generated Dart line audit | 410 files; none over 500 lines |
 | README count, residue, trademark, asset-licence audits | Passed |
 | Markdown links and publication preparation | 124 files; 25 pages and five snippets from three compiled-template sources passed |
-| Full publication and required CI | Pending at this pre-commit local update |
+| Full publication and required CI | Passed at `84a7f6d` in run `33981203036`; boundary follow-up CI pending |
 
 The first seven-harness attempt used the build preceding the final added consent
 alternative regression and failed that case as expected. After the helper repair,
@@ -209,6 +217,32 @@ from `c61d5fc`; local line-ending normalization made the check pass without a
 repository behavior change. Retained local build/format/harness logs use the
 `tf-slice3-*` prefix in the temporary directory; package test logs are ignored under
 `.dart_tool/slice3-*.log`. Exact committed CI evidence will be appended after review.
+
+## Live acceptance isolation prerequisite
+
+Read-only inspection on 5 September 2026 found the installed Unity 6000.0.31f1
+build with Doorstop 4.5.0. Doorstop supports an alternate preloader assembly; the
+installed BepInEx preloader derives its root from that assembly, and
+`ManagerPaths` follows the loader root. This provides a supported route for
+separate loader/manager files, subject to verifying the actual roots at runtime.
+
+It does not isolate Unity native persistent data. The current user has native game
+save and authentication files in LocalLow; only filenames were inspected. No
+supported save-root override was found in the inspected game metadata. CreatorContent
+also reports `persistenceIsolationAvailable: false`. A separate Windows user/session
+or VM is therefore the current viable acceptance arrangement; its availability and
+game compatibility are unverified. No account, save, authentication file or game
+installation was changed, and no game was launched.
+
+The existing `LiveAcceptanceRunner` writes to the ordinary installation even with
+`skipRuntimeInstall`, and the Windows stop helper targets every process matching
+the executable path. Slices 7/8 must carry an explicit isolated runtime layout,
+record actual native persistent-data roots, and retain process ownership including
+PID/start time/executable identity. Add tests for unintended ordinary-root writes,
+root mismatch, stale acknowledgement and unrelated processes. Abort live setup if
+it cannot establish isolation; profile names and environment-variable overrides
+alone are insufficient evidence. Visual/input and native-timing acceptance remain
+pending, with user assistance required if no suitable native-control surface exists.
 
 ## Prioritized repair ledger
 

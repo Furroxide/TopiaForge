@@ -105,7 +105,8 @@
         "missing-spawn",
         "missing-implementation",
         "missing-world",
-        "empty-requirements"
+        "empty-requirements",
+        "discovered-family"
       ]
     },
     "profile": {

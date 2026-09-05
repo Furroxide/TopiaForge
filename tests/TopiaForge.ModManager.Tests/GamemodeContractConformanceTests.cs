@@ -367,6 +367,10 @@ namespace TopiaForge.ModManager.Tests
                 case "missing-implementation": contributions.Gamemodes[0].Implementation = null; break;
                 case "missing-world": contributions.LaunchTargets[0].World = null; break;
                 case "empty-requirements": contributions.Gamemodes[0].WorldRequirements = new ModWorldRequirements(); break;
+                case "discovered-family":
+                    contributions.Worlds[0].Content!.Kind = ModWorldContent.DiscoveredKind;
+                    contributions.LaunchTargets.Clear();
+                    break;
                 default: throw new InvalidOperationException("Unknown fixture model mutation " + mutation);
             }
         }

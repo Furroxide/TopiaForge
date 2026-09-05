@@ -655,6 +655,24 @@
       "path": "serialization/manifest/v6-discovered-family-as-default.json"
     },
     {
+      "id": "v6-discovered-family-id-length-94",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-discovered-family-id-length-94.json"
+    },
+    {
+      "id": "v6-discovered-family-id-length-95",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-discovered-family-id-length-95.json"
+    },
+    {
+      "id": "v6-discovered-family-id-length-96",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-discovered-family-id-length-96.json"
+    },
+    {
       "id": "v6-discovered-family-in-allow",
       "channel": "serialization",
       "kind": "manifest-rejects",
@@ -881,6 +899,18 @@
       "channel": "serialization",
       "kind": "manifest-accepts",
       "path": "serialization/manifest/v6-minimal-gamemode.json"
+    },
+    {
+      "id": "v6-model-discovered-family-id-length-95",
+      "channel": "serialization",
+      "kind": "manifest-model-rejects",
+      "path": "serialization/manifest/v6-model-discovered-family-id-length-95.json"
+    },
+    {
+      "id": "v6-model-discovered-family-id-length-96",
+      "channel": "serialization",
+      "kind": "manifest-model-rejects",
+      "path": "serialization/manifest/v6-model-discovered-family-id-length-96.json"
     },
     {
       "id": "v6-model-empty-contributions",
@@ -1171,6 +1201,18 @@
       "path": "serialization/manifest/v6-sort-key-over-limit.json"
     },
     {
+      "id": "v6-static-world-id-length-95",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-static-world-id-length-95.json"
+    },
+    {
+      "id": "v6-static-world-id-length-96",
+      "channel": "serialization",
+      "kind": "manifest-accepts",
+      "path": "serialization/manifest/v6-static-world-id-length-96.json"
+    },
+    {
       "id": "v6-string-boolean-is-not-boolean",
       "channel": "serialization",
       "kind": "manifest-rejects",
@@ -1337,6 +1379,24 @@
       "channel": "serialization",
       "kind": "transport-codec",
       "path": "serialization/transport/wire-observation-empty-failure-reasons.json"
+    },
+    {
+      "id": "wire-observation-empty-world-suffix",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-observation-empty-world-suffix.json"
+    },
+    {
+      "id": "wire-observation-family-94-world-96",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-observation-family-94-world-96.json"
+    },
+    {
+      "id": "wire-observation-family-95-empty-suffix",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-observation-family-95-empty-suffix.json"
     },
     {
       "id": "wire-observation-foreign-instance-family",
@@ -1631,6 +1691,24 @@
       "channel": "serialization",
       "kind": "transport-codec",
       "path": "serialization/transport/wire-plan-empty-override.json"
+    },
+    {
+      "id": "wire-plan-empty-world-suffix",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-empty-world-suffix.json"
+    },
+    {
+      "id": "wire-plan-family-94-world-96",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-family-94-world-96.json"
+    },
+    {
+      "id": "wire-plan-family-95-empty-suffix",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-family-95-empty-suffix.json"
     },
     {
       "id": "wire-plan-newline-id",

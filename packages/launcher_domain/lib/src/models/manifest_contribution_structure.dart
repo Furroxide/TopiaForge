@@ -50,6 +50,10 @@ void _worldContributionShape(
   );
   if (fields == null) return;
   shape.id(fields, 'id', path);
+  // Reserve a dot and a nonempty suffix inside the 96-character instance limit.
+  if (fields['content'] case {'kind': ModWorldContent.discoveredKind}) {
+    shape.text(fields, 'id', path, minimum: 4, maximum: 94);
+  }
   shape.text(fields, 'name', path, minimum: 1, maximum: 128);
   shape.text(fields, 'description', path, maximum: 1024);
   shape.strings(

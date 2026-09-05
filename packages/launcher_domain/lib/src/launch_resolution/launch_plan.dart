@@ -60,9 +60,10 @@ final class LaunchPlanDescriptor {
        packages = _identities(packages) {
     if (!_idEquals(this.targetId, this.request.targetId) ||
         (this.worldFamilyId != null &&
-            !this.worldId.toLowerCase().startsWith(
-              '${this.worldFamilyId!.toLowerCase()}.',
-            ))) {
+            (!this.worldId.toLowerCase().startsWith(
+                  '${this.worldFamilyId!.toLowerCase()}.',
+                ) ||
+                this.worldId.length <= this.worldFamilyId!.length + 1))) {
       throw const FormatException('Inconsistent launch identities.');
     }
     this.digest = packageSetDigest(this.packages);
