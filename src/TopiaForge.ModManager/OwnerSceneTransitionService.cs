@@ -36,9 +36,14 @@ namespace TopiaForge.ModManager
             if (access?.Borrowed is IInternalSceneTransitionService borrowed)
             {
                 var child = borrowed.Acquire(sceneName, automatic, reason);
-                return child.TryGetValue(out var lease)
-                    ? OperationResult<IInternalSceneTransitionLease>.Success(new LifetimeLease(lease, stoppingToken))
-                    : child;
+                if (!child.TryGetValue(out var lease)) return child;
+                var candidate = new LifetimeLease(lease, stoppingToken);
+                if (!IsAlive)
+                {
+                    candidate.Dispose();
+                    return OperationResult<IInternalSceneTransitionLease>.Failure(ModErrorCode.Cancelled, "The scene owner has stopped.");
+                }
+                return OperationResult<IInternalSceneTransitionLease>.Success(candidate);
             }
             var request = new SceneTransitionRequest(ownerModId, sceneName,
                 automatic ? SceneTransitionPriority.Automatic : SceneTransitionPriority.UserInitiated, reason);
@@ -49,6 +54,12 @@ namespace TopiaForge.ModManager
             var registration = stoppingToken.Register(native.RevokeOwner);
             _ = native.DrainTask.ContinueWith(_ => registration.Dispose(), CancellationToken.None,
                 TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            // Authority evaluation can synchronously stop this owner after the entry check.
+            if (!IsAlive)
+            {
+                native.Dispose();
+                return OperationResult<IInternalSceneTransitionLease>.Failure(ModErrorCode.Cancelled, "The scene owner has stopped.");
+            }
             return OperationResult<IInternalSceneTransitionLease>.Success(native);
         }
 

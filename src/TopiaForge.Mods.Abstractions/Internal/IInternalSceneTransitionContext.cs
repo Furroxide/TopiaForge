@@ -53,6 +53,8 @@ namespace TopiaForge.Mods.Internal
     {
         void FailCaller(ModErrorCode code, string message);
         void NativeCompleted(OperationResult<SceneSnapshot> result);
+        void RequireManagedCompletion();
+        void ManagedCompleted(OperationResult<bool> result);
     }
 
     internal interface IInternalNativeSceneOperation

@@ -50,7 +50,7 @@ namespace TopiaForge.ModManager.Tests
                 try
                 {
                     HostDispatcherTests.Run();
-                    SessionLifecycleTests.Run(sessionRoot + "-state");
+                    SessionLifecycleTests.Run(Path.Combine(sessionRoot, "state"));
                     GamemodeSessionOrchestratorTests.Run(sessionRoot);
                     return 0;
                 }

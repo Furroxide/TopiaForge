@@ -51,18 +51,8 @@ namespace TopiaForge.ModManager
         public IDisposable SubscribeCheckpointChanged(Action<CheckpointSnapshot> handler)
         {
             UnityMainThreadGuard.AssertCurrent();
-            if (handler == null) throw new ArgumentNullException(nameof(handler));
-            return lifetime.Track(backend.SubscribeCheckpointChanged(checkpoint =>
-            {
-                try
-                {
-                    handler(checkpoint);
-                }
-                catch (Exception exception)
-                {
-                    logger.Error(exception, "A checkpoint subscriber failed.");
-                }
-            }));
+            return OwnerCheckpointSubscription.Subscribe(lifetime, handler, backend.SubscribeCheckpointChanged,
+                exception => logger.Error(exception, "A checkpoint subscriber failed."));
         }
 
         public Task<OperationResult<SceneSnapshot>> LoadAsync(

@@ -22,6 +22,9 @@ namespace TopiaForge.ModManager
         private bool beginning = true;
         private bool nativeFinished;
         private bool retired;
+        private bool managedRequired;
+        private bool managedFinished;
+        private OperationResult<SceneSnapshot>? nativeResult;
 
         internal NativeSceneOperation(SceneCoordinator coordinator, NativeTransitionReservation reservation,
             string ownerPackageId, NativeSceneRequest request, CancellationToken token)
@@ -65,6 +68,7 @@ namespace TopiaForge.ModManager
             finally
             {
                 beginning = false;
+                PublishNativeCompletion();
                 RetireIfFinished();
             }
         }
@@ -83,10 +87,33 @@ namespace TopiaForge.ModManager
         {
             if (retired || nativeFinished) return;
             nativeFinished = true;
+            nativeResult = result;
             if (token.IsCancellationRequested) Cancel("The scene request was cancelled.");
-            completion.TrySetResult(result);
+            PublishNativeCompletion();
             RetireIfFinished();
         });
+
+        public void RequireManagedCompletion()
+        {
+            coordinator.AssertCurrent();
+            if (!beginning) throw new InvalidOperationException("A loader observer must attach during native dispatch.");
+            managedRequired = true;
+        }
+        public void ManagedCompleted(OperationResult<bool> result) => coordinator.Post(() =>
+        {
+            if (retired || managedFinished) return;
+            managedFinished = true;
+            if (!result.Succeeded) Fail(result.ErrorCode, result.ErrorMessage);
+            PublishNativeCompletion();
+            RetireIfFinished();
+        });
+
+        private void PublishNativeCompletion()
+        {
+            if (beginning || !nativeFinished || (managedRequired && !managedFinished) || nativeResult == null) return;
+            if (token.IsCancellationRequested) Cancel("The scene request was cancelled.");
+            completion.TrySetResult(nativeResult);
+        }
 
         internal void ObserveScene(SceneSnapshot scene)
         {
@@ -97,12 +124,12 @@ namespace TopiaForge.ModManager
         }
         internal void CheckTimeout(DateTime nowUtc, TimeSpan timeout)
         {
-            if (!retired && !nativeFinished && nowUtc - startedUtc >= timeout)
+            if (!retired && (!nativeFinished || (managedRequired && !managedFinished)) && nowUtc - startedUtc >= timeout)
                 Fail(ModErrorCode.External, "The native transition timed out; admission remains quarantined until it drains.");
         }
         private void RetireIfFinished()
         {
-            if (beginning || !nativeFinished || retired) return;
+            if (beginning || !nativeFinished || (managedRequired && !managedFinished) || retired) return;
             retired = true;
             cancellation.Dispose();
             drained.TrySetResult(true);

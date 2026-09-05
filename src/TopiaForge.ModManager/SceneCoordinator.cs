@@ -41,13 +41,13 @@ namespace TopiaForge.ModManager
         internal OperationResult<INativeTransitionReservation> Reserve(NativeTransitionOwner owner, SceneTransitionRequest request, bool lifecycle = false)
         {
             AssertCurrent();
-            foreach (var prefix in revokedOwnership)
-                if (owner.OwnershipId == prefix || owner.OwnershipId.StartsWith(prefix + ":", StringComparison.Ordinal))
-                    return OperationResult<INativeTransitionReservation>.Failure(ModErrorCode.InvalidState, "The native transition owner was revoked.");
-            if (!lifecycle && sessionAdmissionBusy())
-                return OperationResult<INativeTransitionReservation>.Failure(ModErrorCode.Conflict, "The session lifecycle is Busy.");
+            var refused = CheckAdmission(owner, lifecycle);
+            if (refused != null) return refused;
             var denied = CheckAuthority(request);
             if (denied != null) return OperationResult<INativeTransitionReservation>.Failure(ModErrorCode.NotAuthoritative, denied);
+            // The authority provider may synchronously close admission or revoke this owner.
+            refused = CheckAdmission(owner, lifecycle);
+            if (refused != null) return refused;
             lock (gate)
             {
                 if (active != null)
@@ -59,6 +59,16 @@ namespace TopiaForge.ModManager
                 active = new NativeTransitionReservation(this, owner, request);
                 return OperationResult<INativeTransitionReservation>.Success(active);
             }
+        }
+
+        private OperationResult<INativeTransitionReservation>? CheckAdmission(NativeTransitionOwner owner, bool lifecycle)
+        {
+            foreach (var prefix in revokedOwnership)
+                if (owner.OwnershipId == prefix || owner.OwnershipId.StartsWith(prefix + ":", StringComparison.Ordinal))
+                    return OperationResult<INativeTransitionReservation>.Failure(ModErrorCode.InvalidState, "The native transition owner was revoked.");
+            if (!lifecycle && sessionAdmissionBusy())
+                return OperationResult<INativeTransitionReservation>.Failure(ModErrorCode.Conflict, "The session lifecycle is Busy.");
+            return null;
         }
 
         public void SetSessionAdmissionGate(Func<bool> isBusy)

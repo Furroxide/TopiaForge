@@ -17,6 +17,7 @@ namespace TopiaForge.ModManager
         private readonly ModServiceRegistry serviceRegistry;
         private readonly SceneCoordinator sceneCoordinator;
         private readonly NativeTransitionHost? nativeHost;
+        private readonly HostDispatcher nativeDispatcher;
         private readonly string runtimeOwnershipId = "runtime:" + Guid.NewGuid().ToString("N");
         private readonly IRuntimeGameplayHost coreGameplayServices;
         private readonly RuntimeInfo runtimeInfo;
@@ -87,6 +88,7 @@ namespace TopiaForge.ModManager
             if (coreGameplayServices == null)
             {
                 nativeHost = NativeTransitionHost.GetOrCreate(logger.Info, authority);
+                nativeDispatcher = nativeHost.Dispatcher;
                 nativeHost.AttachRuntime(runtimeOwnershipId, authority, logger.Info);
                 sceneCoordinator = nativeHost.Coordinator;
                 try { this.coreGameplayServices = new CoreGameplayServices(nativeHost, runtimeOwnershipId); }
@@ -98,7 +100,12 @@ namespace TopiaForge.ModManager
             }
             else
             {
-                sceneCoordinator = new SceneCoordinator(logger.Info, authority);
+                nativeDispatcher = new HostDispatcher(error =>
+                {
+                    try { logger.Error(error, "Runtime host callback failed."); }
+                    catch { /* Host cleanup remains available after diagnostic sinks stop. */ }
+                });
+                sceneCoordinator = new SceneCoordinator(logger.Info, authority, nativeDispatcher);
                 this.coreGameplayServices = coreGameplayServices;
             }
             this.coreGameplayServices.FixedUpdate += DispatchFixedUpdate;
@@ -111,7 +118,7 @@ namespace TopiaForge.ModManager
         public IReadOnlyCollection<string> LoadedModIds => loadedModIdsView;
         internal string RuntimeOwnershipId => runtimeOwnershipId;
         internal SceneCoordinator NativeTransitions => sceneCoordinator;
-        internal IHostDispatcher? NativeDispatcher => nativeHost?.Dispatcher;
+        internal HostDispatcher NativeDispatcher => nativeDispatcher;
 
         /// <summary>Why a mod in the load order did not come up (skip reason or exception), or null.</summary>
         public string? GetLoadFailure(string id)

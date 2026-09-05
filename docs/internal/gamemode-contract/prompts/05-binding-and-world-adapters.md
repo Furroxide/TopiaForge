@@ -27,6 +27,14 @@ Keep first-party V6 activation and the canonical alias flip for slice 6.
   with the production binder in integration tests. Reuse `ModRuntime.Loading` receipt
   checks and the owner-aware assembly catalog; verify the assembly actually returned
   by the CLR belongs to the selected package, including forwarded/previously loaded types.
+  An explicit `implementation.assembly` requires its declared SHA-256 to match bytes
+  immediately before load, in addition to receipt inventory verification. The omitted
+  assembly defaults to `entryAssembly`; its manifest hash remains optional, and any
+  supplied hash must match. Do not invent a new mandatory entry hash. Existing content
+  validation only checks synchronized multiplayer content and cannot replace this check.
+  Check actual assembly location and `type.Assembly`, not just the requested path/name.
+  CLR identity-collision integration tests need separate processes: copying one DLL to
+  many fixture directories in one process does not establish selected-file ownership.
 - Bundle and game-scene declarations have no implementation type. Use an explicit
   closed built-in activation path carrying copied declaration data, distinct from
   reflected package types. Do not fabricate public factories or declarations.

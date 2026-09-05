@@ -15,6 +15,7 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static void Run(string root)
         {
+            GamemodeSessionResultTests.Run(root + "-results");
             TestMenuCancellationFailure(root + "-menu-cancel-failure");
             TestDelayedSceneOwnership(root + "-delayed-scene");
             TestCapturedReadiness(root + "-captured-readiness");

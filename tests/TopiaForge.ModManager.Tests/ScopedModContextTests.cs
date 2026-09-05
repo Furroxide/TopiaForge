@@ -14,6 +14,8 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static void Run(string root)
         {
+            ScopedConstructionDrainTests.Run(root + "-constructor-drain");
+            ScopedCleanupReentrancyTests.Run(root + "-reentrant-cleanup");
             TestConcurrentCancellation();
             TestRebindingAndEvents(Path.Combine(root, "scope-events"));
             TestCancellationAndCleanup(Path.Combine(root, "scope-cleanup"));
@@ -181,9 +183,13 @@ namespace TopiaForge.ModManager.Tests
             Assert(provider.Active == 0, "all child extension allocations must be released");
         }
 
-        private static ModContextScope Scope(ModContext parent, string session, HostDispatcher host, Action? stop = null) =>
-            parent.CreateChildScope(session, CancellationToken.None, stop ?? (() => { }),
+        private static ModContextScope Scope(ModContext parent, string session, HostDispatcher host, Action? stop = null)
+        {
+            var creation = parent.CreateChildScopeAsync(session, CancellationToken.None, stop ?? (() => { }),
                 new NativeTransitionAccessSlot(session + ":" + parent.Identity.Id, session, () => !parent.Lifetime.IsStopping), host);
+            HostDispatcherTests.Pump(host, creation);
+            return creation.Result;
+        }
         private static ModManifest Manifest(string id = "scope.mod") => new ModManifest
         { SchemaVersion = 5, Id = id, Name = "Scope", Version = "1.0.0", EntryAssembly = "Scope.dll", EntryType = "Scope.Entry" };
         private static ModContext Parent(string root, RecordingFactory? factory = null, ModServiceRegistry? registry = null,

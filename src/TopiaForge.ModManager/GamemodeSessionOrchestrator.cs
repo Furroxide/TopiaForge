@@ -126,6 +126,9 @@ namespace TopiaForge.ModManager
         private void CompleteCommand(TaskCompletionSource<OperationResult<bool>> completion, string requestId, string command,
             string? sessionId, OperationResult<bool> result, IEnumerable<LaunchBlock>? blocks = null)
         {
+            // SDK failures can contain an undefined enum value. Normalize before either the
+            // command task or its wire outcome receives author-controlled result metadata.
+            if (!result.Succeeded) result = Failure(result);
             if (!completion.TrySetResult(result)) return;
             var reasons = blocks?.ToArray() ?? Array.Empty<LaunchBlock>();
             var status = result.Succeeded ? "succeeded" : result.ErrorCode == ModErrorCode.Cancelled ? "cancelled" : "failed";
@@ -167,7 +170,14 @@ namespace TopiaForge.ModManager
             }
             return text;
         }
-        private static OperationResult<bool> Failure<T>(OperationResult<T> result) where T : notnull => OperationResult<bool>.Failure(result.ErrorCode, Message(result.ErrorMessage));
+        private static OperationResult<bool> Failure<T>(OperationResult<T> result) where T : notnull
+        {
+            var code = result.ErrorCode;
+            if (code == ModErrorCode.None || !Enum.IsDefined(typeof(ModErrorCode), code))
+                return OperationResult<bool>.Failure(ModErrorCode.External, Message(
+                    "An implementation returned an unsupported operation error code (" + (int)code + "). " + result.ErrorMessage));
+            return OperationResult<bool>.Failure(code, Message(result.ErrorMessage));
+        }
         private static OperationResult<bool> ExceptionFailure(Exception error) => OperationResult<bool>.Failure(
             error is OperationCanceledException ? ModErrorCode.Cancelled : ModErrorCode.External, Message(error.GetBaseException().Message));
         private static OperationResult<bool> AdmissionFailure(SessionAdmission admission) => OperationResult<bool>.Failure(

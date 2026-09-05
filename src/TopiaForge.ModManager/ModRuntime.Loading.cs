@@ -40,7 +40,7 @@ namespace TopiaForge.ModManager
 
             // The resolver already validated dependencies at the manifest level, but a dependency can still
             // fail at load time (e.g. a TypeLoadException from a binary-stale package). Running a dependent
-            // without its dependency's services produces a half-alive mod giving users wrong advice â€” skip
+            // without its dependency's services produces a half-alive mod giving users wrong advice — skip
             // it with an honest reason instead. Load order is topological, so dependencies are visited first.
             var failedDependency = DependencyResolver.FindFailedRequiredDependency(manifest, failedMods.Keys);
             if (failedDependency != null)
