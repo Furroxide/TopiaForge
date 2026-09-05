@@ -9,14 +9,15 @@ namespace TopiaForge.ModManager.Tests
     {
         public static JsonElement Snapshot(JsonElement body)
         {
-            string RoundTrip(string json) => body.GetProperty("transport").GetString() switch
+            var transport = body.GetProperty("transport").GetString();
+            string RoundTrip(string json) => transport switch
             {
                 "plan" => LaunchTransportJson.WritePlan(LaunchTransportJson.ReadPlan(json)),
                 "profile" => LaunchTransportJson.WriteProfile(LaunchTransportJson.ReadProfile(json)),
                 "progress" => LaunchTransportJson.WriteProgress(LaunchTransportJson.ReadProgress(json)),
                 "outcome" => LaunchTransportJson.WriteOutcome(LaunchTransportJson.ReadOutcome(json)),
                 "observation" => LaunchTransportJson.WriteObservation(LaunchTransportJson.ReadObservation(json)),
-                _ => throw new InvalidOperationException("Unknown transport fixture.")
+                _ => throw new InvalidOperationException("Unknown transport fixture: " + transport)
             };
             object output;
             try
