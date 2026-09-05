@@ -115,9 +115,10 @@ class ModWorldContent {
   static const gameSceneKind = 'game-scene';
 
   /// A family of worlds enumerated at runtime rather than declared one by one.
-  /// The declaration's id is the family prefix; instances are `<id>.<slug>` and
-  /// are never launchable on their own, so a stored selection cannot name
-  /// content that has never existed.
+  /// Its declaration id is at most 94 characters, leaving room for `.<slug>`
+  /// within an instance's 96-character limit. Families and instances cannot be
+  /// static defaults or allow-list entries; observed instances may be selected
+  /// through a permitted player override.
   static const discoveredKind = 'discovered';
 
   final String kind;
@@ -135,9 +136,9 @@ class ModWorldContent {
   };
 }
 
-/// Where the player starts. Deliberately not a transform: V5 declares no numeric
-/// fields at all, and a spawn point drifting in the last bits is the bug nobody
-/// attributes to the manifest.
+/// How the world provider resolves the player's spawn before gameplay starts.
+/// Authored markers must exist unambiguously; provider-default uses the actual
+/// spawn supplied and applied by the provider.
 class ModSpawnPolicy {
   const ModSpawnPolicy({this.kind = '', this.markerName = ''});
 

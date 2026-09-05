@@ -25,6 +25,22 @@ ModManifest mutateConformanceModel(ModManifest parsed, String mutation) {
         gamemodes: original.gamemodes,
         launchTargets: original.launchTargets,
       );
+    case 'discovered-family':
+      changed = ModContributions(
+        worlds: [
+          ModWorldDeclaration(
+            id: world.id,
+            name: world.name,
+            content: ModWorldContent(
+              kind: ModWorldContent.discoveredKind,
+              implementation: world.content!.implementation,
+            ),
+            spawn: world.spawn,
+            transitions: world.transitions,
+          ),
+        ],
+        gamemodes: original.gamemodes,
+      );
     case 'missing-implementation':
     case 'empty-requirements':
       changed = ModContributions(

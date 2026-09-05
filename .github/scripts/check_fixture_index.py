@@ -146,7 +146,7 @@ def _load_case(path: Path) -> dict:
         raise FixtureIndexError(f"{relative} is misplaced; its kind belongs under {channel}/{directory}/.")
 
     mutation = case.get("modelMutation")
-    mutations = {"empty-contributions", "missing-content", "missing-spawn", "missing-implementation", "missing-world", "empty-requirements"}
+    mutations = {"empty-contributions", "missing-content", "missing-spawn", "missing-implementation", "missing-world", "empty-requirements", "discovered-family"}
     if case["kind"] == "manifest-model-rejects":
         if mutation not in mutations:
             raise FixtureIndexError(f"{relative} requires a known modelMutation.")

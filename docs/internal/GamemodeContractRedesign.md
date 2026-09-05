@@ -47,8 +47,11 @@ are not normative. The ledger maps GM-01 through GM-10 to acceptance evidence.
 Use the V6 schema from the reviewed source stack as the starting point, keeping
 the V5 common contract unchanged except for explicit V6 additions and retirement.
 Package IDs remain at most 64 ASCII characters; declaration IDs have the separate
-96-character ASCII grammar. Preserve the top-level `gamemodes` retired sentinel;
-it must not become the declaration wrapper.
+96-character ASCII grammar. Discovered-family declarations are capped at 94
+characters so `familyId + "." + nonemptySuffix` can form a concrete instance
+within 96 characters. Static world, gamemode and target IDs retain the 96-character
+limit. A trailing separator alone is never an instance. Preserve the top-level
+`gamemodes` retired sentinel; it must not become the declaration wrapper.
 
 Give these rules descriptive names in diagnostics/docs instead of unexplained
 historical R-numbers:
@@ -356,7 +359,8 @@ known limitations, and remaining integration dependencies. Tests must detect the
 defect before its fix. Do not claim a fresh build from a pre-existing binary probe.
 
 - Contract: required/present/null/wrong-type cases; every conditional branch;
-  ownership and dependency failures; 65/96/97-char IDs; Unicode text boundaries;
+  ownership and dependency failures; 65/96/97-char IDs, 94/95/96-char discovery
+  families and nonempty instance suffixes; Unicode text boundaries;
   full normalization; schema semantics; fixture omission/placement failures.
 - Resolution: input-order invariance; nested owners; denied overrides; open consent
   and ranges; independent simultaneous failures; discovered instances; immutability;
@@ -385,6 +389,10 @@ geometry/spawn, both discovered sources, authored-marker maps, Zombies, Sandbox
 F5/pause, Free Play without Sandbox, restart, main-menu return, and injected
 startup/teardown faults. Record game build, package revisions, logs, outcomes, and
 what was actually observed. Do not overwrite a normal player's profile or save.
+Launcher-profile separation alone does not establish native-save isolation. Verify
+the actual loader, manager and native persistent-data roots before gameplay; use
+a separate native user environment when no supported save-root override exists.
+Retain the launched process identity and stop only that owned process.
 
 Completion requires integrated slices, removed obsolete launch paths, published
 replacement guidance, passing automated evidence, and recorded game acceptance.

@@ -734,7 +734,7 @@
       "properties": {
         "id": {
           "$ref": "#/definitions/declarationId",
-          "description": "For content.kind 'discovered' this id is the family prefix: instances observed at runtime are '<id>.<slug>' and are never independently launchable targets."
+          "description": "For content.kind 'discovered' this id is a family prefix of at most 94 characters, leaving room for a dot and a nonempty slug within the 96-character instance id limit. Instances observed at runtime are '<id>.<slug>' and are never independently launchable targets."
         },
         "name": {
           "type": "string",
@@ -768,6 +768,32 @@
         }
       },
       "allOf": [
+        {
+          "if": {
+            "required": [
+              "content"
+            ],
+            "properties": {
+              "content": {
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "const": "discovered"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "id": {
+                "maxLength": 94
+              }
+            }
+          }
+        },
         {
           "if": {
             "required": [

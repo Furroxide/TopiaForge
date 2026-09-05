@@ -12,8 +12,11 @@ final class DiscoveredWorldObservation {
        description = description == null
            ? null
            : _text(description, max: 1024, empty: true) {
-    if (!this.id.toLowerCase().startsWith('${this.familyId.toLowerCase()}.')) {
-      throw const FormatException('Discovery id must belong to its family.');
+    if (!this.id.toLowerCase().startsWith('${this.familyId.toLowerCase()}.') ||
+        this.id.length <= this.familyId.length + 1) {
+      throw const FormatException(
+        'Discovery id must have a nonempty suffix beneath its family.',
+      );
     }
   }
   factory DiscoveredWorldObservation.fromJson(Object? value) {
