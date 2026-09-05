@@ -14,7 +14,7 @@ The [canonical brief](../GamemodeContractRedesign.md) is normative. The
 | `f2ec48b14a86adc93c8079fd1216e91a2d6a2764` | Slice 1 squash merge of PR #106 into `dev` | Canonical documents integrated; no production or live acceptance claim |
 | `c61d5fcf821ef726c2aea3ba35c092e314e1f6c4` | Slice 2 squash merge of PR #107, reviewed head `055a7d4` | Unused V6 contract integrated; alias and production manifests/templates remain V5 |
 | `41f14d078dca1830749f70cac9f72083c4fedd8c` | Slice 3 merged through PR #108; corrected pure resolver, immutable plans and inactive transport models | Full CI passed at reviewed head `63540e2`; no production caller or wire activation |
-| `feat/gamemode-runtime-foundations`, based on `41f14d0` | Slice 4, PR #109; lifecycle, scopes, native admission and shutdown foundations | First head `6caceb9` passed full CI; independent review corrections pass local gates and await exact-head CI |
+| `feat/gamemode-runtime-foundations`, based on `41f14d0` | Slice 4, PR #109; lifecycle, scopes, native admission and shutdown foundations | Review head `930d0a2` passed full CI; PR remains unmerged pending CodeQL verification of atomic test-root allocation |
 
 On 2026-09-05, PRs #102–105 were converted to draft for the approved re-cut.
 Their branch tips and existing review history were preserved. Both external
@@ -340,10 +340,14 @@ analysis and format verification (348 files, zero changes); 353-fixture closure 
 trademark and asset-licence audits; 33 website tests, 124 Markdown-link checks and
 25-page/five-snippet content preparation. The unchanged Dart test results above
 remain scoped evidence; C# tests were rerun after the final corrections. Logs use
-`tf-slice4-followup-*` in the temporary directory. The follow-up requires fresh
-exact-head CI before merge; no game or native-timing result is implied.
+`tf-slice4-followup-*` in the temporary directory. The committed follow-up
+`930d0a2a093f706e14152b035b6eb975051aeaf2` passed full exact-head CI in run
+`33988344239`, including publication, Flutter and Windows data tests. No game or
+native-timing result is implied. PR #109 remains unmerged: the repository
+code-scanning ruleset independently blocks it on test-path alerts 428, 429 and 430.
+Passing the five named required checks alone does not satisfy every merge rule.
 
-Three CodeQL review annotations at the first head concern test fixture paths:
+The CodeQL annotations concern test fixture paths:
 `Program.cs` creates a fresh GUID-named directory under `Path.GetTempPath`, and
 `Program.SessionSceneTests.cs` reads trace paths created by the private fixture
 helper under that test root with constant package names. These paths do not come
@@ -351,6 +355,25 @@ from a package manifest, wire request, or external user input. This assessment i
 limited to those test sites; no global security rule or production path check was
 relaxed. Review also corrected accidental mojibake in owned comments and this ledger;
 UTF-8 decoding and a targeted encoding audit pass for the follow-up source files.
+
+On 6 September, the test-root follow-up replaces manual temporary path selection
+and directory creation with the framework atomic temporary-directory API. This
+keeps per-run ownership and final cleanup while removing the select/create race.
+No CodeQL alert has been dismissed or suppressed and no repository rule changed.
+An earlier combined dismissal/merge request was rejected by automatic approval
+review before execution; the source repair requires its own rebuilt harness and
+exact-head CodeQL results before merge.
+
+The atomic-root follow-up passes fresh Release with zero warnings/errors, all
+eleven SDK package checks and seven no-argument harnesses, focused lifecycle and
+Runtime tests, C# format verification, bundled-Dart fatal-info analysis and format
+verification (348 files unchanged), line limits and repository/Markdown audits.
+Local publication passed website tests, Astro, C# reference and domain/data Dart
+reference generation, then stopped in bundled dartdoc 9.0.4 while documenting
+`launcher_ui`: `_stripDocImports` raised `RangeError` (end 9202, length 9089).
+This is an observed local tool failure, not a publication pass or a permanent
+exemption; exact-head Linux publication remains required. The Flutter SDK was
+not modified. Logs are `tf-slice4-security-*` in the temporary directory.
 
 ## Live acceptance isolation prerequisite
 
@@ -425,7 +448,7 @@ The old four-PR stack is source material; it does not satisfy these eight delive
 | 1 | Review/brief/status/prompts and premature-claim corrections | Merged in PR #106 (`f2ec48b`) | Not applicable | Documentation checks and required CI passed at `16c75ba`; baseline Release/seven-harness checks passed | Not applicable |
 | 2 | Unused V6 contract/readers/validators/conformance; alias stays V5 | Merged in PR #107 (`c61d5fc`) | Intentionally unused | 149 C# fixtures; 479 domain, 358 data, 227 CLI tests; seven Release harnesses and required CI/publication passed at `055a7d4` | Not required for pure contract |
 | 3 | Pure resolution and immutable transport models | Merged in PR #108 (`41f14d0`) | Intentionally no production switch | 353 shared fixtures; 791 domain, 358 data, 227 CLI tests; full Release/seven harnesses and required CI/publication passed at `63540e2` | Not required for pure models |
-| 4 | Scoped ownership, lifecycle, shared transition foundations | Implemented in PR #109; review corrections await exact-head CI | Existing V5 scene routes use the shared executor; V6 orchestration activation remains pending | First head `6caceb9` passed full CI; final review corrections pass local Release/seven harnesses, formatting, analyzers and audits; new CI pending | Native behavior pending |
+| 4 | Scoped ownership, lifecycle, shared transition foundations | Implemented in PR #109; unmerged pending test-root follow-up checks | Existing V5 scene routes use the shared executor; V6 orchestration activation remains pending | Review head `930d0a2` passed full CI (`33988344239`) and local Release/seven harnesses, formatting, analyzers and audits; atomic test-root local checks passed; CodeQL/full CI pending | Native behavior pending |
 | 5 | Verified factory bindings, providers/discovery, readiness adapters | Pending | Pending | Synthetic package and production-adapter coverage pending | World/readiness checks pending |
 | 6 | Activate runtime and atomically flip manifests/templates | Original-stack migration is partial source material only | Pending | Rebuilt API baselines, generated package and consumer coverage pending | First-party gameplay pending |
 | 7 | Launcher/CLI/overlay preflight, wire V4, observations, durable state | Pending | Pending | Cross-language wire/profile/process/progress integration pending | Cold launch and multi-surface selection pending |

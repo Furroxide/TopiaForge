@@ -45,8 +45,7 @@ namespace TopiaForge.ModManager.Tests
 
             if (args.Length == 1 && string.Equals(args[0], "--session-lifecycle", StringComparison.Ordinal))
             {
-                var sessionRoot = Path.Combine(Path.GetTempPath(), "TopiaForgeSessionTests-" + Guid.NewGuid().ToString("N"));
-                Directory.CreateDirectory(sessionRoot);
+                var sessionRoot = Directory.CreateTempSubdirectory("TopiaForgeSessionTests-").FullName;
                 try
                 {
                     HostDispatcherTests.Run();

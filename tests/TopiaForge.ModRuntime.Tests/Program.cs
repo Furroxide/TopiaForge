@@ -16,8 +16,7 @@ namespace TopiaForge.ModRuntime.Tests
 
         private static int Main()
         {
-            var root = Path.Combine(Path.GetTempPath(), "TopiaForgeModRuntimeTests-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(root);
+            var root = Directory.CreateTempSubdirectory("TopiaForgeModRuntimeTests-").FullName;
             try
             {
                 TestShutdownAlwaysWaitsForNativeDrain(root);
