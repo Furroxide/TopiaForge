@@ -136,7 +136,7 @@ namespace TopiaForge.ModManager.Tests
             RequireSource(topiaForgeUi, "TopiaForgeRuntime.Shutdown();", "TopiaForgeUi shutdown must stop its hidden runtime driver.");
             RequireSource(topiaForgeUi, "TopiaForgeLog.Reset();", "TopiaForgeUi shutdown must release owner logging delegates.");
             RequireSource(topiaForgeUi, "while (Hosts.Count > 0)", "TopiaForgeUi shutdown must reclaim forgotten hosts.");
-            RequireSource(host, "TopiaForgeUi.OnHostDisposed(this);", "Disposed hosts must leave the global host registry.");
+            RequireSource(host, "TopiaForgeUi.OnHostDisposed(this)", "Disposed hosts must leave the global host registry.");
             RequireSource(toast, "TopiaForgeToastHost.Instance.Layer(", "The toast canvas must be owned by its UiHost.");
             RequireSource(toast, "Queue.Clear();", "Toast shutdown must clear pending notifications.");
             RequireSource(toast, "Views.Clear();", "Toast shutdown must release pooled view references.");

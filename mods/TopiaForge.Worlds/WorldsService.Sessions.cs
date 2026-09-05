@@ -442,7 +442,7 @@ namespace TopiaForge.Worlds
             GamemodeDefinition gamemode,
             string mode,
             string sceneName,
-            IDisposable? launchClaim)
+            IInternalSceneTransitionLease? launchClaim)
         {
             // The debounce timestamp is already stamped at the top of Load (covering both success and failure);
             // re-stamping here would be a redundant second source of truth for the same value.

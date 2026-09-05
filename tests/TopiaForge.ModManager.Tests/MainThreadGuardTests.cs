@@ -31,8 +31,7 @@ namespace TopiaForge.ModManager.Tests
             }
 
             AssertAdapterEntryGuards();
-            AssertSceneLoadCancellationOwnership();
-            AssertSceneLoadPublicationOrder();
+            // NativeTransitionExecutorTests exercise actual cancellation, publication, and drain behavior.
             AssertUiCreationAbortPaths();
             AssertAudioResourceReuse();
 
@@ -84,96 +83,6 @@ namespace TopiaForge.ModManager.Tests
                     }
                 }
             }
-        }
-
-        private static void AssertSceneLoadCancellationOwnership()
-        {
-            var source = ReadManagerSource("UnitySceneService.cs");
-            AssertContains(
-                source,
-                "stoppingRegistration = stoppingToken.Register(Cancel);",
-                "scene loads must complete with cancellation when their owner stops");
-            AssertContains(
-                source,
-                "callerRegistration = callerToken.CanBeCanceled ? callerToken.Register(Cancel) : default;",
-                "scene loads must complete with cancellation when their caller cancels");
-            AssertContains(
-                source,
-                "stoppingRegistration.Dispose();",
-                "scene-load cancellation registrations must be released after result completion");
-            AssertContains(
-                source,
-                "operation?.DisposeFromBackend();",
-                "backend disposal must settle the result and release native completion tracking");
-            if (source.Contains("lifetime.Track(operation);", StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    "Native scene-load state must remain backend-owned rather than lifetime-tracked as a cancellable resource.");
-            }
-        }
-
-        private static void AssertSceneLoadPublicationOrder()
-        {
-            var source = ReadManagerSource("UnitySceneService.cs");
-            var beginLoadStart = source.IndexOf(
-                "public OperationResult<SceneLoadState> BeginLoad(",
-                StringComparison.Ordinal);
-            if (beginLoadStart < 0)
-            {
-                throw new InvalidOperationException("UnitySceneBackend.BeginLoad could not be inspected.");
-            }
-
-            var beginLoadEnd = source.IndexOf("public void Dispose()", beginLoadStart, StringComparison.Ordinal);
-            if (beginLoadEnd < 0)
-            {
-                throw new InvalidOperationException("UnitySceneBackend.BeginLoad could not be inspected.");
-            }
-
-            var beginLoad = source.Substring(beginLoadStart, beginLoadEnd - beginLoadStart);
-            AssertOrdered(
-                beginLoad,
-                "var state = new SceneLoadState(",
-                "activeLoad = state;",
-                "state.Arm(stoppingToken, callerToken);");
-
-            var stateStart = source.IndexOf("internal sealed class SceneLoadState", StringComparison.Ordinal);
-            if (stateStart < 0)
-            {
-                throw new InvalidOperationException("SceneLoadState's two-phase construction could not be inspected.");
-            }
-
-            var armStart = source.IndexOf(
-                "public void Arm(CancellationToken stoppingToken, CancellationToken callerToken)",
-                stateStart,
-                StringComparison.Ordinal);
-            if (armStart < 0)
-            {
-                throw new InvalidOperationException("SceneLoadState's two-phase construction could not be inspected.");
-            }
-
-            var construction = source.Substring(stateStart, armStart - stateStart);
-            if (construction.Contains("operation.completed += OnCompleted;", StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    "SceneLoadState must not subscribe to native completion before it is published as activeLoad.");
-            }
-
-            var armEnd = source.IndexOf("public void AbortArming()", armStart, StringComparison.Ordinal);
-            if (armEnd < 0)
-            {
-                throw new InvalidOperationException("SceneLoadState.Arm could not be inspected.");
-            }
-
-            var arm = source.Substring(armStart, armEnd - armStart);
-            AssertOrdered(
-                arm,
-                "operation.completed += OnCompleted;",
-                "stoppingRegistration = stoppingToken.Register(Cancel);",
-                "callerRegistration = callerToken.CanBeCanceled ? callerToken.Register(Cancel) : default;");
-            AssertContains(
-                beginLoad,
-                "state.AbortArming();",
-                "failed scene-load arming must clean up its partially initialized state");
         }
 
         private static void AssertUiCreationAbortPaths()

@@ -13,6 +13,7 @@ namespace TopiaForge.Mods.UnityUi
     /// </summary>
     public sealed partial class UiHost : IDisposable
     {
+        private readonly List<object> hotkeyRegistrations = new List<object>();
         private readonly List<GameObject> layerRoots = new List<GameObject>();
         private readonly List<CanvasScaler> scalers = new List<CanvasScaler>();
         private readonly List<ITopiaForgeThemeAware> themeAware = new List<ITopiaForgeThemeAware>();
@@ -146,7 +147,9 @@ namespace TopiaForge.Mods.UnityUi
         public object Hotkey(TopiaForgeKey key, Action action)
         {
             ThrowIfDisposed();
-            return TopiaForgeHotkeys.Register(OwnerId, key, action);
+            var registration = TopiaForgeHotkeys.Register(OwnerId, key, action);
+            hotkeyRegistrations.Add(registration);
+            return registration;
         }
 
         /// <summary>Creates a canvas layer in a sorting band and wraps it as a container.</summary>
@@ -233,44 +236,34 @@ namespace TopiaForge.Mods.UnityUi
             disposed = true;
             TopiaForgeTheme.Changed -= OnThemeChanged;
             AccessibilityProfileChanged = null;
-            TopiaForgeHotkeys.UnregisterOwner(OwnerId);
-            while (modalInstances.Count > 0)
-            {
-                modalInstances[modalInstances.Count - 1].Teardown();
-            }
-
-            for (var index = fullscreenTools.Count - 1; index >= 0; index--)
-            {
-                fullscreenTools[index].Teardown();
-            }
-
+            foreach (var registration in hotkeyRegistrations) TopiaForgeHotkeys.Unregister(registration);
+            hotkeyRegistrations.Clear();
+            var failures = new List<Exception>();
+            foreach (var modal in modalInstances.ToArray()) AttemptCleanup(modal.Teardown, failures);
+            modalInstances.Clear();
+            foreach (var tool in fullscreenTools.ToArray()) AttemptCleanup(tool.Teardown, failures);
             fullscreenTools.Clear();
-
-            for (var index = windows.Count - 1; index >= 0; index--)
-            {
-                windows[index].Teardown();
-            }
-
+            foreach (var window in windows.ToArray()) AttemptCleanup(window.Teardown, failures);
             windows.Clear();
-            for (var index = widgets.Count - 1; index >= 0; index--)
-            {
-                TopiaForgeTween.Cancel(widgets[index]);
-            }
-
+            foreach (var widget in widgets.ToArray()) AttemptCleanup(() => TopiaForgeTween.Cancel(widget), failures);
             widgets.Clear();
             themeAware.Clear();
-            foreach (var root in layerRoots)
+            foreach (var root in layerRoots.ToArray())
             {
-                if (root != null)
-                {
-                    TopiaForgeLayers.Release(root);
-                    UnityEngine.Object.Destroy(root);
-                }
+                if (root == null) continue;
+                AttemptCleanup(() => TopiaForgeLayers.Release(root), failures);
+                AttemptCleanup(() => UnityEngine.Object.Destroy(root), failures);
             }
-
             layerRoots.Clear();
             scalers.Clear();
-            TopiaForgeUi.OnHostDisposed(this);
+            AttemptCleanup(() => TopiaForgeUi.OnHostDisposed(this), failures);
+            if (failures.Count > 0) throw new AggregateException("UI host cleanup failed.", failures);
+        }
+
+        private static void AttemptCleanup(Action cleanup, List<Exception> failures)
+        {
+            try { cleanup(); }
+            catch (Exception exception) { failures.Add(exception); }
         }
 
         private void DestroySubtree(GameObject root)

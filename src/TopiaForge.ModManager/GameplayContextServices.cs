@@ -14,7 +14,8 @@ namespace TopiaForge.ModManager
             string packagePath,
             string dataPath,
             IModLifetime lifetime,
-            IModLogger logger);
+            IModLogger logger,
+            NativeTransitionAccessSlot? transitionAccess = null);
     }
 
     internal sealed class GameplayContextServices
@@ -108,6 +109,7 @@ namespace TopiaForge.ModManager
                 this.lifetime = lifetime;
             }
 
+            public bool IsBusy => false;
             public bool IsUiFocused => false;
             public GameTimeSample Frame => default;
             public GameTimeSample Fixed => default;
@@ -167,12 +169,17 @@ namespace TopiaForge.ModManager
                 return OperationResult<IPlayerControlLease>.Failure(ModErrorCode.Unavailable, "Player controls are unavailable in this host.");
             }
 
-            public OperationResult<IDisposable> Acquire(string sceneName, bool automatic, string reason)
+            public OperationResult<IInternalSceneTransitionLease> Acquire(string sceneName, bool automatic, string reason)
             {
-                return OperationResult<IDisposable>.Failure(
+                return OperationResult<IInternalSceneTransitionLease>.Failure(
                     ModErrorCode.Unavailable,
                     "Scene transitions are unavailable in this host.");
             }
+            public OperationResult<IInternalNativeSceneOperation> TryDispatch(
+                NativeSceneRequest request, IInternalNativeSceneDispatch dispatch,
+                CancellationToken callerToken = default) =>
+                OperationResult<IInternalNativeSceneOperation>.Failure(ModErrorCode.Unavailable, "Native scene transitions are unavailable.");
+
 
             public OperationResult<IEntityMotion> AcquireMotion(IEntity entity)
             {

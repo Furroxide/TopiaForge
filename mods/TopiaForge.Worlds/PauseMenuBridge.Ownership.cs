@@ -64,7 +64,7 @@ namespace TopiaForge.Worlds
                 this.lifetime = lifetime;
             }
 
-            public bool IsAvailable => bridge.IsAvailable;
+            public bool IsAvailable => !lifetime.IsStopping && bridge.IsAvailable;
 
             public OperationResult<IDisposable> RegisterAction(WorldPauseAction action)
             {
@@ -73,10 +73,11 @@ namespace TopiaForge.Worlds
                     throw new ArgumentNullException(nameof(action));
                 }
 
+                if (lifetime.IsStopping) return Stopped();
                 var ownedAction = new WorldPauseAction(
                     ownerModId + ":" + action.Id,
                     action.Label,
-                    action.Callback,
+                    () => { if (!lifetime.IsStopping) action.Callback(); },
                     action.ClosePauseMenu,
                     action.Order,
                     action.Destructive);
@@ -84,23 +85,19 @@ namespace TopiaForge.Worlds
             }
 
             public OperationResult<IDisposable> InterceptExit(
-                Func<WorldPauseExitContext, WorldPauseExitDecision> interceptor) =>
-                Track(bridge.InterceptExit(interceptor, ownerModId));
+                Func<WorldPauseExitContext, WorldPauseExitDecision> interceptor)
+            {
+                if (interceptor == null) throw new ArgumentNullException(nameof(interceptor));
+                if (lifetime.IsStopping) return Stopped();
+                return Track(bridge.InterceptExit(context => lifetime.IsStopping
+                    ? WorldPauseExitDecision.Block : interceptor(context), ownerModId));
+            }
+
+            private static OperationResult<IDisposable> Stopped() =>
+                OperationResult<IDisposable>.Failure(ModErrorCode.Cancelled, "The owning context is stopping.");
 
             private OperationResult<IDisposable> Track(OperationResult<IDisposable> result)
             {
-                if (lifetime.IsStopping)
-                {
-                    if (result.TryGetValue(out var stoppingResource))
-                    {
-                        stoppingResource.Dispose();
-                    }
-
-                    return OperationResult<IDisposable>.Failure(
-                        ModErrorCode.Cancelled,
-                        "The mod is stopping and cannot customize the pause menu.");
-                }
-
                 if (!result.TryGetValue(out var resource))
                 {
                     return result;

@@ -1,3 +1,5 @@
+using TopiaForge.Mods.Internal;
+using UnityEngine.SceneManagement;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -28,6 +30,7 @@ namespace TopiaForge.Worlds
         public const string SandboxSceneName = "UgcPlay";
 
         private readonly IModLogger logger;
+        private readonly IInternalSceneTransitionService sceneTransitions;
         private readonly Type? globalAssetsMapType;
         private readonly Type? loadSceneType;
         private readonly Type? sceneUtilType;
@@ -38,9 +41,10 @@ namespace TopiaForge.Worlds
         private readonly MainThreadDispatchQueue<AsyncLoadOutcome> loadOutcomes =
             new MainThreadDispatchQueue<AsyncLoadOutcome>();
 
-        public GameLevelBridge(IModLogger logger)
+        public GameLevelBridge(IModLogger logger, IInternalSceneTransitionService sceneTransitions)
         {
             this.logger = logger;
+            this.sceneTransitions = sceneTransitions;
             globalAssetsMapType = Type.GetType("GlobalAssetsMap, GameCode", throwOnError: false);
             loadSceneType = Type.GetType("LoadSceneOnTriggerEnter, GameCode", throwOnError: false);
             sceneUtilType = Type.GetType("SceneUtil, GameCode", throwOnError: false);
@@ -108,8 +112,68 @@ namespace TopiaForge.Worlds
             return levels;
         }
 
+        public bool LaunchLevel(object checkpointAsset, Action<string>? onFailure = null,
+            IInternalSceneTransitionService? transitionOverride = null)
+        {
+            string? sceneName;
+            try { sceneName = checkpointAsset?.GetType().GetProperty("SceneName", AnyInstance)?.GetValue(checkpointAsset) as string; }
+            catch { return false; }
+            if (string.IsNullOrWhiteSpace(sceneName)) return false;
+            return Dispatch(sceneName!, onFailure, transitionOverride,
+                (sink, mark) => LaunchLevelCore(checkpointAsset!, onFailure, sink, mark));
+        }
+
+        public bool LoadSceneByName(string sceneName, Action<string>? onFailure = null,
+            IInternalSceneTransitionService? transitionOverride = null) =>
+            Dispatch(sceneName, onFailure, transitionOverride,
+                (sink, mark) => LoadSceneByNameCore(sceneName, onFailure, sink, mark));
+
+        public bool LaunchOpenSandbox(Action<string>? onFailure = null,
+            IInternalSceneTransitionService? transitionOverride = null) =>
+            Dispatch(SandboxSceneName, onFailure, transitionOverride,
+                (sink, mark) => LaunchOpenSandboxCore(onFailure, sink, mark));
+
+        public bool LoadSceneDirect(string sceneName, Action<string>? onFailure,
+            IInternalSceneTransitionService? transitionOverride) =>
+            Dispatch(sceneName, onFailure, transitionOverride, (sink, mark) =>
+            {
+                if (!Application.CanStreamedLevelBeLoaded(sceneName)) return false;
+                mark();
+                SceneManager.LoadScene(sceneName, LoadSceneMode.Single);
+                var scene = SceneManager.GetActiveScene();
+                sink.NativeCompleted(OperationResult<SceneSnapshot>.Success(new SceneSnapshot(scene.name, scene.isLoaded, true)));
+                return true;
+            });
+
+        private bool Dispatch(string sceneName, Action<string>? onFailure,
+            IInternalSceneTransitionService? transitionOverride,
+            Func<IInternalNativeSceneCompletion, Action, bool> begin)
+        {
+            if (string.IsNullOrWhiteSpace(sceneName)) return false;
+            var result = (transitionOverride ?? sceneTransitions).TryDispatch(
+                new NativeSceneRequest(sceneName, false, "world native load"),
+                new DelegateNativeSceneDispatch(sink =>
+                {
+                    var entered = false;
+                    try
+                    {
+                        if (begin(sink, () => entered = true)) return NativeSceneDispatchStatus.Dispatched;
+                    }
+                    catch (Exception error)
+                    {
+                        sink.FailCaller(ModErrorCode.External, error.Message);
+                        NotifyFailure(onFailure, error.Message);
+                    }
+                    if (!entered) return NativeSceneDispatchStatus.NotDispatched;
+                    sink.FailCaller(ModErrorCode.External, "The game loader failed after possible native effects; awaiting native drain.");
+                    NotifyFailure(onFailure, "The game loader failed after possible native effects.");
+                    return NativeSceneDispatchStatus.Indeterminate;
+                }));
+            return result.Succeeded;
+        }
+
         /// <summary>Launches a real level the same way the game's menu does (correct play state).</summary>
-        public bool LaunchLevel(object checkpointAsset, Action<string>? onFailure = null)
+        private bool LaunchLevelCore(object checkpointAsset, Action<string>? onFailure, IInternalNativeSceneCompletion nativeCompletion, Action markDispatched)
         {
             try
             {
@@ -138,8 +202,9 @@ namespace TopiaForge.Worlds
                 // Capture the returned UniTask. If we discard it, a fault raised AFTER its first await is lost:
                 // UniTask publishes no UnobservedTaskException for a dropped task, so the scene could fail to load
                 // while WorldsService still reports "Loaded ...". Observing it makes that failure visible.
+                markDispatched();
                 var loadTask = method.Invoke(null, new[] { (object)false, checkpointAsset });
-                ObserveAsyncLoad(loadTask, sceneName!, onFailure);
+                ObserveAsyncLoad(loadTask, sceneName!, onFailure, nativeCompletion);
 
                 logger.Info("Worlds dispatched the game loader for scene '" + sceneName + "'.");
                 return true;
@@ -156,7 +221,7 @@ namespace TopiaForge.Worlds
         /// instead of being swallowed (UniTask raises no UnobservedTaskException for a discarded task). Best-effort
         /// and reflective: if the UniTask/Task plumbing cannot be reached we degrade to the dispatch log alone.
         /// </summary>
-        private void ObserveAsyncLoad(object? loadTask, string sceneName, Action<string>? onFailure)
+        private void ObserveAsyncLoad(object? loadTask, string sceneName, Action<string>? onFailure, IInternalNativeSceneCompletion nativeCompletion)
         {
             if (loadTask == null)
             {
@@ -167,14 +232,14 @@ namespace TopiaForge.Worlds
             {
                 // Preferred: convert the UniTask to a System.Threading.Tasks.Task (UniTaskExtensions.AsTask) and
                 // attach a plain continuation, keeping the result inspection in ordinary, non-reflective code.
-                if (TryObserveViaTask(loadTask, sceneName, onFailure))
+                if (TryObserveViaTask(loadTask, sceneName, onFailure, nativeCompletion))
                 {
                     return;
                 }
 
                 // Fallback: drive the awaitable contract directly (GetAwaiter/IsCompleted/GetResult/OnCompleted),
                 // which UniTask must implement to be awaitable even if AsTask is renamed/absent in this build.
-                if (TryObserveViaAwaiter(loadTask, sceneName, onFailure))
+                if (TryObserveViaAwaiter(loadTask, sceneName, onFailure, nativeCompletion))
                 {
                     return;
                 }
@@ -188,7 +253,7 @@ namespace TopiaForge.Worlds
             }
         }
 
-        private bool TryObserveViaTask(object loadTask, string sceneName, Action<string>? onFailure)
+        private bool TryObserveViaTask(object loadTask, string sceneName, Action<string>? onFailure, IInternalNativeSceneCompletion nativeCompletion)
         {
             var uniTaskType = loadTask.GetType();
             var extensionsType = uniTaskType.Assembly.GetType("Cysharp.Threading.Tasks.UniTaskExtensions");
@@ -206,14 +271,14 @@ namespace TopiaForge.Worlds
                     completed.IsCanceled,
                     completed.Exception?.GetBaseException()?.Message,
                     sceneName,
-                    onFailure),
+                    onFailure, nativeCompletion),
                 CancellationToken.None,
                 TaskContinuationOptions.ExecuteSynchronously,
                 TaskScheduler.Default);
             return true;
         }
 
-        private bool TryObserveViaAwaiter(object loadTask, string sceneName, Action<string>? onFailure)
+        private bool TryObserveViaAwaiter(object loadTask, string sceneName, Action<string>? onFailure, IInternalNativeSceneCompletion nativeCompletion)
         {
             var getAwaiter = loadTask.GetType().GetMethod("GetAwaiter", AnyInstance, null, Type.EmptyTypes, null);
             var awaiter = getAwaiter?.Invoke(loadTask, null);
@@ -235,15 +300,15 @@ namespace TopiaForge.Worlds
                 try
                 {
                     getResult.Invoke(awaiter, null);
-                    QueueLoadOutcome(false, false, null, sceneName, onFailure);
+                    QueueLoadOutcome(false, false, null, sceneName, onFailure, nativeCompletion);
                 }
                 catch (TargetInvocationException ex)
                 {
-                    QueueLoadOutcome(true, false, (ex.InnerException ?? ex).Message, sceneName, onFailure);
+                    QueueLoadOutcome(true, false, (ex.InnerException ?? ex).Message, sceneName, onFailure, nativeCompletion);
                 }
                 catch (Exception ex)
                 {
-                    QueueLoadOutcome(true, false, ex.Message, sceneName, onFailure);
+                    QueueLoadOutcome(true, false, ex.Message, sceneName, onFailure, nativeCompletion);
                 }
             };
 
@@ -272,8 +337,11 @@ namespace TopiaForge.Worlds
             bool canceled,
             string? error,
             string sceneName,
-            Action<string>? onFailure)
+            Action<string>? onFailure, IInternalNativeSceneCompletion nativeCompletion)
         {
+            if (faulted || canceled)
+                nativeCompletion.FailCaller(canceled ? ModErrorCode.Cancelled : ModErrorCode.External,
+                    "The game loader failed after dispatch: " + (error ?? sceneName));
             loadOutcomes.TryEnqueue(new AsyncLoadOutcome(faulted, canceled, error, sceneName, onFailure));
         }
 
@@ -335,7 +403,7 @@ namespace TopiaForge.Worlds
         }
 
         /// <summary>Loads a scene by name through the game's async loader when no checkpoint asset is known.</summary>
-        public bool LoadSceneByName(string sceneName, Action<string>? onFailure = null)
+        private bool LoadSceneByNameCore(string sceneName, Action<string>? onFailure, IInternalNativeSceneCompletion nativeCompletion, Action markDispatched)
         {
             if (string.IsNullOrWhiteSpace(sceneName))
             {
@@ -351,8 +419,9 @@ namespace TopiaForge.Worlds
                 }
 
                 // Capture and observe the returned UniTask so an async load fault is logged, not swallowed.
+                markDispatched();
                 var loadTask = method.Invoke(null, new object[] { sceneName, CancellationToken.None });
-                ObserveAsyncLoad(loadTask, sceneName, onFailure);
+                ObserveAsyncLoad(loadTask, sceneName, onFailure, nativeCompletion);
                 return true;
             }
             catch (Exception ex)
@@ -367,14 +436,17 @@ namespace TopiaForge.Worlds
         /// scene (which spawns a real player) with any UGC content import suppressed. Returns true on dispatch;
         /// the caller layers the arena geometry on once the scene finishes loading.
         /// </summary>
-        public bool LaunchOpenSandbox(Action<string>? onFailure = null)
+        private bool LaunchOpenSandboxCore(Action<string>? onFailure, IInternalNativeSceneCompletion nativeCompletion, Action markDispatched)
         {
             try
             {
                 // Suppress the UGC importer first so the play scene comes up empty (no past creation loaded),
                 // then load it. The scene's own bootstrap spawns the player; we only need a clean stage.
+                if (sceneUtilType?.GetMethod("LoadScene", PublicStatic, null,
+                        new[] { typeof(string), typeof(CancellationToken) }, null) == null) return false;
+                markDispatched();
                 SuppressUgcImport();
-                return LoadSceneByName(SandboxSceneName, onFailure);
+                return LoadSceneByNameCore(SandboxSceneName, onFailure, nativeCompletion, markDispatched);
             }
             catch (Exception ex)
             {

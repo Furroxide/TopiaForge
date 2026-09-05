@@ -40,7 +40,7 @@ namespace TopiaForge.ModManager
 
             // The resolver already validated dependencies at the manifest level, but a dependency can still
             // fail at load time (e.g. a TypeLoadException from a binary-stale package). Running a dependent
-            // without its dependency's services produces a half-alive mod giving users wrong advice — skip
+            // without its dependency's services produces a half-alive mod giving users wrong advice â€” skip
             // it with an honest reason instead. Load order is topological, so dependencies are visited first.
             var failedDependency = DependencyResolver.FindFailedRequiredDependency(manifest, failedMods.Keys);
             if (failedDependency != null)
@@ -131,6 +131,11 @@ namespace TopiaForge.ModManager
                 failedMods[manifest.Id] = rootException.GetType().Name + ": " + rootException.Message;
                 runtimeInfo.MarkProviderFailed(manifest, failedMods[manifest.Id]);
                 Exception? unloadFailure = null;
+                if (context != null)
+                {
+                    try { context.BeginStopping(); }
+                    catch (Exception cancellationException) { unloadFailure = cancellationException; }
+                }
                 if (loadObserverStarted && !loadObserverCompleted)
                 {
                     loadObserverCompleted = true;
@@ -140,7 +145,7 @@ namespace TopiaForge.ModManager
                     }
                     catch (Exception observerException)
                     {
-                        unloadFailure = observerException;
+                        unloadFailure = CombineCleanupFailures(unloadFailure, observerException);
                     }
                 }
 
@@ -172,13 +177,17 @@ namespace TopiaForge.ModManager
 
                 // OnLoad may have published services or acquired a scene claim before throwing. A failed mod
                 // is not added to loadedMods, so UnloadAll would never otherwise clean those partial effects.
-                CleanupOwnedFrameworkServices(manifest.Id);
-                serviceRegistry.UnregisterOwner(manifest.Id);
-                // Diagnostics are deliberately last: cleanup is mandatory even if every log sink is broken.
-                logger.Error(ex, "Failed to load mod " + manifest.Id + ".");
+                try { CleanupOwnedFrameworkServices(manifest.Id); }
+                catch (Exception cleanupException) { unloadFailure = CombineCleanupFailures(unloadFailure, cleanupException); }
+                try { serviceRegistry.UnregisterOwner(manifest.Id); }
+                catch (Exception serviceException) { unloadFailure = CombineCleanupFailures(unloadFailure, serviceException); }
+                // Failed diagnostics must not prevent an independent package from loading.
+                try { logger.Error(ex, "Failed to load mod " + manifest.Id + "."); }
+                catch { }
                 if (unloadFailure != null)
                 {
-                    logger.Error(unloadFailure, "Failed to clean up partially loaded mod " + manifest.Id + ".");
+                    try { logger.Error(unloadFailure, "Failed to clean up partially loaded mod " + manifest.Id + "."); }
+                    catch { }
                 }
             }
             finally

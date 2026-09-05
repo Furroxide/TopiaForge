@@ -66,7 +66,6 @@ namespace TopiaForge.ModManager
                 }
                 catch (ObjectDisposedException)
                 {
-                    lease.Dispose();
                     return OperationResult<IPlayerControlLease>.Failure(
                         ModErrorCode.Cancelled,
                         "The mod stopped before player control could be acquired.");

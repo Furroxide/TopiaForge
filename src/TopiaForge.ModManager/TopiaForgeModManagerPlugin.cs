@@ -295,7 +295,7 @@ namespace TopiaForge.ModManager
             menuButtonInjector.Update();
         }
 
-        private void OnDestroy()
+        private async void OnDestroy()
         {
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.sceneUnloaded -= OnSceneUnloaded;
@@ -322,7 +322,12 @@ namespace TopiaForge.ModManager
             {
                 try
                 {
-                    runtime.UnloadAll();
+                    var shutdown = await runtime.UnloadAllAsync();
+                    if (!shutdown.Succeeded)
+                    {
+                        LogCleanupFailure(new InvalidOperationException(shutdown.ErrorMessage),
+                            "Mod runtime teardown completed with cleanup failures.");
+                    }
                 }
                 catch (Exception ex)
                 {
