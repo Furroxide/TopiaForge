@@ -9,8 +9,23 @@ namespace TopiaForge.ModManager.Core
         /// <summary>The immutable schema selector for the TopiaForge 1.0 manifest contract.</summary>
         public const int ManifestV5SchemaVersion = 5;
 
+        /// <summary>
+        /// The schema that declares <c>contributions</c>: worlds, gamemodes and launch targets as
+        /// separate things, each with an implementation owner, rather than V5's display-only
+        /// <c>worldGamemodes</c> list.
+        /// </summary>
+        public const int ManifestV6SchemaVersion = 6;
+
         /// <summary>The newest schema emitted by current tooling. Older supported readers must not depend on this.</summary>
         public const int CurrentSchemaVersion = ManifestV5SchemaVersion;
+
+        /// <summary>
+        /// Whether a version has a reader at all. Every version gate routes through here, so admitting
+        /// a new schema cannot leave one of them behind still testing for a single version. A gate that
+        /// silently stops applying is worse than one that rejects.
+        /// </summary>
+        public static bool IsSupportedSchemaVersion(int schemaVersion) =>
+            schemaVersion == ManifestV5SchemaVersion || schemaVersion == ManifestV6SchemaVersion;
 
         [DataMember(Name = "$schema", EmitDefaultValue = false)]
         public string SchemaUrl { get; set; } = string.Empty;
@@ -147,6 +162,13 @@ namespace TopiaForge.ModManager.Core
         [DataMember(Name = "apiAssemblies")]
         public List<string> ApiAssemblies { get; set; } = new List<string>();
 
+        /// <summary>
+        /// The worlds, gamemodes and launch targets this package declares. V6 only; null on a V5
+        /// manifest, which had no way to express any of them.
+        /// </summary>
+        [DataMember(Name = "contributions", EmitDefaultValue = false)]
+        public ModContributions? Contributions { get; set; }
+
         [DataMember(Name = "worldGamemodes")]
         public List<ModGamemode> WorldGamemodes { get; set; } = new List<ModGamemode>();
 
@@ -158,7 +180,7 @@ namespace TopiaForge.ModManager.Core
         /// </summary>
         [IgnoreDataMember]
         public bool DeclaresMultiplayer =>
-            SchemaVersion == ManifestV5SchemaVersion && Multiplayer != null;
+            IsSupportedSchemaVersion(SchemaVersion) && Multiplayer != null;
 
         /// <summary>True for manifests that may only be admitted to a standalone session.</summary>
         [IgnoreDataMember]

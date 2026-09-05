@@ -11,7 +11,7 @@ using System.Xml;
 namespace TopiaForge.ModManager.Core
 {
     /// <summary>Strict, bounded, schema-dispatched reader for TopiaForge manifest contracts.</summary>
-    public static class ModManifestJson
+    public static partial class ModManifestJson
     {
         public const long MaxManifestBytes = 1024L * 1024;
 
@@ -26,7 +26,8 @@ namespace TopiaForge.ModManager.Core
             "loadAfter", "loadBefore", "supportedGameVersionRange", "supportedLoaderVersionRange",
             "supportedSdkVersionRange", "category", "tags", "icon", "screenshots", "homepage",
             "source", "license", "licenseFiles", "hashes", "capabilities", "platforms",
-            "architectures", "contentTargets", "builtWith", "worldGamemodes", "apiAssemblies", "multiplayer",
+            "architectures", "contentTargets", "builtWith", "worldGamemodes", "contributions",
+            "apiAssemblies", "multiplayer",
 
             // Retired fields are decoded only so validation can return an actionable migration error.
             "vpmDependencies", "permissions", "id", "title", "gameVersion", "gameVersionRange",
@@ -37,6 +38,14 @@ namespace TopiaForge.ModManager.Core
         {
             "schemaVersion", "name", "displayName", "version", "author", "entryAssembly", "entryType",
             "supportedGameVersionRange", "supportedLoaderVersionRange", "supportedSdkVersionRange"
+        };
+        private static readonly HashSet<string> V5OnlyFields = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "worldGamemodes"
+        };
+        private static readonly HashSet<string> V6OnlyFields = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "contributions"
         };
         private static readonly HashSet<string> AuthorFields = new HashSet<string>(StringComparer.Ordinal)
         {
@@ -145,6 +154,8 @@ namespace TopiaForge.ModManager.Core
             {
                 case ManifestSchemaContract.V5:
                     return DeserializeV5(json, properties, names, present);
+                case ManifestSchemaContract.V6:
+                    return DeserializeV6(json, properties, names, present);
                 default:
                     throw new InvalidDataException(
                         "Manifest schemaVersion " + schemaVersion + " has no registered reader.");
@@ -156,6 +167,27 @@ namespace TopiaForge.ModManager.Core
             IReadOnlyList<JsonObjectMerge.RawJsonProperty> properties,
             IReadOnlyList<string> names,
             HashSet<string> present)
+        {
+            ValidateCommonStructure(properties, names, present, V6OnlyFields);
+            ValidateClosedObjectArray(properties, "worldGamemodes", GamemodeFields, new[] { "id", "name" });
+            return ReadManifest(json);
+        }
+
+        /// <summary>
+        /// Everything both contracts share. Kept in one place so a rule cannot be added to one
+        /// version's reader and quietly missed by the other's.
+        /// <para>
+        /// Structure is checked before anything is deserialized, always. DataContractJsonSerializer
+        /// throws its own SerializationException on a shape it cannot bind -- a string where an object
+        /// belongs, say -- and that is not an actionable manifest error, so nothing may reach it that
+        /// this walk has not already accepted.
+        /// </para>
+        /// </summary>
+        private static void ValidateCommonStructure(
+            IReadOnlyList<JsonObjectMerge.RawJsonProperty> properties,
+            IReadOnlyList<string> names,
+            HashSet<string> present,
+            ICollection<string> foreignFields)
         {
             var missing = RequiredFields.FirstOrDefault(field => !present.Contains(field));
             if (missing != null)
@@ -202,16 +234,43 @@ namespace TopiaForge.ModManager.Core
                     requireAtLeastOne: true);
             }
 
+            foreach (var field in foreignFields)
+            {
+                if (present.Contains(field))
+                {
+                    throw new InvalidDataException(ForeignFieldMessage(field));
+                }
+            }
+
             ValidateClosedObjectArray(properties, "conflicts", ConflictFields, new[] { "id" });
-            ValidateClosedObjectArray(properties, "worldGamemodes", GamemodeFields, new[] { "id", "name" });
 
             if (present.Contains("multiplayer"))
             {
                 ValidateMultiplayerObject(properties);
             }
+        }
 
+        private static ModManifest ReadManifest(string json)
+        {
             var manifest = JsonUtil.Deserialize<ModManifest>(json);
             NormalizeCollections(manifest);
+            return manifest;
+        }
+
+        private static ModManifest DeserializeV6(
+            string json,
+            IReadOnlyList<JsonObjectMerge.RawJsonProperty> properties,
+            IReadOnlyList<string> names,
+            HashSet<string> present)
+        {
+            ValidateCommonStructure(properties, names, present, V5OnlyFields);
+            if (present.Contains("contributions"))
+            {
+                ValidateContributionsObject(properties);
+            }
+
+            var manifest = ReadManifest(json);
+            NormalizeContributions(manifest);
             return manifest;
         }
 

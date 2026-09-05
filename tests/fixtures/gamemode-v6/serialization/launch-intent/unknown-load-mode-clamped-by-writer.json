@@ -1,0 +1,31 @@
+{
+  "id": "unknown-load-mode-clamped-by-writer",
+  "channel": "serialization",
+  "kind": "launch-intent-round-trip",
+  "summary": "A persisted load mode neither side understands is clamped to additiveArena by the Dart writer, which is the only reason the reader never sees it. Removing that clamp turns this into a rejected launch.",
+  "selection": {
+    "worldId": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+    "gamemodeId": "io.github.furroxide.topiaforge.worlds.sandbox",
+    "loadMode": "orbitalDropPod",
+    "launchIntoGamemode": true
+  },
+  "intent": {
+    "command": "launch-target",
+    "worldId": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+    "gamemodeId": "io.github.furroxide.topiaforge.worlds.sandbox",
+    "loadMode": "additiveArena",
+    "allowAdditiveFallback": true
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept"
+    },
+    "dart": {
+      "outcome": "accept"
+    }
+  },
+  "operations": {
+    "csharp": "read-intent",
+    "dart": "write-intent"
+  }
+}

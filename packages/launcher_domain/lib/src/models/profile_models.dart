@@ -181,14 +181,14 @@ class ProfileLaunchConfiguration {
 
     final seenIds = <String>{};
     final selection = profile.worldSelection;
-    if (!ModManifest.isValidId(selection.worldId)) {
+    if (!_isValidDeclarationId(selection.worldId)) {
       throw const FormatException(
-        'Profile worldId must use the safe TopiaForge id format.',
+        'Profile worldId must use the safe TopiaForge declaration id format.',
       );
     }
-    if (!ModManifest.isValidId(selection.gamemodeId)) {
+    if (!_isValidDeclarationId(selection.gamemodeId)) {
       throw const FormatException(
-        'Profile gamemodeId must use the safe TopiaForge id format.',
+        'Profile gamemodeId must use the safe TopiaForge declaration id format.',
       );
     }
     final enabledMods = <String>[];

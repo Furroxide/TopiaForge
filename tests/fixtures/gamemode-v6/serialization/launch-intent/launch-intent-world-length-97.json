@@ -1,0 +1,31 @@
+{
+  "id": "launch-intent-world-length-97",
+  "channel": "serialization",
+  "kind": "launch-intent-hostile",
+  "summary": "The worldId field independently enforces the 96-character declaration boundary.",
+  "intent": {
+    "command": "launch-target",
+    "worldId": "io.fixture.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "gamemodeId": "io.github.furroxide.topiaforge.fixture.gggggggggggggggggggggggggg",
+    "loadMode": "additiveArena",
+    "allowAdditiveFallback": true
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "worldLaunch.worldId"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "writer-cannot-emit"
+      ]
+    }
+  },
+  "operations": {
+    "csharp": "read-intent",
+    "dart": "write-intent"
+  }
+}

@@ -11,7 +11,8 @@ The [canonical brief](../GamemodeContractRedesign.md) is normative. The
 | `9811ff8f78697f1302760b57918e942613f2fc43` and the 2026-09-03 working tree | Historical architecture investigation; its uncommitted state is part of its evidence | Historical, not a description of today's checkout |
 | `f3de112` | Reviewed tip of the original Manifest V6 stack | Source material only; PRs #102–105 were open and unmerged when reviewed |
 | `768fb0f386b5c16ac35d124e12819d58b60816b7` (`origin/dev` when the replacement slice was cut) | Base of `docs/gamemode-redesign-plan` in the registered `TopiaForge-gm` worktree | First replacement slice contains documentation only |
-| Documentation commit containing this ledger on `docs/gamemode-redesign-plan` | Canonical decisions, replacement prompts, evidence boundaries, and historical-status correction | Not merged, not a production fix, and not live acceptance |
+| `f2ec48b14a86adc93c8079fd1216e91a2d6a2764` | Slice 1 squash merge of PR #106 into `dev` | Canonical documents integrated; no production or live acceptance claim |
+| `feat/gamemode-v6-parity`, based on `f2ec48b` | Slice 2; imported source through `16181af`, followed by regression-driven repairs | In progress; canonical alias and production manifests/templates remain V5 |
 
 On 2026-09-05, PRs #102–105 were converted to draft for the approved re-cut.
 Their branch tips and existing review history were preserved. Both external
@@ -76,8 +77,71 @@ The documentation commit containing this ledger was checked on 2026-09-05:
 The initial website-test attempt used PATH's Node 23.8.0 without this worktree's
 website dependencies and failed importing `yaml`. Locked dependency installation
 and Node 24.19.0 resolved that setup failure; no repository dependency versions
-changed. Full C#/Dart/Flutter/reference-build CI is pending the PR against `dev`.
+changed. [PR #106](https://github.com/Furroxide/TopiaForge/pull/106) merged after
+[CI run 33973852651](https://github.com/Furroxide/TopiaForge/actions/runs/33973852651)
+passed on head `16c75babdd19a0c2c74536b4ea9bdac21cb49dbd`, with all five required
+checks present and review threads resolved. Normal protected-branch merge was used.
 These documentation checks do not close any production or live-game acceptance.
+
+Additional baseline checks on the documentation branch (runtime sources identical to
+`768fb0f`) passed: a fresh Release build with zero warnings/errors and the rebuilt
+`verify-csharp-release-surface.sh` run across eleven SDK packages and all seven test
+harnesses. The focused Windows multiplayer pack test reproduced the historical seven
+failures under the inherited PATH (`powershell.exe` was not found by child commands).
+The same unchanged sources passed all ten focused cases with a short explicit PATH
+including Windows PowerShell; the complete data suite then passed 354 tests with four
+expected skips. This is an environment diagnosis, not a source-test waiver. Subsequent
+Windows tests use that explicit child-process PATH and record any new failure.
+
+## Slice 2 local verification
+
+Before reader repairs, the strengthened Dart harness validated each payload against the
+pinned V6 schema and produced 29 reader failures (51 checks passed). These failures
+reproduced invalid acceptance and diagnostic drift for raw scalar/null/conditional
+inputs, collection uniqueness, and typed local references. Schema expectations passed.
+Additional failing fixtures preceded direct-model validation and longest-owner
+repairs. The final corpus has 149 cases: 18 intent operations, 125 manifest reader
+cases, and six direct-model mutation cases. Every manifest payload is checked against
+locked `json_schema` 5.2.2; successful cases require complete structured values and
+serializer/reparse agreement. The harness also checks that every schema contribution
+field is represented in normalization.
+
+Before launch-path repairs, `declaration_id_launch_paths_test.dart` had six failures
+and three passes; `world_authoring_declaration_id_test.dart` had two failures and two
+passes. Legal 65/96-character IDs were dropped or rejected, and invalid menu world
+references survived catalog filtering. After the fixes, the domain boundary plus
+existing profile tests passed 15 cases, and authoring boundary plus existing world
+authoring tests passed 21 cases. Package IDs retain the separate 64-character limit.
+These tests run from each package directory using Flutter 3.44.6 bundled Dart.
+
+| Final local command/check on the slice 2 working tree | Result |
+| --- | --- |
+| `dotnet build TopiaForge.slnx -c Release --nologo` | Passed, zero warnings/errors |
+| `bash tools/verify-csharp-release-surface.sh` after that build | All eleven SDK packages and seven harnesses passed; 148 conformance cases at that run |
+| Rebuilt manager harness with `--gamemode-contract` after the final capability oracle case | 149/149 cases passed |
+| `dart test` from launcher_domain | 479 passed, including 267 focused conformance checks |
+| `dart test` from launcher_data with the verified short Windows PATH | 358 passed, four expected Windows symlink skips |
+| `dart test` from topiaforge_cli with the same PATH | 227 passed, four expected platform skips |
+| `dart analyze --fatal-infos` from each of those three packages | Passed; two initial test-helper brace infos were corrected |
+| `dart format --output=none --set-exit-if-changed` across their lib/test/bin trees | 332 files, zero changes |
+| Fixture index audit and Python fixture self-tests | 149 indexed cases; 23 self-tests passed |
+| Tracked plus new non-generated Dart line audit | No file over 500 lines |
+| README counts, residue, trademark, asset-licence, Markdown links, content preparation | Passed |
+| Full website publication check | Website tests, Astro and DocFX pass; domain/data Dartdoc pass. Launcher UI Dartdoc hits the identical Windows toolchain crash reproduced on clean `f2ec48b`; isolated SDK-source workaround under investigation |
+
+Publication setup history: restoring repository-pinned DocFX 2.78.5 fixed the first
+attempt. The second failed in Dartdoc 9.0.4 `_stripDocImports` with
+`RangeError (end): 0..9089: 9202` after precaching 653180 Flutter elements.
+An archive of unchanged `f2ec48b` domain/data/UI packages reproduced the exact crash
+using the same Flutter 3.44.6 SDK. That SDK has CRLF Flutter source files; the existing
+`tools/bootstrap-dev.ps1` documents this upstream Dartdoc issue. No SDK or source
+versions were changed. Remote publication CI and an isolated source-copy check remain
+separate evidence; this is not a permanent publication exemption.
+
+The canonical schema alias and all first-party manifests/templates remain unchanged
+at V5. Production launch activation is deliberately absent. Slice 2 CI and merge are
+not yet recorded; runtime, Flutter application integration, and live game evidence
+remain with their later slices.
 
 ## Prioritized repair ledger
 
@@ -123,8 +187,8 @@ The old four-PR stack is source material; it does not satisfy these eight delive
 
 | Slice | Deliverable | Implemented | Connected to production | Automated evidence | Live evidence |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Review/brief/status/prompts and premature-claim corrections | Prepared on the base above; awaiting integration | Not applicable | Local documentation checks below pass; remote CI pending | Not applicable |
-| 2 | Unused V6 contract/readers/validators/conformance; alias stays V5 | Original-stack candidate needs repairs | Intentionally unused | Review checks above are insufficient; replacement regressions pending | Not required for pure contract |
+| 1 | Review/brief/status/prompts and premature-claim corrections | Merged in PR #106 (`f2ec48b`) | Not applicable | Documentation checks and required CI passed at `16c75ba`; baseline Release/seven-harness checks passed | Not applicable |
+| 2 | Unused V6 contract/readers/validators/conformance; alias stays V5 | Implemented on `feat/gamemode-v6-parity`, awaiting integration | Intentionally unused | 149 C# fixtures; 479 domain, 358 data, 227 CLI tests pass; seven Release harnesses pass; CI pending | Not required for pure contract |
 | 3 | Pure resolution and immutable transport models | Original-stack candidate needs repairs | Intentionally no production switch | Corrected shared resolution/wire fixtures pending | Not required for pure models |
 | 4 | Scoped ownership, lifecycle, shared transition foundations | Pending | Pending | Fault-injection and admission coverage pending | Native behavior pending |
 | 5 | Verified factory bindings, providers/discovery, readiness adapters | Pending | Pending | Synthetic package and production-adapter coverage pending | World/readiness checks pending |

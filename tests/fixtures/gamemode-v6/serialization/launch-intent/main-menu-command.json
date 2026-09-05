@@ -1,0 +1,27 @@
+{
+  "id": "main-menu-command",
+  "channel": "serialization",
+  "kind": "launch-intent-round-trip",
+  "summary": "Play normally is a command in its own right, and it carries no target at all so it cannot be confused with a launch the writer forgot to fill in.",
+  "selection": {
+    "worldId": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+    "gamemodeId": "io.github.furroxide.topiaforge.worlds.sandbox",
+    "loadMode": "additiveArena",
+    "launchIntoGamemode": false
+  },
+  "intent": {
+    "command": "main-menu"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept"
+    },
+    "dart": {
+      "outcome": "accept"
+    }
+  },
+  "operations": {
+    "csharp": "read-intent",
+    "dart": "write-intent"
+  }
+}
