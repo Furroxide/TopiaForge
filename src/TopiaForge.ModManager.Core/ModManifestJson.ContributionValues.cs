@@ -30,6 +30,8 @@ namespace TopiaForge.ModManager.Core
             var contentPath = path + ".content";
             var content = ReadObject(contentPath, RequireRawProperty(fields, "content"));
             var kind = RawEnum(content, contentPath, "kind", "bundle", "provider", "game-scene", "discovered");
+            // Reserve the dot and one nonempty suffix character for a legal 96-character instance id.
+            if (kind == ModWorldContent.DiscoveredKind) RawText(fields, path, "id", 4, 94);
             RawPath(content, contentPath, "bundle", dll: false);
             RawText(content, contentPath, "prefab", 1, 512);
             RawText(content, contentPath, "sceneName", 1, 128);

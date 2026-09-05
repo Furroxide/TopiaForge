@@ -185,6 +185,52 @@ class FixtureIndexAuditTests(unittest.TestCase):
         self._write("a-case.json", _case(expect={"csharp": {"outcome": "reject"}, "dart": {"outcome": "reject"}}))
         self._expect_failure("nonempty errorCodes")
 
+    def _resolution(self, **overrides) -> dict:
+        reason = {"code": "worldNotDeclared", "subject": "base.mod.world", "subjectVersion": ""}
+        expected = {"outcome": "reject", "blocks": [reason]}
+        case = {"id": "a-case", "channel": "resolution", "kind": "launch-resolution",
+            "summary": "A pure resolution closure test", "profile": {"packages": []}, "request": {},
+            "expect": {"csharp": expected, "dart": json.loads(json.dumps(expected))}}
+        case.update(overrides)
+        path = self.fixtures / "resolution"
+        path.mkdir(exist_ok=True)
+        (path / "a-case.json").write_text(json.dumps(case), encoding="utf-8")
+        return case
+
+    def test_resolution_requires_full_reason_tuples(self) -> None:
+        self._resolution(expect={runner: {"outcome": "reject", "blocks": ["worldNotDeclared"]} for runner in ["csharp", "dart"]})
+        self._expect_failure("closed string block tuples")
+
+    def test_resolution_reasons_are_ordered_and_unique(self) -> None:
+        reason = {"code": "worldNotDeclared", "subject": "base.mod.world", "subjectVersion": ""}
+        self._resolution(expect={runner: {"outcome": "reject", "blocks": [reason, reason]} for runner in ["csharp", "dart"]})
+        self._expect_failure("ordinal sorted unique blocks")
+
+    def test_resolution_acceptance_requires_normalization(self) -> None:
+        self._resolution(expect={runner: {"outcome": "accept"} for runner in ["csharp", "dart"]})
+        self._expect_failure("structured normalized")
+
+    def test_resolution_requires_package_manifest_expectations(self) -> None:
+        self._resolution(profile={"packages": [{"id": "base.mod", "version": "1.0.0", "manifest": {}}]})
+        self._expect_failure("schemaOutcome and validation")
+
+    def test_resolution_rejects_nonobject_package_validation(self) -> None:
+        self._resolution(profile={"packages": [{"schemaOutcome": "accept", "validation": []}]})
+        self._expect_failure("schemaOutcome and validation")
+
+    def test_resolution_rejects_missing_semantic_codes(self) -> None:
+        self._resolution(profile={"packages": [{"schemaOutcome": "accept", "validation": {"outcome": "reject"}}]})
+        self._expect_failure("exact sorted manifest validation codes")
+
+    def test_resolution_cannot_accept_invalid_manifest_inputs(self) -> None:
+        self._resolution(profile={"packages": [{"schemaOutcome": "reject", "validation": {"outcome": "accept"}}]},
+            expect={runner: {"outcome": "accept", "normalized": {}} for runner in ["csharp", "dart"]})
+        self._expect_failure("invalid input manifests")
+
+    def test_resolution_cannot_exempt_same_operation_parity(self) -> None:
+        self._resolution(divergenceReason="Intentionally different language rules")
+        self._expect_failure("same-operation parity")
+
     def test_malformed_json_names_the_file(self) -> None:
         (self.cases / "a-case.json").write_text("{not json", encoding="utf-8")
         self._expect_failure("a-case.json is not valid JSON")

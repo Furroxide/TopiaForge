@@ -1,0 +1,22 @@
+{
+  "id": "wire-progress-scalar-root",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive progress codec scalar root",
+  "transport": "progress",
+  "payload": true,
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    }
+  }
+}

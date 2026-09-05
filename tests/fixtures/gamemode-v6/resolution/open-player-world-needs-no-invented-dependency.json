@@ -1,0 +1,177 @@
+{
+  "id": "open-player-world-needs-no-invented-dependency",
+  "channel": "resolution",
+  "kind": "launch-resolution",
+  "summary": "open player world needs no invented dependency.",
+  "profile": {
+    "packages": [
+      {
+        "id": "io.github.furroxide.topiaforge.worlds",
+        "version": "0.1.0",
+        "manifest": {
+          "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+          "schemaVersion": 6,
+          "name": "io.github.furroxide.topiaforge.worlds",
+          "displayName": "worlds",
+          "version": "0.1.0",
+          "author": {
+            "name": "TopiaForge"
+          },
+          "entryAssembly": "Fixture.dll",
+          "entryType": "Fixture.Mod",
+          "supportedGameVersionRange": "*",
+          "supportedLoaderVersionRange": "*",
+          "supportedSdkVersionRange": "*",
+          "capabilities": [
+            "world-service"
+          ],
+          "contributions": {
+            "worlds": [
+              {
+                "id": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+                "name": "open_sandbox",
+                "content": {
+                  "kind": "game-scene",
+                  "sceneName": "UgcPlay"
+                },
+                "transitions": [
+                  "additive-arena",
+                  "scene-replacement"
+                ],
+                "spawn": {
+                  "kind": "provider-default"
+                },
+                "openToAnyCompatible": true
+              }
+            ],
+            "gamemodes": [
+              {
+                "id": "io.github.furroxide.topiaforge.worlds.freeplay",
+                "name": "freeplay",
+                "implementation": {
+                  "type": "Fixture.Gamemode"
+                }
+              }
+            ],
+            "launchTargets": [
+              {
+                "id": "io.github.furroxide.topiaforge.worlds.freeplay.menu",
+                "title": "menu",
+                "gamemode": "io.github.furroxide.topiaforge.worlds.freeplay",
+                "world": {
+                  "policy": "open",
+                  "default": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+                  "allowPlayerOverride": true
+                }
+              }
+            ]
+          }
+        },
+        "schemaOutcome": "accept",
+        "validation": {
+          "outcome": "accept"
+        }
+      },
+      {
+        "id": "io.example.external",
+        "version": "0.1.0",
+        "manifest": {
+          "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+          "schemaVersion": 6,
+          "name": "io.example.external",
+          "displayName": "worlds",
+          "version": "0.1.0",
+          "author": {
+            "name": "TopiaForge"
+          },
+          "entryAssembly": "Fixture.dll",
+          "entryType": "Fixture.Mod",
+          "supportedGameVersionRange": "*",
+          "supportedLoaderVersionRange": "*",
+          "supportedSdkVersionRange": "*",
+          "capabilities": [
+            "world-service"
+          ],
+          "contributions": {
+            "worlds": [
+              {
+                "id": "io.example.external.arena",
+                "name": "open_sandbox",
+                "content": {
+                  "kind": "game-scene",
+                  "sceneName": "UgcPlay"
+                },
+                "transitions": [
+                  "additive-arena",
+                  "scene-replacement"
+                ],
+                "spawn": {
+                  "kind": "provider-default"
+                },
+                "openToAnyCompatible": true
+              }
+            ]
+          }
+        },
+        "schemaOutcome": "accept",
+        "validation": {
+          "outcome": "accept"
+        }
+      }
+    ]
+  },
+  "request": {
+    "targetId": "io.github.furroxide.topiaforge.worlds.freeplay.menu",
+    "worldOverride": "io.example.external.arena"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "targetId": "io.github.furroxide.topiaforge.worlds.freeplay.menu",
+        "gamemodeId": "io.github.furroxide.topiaforge.worlds.freeplay",
+        "worldId": "io.example.external.arena",
+        "transition": "scene-replacement",
+        "request": {
+          "targetId": "io.github.furroxide.topiaforge.worlds.freeplay.menu",
+          "worldOverride": "io.example.external.arena"
+        },
+        "packages": [
+          {
+            "id": "io.example.external",
+            "version": "0.1.0"
+          },
+          {
+            "id": "io.github.furroxide.topiaforge.worlds",
+            "version": "0.1.0"
+          }
+        ],
+        "digest": "54b5671319e69d1a"
+      }
+    },
+    "dart": {
+      "outcome": "accept",
+      "normalized": {
+        "targetId": "io.github.furroxide.topiaforge.worlds.freeplay.menu",
+        "gamemodeId": "io.github.furroxide.topiaforge.worlds.freeplay",
+        "worldId": "io.example.external.arena",
+        "transition": "scene-replacement",
+        "request": {
+          "targetId": "io.github.furroxide.topiaforge.worlds.freeplay.menu",
+          "worldOverride": "io.example.external.arena"
+        },
+        "packages": [
+          {
+            "id": "io.example.external",
+            "version": "0.1.0"
+          },
+          {
+            "id": "io.github.furroxide.topiaforge.worlds",
+            "version": "0.1.0"
+          }
+        ],
+        "digest": "54b5671319e69d1a"
+      }
+    }
+  }
+}

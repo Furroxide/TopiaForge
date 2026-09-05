@@ -50,7 +50,8 @@ inspect, not an alternative specification.
 7. Do not reopen accepted choices: V6 replaces V5; contribution declarations
    live under `contributions`; `options`, `optionValues`, and
    `sessionExtensions` are excluded; declaration IDs have a separate 96-character
-   ASCII grammar; `GamemodeHost` is retired at activation; the Worlds SDK
+   ASCII grammar, with discovered families capped at 94 to reserve a nonempty
+   instance suffix; `GamemodeHost` is retired at activation; the Worlds SDK
    assembly identity stays `0.1.0.0`; competing launches return Busy.
 
 ## Verification and handoff

@@ -55,6 +55,15 @@ live acceptance for the integrated redesign. Do not waive pending game evidence.
 - Use an isolated profile against the installed game. Record exact package/game
   revisions, launch command, scene/world, expected/actual behavior, and log/artifact
   evidence. Preserve the user's regular profiles, saves, and game content.
+  Establish both loader/manager isolation and native persistent-data isolation; a
+  launcher profile or copied install does not prove the latter. The current runner
+  writes under the normal installation even with `skipRuntimeInstall`, so pass an
+  explicit isolated runtime layout through installation, staging, launch and logs.
+  Verify actual runtime roots before gameplay and abort on normal-user save paths.
+  Retain PID, start time and executable identity; never stop all processes matching
+  the game's path. Test stale acknowledgements, PID reuse and unrelated processes.
+  A separate Windows user/session or VM may require user assistance. Do not create
+  accounts or copy normal authentication/save data as an implicit setup step.
 - Exercise cold launch, actual Open Sandbox geometry/environment/kill-plane/spawn,
   both discovered-level sources, authored-marker worlds, Zombies, Sandbox F5 and
   pause behavior, Free Play with Sandbox absent, restart, and main-menu return.

@@ -12,7 +12,8 @@ The [canonical brief](../GamemodeContractRedesign.md) is normative. The
 | `f3de112` | Reviewed tip of the original Manifest V6 stack | Source material only; PRs #102–105 were open and unmerged when reviewed |
 | `768fb0f386b5c16ac35d124e12819d58b60816b7` (`origin/dev` when the replacement slice was cut) | Base of `docs/gamemode-redesign-plan` in the registered `TopiaForge-gm` worktree | First replacement slice contains documentation only |
 | `f2ec48b14a86adc93c8079fd1216e91a2d6a2764` | Slice 1 squash merge of PR #106 into `dev` | Canonical documents integrated; no production or live acceptance claim |
-| `feat/gamemode-v6-parity`, based on `f2ec48b` | Slice 2; imported source through `16181af`, followed by regression-driven repairs | In progress; canonical alias and production manifests/templates remain V5 |
+| `c61d5fcf821ef726c2aea3ba35c092e314e1f6c4` | Slice 2 squash merge of PR #107, reviewed head `055a7d4` | Unused V6 contract integrated; alias and production manifests/templates remain V5 |
+| `feat/gamemode-resolution-v4`, based on `c61d5fc` | Slice 3; corrected pure resolver, immutable plans and inactive transport models | Local verification passed; PR/CI integration pending; no production caller or wire activation |
 
 On 2026-09-05, PRs #102–105 were converted to draft for the approved re-cut.
 Their branch tips and existing review history were preserved. Both external
@@ -127,7 +128,7 @@ These tests run from each package directory using Flutter 3.44.6 bundled Dart.
 | Fixture index audit and Python fixture self-tests | 149 indexed cases; 23 self-tests passed |
 | Tracked plus new non-generated Dart line audit | No file over 500 lines |
 | README counts, residue, trademark, asset-licence, Markdown links, content preparation | Passed |
-| Full website publication check | Website tests, Astro and DocFX pass; domain/data Dartdoc pass. Launcher UI Dartdoc hits the identical Windows toolchain crash reproduced on clean `f2ec48b`; isolated SDK-source workaround under investigation |
+| Full website publication check | Complete Linux CI publication passed at `055a7d4`. Local Windows UI Dartdoc hits a baseline toolchain crash; isolated LF copies remove that crash but expose 36 baseline annotation-link warnings |
 
 Publication setup history: restoring repository-pinned DocFX 2.78.5 fixed the first
 attempt. The second failed in Dartdoc 9.0.4 `_stripDocImports` with
@@ -135,13 +136,113 @@ attempt. The second failed in Dartdoc 9.0.4 `_stripDocImports` with
 An archive of unchanged `f2ec48b` domain/data/UI packages reproduced the exact crash
 using the same Flutter 3.44.6 SDK. That SDK has CRLF Flutter source files; the existing
 `tools/bootstrap-dev.ps1` documents this upstream Dartdoc issue. No SDK or source
-versions were changed. Remote publication CI and an isolated source-copy check remain
-separate evidence; this is not a permanent publication exemption.
+versions were changed. An isolated LF source copy removed the crash but produced 36 inherited meta
+annotation-link warnings; a supported staged linkTo override did not fix those
+warnings. No global SDK or cache sources were changed. Retained local logs are
+under the temporary reproduction directory `tf-dartdoc-baseline-spmb62k8`. This
+local limitation is separate from passing Linux publication CI and is not a
+permanent publication exemption.
 
 The canonical schema alias and all first-party manifests/templates remain unchanged
-at V5. Production launch activation is deliberately absent. Slice 2 CI and merge are
-not yet recorded; runtime, Flutter application integration, and live game evidence
-remain with their later slices.
+at V5. Production launch activation is deliberately absent. [PR #107](https://github.com/Furroxide/TopiaForge/pull/107) merged at `c61d5fc` after
+[CI run 33976277744](https://github.com/Furroxide/TopiaForge/actions/runs/33976277744)
+passed on `055a7d4f537d48f49862ed60becf44731aa3e83a`. All five required checks,
+Windows data tests, Flutter checks, seven template lifecycles and full Linux
+publication passed. Updating the final PR description reran the policy check;
+the merge waited for that check to pass and used normal branch protection.
+Runtime activation and live game evidence remain with later slices.
+
+## Slice 3 local verification
+
+The replacement branch starts at merged `c61d5fc`. It imports only the pure
+resolver and resolution fixtures from preserved `d314599`, leaving the alias,
+first-party manifests, templates, runtime callers and wire V3 unchanged.
+
+The pre-fix resolver failed cases for absent override permission, consent on open
+policy defaults, invented dependencies on open player choices, concrete discovered
+instance identity, combined blockers and copied plan identities. A preserved
+isolated Dart copy of `d314599` additionally reproduced incorrect longer-owner
+fallback for targets, disabled mode/world diagnostics and consent dependency ranges.
+These probes ran independently of the repaired production sources.
+
+Review of the replacement exposed further defects before integration: disabled
+historical versions competing with an enabled selection, family availability not
+propagating to its instances, and NoAvailableTarget being inferred despite an
+independent compatibility failure. New cases reproduced those defects before the
+corresponding fixes. Resolution fixtures now separately state schema and semantic
+validity for every input manifest; an intentionally invalid robustness input cannot
+silently stand in for a valid operational case.
+
+Immutable transport descriptors retain the original request independently of the
+resolved tuple. Inactive wire V4, progress, separate launch/session outcomes and
+versioned observations have strict shared string-codec fixtures. Runtime binding
+proof is separate from cached observations and must match the loaded profile.
+Exact package identities and literal cross-language digest vectors are checked in
+addition to re-resolution. The corpus contains 353 shared cases: 156 contract/legacy-wire,
+67 resolution and 130 new transport cases. Both runners execute exact results and
+input-order permutations; direct model suites additionally check copied snapshots,
+constructor invariants, 4096/4097 collection limits and fresh binding revalidation.
+These checks do not certify a production launch or live game behavior.
+
+A final boundary review reproduced four Dart transport failures: empty discovery
+suffixes were accepted while C# rejected them. Two valid 94-character-family /
+96-character-instance controls passed. The manifest contract also allowed families
+of 95/96 characters, which cannot represent any nonempty-suffix instance within
+96. Six schema/reader/direct-model checks failed before the conditional max94
+repair; static world95/96 and mode/target96 controls remained valid. All twenty
+added checks pass after the fixes. The normative brief now states this reserve.
+
+Local checks on the slice 3 boundary follow-up to `84a7f6d`, 5 September 2026:
+
+| Command or check | Result |
+| --- | --- |
+| Fresh `dotnet build TopiaForge.slnx -c Release` | Passed, zero warnings/errors |
+| Rebuilt `bash tools/verify-csharp-release-surface.sh` | All eleven SDK packages and seven harnesses passed, including 353 C# conformance cases and direct model tests |
+| `dotnet format TopiaForge.slnx --verify-no-changes --no-restore` | Passed after formatting owned files and two unchanged local line-ending cases |
+| Full launcher_domain `dart test` | 791 passed, including 579 conformance/model checks |
+| Full launcher_data / topiaforge_cli `dart test`, verified short Windows PATH | 358 / 227 passed, four expected platform skips in each |
+| Fatal-info analysis in domain/data/CLI | Passed; final full-domain analysis found one missing brace pair, corrected before handoff |
+| Dart format verification across those lib/test/bin trees | Original three-package check: 348 files; boundary follow-up: 97 domain files, zero changes |
+| Fixture closure and Python self-tests | 353 cases; 31 self-tests passed |
+| Tracked plus new non-generated Dart line audit | 410 files; none over 500 lines |
+| README count, residue, trademark, asset-licence audits | Passed |
+| Markdown links and publication preparation | 124 files; 25 pages and five snippets from three compiled-template sources passed |
+| Full publication and required CI | Passed at `84a7f6d` in run `33981203036`; boundary follow-up CI pending |
+
+The first seven-harness attempt used the build preceding the final added consent
+alternative regression and failed that case as expected. After the helper repair,
+a fresh Release build and complete seven-harness rerun passed. Whole-solution
+Windows formatting also flagged two files whose normalized content was unchanged
+from `c61d5fc`; local line-ending normalization made the check pass without a
+repository behavior change. Retained local build/format/harness logs use the
+`tf-slice3-*` prefix in the temporary directory; package test logs are ignored under
+`.dart_tool/slice3-*.log`. Exact committed CI evidence will be appended after review.
+
+## Live acceptance isolation prerequisite
+
+Read-only inspection on 5 September 2026 found the installed Unity 6000.0.31f1
+build with Doorstop 4.5.0. Doorstop supports an alternate preloader assembly; the
+installed BepInEx preloader derives its root from that assembly, and
+`ManagerPaths` follows the loader root. This provides a supported route for
+separate loader/manager files, subject to verifying the actual roots at runtime.
+
+It does not isolate Unity native persistent data. The current user has native game
+save and authentication files in LocalLow; only filenames were inspected. No
+supported save-root override was found in the inspected game metadata. CreatorContent
+also reports `persistenceIsolationAvailable: false`. A separate Windows user/session
+or VM is therefore the current viable acceptance arrangement; its availability and
+game compatibility are unverified. No account, save, authentication file or game
+installation was changed, and no game was launched.
+
+The existing `LiveAcceptanceRunner` writes to the ordinary installation even with
+`skipRuntimeInstall`, and the Windows stop helper targets every process matching
+the executable path. Slices 7/8 must carry an explicit isolated runtime layout,
+record actual native persistent-data roots, and retain process ownership including
+PID/start time/executable identity. Add tests for unintended ordinary-root writes,
+root mismatch, stale acknowledgement and unrelated processes. Abort live setup if
+it cannot establish isolation; profile names and environment-variable overrides
+alone are insufficient evidence. Visual/input and native-timing acceptance remain
+pending, with user assistance required if no suitable native-control surface exists.
 
 ## Prioritized repair ledger
 
@@ -188,8 +289,8 @@ The old four-PR stack is source material; it does not satisfy these eight delive
 | Slice | Deliverable | Implemented | Connected to production | Automated evidence | Live evidence |
 | --- | --- | --- | --- | --- | --- |
 | 1 | Review/brief/status/prompts and premature-claim corrections | Merged in PR #106 (`f2ec48b`) | Not applicable | Documentation checks and required CI passed at `16c75ba`; baseline Release/seven-harness checks passed | Not applicable |
-| 2 | Unused V6 contract/readers/validators/conformance; alias stays V5 | Implemented on `feat/gamemode-v6-parity`, awaiting integration | Intentionally unused | 149 C# fixtures; 479 domain, 358 data, 227 CLI tests pass; seven Release harnesses pass; CI pending | Not required for pure contract |
-| 3 | Pure resolution and immutable transport models | Original-stack candidate needs repairs | Intentionally no production switch | Corrected shared resolution/wire fixtures pending | Not required for pure models |
+| 2 | Unused V6 contract/readers/validators/conformance; alias stays V5 | Merged in PR #107 (`c61d5fc`) | Intentionally unused | 149 C# fixtures; 479 domain, 358 data, 227 CLI tests; seven Release harnesses and required CI/publication passed at `055a7d4` | Not required for pure contract |
+| 3 | Pure resolution and immutable transport models | Implemented on `feat/gamemode-resolution-v4`; awaiting PR/CI integration | Intentionally no production switch | 340 shared fixtures; 771 domain tests; full Release/seven harnesses, data/CLI, formatting/analyzers and audits passed locally | Not required for pure models |
 | 4 | Scoped ownership, lifecycle, shared transition foundations | Pending | Pending | Fault-injection and admission coverage pending | Native behavior pending |
 | 5 | Verified factory bindings, providers/discovery, readiness adapters | Pending | Pending | Synthetic package and production-adapter coverage pending | World/readiness checks pending |
 | 6 | Activate runtime and atomically flip manifests/templates | Original-stack migration is partial source material only | Pending | Rebuilt API baselines, generated package and consumer coverage pending | First-party gameplay pending |
