@@ -10,7 +10,7 @@ The [canonical brief](../GamemodeContractRedesign.md) is normative. The
 | --- | --- | --- |
 | `9811ff8f78697f1302760b57918e942613f2fc43` and the 2026-09-03 working tree | Historical architecture investigation; its uncommitted state is part of its evidence | Historical, not a description of today's checkout |
 | `f3de112` | Reviewed tip of the original Manifest V6 stack | Source material only; PRs #102–105 were open and unmerged when reviewed |
-| `768fb0f386b5c16ac35d124e12819d58b60816b7` (`origin/dev` when the replacement slice was cut) | Base of `docs/gamemode-redesign-plan` in `C:\Users\vanst\Code\TopiaForge-gm` | First replacement slice contains documentation only |
+| `768fb0f386b5c16ac35d124e12819d58b60816b7` (`origin/dev` when the replacement slice was cut) | Base of `docs/gamemode-redesign-plan` in the registered `TopiaForge-gm` worktree | First replacement slice contains documentation only |
 | Documentation commit containing this ledger on `docs/gamemode-redesign-plan` | Canonical decisions, replacement prompts, evidence boundaries, and historical-status correction | Not merged, not a production fix, and not live acceptance |
 
 On 2026-09-05, PRs #102–105 were converted to draft for the approved re-cut.
@@ -39,10 +39,11 @@ certify the current documentation branch or a future reconstruction of the sourc
 | Full relevant Release/Dart/Flutter matrix on the replacement branch | Not yet recorded | No new full-suite green claim. |
 | Live game and native-timing acceptance | Not run | Scene readiness, placement, transition races, teardown under injection, and Free Play gameplay remain unverified. |
 
-The focused Dart command was run from `packages/launcher_domain` at the reviewed revision:
+The focused Dart command was run from `packages/launcher_domain` at the reviewed revision
+(the machine-specific home directory is expressed portably here):
 
 ```powershell
-& 'C:\Users\vanst\fvm\versions\3.44.6\bin\cache\dart-sdk\bin\dart.exe' test test/gamemode_contract_conformance_test.dart test/manifest_schema_test.dart --reporter expanded
+& (Join-Path $env:USERPROFILE 'fvm\versions\3.44.6\bin\cache\dart-sdk\bin\dart.exe') test test/gamemode_contract_conformance_test.dart test/manifest_schema_test.dart --reporter expanded
 ```
 
 It ended with `+12: All tests passed`. The publication-preparation check was

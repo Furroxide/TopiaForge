@@ -25,7 +25,7 @@ inspect, not an alternative specification.
 1. Read the repository's `AGENTS.md` and `CONTRIBUTING.md`, the canonical brief,
    this index, the selected prompt, and the current evidence ledger. Confirm
    the worktree, branch, tracked changes, remote, and prerequisite merge before
-   editing. The approved working checkout is `C:\Users\vanst\Code\TopiaForge-gm`;
+   editing. Resolve the approved `TopiaForge-gm` checkout using `git worktree list`;
    the sibling `TopiaForge` checkout is shared and is not this implementation
    worktree. Preserve unrelated work in either checkout.
 2. Fetch and compare with remote `dev` at the start, before every push, and
@@ -57,8 +57,8 @@ inspect, not an alternative specification.
 
 Use the pinned tool versions declared by the current checkout. On the recorded
 Windows development machine, invoke Flutter-bundled Dart explicitly at
-`C:\Users\vanst\fvm\versions\3.44.6\bin\cache\dart-sdk\bin\dart.exe`, after verifying
-that it matches the repository pin. Do not use the unrelated `dart` on PATH.
+`Join-Path $env:USERPROFILE 'fvm\versions\3.44.6\bin\cache\dart-sdk\bin\dart.exe'`,
+after verifying that it matches the repository pin. Do not use the unrelated `dart` on PATH.
 Run Flutter's Windows wrapper from PowerShell. Read current CI for required
 setup rather than inventing environment variables or assuming local tools exist.
 

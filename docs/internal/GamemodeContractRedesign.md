@@ -28,7 +28,7 @@ The accepted decisions below supersede contradictory historical prose:
   activation boundaries. Notifications observe committed state only.
 - The Worlds contract assembly keeps `AssemblyVersion` 0.1.0.0. The additive
   constraint applies to types compiled into `TopiaForge.Mods.Abstractions`, not
-  every source file located in its directory. Amend AGENTS with that assembly
+  every source file located in its directory. Amend `AGENTS.md` with that assembly
   distinction when changing the Worlds API.
 - Preserve `.topiaforgemod`, the `topiaforge.mod.json` filename, package dependency
   ordering, profiles, inbox, logs, enablement, and restart-required semantics.
@@ -323,7 +323,7 @@ defect before its fix. Do not claim a fresh build from a pre-existing binary pro
 - Migration: all legacy selectors; malformed/mixed arrays; untouched values and
   extensions; indexed diagnostics; atomic writes; invalid stubs; no-write failures.
 
-Run applicable AGENTS builds/tests, the freshly rebuilt seven-harness release
+Run applicable `AGENTS.md` builds/tests, the freshly rebuilt seven-harness release
 surface verification, C# formatting verification, pinned Flutter Dart formatting
 and fatal-info analysis, Dart line-count audit, fixture/repository/legal audits,
 docs publication check, and Flutter tests/Windows build for application changes.
