@@ -1,0 +1,32 @@
+{
+  "id": "wire-plan-null-packages",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive plan codec null packages",
+  "transport": "plan",
+  "payload": {
+    "targetId": "base.mod.menu",
+    "gamemodeId": "mode.mod.play",
+    "worldId": "base.mod.world",
+    "transition": "scene-replacement",
+    "request": {
+      "targetId": "BASE.MOD.MENU"
+    },
+    "packages": null,
+    "digest": "6a4a1aa84ed69e17"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    }
+  }
+}

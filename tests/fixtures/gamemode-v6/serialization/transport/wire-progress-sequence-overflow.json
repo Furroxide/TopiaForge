@@ -1,0 +1,28 @@
+{
+  "id": "wire-progress-sequence-overflow",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive progress codec sequence overflow",
+  "transport": "progress",
+  "payload": {
+    "schemaVersion": 1,
+    "requestId": "request-01",
+    "sequence": 2147483648,
+    "phase": "loading-world",
+    "nativeBusy": true
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    }
+  }
+}

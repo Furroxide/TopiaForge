@@ -2,12 +2,418 @@
   "schemaVersion": 1,
   "generatedBy": ".github/scripts/check_fixture_index.py",
   "channelRunners": {
+    "resolution": [
+      "csharp",
+      "dart"
+    ],
     "serialization": [
       "csharp",
       "dart"
     ]
   },
   "cases": [
+    {
+      "id": "a-policy-cannot-name-a-discovered-family",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/a-policy-cannot-name-a-discovered-family.json"
+    },
+    {
+      "id": "a-transition-the-target-does-not-offer",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/a-transition-the-target-does-not-offer.json"
+    },
+    {
+      "id": "absent-player-override-permission-is-false",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/absent-player-override-permission-is-false.json"
+    },
+    {
+      "id": "an-observed-level-is-launchable-under-its-family",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/an-observed-level-is-launchable-under-its-family.json"
+    },
+    {
+      "id": "an-unobserved-level-is-not-launchable",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/an-unobserved-level-is-not-launchable.json"
+    },
+    {
+      "id": "auto-transition-prefers-scene-replacement",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/auto-transition-prefers-scene-replacement.json"
+    },
+    {
+      "id": "availability-ignores-stale-digest",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/availability-ignores-stale-digest.json"
+    },
+    {
+      "id": "availability-ignores-stale-profile",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/availability-ignores-stale-profile.json"
+    },
+    {
+      "id": "availability-ignores-stale-revision",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/availability-ignores-stale-revision.json"
+    },
+    {
+      "id": "conflicting-observation-revision-has-no-authority",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/conflicting-observation-revision-has-no-authority.json"
+    },
+    {
+      "id": "dependency-pins-an-unsatisfied-version",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/dependency-pins-an-unsatisfied-version.json"
+    },
+    {
+      "id": "discovery-ignores-mismatched-digest",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/discovery-ignores-mismatched-digest.json"
+    },
+    {
+      "id": "discovery-ignores-mismatched-producer-package",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/discovery-ignores-mismatched-producer-package.json"
+    },
+    {
+      "id": "discovery-ignores-mismatched-producer-version",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/discovery-ignores-mismatched-producer-version.json"
+    },
+    {
+      "id": "discovery-ignores-mismatched-profile",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/discovery-ignores-mismatched-profile.json"
+    },
+    {
+      "id": "discovery-ignores-mismatched-revision",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/discovery-ignores-mismatched-revision.json"
+    },
+    {
+      "id": "discovery-longest-family-accepts-correct-attribution",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/discovery-longest-family-accepts-correct-attribution.json"
+    },
+    {
+      "id": "discovery-longest-family-rejects-shorter-attribution",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/discovery-longest-family-rejects-shorter-attribution.json"
+    },
+    {
+      "id": "duplicate-authoritative-target-declaration",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/duplicate-authoritative-target-declaration.json"
+    },
+    {
+      "id": "duplicate-authoritative-world-declaration",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/duplicate-authoritative-world-declaration.json"
+    },
+    {
+      "id": "duplicate-selected-package-identity",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/duplicate-selected-package-identity.json"
+    },
+    {
+      "id": "enabled-selection-ignores-disabled-historical-version",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/enabled-selection-ignores-disabled-historical-version.json"
+    },
+    {
+      "id": "every-admissible-world-is-unavailable",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/every-admissible-world-is-unavailable.json"
+    },
+    {
+      "id": "explicit-consent-requires-satisfied-version",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/explicit-consent-requires-satisfied-version.json"
+    },
+    {
+      "id": "explicit-override-limits-availability-candidates",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/explicit-override-limits-availability-candidates.json"
+    },
+    {
+      "id": "gamemode-declared-but-not-bound",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/gamemode-declared-but-not-bound.json"
+    },
+    {
+      "id": "gamemode-package-disabled",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/gamemode-package-disabled.json"
+    },
+    {
+      "id": "gamemode-package-platform-is-checked",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/gamemode-package-platform-is-checked.json"
+    },
+    {
+      "id": "gamemode-reference-is-not-a-dependency",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/gamemode-reference-is-not-a-dependency.json"
+    },
+    {
+      "id": "identical-observation-revision-is-idempotent",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/identical-observation-revision-is-idempotent.json"
+    },
+    {
+      "id": "incompatible-alternative-does-not-prevent-unavailable-summary",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/incompatible-alternative-does-not-prevent-unavailable-summary.json"
+    },
+    {
+      "id": "independent-package-platform-blocks-accumulate",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/independent-package-platform-blocks-accumulate.json"
+    },
+    {
+      "id": "independent-spawn-transition-and-platform-blocks",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/independent-spawn-transition-and-platform-blocks.json"
+    },
+    {
+      "id": "invalid-consent-alternative-does-not-prevent-unavailable-summary",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/invalid-consent-alternative-does-not-prevent-unavailable-summary.json"
+    },
+    {
+      "id": "latest-observation-revision-removes-old-instance",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/latest-observation-revision-removes-old-instance.json"
+    },
+    {
+      "id": "longer-disabled-gamemode-owner-cannot-fall-through",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/longer-disabled-gamemode-owner-cannot-fall-through.json"
+    },
+    {
+      "id": "longer-disabled-world-owner-cannot-fall-through",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/longer-disabled-world-owner-cannot-fall-through.json"
+    },
+    {
+      "id": "longest-target-owner-disabled-ignores-shorter-declaration",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/longest-target-owner-disabled-ignores-shorter-declaration.json"
+    },
+    {
+      "id": "longest-target-owner-missing-ignores-shorter-declaration",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/longest-target-owner-missing-ignores-shorter-declaration.json"
+    },
+    {
+      "id": "longest-target-owner-valid-ignores-shorter-declaration",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/longest-target-owner-valid-ignores-shorter-declaration.json"
+    },
+    {
+      "id": "missing-longer-world-and-required-edge-accumulate",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/missing-longer-world-and-required-edge-accumulate.json"
+    },
+    {
+      "id": "missing-required-longer-gamemode-owner",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/missing-required-longer-gamemode-owner.json"
+    },
+    {
+      "id": "missing-required-longer-world-owner",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/missing-required-longer-world-owner.json"
+    },
+    {
+      "id": "no-shared-transition",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/no-shared-transition.json"
+    },
+    {
+      "id": "open-default-requires-world-consent",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/open-default-requires-world-consent.json"
+    },
+    {
+      "id": "open-player-world-needs-no-invented-dependency",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/open-player-world-needs-no-invented-dependency.json"
+    },
+    {
+      "id": "open-policy-without-world-consent",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/open-policy-without-world-consent.json"
+    },
+    {
+      "id": "open-unknown-alternative-prevents-no-available-target",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/open-unknown-alternative-prevents-no-available-target.json"
+    },
+    {
+      "id": "override-default-false-limits-availability-candidates",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/override-default-false-limits-availability-candidates.json"
+    },
+    {
+      "id": "owner-prefix-requires-dot-boundary",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/owner-prefix-requires-dot-boundary.json"
+    },
+    {
+      "id": "plan-copies-immutable-package-identities",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/plan-copies-immutable-package-identities.json"
+    },
+    {
+      "id": "player-choice-honours-an-offered-transition",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/player-choice-honours-an-offered-transition.json"
+    },
+    {
+      "id": "resolves-a-cross-package-target",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/resolves-a-cross-package-target.json"
+    },
+    {
+      "id": "runtime-fresh-bindings-permit-plan",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/runtime-fresh-bindings-permit-plan.json"
+    },
+    {
+      "id": "runtime-fresh-bindings-supersede-cached-failure",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/runtime-fresh-bindings-supersede-cached-failure.json"
+    },
+    {
+      "id": "runtime-missing-boundgamemodeids",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/runtime-missing-boundgamemodeids.json"
+    },
+    {
+      "id": "runtime-missing-boundworldids",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/runtime-missing-boundworldids.json"
+    },
+    {
+      "id": "runtime-stale-binding-revision",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/runtime-stale-binding-revision.json"
+    },
+    {
+      "id": "spawn-requirement-unsatisfied",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/spawn-requirement-unsatisfied.json"
+    },
+    {
+      "id": "target-not-declared",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/target-not-declared.json"
+    },
+    {
+      "id": "target-package-disabled",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/target-package-disabled.json"
+    },
+    {
+      "id": "target-package-platform-is-checked",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/target-package-platform-is-checked.json"
+    },
+    {
+      "id": "unavailable-family-blocks-concrete-observed-instance",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/unavailable-family-blocks-concrete-observed-instance.json"
+    },
+    {
+      "id": "unavailable-incompatible-world-has-no-derived-summary",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/unavailable-incompatible-world-has-no-derived-summary.json"
+    },
+    {
+      "id": "unavailable-unbound-world-has-no-derived-summary",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/unavailable-unbound-world-has-no-derived-summary.json"
+    },
+    {
+      "id": "world-outside-a-fixed-policy",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/world-outside-a-fixed-policy.json"
+    },
+    {
+      "id": "world-package-does-not-support-this-install",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/world-package-does-not-support-this-install.json"
+    },
     {
       "id": "empty-intent-object",
       "channel": "serialization",
@@ -901,6 +1307,750 @@
       "channel": "serialization",
       "kind": "manifest-rejects",
       "path": "serialization/manifest/v6-wrong-kind-target-gamemode.json"
+    },
+    {
+      "id": "wire-observation-absent-description",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-observation-absent-description.json"
+    },
+    {
+      "id": "wire-observation-complete-round-trip",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-observation-complete-round-trip.json"
+    },
+    {
+      "id": "wire-observation-duplicate-availability",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-observation-duplicate-availability.json"
+    },
+    {
+      "id": "wire-observation-duplicate-instance",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-observation-duplicate-instance.json"
+    },
+    {
+      "id": "wire-observation-empty-failure-reasons",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-observation-empty-failure-reasons.json"
+    },
+    {
+      "id": "wire-observation-foreign-instance-family",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-observation-foreign-instance-family.json"
+    },
+    {
+      "id": "wire-observation-missing-reason-version",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-observation-missing-reason-version.json"
+    },
+    {
+      "id": "wire-observation-name-scalars-128",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-observation-name-scalars-128.json"
+    },
+    {
+      "id": "wire-observation-name-scalars-129",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-observation-name-scalars-129.json"
+    },
+    {
+      "id": "wire-observation-name-scalars-96",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-observation-name-scalars-96.json"
+    },
+    {
+      "id": "wire-observation-name-scalars-97",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-observation-name-scalars-97.json"
+    },
+    {
+      "id": "wire-observation-null-availability",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-observation-null-availability.json"
+    },
+    {
+      "id": "wire-observation-null-discoveredworlds",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-observation-null-discoveredworlds.json"
+    },
+    {
+      "id": "wire-observation-null-observationrevision",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-observation-null-observationrevision.json"
+    },
+    {
+      "id": "wire-observation-null-packagesetdigest",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-observation-null-packagesetdigest.json"
+    },
+    {
+      "id": "wire-observation-null-producer",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-observation-null-producer.json"
+    },
+    {
+      "id": "wire-observation-null-profileid",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-observation-null-profileid.json"
+    },
+    {
+      "id": "wire-observation-null-profilerevision",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-observation-null-profilerevision.json"
+    },
+    {
+      "id": "wire-observation-null-schemaversion",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-observation-null-schemaversion.json"
+    },
+    {
+      "id": "wire-observation-scalar-root",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-observation-scalar-root.json"
+    },
+    {
+      "id": "wire-observation-unknown-field",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-observation-unknown-field.json"
+    },
+    {
+      "id": "wire-observation-unknown-reason",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-observation-unknown-reason.json"
+    },
+    {
+      "id": "wire-outcome-caller-cancelled",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-outcome-caller-cancelled.json"
+    },
+    {
+      "id": "wire-outcome-complete-round-trip",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-outcome-complete-round-trip.json"
+    },
+    {
+      "id": "wire-outcome-failure-without-reason",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-outcome-failure-without-reason.json"
+    },
+    {
+      "id": "wire-outcome-launch-missing-command",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-outcome-launch-missing-command.json"
+    },
+    {
+      "id": "wire-outcome-main-menu-ack",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-outcome-main-menu-ack.json"
+    },
+    {
+      "id": "wire-outcome-none-error",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-outcome-none-error.json"
+    },
+    {
+      "id": "wire-outcome-null-blocks",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-outcome-null-blocks.json"
+    },
+    {
+      "id": "wire-outcome-null-command",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-outcome-null-command.json"
+    },
+    {
+      "id": "wire-outcome-null-kind",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-outcome-null-kind.json"
+    },
+    {
+      "id": "wire-outcome-null-phase",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-outcome-null-phase.json"
+    },
+    {
+      "id": "wire-outcome-null-requestid",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-outcome-null-requestid.json"
+    },
+    {
+      "id": "wire-outcome-null-schemaversion",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-outcome-null-schemaversion.json"
+    },
+    {
+      "id": "wire-outcome-null-sequence",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-outcome-null-sequence.json"
+    },
+    {
+      "id": "wire-outcome-null-sessionid",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-outcome-null-sessionid.json"
+    },
+    {
+      "id": "wire-outcome-null-status",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-outcome-null-status.json"
+    },
+    {
+      "id": "wire-outcome-premature-success",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-outcome-premature-success.json"
+    },
+    {
+      "id": "wire-outcome-scalar-root",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-outcome-scalar-root.json"
+    },
+    {
+      "id": "wire-outcome-session-terminal",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-outcome-session-terminal.json"
+    },
+    {
+      "id": "wire-outcome-session-with-command",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-outcome-session-with-command.json"
+    },
+    {
+      "id": "wire-outcome-startup-failure",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-outcome-startup-failure.json"
+    },
+    {
+      "id": "wire-outcome-success-with-block",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-outcome-success-with-block.json"
+    },
+    {
+      "id": "wire-outcome-unknown-field",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-outcome-unknown-field.json"
+    },
+    {
+      "id": "wire-plan-canonical-package-order",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-canonical-package-order.json"
+    },
+    {
+      "id": "wire-plan-complete-round-trip",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-complete-round-trip.json"
+    },
+    {
+      "id": "wire-plan-declaration-width-65",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-declaration-width-65.json"
+    },
+    {
+      "id": "wire-plan-declaration-width-96",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-declaration-width-96.json"
+    },
+    {
+      "id": "wire-plan-declaration-width-97",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-declaration-width-97.json"
+    },
+    {
+      "id": "wire-plan-digest-mismatch",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-digest-mismatch.json"
+    },
+    {
+      "id": "wire-plan-digit-segment",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-digit-segment.json"
+    },
+    {
+      "id": "wire-plan-discovered-instance",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-discovered-instance.json"
+    },
+    {
+      "id": "wire-plan-duplicate-package",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-duplicate-package.json"
+    },
+    {
+      "id": "wire-plan-empty-override",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-empty-override.json"
+    },
+    {
+      "id": "wire-plan-newline-id",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-newline-id.json"
+    },
+    {
+      "id": "wire-plan-null-digest",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-null-digest.json"
+    },
+    {
+      "id": "wire-plan-null-gamemodeid",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-null-gamemodeid.json"
+    },
+    {
+      "id": "wire-plan-null-override",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-null-override.json"
+    },
+    {
+      "id": "wire-plan-null-packages",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-null-packages.json"
+    },
+    {
+      "id": "wire-plan-null-request",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-null-request.json"
+    },
+    {
+      "id": "wire-plan-null-targetid",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-null-targetid.json"
+    },
+    {
+      "id": "wire-plan-null-transition",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-null-transition.json"
+    },
+    {
+      "id": "wire-plan-null-worldid",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-null-worldid.json"
+    },
+    {
+      "id": "wire-plan-scalar-root",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-scalar-root.json"
+    },
+    {
+      "id": "wire-plan-target-mismatch",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-target-mismatch.json"
+    },
+    {
+      "id": "wire-plan-unicode-id",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-unicode-id.json"
+    },
+    {
+      "id": "wire-plan-unknown-field",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-unknown-field.json"
+    },
+    {
+      "id": "wire-plan-version-carriage-return",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-version-carriage-return.json"
+    },
+    {
+      "id": "wire-plan-version-newline",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-version-newline.json"
+    },
+    {
+      "id": "wire-plan-version-tab",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-version-tab.json"
+    },
+    {
+      "id": "wire-plan-wrong-family",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-wrong-family.json"
+    },
+    {
+      "id": "wire-profile-boolean-coercion",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-boolean-coercion.json"
+    },
+    {
+      "id": "wire-profile-complete-round-trip",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-complete-round-trip.json"
+    },
+    {
+      "id": "wire-profile-fractional-revision",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-fractional-revision.json"
+    },
+    {
+      "id": "wire-profile-main-menu-with-plan",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-main-menu-with-plan.json"
+    },
+    {
+      "id": "wire-profile-null-command",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-null-command.json"
+    },
+    {
+      "id": "wire-profile-null-digest",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-null-digest.json"
+    },
+    {
+      "id": "wire-profile-null-enabledmods",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-null-enabledmods.json"
+    },
+    {
+      "id": "wire-profile-null-inheritmanagermodstate",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-null-inheritmanagermodstate.json"
+    },
+    {
+      "id": "wire-profile-null-packages",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-null-packages.json"
+    },
+    {
+      "id": "wire-profile-null-plan",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-null-plan.json"
+    },
+    {
+      "id": "wire-profile-null-profileid",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-null-profileid.json"
+    },
+    {
+      "id": "wire-profile-null-profilerevision",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-null-profilerevision.json"
+    },
+    {
+      "id": "wire-profile-null-requestid",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-null-requestid.json"
+    },
+    {
+      "id": "wire-profile-null-safemode",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-null-safemode.json"
+    },
+    {
+      "id": "wire-profile-null-schemaversion",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-null-schemaversion.json"
+    },
+    {
+      "id": "wire-profile-null-selectedversions",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-null-selectedversions.json"
+    },
+    {
+      "id": "wire-profile-old-version",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-old-version.json"
+    },
+    {
+      "id": "wire-profile-plan-package-mismatch",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-plan-package-mismatch.json"
+    },
+    {
+      "id": "wire-profile-revision-overflow",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-revision-overflow.json"
+    },
+    {
+      "id": "wire-profile-safe-main-menu",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-safe-main-menu.json"
+    },
+    {
+      "id": "wire-profile-safe-target",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-safe-target.json"
+    },
+    {
+      "id": "wire-profile-scalar-root",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-scalar-root.json"
+    },
+    {
+      "id": "wire-profile-target-missing-plan",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-target-missing-plan.json"
+    },
+    {
+      "id": "wire-profile-unknown-field",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-unknown-field.json"
+    },
+    {
+      "id": "wire-progress-absent-native-busy",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-absent-native-busy.json"
+    },
+    {
+      "id": "wire-progress-complete-round-trip",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-complete-round-trip.json"
+    },
+    {
+      "id": "wire-progress-duplicate-property",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-duplicate-property.json"
+    },
+    {
+      "id": "wire-progress-escaped-duplicate-property",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-escaped-duplicate-property.json"
+    },
+    {
+      "id": "wire-progress-fractional-sequence",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-fractional-sequence.json"
+    },
+    {
+      "id": "wire-progress-idle",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-idle.json"
+    },
+    {
+      "id": "wire-progress-integral-decimal",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-integral-decimal.json"
+    },
+    {
+      "id": "wire-progress-integral-exponent",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-integral-exponent.json"
+    },
+    {
+      "id": "wire-progress-malformed-json",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-malformed-json.json"
+    },
+    {
+      "id": "wire-progress-native-boolean-coercion",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-native-boolean-coercion.json"
+    },
+    {
+      "id": "wire-progress-negative-sequence",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-negative-sequence.json"
+    },
+    {
+      "id": "wire-progress-newline-request",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-newline-request.json"
+    },
+    {
+      "id": "wire-progress-null-nativebusy",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-null-nativebusy.json"
+    },
+    {
+      "id": "wire-progress-null-phase",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-null-phase.json"
+    },
+    {
+      "id": "wire-progress-null-requestid",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-null-requestid.json"
+    },
+    {
+      "id": "wire-progress-null-schemaversion",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-null-schemaversion.json"
+    },
+    {
+      "id": "wire-progress-null-sequence",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-null-sequence.json"
+    },
+    {
+      "id": "wire-progress-path-request",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-path-request.json"
+    },
+    {
+      "id": "wire-progress-preparing",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-preparing.json"
+    },
+    {
+      "id": "wire-progress-request-129",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-request-129.json"
+    },
+    {
+      "id": "wire-progress-running",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-running.json"
+    },
+    {
+      "id": "wire-progress-scalar-root",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-scalar-root.json"
+    },
+    {
+      "id": "wire-progress-sequence-overflow",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-sequence-overflow.json"
+    },
+    {
+      "id": "wire-progress-starting-mode",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-starting-mode.json"
+    },
+    {
+      "id": "wire-progress-stopping",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-stopping.json"
+    },
+    {
+      "id": "wire-progress-trailing-json",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-trailing-json.json"
+    },
+    {
+      "id": "wire-progress-unicode-request",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-unicode-request.json"
+    },
+    {
+      "id": "wire-progress-unknown-field",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-unknown-field.json"
+    },
+    {
+      "id": "wire-progress-unknown-phase",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-progress-unknown-phase.json"
     }
   ]
 }

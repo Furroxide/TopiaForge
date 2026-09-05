@@ -19,11 +19,11 @@ namespace TopiaForge.ModManager.Tests
         private static readonly HashSet<string> CaseFields = new HashSet<string>(StringComparer.Ordinal)
         {
             "id", "channel", "kind", "summary", "selection", "intent", "manifest", "expect",
-            "divergenceReason", "schemaOutcome", "operations", "modelMutation"
+            "divergenceReason", "schemaOutcome", "operations", "modelMutation", "profile", "request", "observation", "verifyImmutability", "transport", "payload", "wireJson", "bindings"
         };
         private static readonly HashSet<string> OutcomeFields = new HashSet<string>(StringComparer.Ordinal)
         {
-            "outcome", "errorCodes", "normalized"
+            "outcome", "errorCodes", "normalized", "blocks"
         };
 
         public static void Run()
@@ -49,6 +49,7 @@ namespace TopiaForge.ModManager.Tests
                 executed[testCase.Channel] = count + 1;
             }
 
+            LaunchResolutionModelTests.Run(fixtureRoot);
             AssertRunnerMetItsObligations(channelRunners, cases, executed);
             Console.WriteLine(
                 "All gamemode contract conformance fixtures passed (" +
@@ -146,8 +147,8 @@ namespace TopiaForge.ModManager.Tests
 
             Assert(body.GetProperty("channel").GetString() == indexed.Channel,
                 indexed.Path + " declares a channel the index disagrees with.");
-            var directory = indexed.Kind.StartsWith("manifest-", StringComparison.Ordinal) ? "manifest" : "launch-intent";
-            Assert(indexed.Path.StartsWith(indexed.Channel + "/" + directory + "/", StringComparison.Ordinal),
+            var directory = indexed.Kind.StartsWith("manifest-", StringComparison.Ordinal) ? "manifest" : indexed.Kind == "transport-codec" ? "transport" : "launch-intent";
+            Assert(indexed.Path.StartsWith(indexed.Channel == "resolution" ? "resolution/" : indexed.Channel + "/" + directory + "/", StringComparison.Ordinal),
                 indexed.Path + " is misplaced for its kind.");
             AssertEquivalentOperations(indexed, body, obligedRunners);
 
@@ -159,6 +160,16 @@ namespace TopiaForge.ModManager.Tests
                 case "launch-intent-round-trip":
                 case "launch-intent-hostile":
                     ExecuteLaunchIntent(indexed, body, expectation);
+                    break;
+                case "transport-codec":
+                    var transport = TransportFixtureRunner.Snapshot(body);
+                    Assert(DeclarationDigest.Equal(transport, body.GetProperty("expect").GetProperty(RunnerName)),
+                        indexed.Path + ": transport differs: " + transport.GetRawText());
+                    break;
+                case "launch-resolution":
+                    var snapshot = ResolutionFixtureRunner.Snapshot(body);
+                    Assert(DeclarationDigest.Equal(snapshot, body.GetProperty("expect").GetProperty(RunnerName)),
+                        indexed.Path + ": resolution differs: " + snapshot.GetRawText());
                     break;
                 case "manifest-accepts":
                 case "manifest-rejects":
@@ -197,6 +208,11 @@ namespace TopiaForge.ModManager.Tests
                     indexed.Path + " has divergent same-operation expectations.");
                 Assert(!body.TryGetProperty("divergenceReason", out _),
                     indexed.Path + " cannot exempt manifest-reader parity.");
+            }
+            else if (indexed.Channel == "resolution" || indexed.Kind == "transport-codec")
+            {
+                Assert(DeclarationDigest.Equal(expect.GetProperty("csharp"), expect.GetProperty("dart")),
+                    indexed.Path + " has divergent same-operation expectations.");
             }
             else
             {

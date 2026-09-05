@@ -1,0 +1,75 @@
+{
+  "id": "wire-plan-declaration-width-96",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive plan codec declaration width 96",
+  "transport": "plan",
+  "payload": {
+    "targetId": "base.mod.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "gamemodeId": "mode.mod.play",
+    "worldId": "base.mod.wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+    "transition": "scene-replacement",
+    "request": {
+      "targetId": "base.mod.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "packages": [
+      {
+        "id": "base.mod",
+        "version": "1.0.0"
+      },
+      {
+        "id": "mode.mod",
+        "version": "2.3.4"
+      }
+    ],
+    "digest": "6a4a1aa84ed69e17"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "targetId": "base.mod.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "gamemodeId": "mode.mod.play",
+        "worldId": "base.mod.wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+        "transition": "scene-replacement",
+        "request": {
+          "targetId": "base.mod.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "packages": [
+          {
+            "id": "base.mod",
+            "version": "1.0.0"
+          },
+          {
+            "id": "mode.mod",
+            "version": "2.3.4"
+          }
+        ],
+        "digest": "6a4a1aa84ed69e17"
+      }
+    },
+    "dart": {
+      "outcome": "accept",
+      "normalized": {
+        "targetId": "base.mod.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "gamemodeId": "mode.mod.play",
+        "worldId": "base.mod.wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+        "transition": "scene-replacement",
+        "request": {
+          "targetId": "base.mod.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "packages": [
+          {
+            "id": "base.mod",
+            "version": "1.0.0"
+          },
+          {
+            "id": "mode.mod",
+            "version": "2.3.4"
+          }
+        ],
+        "digest": "6a4a1aa84ed69e17"
+      }
+    }
+  }
+}
