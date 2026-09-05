@@ -64,7 +64,13 @@ Run Flutter's Windows wrapper from PowerShell. Read current CI for required
 setup rather than inventing environment variables or assuming local tools exist.
 
 Run the relevant `AGENTS.md` checks for the slice, its acceptance checks, and
-current required CI. For changes to C# or its baselines, rebuild Release before
+current required CI. Inspect all active branch rulesets, including code-scanning
+alert thresholds and resolved review threads; a successful workflow run or the
+five named required checks alone does not establish merge eligibility. Preserve
+security findings until a verified source fix or authorized evidence-backed
+disposition resolves them; never bypass branch protection.
+
+For changes to C# or its baselines, rebuild Release before
 running `bash tools/verify-csharp-release-surface.sh`: its seven harnesses use
 `--no-build`, and API baselines are embedded resources. A stale binary is not
 evidence for an edited baseline. Apply Dart formatting, then verify
