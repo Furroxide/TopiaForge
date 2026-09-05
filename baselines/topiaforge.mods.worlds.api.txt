@@ -18,6 +18,13 @@ type public sealed class TopiaForge.Mods.CustomWorldOptions : System.Object
   property System.Single KillPlaneDepth { get; }
   property System.String SpawnPointName { get; }
 
+type public sealed class TopiaForge.Mods.DiscoveredWorldDescriptor : System.Object
+  constructor .ctor(System.String id, System.String familyId, System.String name, System.String? description = null)
+  property System.String FamilyId { get; }
+  property System.String Id { get; }
+  property System.String Name { get; }
+  property System.String? Description { get; }
+
 type public sealed class TopiaForge.Mods.GamemodeDefinition : System.Object
   constructor .ctor(System.String id, System.String name, System.String description)
   property System.String Description { get; }
@@ -43,6 +50,25 @@ type public interface TopiaForge.Mods.ICustomWorldContent
   method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.IWorldContent>> CreateAsync(System.Threading.CancellationToken cancellationToken = null)
   property TopiaForge.Mods.CustomWorldOptions Options { get [abstract,virtual,newslot]; }
 
+type public interface TopiaForge.Mods.IGamemodeController : System.IDisposable
+
+type public interface TopiaForge.Mods.IGamemodeFactory
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.IGamemodeController>> StartAsync(TopiaForge.Mods.IGamemodeSession session, System.Threading.CancellationToken cancellationToken)
+
+type public interface TopiaForge.Mods.IGamemodeSession
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>> RestartAsync(System.Threading.CancellationToken cancellationToken = null)
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>> ReturnToMainMenuAsync(System.Threading.CancellationToken cancellationToken = null)
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>> StopAsync(System.Threading.CancellationToken cancellationToken = null)
+  property System.String GamemodeId { get [abstract,virtual,newslot]; }
+  property System.String SessionId { get [abstract,virtual,newslot]; }
+  property System.String TargetId { get [abstract,virtual,newslot]; }
+  property System.String WorldId { get [abstract,virtual,newslot]; }
+  property System.String? WorldFamilyId { get [abstract,virtual,newslot]; }
+  property System.Threading.CancellationToken CancellationToken { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IModContext Context { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IModLifetime Lifetime { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.WorldReadiness World { get [abstract,virtual,newslot]; }
+
 type public interface TopiaForge.Mods.IShopWallet
   event System.Action<System.Int32>? BalanceChanged { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
   method [abstract,virtual,newslot] System.Boolean TrySpend(System.Int32 amount)
@@ -51,6 +77,17 @@ type public interface TopiaForge.Mods.IShopWallet
 type public interface TopiaForge.Mods.IWorldContent : System.IDisposable
   property System.Boolean IsAlive { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.IEntity Root { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IWorldContentProvider
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.IWorldInstance>> LoadAsync(TopiaForge.Mods.IWorldLoadContext context, System.Threading.CancellationToken cancellationToken)
+
+type public interface TopiaForge.Mods.IWorldDiscoveryContext
+  property System.Int32 MaximumResults { get [abstract,virtual,newslot]; }
+  property System.String FamilyId { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IModContext Context { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IWorldDiscoverySource : TopiaForge.Mods.IWorldContentProvider
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.DiscoveredWorldDescriptor>>> DiscoverAsync(TopiaForge.Mods.IWorldDiscoveryContext context, System.Threading.CancellationToken cancellationToken)
 
 type public interface TopiaForge.Mods.IWorldGamemodeService
   event System.Action<TopiaForge.Mods.WorldSession>? SessionChanged { add [abstract,virtual,newslot]; remove [abstract,virtual,newslot]; }
@@ -68,6 +105,18 @@ type public interface TopiaForge.Mods.IWorldGamemodeService
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.GamemodeMenuEntry> MenuEntries { get [abstract,virtual,newslot]; }
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.WorldDefinition> Worlds { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.WorldSession? CurrentSession { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IWorldInstance : System.IDisposable
+  property TopiaForge.Mods.WorldReadiness Readiness { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IWorldLoadContext
+  property System.String SessionId { get [abstract,virtual,newslot]; }
+  property System.String TargetId { get [abstract,virtual,newslot]; }
+  property System.String WorldId { get [abstract,virtual,newslot]; }
+  property System.String? WorldFamilyId { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IModContext Context { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.WorldLoadTransition Transition { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.WorldSpawnPolicy SpawnPolicy { get [abstract,virtual,newslot]; }
 
 type public interface TopiaForge.Mods.IWorldPauseMenuService
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.IDisposable> InterceptExit(System.Func<TopiaForge.Mods.WorldPauseExitContext, TopiaForge.Mods.WorldPauseExitDecision> interceptor)
@@ -150,6 +199,11 @@ type public sealed class TopiaForge.Mods.WorldLoadRequest : System.Object
   property System.String WorldId { get; }
   property TopiaForge.Mods.WorldLoadPriority Priority { get; }
 
+type public enum TopiaForge.Mods.WorldLoadTransition : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.WorldLoadTransition AdditiveArena = 1 (AdditiveArena)
+  field const TopiaForge.Mods.WorldLoadTransition SceneReplacement = 0 (SceneReplacement)
+
 type public sealed class TopiaForge.Mods.WorldPauseAction : System.Object
   constructor .ctor(System.String id, System.String label, System.Action callback, System.Boolean closePauseMenu = true, System.Int32 order = 0, System.Boolean destructive = false)
   property System.Action Callback { get; }
@@ -169,11 +223,21 @@ type public enum TopiaForge.Mods.WorldPauseExitDecision : System.Int32
   field const TopiaForge.Mods.WorldPauseExitDecision EndSessionAndExit = 0 (EndSessionAndExit)
   field const TopiaForge.Mods.WorldPauseExitDecision ExitWithoutEnding = 1 (ExitWithoutEnding)
 
+type public sealed class TopiaForge.Mods.WorldReadiness : System.Object
+  constructor .ctor(TopiaForge.Mods.WorldSceneIdentity scene, TopiaForge.Mods.TransformState spawn)
+  property TopiaForge.Mods.TransformState Spawn { get; }
+  property TopiaForge.Mods.WorldSceneIdentity Scene { get; }
+
 type public enum TopiaForge.Mods.WorldRegistrationKind : System.Int32
   field System.Int32 value__
   field const TopiaForge.Mods.WorldRegistrationKind Gamemode = 1 (Gamemode)
   field const TopiaForge.Mods.WorldRegistrationKind MenuEntry = 2 (MenuEntry)
   field const TopiaForge.Mods.WorldRegistrationKind World = 0 (World)
+
+type public sealed class TopiaForge.Mods.WorldSceneIdentity : System.Object
+  constructor .ctor(System.Int32 instanceId, System.String name)
+  property System.Int32 InstanceId { get; }
+  property System.String Name { get; }
 
 type public sealed class TopiaForge.Mods.WorldSession : System.Object
   constructor .ctor(System.String worldId, System.String gamemodeId, System.String mode, System.String sceneName, System.DateTimeOffset startedAtUtc)
@@ -196,6 +260,16 @@ type public enum TopiaForge.Mods.WorldSessionEndReason : System.Int32
   field const TopiaForge.Mods.WorldSessionEndReason ProviderUnloading = 3 (ProviderUnloading)
   field const TopiaForge.Mods.WorldSessionEndReason SceneReplaced = 4 (SceneReplaced)
   field const TopiaForge.Mods.WorldSessionEndReason Superseded = 2 (Superseded)
+
+type public enum TopiaForge.Mods.WorldSpawnKind : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.WorldSpawnKind AuthoredMarker = 1 (AuthoredMarker)
+  field const TopiaForge.Mods.WorldSpawnKind ProviderDefault = 0 (ProviderDefault)
+
+type public sealed class TopiaForge.Mods.WorldSpawnPolicy : System.Object
+  constructor .ctor(TopiaForge.Mods.WorldSpawnKind kind, System.String? markerName = null)
+  property System.String? MarkerName { get; }
+  property TopiaForge.Mods.WorldSpawnKind Kind { get; }
 
 type public static class TopiaForge.Mods.WorldsModule : System.Object
   field const System.String Id = "io.github.furroxide.topiaforge.worlds"

@@ -11,6 +11,7 @@ namespace TopiaForge.ModManager.Tests
     {
         public static void Run(string root)
         {
+            OwnerFacadeStoppingTests.Run(root);
             TestSemanticVersion();
             TestOperationResult();
             TestSceneLifecycleEvent();

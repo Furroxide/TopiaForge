@@ -73,9 +73,9 @@ namespace TopiaForge.Worlds
                     return;
                 }
 
-                // GameLevelBridge invokes this callback only after the reflected Task/UniTask reaches a terminal
-                // faulted or canceled state. The target can no longer arrive, so retire any quarantine while
-                // retaining the failure until the Unity-thread update performs session cleanup.
+                // A reflected Task/UniTask failure ends local session bookkeeping, but does not prove native
+                // work drained. The process-owned executor retains admission and late-arrival tracking
+                // independently while the Unity-thread update performs this session cleanup.
                 pending = false;
                 quarantined = false;
                 terminalFailurePending = true;

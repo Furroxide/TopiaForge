@@ -55,7 +55,7 @@ namespace TopiaForge.Worlds
         // world's pre-created content, waiting for the play scene (and its player spawn) to exist.
         private PendingCustomWorld? pendingCustomWorld;
         private IWorldContent? activeWorldContent;
-        private IDisposable? pendingSceneClaim;
+        private IInternalSceneTransitionLease? pendingSceneClaim;
         // In-flight ICustomWorldContent.CreateAsync for the world currently being placed. SDK asset tasks only
         // complete on Unity's main thread, so this is started on the scene-loaded callback and drained from
         // UpdateTransition; it is never waited on.
@@ -81,7 +81,7 @@ namespace TopiaForge.Worlds
             this.files = files;
             this.sceneTransitions = sceneTransitions ?? throw new ArgumentNullException(nameof(sceneTransitions));
             this.lifetimeToken = lifetimeToken;
-            levelBridge = new GameLevelBridge(logger);
+            levelBridge = new GameLevelBridge(logger, sceneTransitions);
             worldsView = new ReadOnlyCollection<WorldDefinition>(worlds);
             gamemodesView = new ReadOnlyCollection<GamemodeDefinition>(gamemodes);
             menuEntriesView = new ReadOnlyCollection<GamemodeMenuEntry>(menuEntries);
@@ -100,7 +100,7 @@ namespace TopiaForge.Worlds
         public WorldSession? CurrentSession { get; private set; }
 
         public bool IsTransitionInFlight =>
-            !disposed && transitionTracker.IsInFlight(Time.realtimeSinceStartup, TransitionTimeoutSeconds);
+            !disposed && (sceneTransitions.IsBusy || transitionTracker.IsInFlight(Time.realtimeSinceStartup, TransitionTimeoutSeconds));
 
         public event Action<WorldSession>? SessionChanged;
         public event Action<WorldSessionEnd>? SessionEnded;

@@ -85,13 +85,13 @@ namespace TopiaForge.Worlds
             public OperationResult<IWorldRegistration> RegisterWorld(
                 WorldDefinition world,
                 ICustomWorldContent? content = null) =>
-                Track(service.RegisterWorld(world, content));
+                lifetime.IsStopping ? Cancelled<IWorldRegistration>() : Track(service.RegisterWorld(world, content));
 
             public OperationResult<IWorldRegistration> RegisterGamemode(GamemodeDefinition gamemode) =>
-                Track(service.RegisterGamemode(gamemode));
+                lifetime.IsStopping ? Cancelled<IWorldRegistration>() : Track(service.RegisterGamemode(gamemode));
 
             public OperationResult<IWorldRegistration> RegisterMenuEntry(GamemodeMenuEntry entry) =>
-                Track(service.RegisterMenuEntry(entry));
+                lifetime.IsStopping ? Cancelled<IWorldRegistration>() : Track(service.RegisterMenuEntry(entry));
 
             public Task<OperationResult<WorldSession>> LoadAsync(
                 WorldLoadRequest request,
@@ -103,31 +103,23 @@ namespace TopiaForge.Worlds
                 CancellationToken cancellationToken = default) =>
                 RunWithLifetimeCancellation(token => service.LaunchMenuEntryAsync(entryId, token), cancellationToken);
 
-            public OperationResult<bool> EndSession(WorldSessionEndReason reason) => service.EndSession(reason);
+            public OperationResult<bool> EndSession(WorldSessionEndReason reason) =>
+                lifetime.IsStopping ? Cancelled<bool>() : service.EndSession(reason);
 
             public OperationResult<IDisposable> RegisterAssetOverride(WorldAssetOverride assetOverride) =>
-                TrackDisposable(service.RegisterAssetOverride(assetOverride));
+                lifetime.IsStopping ? Cancelled<IDisposable>() : TrackDisposable(service.RegisterAssetOverride(assetOverride));
 
             public OperationResult<IReadOnlyList<LocalWorldFile>> ListLocalWorlds() =>
                 service.ListLocalWorlds();
 
             public OperationResult<bool> LoadLocalWorld(string requestedPath) =>
-                service.LoadLocalWorld(requestedPath);
+                lifetime.IsStopping ? Cancelled<bool>() : service.LoadLocalWorld(requestedPath);
+
+            private static OperationResult<T> Cancelled<T>() where T : notnull =>
+                OperationResult<T>.Failure(ModErrorCode.Cancelled, "The owning context is stopping.");
 
             private OperationResult<IDisposable> TrackDisposable(OperationResult<IDisposable> result)
             {
-                if (lifetime.IsStopping)
-                {
-                    if (result.TryGetValue(out var stoppingResource))
-                    {
-                        stoppingResource.Dispose();
-                    }
-
-                    return OperationResult<IDisposable>.Failure(
-                        ModErrorCode.Cancelled,
-                        "The mod is stopping and cannot register an asset override.");
-                }
-
                 if (!result.TryGetValue(out var resource))
                 {
                     return result;
@@ -147,18 +139,6 @@ namespace TopiaForge.Worlds
 
             private OperationResult<IWorldRegistration> Track(OperationResult<IWorldRegistration> result)
             {
-                if (lifetime.IsStopping)
-                {
-                    if (result.TryGetValue(out var stoppingRegistration))
-                    {
-                        stoppingRegistration.Dispose();
-                    }
-
-                    return OperationResult<IWorldRegistration>.Failure(
-                        ModErrorCode.Cancelled,
-                        "The mod is stopping and cannot register world content.");
-                }
-
                 if (!result.TryGetValue(out var registration))
                 {
                     return result;
@@ -183,6 +163,7 @@ namespace TopiaForge.Worlds
                 Func<CancellationToken, Task<OperationResult<WorldSession>>> operation,
                 CancellationToken cancellationToken)
             {
+                if (lifetime.IsStopping || cancellationToken.IsCancellationRequested) return Cancelled<WorldSession>();
                 using (var linked = CancellationTokenSource.CreateLinkedTokenSource(
                     cancellationToken,
                     lifetime.StoppingToken))
@@ -198,7 +179,8 @@ namespace TopiaForge.Worlds
                     handler,
                     wrapper => service.SessionChanged += wrapper,
                     wrapper => service.SessionChanged -= wrapper,
-                    () => ForgetSubscription(changedSubscriptions, subscription!));
+                    () => ForgetSubscription(changedSubscriptions, subscription!),
+                    () => !lifetime.IsStopping);
                 TrackSubscription(changedSubscriptions, subscription);
             }
 
@@ -209,7 +191,8 @@ namespace TopiaForge.Worlds
                     handler,
                     wrapper => service.SessionEnded += wrapper,
                     wrapper => service.SessionEnded -= wrapper,
-                    () => ForgetSubscription(endedSubscriptions, subscription!));
+                    () => ForgetSubscription(endedSubscriptions, subscription!),
+                    () => !lifetime.IsStopping);
                 TrackSubscription(endedSubscriptions, subscription);
             }
 
@@ -233,9 +216,7 @@ namespace TopiaForge.Worlds
                     }
                     catch (ObjectDisposedException)
                     {
-                        // Shutdown won the race after the IsStopping check. Track has already disposed the
-                        // subscription; Dispose is idempotent and also removes the facade's bookkeeping node.
-                        subscription.Dispose();
+                        // Track owns rejected cleanup. The liveness guard suppresses delivery until host disposal.
                     }
                     catch
                     {

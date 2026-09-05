@@ -186,7 +186,8 @@ namespace TopiaForge.Worlds
         public bool TryImport(
             RoboWorldImportPlan plan,
             IReadOnlyList<WorldAssetOverride> assetOverrides,
-            out string error)
+            out string error,
+            Action? beforeNativeImport = null)
         {
             if (plan == null)
             {
@@ -231,6 +232,8 @@ namespace TopiaForge.Worlds
                 return false;
             }
 
+            var previousImport = importHostControllerType
+                .GetProperty("LastImportedScene", PublicInstance)?.GetValue(controller);
             try
             {
                 ApplyConfigSelection(controller, plan);
@@ -243,16 +246,16 @@ namespace TopiaForge.Worlds
                 importHostControllerType.GetMethod("RefreshImportFiles", PublicInstance)
                     ?.Invoke(controller, Array.Empty<object>());
 
+                beforeNativeImport?.Invoke();
                 importFile.Invoke(controller, new object?[] { plan.FilePath });
 
                 // ImportFile returns void and swallows its own failures, so "it was called" is not "it
-                // worked". The importer records what it last built; if that is still null the import did not
-                // produce a scene and the caller must not be told it did.
+                // worked". Require a new result, not a stale scene from an earlier successful import.
                 var importedScene = importHostControllerType
                     .GetProperty("LastImportedScene", PublicInstance)?.GetValue(controller);
-                if (importedScene == null)
+                if (!UgcImportCompletionPolicy.IsFresh(previousImport, importedScene))
                 {
-                    error = "'" + plan.FileName + "' produced no scene. Check the game log for details.";
+                    error = "'" + plan.FileName + "' produced no new scene. Check the game log for details.";
                     ClearAssetOverrides();
                     RestoreConfigSelection();
                     return false;

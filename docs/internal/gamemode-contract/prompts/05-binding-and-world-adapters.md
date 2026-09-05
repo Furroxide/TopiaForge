@@ -20,6 +20,22 @@ Keep first-party V6 activation and the canonical alias flip for slice 6.
 - Revalidate immutable package identities and resolve against loaded manifests
   before doing scene work. Report a changed package set as an actionable failure.
 
+## Foundation seams verified after slice 4
+
+- `RuntimeSessionEnvironment` currently defines the snapshot/constructor seam;
+  foundation tests manually supply metadata. Replace that test-only assembly setup
+  with the production binder in integration tests. Reuse `ModRuntime.Loading` receipt
+  checks and the owner-aware assembly catalog; verify the assembly actually returned
+  by the CLR belongs to the selected package, including forwarded/previously loaded types.
+- Bundle and game-scene declarations have no implementation type. Use an explicit
+  closed built-in activation path carrying copied declaration data, distinct from
+  reflected package types. Do not fabricate public factories or declarations.
+- Expose native readiness through an owner-scoped internal service shared by manager
+  built-ins and Worlds providers; the manager must not reference the Worlds mod assembly.
+- Discovery needs a bounded temporary child scope, callback/cancellation drain and
+  atomic observations tied to the current profile revision/package digest. Catalog
+  enumeration must never instantiate a provider outside its scope.
+
 ## Worlds and discovery
 
 - Implement `IGamemodeFactory.StartAsync(session, cancellationToken)` returning an
@@ -36,6 +52,21 @@ Keep first-party V6 activation and the canonical alias flip for slice 6.
   resources session owned, including partial creation and canceled load cleanup.
 - Keep production registration paths reusable by synthetic packages and upcoming
   generated templates; do not expose test-only shortcuts as the acceptance path.
+
+## Existing adapter evidence to preserve and repair
+
+- `WorldsService.Catalog` currently calls curated `GameLevelBridge.GetLevels` and
+  falls back to build-settings scenes only when that list is empty. Expose both
+  sources independently. Replace the Unicode/unbounded/collision-prone `Slug` path
+  with stable ASCII instance IDs within each family's remaining 96-character budget.
+  Keep native checkpoint/path keys process-side and validate all display bounds.
+- Open Sandbox currently loads `UgcPlay` and builds through `SandboxArenaBuilder`
+  and `HdrpEnvironment`. Own generated geometry, tint materials and volume profiles;
+  destroying a root does not reclaim static materials. Attach its kill plane.
+  `SandboxPlayerGuard`'s timed/fallback spawn and an arena-ready log do not prove readiness.
+- `WorldsService.Sessions` currently selects the first descendant marker and can
+  substitute a generated arena for failed custom placement. The new adapters must
+  reject missing/ambiguous markers and content failure explicitly.
 
 ## Acceptance
 

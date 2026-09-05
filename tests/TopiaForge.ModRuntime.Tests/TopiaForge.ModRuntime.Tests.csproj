@@ -11,6 +11,7 @@
     <ProjectReference Include="..\..\src\TopiaForge.ModManager.Core\TopiaForge.ModManager.Core.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
     <ProjectReference Include="..\TopiaForge.ValidTestMod\TopiaForge.ValidTestMod.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../TopiaForge.SecondTestMod/TopiaForge.SecondTestMod.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>
@@ -28,6 +29,8 @@
 
   <Target Name="CopySyntheticMod" AfterTargets="Build">
     <Copy SourceFiles="..\TopiaForge.ValidTestMod\bin\$(Configuration)\netstandard2.1\TopiaForge.ValidTestMod.dll"
+          DestinationFolder="$(OutDir)" />
+    <Copy SourceFiles="../TopiaForge.SecondTestMod/bin/$(Configuration)/netstandard2.1/TopiaForge.SecondTestMod.dll"
           DestinationFolder="$(OutDir)" />
   </Target>
 </Project>
