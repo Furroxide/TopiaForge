@@ -29,6 +29,32 @@ Keep the V6 declaration activation and old public startup-API removal for slice 
   without activating incomplete first-party declarations. Keep the Worlds SDK
   assembly identity at `0.1.0.0` and update/rebuild owned API baselines as needed.
 
+## Existing ownership seams to verify
+
+Use `ModContext`, `OwnerModLifetime` and `IGameplayContextFactory` as the starting
+points. Create a scope for each participating package; preserve public package
+identity while keeping internal resource ownership unique to that scope.
+
+- Recreate files, events, commands and extension facades as well as gameplay
+  facades. Extension factories capture their facade's lifetime; reusing a parent
+  extension cache leaks session resources into package ownership.
+- Forward package event delivery into active child contexts. Preserve lookup of
+  package localization catalogs while disposing child registrations separately.
+- A child UI host must not unregister package or sibling hotkeys when it stops.
+  `UiHost.Dispose` currently unregisters by public owner ID; introduce separate
+  internal registration ownership and test sibling survival.
+- Define how a child spawns from package-owned asset handles. Current facade
+  reference-equality ownership must not force package assets into session cleanup
+  or let a child dispose the package's asset bundle.
+- Guard direct mutations after stop, including player damage/heal, entity
+  transform/destruction, command execution and world/creator operations. Resource
+  registration checks alone do not prevent stale callbacks changing a new session.
+- Keep Unity access and callbacks on the host dispatcher. Controlled asynchronous
+  tests must exercise completion from other threads as well as synchronous results.
+- The guarantee covers resources allocated through scoped framework services and
+  explicitly tracked disposers. Test constructor failure with such allocations;
+  arbitrary unmanaged/global allocations require their own author cleanup contract.
+
 ## Native transition executor
 
 - Make Worlds loads, core scene requests, local world loading, restart, and

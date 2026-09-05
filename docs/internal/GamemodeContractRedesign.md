@@ -105,11 +105,31 @@ integrity remains the installer's hash/receipt responsibility. Never retain muta
 caller lists, manifests, or selected declaration references underneath a precomputed
 digest. Snapshot identities and any plan data needed after resolution.
 
+Use an immutable transport descriptor distinct from an authoritative resolved plan.
+Its fields are `targetId`, original `request` (`targetId`, optional `worldOverride`
+and `transitionOverride`), `gamemodeId`, concrete `worldId`, optional
+`worldFamilyId`, `transition`, sorted `packages` (`id`, `version`), and `digest`.
+The canonical target identity is separate from the original request's spelling;
+they agree ordinally ignoring case. Preserve the original override presence so
+re-resolution does not mistake a default for a player override. Decoding a
+transport descriptor does not establish that it is launchable.
+
+The established digest is FNV-1a 64-bit over ordinally sorted `id@version` strings,
+UTF-16 low byte then high byte for each code unit, with one LF byte between entries,
+rendered as sixteen lowercase hexadecimal digits. Pin exact shared digest values;
+self-consistency alone cannot prove language parity. Revalidation compares exact
+sorted identities as well as digest, resolves the original request against the
+loaded immutable snapshots, and compares the newly resolved canonical tuple.
+
 Apply one longest-prefix owner lookup everywhere, including target selection and
-disabled-package diagnostics. A longer installed owner cannot be bypassed to find
-a declaration in a shorter package. Report namespace ambiguity when overlapping
-ownership prevents a valid lookup; do not fabricate missing-declaration reasons
-when the owner itself is ambiguous.
+disabled-package diagnostics. A longer installed owner or manifest-known required
+or optional namespace cannot be bypassed to find a declaration in a shorter
+package, including when that longer package is absent. Distinct prefix lengths
+have a unique longest owner; a shorter declaration cannot make it ambiguous.
+Require one enabled identity per logical package. Duplicate selected identities
+or duplicate declarations within the actual owner are ambiguous; diagnostic
+disabled versions cannot compete with an enabled selection. Do not fabricate
+missing-declaration reasons when the owner itself is ambiguous.
 
 Required dependency edges and pinned ranges govern references written in
 manifests: target mode, policy default/allow, and explicit world consent. A
@@ -130,7 +150,12 @@ deduplicate complete tuples. Do not derive later checks from missing prerequisit
 Discovered families are declarations; concrete instances are observations. A
 policy always has a static default. Only permitted player overrides can select an
 observed instance. The plan's world ID is that instance, never its family prefix.
-Determine NoAvailableTarget from the worlds the request actually permits.
+Emit WorldUnavailable for an explicitly unavailable selected world. Add
+NoAvailableTarget only when matching availability observations explicitly cover
+every world the request/policy admits. An explicit override restricts that set;
+absent override permission restricts it to the default. Unknown availability does
+not prove all candidates unavailable. Missing/disabled ownership, binding and static
+compatibility failures keep their specific reasons without this derived code.
 
 Replace diagnostic `catalog.json` with an atomic, versioned observation envelope
 containing profile identity/revision, producer package identity/version, effective
@@ -145,7 +170,11 @@ then resolve the requested tuple against loaded manifests and bindings before
 Preparing. A mismatch prevents all scene effects. Static resolution treats binding
 as unknown unless a matching observation records a failure; runtime binding is
 mandatory. Use GamemodeUnbound for modes and add WorldUnbound for failed provider
-bindings rather than pretending the declaration is absent.
+bindings rather than pretending the declaration is absent. Runtime revalidation
+requires fresh binding evidence matching the profile identity, revision and digest.
+A mismatched binding snapshot produces PlanPackageSetMismatch without guessing
+which bindings failed. A matching snapshot must prove each selected binding;
+cached binding success cannot establish availability in the current process.
 
 ## 4. Runtime ownership and execution
 
@@ -227,10 +256,15 @@ selected versions, and inherited manager state according to the existing package
 selection rules. Safe mode explicitly starts at main-menu.
 
 Profile launch wire version 4 replaces version 3. Every command carries a request
-ID; its explicit command is main-menu or launch-target. Launch-target additionally
-carries resolved target/mode/world and transition, immutable package identities,
-and digest. The main-menu command cannot
-fall through to remembered autoload. Only direct startup without a launcher command
+ID, profile revision, immutable package identities and digest; its explicit command
+is main-menu or launch-target. Launch-target additionally carries a resolved plan
+descriptor whose package identities and digest must match the envelope. Main-menu
+forbids a plan. Existing profile enablement/pin/safe-mode fields remain explicit.
+For explicit non-safe-mode selections, enabled IDs equal the envelope package
+set. A pin for an actual envelope package must match its version; pins for disabled
+packages may remain. Safe mode may preserve enabled preferences while carrying
+the actual package set and an explicit main-menu command. The main-menu command
+cannot fall through to remembered autoload. Only direct startup without a launcher command
 may use the manager's own remembered target. Consume the guarded one-shot request
 once; never modify a mod's config to convey launch intent.
 
@@ -240,6 +274,18 @@ success is distinct from session readiness. Missing acknowledgement is
 unknown/unconfirmed, never proof of gameplay success. Runtime failures include
 structured reasons and retain request/session attribution. Do not accept arbitrary
 output paths from profile data.
+
+Inactive progress/outcome models land with slice 3, before their slice 7 filesystem
+consumers. Version-one outcomes require `kind` (`launch` or `session`), `requestId`,
+`sequence`, canonical `phase`, `status` (`succeeded`, `failed`, `cancelled`) and
+`blocks`, with optional `sessionId` and structured `error`. Only launch outcomes
+carry `command`. A successful launch-target outcome is Running with a session ID;
+a successful main-menu outcome is Idle without one. A terminal session outcome is
+Idle with a session ID. Retain launch acknowledgement separately from later session
+termination so teardown never overwrites the start result. Progress uses the same
+six lifecycle phases and ordered sequence; optional `nativeBusy` describes executor
+ownership independently instead of inventing a seventh lifecycle phase. Explicit
+nulls and empty values for present optional IDs are invalid on the wire.
 
 Version durable target selection and migrate prior profile/manager selections
 without losing unrelated state. A legacy mode/world tuple maps automatically only

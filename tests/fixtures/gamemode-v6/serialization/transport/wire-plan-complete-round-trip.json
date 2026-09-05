@@ -1,0 +1,75 @@
+{
+  "id": "wire-plan-complete-round-trip",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive plan codec complete round trip",
+  "transport": "plan",
+  "payload": {
+    "targetId": "base.mod.menu",
+    "gamemodeId": "mode.mod.play",
+    "worldId": "base.mod.world",
+    "transition": "scene-replacement",
+    "request": {
+      "targetId": "BASE.MOD.MENU"
+    },
+    "packages": [
+      {
+        "id": "base.mod",
+        "version": "1.0.0"
+      },
+      {
+        "id": "mode.mod",
+        "version": "2.3.4"
+      }
+    ],
+    "digest": "6a4a1aa84ed69e17"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "targetId": "base.mod.menu",
+        "gamemodeId": "mode.mod.play",
+        "worldId": "base.mod.world",
+        "transition": "scene-replacement",
+        "request": {
+          "targetId": "BASE.MOD.MENU"
+        },
+        "packages": [
+          {
+            "id": "base.mod",
+            "version": "1.0.0"
+          },
+          {
+            "id": "mode.mod",
+            "version": "2.3.4"
+          }
+        ],
+        "digest": "6a4a1aa84ed69e17"
+      }
+    },
+    "dart": {
+      "outcome": "accept",
+      "normalized": {
+        "targetId": "base.mod.menu",
+        "gamemodeId": "mode.mod.play",
+        "worldId": "base.mod.world",
+        "transition": "scene-replacement",
+        "request": {
+          "targetId": "BASE.MOD.MENU"
+        },
+        "packages": [
+          {
+            "id": "base.mod",
+            "version": "1.0.0"
+          },
+          {
+            "id": "mode.mod",
+            "version": "2.3.4"
+          }
+        ],
+        "digest": "6a4a1aa84ed69e17"
+      }
+    }
+  }
+}

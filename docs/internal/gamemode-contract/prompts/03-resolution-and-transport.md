@@ -10,7 +10,9 @@ switching production launch, profile writers, or runtime activation.
 
 - Implement one longest-prefix ownership algorithm used for targets, gamemodes,
   static worlds, discovery families, instances, and disabled-package diagnostics.
-  Match ownership at ID segment boundaries. Never fall back to a shorter owner
+  Match ownership at ID segment boundaries. A disabled historical version cannot
+  compete with its enabled logical package, and a shorter declaration cannot make
+  the unique longer namespace ambiguous. Never fall back to a shorter owner
   when the longest matching package is disabled, missing, or otherwise invalid.
 - Resolve only against the exact effective-profile package set. Check declared
   reference dependencies and version requirements. An open-policy player world
@@ -29,14 +31,20 @@ switching production launch, profile writers, or runtime activation.
   later input mutation nor catalog refresh may change an already produced plan.
   Snapshot mutable manifests and selected declarations too; retain no caller-owned
   references.
-  Expose package-set comparison and re-resolution inputs for the runtime boundary.
+  Separate the authoritative plan from its public transport descriptor. Retain the
+  original request, including absent overrides, and expose package-set comparison
+  plus re-resolution against loaded manifests and fresh matching runtime bindings.
+  Cached observation success never proves that current-process code is bound.
 
 ## Transport models and boundaries
 
 - Define the inactive wire-v4 models for explicit command, request ID, target,
   resolved world/transition, exact package identities, and digest. Every command,
-  including main-menu, carries a request ID. Define matching
-  outcome/progress and versioned observation models required by slice 7.
+  including main-menu, carries request/profile identity, revision, package identities
+  and digest. Main-menu forbids a plan; launch-target requires a consistent plan.
+  Define matching outcome/progress and versioned observation models required by
+  slice 7. Retain launch acknowledgement separately from terminal session outcome.
+  Native draining is orthogonal to the six lifecycle phases.
 - Make C#/Dart serialization fixtures normative for equivalent operations,
   including absent values and ordinal ordering. Use one shared canonical digest
   representation from the brief; do not hash ordinary serializer output whose
@@ -55,6 +63,9 @@ switching production launch, profile writers, or runtime activation.
 - Cover open-policy external player selection with no invented dependency,
   concrete discovery identity versus family, forbidden discovered defaults,
   immutable plans, equivalent input ordering, and multiple simultaneous failures.
+  Test family availability propagation, mismatched observations, current binding
+  proof, selected target/mode/world installation compatibility, and NoAvailableTarget
+  only when matching observations cover every otherwise valid admitted candidate.
 - Verify 65/96/97-character identifiers across all new plan and transport paths.
   Round-trip C#/Dart payloads and compare the same digest for reordered source
   maps using the canonical representation.
