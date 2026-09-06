@@ -21,18 +21,15 @@ namespace TopiaForge.Worlds
             // and only the main thread may release the Unity objects it owns. UpdateTransition does that.
             contentLoad.Cancel();
             placingCustomWorld = null;
-            activeWorldContent?.Dispose();
+            var content = activeWorldContent;
+            var owned = arenaResources;
             activeWorldContent = null;
-
-            if (arenaRoot != null)
-            {
-                UnityEngine.Object.Destroy(arenaRoot);
-                arenaRoot = null;
-            }
-
-            // The HDRP VolumeProfile + its components are ScriptableObjects, not destroyed with the GameObject.
-            HdrpEnvironment.Cleanup(arenaProfile);
-            arenaProfile = null;
+            arenaResources = null;
+            arenaRoot = null;
+            var cleanup = new WorldResourceScope();
+            if (owned != null) cleanup.Add(owned);
+            if (content != null) cleanup.Add(content);
+            cleanup.Dispose();
         }
 
         /// <summary>
@@ -274,7 +271,8 @@ namespace TopiaForge.Worlds
             var spawnPosition = levelBridge.GetSandboxSpawnPosition();
             try
             {
-                arenaRoot = new GameObject("TopiaForge Worlds - Custom World: " + pending.World.Id);
+                arenaResources = new WorldResourceScope();
+                arenaRoot = UnityWorldResources.Own(arenaResources, new GameObject("TopiaForge Worlds - Custom World: " + pending.World.Id));
                 UnityEngine.Object.DontDestroyOnLoad(arenaRoot);
 
                 placingCustomWorld = pending;
@@ -367,7 +365,7 @@ namespace TopiaForge.Worlds
                 var options = pending.Content.Options;
                 if (options.ApplyDefaultEnvironment)
                 {
-                    arenaProfile = HdrpEnvironment.Apply(arenaRoot, logger);
+                    HdrpEnvironment.ApplyLegacy(arenaRoot, arenaResources!, logger);
                 }
 
                 var guard = arenaRoot.AddComponent<SandboxPlayerGuard>();
@@ -494,13 +492,14 @@ namespace TopiaForge.Worlds
         private void BuildArena(Vector3 center)
         {
             UnloadArena();
-            arenaRoot = new GameObject("TopiaForge Worlds - Open Sandbox");
+            arenaResources = new WorldResourceScope();
+            arenaRoot = UnityWorldResources.Own(arenaResources, new GameObject("TopiaForge Worlds - Open Sandbox"));
             UnityEngine.Object.DontDestroyOnLoad(arenaRoot);
 
-            SandboxArenaBuilder.Build(arenaRoot, center, logger);
+            SandboxArenaBuilder.Build(arenaRoot, center, logger, arenaResources, allowPartialDecoration: true);
 
             // HDRP has no default sky/exposure/tonemapping; without a global Volume the arena looks washed out.
-            arenaProfile = HdrpEnvironment.Apply(arenaRoot, logger);
+            HdrpEnvironment.ApplyLegacy(arenaRoot, arenaResources!, logger);
             logger.Info("Built open sandbox arena.");
         }
     }

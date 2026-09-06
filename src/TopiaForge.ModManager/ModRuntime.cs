@@ -108,6 +108,7 @@ namespace TopiaForge.ModManager
                 sceneCoordinator = new SceneCoordinator(logger.Info, authority, nativeDispatcher);
                 this.coreGameplayServices = coreGameplayServices;
             }
+            sceneCoordinator.SetRuntimeCleanupAdmissionGate(() => pendingFailedLoadCleanups != 0);
             this.coreGameplayServices.FixedUpdate += DispatchFixedUpdate;
             this.coreGameplayServices.LateUpdate += DispatchLateUpdate;
             pluginAssemblyPath = Path.GetDirectoryName(typeof(ModRuntime).Assembly.Location) ?? string.Empty;
@@ -136,12 +137,19 @@ namespace TopiaForge.ModManager
 
             if (shutdownCompletion != null) throw new ObjectDisposedException(nameof(ModRuntime));
             var packages = orderedPackages.ToList();
+            if (sessionBindings != null) packages = sessionBindings.VerifyAndFreezeSelection(packages).ToList();
+            loadingStarted = true;
             var availableManifests = packages
                 .Where(package => package.Manifest != null)
                 .Select(package => package.Manifest!)
                 .ToArray();
             runtimeInfo.ConfigureProviders(packages);
             assemblyCatalog = new ModAssemblyResolutionCatalog(packages, pluginAssemblyPath);
+            if (sessionBindings != null)
+            {
+                verifiedDeclarationLoader = new VerifiedPackageAssemblyLoader(assemblyCatalog, RegisterAssemblyOwner);
+                declarationBinder = new RuntimeDeclarationBinder(verifiedDeclarationLoader);
+            }
             foreach (var entry in assemblyCatalog.ValidateScopes())
             {
                 var reason = string.Join("; ", entry.Value);
@@ -151,7 +159,7 @@ namespace TopiaForge.ModManager
 
             foreach (var package in packages)
             {
-                Load(package, availableManifests);
+                LoadWithBindings(package, availableManifests);
                 if (package.Manifest != null
                     && failedMods.TryGetValue(package.Manifest.Id, out var providerFailure))
                 {

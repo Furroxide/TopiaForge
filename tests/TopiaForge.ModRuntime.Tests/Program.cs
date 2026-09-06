@@ -14,8 +14,10 @@ namespace TopiaForge.ModRuntime.Tests
     {
         private const string FixtureAssembly = "TopiaForge.ValidTestMod.dll";
 
-        private static int Main()
+        private static int Main(string[] args)
         {
+            if (args.Length > 0) return args.Length == 2 && args[0] == "--binding-case" ? RunBindingCase(args[1]) : 2;
+            TestProductionBindingsInFreshProcesses();
             var root = Directory.CreateTempSubdirectory("TopiaForgeModRuntimeTests-").FullName;
             try
             {
@@ -299,6 +301,7 @@ namespace TopiaForge.ModRuntime.Tests
             }
             public bool Disposed { get; private set; }
             public bool ThrowOnDispose { get; set; }
+            public Action<IModLifetime>? ScopeCreated { get; set; }
 
             public GameplayContextServices Create(
                 string ownerModId,
@@ -306,7 +309,11 @@ namespace TopiaForge.ModRuntime.Tests
                 string dataPath,
                 IModLifetime lifetime,
                 IModLogger logger,
-                NativeTransitionAccessSlot? transitionAccess = null) => GameplayContextServices.Unavailable(lifetime);
+                NativeTransitionAccessSlot? transitionAccess = null)
+            {
+                if (transitionAccess != null) ScopeCreated?.Invoke(lifetime);
+                return GameplayContextServices.Unavailable(lifetime);
+            }
 
             public GameTimeSample BeginFrame(float deltaTime) =>
                 new GameTimeSample(GameLoopPhase.Frame, deltaTime, deltaTime, 0d, 0);

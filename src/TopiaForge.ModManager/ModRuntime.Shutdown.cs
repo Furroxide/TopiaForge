@@ -36,6 +36,7 @@ namespace TopiaForge.ModManager
             shutdownCompletion = new TaskCompletionSource<OperationResult<bool>>(TaskCreationOptions.RunContinuationsAsynchronously);
             var failures = new List<Exception>();
             sceneCoordinator.SetSessionAdmissionGate(() => true);
+            sessionBindings?.BeginShutdown();
             // Publish the shutdown request before callbacks so reentrant unload requests share this completion.
             foreach (var loaded in loadedMods)
                 Attempt(() => loaded.Context.BeginStopping(), failures, "Mod cancellation failed for " + loaded.Manifest.Id + ".");
@@ -74,6 +75,20 @@ namespace TopiaForge.ModManager
                 }, failures, "Session cleanup reported a failure.");
             }
 
+            // Discovery constructors/callbacks may ignore cancellation. Their work lease is released
+            // only after the owning child scope finishes cleanup, before package services disappear.
+            var discoveryDrain = sessionBindings?.WaitForDiscoveryIdleAsync() ?? Task.FromResult(true);
+            if (discoveryDrain.IsCompleted) CompleteAfterDiscoveryDrain(discoveryDrain, failures);
+            else
+                _ = discoveryDrain.ContinueWith(completed => nativeDispatcher.Post(
+                    () => CompleteAfterDiscoveryDrain(completed, failures)), CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        }
+
+        private void CompleteAfterDiscoveryDrain(Task<bool> discoveryDrain, List<Exception> failures)
+        {
+            UnityMainThreadGuard.AssertCurrent();
+            Attempt(() => discoveryDrain.GetAwaiter().GetResult(), failures, "Discovery cleanup reported a failure.");
             // V5 production has no session hook. A failed hook also cannot establish native drain.
             // Capture this barrier after session work: it may have dispatched native work while stopping.
             var nativeDrain = sceneCoordinator.WaitForIdleAsync();
@@ -88,6 +103,34 @@ namespace TopiaForge.ModManager
         {
             UnityMainThreadGuard.AssertCurrent();
             Attempt(() => drain.GetAwaiter().GetResult(), failures, "Native cleanup reported a failure.");
+            // Asset public tasks may have acknowledged cancellation before engine work and late cleanup ended.
+            var assetDrain = WaitForPackageNativeWorkAsync();
+            if (assetDrain.IsCompleted) CompleteAfterAssetDrain(assetDrain, failures);
+            else
+                _ = assetDrain.ContinueWith(completed => nativeDispatcher.Post(
+                    () => CompleteAfterAssetDrain(completed, failures)), CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        }
+
+        private async Task WaitForPackageNativeWorkAsync()
+        {
+            var work = new List<Task> { WaitForFailedLoadCleanupAsync() };
+            foreach (var loaded in loadedMods)
+                work.Add(((IInternalNativeWorkLifetime)loaded.Context.Lifetime).DrainNativeWorkAsync());
+            try { await Task.WhenAll(work).ConfigureAwait(false); }
+            catch
+            {
+                var errors = new List<Exception>();
+                foreach (var task in work)
+                    if (task.Exception != null) errors.AddRange(task.Exception.Flatten().InnerExceptions);
+                throw new AggregateException("Package native asset work failed to drain cleanly.", errors);
+            }
+        }
+
+        private void CompleteAfterAssetDrain(Task drain, List<Exception> failures)
+        {
+            UnityMainThreadGuard.AssertCurrent();
+            Attempt(() => drain.GetAwaiter().GetResult(), failures, "Native asset cleanup reported a failure.");
             Attempt(() => sceneCoordinator.RevokeOwnership(runtimeOwnershipId), failures,
                 "Native runtime access could not be revoked.");
             // The host stays attached until every package callback and disposer has completed.
@@ -109,6 +152,9 @@ namespace TopiaForge.ModManager
                 }
             }
 
+            sessionBindings?.CompleteShutdown();
+            declarationBinder = null;
+            verifiedDeclarationLoader = null;
             loadedMods.Clear();
             loadedModIds.Clear();
             assemblyOwners.Clear();

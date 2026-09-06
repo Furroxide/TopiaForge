@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 using UnityEngine;
-using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 
 namespace TopiaForge.Worlds
@@ -39,7 +38,7 @@ namespace TopiaForge.Worlds
         private readonly Dictionary<string, ICustomWorldContent> customWorldContent =
             new Dictionary<string, ICustomWorldContent>(StringComparer.OrdinalIgnoreCase);
         private GameObject? arenaRoot;
-        private VolumeProfile? arenaProfile;
+        private WorldResourceScope? arenaResources;
         private float lastLaunchTime = -10f;
         // Provisional scene-load lifecycle. Async loader faults can arrive off-thread; the tracker carries
         // them to UpdateTransition on the Unity thread and generation-isolates late faults from older loads.

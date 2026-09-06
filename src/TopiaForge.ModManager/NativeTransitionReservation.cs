@@ -61,6 +61,25 @@ namespace TopiaForge.ModManager
             });
         }
 
+        internal Task RevokeOwnerAndDrainAsync()
+        {
+            coordinator.AssertCurrent();
+            // Capture before revocation: caller cancellation can hide a later native/managed fault.
+            var captured = operation;
+            RevokeOwner();
+            return ObserveOwnerDrainAsync(drained.Task, captured);
+        }
+
+        private static async Task ObserveOwnerDrainAsync(Task drain, NativeSceneOperation? operation)
+        {
+            await drain.ConfigureAwait(false);
+            if (operation == null) return;
+            var terminal = await operation.NativeCompletion.ConfigureAwait(false);
+            var caller = operation.Completion.IsCompleted ? await operation.Completion.ConfigureAwait(false) : null;
+            if (!terminal.Succeeded && (caller == null || caller.ErrorCode != terminal.ErrorCode || caller.ErrorMessage != terminal.ErrorMessage))
+                throw new InvalidOperationException("Native work failed after the failed owner's caller outcome: " + terminal.ErrorCode + ": " + terminal.ErrorMessage);
+        }
+
         internal bool OwnsPackage(string id) => string.Equals(Owner.PackageId, id, StringComparison.OrdinalIgnoreCase)
             || (operation != null && string.Equals(operation.OwnerPackageId, id, StringComparison.OrdinalIgnoreCase));
 
