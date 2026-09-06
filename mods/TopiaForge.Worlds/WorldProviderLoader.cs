@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.Mods;
@@ -39,13 +40,32 @@ namespace TopiaForge.Worlds
             catch (OperationCanceledException) { result = Failure(ModErrorCode.Cancelled, "World preparation was cancelled."); }
             catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested || context.Context.Lifetime.IsStopping)
             { result = Failure(ModErrorCode.Cancelled, "The world owner stopped during preparation."); }
-            catch (Exception error) { result = Failure(ModErrorCode.External, "World preparation failed: " + error); }
+            catch (Exception error) { result = Failure(ModErrorCode.External, "World preparation failed: " + FailureMessages(error)); }
             if (resources != null)
             {
                 try { resources.Dispose(); }
-                catch (Exception cleanup) { result = Failure(ModErrorCode.External, result.ErrorCode + ": " + result.ErrorMessage + " Cleanup failed: " + cleanup); }
+                catch (Exception cleanup) { result = Failure(ModErrorCode.External, result.ErrorCode + ": " + result.ErrorMessage + " Cleanup failed: " + FailureMessages(cleanup)); }
             }
             return result;
+        }
+        internal static string FailureMessages(Exception error)
+        {
+            var messages = new List<string>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var pending = new Stack<Exception>();
+            pending.Push(error);
+            while (pending.Count != 0)
+            {
+                var current = pending.Pop();
+                if (!string.IsNullOrWhiteSpace(current.Message) && seen.Add(current.Message)) messages.Add(current.Message);
+                if (current is AggregateException aggregate)
+                {
+                    for (var index = aggregate.InnerExceptions.Count - 1; index >= 0; index--)
+                        pending.Push(aggregate.InnerExceptions[index]);
+                }
+                else if (current.InnerException != null) pending.Push(current.InnerException);
+            }
+            return string.Join(" ", messages);
         }
         private static OperationResult<IWorldInstance> Failure(ModErrorCode code, string message) =>
             OperationResult<IWorldInstance>.Failure(code, message);

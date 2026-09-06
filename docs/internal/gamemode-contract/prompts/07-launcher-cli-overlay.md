@@ -25,6 +25,44 @@ Remove any temporary wire adapter from slice 6 when both sides move to wire v4.
   main-menu. Only direct game startup with no launcher command can use the
   manager's remembered choice. Remove contradictory fallback paths.
 
+## Verified integration seams and traps
+
+Refresh these locations after slice 6 merges; this inventory was read at `dde58f2`.
+
+- Build one exact selection adapter shared by snapshot/preview and preflight from
+  `manager_state_helpers.dart` installed catalog plus dependency planning. Include
+  installed default-enabled IDs absent from manager state. Do not treat an unpinned
+  `state.version` as an exact pin: mirror runtime scan/reconciliation. Return the
+  selected set and structured blocks; `_profileSelectionError` currently discards
+  its dependency selection and never calls `LaunchResolver`.
+- `_loadWorldCatalog` in `storage_helpers.dart` currently merges registry content;
+  reverse the existing `world_catalog_test_part.dart` expectation that endorses it.
+  `_onProfileSelected` currently only swaps an ID. Rebuild profile-specific targets
+  and observations and reject stale asynchronous results during rapid switching.
+- `restart()` currently stops the game before `_startGame` reaches preflight.
+  Resolve the requested replacement before termination and revalidate again before
+  creation. Request-owned restart/acceptance tracks PID, start time and executable;
+  it must not terminate every process with the same executable path.
+- Version durable selection before `WorldSelection.fromJson` supplies historical
+  defaults or `WorldCatalog.fromJson` injects fallback entries. Remove Home's
+  unavailable-as-None display, Setup/overlay index-zero fallback and `.first` on
+  possibly empty collections. Preserve unknown transition values for explicit repair.
+  Profile load/save/import/export/duplicate all pass through the old schema-2
+  validator and wire constructor; migrate them together and define persisted revisions.
+- Port `StartupRecoveryPolicy`, `WorldLaunchArming` and profile consumption together.
+  Preserve correlation through recovery/rejection, but force main-menu in safe mode.
+  A launcher command cannot fall through to manager autoload when an old optional
+  worldLaunch field is missing. Pass the launcher request ID through the runtime
+  main-menu entry point instead of generating an unrelated acknowledgement ID.
+- `_managerStaging` and the consumer currently check immediate-child names and
+  leaf reparse attributes. Establish trusted-root containment and safe ancestors
+  using the runtime directory guards, including symlink/junction regressions, for
+  requests, observations and progress. Validate request-owned cleanup and forged
+  outcome filenames without deleting unrelated staged files.
+- `LaunchResult` currently means process creation and `_launchResultState` presents
+  that as completed success. Preserve the distinction from confirmed Running and
+  use the existing shared outcome transport models for request-correlated evidence.
+
 ## Observations, progress, and durable state
 
 - Replace `catalog.json` with atomic versioned observations containing profile/
@@ -62,4 +100,5 @@ Remove any temporary wire adapter from slice 6 when both sides move to wire v4.
 - Run Windows launcher_data tests and compare any claimed environment divergence
   against the matching clean base. Record actual CI and local results separately.
 - Update the ledger with production paths now connected and remaining live QA.
-  Submit only this slice; branch slice 8 after merge.
+  Submit only this slice. After its merge, create the separate release-preparation
+  slice 7a; final acceptance slice 8 begins only after that prerequisite merges.

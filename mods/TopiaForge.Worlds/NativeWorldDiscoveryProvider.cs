@@ -29,7 +29,7 @@ namespace TopiaForge.Worlds
                 return OperationResult<IReadOnlyList<DiscoveredWorldDescriptor>>.Success(Array.AsReadOnly(worlds.Select(x => x.Descriptor).ToArray()));
             }
             catch (OperationCanceledException) { return DiscoveryFailure(ModErrorCode.Cancelled, "World discovery was cancelled."); }
-            catch (Exception error) { return DiscoveryFailure(ModErrorCode.External, "World discovery failed: " + error); }
+            catch (Exception error) { return DiscoveryFailure(ModErrorCode.External, "World discovery failed: " + WorldProviderLoader.FailureMessages(error)); }
         }
         public static async Task<OperationResult<IWorldInstance>> LoadAsync(NativeWorldSource source,
             IWorldLoadContext context, CancellationToken cancellationToken)
@@ -58,7 +58,7 @@ namespace TopiaForge.Worlds
                 return await WorldProviderLoader.LoadAsync(context, request, cancellationToken);
             }
             catch (OperationCanceledException) { return LoadFailure(ModErrorCode.Cancelled, "World discovery was cancelled before load."); }
-            catch (Exception error) { return LoadFailure(ModErrorCode.External, "Discovered world load failed: " + error); }
+            catch (Exception error) { return LoadFailure(ModErrorCode.External, "Discovered world load failed: " + WorldProviderLoader.FailureMessages(error)); }
         }
         private static OperationResult<IReadOnlyList<DiscoveredWorldDescriptor>> DiscoveryFailure(ModErrorCode code, string message) =>
             OperationResult<IReadOnlyList<DiscoveredWorldDescriptor>>.Failure(code, message);

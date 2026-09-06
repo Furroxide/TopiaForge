@@ -6,6 +6,29 @@ Begin only after slice 7 merges into `dev`. Read the [canonical brief](../../Gam
 
 Implement this explicit release-preparation PR after slice 7 integrates and before slice 8 freezes its final acceptance candidate. Keep all eight redesign slices and their acceptance requirements. This is an additional release trust-contract change, not a silent widening of slice 8. Obtain exact-head CI against current dev and merge normally. Do not create later branches before their prerequisites merge.
 
+## Protected promotion and workflow source
+
+The 2026-09-06 remote check found default branch `main` at `f7d154a5bc5880b75f9f4a4bbaf9a34a5158c76e`, while `dev` was `9dc5613bc0cc8f2fa9b3c50b02357116f2540514`. Refresh these facts before release; development CI does not promote workflow definitions or certify the default branch.
+
+- After the required redesign slices integrate, promote through a same-repository `release/0.1.0-rc.1` PR into `main`, matching `release/release-policy.json`. `.github/workflows/pr-policy.yml` rejects direct `dev -> main` promotion.
+- Preserve `tools/verify-release-candidate.sh`: one exact merged release PR, a two-parent merge whose second parent is the checked release head, and identical merge/head trees. Squash/rebase promotion cannot satisfy this contract. Resolve promotion conflicts before obtaining final release-head checks.
+- Obtain all six required hosted checks on that release head with their existing workflow/run/job provenance. `Required / Release packages` must come from a release-branch **push**, not a manually dispatched substitute.
+- Freeze and test the final `main` merge SHA. `release-admin` requires a clean local `main` exactly matching `origin/main`; build/stage and protected verification recheck it. A release-head SHA is not the acceptance SHA even when trees match. Moving `main` invalidates the candidate; preserve this rule in the detached qualification repair.
+- Dispatch `release.yml` only from the exact signed annotated version tag, using the journaled request ID. Preserve tag-only protected approval, governance checks and revalidation after approval and immediately before publication. Never run a stale/default-branch publisher or bypass promotion protections to finish acceptance.
+- Pages accepts successful `main` push CI, explicit `main`, or a published immutable **stable** release tag. An RC prerelease tag does not satisfy its stable-tag gate. Verify the promoted workflow source before publication and keep this trust boundary intact.
+
+## Actions security findings by ref
+
+Recheck alert **instances**, not only `most_recent_instance`. On 2026-09-06 all three latest instances pointed to old `main`, but their per-ref states differed:
+
+| Alert | Verified state and required follow-up |
+| --- | --- |
+| #409 | Open on current `dev` `9dc5613` and old `main`; `deploy-pages.yml:134-137` calls the transitive Flutter setup action. `.github/actions/setup-flutter/action.yml` is identical on both refs and still uses read/write `actions/cache`. Pinned archive digest validation is a mitigation, not closure of the reported cache writer. |
+| #416 | Fixed on `dev` (recorded at `efa0ee53`), still open on old `main`. Carry the existing source repair through promotion and verify the resulting default-branch analysis. |
+| #417 | Still open on current `dev` `9dc5613`, at `release-package-build.yml:196-203`, as well as old `main`. Do not infer closure from the managed-reference cache repair or a successful PR CodeQL run. |
+
+Managed-reference caches in Pages and release-package-build are already restore-only on `dev` (changes carried by `a5d8677`, PR #66). Review the surviving #409/#417 flows, including transitive actions and post-job cache saves; add a bounded regression and repair the actual remaining source before promotion. Obtain fresh Actions-CodeQL evidence at the repaired head and promoted source. Preserve checked archive digests and trusted publication boundaries. Do not dismiss alerts, silently weaken analysis, or classify an open `dev` instance as stale-main-only. No alert was dismissed during this review.
+
 ## Confirmed ordering defect
 
 - tools/release-admin.ps1:1054 invokes release validate-readiness during preflight.
