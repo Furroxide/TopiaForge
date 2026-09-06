@@ -43,6 +43,19 @@ namespace TopiaForge.ModManager.Tests
                 return 0;
             }
 
+            if (args.Length == 1 && string.Equals(args[0], "--session-lifecycle", StringComparison.Ordinal))
+            {
+                var sessionRoot = Directory.CreateTempSubdirectory("TopiaForgeSessionTests-").FullName;
+                try
+                {
+                    HostDispatcherTests.Run();
+                    SessionLifecycleTests.Run(Path.Combine(sessionRoot, "state"));
+                    GamemodeSessionOrchestratorTests.Run(sessionRoot);
+                    return 0;
+                }
+                finally { TryDelete(sessionRoot); }
+            }
+
             if (args.Length == 1 && string.Equals(args[0], "--sdk-lifecycle", StringComparison.Ordinal))
             {
                 var lifecycleRoot = Path.Combine(
@@ -52,6 +65,12 @@ namespace TopiaForge.ModManager.Tests
                 try
                 {
                     SdkLifecycleTests.Run(lifecycleRoot);
+                    ScopedModContextTests.Run(lifecycleRoot);
+                    ScopedAssetOwnershipTests.Run(lifecycleRoot);
+                    AssetSpawnTransactionTests.Run();
+                    UiHotkeyOwnershipTests.Run();
+                    WorldsOwnerFacadeTests.Run();
+                    ScopedExtensionFacadeTests.Run();
                     return 0;
                 }
                 finally
@@ -93,6 +112,8 @@ namespace TopiaForge.ModManager.Tests
             if (args.Length == 1 && string.Equals(args[0], "--scene-coordinator", StringComparison.Ordinal))
             {
                 SceneCoordinatorTests.Run();
+                NativeTransitionExecutorTests.Run();
+                MultiplayerSceneAuthorityTests.Run();
                 SceneTransitionTrackerTests.Run();
                 return 0;
             }
@@ -268,7 +289,16 @@ namespace TopiaForge.ModManager.Tests
                 ModuleContractSurfaceTests.Run();
                 V1LaunchCoverageTests.Run();
                 GameplayFacadeTests.Run();
+                HostDispatcherTests.Run();
+                SessionLifecycleTests.Run(root + "-state");
+                GamemodeSessionOrchestratorTests.Run(root + "-session");
                 SdkLifecycleTests.Run(root);
+                ScopedModContextTests.Run(root);
+                ScopedAssetOwnershipTests.Run(root);
+                AssetSpawnTransactionTests.Run();
+                UiHotkeyOwnershipTests.Run();
+                WorldsOwnerFacadeTests.Run();
+                ScopedExtensionFacadeTests.Run();
                 TestingKitTests.Run();
                 SdkPublicApiBaselineTests.Run();
                 PromptRegistryTests.Run();
@@ -287,6 +317,8 @@ namespace TopiaForge.ModManager.Tests
                 WorldsSafetyTests.Run();
                 PendingOperationTests.Run();
                 SceneCoordinatorTests.Run();
+                NativeTransitionExecutorTests.Run();
+                MultiplayerSceneAuthorityTests.Run();
                 MenuSurfaceCensusTests.Run();
                 GamemodeContractConformanceTests.Run();
                 ModServiceRegistryTests.Run();

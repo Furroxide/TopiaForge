@@ -43,6 +43,7 @@
     <Project Path="tests/TopiaForge.ModManager.Tests/TopiaForge.ModManager.Tests.csproj" />
     <Project Path="tests/TopiaForge.ModPackageValidator.Tests/TopiaForge.ModPackageValidator.Tests.csproj" />
     <Project Path="tests/TopiaForge.ModRuntime.Tests/TopiaForge.ModRuntime.Tests.csproj" />
+    <Project Path="tests/TopiaForge.SecondTestMod/TopiaForge.SecondTestMod.csproj" />
     <Project Path="tests/TopiaForge.ValidTestMod.Api/TopiaForge.ValidTestMod.Api.csproj" />
     <Project Path="tests/TopiaForge.ValidTestMod/TopiaForge.ValidTestMod.csproj" />
   </Folder>

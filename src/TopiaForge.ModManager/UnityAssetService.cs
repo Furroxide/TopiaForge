@@ -8,8 +8,9 @@ using UnityEngine;
 
 namespace TopiaForge.ModManager
 {
-    internal sealed class OwnerAssetService : IAssetService
+    internal sealed class OwnerAssetService : IAssetService, IParentAssetScope
     {
+        private readonly AssetScopeOwnership ownership;
         private readonly string packagePath;
         private readonly IModLifetime lifetime;
         private readonly UnityEntityRegistry entities;
@@ -17,8 +18,16 @@ namespace TopiaForge.ModManager
         public OwnerAssetService(string packagePath, IModLifetime lifetime, UnityEntityRegistry entities)
         {
             this.packagePath = packagePath;
+            ownership = new AssetScopeOwnership(packagePath);
             this.lifetime = lifetime;
             this.entities = entities;
+        }
+
+        void IParentAssetScope.AttachParent(IAssetService parent)
+        {
+            if (!(parent is OwnerAssetService source) || !ReferenceEquals(entities, source.entities))
+                throw new InvalidOperationException("Parent assets must belong to the same loaded package host.");
+            ownership.AttachParent(source.ownership);
         }
 
         public Task<OperationResult<IAssetBundle>> LoadBundleAsync(
@@ -143,11 +152,11 @@ namespace TopiaForge.ModManager
                 throw new ArgumentNullException(nameof(request));
             }
 
-            if (!(request.Prefab is UnityPrefabHandle prefab) || !ReferenceEquals(prefab.Owner, this))
+            if (!(request.Prefab is UnityPrefabHandle prefab) || !ownership.AllowsSpawn(prefab.Owner.ownership))
             {
                 return OperationResult<ISpawnedEntity>.Failure(
                     ModErrorCode.InvalidArgument,
-                    "The prefab was not created by this mod context.");
+                    "The prefab was not created by this context or its explicitly attached parent package context.");
             }
 
             if (!prefab.IsAlive)
@@ -167,14 +176,16 @@ namespace TopiaForge.ModManager
             try
             {
                 var transform = request.Transform;
-                var instance = UnityEngine.Object.Instantiate(
-                    prefab.Prefab,
-                    UnityPhysicsBackend.ToUnity(transform.Position),
-                    ToUnity(transform.Rotation));
-                instance.transform.localScale = UnityPhysicsBackend.ToUnity(transform.Scale);
-                var entity = entities.GetOrCreate(instance);
-                var spawned = new UnitySpawnedEntity(instance, entity, transform);
-                lifetime.Track(spawned);
+                var spawned = AssetSpawnTransaction.Create(
+                    () => UnityEngine.Object.Instantiate(prefab.Prefab,
+                        UnityPhysicsBackend.ToUnity(transform.Position), ToUnity(transform.Rotation)),
+                    instance =>
+                    {
+                        instance.transform.localScale = UnityPhysicsBackend.ToUnity(transform.Scale);
+                        return new UnitySpawnedEntity(instance, entities.GetOrCreate(instance), transform);
+                    },
+                    instance => UnityEngine.Object.Destroy(instance),
+                    lifetime);
                 return OperationResult<ISpawnedEntity>.Success(spawned);
             }
             catch (Exception exception)
@@ -348,7 +359,6 @@ namespace TopiaForge.ModManager
                 }
                 catch (ObjectDisposedException)
                 {
-                    handle.Dispose();
                     Finish(OperationResult<IAssetBundle>.Failure(
                         ModErrorCode.Cancelled,
                         "The mod stopped before the asset bundle became available."));
@@ -452,7 +462,6 @@ namespace TopiaForge.ModManager
                 }
                 catch (ObjectDisposedException)
                 {
-                    handle.Dispose();
                     Finish(OperationResult<IPrefabAsset>.Failure(
                         ModErrorCode.Cancelled,
                         "The mod stopped before the prefab became available."));

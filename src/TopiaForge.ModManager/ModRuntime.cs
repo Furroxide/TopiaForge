@@ -16,6 +16,9 @@ namespace TopiaForge.ModManager
         private readonly IModRuntimeLogger logger;
         private readonly ModServiceRegistry serviceRegistry;
         private readonly SceneCoordinator sceneCoordinator;
+        private readonly NativeTransitionHost? nativeHost;
+        private readonly HostDispatcher nativeDispatcher;
+        private readonly string runtimeOwnershipId = "runtime:" + Guid.NewGuid().ToString("N");
         private readonly IRuntimeGameplayHost coreGameplayServices;
         private readonly RuntimeInfo runtimeInfo;
         private readonly ManifestValidationContext validationContext;
@@ -81,8 +84,30 @@ namespace TopiaForge.ModManager
             runtimeInfo.SetCapabilityRefresher(RefreshRuntimeCapabilities);
             // Manager-owned framework service: scene-transition arbitration is available to every mod from
             // the first OnLoad and cannot be shadowed or removed through the public mod registry.
-            sceneCoordinator = new SceneCoordinator(logger.Info);
-            this.coreGameplayServices = coreGameplayServices ?? new CoreGameplayServices(sceneCoordinator);
+            var authority = new MultiplayerSceneTransitionAuthorityPolicy(serviceRegistry);
+            if (coreGameplayServices == null)
+            {
+                nativeHost = NativeTransitionHost.GetOrCreate(logger.Info, authority);
+                nativeDispatcher = nativeHost.Dispatcher;
+                nativeHost.AttachRuntime(runtimeOwnershipId, authority, logger.Info);
+                sceneCoordinator = nativeHost.Coordinator;
+                try { this.coreGameplayServices = new CoreGameplayServices(nativeHost, runtimeOwnershipId); }
+                catch
+                {
+                    nativeHost.DetachRuntime(runtimeOwnershipId);
+                    throw;
+                }
+            }
+            else
+            {
+                nativeDispatcher = new HostDispatcher(error =>
+                {
+                    try { logger.Error(error, "Runtime host callback failed."); }
+                    catch { /* Host cleanup remains available after diagnostic sinks stop. */ }
+                });
+                sceneCoordinator = new SceneCoordinator(logger.Info, authority, nativeDispatcher);
+                this.coreGameplayServices = coreGameplayServices;
+            }
             this.coreGameplayServices.FixedUpdate += DispatchFixedUpdate;
             this.coreGameplayServices.LateUpdate += DispatchLateUpdate;
             pluginAssemblyPath = Path.GetDirectoryName(typeof(ModRuntime).Assembly.Location) ?? string.Empty;
@@ -91,6 +116,9 @@ namespace TopiaForge.ModManager
         }
 
         public IReadOnlyCollection<string> LoadedModIds => loadedModIdsView;
+        internal string RuntimeOwnershipId => runtimeOwnershipId;
+        internal SceneCoordinator NativeTransitions => sceneCoordinator;
+        internal HostDispatcher NativeDispatcher => nativeDispatcher;
 
         /// <summary>Why a mod in the load order did not come up (skip reason or exception), or null.</summary>
         public string? GetLoadFailure(string id)
@@ -106,6 +134,7 @@ namespace TopiaForge.ModManager
                 throw new ArgumentNullException(nameof(orderedPackages));
             }
 
+            if (shutdownCompletion != null) throw new ObjectDisposedException(nameof(ModRuntime));
             var packages = orderedPackages.ToList();
             var availableManifests = packages
                 .Where(package => package.Manifest != null)
@@ -148,6 +177,7 @@ namespace TopiaForge.ModManager
             // that boundary, a callback for a reused handle is a real later load and must not be suppressed.
             replayedInitialScenesAwaitingNativeCallback.Clear();
             coreGameplayServices.BeginFrame(deltaTime);
+            if (shutdownCompletion != null) return;
             capabilityRefreshRemaining -= Math.Max(0f, deltaTime);
             if (capabilityRefreshRemaining <= 0f)
             {
@@ -398,6 +428,8 @@ namespace TopiaForge.ModManager
                     isActive: true,
                     isInitial: isInitial)
                 : null;
+            PublishSessionSceneLifecycle(loadedLifecycle);
+            if (activatedLifecycle != null) PublishSessionSceneLifecycle(activatedLifecycle);
             var count = loadedMods.Count;
             for (var index = 0; index < count; index++)
             {
@@ -427,63 +459,5 @@ namespace TopiaForge.ModManager
             RefreshRuntimeCapabilities();
         }
 
-        public void UnloadAll()
-        {
-            UnityMainThreadGuard.AssertCurrent();
-            for (var index = loadedMods.Count - 1; index >= 0; index--)
-            {
-                var loaded = loadedMods[index];
-                var failed = false;
-                try
-                {
-                    loaded.Instance.OnUnload();
-                }
-                catch (Exception ex)
-                {
-                    failed = true;
-                    logger.Error(ex, "Mod failed during OnUnload: " + loaded.Manifest.Id);
-                }
-
-                try
-                {
-                    loaded.Context.DisposeLifetime();
-                }
-                catch (Exception ex)
-                {
-                    failed = true;
-                    logger.Error(ex, "Mod lifetime cleanup failed for " + loaded.Manifest.Id + ".");
-                }
-
-                try
-                {
-                    CleanupOwnedFrameworkServices(loaded.Manifest.Id);
-                    serviceRegistry.UnregisterOwner(loaded.Manifest.Id);
-                }
-                catch (Exception ex)
-                {
-                    failed = true;
-                    logger.Error(ex, "Mod service cleanup failed for " + loaded.Manifest.Id + ".");
-                }
-
-                if (!failed)
-                {
-                    logger.Info("Unloaded mod " + loaded.Manifest.Id + ".");
-                }
-            }
-
-            loadedMods.Clear();
-            loadedModIds.Clear();
-            assemblyOwners.Clear();
-            assemblyCatalog = null;
-            loadingOwnerId = null;
-            updateFailureLogged.Clear();
-            sceneFailureLogged.Clear();
-            failedMods.Clear();
-            runtimeInfo.SetCapabilityRefresher(null);
-            coreGameplayServices.FixedUpdate -= DispatchFixedUpdate;
-            coreGameplayServices.LateUpdate -= DispatchLateUpdate;
-            coreGameplayServices.Dispose();
-            AppDomain.CurrentDomain.AssemblyResolve -= ResolveAssembly;
-        }
     }
 }

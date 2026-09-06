@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 using TopiaForge.Mods;
 
 namespace TopiaForge.ModManager
@@ -12,16 +13,23 @@ namespace TopiaForge.ModManager
         private readonly CancellationTokenSource stoppingSource = new CancellationTokenSource();
         private readonly CancellationToken stoppingToken;
         private readonly List<TrackedResource> resources = new List<TrackedResource>();
+        private readonly Action<IDisposable>? rejectResource;
+        private readonly TaskCompletionSource<bool> cancellationFinished = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        private int cancellingThread;
+        private bool cancellationComplete;
+        private bool stopping;
         private bool disposed;
 
-        public OwnerModLifetime()
+        public OwnerModLifetime(Action<IDisposable>? rejectResource = null)
         {
+            this.rejectResource = rejectResource;
             stoppingToken = stoppingSource.Token;
         }
 
         public CancellationToken StoppingToken => stoppingToken;
 
-        public bool IsStopping => stoppingToken.IsCancellationRequested;
+        public bool IsStopping => Volatile.Read(ref stopping);
 
         public IDisposable Track(IDisposable resource)
         {
@@ -38,14 +46,15 @@ namespace TopiaForge.ModManager
             var tracked = new TrackedResource(this, resource);
             lock (sync)
             {
-                if (!disposed)
+                if (!stopping && !disposed)
                 {
                     resources.Add(tracked);
                     return tracked;
                 }
             }
 
-            tracked.DisposeFromOwner();
+            if (rejectResource == null) tracked.DisposeFromOwner();
+            else rejectResource(tracked);
             throw new ObjectDisposedException(nameof(OwnerModLifetime),
                 "Resources cannot be tracked after mod shutdown has begun.");
         }
@@ -60,29 +69,50 @@ namespace TopiaForge.ModManager
             return Track(new DeferredAction(cleanup));
         }
 
+        internal void BeginStop()
+        {
+            Task? waitForCancellation = null;
+            lock (sync)
+            {
+                if (stopping)
+                {
+                    if (cancellationComplete || cancellingThread == Thread.CurrentThread.ManagedThreadId) return;
+                    waitForCancellation = cancellationFinished.Task;
+                }
+                else
+                {
+                    stopping = true;
+                    cancellingThread = Thread.CurrentThread.ManagedThreadId;
+                }
+            }
+            if (waitForCancellation != null)
+            {
+                waitForCancellation.GetAwaiter().GetResult();
+                return;
+            }
+            try { stoppingSource.Cancel(); }
+            finally
+            {
+                lock (sync) cancellationComplete = true;
+                cancellationFinished.TrySetResult(true);
+            }
+        }
+
         public void Dispose()
         {
+            List<Exception>? failures = null;
+            try { BeginStop(); }
+            catch (Exception exception) { AddFailure(ref failures, exception); }
             TrackedResource[] snapshot;
             lock (sync)
             {
-                if (disposed)
-                {
-                    return;
-                }
-
+                // A reentrant Dispose from a cancellation callback cannot run cleanup ahead of
+                // the remaining callbacks. The outer lifecycle operation retains disposal ownership.
+                if (!cancellationComplete) return;
+                if (disposed) return;
                 disposed = true;
                 snapshot = resources.ToArray();
                 resources.Clear();
-            }
-
-            List<Exception>? failures = null;
-            try
-            {
-                stoppingSource.Cancel();
-            }
-            catch (Exception ex)
-            {
-                AddFailure(ref failures, ex);
             }
 
             for (var index = snapshot.Length - 1; index >= 0; index--)

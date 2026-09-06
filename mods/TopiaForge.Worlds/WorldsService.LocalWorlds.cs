@@ -1,3 +1,5 @@
+using UnityEngine.SceneManagement;
+using TopiaForge.Mods.Internal;
 using System;
 using System.Collections.Generic;
 using TopiaForge.Mods;
@@ -122,22 +124,21 @@ namespace TopiaForge.Worlds
         /// Imports one local export into the active scene through the game's own import host.
         /// </summary>
         /// <param name="requestedPath">An absolute path inside the folder, or a file name relative to it.</param>
-        /// <param name="error">The reason the import was refused, when it was.</param>
         /// <remarks>Main thread only: this reaches live scene objects.</remarks>
-        internal bool TryLoadLocalWorld(string requestedPath, out string error)
+        private OperationResult<bool> LoadLocalWorldCore(string requestedPath)
         {
             ThrowIfDisposed();
 
             if (!EnableLocalWorlds)
             {
-                error = "Local worlds are disabled in the Worlds configuration.";
-                return false;
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidState,
+                    "Local worlds are disabled in the Worlds configuration.");
             }
 
             if (!ImportHost.IsAvailable)
             {
-                error = "This game build does not expose the local world importer.";
-                return false;
+                return OperationResult<bool>.Failure(ModErrorCode.Unavailable,
+                    "This game build does not expose the local world importer.");
             }
 
             if (!RoboWorldImportPlan.TryPlan(
@@ -145,13 +146,23 @@ namespace TopiaForge.Worlds
                     requestedPath,
                     System.IO.File.Exists,
                     out var plan,
-                    out error)
+                    out var error)
                 || plan == null)
             {
-                return false;
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, error);
             }
 
-            return ImportHost.TryImport(plan, SnapshotAssetOverrides(), out error);
+            var activeScene = SceneManager.GetActiveScene();
+            if (!activeScene.IsValid() || string.IsNullOrWhiteSpace(activeScene.name))
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidState,
+                    "A local world requires an active native scene.");
+            }
+            return LocalWorldImportOperation.Run(sceneTransitions,
+                new SceneSnapshot(activeScene.name, activeScene.isLoaded, true), lifetimeToken,
+                entered => ImportHost.TryImport(plan, SnapshotAssetOverrides(), out var failure, entered)
+                    ? OperationResult<bool>.Success(true)
+                    : OperationResult<bool>.Failure(ModErrorCode.External, failure));
         }
 
         /// <inheritdoc />
@@ -193,20 +204,7 @@ namespace TopiaForge.Worlds
         }
 
         /// <inheritdoc />
-        public OperationResult<bool> LoadLocalWorld(string requestedPath)
-        {
-            if (!TryLoadLocalWorld(requestedPath, out var error))
-            {
-                // The importer reports refusals as prose, and the distinction the caller acts on is whether
-                // the build can do this at all versus whether this particular file was rejected.
-                var code = error.IndexOf("does not expose", StringComparison.Ordinal) >= 0
-                    ? ModErrorCode.Unavailable
-                    : ModErrorCode.InvalidArgument;
-                return OperationResult<bool>.Failure(code, error);
-            }
-
-            return OperationResult<bool>.Success(true);
-        }
+        public OperationResult<bool> LoadLocalWorld(string requestedPath) => LoadLocalWorldCore(requestedPath);
 
         private void DisposeLocalWorlds()
         {

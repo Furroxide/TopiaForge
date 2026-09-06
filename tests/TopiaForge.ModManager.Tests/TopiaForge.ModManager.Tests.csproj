@@ -156,6 +156,11 @@
   <ItemGroup>
     <Compile Include="..\..\mods\TopiaForge.Worlds\OpenSandboxFallbackPolicy.cs" />
     <Compile Include="..\..\mods\TopiaForge.Worlds\OwnerEventSubscription.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Worlds\PauseMenuBridge.Ownership.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Chronos\TimeControlService.OwnerFacade.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Worlds\UgcImportCompletionPolicy.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Worlds\LocalWorldImportOperation.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Worlds\WorldsService.OwnerFacade.cs" />
     <Compile Include="..\..\mods\TopiaForge.Worlds\SceneTransitionTracker.cs" />
     <Compile Include="..\..\mods\TopiaForge.Worlds\MainThreadDispatchQueue.cs" />
     <Compile Include="..\..\mods\TopiaForge.Worlds\RoboWorldImportPlan.cs" />
@@ -165,6 +170,33 @@
        implementation is compiled in and unit-tested (SceneCoordinatorTests + the live-sync deferral tests). -->
   <ItemGroup>
     <Compile Include="..\..\src\TopiaForge.ModManager\SceneCoordinator.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/OwnerSceneTransitionService.cs" Link="Runtime/OwnerSceneTransitionService.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/OwnerCheckpointSubscription.cs" Link="Runtime/OwnerCheckpointSubscription.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/WorldNativeDispatchResult.cs" Link="Worlds/WorldNativeDispatchResult.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/AssetScopeOwnership.cs" Link="Runtime/AssetScopeOwnership.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/AssetSpawnTransaction.cs" Link="Runtime/AssetSpawnTransaction.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/ModContext.ScopedGameplay.cs" Link="Runtime/ModContext.ScopedGameplay.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/IRuntimeSessionSceneObserver.cs" Link="Runtime/IRuntimeSessionSceneObserver.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/RuntimeSessionEnvironment.cs" Link="Runtime/RuntimeSessionEnvironment.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionViews.cs" Link="Runtime/GamemodeSessionViews.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.cs" Link="Runtime/GamemodeSessionOrchestrator.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Startup.cs" Link="Runtime/GamemodeSessionOrchestrator.Startup.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Cleanup.cs" Link="Runtime/GamemodeSessionOrchestrator.Cleanup.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Operations.cs" Link="Runtime/GamemodeSessionOrchestrator.Operations.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.MainMenu.cs" Link="Runtime/GamemodeSessionOrchestrator.MainMenu.cs" />
+    <Compile Include="../../src/TopiaForge.Mods.UnityUi/Runtime/TopiaForgeKey.cs" Link="Runtime/TopiaForgeKey.cs" />
+    <Compile Include="../../src/TopiaForge.Mods.UnityUi/Runtime/HotkeyRegistrationStore.cs" Link="Runtime/HotkeyRegistrationStore.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\NativeTransitionContracts.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\NativeTransitionReservation.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\NativeSceneOperation.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\IHostDispatcher.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\HostDispatcher.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\IRuntimeSessionShutdown.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\ModContextScope.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\ScopedModLifetime.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\ModContext.Scopes.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\ModContext.ScopedPersistence.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\MultiplayerSceneTransitionAuthorityPolicy.cs" />
     <!-- Compiling the menu census here both unit-tests it and mechanically keeps it Unity-free, so the
          reporting that explains a missing main-menu entry point cannot regain a UnityEngine dependency. -->
     <Compile Include="..\..\src\TopiaForge.ModManager\MenuSurfaceCensus.cs" />
