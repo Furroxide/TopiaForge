@@ -21,7 +21,7 @@ spoof that declaration.
 | Module | Add command | Main contracts | Runtime dependency |
 | --- | --- | --- | --- |
 | RobotKit | `topiaforge mod add robotkit` | `IRobotAgentService`, objectives, targets, dialogue, voice, brain queries | `io.github.furroxide.topiaforge.robotkit` |
-| Worlds | `topiaforge mod add worlds` | `IWorldGamemodeService`, world content, pause actions, shops, sessions | `io.github.furroxide.topiaforge.worlds` |
+| Worlds | `topiaforge mod add worlds` | `IGamemodeFactory`, `IWorldContentProvider`, `IWorldSessionService`, pause actions, shops | `io.github.furroxide.topiaforge.worlds` |
 | Chronos | `topiaforge mod add chronos` | `ITimeControlService`, time leases, drivers, turn scheduler | `io.github.furroxide.topiaforge.chronos` |
 | Creator Content | `topiaforge mod add creatorcontent` | Catalog registrations, creator sessions, project library, mutation safety, F5 host routing | `io.github.furroxide.topiaforge.creatorcontent` |
 | Prompts | `topiaforge mod add prompts` | `IPromptOverrideRegistry`, override leases, conflict diagnostics | `io.github.furroxide.topiaforge.prompts` |
@@ -56,10 +56,12 @@ deterministic local fallback.
 
 ## Worlds
 
-Worlds owns definitions, menu entries, scene transitions, and one current `WorldSession`.
-Register worlds and gamemodes with returned `IWorldRegistration` handles; do not build a parallel
-scene coordinator. The `gamemode` and `world` templates demonstrate lifetime-owned registration
-and session-aware teardown.
+Declare worlds, gamemodes and launch targets in Manifest V6 `contributions`. The manager binds
+factories from each verified owning package and runs one session lifecycle. `StartAsync` receives
+an `IGamemodeSession` with prepared world identity and a child-scoped mod context; acquire gameplay
+resources through that context. `IWorldSessionService` only observes committed state. Session-bound
+stop, restart and main-menu operations share the native transition executor. The `gamemode` and
+`world` templates demonstrate these contracts; see [Custom worlds](CustomWorlds.md).
 
 ## Chronos
 
@@ -91,11 +93,11 @@ effect dynamically, so unloading the consumer restores normal planning without r
 ## Multiplayer
 
 Multiplayer is a stable API preview with a generated contract, standalone loopback provider, and deterministic
-multi-peer test rig. The add command keeps the mod on Manifest V5, pins all three multiplayer components to the same
+multi-peer test rig. New scaffolds use Manifest V6; the add command preserves the input manifest version, pins all three multiplayer components to the same
 release, and adds multiplayer metadata; removing
-the module leaves a valid standalone V5 manifest. Shared state is
+the module preserves unrelated contribution declarations. Shared state is
 server-canonical with optional owner prediction. See [Multiplayer API preview](Multiplayer.md) and
-[Manifest V5](ManifestV5.md). Live transport is not part of the current release.
+[Manifest V6](ManifestV6.md). Live transport is not part of the current release.
 
 Advanced native interop is deliberately not a specialist safe module. Read
 [Advanced interop](UnityInterop.md) before adding that separate package.

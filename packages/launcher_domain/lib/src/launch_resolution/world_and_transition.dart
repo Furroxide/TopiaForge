@@ -250,7 +250,13 @@ bool _supportsThisInstall(InstallFacts install, ModManifest manifest) {
       !declared.any((item) => _idEquals(item, actual));
   if (unsupported(install.platform, manifest.platforms) ||
       unsupported(install.architecture, manifest.architectures) ||
-      unsupported(install.contentTarget, manifest.contentTargets)) {
+      (install.supportedContentTargets.isNotEmpty &&
+          manifest.contentTargets.isNotEmpty &&
+          !manifest.contentTargets.any(
+            (declared) => install.supportedContentTargets.any(
+              (supported) => _idEquals(declared, supported),
+            ),
+          ))) {
     return false;
   }
   return install.gameVersion.isEmpty ||

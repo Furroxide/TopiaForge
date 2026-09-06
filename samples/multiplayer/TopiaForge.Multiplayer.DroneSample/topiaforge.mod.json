@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "name": "io.github.furroxide.topiaforge.samples.drone",
   "displayName": "Predicted Drone Sample",
   "version": "0.1.0-rc.1",

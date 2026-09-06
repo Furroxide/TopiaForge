@@ -104,7 +104,7 @@ namespace TopiaForge.ModManager
                     Identity.Id,
                     visibleDependencies,
                     Lifetime,
-                    serviceRegistry);
+                    serviceRegistry, this);
             }
             catch (Exception constructionFailure)
             {

@@ -15,9 +15,8 @@ namespace TopiaForge.Zombies
             SeedDefaults();
         }
 
-        // World/level the Zombies gamemode launches in. Defaults to the generated Open Sandbox so the wave
-        // arena gets the framework HDRP sky/exposure/sun. Set it to a world id from the Worlds catalog.json
-        // (e.g. "io.github.furroxide.topiaforge.worlds.level.firstlevel") to opt into a specific level.
+        // Preserved legacy preference. Launch target policy and explicit player selection now choose the world;
+        // this value is retained for an actionable selection repair and never overrides a resolved session.
         [DataMember(Name = "targetWorldId")]
         public string TargetWorldId { get; set; } = WellKnownWorldIds.OpenSandboxWorld;
 

@@ -185,7 +185,8 @@ void _coreCliTests(_CliTestHarness Function() currentHarness) {
       // Likewise, declared capabilities must match what the scaffold actually reaches for.
       expect(manifest['capabilities'], containsAll(['world-service', 'hud']));
       expect(manifest['capabilities'], isNot(contains('robot-spawning')));
-      expect(manifest['worldGamemodes'], isNotEmpty);
+      expect((manifest['contributions'] as Map)['gamemodes'], isNotEmpty);
+      expect(manifest.containsKey('worldGamemodes'), isFalse);
 
       final checked = await currentHarness().runCli([
         'check',

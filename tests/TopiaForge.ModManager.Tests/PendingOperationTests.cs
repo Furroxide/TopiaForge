@@ -2,7 +2,6 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.Mods;
-using TopiaForge.Worlds;
 
 namespace TopiaForge.ModManager.Tests
 {
@@ -30,8 +29,8 @@ namespace TopiaForge.ModManager.Tests
 
         private static void WaitsWithoutBlocking()
         {
-            var load = new PendingOperation<IWorldContent>();
-            var completion = new TaskCompletionSource<OperationResult<IWorldContent>>();
+            var load = new PendingOperation<IDisposable>();
+            var completion = new TaskCompletionSource<OperationResult<IDisposable>>();
             load.Begin(_ => completion.Task, CancellationToken.None, now: 0f);
 
             Assert(load.Poll(1f, Timeout, out _) == PendingOperationState.Waiting,
@@ -41,10 +40,10 @@ namespace TopiaForge.ModManager.Tests
 
         private static void CompletesWithTheCreatedContent()
         {
-            var load = new PendingOperation<IWorldContent>();
-            var content = new FakeWorldContent();
+            var load = new PendingOperation<IDisposable>();
+            var content = new FakeOwnedResource();
             load.Begin(
-                _ => Task.FromResult(OperationResult<IWorldContent>.Success(content)),
+                _ => Task.FromResult(OperationResult<IDisposable>.Success(content)),
                 CancellationToken.None,
                 now: 0f);
 
@@ -59,9 +58,9 @@ namespace TopiaForge.ModManager.Tests
 
         private static void ConvertsAFaultIntoAFailure()
         {
-            var load = new PendingOperation<IWorldContent>();
+            var load = new PendingOperation<IDisposable>();
             load.Begin(
-                _ => Task.FromException<OperationResult<IWorldContent>>(new InvalidOperationException("bundle is corrupt")),
+                _ => Task.FromException<OperationResult<IDisposable>>(new InvalidOperationException("bundle is corrupt")),
                 CancellationToken.None,
                 now: 0f);
 
@@ -73,8 +72,8 @@ namespace TopiaForge.ModManager.Tests
 
         private static void CancelReleasesLateContentToTheCaller()
         {
-            var load = new PendingOperation<IWorldContent>();
-            var completion = new TaskCompletionSource<OperationResult<IWorldContent>>();
+            var load = new PendingOperation<IDisposable>();
+            var completion = new TaskCompletionSource<OperationResult<IDisposable>>();
             var observed = CancellationToken.None;
             load.Begin(
                 token =>
@@ -90,8 +89,8 @@ namespace TopiaForge.ModManager.Tests
 
             // The SDK can still hand back live content after cancellation. It owns Unity objects, so it must be
             // surfaced to the caller for release on the main thread rather than silently dropped.
-            var content = new FakeWorldContent();
-            completion.SetResult(OperationResult<IWorldContent>.Success(content));
+            var content = new FakeOwnedResource();
+            completion.SetResult(OperationResult<IDisposable>.Success(content));
             Assert(load.Poll(1f, Timeout, out var result) == PendingOperationState.Abandoned,
                 "late content from a cancelled creation must be reported as Abandoned");
             Assert(result.TryGetValue(out var orphan) && ReferenceEquals(orphan, content),
@@ -102,21 +101,22 @@ namespace TopiaForge.ModManager.Tests
 
         private static void CancelFreesTheSlotForARelaunch()
         {
-            var load = new PendingOperation<IWorldContent>();
-            var first = new TaskCompletionSource<OperationResult<IWorldContent>>();
+            var load = new PendingOperation<IDisposable>();
+            var first = new TaskCompletionSource<OperationResult<IDisposable>>();
             load.Begin(_ => first.Task, CancellationToken.None, now: 0f);
             load.Cancel();
 
-            // Relaunching a world must not have to wait on the creation the previous session discarded.
-            var second = new FakeWorldContent();
+            // This generic operation queue can accept unrelated work while draining.
+            // The session orchestrator separately retains Busy admission for native transitions.
+            var second = new FakeOwnedResource();
             load.Begin(
-                _ => Task.FromResult(OperationResult<IWorldContent>.Success(second)),
+                _ => Task.FromResult(OperationResult<IDisposable>.Success(second)),
                 CancellationToken.None,
                 now: 1f);
             Assert(load.IsInFlight, "a relaunch must arm immediately while the discarded creation drains");
 
             // The abandoned creation is reported first so its content is released promptly.
-            first.SetResult(OperationResult<IWorldContent>.Success(new FakeWorldContent()));
+            first.SetResult(OperationResult<IDisposable>.Success(new FakeOwnedResource()));
             Assert(load.Poll(1f, Timeout, out _) == PendingOperationState.Abandoned,
                 "the discarded creation drains ahead of the armed one");
             Assert(load.Poll(1f, Timeout, out var result) == PendingOperationState.Completed
@@ -126,8 +126,8 @@ namespace TopiaForge.ModManager.Tests
 
         private static void TimesOutOnceThenKeepsDraining()
         {
-            var load = new PendingOperation<IWorldContent>();
-            var completion = new TaskCompletionSource<OperationResult<IWorldContent>>();
+            var load = new PendingOperation<IDisposable>();
+            var completion = new TaskCompletionSource<OperationResult<IDisposable>>();
             load.Begin(_ => completion.Task, CancellationToken.None, now: 0f);
 
             Assert(load.Poll(Timeout - 0.1f, Timeout, out _) == PendingOperationState.Waiting,
@@ -137,8 +137,8 @@ namespace TopiaForge.ModManager.Tests
             Assert(load.Poll(Timeout + 1f, Timeout, out _) == PendingOperationState.Waiting,
                 "a timed-out creation must be reported once, then keep draining");
 
-            var content = new FakeWorldContent();
-            completion.SetResult(OperationResult<IWorldContent>.Success(content));
+            var content = new FakeOwnedResource();
+            completion.SetResult(OperationResult<IDisposable>.Success(content));
             Assert(load.Poll(Timeout + 2f, Timeout, out var result) == PendingOperationState.Abandoned
                    && result.TryGetValue(out var orphan) && ReferenceEquals(orphan, content),
                 "content arriving after a timeout must still reach the caller for release");
@@ -146,8 +146,8 @@ namespace TopiaForge.ModManager.Tests
 
         private static void ForgetDropsEverything()
         {
-            var load = new PendingOperation<IWorldContent>();
-            var completion = new TaskCompletionSource<OperationResult<IWorldContent>>();
+            var load = new PendingOperation<IDisposable>();
+            var completion = new TaskCompletionSource<OperationResult<IDisposable>>();
             var observed = CancellationToken.None;
             load.Begin(
                 token =>
@@ -164,7 +164,7 @@ namespace TopiaForge.ModManager.Tests
                 "forgetting must leave nothing armed or draining");
         }
 
-        private sealed class FakeWorldContent : IWorldContent
+        private sealed class FakeOwnedResource : IDisposable
         {
             public bool Disposed { get; private set; }
 

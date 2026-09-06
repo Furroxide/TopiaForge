@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "name": "dev.topiaforge.sdk-acceptance",
   "displayName": "TopiaForge SDK Live Acceptance",
   "version": "0.1.0-rc.1",
@@ -24,11 +24,23 @@
   "supportedGameVersionRange": ">=0.0.2409 <0.0.2600",
   "supportedLoaderVersionRange": ">=0.1.0-rc.1 <0.2.0",
   "supportedSdkVersionRange": ">=0.1.0-rc.1 <0.2.0",
-  "platforms": ["windows", "linux"],
-  "architectures": ["x64"],
-  "contentTargets": ["code"],
+  "platforms": [
+    "windows",
+    "linux"
+  ],
+  "architectures": [
+    "x64"
+  ],
+  "contentTargets": [
+    "code",
+    "standalonewindows64"
+  ],
   "category": "Developer",
-  "tags": ["acceptance", "safe-sdk", "non-distributable"],
+  "tags": [
+    "acceptance",
+    "safe-sdk",
+    "non-distributable"
+  ],
   "license": "AGPL-3.0-or-later",
   "licenseFiles": [
     "LICENSE"
@@ -58,5 +70,54 @@
     },
     "synchronizedFiles": []
   },
-  "x-topiaforge-non-distributable": true
+  "x-topiaforge-non-distributable": true,
+  "contributions": {
+    "worlds": [
+      {
+        "id": "dev.topiaforge.sdk-acceptance.world",
+        "name": "SDK Acceptance World",
+        "content": {
+          "kind": "bundle",
+          "bundle": "third_party/sdk-acceptance-world.bundle",
+          "prefab": "Assets/World/World.prefab"
+        },
+        "transitions": [
+          "additive-arena"
+        ],
+        "spawn": {
+          "kind": "authored-marker",
+          "markerName": "SpawnPoint"
+        }
+      }
+    ],
+    "gamemodes": [
+      {
+        "id": "dev.topiaforge.sdk-acceptance.mode",
+        "name": "SDK Acceptance",
+        "implementation": {
+          "type": "TopiaForge.SdkAcceptance.AcceptanceGamemodeFactory"
+        },
+        "worldRequirements": {
+          "transitions": [
+            "additive-arena"
+          ],
+          "spawn": "authored-marker"
+        },
+        "sceneChangePolicy": "end-session"
+      }
+    ],
+    "launchTargets": [
+      {
+        "id": "dev.topiaforge.sdk-acceptance.menu",
+        "title": "SDK Live Acceptance",
+        "gamemode": "dev.topiaforge.sdk-acceptance.mode",
+        "world": {
+          "policy": "fixed",
+          "default": "dev.topiaforge.sdk-acceptance.world",
+          "allowPlayerOverride": false
+        },
+        "transition": "additive-arena"
+      }
+    ]
+  }
 }

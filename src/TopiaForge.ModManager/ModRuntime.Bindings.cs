@@ -26,6 +26,13 @@ namespace TopiaForge.ModManager
         {
             if (sessionBindings == null) { Load(package, availableManifests); return; }
             var manifest = package.Manifest!;
+            if (sessionBindings.IsAmbiguousOwner(manifest.Id))
+            {
+                var failure = "The selected package id is ambiguous; no owner may load: " + manifest.Id + ".";
+                failedMods[manifest.Id] = failure;
+                logger.Warn("Skipping " + manifest.Id + " (" + package.PackagePath + "): " + failure);
+                return;
+            }
             var attempt = sessionBindings.BeginPackageLoad(new PackageIdentity(manifest.Id, manifest.Version));
             try { Load(package, availableManifests, attempt); }
             finally

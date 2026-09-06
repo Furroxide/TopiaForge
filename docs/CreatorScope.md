@@ -54,7 +54,7 @@ game reads the same formats — build 2409's import host describes "the folder s
 .json, and .json.gz exports" — and exposes a local import path that needs no account.
 
 **Closing, in order.** Worlds can now load a local export through the game's own import host — see
-[Local `.roboworld` worlds](CustomWorlds.md#local-roboworld-worlds). TopiaForge still does not *read*
+[Local `.roboworld` worlds](CustomWorlds.md#import-local-exports-into-a-running-session). TopiaForge still does not *read*
 the format itself; the world-format contract is pinned by `tests/fixtures/ugc/sample-project.json`
 and its schema test, whose component keys (`transform`, `agent`, `poi`, `spawn-location`, `aoi`,
 `prefab-instance`, `model-renderer`) match the 2409 runtime. That fixture is the starting point, not

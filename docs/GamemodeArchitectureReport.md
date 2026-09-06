@@ -15,7 +15,10 @@ description: Evidence, root causes, and a pre-release redesign of gamemode disco
 Date: 2026-09-03. HEAD at investigation start: `9811ff8f78697f1302760b57918e942613f2fc43`.
 Scope: the **current working tree, including existing uncommitted changes**, across manifests,
 launcher domain/data/Flutter/CLI, the manager, Worlds, SDK contracts, first-party consumers,
-templates, and tests. This investigation changes only this report.
+templates, and tests. This investigation changed only the report. Source links now point to the
+investigation base where available, with the last pre-activation revision `b7390fb6` used for files
+introduced afterward. The original uncommitted observations remain historical evidence; those links
+do not assert that every observed working-tree change was committed at the investigation base.
 
 ## Assessment
 
@@ -54,9 +57,9 @@ Those are useful changes. This report does **not** count the old flat writes int
 config envelope, or the old single snapshot before later mods register, as remaining defects.
 The findings below concern the current implementation after those changes.
 
-Sources: [launch intent](../src/TopiaForge.ModManager.Core/WorldLaunchIntent.cs#L8),
-[startup launch](../src/TopiaForge.ModManager/TopiaForgeModManagerPlugin.Gamemodes.cs#L47),
-[catalog publication](../mods/TopiaForge.Worlds/WorldsService.Catalog.cs#L77).
+Sources: [launch intent](https://github.com/Furroxide/TopiaForge/blob/b7390fb6a8376c58c77d18f20e287bacbd427850/src/TopiaForge.ModManager.Core/WorldLaunchIntent.cs#L8),
+[startup launch](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/src/TopiaForge.ModManager/TopiaForgeModManagerPlugin.Gamemodes.cs#L47),
+[catalog publication](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/mods/TopiaForge.Worlds/WorldsService.Catalog.cs#L77).
 
 ## Findings
 
@@ -113,13 +116,13 @@ factory. Model optional session extensions separately from gamemode implementati
 and descriptors from one declaration instead of repeating loosely related strings.
 
 Sources: [manifest shape](../schemas/topiaforge.mod.v5.schema.json#L191),
-[SDK registrations](../src/TopiaForge.Mods.Abstractions/Worlds.cs#L36),
-[optional host registration](../src/TopiaForge.Mods.Abstractions/GamemodeHost.cs#L121),
-[discarded owner](../mods/TopiaForge.Worlds/WorldsService.OwnerFacade.cs#L12),
-[Sandbox initialization and attachment](../mods/TopiaForge.Sandbox/SandboxMod.cs#L41),
-[Home world inference](../apps/topiaforge_launcher_flutter/lib/src/launcher_bloc_actions.dart#L83),
-[first matching entry](../packages/launcher_domain/lib/src/models/world_models.dart#L245),
-[Zombies runtime target](../mods/TopiaForge.Zombies/ZombiesMod.cs#L66).
+[SDK registrations](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/src/TopiaForge.Mods.Abstractions/Worlds.cs#L36),
+[optional host registration](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/src/TopiaForge.Mods.Abstractions/GamemodeHost.cs#L121),
+[discarded owner](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/mods/TopiaForge.Worlds/WorldsService.OwnerFacade.cs#L12),
+[Sandbox initialization and attachment](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/mods/TopiaForge.Sandbox/SandboxMod.cs#L41),
+[Home world inference](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/apps/topiaforge_launcher_flutter/lib/src/launcher_bloc_actions.dart#L83),
+[first matching entry](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/packages/launcher_domain/lib/src/models/world_models.dart#L245),
+[Zombies runtime target](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/mods/TopiaForge.Zombies/ZombiesMod.cs#L66).
 
 ### GM-02 — Catalog and preflight disagree with the effective profile
 
@@ -150,11 +153,11 @@ registry discovery separate from installed launchability. Treat runtime snapshot
 revisioned observations. Validate the requested target against the resolved profile before
 spawning the game, and revalidate its implementation binding inside the runtime.
 
-Sources: [catalog assembly](../packages/launcher_data/lib/src/local_launcher_repository/storage_helpers.dart#L223),
-[unversioned registry merge](../packages/launcher_data/lib/src/local_launcher_repository/storage_helpers.dart#L273),
-[profile preflight](../packages/launcher_data/lib/src/local_launcher_repository/profile_launch_helpers.dart#L15),
-[registration removal](../mods/TopiaForge.Worlds/WorldsService.Registrations.cs#L114),
-[diagnostic-only publisher contract](../mods/TopiaForge.Worlds/WorldsService.Catalog.cs#L91).
+Sources: [catalog assembly](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/packages/launcher_data/lib/src/local_launcher_repository/storage_helpers.dart#L223),
+[unversioned registry merge](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/packages/launcher_data/lib/src/local_launcher_repository/storage_helpers.dart#L273),
+[profile preflight](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/packages/launcher_data/lib/src/local_launcher_repository/profile_launch_helpers.dart#L15),
+[registration removal](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/mods/TopiaForge.Worlds/WorldsService.Registrations.cs#L114),
+[diagnostic-only publisher contract](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/mods/TopiaForge.Worlds/WorldsService.Catalog.cs#L91).
 
 ### GM-03 — “None,” unavailable selections, and startup defaults conflict
 
@@ -184,11 +187,11 @@ applies its remembered selection only when a run supplied no profile at all, so 
 selection is still shown as None rather than as an error, and Home and Setup still interpret the
 same dropdown differently.
 
-Sources: [None selection](../apps/topiaforge_launcher_flutter/lib/src/launcher_bloc_actions.dart#L80),
-[wire omission](../packages/launcher_domain/lib/src/models/profile_models.dart#L226),
-[manager fallback](../src/TopiaForge.ModManager/TopiaForgeModManagerPlugin.Gamemodes.cs#L54),
-[missing-mode display](../apps/topiaforge_launcher_flutter/lib/src/screens/home_launch_pane.dart#L174),
-[Setup selection](../apps/topiaforge_launcher_flutter/lib/src/screens/setup_screen.dart#L249).
+Sources: [None selection](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/apps/topiaforge_launcher_flutter/lib/src/launcher_bloc_actions.dart#L80),
+[wire omission](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/packages/launcher_domain/lib/src/models/profile_models.dart#L226),
+[manager fallback](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/src/TopiaForge.ModManager/TopiaForgeModManagerPlugin.Gamemodes.cs#L54),
+[missing-mode display](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/apps/topiaforge_launcher_flutter/lib/src/screens/home_launch_pane.dart#L174),
+[Setup selection](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/apps/topiaforge_launcher_flutter/lib/src/screens/setup_screen.dart#L249).
 
 ### GM-04 — Requested world and load mode do not identify actual content
 
@@ -218,12 +221,12 @@ content, gamemode rules, engine transition strategy, and supported combinations.
 explicit world override; reject an unavailable required world instead of silently substituting.
 Keep scene mechanics out of ordinary selection unless users have a meaningful supported choice.
 
-Sources: [in-game card action](../src/TopiaForge.ModManager/Overlay/GamemodesTab.cs#L95),
-[startup router](../src/TopiaForge.ModManager/WorldLaunchRouter.cs#L51),
-[runtime route selection](../mods/TopiaForge.Worlds/WorldsService.Loading.cs#L139),
-[generic additive path](../mods/TopiaForge.Worlds/WorldsService.Loading.cs#L222),
-[entry fallback](../mods/TopiaForge.Worlds/WorldsService.Loading.cs#L396),
-[requested-world reporting](../src/TopiaForge.ModManager/TopiaForgeModManagerPlugin.Gamemodes.cs#L240).
+Sources: [in-game card action](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/src/TopiaForge.ModManager/Overlay/GamemodesTab.cs#L95),
+[startup router](https://github.com/Furroxide/TopiaForge/blob/b7390fb6a8376c58c77d18f20e287bacbd427850/src/TopiaForge.ModManager/WorldLaunchRouter.cs#L51),
+[runtime route selection](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/mods/TopiaForge.Worlds/WorldsService.Loading.cs#L139),
+[generic additive path](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/mods/TopiaForge.Worlds/WorldsService.Loading.cs#L222),
+[entry fallback](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/mods/TopiaForge.Worlds/WorldsService.Loading.cs#L396),
+[requested-world reporting](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/src/TopiaForge.ModManager/TopiaForgeModManagerPlugin.Gamemodes.cs#L240).
 
 ### GM-05 — Success precedes readiness, and can follow startup failure
 
@@ -256,12 +259,12 @@ session identities to reject stale/reentrant completions. Fallback must be decla
 in the actual resulting session; cancellation must cover the operation, with native retirement
 handled separately when the engine cannot cancel a dispatched load.
 
-Sources: [immediate task completion](../mods/TopiaForge.Worlds/WorldsService.Loading.cs#L15),
-[unconditional success after callbacks](../mods/TopiaForge.Worlds/WorldsService.Sessions.cs#L440),
-[deferred content creation](../mods/TopiaForge.Worlds/WorldsService.Sessions.cs#L272),
-[silent content substitution](../mods/TopiaForge.Worlds/WorldsService.Sessions.cs#L390),
-[consumer readiness heuristic](../mods/TopiaForge.Zombies/ZombiesController.Loop.cs#L122),
-[factory failure](../src/TopiaForge.Mods.Abstractions/GamemodeHost.cs#L232).
+Sources: [immediate task completion](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/mods/TopiaForge.Worlds/WorldsService.Loading.cs#L15),
+[unconditional success after callbacks](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/mods/TopiaForge.Worlds/WorldsService.Sessions.cs#L440),
+[deferred content creation](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/mods/TopiaForge.Worlds/WorldsService.Sessions.cs#L272),
+[silent content substitution](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/mods/TopiaForge.Worlds/WorldsService.Sessions.cs#L390),
+[consumer readiness heuristic](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/mods/TopiaForge.Zombies/ZombiesController.Loop.cs#L122),
+[factory failure](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/src/TopiaForge.Mods.Abstractions/GamemodeHost.cs#L232).
 
 ### GM-06 — Failed startup has no session resource scope
 
@@ -288,9 +291,9 @@ to that scope; merely exposing a child lifetime while services still acquire und
 lifetime would preserve the leak. Dispose it on failed start, stop, supersession, and owner unload. Keep
 application/mod registrations and session resources as separate ownership categories.
 
-Sources: [factory contract](../src/TopiaForge.Mods.Abstractions/GamemodeHost.cs#L80),
-[post-construction tracking and cleanup](../src/TopiaForge.Mods.Abstractions/GamemodeHost.cs#L232),
-[Zombies rollback](../mods/TopiaForge.Zombies/ZombiesController.cs#L109).
+Sources: [factory contract](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/src/TopiaForge.Mods.Abstractions/GamemodeHost.cs#L80),
+[post-construction tracking and cleanup](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/src/TopiaForge.Mods.Abstractions/GamemodeHost.cs#L232),
+[Zombies rollback](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/mods/TopiaForge.Zombies/ZombiesController.cs#L109).
 
 ### GM-07 — A cleanup exception can interrupt teardown permanently
 
@@ -312,9 +315,9 @@ failures, and always publishes exactly one terminal result. Clear owned referenc
 calling extension cleanup. A consumer failure must not prevent provider hooks, scene claims,
 and other consumers' resources from being released.
 
-Sources: [unsafe content disposal](../mods/TopiaForge.Worlds/WorldsService.Sessions.cs#L13),
-[clear-before-notify sequence](../mods/TopiaForge.Worlds/WorldsService.Sessions.cs#L43),
-[provider shutdown](../mods/TopiaForge.Worlds/WorldsService.Sessions.cs#L76).
+Sources: [unsafe content disposal](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/mods/TopiaForge.Worlds/WorldsService.Sessions.cs#L13),
+[clear-before-notify sequence](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/mods/TopiaForge.Worlds/WorldsService.Sessions.cs#L43),
+[provider shutdown](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/mods/TopiaForge.Worlds/WorldsService.Sessions.cs#L76).
 
 ### GM-08 — Scene updates are interpreted as new gamemode sessions
 
@@ -333,9 +336,9 @@ running session from beginning another session. Define whether a native world ch
 within a mode; preserve its controller if so, or end it explicitly if not. Do not infer that
 decision from an untyped `SessionChanged` notification.
 
-Sources: [scene rebinding](../mods/TopiaForge.Worlds/WorldsService.Sessions.cs#L187),
-[unconditional controller replacement](../src/TopiaForge.Mods.Abstractions/GamemodeHost.cs#L216),
-[session shape](../src/TopiaForge.Mods.Abstractions/Worlds.cs#L390).
+Sources: [scene rebinding](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/mods/TopiaForge.Worlds/WorldsService.Sessions.cs#L187),
+[unconditional controller replacement](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/src/TopiaForge.Mods.Abstractions/GamemodeHost.cs#L216),
+[session shape](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/src/TopiaForge.Mods.Abstractions/Worlds.cs#L390).
 
 ### GM-09 — Separate scene-loading paths admit competing transitions
 
@@ -355,10 +358,10 @@ and retirement. Continue observing native game transitions, but distinguish them
 framework operations. An uncancellable engine operation cannot safely be “superseded” by adding
 another claim.
 
-Sources: [claim admission](../src/TopiaForge.ModManager/SceneCoordinator.cs#L74),
-[core scene request](../src/TopiaForge.ModManager/UnitySceneService.cs#L68),
-[separate core load guard](../src/TopiaForge.ModManager/UnitySceneService.cs#L258),
-[Worlds load guard](../mods/TopiaForge.Worlds/WorldsService.Loading.cs#L118).
+Sources: [claim admission](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/src/TopiaForge.ModManager/SceneCoordinator.cs#L74),
+[core scene request](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/src/TopiaForge.ModManager/UnitySceneService.cs#L68),
+[separate core load guard](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/src/TopiaForge.ModManager/UnitySceneService.cs#L258),
+[Worlds load guard](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/mods/TopiaForge.Worlds/WorldsService.Loading.cs#L118).
 
 ### GM-10 — The custom-world spawn contract is not implemented
 
@@ -372,10 +375,10 @@ or implement the documented marker lookup through the appropriate adapter. Valid
 spawn readiness before the gamemode starts. Remove an unsupported option instead of publishing
 a contract that cannot affect behavior.
 
-Sources: [spawn option](../src/TopiaForge.Mods.Abstractions/CustomWorlds.cs#L49),
-[authoring validation](../templates/TopiaForge.UnityWorldTemplate/Packages/io.github.furroxide.topiaforge.world-companion/Editor/WorldValidator.cs#L62),
-[actual runtime spawn](../mods/TopiaForge.Worlds/WorldsService.Sessions.cs#L272),
-[player guard placement](../mods/TopiaForge.Worlds/WorldsService.Sessions.cs#L373).
+Sources: [spawn option](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/src/TopiaForge.Mods.Abstractions/CustomWorlds.cs#L49),
+[authoring validation](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/templates/TopiaForge.UnityWorldTemplate/Packages/io.github.furroxide.topiaforge.world-companion/Editor/WorldValidator.cs#L62),
+[actual runtime spawn](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/mods/TopiaForge.Worlds/WorldsService.Sessions.cs#L272),
+[player guard placement](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/mods/TopiaForge.Worlds/WorldsService.Sessions.cs#L373).
 
 ## Root causes
 
@@ -541,10 +544,10 @@ definition without ending an active session, while Worlds ends that session. Sha
 contract tests should exercise the same lifecycle cases against the fake and the production
 orchestrator, so a convenient fake cannot silently define a weaker contract.
 
-Sources: [test composition](../tests/TopiaForge.ModManager.Tests/TopiaForge.ModManager.Tests.csproj#L156),
-[Zombies test setup](../tests/TopiaForge.ModManager.Tests/ZombiesControllerTests.Lifecycle.cs#L74),
-[fake registration removal](../src/TopiaForge.Mods.Testing/FakeWorldGamemodeService.cs#L403),
-[picker tests](../apps/topiaforge_launcher_flutter/test/widget_test.dart#L147).
+Sources: [test composition](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/tests/TopiaForge.ModManager.Tests/TopiaForge.ModManager.Tests.csproj#L156),
+[Zombies test setup](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/tests/TopiaForge.ModManager.Tests/ZombiesControllerTests.Lifecycle.cs#L74),
+[fake registration removal](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/src/TopiaForge.Mods.Testing/FakeWorldGamemodeService.cs#L403),
+[picker tests](https://github.com/Furroxide/TopiaForge/blob/9811ff8f78697f1302760b57918e942613f2fc43/apps/topiaforge_launcher_flutter/test/widget_test.dart#L147).
 
 No full solution/release build or full Flutter/Dart test matrix was run: no production code was
 changed. No live-game claim is made for scene races, custom-content failure placement, teardown

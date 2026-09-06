@@ -41,7 +41,24 @@ final class InstallFacts {
     this.architecture = '',
     this.contentTarget = '',
     this.gameVersion = '',
-  });
+  }) : contentTargets = const [];
+  InstallFacts.withContentTargets({
+    this.platform = '',
+    this.architecture = '',
+    this.contentTarget = '',
+    this.gameVersion = '',
+    Iterable<String> contentTargets = const [],
+  }) : contentTargets = List.unmodifiable(
+         {
+           ...contentTargets,
+           if (contentTarget.isNotEmpty) contentTarget,
+         }.where((value) => value.isNotEmpty),
+       );
+  final List<String> contentTargets;
+  Iterable<String> get supportedContentTargets =>
+      contentTargets.isEmpty && contentTarget.isNotEmpty
+      ? [contentTarget]
+      : contentTargets;
   final String platform;
   final String architecture;
   final String contentTarget;

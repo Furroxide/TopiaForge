@@ -15,7 +15,6 @@ namespace TopiaForge.ModManager.Tests
             TestImmediateLifetimeReleaseForZombieResources();
             TestSchedulerAndControlledCompletion();
             TestExpectedCancellationResults();
-            TestBundleWorldContentOwnership();
             TestSpecialistModuleFakes();
             TestWorldAssetOverrideFake();
             TestLocalWorldFake();

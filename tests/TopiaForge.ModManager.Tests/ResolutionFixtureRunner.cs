@@ -99,7 +99,8 @@ namespace TopiaForge.ModManager.Tests
                     Text(install, "platform"),
                     Text(install, "architecture"),
                     Text(install, "contentTarget"),
-                    Text(install, "gameVersion"))
+                    Text(install, "gameVersion"),
+                    install.TryGetProperty("contentTargets", out var targets) ? targets.EnumerateArray().Select(value => value.GetString()!).ToArray() : Array.Empty<string>())
                 : new InstallFacts();
 
         private static LaunchRequest ReadRequest(JsonElement raw) =>

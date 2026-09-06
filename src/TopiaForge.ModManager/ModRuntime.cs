@@ -144,7 +144,8 @@ namespace TopiaForge.ModManager
                 .Select(package => package.Manifest!)
                 .ToArray();
             runtimeInfo.ConfigureProviders(packages);
-            assemblyCatalog = new ModAssemblyResolutionCatalog(packages, pluginAssemblyPath);
+            assemblyCatalog = new ModAssemblyResolutionCatalog(
+                sessionBindings == null ? packages : sessionBindings.UnambiguousSelections(packages), pluginAssemblyPath);
             if (sessionBindings != null)
             {
                 verifiedDeclarationLoader = new VerifiedPackageAssemblyLoader(assemblyCatalog, RegisterAssemblyOwner);

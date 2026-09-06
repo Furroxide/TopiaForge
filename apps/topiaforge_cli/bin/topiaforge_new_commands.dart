@@ -81,8 +81,18 @@ extension _NewCommands on _TopiaForgeCli {
   }
 
   /// Parses every scaffold-time manifest flag of `new mod`. `hashes`
-  /// (pack-time) and `schemaVersion` (pinned to 5) are intentionally not flags.
+  /// (pack-time) and `schemaVersion` (pinned to V6) are intentionally not flags.
   ModScaffoldOptions _parseModScaffoldOptions(List<String> args) {
+    if (args.any(
+      (argument) =>
+          argument == '--gamemode' || argument.startsWith('--gamemode='),
+    )) {
+      throw UsageError(
+        'Metadata-only --gamemode scaffolding is retired. Use --template gamemode '
+        'and declare contributions.gamemodes with a factory implementation, '
+        'plus contributions.launchTargets in topiaforge.mod.json.',
+      );
+    }
     ModDependency parseDependency(String spec, {bool optional = false}) {
       final at = spec.indexOf('@');
       return ModDependency(
@@ -101,20 +111,6 @@ extension _NewCommands on _TopiaForgeCli {
         versionRange: at < 0
             ? const VersionRange.any()
             : VersionRange.parse(spec.substring(at + 1)),
-      );
-    }
-
-    GamemodeDefinition parseGamemode(String spec) {
-      final parts = spec.split(':');
-      if (parts.first.trim().isEmpty) {
-        throw StateError('--gamemode expects <id:Name[:description]>.');
-      }
-      return GamemodeDefinition(
-        id: parts[0].trim(),
-        name: parts.length > 1 && parts[1].trim().isNotEmpty
-            ? parts[1].trim()
-            : parts[0].trim(),
-        description: parts.length > 2 ? parts.sublist(2).join(':').trim() : '',
       );
     }
 
@@ -147,7 +143,6 @@ extension _NewCommands on _TopiaForgeCli {
         '--optional-dependency',
       ).map((spec) => parseDependency(spec, optional: true)).toList(),
       conflicts: _options(args, '--conflict').map(parseConflict).toList(),
-      gamemodes: _options(args, '--gamemode').map(parseGamemode).toList(),
       entryAssembly: _option(args, '--entry-assembly'),
       entryType: _option(args, '--entry-type'),
       gameVersionRange: parseRange(_option(args, '--game-version-range')),

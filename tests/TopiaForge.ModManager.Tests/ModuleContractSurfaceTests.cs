@@ -35,7 +35,7 @@ namespace TopiaForge.ModManager.Tests
             {
                 typeof(IRobotAgentService).Assembly,
                 typeof(ICreatorContentService).Assembly,
-                typeof(IWorldGamemodeService).Assembly,
+                typeof(IWorldSessionService).Assembly,
                 typeof(ITimeControlService).Assembly,
                 typeof(IPromptOverrideRegistry).Assembly
             };
@@ -56,7 +56,7 @@ namespace TopiaForge.ModManager.Tests
                      {
                          typeof(IRobotAgentService),
                          typeof(ICreatorContentService),
-                         typeof(IWorldGamemodeService),
+                         typeof(IWorldSessionService),
                          typeof(ITimeControlService),
                          typeof(IPromptOverrideRegistry)
                      })

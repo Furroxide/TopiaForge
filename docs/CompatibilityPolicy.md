@@ -35,16 +35,21 @@ The explicitly unstable interop package is outside even these guarantees.
 
 ## Manifest and serialized state
 
-Schema V5 is the sole TopiaForge package manifest. Its `multiplayer` object is optional; absence means
-standalone-only. Manifest V4 was retired before the first public release and is rejected with an actionable V5
-migration path. Readers dispatch by schema version and never reinterpret an older schema. Unknown fields fail
-validation except bounded namespaced `x-*` metadata. Changing an existing field's meaning requires a new schema and
-migration command. Future loaders may accept newer schemas alongside V5, but must keep a dedicated V5 reader and
-its original semantics for the entire 0.x line and into 1.0.
+Manifest V6 is the canonical authoring contract. Its optional `multiplayer` object does not change
+standalone defaults. V5 is unreleased and is being retired through the sequential gamemode redesign;
+the temporary V5 dispatcher exists only until its migration/retirement slice. No policy requires
+retaining V5 into 0.x or 1.0. V4 is already rejected. Readers dispatch by schema version; unknown
+fields fail except bounded namespaced `x-*` metadata. New semantics require an explicit numbered
+contract and migration. See [Manifest V6](ManifestV6.md) for current fields and deliberate exclusions.
+
+The approved pre-release redesign removes the Worlds startup API, including `GamemodeHost`, while
+keeping `TopiaForge.Mods.Worlds` assembly identity at `0.1.0.0`. Gameplay starts through the declared
+factory and a manager-owned session scope. Package format, dependency ordering, inbox, logs,
+enablement and restart-required behavior remain part of the release contract.
 
 The `TopiaForge.Mods.Multiplayer` public preview receives the same 0.x posture as other safe specialist
 contracts. It does not promise live networking. Protocol versions are
-independent from package versions, and standalone V5 mods are not assumed multiplayer-correct.
+independent from package versions, and standalone mods are not assumed multiplayer-correct.
 
 Manager, profile, receipt, journal, and last-run state are versioned, bounded, and written atomically.
 Readers either migrate a known older state or fail with a recovery path. Package-supplied backup

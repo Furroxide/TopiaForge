@@ -36,7 +36,7 @@ namespace TopiaForge.Mods.Analyzers.Tests
                 "io.github.furroxide.topiaforge.robotkit"),
             new ModuleFixture(
                 "TopiaForge.Mods.Worlds",
-                "IWorldGamemodeService",
+                "IWorldSessionService",
                 "io.github.furroxide.topiaforge.worlds"),
             new ModuleFixture(
                 "TopiaForge.Mods.Ugc",
@@ -200,7 +200,7 @@ namespace TopiaForge.Mods.Analyzers.Tests
         private static void RequiresCompileAndRuntimeModuleDependencies()
         {
             var module = SpecialistModules.Single(item => item.AssemblyName.EndsWith("Worlds", StringComparison.Ordinal));
-            var source = "using TopiaForge.Mods; public sealed class Mod { IWorldGamemodeService value = null!; }";
+            var source = "using TopiaForge.Mods; public sealed class Mod { IWorldSessionService value = null!; }";
             Assert(Compile(source).Any(item => item.Id == "CS0246"),
                 "module type use without the compile-time contract reference should fail compilation");
 

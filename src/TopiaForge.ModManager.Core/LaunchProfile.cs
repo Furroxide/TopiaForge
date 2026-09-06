@@ -27,17 +27,20 @@ namespace TopiaForge.ModManager.Core
 
     public sealed class InstallFacts
     {
-        public InstallFacts(string platform = "", string architecture = "", string contentTarget = "", string gameVersion = "")
+        public InstallFacts(string platform = "", string architecture = "", string contentTarget = "", string gameVersion = "", IEnumerable<string>? contentTargets = null)
         {
             Platform = platform ?? string.Empty;
             Architecture = architecture ?? string.Empty;
             ContentTarget = contentTarget ?? string.Empty;
+            ContentTargets = Array.AsReadOnly((contentTargets ?? Array.Empty<string>()).Concat(new[] { ContentTarget })
+                .Where(value => !string.IsNullOrEmpty(value)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(value => value, StringComparer.Ordinal).ToArray());
             GameVersion = gameVersion ?? string.Empty;
         }
 
         public string Platform { get; }
         public string Architecture { get; }
         public string ContentTarget { get; }
+        public IReadOnlyList<string> ContentTargets { get; }
         public string GameVersion { get; }
     }
 

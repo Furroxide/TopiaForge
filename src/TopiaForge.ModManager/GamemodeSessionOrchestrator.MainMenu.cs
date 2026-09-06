@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.ModManager.Core;
@@ -20,7 +22,17 @@ namespace TopiaForge.ModManager
                 if (admission != SessionAdmission.Accepted)
                 { CompleteCommand(completion, requestId, "main-menu", null, AdmissionFailure(admission)); return; }
                 var owner = current == null ? "topiaforge.manager" : Owner(current.Plan, current.Plan.TargetId).Id;
-                var reserved = native.TryReserve(new NativeTransitionOwner(owner, runtimeOwnershipId + ":menu:" + requestId), requestId);
+                OperationResult<INativeTransitionReservation> reserved;
+                try
+                {
+                    reserved = native.TryReserve(new NativeTransitionOwner(owner, runtimeOwnershipId + ":menu:" + requestId), requestId);
+                }
+                catch (Exception error)
+                {
+                    lifecycle.Release(lease!);
+                    CompleteCommand(completion, requestId, "main-menu", null, ExceptionFailure(error));
+                    return;
+                }
                 if (!reserved.TryGetValue(out var reservation))
                 {
                     lifecycle.Release(lease!);
@@ -37,6 +49,7 @@ namespace TopiaForge.ModManager
             TaskCompletionSource<OperationResult<bool>> completion)
         {
             var result = OperationResult<bool>.Success(true);
+            var failures = new List<Exception>();
             using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             menuCancellation = cancellation;
             try
@@ -54,11 +67,25 @@ namespace TopiaForge.ModManager
                 using (var grant = reservation.BorrowFor(owner, requestId))
                     result = await dispatcher.InvokeCallbackAsync(() => environment.LoadMainMenuAsync(grant.SceneTransitions, cancellation.Token));
             }
-            catch (Exception error) { result = ExceptionFailure(error); }
+            catch (Exception error)
+            {
+                result = ExceptionFailure(error);
+                if (!(error is OperationCanceledException)) failures.Add(error);
+            }
             finally
             {
-                await reservation.CloseAsync();
+                // A late close failure is still terminal cleanup evidence; it cannot strand
+                // the command task or the lifecycle lease after native ownership has drained.
+                try { await reservation.CloseAsync(); }
+                catch (Exception error) { failures.Add(error); }
                 menuCancellation = null;
+            }
+            if (failures.Count != 0)
+            {
+                result = OperationResult<bool>.Failure(ModErrorCode.External,
+                    Message(string.Join("; ", new[] { result.ErrorMessage }.Concat(failures.SelectMany(CleanupMessages))
+                        .Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.Ordinal))));
+                foreach (var error in failures) Report(error);
             }
             lifecycle.Release(lease);
             CompleteCommand(completion, requestId, "main-menu", null, result);

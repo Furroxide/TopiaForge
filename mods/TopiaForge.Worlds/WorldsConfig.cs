@@ -10,14 +10,7 @@ namespace TopiaForge.Worlds
             SeedDefaults();
         }
 
-        // Automatically end the active world session when a non-gameplay scene (menu/boot/loader) becomes the
-        // active scene — e.g. the player used the game's own pause-menu exit. Leave on unless a gamemode must
-        // survive menu round-trips and manages its own teardown.
-        [DataMember(Name = "endSessionOnMenuScene")]
-        public bool EndSessionOnMenuScene { get; set; } = true;
-
-        // While a session is active, rewire the vanilla pause menu's exit button to end the session cleanly
-        // (and host gamemode-registered pause actions). The scene-load auto-end above still applies when off.
+        // Rewire the vanilla pause exit through the manager's bound menu operation.
         [DataMember(Name = "interceptPauseMenu")]
         public bool InterceptPauseMenu { get; set; } = true;
 
@@ -43,7 +36,6 @@ namespace TopiaForge.Worlds
 
         private void SeedDefaults()
         {
-            EndSessionOnMenuScene = true;
             InterceptPauseMenu = true;
             EnableLocalWorlds = true;
             LocalWorldFolder = string.Empty;

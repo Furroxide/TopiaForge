@@ -26,6 +26,11 @@ working templates, consumer migration, and removal of the old startup protocol.
 
 ## Production composition seams from slice 5
 
+The descriptions of old routing, reflection checks, and package selection below describe
+the slice-5 baseline. Consult the ledger for repairs already implemented; do not reintroduce
+the old entry points. The activation entry point is now `ModRuntime.ActivateSessionRuntime`,
+using `RuntimeSessionSelection` before `Load`.
+
 - Configure the exact effective selection with `ModRuntime.ConfigureSessionSelection`
   before `Load`, then compose the live session environment from `SessionBindings`
   snapshots and the existing process dispatcher/executor. Do not reconstruct the
@@ -93,6 +98,31 @@ working templates, consumer migration, and removal of the old startup protocol.
 - Preserve assembly identity `0.1.0.0`, package/runtime operational boundaries,
   enablement and restart semantics, and the shared Busy transition policy.
 
+## Verified handoff prerequisites
+
+- Before C# generated-package acceptance, restore the tracked CLI dependency graph
+  with Dart **3.12.2**: run `dart pub get --enforce-lockfile` from
+  `apps/topiaforge_cli`. On this Windows host invoke
+  `C:\Users\vanst\fvm\versions\3.44.6\bin\cache\dart-sdk\bin\dart.exe`
+  explicitly. The C# helper passes that application's `.dart_tool/package_config.json`,
+  which resolves `launcher_data` and `launcher_domain` as local packages. The data
+  package's ignored lockfile is not a reproducible CI prerequisite. Keep CI lock
+  enforcement, validate any explicit test-executable override's Dart version, and
+  fail actionably rather than skipping generation when the configuration is absent.
+- The gamemode template calls the bound `session.RestartAsync()` with its default
+  token. Do not automatically pass the predecessor's session/stopping token into
+  restart or main-menu: those admitted operations intentionally stop that scope.
+  Context facades must recheck their consuming lifetime on the host at admission;
+  after admission they preserve independent explicit caller cancellation. Retain
+  child-facade restart/menu, queued-stop, stale-handle and caller-cancellation tests.
+- During this intermediate slice, `migrate-manifest` validates V6 input and leaves
+  valid files untouched; malformed V6 must fail without writes. V3/V4 mechanical
+  conversion remains explicitly V5 with the frozen V5 schema URL until slice 8
+  replaces it with the full preservation/refusal workflow. Do not describe this
+  temporary conversion as completed V5 retirement or non-lossy V6 migration.
+  All `new mod --gamemode` forms, including missing/empty values, refuse before
+  project, companion, registry or SDK-cache creation and direct authors to the
+  gamemode template and contribution fields.
 ## Acceptance
 
 - Validate every first-party and generated manifest against the canonical V6
@@ -111,3 +141,19 @@ working templates, consumer migration, and removal of the old startup protocol.
   Record each unrun live case as pending for slice 8.
 - Update the ledger and submit this coherent activation slice. Branch slice 7
   only after merge; do not split the alias from manifest/template migration.
+
+
+## Final activation review handoff
+
+Generated acceptance uses a closed tool choice. Windows uses the ignored repository
+`.fvm/flutter_sdk` link to Flutter 3.44.6 and verifies Flutter/Dart version metadata
+before executing its fixed Dart path; Linux uses the CI-pinned Dart command. Arbitrary
+`TOPIAFORGE_TEST_DART` executable overrides are rejected. CLI relocation tests overwrite
+ignored NuGet asset paths with a temporary cache: restore the solution after that suite
+before final C# formatting or builds. Do not patch SDK contents or weaken lock restores.
+
+Source reflection auditing must reject directory links at the source root, any ancestor,
+recursive source directory, and literal/glob project links that escape the repository.
+Valid `../Shared` links within ordinary repository directories remain supported. Use
+owned temporary directories in its regression fixtures rather than concatenating an
+externally supplied temporary-path string.

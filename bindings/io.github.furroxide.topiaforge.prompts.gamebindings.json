@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "modId": "io.github.furroxide.topiaforge.prompts",
   "modName": "TopiaForge Prompts",
   "bindings": [

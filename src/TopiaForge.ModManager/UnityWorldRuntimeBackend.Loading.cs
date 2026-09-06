@@ -53,17 +53,22 @@ namespace TopiaForge.ModManager
                 if (disposed || started)
                 { completion.FailCaller(ModErrorCode.InvalidState, "The native world preparation is closed or already dispatched."); return NativeSceneDispatchStatus.NotDispatched; }
                 MethodInfo? loader;
+                NativeAwaiterMethods? observer;
                 try
                 {
-                    loader = checkpoint != null
-                        ? Type.GetType("LoadSceneOnTriggerEnter, GameCode", false)?.GetMethod("LoadSceneImpl", PublicStatic)
-                        : Type.GetType("SceneUtil, GameCode", false)?.GetMethod("LoadScene", PublicStatic, null, new[] { typeof(string), typeof(CancellationToken) }, null);
-                    if (loader == null || !CanObserve(loader.ReturnType))
+                    if (checkpoint != null)
+                    {
+                        var loaderType = Type.GetType("LoadSceneOnTriggerEnter, GameCode", false);
+                        var checkpointType = Type.GetType("CheckpointAsset, GameCode", false);
+                        if (loaderType == null || checkpointType == null || !checkpointType.IsInstanceOfType(checkpoint))
+                            throw new InvalidOperationException("The native checkpoint loader signature is unsupported.");
+                        loader = NativeWorldReflection.CheckpointLoader(loaderType, checkpointType);
+                    }
+                    else loader = Type.GetType("SceneUtil, GameCode", false)?.GetMethod("LoadScene", PublicStatic,
+                        null, new[] { typeof(string), typeof(CancellationToken) }, null);
+                    observer = loader == null ? null : NativeWorldReflection.Awaiter(loader.ReturnType);
+                    if (loader == null || (observer == null && !typeof(Task).IsAssignableFrom(loader.ReturnType)))
                         throw new InvalidOperationException("The native world loader has no supported observable completion contract.");
-                    var parameters = loader.GetParameters();
-                    if (checkpoint != null && (parameters.Length != 2 || parameters[0].ParameterType != typeof(bool)
-                        || !parameters[1].ParameterType.IsInstanceOfType(checkpoint)))
-                        throw new InvalidOperationException("The native checkpoint loader signature is unsupported.");
                     if (request.Kind == NativeWorldLoadKind.OpenSandbox)
                     {
                         var lastRun = Type.GetType("UgcPlayLauncherLastRun, GameCode", false);
@@ -87,7 +92,7 @@ namespace TopiaForge.ModManager
                 {
                     var task = loader.Invoke(null, checkpoint != null ? new[] { (object)false, checkpoint } : new object[] { scenePath, CancellationToken.None });
                     returned = true;
-                    Observe(task, completion);
+                    Observe(task, observer, completion);
                     return NativeSceneDispatchStatus.Dispatched;
                 }
                 catch (Exception error)
@@ -100,16 +105,7 @@ namespace TopiaForge.ModManager
                     return NativeSceneDispatchStatus.Indeterminate;
                 }
             }
-            private static bool CanObserve(Type type)
-            {
-                if (typeof(Task).IsAssignableFrom(type)) return true;
-                var awaiter = type.GetMethod("GetAwaiter", AnyInstance, null, Type.EmptyTypes, null)?.ReturnType;
-                return awaiter?.GetMethod("GetResult", AnyInstance, null, Type.EmptyTypes, null) != null
-                    && awaiter.GetProperty("IsCompleted", AnyInstance) != null
-                    && (awaiter.GetMethod("OnCompleted", AnyInstance, null, new[] { typeof(Action) }, null) != null
-                        || awaiter.GetMethod("UnsafeOnCompleted", AnyInstance, null, new[] { typeof(Action) }, null) != null);
-            }
-            private static void Observe(object? task, IInternalNativeSceneCompletion completion)
+            private static void Observe(object? task, NativeAwaiterMethods? observer, IInternalNativeSceneCompletion completion)
             {
                 if (task is Task managed)
                 {
@@ -118,22 +114,18 @@ namespace TopiaForge.ModManager
                         : OperationResult<bool>.Success(true)), CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
                     return;
                 }
-                var awaiter = task?.GetType().GetMethod("GetAwaiter", AnyInstance)?.Invoke(task, null)
-                    ?? throw new InvalidOperationException("The native loader returned no awaitable.");
-                var type = awaiter.GetType();
-                var getResult = type.GetMethod("GetResult", AnyInstance)!;
+                if (task == null || observer == null)
+                    throw new InvalidOperationException("The native loader returned no supported awaitable.");
+                // Invoke the same declared contract validated before dispatch, even for runtime subtypes.
+                var awaiter = observer.GetAwaiter.Invoke(task, null)
+                    ?? throw new InvalidOperationException("The native loader returned no awaiter.");
                 Action complete = () =>
                 {
-                    try { getResult.Invoke(awaiter, null); completion.ManagedCompleted(OperationResult<bool>.Success(true)); }
+                    try { observer.GetResult.Invoke(awaiter, null); completion.ManagedCompleted(OperationResult<bool>.Success(true)); }
                     catch (Exception error) { completion.ManagedCompleted(Failure<bool>(ModErrorCode.External, Unwrap(error).Message)); }
                 };
-                if (type.GetProperty("IsCompleted", AnyInstance)?.GetValue(awaiter) is bool completed && completed) complete();
-                else
-                {
-                    var onCompleted = type.GetMethod("OnCompleted", AnyInstance, null, new[] { typeof(Action) }, null)
-                        ?? type.GetMethod("UnsafeOnCompleted", AnyInstance, null, new[] { typeof(Action) }, null)!;
-                    onCompleted.Invoke(awaiter, new object[] { complete });
-                }
+                if ((bool)observer.IsCompleted.GetValue(awaiter)!) complete();
+                else observer.OnCompleted.Invoke(awaiter, new object[] { complete });
             }
             public OperationResult<WorldSceneIdentity> CaptureScene()
             {

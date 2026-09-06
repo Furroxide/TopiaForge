@@ -10,6 +10,17 @@ namespace TopiaForge.ModManager
 {
     internal sealed partial class GamemodeSessionOrchestrator
     {
+        internal Task<OperationResult<bool>> InvokeContextOperationAsync(IModLifetime lifetime,
+            Func<CancellationToken, Task<OperationResult<bool>>> operation, CancellationToken token)
+            => dispatcher.InvokeCallbackAsync(() =>
+            {
+                // Check on the same host turn as admission. Once accepted, retiring the calling
+                // scope is part of restart/menu work and must not cancel that work itself.
+                if (lifetime.IsStopping || token.IsCancellationRequested)
+                    return Task.FromResult(OperationResult<bool>.Failure(ModErrorCode.Cancelled,
+                        "The consuming session scope has stopped."));
+                return operation(token);
+            });
         internal Task<OperationResult<bool>> StopAsync(string sessionId, CancellationToken cancellationToken = default)
         {
             var completion = Completion();
@@ -42,11 +53,15 @@ namespace TopiaForge.ModManager
 
         private void RequestBoundStop(string sessionId)
         {
-            if (!dispatcher.IsCurrent || publishing != 0
-                || (lifecycle.HasOperation && lifecycle.Current.Phase == SessionPhase.Running))
+            if (!dispatcher.IsCurrent)
             { dispatcher.Post(() => RequestBoundStop(sessionId)); return; }
             var record = current;
+            // A stale callback has no work to defer, even while a newer operation is Busy.
             if (record == null || record.Identity.SessionId != sessionId || record.StopRequested) return;
+            if (publishing == 0 && record.ContentOperation)
+            { CancelRecord(record); return; }
+            if (publishing != 0 || (lifecycle.HasOperation && lifecycle.Current.Phase == SessionPhase.Running))
+            { dispatcher.Post(() => RequestBoundStop(sessionId)); return; }
             if (!record.Starting)
             {
                 var admission = lifecycle.TryAcquire(false, sessionId, out var lease);
