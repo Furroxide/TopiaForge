@@ -605,11 +605,41 @@ The old four-PR stack is source material; it does not satisfy these eight delive
 | 2 | Unused V6 contract/readers/validators/conformance; alias stays V5 | Merged in PR #107 (`d7bb38c`) | Intentionally unused | 149 C# fixtures; 479 domain, 358 data, 227 CLI tests; seven Release harnesses and required CI/publication passed at `99e7d15` | Not required for pure contract |
 | 3 | Pure resolution and immutable transport models | Merged in PR #108 (`ddc950e`) | Intentionally no production switch | 353 shared fixtures; 791 domain, 358 data, 227 CLI tests; full Release/seven harnesses and required CI/publication passed at `d175861` | Not required for pure models |
 | 4 | Scoped ownership, lifecycle, shared transition foundations | Merged in PR #109 (`cfbed99`) | Existing V5 scene routes use the shared executor; V6 orchestration activation remains pending | Final head `e7bf7c6` passed full CI (`33999792058`), CodeQL (`33999790502`), local Release/seven harnesses and scoped audits | Native behavior pending |
-| 5 | Verified bindings, providers/discovery/readiness and native cleanup follow-up | Working tree based on `cfbed99`; local corrections complete; commit/CI pending | Explicit-selection production binder/discovery/adapters exercised by synthetic packages; default V5 consumers unchanged; activation remains slice 6 | Final formatting and full Release pass (zero warnings/errors); all 11 SDK packages and seven rebuilt harnesses pass, including 40 isolated runtime cases; exact-head CI pending | World/readiness/native-timing checks pending |
+| 5 | Verified bindings, providers/discovery/readiness and native cleanup follow-up | PR #110 open on `dev` (`cfbed99`); initial head `4dd3e63` passed CI; review correction awaiting its own CI | Explicit-selection production binder/discovery/adapters exercised by synthetic packages; default V5 consumers unchanged; activation remains slice 6 | Initial head CI `34004356327` and CodeQL `34004355404` passed. Review correction passed fresh Release, seven harnesses, formatting, Dart analysis and audits; new-head CI pending | World/readiness/native-timing checks pending |
 | 6 | Activate runtime and atomically flip manifests/templates | Original-stack migration is partial source material only | Pending | Rebuilt API baselines, generated package and consumer coverage pending | First-party gameplay pending |
 | 7 | Launcher/CLI/overlay preflight, wire V4, observations, durable state | Pending | Pending | Cross-language wire/profile/process/progress integration pending | Cold launch and multi-surface selection pending |
 | 7a | Release prerequisites, exact-byte qualification and unsigned Windows repair | Explicit additional PR planned | Pending | Qualification/bypass/tamper and packaging regressions pending | Reviewed evidence and isolated QA locations pending |
 | 8 | Retire V5, migration, publication, final acceptance | Original-stack migration/docs need repairs | Pending | Complete scoped matrix, audits, publication and CI pending | Full isolated-profile acceptance pending |
+
+## Slice 5 initial CI and review correction (6 September 2026)
+
+PR #110 initial head `4dd3e63f9e6c4e92c8b2151edae51e7faf0ba34c` passed full
+[CI run 34004356327](https://github.com/Furroxide/TopiaForge/actions/runs/34004356327)
+and [CodeQL run 34004355404](https://github.com/Furroxide/TopiaForge/actions/runs/34004355404).
+This includes Linux documentation publication, Windows data tests, Flutter checks and
+all seven generated templates. It does not establish game readiness or closure of
+pre-existing workflow alerts.
+
+Review found world-provider and discovery errors included CLR stack formatting. A
+regression first failed, then passed after extracting ordered, deduplicated messages
+from every nested primary and cleanup cause. Retained logs are
+`%TEMP%/tf-pr110-world-error-messages-red.log` and `...-green.log`. The follow-up source
+passed full Release (zero warnings/errors), solution formatting, all 11 SDK packages
+and seven rebuilt C# harnesses (`tf-pr110-review-release.log`,
+`tf-pr110-review-format-verify.log`, `tf-pr110-review-seven-harnesses.log`). Pinned Dart
+3.12.2 toolchain analysis of domain/data/CLI, formatting (294 files, zero changes), tracked
+line limits, README/residue/assets/trademark/353-case fixture audits, 125-file Markdown
+links and publication preparation passed. These local results require a fresh exact-head
+CI run before merge. Strict generated Open Sandbox decoration remains intentional:
+incomplete required content fails the declared provider; legacy V5 behavior remains
+separate until activation. Geometry and engine readiness remain unverified in-game.
+
+Read-only release review also confirmed workflow alerts #409 and #417 are open on
+`dev` `cfbed99`; #416 is fixed on dev but remains open on old main. No alert was
+dismissed. The slice 7a prompt records source-repair/reassessment requirements and the
+protected release-branch promotion route. It requires final acceptance to bind the
+resulting main merge SHA. The slice 7 prompt now records exact installed-profile,
+selection, process-ownership, guarded-staging and acknowledgement integration seams.
 
 ## Updating and closing this ledger
 

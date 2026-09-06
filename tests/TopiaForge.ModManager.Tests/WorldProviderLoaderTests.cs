@@ -14,12 +14,47 @@ namespace TopiaForge.ModManager.Tests
     {
         public static void Run()
         {
+            FailureMessagesPreserveNestedCausesWithoutStackTraces().GetAwaiter().GetResult();
             FailureAfterAllocationCleansEverything().GetAwaiter().GetResult();
             CancellationDisposesLatePreparation().GetAwaiter().GetResult();
             OwnerStopDisposesLatePreparation().GetAwaiter().GetResult();
             SuccessRetainsCancellationAndOwnsItsResources().GetAwaiter().GetResult();
             DiscoverySourcesRemainIndependentAndReloadStableKeys().GetAwaiter().GetResult();
             Console.WriteLine("All world provider loader tests passed.");
+        }
+        private static async Task FailureMessagesPreserveNestedCausesWithoutStackTraces()
+        {
+            using var context = new NativeContext();
+            context.Native.Preparation.OnDispose = () => throw new InvalidOperationException("native-cleanup",
+                new ArgumentException("nested-native-cleanup"));
+            var loaded = await WorldProviderLoader.LoadAsync(new LoadContext(context), Request(), default, (_, resources) =>
+            {
+                resources.Add(new Resource(() => throw new AggregateException("content-cleanup",
+                    new InvalidOperationException("nested-content-cleanup"))));
+                throw new InvalidOperationException("content-construction", new AggregateException("construction-causes",
+                    new ArgumentException("first-primary-cause"), new InvalidOperationException("second-primary-cause")));
+            });
+            context.Native.DiscoveryFailure = new InvalidOperationException("inventory-failure",
+                new AggregateException("inventory-causes", new ArgumentException("first-inventory-cause"),
+                    new InvalidOperationException("second-inventory-cause")));
+            var discovery = await NativeWorldDiscoveryProvider.DiscoverAsync(NativeWorldSource.BuildScenes,
+                new DiscoveryContext(context, "example.scenes"), default);
+            var discoveredLoad = await NativeWorldDiscoveryProvider.LoadAsync(NativeWorldSource.BuildScenes,
+                new LoadContext(context, "example.scenes.instance", "example.scenes"), default);
+            Assert(!loaded.Succeeded && !discovery.Succeeded && !discoveredLoad.Succeeded, "injected failures cannot become successful operations");
+            var expectations = new[]
+            {
+                (Message: loaded.ErrorMessage, Causes: new[] { "content-construction", "construction-causes", "first-primary-cause", "second-primary-cause",
+                    "content-cleanup", "nested-content-cleanup", "native-cleanup", "nested-native-cleanup" }),
+                (Message: discovery.ErrorMessage, Causes: new[] { "inventory-failure", "inventory-causes", "first-inventory-cause", "second-inventory-cause" }),
+                (Message: discoveredLoad.ErrorMessage, Causes: new[] { "inventory-failure", "inventory-causes", "first-inventory-cause", "second-inventory-cause" })
+            };
+            foreach (var expectation in expectations)
+                Assert(expectation.Causes.All(expectation.Message.Contains), "every nested primary and cleanup message must remain visible: " + expectation.Message);
+            Assert(expectations.All(expectation => !expectation.Message.Contains("System.")
+                && !expectation.Message.Contains(" ---> ") && !expectation.Message.Contains("   at ")
+                && !expectation.Message.Contains(nameof(WorldProviderLoaderTests))),
+                "world load, discovery and discovered load failures must omit CLR exception types and stack formatting");
         }
         private static async Task FailureAfterAllocationCleansEverything()
         {
@@ -124,6 +159,7 @@ namespace TopiaForge.ModManager.Tests
             public NativeWorldLoadRequest? LastRequest { get; private set; }
             public int Prepares { get; private set; }
             public bool EntriesRemoved { get; set; }
+            public Exception? DiscoveryFailure { get; set; }
             public Task<OperationResult<IInternalWorldPreparation>> PrepareAsync(NativeWorldLoadRequest request, CancellationToken cancellationToken)
             {
                 LastRequest = request;
@@ -131,10 +167,10 @@ namespace TopiaForge.ModManager.Tests
                 return Pending ?? Task.FromResult(OperationResult<IInternalWorldPreparation>.Success(Preparation));
             }
             public Task<OperationResult<IReadOnlyList<NativeWorldEntry>>> DiscoverAsync(NativeWorldSource source, int maximumResults, CancellationToken cancellationToken) =>
-                Task.FromResult(OperationResult<IReadOnlyList<NativeWorldEntry>>.Success(EntriesRemoved ? Array.Empty<NativeWorldEntry>() : new[]
+                DiscoveryFailure == null ? Task.FromResult(OperationResult<IReadOnlyList<NativeWorldEntry>>.Success(EntriesRemoved ? Array.Empty<NativeWorldEntry>() : new[]
                 {
                     new NativeWorldEntry(source, source == NativeWorldSource.BuildScenes ? "Assets/Scenes/City.unity" : "checkpoint:city", "City", "", "City")
-                }));
+                })) : Task.FromException<OperationResult<IReadOnlyList<NativeWorldEntry>>>(DiscoveryFailure);
         }
         private sealed class DiscoveryContext : IWorldDiscoveryContext
         {
