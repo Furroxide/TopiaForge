@@ -1,6 +1,6 @@
 # Slice 8: V5 retirement and acceptance
 
-Begin only after slice 7 merges into `dev`. Read the
+Begin only after slice 7 and the separate release-preparation slice 7a merge into `dev`. Read the
 [canonical brief](../../GamemodeContractRedesign.md),
 [evidence ledger](../Status.md), and [common execution rules](README.md).
 Retire V5, finish migration and authoring guidance, then establish automated and

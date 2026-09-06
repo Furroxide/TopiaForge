@@ -1,6 +1,7 @@
 # Gamemode redesign execution prompts
 
-These are bounded handoffs for the accepted eight-slice redesign. Read the
+These are bounded handoffs for the accepted eight-slice redesign and its separate
+release-preparation PR. Read the
 [canonical brief](../../GamemodeContractRedesign.md) and
 [evidence ledger](../Status.md) before selecting a slice. The brief is normative;
 this index supplies the common execution and verification rules. Historical
@@ -18,7 +19,8 @@ inspect, not an alternative specification.
 | 5 | [Binding and world adapters](05-binding-and-world-adapters.md) | Slice 4 merged into `dev` |
 | 6 | [Runtime activation and manifest flip](06-runtime-activation-and-manifest-flip.md) | Slice 5 merged into `dev` |
 | 7 | [Launcher, CLI, and overlay integration](07-launcher-cli-overlay.md) | Slice 6 merged into `dev` |
-| 8 | [V5 retirement and acceptance](08-v5-retirement-and-acceptance.md) | Slice 7 merged into `dev` |
+| 7a | [Release preparation](07a-release-preparation.md) | Slice 7 merged into `dev` |
+| 8 | [V5 retirement and acceptance](08-v5-retirement-and-acceptance.md) | Slice 7a merged into `dev` |
 
 ## Common execution rules
 

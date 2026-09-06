@@ -484,8 +484,7 @@ namespace TopiaForge.Worlds
         {
             try
             {
-                var findPlayer = playerControllerType?.GetMethod("FindPlayer", PublicStatic, null, Type.EmptyTypes, null);
-                return findPlayer?.Invoke(null, null) is Component player ? player.transform : null;
+                return NativeWorldPlayer.GetTransform();
             }
             catch (Exception ex)
             {
@@ -508,17 +507,7 @@ namespace TopiaForge.Worlds
                     return false;
                 }
 
-                var controller = player.GetComponent<CharacterController>();
-                if (controller != null)
-                {
-                    controller.enabled = false;
-                }
-
-                player.position = position;
-                if (controller != null)
-                {
-                    controller.enabled = true;
-                }
+                NativeWorldPlayer.Place(player, position, player.rotation);
 
                 return true;
             }

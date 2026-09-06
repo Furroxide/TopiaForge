@@ -65,13 +65,11 @@ namespace TopiaForge.ModManager
                 throw new ArgumentNullException(nameof(request));
             }
 
-            var result = sceneTransitions.TryDispatch(
-                new NativeSceneRequest(request.SceneName, false, "core scene load", observeSceneArrival: false),
-                new DelegateNativeSceneDispatch(completion => backend.DispatchLoad(request, completion)),
-                cancellationToken);
-            return result.TryGetValue(out var operation)
-                ? operation.Completion
-                : Task.FromResult(OperationResult<SceneSnapshot>.Failure(result.ErrorCode, result.ErrorMessage));
+            return OwnerNativeSceneLoad.Start(lifetime, "Core scene '" + request.SceneName + "'", () =>
+                sceneTransitions.TryDispatch(
+                    new NativeSceneRequest(request.SceneName, false, "core scene load", observeSceneArrival: false),
+                    new DelegateNativeSceneDispatch(completion => backend.DispatchLoad(request, completion)),
+                    cancellationToken), cancellationToken);
         }
     }
 

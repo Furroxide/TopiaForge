@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.Mods;
@@ -14,6 +15,9 @@ namespace TopiaForge.ModManager
         private readonly NativeSceneRequest request;
         private readonly TaskCompletionSource<OperationResult<SceneSnapshot>> completion =
             new TaskCompletionSource<OperationResult<SceneSnapshot>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<OperationResult<SceneSnapshot>> nativeCompletion =
+            new TaskCompletionSource<OperationResult<SceneSnapshot>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly List<NativeFailure> nativeFailures = new List<NativeFailure>();
         private readonly TaskCompletionSource<bool> drained =
             new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly DateTime startedUtc = DateTime.UtcNow;
@@ -38,6 +42,7 @@ namespace TopiaForge.ModManager
         internal string OwnerPackageId { get; }
         public Task<OperationResult<SceneSnapshot>> Completion => completion.Task;
         public Task NativeDrained => drained.Task;
+        public Task<OperationResult<SceneSnapshot>> NativeCompletion => nativeCompletion.Task;
         public NativeSceneDispatchStatus DispatchStatus { get; private set; } = NativeSceneDispatchStatus.Indeterminate;
         internal ModErrorCode InitialErrorCode { get; private set; } = ModErrorCode.External;
         internal string InitialErrorMessage { get; private set; } = "The native adapter did not dispatch an operation.";
@@ -63,7 +68,9 @@ namespace TopiaForge.ModManager
             {
                 // Once adapter dispatch begins, a throw cannot prove that no native effect occurred.
                 DispatchStatus = NativeSceneDispatchStatus.Indeterminate;
-                Fail(ModErrorCode.External, "Native dispatch became uncertain: " + error.Message);
+                var message = "Native dispatch became uncertain: " + error.Message;
+                RecordNativeFailure("adapter", ModErrorCode.External, message);
+                Fail(ModErrorCode.External, message);
             }
             finally
             {
@@ -73,7 +80,12 @@ namespace TopiaForge.ModManager
             }
         }
 
-        public void FailCaller(ModErrorCode code, string message) => coordinator.Post(() => Fail(code, message));
+        public void FailCaller(ModErrorCode code, string message) => coordinator.Post(() =>
+        {
+            if (retired) return;
+            RecordNativeFailure("adapter", code, message);
+            Fail(code, message);
+        });
         private void Fail(ModErrorCode code, string message)
         {
             if (retired) return;
@@ -85,9 +97,14 @@ namespace TopiaForge.ModManager
 
         public void NativeCompleted(OperationResult<SceneSnapshot> result) => coordinator.Post(() =>
         {
-            if (retired || nativeFinished) return;
+            if (retired || (nativeFinished && result.Succeeded)) return;
             nativeFinished = true;
             nativeResult = result;
+            if (!result.Succeeded)
+            {
+                RecordNativeFailure("native", result.ErrorCode, result.ErrorMessage);
+                Fail(result.ErrorCode, result.ErrorMessage);
+            }
             if (token.IsCancellationRequested) Cancel("The scene request was cancelled.");
             PublishNativeCompletion();
             RetireIfFinished();
@@ -103,7 +120,11 @@ namespace TopiaForge.ModManager
         {
             if (retired || managedFinished) return;
             managedFinished = true;
-            if (!result.Succeeded) Fail(result.ErrorCode, result.ErrorMessage);
+            if (!result.Succeeded)
+            {
+                RecordNativeFailure("managed", result.ErrorCode, result.ErrorMessage);
+                Fail(result.ErrorCode, result.ErrorMessage);
+            }
             PublishNativeCompletion();
             RetireIfFinished();
         });
@@ -127,11 +148,44 @@ namespace TopiaForge.ModManager
             if (!retired && (!nativeFinished || (managedRequired && !managedFinished)) && nowUtc - startedUtc >= timeout)
                 Fail(ModErrorCode.External, "The native transition timed out; admission remains quarantined until it drains.");
         }
+        private void RecordNativeFailure(string phase, ModErrorCode code, string message)
+        {
+            foreach (var failure in nativeFailures)
+                if (failure.Phase == phase && failure.Code == code && failure.Message == message) return;
+            nativeFailures.Add(new NativeFailure(phase, code == ModErrorCode.None ? ModErrorCode.External : code, message));
+        }
+        private OperationResult<SceneSnapshot> CreateNativeResult()
+        {
+            if (nativeFailures.Count == 0) return nativeResult
+                ?? OperationResult<SceneSnapshot>.Failure(InitialErrorCode, InitialErrorMessage);
+            nativeFailures.Sort((left, right) =>
+            {
+                var phase = StringComparer.Ordinal.Compare(left.Phase, right.Phase);
+                if (phase != 0) return phase;
+                var code = StringComparer.Ordinal.Compare(left.Code.ToString(), right.Code.ToString());
+                return code != 0 ? code : StringComparer.Ordinal.Compare(left.Message, right.Message);
+            });
+            var selected = nativeFailures[0];
+            foreach (var failure in nativeFailures) if (failure.Code != ModErrorCode.Cancelled) { selected = failure; break; }
+            var messages = new List<string>();
+            foreach (var failure in nativeFailures) messages.Add(failure.Phase + ": " + failure.Message);
+            return OperationResult<SceneSnapshot>.Failure(selected.Code,
+                nativeFailures.Count == 1 ? selected.Message : string.Join("; ", messages));
+        }
+        private sealed class NativeFailure
+        {
+            internal NativeFailure(string phase, ModErrorCode code, string message) { Phase = phase; Code = code; Message = message; }
+            internal string Phase { get; }
+            internal ModErrorCode Code { get; }
+            internal string Message { get; }
+        }
+
         private void RetireIfFinished()
         {
             if (beginning || !nativeFinished || (managedRequired && !managedFinished) || retired) return;
             retired = true;
             cancellation.Dispose();
+            nativeCompletion.TrySetResult(CreateNativeResult());
             drained.TrySetResult(true);
             reservation.OperationDrained(this);
         }

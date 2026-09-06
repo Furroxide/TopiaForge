@@ -204,17 +204,49 @@ ownership without instantiating at catalog time. Create instances within the own
 startup scope. Publish successful bindings and removals atomically; a fault blocks
 dependent targets with diagnostic attribution instead of hiding them.
 
+Discovery acquires an owner work lease before constructing a temporary child
+scope or a source. Each family receives its own scope and an explicit result
+budget; the package observation contains at most 4096 instances. Sources cannot
+use discovery scope access to reserve native scene transitions. Dispose the source
+and drain every family resource before atomically publishing the completed package
+observation. A malformed or failed family remains unavailable while independent
+valid families survive. A newer attempt or owner removal revokes publication from
+old callbacks. Cancellation requests do not abandon an ignoring callback: retain
+its scope and delay package teardown until it returns and cleanup completes. The
+manager requests discovery cancellation after 30 seconds and reports TimedOut only
+after drain; a timeout never turns an uncompleted callback into completed work.
+Caller and deadline cancellation invoke provider callbacks on the host dispatcher;
+throwing cancellation callbacks remain cleanup evidence rather than escaping the
+caller or timer thread. Cancellation combined with a cleanup fault reports failure
+and retains both reasons. The discovery work barrier preserves cleanup failures
+for package shutdown, including failures recorded before shutdown began. A handled
+family discovery error remains structured unavailability rather than a teardown fault.
+
 Create a unique session ID and child scope before any provider/factory callback.
 Rebuild resource-producing facades against that scope with unchanged package ID,
 paths, permissions, capability checks, and dependency visibility. Forward scoped
 events from the parent event source. Reusing services that captured the parent
 lifetime would preserve partial-start leaks even with a new Lifetime property.
 Parent unload cancels all children and waits for callback/native drain before
-package callbacks and service disposal. A child asset facade may spawn from its
+package callbacks and service disposal. Native asset work is included: register
+bundle/prefab requests with the owning lifetime before engine allocation, independently
+of their public cancellation result. Complete ownership only after native completion
+and any late-result cleanup. A pending prefab request retains its backing bundle.
+Failed context construction must drain registered native work before releasing its
+parent registration, even when no initialized child context can be returned. A child asset facade may spawn from its
 own prefab or the explicitly attached parent package facade's prefab; sibling and
 foreign handles remain rejected. Spawned instances belong to the child, while the
 parent retains its prefab/bundle lifetime. Package registrations and session
 resources remain separate ownership categories.
+
+A failed package constructor or OnLoad retains its context and partial entrypoint
+in a cleanup transaction before cancellation can reenter the runtime. Drain its
+native assets and owned scene operation before OnUnload, lifetime disposal and
+service removal. Compose this pending-cleanup admission gate with session admission:
+both launch and direct scene requests remain Busy until cleanup releases ownership.
+Core scene requests enroll in the same owner native-work lifetime before dispatch.
+Their early caller outcome cannot erase a later engine or cleanup failure; expected
+operation failures already delivered to the caller do not become teardown failures.
 
 ### Lifecycle and scene authority
 
@@ -343,10 +375,23 @@ targets. Stage owned paths only; never use git add -A in the shared environment.
 | 2 | Unused V6 schema/readers/validators and complete conformance; alias and first-party manifests remain V5. |
 | 3 | Corrected pure resolver, immutable plans, transport models/fixtures; no production switch. |
 | 4 | Scoped contexts, lifecycle machinery, shared scene executor, fault-injection tests. |
-| 5 | Bindings, real world providers/discovery/readiness, synthetic-package integration. |
+| 5 | Bindings, real world providers/discovery/readiness, synthetic-package integration, and the native asset/core scene/failed-entry cleanup needed to own provider allocations. |
 | 6 | Atomic V6 alias/manifest/template flip, live declaration activation, consumer migration, old SDK startup API removal. |
 | 7 | Launcher/CLI/overlay target selection, preflight, wire/state migration, observations/outcomes. |
+| 7a | Separate release preparation: unsigned Windows policy, private-build prerequisites and detached exact-byte qualification; all publication gates preserved. |
 | 8 | V5 retirement, author migration, obsolete models removed, complete public docs and game acceptance. |
+
+The release request adds slice 7a as a separately reviewable PR after launcher
+integration and before final acceptance. This preserves the eight redesign slices.
+RC1 is unsigned Windows x64 `0.1.0-rc.1`; update metadata remains Ed25519 signed.
+Separate private-build prerequisites from final release permission: the four
+non-game blocking gates must already have reviewed approval before building, and
+all five must be approved before publication. Final game approval binds the frozen
+source SHA and exact tested payload/handoff/evidence bytes through a detached
+strict contract. Never prefill approval to break the build/acceptance ordering
+cycle, promote rehearsal output, or repack qualified bytes. The
+[release-preparation prompt](gamemode-contract/prompts/07a-release-preparation.md)
+defines the bounded repair, qualification state machine and regression matrix.
 
 During slice 6 only, an internal old-wire adapter may translate an unambiguous
 legacy request into the new orchestrator. It is not another startup protocol and

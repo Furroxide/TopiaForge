@@ -56,6 +56,7 @@ namespace TopiaForge.ModManager
             activeRuntimeId = null;
             logSink = null;
             Coordinator.SetSessionAdmissionGate(() => false);
+            Coordinator.SetRuntimeCleanupAdmissionGate(() => false);
         }
 
         private void Report(string message) { try { logSink?.Invoke(message); } catch { } }
@@ -67,6 +68,7 @@ namespace TopiaForge.ModManager
         {
             Dispatcher.Drain();
             Scenes.PollNativeOperations();
+            AssetNativeRequestPump.Poll();
             Coordinator.CheckTimeout(DateTime.UtcNow, TimeSpan.FromSeconds(30));
         }
 

@@ -14,6 +14,8 @@ namespace TopiaForge.ModManager
         private readonly UnityScheduler scheduler = new UnityScheduler();
         private readonly UnityPlayerBackend player = new UnityPlayerBackend();
         private readonly UnitySceneBackend scenes;
+        private readonly UnityWorldRuntimeBackend worlds;
+        private readonly IHostDispatcher dispatcher;
         private readonly string runtimeOwnershipId;
         private readonly SceneCoordinator sceneCoordinator;
         private readonly UnityPhysicsBackend physics;
@@ -24,6 +26,8 @@ namespace TopiaForge.ModManager
         {
             sceneCoordinator = nativeHost.Coordinator;
             scenes = nativeHost.Scenes;
+            dispatcher = nativeHost.Dispatcher;
+            worlds = new UnityWorldRuntimeBackend(entities);
             this.runtimeOwnershipId = runtimeOwnershipId;
             UnityMainThreadGuard.CaptureCurrentThread();
             physics = new UnityPhysicsBackend(entities);
@@ -53,13 +57,14 @@ namespace TopiaForge.ModManager
             var sceneTransitions = new OwnerSceneTransitionService(ownerModId, sceneCoordinator,
                 lifetime.StoppingToken, transitionAccess,
                 runtimeOwnershipId + ":" + (transitionAccess?.OwnershipId ?? ownerModId));
+            var ownerScheduler = new OwnerScheduler(lifetime, scheduler, logger);
             return new GameplayContextServices(
                 new OwnerInputService(ownerModId, lifetime, input),
                 new OwnerPlayerService(lifetime, player),
                 new OwnerEntityService(lifetime, entities),
                 physics,
                 time,
-                new OwnerScheduler(lifetime, scheduler, logger),
+                ownerScheduler,
                 new OwnerSceneService(lifetime, scenes, logger, sceneTransitions),
                 new OwnerInteractionService(lifetime, entities, player, logger),
                 new OwnerItemService(lifetime, entities, logger),
@@ -67,7 +72,8 @@ namespace TopiaForge.ModManager
                 new OwnerAudioService(lifetime),
                 new OwnerUiService(ownerModId, dataPath, lifetime, logger),
                 new OwnerUnityInteropService(ownerModId, lifetime, entities),
-                sceneTransitions);
+                sceneTransitions,
+                new OwnerWorldRuntimeService(lifetime, sceneTransitions, worlds, new WorldRuntimeClock(ownerScheduler), dispatcher));
         }
 
         public GameTimeSample BeginFrame(float deltaTime)

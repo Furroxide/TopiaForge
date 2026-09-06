@@ -23,6 +23,11 @@ namespace TopiaForge.ModManager
             {
                 try { await native.WaitForIdleAsync(); } catch (Exception error) { record.Errors.Add(error); }
             }
+            // Native asset callbacks retain their controller/content dependencies until their final cleanup.
+            foreach (var scope in record.Scopes.Values)
+            {
+                try { await scope.DrainNativeWorkAsync(); } catch (Exception error) { record.Errors.Add(error); }
+            }
             // Clear owned references before invoking extension code; reentrancy cannot dispose them twice.
             var resources = new IDisposable?[] { record.Controller, record.Factory as IDisposable, record.Instance, record.Provider as IDisposable };
             record.Controller = null;
@@ -38,9 +43,7 @@ namespace TopiaForge.ModManager
             }
             foreach (var scope in record.Scopes.Values.Reverse())
             {
-                try { await scope.DrainRejectedResourcesAsync(); } catch (Exception error) { record.Errors.Add(error); }
-                TryCleanup(record, scope.Dispose);
-                try { await scope.DrainRejectedResourcesAsync(); } catch (Exception error) { record.Errors.Add(error); }
+                try { await scope.CloseAsync(); } catch (Exception error) { record.Errors.Add(error); }
             }
             TryCleanup(record, record.CallerCancellation.Dispose);
             TryCleanup(record, record.Cancellation.Dispose);
@@ -51,12 +54,25 @@ namespace TopiaForge.ModManager
             record.TerminalPublished = true;
             foreach (var error in record.Errors) Report(error);
             var result = record.Errors.Count == 0 ? OperationResult<bool>.Success(true)
-                : OperationResult<bool>.Failure(ModErrorCode.External, Message(string.Join("; ", record.Errors.Select(error => Message(error.GetBaseException().Message)))));
+                : OperationResult<bool>.Failure(ModErrorCode.External, Message(string.Join("; ", record.Errors.SelectMany(CleanupMessages).Distinct(StringComparer.Ordinal))));
             Publish(Outcome, new LaunchOutcome("session", record.Identity.RequestId, NextSequence(), "idle",
                 result.Succeeded ? (record.ReachedRunning ? "succeeded" : "cancelled") : "failed", Array.Empty<LaunchBlock>(), record.Identity.SessionId,
                 error: result.Succeeded ? null : new LaunchExecutionError("external", result.ErrorMessage)));
             if (!retainLease) lifecycle.Release(record.Lease);
             record.Stopped.TrySetResult(result);
+        }
+
+        private static IEnumerable<string> CleanupMessages(Exception error)
+        {
+            if (error is AggregateException aggregate)
+            {
+                foreach (var inner in aggregate.InnerExceptions)
+                    foreach (var message in CleanupMessages(inner)) yield return message;
+                yield break;
+            }
+            yield return error.Message;
+            if (error.InnerException != null)
+                foreach (var message in CleanupMessages(error.InnerException)) yield return message;
         }
 
         private static void TryCleanup(SessionRecord record, Action cleanup)

@@ -51,6 +51,11 @@ namespace TopiaForge.ModManager.Tests
                     HostDispatcherTests.Run();
                     SessionLifecycleTests.Run(Path.Combine(sessionRoot, "state"));
                     GamemodeSessionOrchestratorTests.Run(sessionRoot);
+                    BuiltinWorldProviderTests.Run();
+                    WorldRuntimeReadinessTests.Run();
+                    AssetNativeDrainTests.Run();
+                    OwnerNativeSceneLoadTests.Run();
+                    NativeWorkLifecycleTests.Run(Path.Combine(sessionRoot, "native-work"));
                     return 0;
                 }
                 finally { TryDelete(sessionRoot); }
@@ -212,6 +217,17 @@ namespace TopiaForge.ModManager.Tests
 
             try
             {
+                if (args.Contains("--world-providers"))
+                {
+                    WorldDiscoveryIdentityTests.Run();
+                    WorldResourceScopeTests.Run();
+                    WorldPlayerPlacementTests.Run();
+                    GeneratedArenaGeometryTests.Run();
+                    WorldProviderLoaderTests.Run();
+                    Console.WriteLine("World provider tests passed.");
+                    return 0;
+                }
+
                 TestInstallSuccess(root);
                 TestLegacyPackageExtensionRejected(root);
                 TestUpdatePreservesDisabledState(root);
@@ -292,6 +308,11 @@ namespace TopiaForge.ModManager.Tests
                 HostDispatcherTests.Run();
                 SessionLifecycleTests.Run(root + "-state");
                 GamemodeSessionOrchestratorTests.Run(root + "-session");
+                BuiltinWorldProviderTests.Run();
+                WorldRuntimeReadinessTests.Run();
+                AssetNativeDrainTests.Run();
+                OwnerNativeSceneLoadTests.Run();
+                NativeWorkLifecycleTests.Run(Path.Combine(root, "native-work"));
                 SdkLifecycleTests.Run(root);
                 ScopedModContextTests.Run(root);
                 ScopedAssetOwnershipTests.Run(root);
@@ -311,6 +332,11 @@ namespace TopiaForge.ModManager.Tests
                 RobotTargetFactsTests.Run();
                 SandboxProgramDirectorTests.Run();
                 SandboxConfigTests.Run();
+                WorldDiscoveryIdentityTests.Run();
+                WorldResourceScopeTests.Run();
+                WorldPlayerPlacementTests.Run();
+                GeneratedArenaGeometryTests.Run();
+                WorldProviderLoaderTests.Run();
                 WorldLaunchRouterTests.Run();
                 WorldLaunchArmingTests.Run();
                 RoboWorldImportPlanTests.Run();

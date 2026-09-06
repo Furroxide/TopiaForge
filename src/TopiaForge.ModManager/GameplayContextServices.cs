@@ -34,7 +34,8 @@ namespace TopiaForge.ModManager
             IAudioService audio,
             IUiService ui,
             IUnityInteropService? unityInterop,
-            IInternalSceneTransitionService sceneTransitions)
+            IInternalSceneTransitionService sceneTransitions,
+            IInternalWorldRuntimeService? worldRuntime = null)
         {
             Input = input;
             LocalPlayer = localPlayer;
@@ -50,6 +51,7 @@ namespace TopiaForge.ModManager
             Ui = ui;
             UnityInterop = unityInterop;
             SceneTransitions = sceneTransitions;
+            WorldRuntime = worldRuntime ?? UnavailableWorldRuntimeService.Instance;
         }
 
         public IInputService Input { get; }
@@ -66,6 +68,7 @@ namespace TopiaForge.ModManager
         public IUiService Ui { get; }
         public IUnityInteropService? UnityInterop { get; }
         public IInternalSceneTransitionService SceneTransitions { get; }
+        public IInternalWorldRuntimeService WorldRuntime { get; }
 
         public static GameplayContextServices Unavailable(IModLifetime lifetime)
         {
@@ -85,6 +88,16 @@ namespace TopiaForge.ModManager
                 unavailable,
                 null,
                 unavailable);
+        }
+
+        private sealed class UnavailableWorldRuntimeService : IInternalWorldRuntimeService
+        {
+            internal static readonly UnavailableWorldRuntimeService Instance = new UnavailableWorldRuntimeService();
+            public Task<OperationResult<System.Collections.Generic.IReadOnlyList<NativeWorldEntry>>> DiscoverAsync(
+                NativeWorldSource source, int maximumResults, CancellationToken token) => Task.FromResult(
+                    OperationResult<System.Collections.Generic.IReadOnlyList<NativeWorldEntry>>.Failure(ModErrorCode.Unavailable, "Native world discovery is unavailable in this host."));
+            public Task<OperationResult<IInternalWorldPreparation>> PrepareAsync(NativeWorldLoadRequest request, CancellationToken token) =>
+                Task.FromResult(OperationResult<IInternalWorldPreparation>.Failure(ModErrorCode.Unavailable, "Native world preparation is unavailable in this host."));
         }
 
         private sealed class UnavailableGameplayService :

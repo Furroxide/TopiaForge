@@ -27,7 +27,14 @@
     <Reference Include="UnityEngine.UIModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.UIModule.dll" Private="true" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../TopiaForge.BindingTestMod/TopiaForge.BindingTestMod.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../TopiaForge.BindingForwarderTestMod/TopiaForge.BindingForwarderTestMod.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
   <Target Name="CopySyntheticMod" AfterTargets="Build">
+    <Copy SourceFiles="../TopiaForge.BindingTestMod/bin/$(Configuration)/netstandard2.1/TopiaForge.BindingTestMod.dll" DestinationFolder="$(OutDir)" />
+    <Copy SourceFiles="../TopiaForge.BindingForwarderTestMod/bin/$(Configuration)/netstandard2.1/TopiaForge.BindingForwarderTestMod.dll" DestinationFolder="$(OutDir)" />
     <Copy SourceFiles="..\TopiaForge.ValidTestMod\bin\$(Configuration)\netstandard2.1\TopiaForge.ValidTestMod.dll"
           DestinationFolder="$(OutDir)" />
     <Copy SourceFiles="../TopiaForge.SecondTestMod/bin/$(Configuration)/netstandard2.1/TopiaForge.SecondTestMod.dll"
