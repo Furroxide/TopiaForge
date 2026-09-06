@@ -16,8 +16,10 @@ namespace TopiaForge.ModManager.Tests
             TestNoLauncherKeepsTheRememberedSelection();
             TestExplicitMainMenuOverridesTheRememberedSelection();
             TestLaunchTargetWins();
-            TestProfileWithoutACommandKeepsTheRememberedSelection();
+            TestProfileWithoutACommandSuppressesRememberedSelection();
+            TestSafeModeRejectsGamemodeAutoload();
             TestNothingRememberedBootsNormally();
+            TestInvalidRememberedTransitionIsPreserved();
             Console.WriteLine("All world launch arming tests passed.");
         }
 
@@ -58,17 +60,24 @@ namespace TopiaForge.ModManager.Tests
         }
 
         /// <summary>
-        /// A profile from a launcher that predates the command asked for neither a gamemode nor an
-        /// ordinary boot, so it must not be read as having suppressed the remembered one.
+        /// Only direct startup without any launcher profile may use remembered autoload.
+        /// Missing launcher commands must not inherit an unrelated durable selection.
         /// </summary>
-        private static void TestProfileWithoutACommandKeepsTheRememberedSelection()
+        private static void TestProfileWithoutACommandSuppressesRememberedSelection()
         {
             var armed = WorldLaunchArming.Resolve(
                 Profile(null),
                 Remembered(ZombiesGamemodeId, autoLoad: true));
 
-            Assert(armed != null && armed!.GamemodeId == ZombiesGamemodeId,
-                "a profile carrying no command must not silently cancel the remembered selection");
+            Assert(armed == null, "a launcher profile without a command must not reuse remembered autoload");
+        }
+
+        internal static void TestSafeModeRejectsGamemodeAutoload()
+        {
+            var profile = Profile(new WorldLaunchIntent { GamemodeId = ZombiesGamemodeId });
+            profile.SafeMode = true;
+            Assert(WorldLaunchArming.Resolve(profile, Remembered(ZombiesGamemodeId, true)) == null,
+                "safe mode must suppress both explicit legacy mode commands and remembered autoload");
         }
 
         private static void TestNothingRememberedBootsNormally()
@@ -79,6 +88,15 @@ namespace TopiaForge.ModManager.Tests
                 "autoload on with nothing selected means boot normally");
             Assert(WorldLaunchArming.Resolve(null, null) == null,
                 "no remembered state at all means boot normally");
+        }
+
+        internal static void TestInvalidRememberedTransitionIsPreserved()
+        {
+            var saved = Remembered(ZombiesGamemodeId, true);
+            saved.LoadMode = "obsolete-transition";
+            var armed = WorldLaunchArming.Resolve(null, saved);
+            Assert(armed != null && armed.LoadMode == saved.LoadMode && armed.Validate().Count > 0,
+                "unknown saved transitions must remain invalid rather than silently normalize to another launch");
         }
 
         private static ProfileLaunchConfiguration Profile(WorldLaunchIntent? intent)

@@ -311,16 +311,18 @@ namespace TopiaForge.ModManager
         private readonly ModServiceRegistry registry;
         private readonly HashSet<string> accessibleOwnerIds;
         private readonly List<FacadeEntry> facadeCache = new List<FacadeEntry>();
+        private readonly IModContext? consumerContext;
 
         public OwnerExtensionService(
             string ownerModId,
             IEnumerable<string> dependencyIds,
             IModLifetime lifetime,
-            ModServiceRegistry registry)
+            ModServiceRegistry registry, IModContext? consumerContext = null)
         {
             this.ownerModId = ownerModId;
             this.lifetime = lifetime;
             this.registry = registry;
+            this.consumerContext = consumerContext;
             accessibleOwnerIds = new HashSet<string>(dependencyIds, StringComparer.OrdinalIgnoreCase)
             {
                 ownerModId
@@ -379,7 +381,9 @@ namespace TopiaForge.ModManager
 
         private T GetOwnerFacade<T>(T provider) where T : class
         {
-            if (!(provider is IOwnerBoundExtensionFactory factory))
+            var contextFactory = provider as IOwnerContextBoundExtensionFactory;
+            var factory = provider as IOwnerBoundExtensionFactory;
+            if (contextFactory == null && factory == null)
             {
                 return provider;
             }
@@ -396,7 +400,10 @@ namespace TopiaForge.ModManager
                     }
                 }
 
-                var facade = factory.CreateOwnerFacade(contractType, ownerModId, lifetime);
+                var facade = contextFactory != null
+                    ? contextFactory.CreateOwnerFacade(contractType, consumerContext
+                        ?? throw new InvalidOperationException("A context-bound provider requires the exact consuming mod context."))
+                    : factory!.CreateOwnerFacade(contractType, ownerModId, lifetime);
                 if (!(facade is T typedFacade))
                 {
                     throw new InvalidOperationException(

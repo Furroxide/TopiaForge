@@ -46,6 +46,7 @@
     <Project Path="tests/TopiaForge.SecondTestMod/TopiaForge.SecondTestMod.csproj" />
     <Project Path="tests/TopiaForge.ValidTestMod.Api/TopiaForge.ValidTestMod.Api.csproj" />
     <Project Path="tests/TopiaForge.BindingTestMod/TopiaForge.BindingTestMod.csproj" />
+    <Project Path="tests/TopiaForge.GeneratedWorldsTestMod/TopiaForge.GeneratedWorldsTestMod.csproj" />
     <Project Path="tests/TopiaForge.BindingForwarderTestMod/TopiaForge.BindingForwarderTestMod.csproj" />
     <Project Path="tests/TopiaForge.ValidTestMod/TopiaForge.ValidTestMod.csproj" />
   </Folder>

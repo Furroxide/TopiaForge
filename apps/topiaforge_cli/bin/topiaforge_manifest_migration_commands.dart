@@ -18,7 +18,22 @@ extension _TopiaForgeManifestMigrationCommands on _TopiaForgeCli {
     );
     final rawSchemaVersion = map['schemaVersion'];
     final schemaVersion = rawSchemaVersion is int ? rawSchemaVersion : null;
-    if (schemaVersion == 5) {
+    if (schemaVersion == ModManifest.currentSchemaVersion) {
+      final current = ModManifest.fromJson(map);
+      final issues = current.validate();
+      if (issues.any((issue) => issue.isBlocking)) {
+        stderr.writeln('The V6 manifest is invalid; no files were changed:');
+        _printIssues(issues);
+        return 1;
+      }
+      stdout.writeln(
+        'topiaforge.mod.json already uses supported schema V$schemaVersion.',
+      );
+      return 0;
+    }
+    // Slice 8 replaces this legacy mechanical migration with preservation/refusal
+    // rules. Keep its existing V5 output explicit while new scaffolds use V6.
+    if (schemaVersion == ModManifest.manifestV5SchemaVersion) {
       stdout.writeln(
         'topiaforge.mod.json already uses supported schema V$schemaVersion.',
       );
@@ -32,8 +47,11 @@ extension _TopiaForgeManifestMigrationCommands on _TopiaForgeCli {
 
     if (schemaVersion == 4) {
       map
-        ..['schemaVersion'] = ModManifest.currentSchemaVersion
-        ..[r'$schema'] = ModManifest.canonicalSchemaUrl;
+        ..['schemaVersion'] = ModManifest.manifestV5SchemaVersion
+        ..[r'$schema'] = ModManifest.canonicalSchemaUrl.replaceFirst(
+          'topiaforge.mod.schema.json',
+          'topiaforge.mod.v5.schema.json',
+        );
       final migrated = ModManifest.fromJson(map);
       final issues = migrated.validate();
       if (issues.any((issue) => issue.isBlocking)) {
@@ -100,8 +118,11 @@ extension _TopiaForgeManifestMigrationCommands on _TopiaForgeCli {
       ..remove('vpmDependencies')
       ..remove('permissions')
       ..['dependencies'] = required
-      ..['schemaVersion'] = ModManifest.currentSchemaVersion
-      ..[r'$schema'] = ModManifest.canonicalSchemaUrl;
+      ..['schemaVersion'] = ModManifest.manifestV5SchemaVersion
+      ..[r'$schema'] = ModManifest.canonicalSchemaUrl.replaceFirst(
+        'topiaforge.mod.schema.json',
+        'topiaforge.mod.v5.schema.json',
+      );
     if (optional.isEmpty) {
       map.remove('optionalDependencies');
     } else {

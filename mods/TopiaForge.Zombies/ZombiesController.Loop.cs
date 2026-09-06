@@ -7,7 +7,7 @@ namespace TopiaForge.Zombies
     {
         private void Update(float eventDeltaTime)
         {
-            if (disposed)
+            if (disposed || !isActive())
             {
                 return;
             }
@@ -122,8 +122,8 @@ namespace TopiaForge.Zombies
         private bool IsWorldReady()
         {
             if (!context.Scenes.TryGetActive(out var active) || active == null
-                || (!string.IsNullOrWhiteSpace(session.SceneName)
-                    && !string.Equals(active.Name, session.SceneName, StringComparison.OrdinalIgnoreCase)))
+                || (!string.IsNullOrWhiteSpace(session.World.Scene.Name)
+                    && !string.Equals(active.Name, session.World.Scene.Name, StringComparison.OrdinalIgnoreCase)))
             {
                 return false;
             }

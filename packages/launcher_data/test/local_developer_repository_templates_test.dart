@@ -175,7 +175,7 @@ void main() {
         expect(manifestFile.existsSync(), isTrue, reason: template.id);
         final manifestJson =
             jsonDecode(manifestFile.readAsStringSync()) as Map<String, Object?>;
-        expect(manifestJson['schemaVersion'], 5, reason: template.id);
+        expect(manifestJson['schemaVersion'], 6, reason: template.id);
         final manifest = ModManifest.fromJson(manifestJson);
         expect(
           manifest.validate().where((issue) => issue.isBlocking),
@@ -299,9 +299,9 @@ void main() {
       manifest.loadAfter,
       contains('io.github.furroxide.topiaforge.worlds'),
     );
-    expect(manifest.worldGamemodes, hasLength(1));
-    expect(manifest.worldGamemodes.first.id, 'test.waves.mode');
-    expect(manifest.worldGamemodes.first.name, 'Waves');
+    expect(manifest.contributions!.gamemodes, hasLength(1));
+    expect(manifest.contributions!.gamemodes.first.id, 'test.waves.mode');
+    expect(manifest.contributions!.gamemodes.first.name, 'Waves');
   });
 
   test('scaffold flag overrides beat template defaults', () async {

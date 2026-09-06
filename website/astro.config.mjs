@@ -75,7 +75,7 @@ export default defineConfig({
         {
           label: 'Reference',
           items: [
-            { label: 'Manifest V5', slug: 'reference/manifest-v5' },
+            { label: 'Manifest V6', slug: 'reference/manifest-v6' },
             { label: 'Diagnostics', slug: 'reference/diagnostics' },
             { label: 'Capabilities and trust', slug: 'reference/capabilities' },
             { label: 'V1 capability coverage', slug: 'reference/capability-matrix' },

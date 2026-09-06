@@ -75,13 +75,28 @@ void _worldCliTests(_CliTestHarness Function() currentHarness) {
     expect(manifest['capabilities'], contains('asset-bundles'));
     expect(manifest['capabilities'], contains('world-service'));
 
-    // The scaffold uses the owner-bound Worlds contract and SDK asset service.
+    final contributions = manifest['contributions'] as Map;
+    final world = (contributions['worlds'] as List).single as Map;
+    expect(world['id'], 't.island.world');
+    expect(world['content'], {
+      'kind': 'bundle',
+      'bundle': 'AssetBundles/t-island.bundle',
+      'prefab': 'assets/world/world.prefab',
+    });
+    expect(world['spawn'], {
+      'kind': 'authored-marker',
+      'markerName': 'SpawnPoint',
+    });
+    final target = (contributions['launchTargets'] as List).single as Map;
+    expect(
+      target['gamemode'],
+      'io.github.furroxide.topiaforge.worlds.freeplay',
+    );
+    expect((target['world'] as Map)['default'], world['id']);
     final modSource = File(
       p.join(projectDir, 'TIslandMod.cs'),
     ).readAsStringSync();
-    expect(modSource, contains('new BundleWorldContent('));
-    expect(modSource, contains('worlds.RegisterWorld('));
-    expect(modSource, contains('AssetBundles/t-island.bundle'));
+    expect(modSource, isNot(contains('worlds.RegisterWorld(')));
 
     final checked = await currentHarness().runCli([
       'check',

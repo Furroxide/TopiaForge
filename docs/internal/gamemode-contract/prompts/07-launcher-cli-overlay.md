@@ -102,3 +102,34 @@ Refresh these locations after slice 6 merges; this inventory was read at `dde58f
 - Update the ledger with production paths now connected and remaining live QA.
   Submit only this slice. After its merge, create the separate release-preparation
   slice 7a; final acceptance slice 8 begins only after that prerequisite merges.
+
+## Additional slice-6 handoff findings
+
+- `topiaforge_world_commands.dart` still stores `worldId = manifest.id` from `world link`; generated
+  V6 worlds instead declare `<package>.world`. Resolve actual declaration identity and reject ambiguous
+  packages rather than deriving one from a package name.
+- `world play` currently finishes with `_launch([])`, which reuses remembered profile selection after
+  installing the built package. Carry the explicitly selected declared target through preflight and
+  wire V4; prove an unrelated remembered selection cannot replace it.
+- Runtime install facts now carry the complete supported content-target set. Match any supported
+  target in both adapters; selecting only `code` or only the native bundle target wrongly rejects
+  otherwise compatible packages. Preserve immutable facts when switching profiles.
+- Runtime activation preserves duplicate and malformed selected-package diagnostics. Duplicate IDs
+  have no binding or assembly-catalog winner. Malformed identities cannot enter a typed plan and
+  explicitly block launches until repair/disable; disabled malformed scans remain diagnostic only.
+  Launcher preflight must retain these failures and must not shrink a selection to simulate success.
+
+- Home profile cards currently gate every Play button using the selected profile's resolution.
+  Resolve the profile being launched; prove a blocked selected profile cannot disable a valid other
+  profile, and a valid selection cannot enable a broken other one. Recompute preview after profile
+  selection or edits. Profiles detail reuses the world controls and needs the same target repair UI.
+- LauncherBloc's global sequential event queue must not wait for runtime acknowledgement inside
+  the launch handler while progress waits in that same queue. Establish a request-owned subscription,
+  return after process creation, and ignore stale profile/request events. Dispose subscriptions on
+  replacement and shutdown.
+- `dev --launch` is an independent repository launch path (TFDEV160). Carry its explicit target
+  through the shared preflight. Update the acceptance-runner handoff to select its declared target;
+  ordinary launch or remembered state cannot certify the acceptance factory. Keep live execution
+  deferred until isolated acceptance prerequisites are met.
+- The CLI launch command currently creates its repository without a `finally` disposal boundary.
+  Own and close the new observation monitor on success, failure, cancellation, and early exit.

@@ -143,7 +143,9 @@ List<ResolvedPackage> _packages(Object? value) {
 
 InstallFacts _install(Map<String, Object?>? value) => value == null
     ? const InstallFacts()
-    : InstallFacts(
+    : InstallFacts.withContentTargets(
+        contentTargets: ((value['contentTargets'] as List?) ?? const [])
+            .cast<String>(),
         platform: (value['platform'] as String?) ?? '',
         architecture: (value['architecture'] as String?) ?? '',
         contentTarget: (value['contentTarget'] as String?) ?? '',

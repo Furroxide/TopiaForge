@@ -27,14 +27,14 @@ namespace TopiaForge.ModManager.Tests
             harness.Context.Ui.Modals[0].Confirm();
             harness.Advance(0.01f);
             Assert(string.Equals(harness.Context.Scenes.ActiveScene, GameScenes.MainMenuSceneName, StringComparison.Ordinal)
-                && harness.Controller.TestingPhase == ZombiesPhase.ReturningToMenu,
+                && harness.Controller.TestingPhase == ZombiesPhase.ReturningToMenu && harness.Session.MainMenuRequests == 1,
                 "confirmed return loads the real main-menu scene and remains transition-safe");
         }
 
         private static void RestartIsRejectedDuringPendingMenuReturn()
         {
             var config = FastConfig();
-            var completion = new TaskCompletionSource<OperationResult<SceneSnapshot>>();
+            var completion = new TaskCompletionSource<OperationResult<bool>>();
             CancellationToken observedToken = default;
             using var harness = new Harness(
                 config,
@@ -61,7 +61,7 @@ namespace TopiaForge.ModManager.Tests
         private static void ReturningPresentationFailureSuppressesStaleRestart()
         {
             var config = FastConfig();
-            var completion = new TaskCompletionSource<OperationResult<SceneSnapshot>>();
+            var completion = new TaskCompletionSource<OperationResult<bool>>();
             CancellationToken observedToken = default;
             using var harness = new Harness(
                 config,

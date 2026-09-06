@@ -34,7 +34,7 @@ namespace TopiaForge.ModManager.Tests
         internal int MenuLoads;
         internal Func<CancellationToken, Task<OperationResult<bool>>>? Menu;
 
-        internal SessionFixture(string root, bool endOnScene = false)
+        internal SessionFixture(string root, bool endOnScene = false, Func<INativeTransitionExecutor, INativeTransitionExecutor>? decorateNative = null)
         {
             Load = (_, _) => Task.FromResult(OperationResult<IWorldInstance>.Success(new SessionTestWorld()));
             Start = (session, _) =>
@@ -58,7 +58,7 @@ namespace TopiaForge.ModManager.Tests
                 new ModServiceRegistry(), null, this);
             Native = new SceneCoordinator(dispatcher: Host);
             Dispatch = new DelayedSessionDispatcher(Host);
-            Hosted = new GamemodeSessionOrchestrator(Dispatch, Native, this, "runtime-fixture");
+            Hosted = new GamemodeSessionOrchestrator(Dispatch, decorateNative?.Invoke(Native) ?? Native, this, "runtime-fixture");
             Hosted.Outcome += Outcomes.Add;
         }
 
@@ -107,11 +107,13 @@ namespace TopiaForge.ModManager.Tests
     {
         private readonly HostDispatcher host;
         internal bool HoldNextPost;
+        internal int PostedCount;
         private Action? held;
         internal DelayedSessionDispatcher(HostDispatcher host) { this.host = host; }
         public bool IsCurrent => host.IsCurrent;
         public void Post(Action action)
         {
+            Interlocked.Increment(ref PostedCount);
             if (HoldNextPost) { HoldNextPost = false; held = action; }
             else host.Post(action);
         }

@@ -46,7 +46,7 @@ namespace TopiaForge.ModManager.Tests
             new BaselineSpec(
                 "topiaforge.mods.worlds",
                 "TopiaForge.Mods.Worlds",
-                () => typeof(IWorldGamemodeService).Assembly),
+                () => typeof(IWorldSessionService).Assembly),
             new BaselineSpec(
                 "topiaforge.mods.chronos",
                 "TopiaForge.Mods.Chronos",

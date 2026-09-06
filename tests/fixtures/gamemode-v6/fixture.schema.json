@@ -149,6 +149,14 @@
             },
             "gameVersion": {
               "type": "string"
+            },
+            "contentTargets": {
+              "type": "array",
+              "maxItems": 64,
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              }
             }
           }
         }

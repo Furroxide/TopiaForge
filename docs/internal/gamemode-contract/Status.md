@@ -15,7 +15,8 @@ The [canonical brief](../GamemodeContractRedesign.md) is normative. The
 | `c61d5fcf821ef726c2aea3ba35c092e314e1f6c4` | Slice 2 squash merge of PR #107, reviewed head `055a7d4` | Unused V6 contract integrated; alias and production manifests/templates remain V5 |
 | `41f14d078dca1830749f70cac9f72083c4fedd8c` | Slice 3 merged through PR #108; corrected pure resolver, immutable plans and inactive transport models | Full CI passed at reviewed head `63540e2`; no production caller or wire activation |
 | `9dc5613bc0cc8f2fa9b3c50b02357116f2540514` | Slice 4 squash merge of PR #109, reviewed head `4b12a1edcc56c033f1616931f40deaba44ee35c6` | Full CI and CodeQL passed; merged normally on 6 September with review threads resolved |
-| `feat/gamemode-bindings-world-adapters`, based on `9dc5613` | Slice 5 active working tree | Binding, discovery, world adapters and native cleanup implemented locally with focused evidence; final local checks passed; CI and integration pending |
+| `b7390fb6a8376c58c77d18f20e287bacbd427850` | Slice 5 merge of PR #110, final reviewed head `7907398cc9d21dc18d8b9481690dd434f7f30595` | Final exact-head CI and CodeQL passed; merged normally at 2026-09-06T02:07:23Z |
+| `feat/gamemode-runtime-activation`, based on `b7390fb6` | Slice 6 active working tree | Runtime composition, consumers and manifest/template activation implemented locally; combined verification in progress; uncommitted and not integrated |
 
 On 2026-09-05, PRs #102–105 were converted to draft for the approved re-cut.
 Their branch tips and existing review history were preserved. Both external
@@ -605,8 +606,8 @@ The old four-PR stack is source material; it does not satisfy these eight delive
 | 2 | Unused V6 contract/readers/validators/conformance; alias stays V5 | Merged in PR #107 (`c61d5fc`) | Intentionally unused | 149 C# fixtures; 479 domain, 358 data, 227 CLI tests; seven Release harnesses and required CI/publication passed at `055a7d4` | Not required for pure contract |
 | 3 | Pure resolution and immutable transport models | Merged in PR #108 (`41f14d0`) | Intentionally no production switch | 353 shared fixtures; 791 domain, 358 data, 227 CLI tests; full Release/seven harnesses and required CI/publication passed at `63540e2` | Not required for pure models |
 | 4 | Scoped ownership, lifecycle, shared transition foundations | Merged in PR #109 (`9dc5613`) | Existing V5 scene routes use the shared executor; V6 orchestration activation remains pending | Final head `4b12a1e` passed full CI (`33999792058`), CodeQL (`33999790502`), local Release/seven harnesses and scoped audits | Native behavior pending |
-| 5 | Verified bindings, providers/discovery/readiness and native cleanup follow-up | PR #110 open on `dev` (`9dc5613`); initial head `dde58f2` passed CI; review correction awaiting its own CI | Explicit-selection production binder/discovery/adapters exercised by synthetic packages; default V5 consumers unchanged; activation remains slice 6 | Initial head CI `34004356327` and CodeQL `34004355404` passed. Review correction passed fresh Release, seven harnesses, formatting, Dart analysis and audits; new-head CI pending | World/readiness/native-timing checks pending |
-| 6 | Activate runtime and atomically flip manifests/templates | Original-stack migration is partial source material only | Pending | Rebuilt API baselines, generated package and consumer coverage pending | First-party gameplay pending |
+| 5 | Verified bindings, providers/discovery/readiness and native cleanup follow-up | Merged in PR #110 (`b7390fb6`), final reviewed head `7907398c` | Explicit-selection production binder/discovery/adapters exercised by synthetic packages; activation follows in slice 6 | Final exact-head CI `34005261775` and CodeQL `34005260669` passed; fresh local Release and seven harnesses passed | Native world/readiness/timing checks pending |
+| 6 | Activate runtime and atomically flip manifests/templates | Working tree based on merged slice 5; uncommitted | Manager composes one orchestrator, migrated declared factories/providers and scoped observers; temporary V3 adapter maps only a unique valid target | 796 domain tests; generated gamemode/world packages pass production install/binding/resolve/start/stop with fake native readiness; combined C# and publication verification in progress | All candidate game acceptance remains pending |
 | 7 | Launcher/CLI/overlay preflight, wire V4, observations, durable state | Pending | Pending | Cross-language wire/profile/process/progress integration pending | Cold launch and multi-surface selection pending |
 | 7a | Release prerequisites, exact-byte qualification and unsigned Windows repair | Explicit additional PR planned | Pending | Qualification/bypass/tamper and packaging regressions pending | Reviewed evidence and isolated QA locations pending |
 | 8 | Retire V5, migration, publication, final acceptance | Original-stack migration/docs need repairs | Pending | Complete scoped matrix, audits, publication and CI pending | Full isolated-profile acceptance pending |
@@ -663,3 +664,177 @@ Close a repair only with its regression result and integration evidence. Close a
 when the relevant automated **and** live acceptance cells are satisfied. Preserve failed outcomes
 as history when appending later passes. Never prefill a future slice, CI run, merge, game test, or
 publication as successful. Update this ledger in the same slice as the behavior it describes.
+
+## Slice 5 final integration and slice 6 activation
+
+PR #110 merged normally after all required checks and review threads were resolved. Its final
+head `7907398cc9d21dc18d8b9481690dd434f7f30595` passed
+[CI 34005261775](https://github.com/Furroxide/TopiaForge/actions/runs/34005261775) and
+[CodeQL 34005260669](https://github.com/Furroxide/TopiaForge/actions/runs/34005260669).
+The prior slice-5 pending statements above describe their dated intermediate checkpoints.
+
+Slice 6 was created only after that merge, from `b7390fb6`, with no upstream. Local changes activate
+the canonical V6 alias, both current-version constants, 17 first-party manifests and all template
+outputs together. A fresh selected-package snapshot includes enabled packages excluded by validation
+or ordering, retaining their failure evidence instead of shrinking the effective profile. The manager
+composes the verified bindings, bounded discovery, one orchestrator and shared native executor.
+Worlds' imperative registration/start protocol and GamemodeHost are removed. Free Play has no Sandbox
+dependency; Sandbox and Zombies declared factories allocate their controller and resource-producing
+facades under the supplied child context. Committed observers expose immutable IDs and bound operations.
+
+The temporary `LegacyWorldLaunchAdapter` is the only old-wire bridge. It accepts a unique valid target
+mapping through the resolver, preserves unavailable old values and never maps retired Sandbox to
+another mode. Slice 7 must remove it with profile wire V3 and add complete target/override selection,
+versioned durable state/observations and request-correlated process/session outcomes. The slice-6 overlay
+can launch declared defaults; launcher integration and full release qualification are not complete.
+
+| Slice-6 finding | Regression and local evidence | Limit |
+| --- | --- | --- |
+| Launcher profile without command reused remembered autoload; safe mode armed a mode | `WorldLaunchArmingTests` captured both failures before repair; complete focused arming suite GREEN | Wire V4 integration remains slice 7 |
+| Unknown remembered transition normalized into a different valid choice | Additional arming regression RED then GREEN; saved value now remains invalid | Durable versioned repair UI remains slice 7 |
+| Selection omitted enabled packages that failed validation/load order | `RuntimeSessionSelectionTests` RED then GREEN; exact selection, disabled owners and cloned facts preserved | Full launcher pin/installation adapter remains slice 7 |
+| Extension factory reused a package context rather than actual child scope | `ContextBoundExtensionTests` RED then GREEN for root/sibling same-owner contexts | Combined lifecycle suite still in progress |
+| Sandbox closed a foreign creator host or enabled F5 before Running | Consumer regressions RED then GREEN; checks own host and committed matching session | F5/input timing in game pending |
+| Zombies throwing cleanup skipped later resources | Consumer regression RED then GREEN, all cleanup attempts and aggregate errors retained | Native health/teardown verification pending |
+| Local import lost ownership or reported success before native terminal failure | Four local import regressions GREEN; captured-root cleanup and actual drain retained | Native importer behavior remains unverified in game |
+| Templates compiled without proof of runtime binding | Two generated package cases GREEN through real scaffolder, installer, receipts, binding, resolver and orchestrator; generated source/manifest hashes preserved | Native readiness is a fake boundary, not geometry or spawn evidence |
+
+Current Worlds and SDK acceptance mod Release builds pass with zero warnings/errors. The acceptance
+probe preserves all 15 live case IDs and ten lifecycle cycles, uses the actual acceptance factory's
+session context, and requires committed Running-to-Idle plus controller/scope disposal before its world
+PASS marker. Its resource family is now `session-resources`; no game PASS markers have been produced.
+The active authoring guides and website now reference Manifest V6. Combined C# checks, API baselines,
+publication, exact-head CI and every live acceptance case are still pending for this working revision.
+
+## Slice6 content/facade/menucleanup verification
+
+These results describe uncommitted source on `feat/gamemode-runtime-activation`,
+branched from slice-5 merge `b7390fb6`; they do not certify a release commit or
+native game behavior. `ContentAdmissionTests` uses actual scoped `ModContext`
+instances, the orchestrator and shared `SceneCoordinator`, with a decorator that
+injects reservation/grant/close failures. Its 11 named cases are registered in
+both the focused and sequential full harness; the focused cases below passed
+against a freshly rebuilt Manager test project.
+
+| Confirmed defect or required boundary | Regression and observed result |
+| --- | --- |
+| Content reservation exception abandoned the command task and lifecycle lease | `reserve-throw` RED before repair, then GREEN; no callback/child allocation and a subsequent restart is admitted |
+| Internal cleanup cancellation replaced an expected `NotFound` with `Cancelled` | `expected-failure` RED then GREEN; original code/message retained, only the failed child closes, terminal session cleanup stays successful |
+| Borrowed-grant disposal lost the provider's already-returned content resource | `grant-cleanup` RED then GREEN; ownership is captured before grant disposal, every content/scope disposer runs, all three failure messages remain |
+| Worker caller cancellation and stale content callbacks must remain contained | `worker-cancel` and `stale-content` GREEN; cancellation callbacks execute on the host, both throwing callbacks are retained, late content drains while Busy, old scopes cannot stop successor content |
+| A child session facade linked restart/menu to the predecessor scope token and cancelled its own teardown | `child-restart` and `child-menu` RED then GREEN; host admission checks the lifetime before invoking the operation, and admitted self-teardown no longer cancels the successor/menu |
+| Independent cancellation and a stopped queued caller remain effective | `child-explicit-cancel` reaches the new load and cancels/drains it after the facade fix; `child-queued-stop` remains GREEN and rejects a scope stopped before host admission |
+| Main-menu reservation or late close exceptions left command tasks and leases pending | `menu-reserve-throw` and `menu-close-throw` RED then GREEN; Busy persists through held cleanup, primary/close messages are retained, one command outcome and the applicable one predecessor terminal publish, and the next launch succeeds |
+
+Retained local evidence is `%TEMP%/tf-slice6-content-<case>-red.log` and
+`...-green.log` using the exact case names above. The three relevant rebuilt
+Manager test logs are `tf-slice6-content-build.log`,
+`tf-slice6-child-facade-green-build.log` and `tf-slice6-menu-green-build.log`;
+each completed with zero warnings and zero errors. The final focused run passed
+all 11 cases. No source fix was made for the already-passing worker/stale
+boundaries. Complete solution/release-surface and exact-head CI checks are being
+run separately; no pending check is represented here as passed.
+
+CLI regressions also captured obsolete `--gamemode` with a missing value creating
+files, and V6 migration dispatch rejecting current manifests while mechanical
+V3/V4 conversion silently changed to V6. After repair, ten focused scaffold,
+no-write and migration cases passed in
+`%TEMP%/tf-slice6-cli-scaffold-and-migration-green.log`; failures are retained in
+`tf-slice6-cli-obsolete-red.log` and `tf-slice6-cli-migration-dispatch-red.log`.
+The full CLI run is still in progress at this checkpoint. The generated C# cases
+previously passed actual scaffold/install/receipt/binding/resolve/launch/stop
+with fake native readiness; rerunning them with the tracked CLI lock/config
+is pending the next C# build slot. Template restart now uses the bound operation's
+default token. None of these checks proves scene timing, authored spawn,
+Open Sandbox geometry, F5/pause behavior or live teardown.
+
+The first complete CLI run then finished with **231 passed, four existing Windows
+skips and one stale world-template assertion failure** in
+`%TEMP%/tf-slice6-cli-full-final.log`. The assertion still required the removed
+imperative `BundleWorldContent`/`RegisterWorld` source. It now checks the V6
+bundle/prefab path, authored `SpawnPoint`, declaration ID and Free Play target;
+the focused case passes in `tf-slice6-cli-world-scaffold-green.log`. A complete
+rerun remains pending the shared C# build slot because the CLI release-payload
+suite itself restores the solution and builds shared SDK/validator projects.
+The four unchanged platform skips cover two developer-mode symlink archive
+cases, POSIX process signals and a POSIX shell output-overflow fixture.
+Final domain/data/CLI analyzers and the standalone generated-helper analyzer
+passed with pinned Dart 3.12.2. All 15 owned Dart files are formatted and below
+500 lines; the largest remains 496 lines. No new skipped test was introduced.
+
+A later host-queue regression strengthened `stale-content`: an old stop callback
+was repeatedly reposted while successor content held Busy. It failed before the
+identity check moved ahead of host-side retry. The repaired path dispatches an
+off-thread callback once and rejects stale/stopped identity before deferring
+valid work. `tf-slice6-stale-content-post-storm-red.log` and `...-green.log`
+record the result; `tf-slice6-stale-content-green-build.log` records a fresh
+zero-warning/error build. This corrects the earlier narrower stale-handle check,
+which proved isolation but did not measure repeated queueing.
+
+
+## Slice 6 final local verification checkpoint
+
+These results apply to the final uncommitted activation source on
+`feat/gamemode-runtime-activation`, based on `b7390fb6`, on 6 September 2026.
+They supersede earlier pending local-check statements without erasing their failed
+or incomplete checkpoints. The slice is not yet integrated; exact-head CI and
+native game acceptance remain separate requirements.
+
+| Check | Observed result |
+| --- | --- |
+| Full Release solution after the stale-callback fix | PASS, zero warnings/errors; `tf-slice6-final-solution-build.log` |
+| Rebuilt SDK packages and sequential C# harnesses | PASS, all 11 packages and all seven no-argument harnesses; `tf-slice6-final-seven-harnesses.log` |
+| Production generated packages | Both real scaffolder/install/receipt/binding/resolve/start/stop cases ran in that final Runtime harness, using the tracked CLI lock/config and unchanged generated source/manifest hashes |
+| C# format verification | Final PASS after normal post-CLI restore, zero of 1074 files changed and no missing-reference/workspace warning; `tf-slice6-post-cli-format.log` |
+| Domain tests | 800 PASS; `tf-slice6-domain-final-tests.log` |
+| Complete CLI rerun | 232 PASS, four existing Windows skips; `tf-slice6-cli-full-green.log`. This closes the earlier stale world-template assertion failure, whose failed log remains preserved |
+| Windows data tests | 360 PASS, four existing platform skips with the corrected child-process PATH; `tf-slice6-data-clean-path-tests.log` |
+| Matching clean Windows baseline | All ten multiplayer pack cases PASS on archived `b7390fb6` using the same PATH; `tf-slice6-baseline-data-pack.log`. The historical seven local failures are no longer an exemption |
+| Dart format and analysis | 357 checked domain/data/CLI files, zero format changes; fatal-info analyzers PASS, including the standalone generated-helper analyzer |
+| Fixture closure and repository audits | PASS, 355 recursively closed cases, derived README guide count 45, residue/trademark/asset-license audits |
+| Full Dart line audit | 416 tracked/new files, all 414 non-generated files at most 500 lines; only two explicitly generated files exceed the cap |
+| Flutter tests and fatal-info analysis | UI package 3 PASS; launcher app 54 PASS; both analyzers report no issues using Flutter 3.44.6 |
+| Windows launcher debug build | PASS; `tf-slice6-flutter-windows-build.log`. The executable was built, not launched for game acceptance |
+| Website checks | 33 tool tests, 26 canonical pages, 5 snippets from 3 compiled template projects, Markdown links over 126 files, Astro analysis and 27-page build PASS |
+| C# API publication | DocFX PASS, 381 HTML pages, zero warnings/errors |
+| Dart API publication | Domain/data PASS with zero warnings/errors; UI fails in pinned dartdoc 9.0.4 with the documented Flutter SDK CRLF `DocumentationComment._stripDocImports` RangeError. No SDK/cache patch or check weakening; exact-head Linux publication is required |
+
+The installation compatibility regression now preserves and checks every supported
+content target rather than one enumeration choice; two shared fixtures prove both
+native-world and code-provider cases. Duplicate selected identities have no binding
+winner. Malformed enabled selections remain attributable diagnostics and block scene
+work; disabled malformed selections do not block unrelated valid gameplay. Runtime
+integration tests exercise healthy package loading alongside both failure forms.
+
+The strict metadata baseline covers 60 types and 15 simple lookups. Across nine
+binding manifests, 203 of 214 bindings verify and 11 legacy dynamic bindings remain
+explicitly uncheckable; all 29 Manager and 35 Worlds bindings verify. Fourteen new
+metadata regressions enforce exact overloads, fields, properties, visibility and
+awaiter shape. Source auditing reports no undeclared or stale bindings. These are
+metadata and controlled-runtime results, not native timing evidence.
+
+No game was run for these checks. Open Sandbox geometry/environment/kill plane,
+actual spawn and discovered scene readiness, Zombies, Sandbox F5/pause, Free Play
+without Sandbox, restart/menu, and injected native startup/teardown remain pending
+live acceptance in an isolated environment. Launcher wire V4, correlated outcomes,
+versioned selection repair, V5 retirement and release qualification remain later
+slices. No release dispatch or publication has been performed.
+
+
+The final publication run generated 381 C# API pages with zero DocFX warnings/errors.
+The missing UI Dartdoc output then correctly failed unified search and produced 25
+built-link failures, all pointing at the absent `/api/dart/` landing output. Other
+built destinations and anchors passed. Full publication is not locally green;
+Linux CI must establish it on the committed source. Logs are
+`tf-slice6-docs-dart-reference.log`, `tf-slice6-docs-build-search.log`, and
+`tf-slice6-docs-check-built-links.log` in the temporary directory.
+
+The format workspace warning was traced to the CLI relocation test overwriting
+ignored NuGet assets with its subsequently deleted temporary package-cache path.
+Analyzer project and toolchain configuration match `b7390fb6`; the normal NuGet
+cache contains the package. A normal solution restore after the CLI test repairs
+those local asset paths, without changing source, SDK caches, or verification rules.
+
+The post-CLI solution restore and final diagnostic format check passed: zero of
+1074 files changed, with no missing-reference or workspace warning. The prior
+warning is retained above as an explained intermediate result.

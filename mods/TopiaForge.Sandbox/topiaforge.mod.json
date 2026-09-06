@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "name": "io.github.furroxide.topiaforge.sandbox",
   "displayName": "Sandbox",
   "version": "0.1.0-rc.1",
@@ -52,5 +52,39 @@
     "network",
     "remote-ai",
     "player-token"
-  ]
+  ],
+  "contributions": {
+    "gamemodes": [
+      {
+        "id": "io.github.furroxide.topiaforge.sandbox.creator",
+        "name": "Sandbox",
+        "description": "Freeform creator sandbox: an open arena with a spawn menu for props and robots.",
+        "implementation": {
+          "type": "TopiaForge.Sandbox.SandboxGamemode"
+        },
+        "worldRequirements": {
+          "transitions": [
+            "additive-arena"
+          ],
+          "spawn": "any"
+        },
+        "sceneChangePolicy": "end-session"
+      }
+    ],
+    "launchTargets": [
+      {
+        "id": "io.github.furroxide.topiaforge.sandbox.creator.menu",
+        "title": "Sandbox",
+        "description": "Freeform creator sandbox: an open arena with a spawn menu for props and robots.",
+        "sortKey": 30,
+        "gamemode": "io.github.furroxide.topiaforge.sandbox.creator",
+        "world": {
+          "policy": "fixed",
+          "default": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+          "allowPlayerOverride": false
+        },
+        "transition": "auto"
+      }
+    ]
+  }
 }

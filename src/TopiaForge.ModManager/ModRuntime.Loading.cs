@@ -122,6 +122,7 @@ namespace TopiaForge.ModManager
                     runtimeInfo,
                     coreGameplayServices,
                     availableManifests);
+                if (activeSessions != null) context.ConfigureSessions(activeSessions);
                 loadObserverStarted = true;
                 loadObserver?.OnLoading(manifest.Id);
                 onLoadStarted = true;

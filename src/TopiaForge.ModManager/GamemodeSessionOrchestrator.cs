@@ -8,7 +8,7 @@ using TopiaForge.Mods;
 
 namespace TopiaForge.ModManager
 {
-    /// <summary>Inactive declaration lifecycle. Binding/catalog activation supplies its production environment later.</summary>
+    /// <summary>Authoritative declaration lifecycle composed with verified runtime bindings.</summary>
     internal sealed partial class GamemodeSessionOrchestrator : IRuntimeSessionShutdown, IRuntimeSessionSceneObserver
     {
         private readonly IHostDispatcher dispatcher;
@@ -125,7 +125,9 @@ namespace TopiaForge.ModManager
         private void Commit(SessionRecord record, SessionPhase phase)
         {
             var state = lifecycle.Commit(record.Lease, phase, phase == SessionPhase.Preparing ? record.Identity : null);
+            publicState = CapturePublicState(state, record);
             Publish(StateChanged, state);
+            Publish(publicStateChanged, publicState);
             Publish(Progress, new LaunchProgress(record.Identity.RequestId, NextSequence(), PhaseName(phase),
                 phase == SessionPhase.Idle ? null : record.Identity.SessionId, native.IsSceneBusy));
         }
@@ -186,7 +188,9 @@ namespace TopiaForge.ModManager
             return OperationResult<bool>.Failure(code, Message(result.ErrorMessage));
         }
         private static OperationResult<bool> ExceptionFailure(Exception error) => OperationResult<bool>.Failure(
-            error is OperationCanceledException ? ModErrorCode.Cancelled : ModErrorCode.External, Message(error.GetBaseException().Message));
+            error is OperationCanceledException ? ModErrorCode.Cancelled
+                : error.GetBaseException() is InvalidRuntimeSelectionException ? ModErrorCode.InvalidState : ModErrorCode.External,
+            Message(error.GetBaseException().Message));
         private static OperationResult<bool> AdmissionFailure(SessionAdmission admission) => OperationResult<bool>.Failure(
             admission == SessionAdmission.StaleSession ? ModErrorCode.InvalidState : ModErrorCode.Conflict,
             admission == SessionAdmission.StaleSession ? "This session handle no longer owns the current session." : "A session or native transition is busy.");
@@ -213,6 +217,8 @@ namespace TopiaForge.ModManager
             internal readonly Dictionary<string, ModContextScope> Scopes = new Dictionary<string, ModContextScope>(StringComparer.OrdinalIgnoreCase);
             internal readonly Dictionary<string, NativeTransitionAccessSlot> Slots = new Dictionary<string, NativeTransitionAccessSlot>(StringComparer.OrdinalIgnoreCase);
             internal readonly List<Exception> Errors = new List<Exception>();
+            internal readonly List<IDisposable> ContentResources = new List<IDisposable>();
+            internal bool ContentOperation;
             internal IWorldContentProvider? Provider;
             internal IWorldInstance? Instance;
             internal WorldReadiness? Readiness;

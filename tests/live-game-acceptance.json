@@ -51,8 +51,8 @@
     },
     {
       "id": "worlds.session-teardown",
-      "probeMethod": "RegisterProviderChecks",
-      "description": "Scene/world/gamemode registration, loading, pause actions, session lifecycle, and save-aware teardown complete cleanly."
+      "probeMethod": "ObserveAcceptanceSession",
+      "description": "The declared acceptance factory observes committed Running and Idle, session-scoped pause actions, controller disposal, and tracked scope cleanup."
     },
     {
       "id": "robots.objectives-dialogue-voice",
@@ -104,7 +104,7 @@
         "prompt-overrides",
         "robot-targets",
         "creator-sessions",
-        "world-registrations"
+        "session-resources"
       ]
     }
   ]

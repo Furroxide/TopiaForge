@@ -10,7 +10,7 @@ namespace TopiaForge.ModManager
     {
         PackageNotLoaded, PackageLoadFailed, OwnerStopping, OwnerRemoved,
         UnsafeAssemblyPath, ReceiptInvalid, AssemblyHashMissing, AssemblyHashMismatch,
-        AssemblyMissing, ForeignAssembly, MissingType, InvalidType, VerificationFailed
+        AssemblyMissing, ForeignAssembly, MissingType, InvalidType, VerificationFailed, AmbiguousPackage
     }
 
     internal sealed class RuntimeBindingFailure

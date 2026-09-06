@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>TopiaForge.GeneratedWorldsTestMod</AssemblyName>
+    <Version>0.1.0-rc.1</Version>
+    <AssemblyVersion>0.1.0.0</AssemblyVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/TopiaForge.Mods.Abstractions/TopiaForge.Mods.Abstractions.csproj" />
+    <ProjectReference Include="../../src/TopiaForge.Mods.Worlds/TopiaForge.Mods.Worlds.csproj" />
+    <Compile Include="../../mods/TopiaForge.Worlds/FreePlayGamemode.cs" Link="FreePlayGamemode.cs" />
+  </ItemGroup>
+</Project>

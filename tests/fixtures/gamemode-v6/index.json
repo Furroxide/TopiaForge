@@ -187,6 +187,18 @@
       "path": "resolution/gamemode-reference-is-not-a-dependency.json"
     },
     {
+      "id": "host-target-set-permits-code-provider",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/host-target-set-permits-code-provider.json"
+    },
+    {
+      "id": "host-target-set-permits-native-world",
+      "channel": "resolution",
+      "kind": "launch-resolution",
+      "path": "resolution/host-target-set-permits-native-world.json"
+    },
+    {
       "id": "identical-observation-revision-is-idempotent",
       "channel": "resolution",
       "kind": "launch-resolution",

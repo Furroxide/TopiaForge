@@ -1,87 +1,81 @@
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using TopiaForge.Mods;
 
 namespace {{ASSEMBLY_NAME}}
 {
-    /// <summary>Registers a lifetime-owned gamemode and runs one controller per active session.</summary>
+    /// <summary>Loads package services; the manifest declares the launch target and factory.</summary>
     public sealed class {{TYPE_NAME}}Mod : TopiaForgeMod
     {
-        public const string GamemodeId = "{{MOD_ID}}.mode";
+        protected override void OnLoad() => Context.Logger.Info("{{DISPLAY_NAME}} package loaded.");
+    }
 
-        private GamemodeHost<{{TYPE_NAME}}Session>? host;
-
-        protected override void OnLoad()
+    /// <summary>Starts one controller after the selected world and spawn are ready.</summary>
+    public sealed class {{TYPE_NAME}}Gamemode : IGamemodeFactory
+    {
+        public Task<OperationResult<IGamemodeController>> StartAsync(
+            IGamemodeSession session, CancellationToken cancellationToken)
         {
-            // GamemodeHost owns registration rollback, the session subscription and its lifetime-deferred
-            // unsubscribe, replay of a session that is already running, one-controller-per-session, and teardown.
-            var hosted = GamemodeHost<{{TYPE_NAME}}Session>.Create(
-                Context,
-                Context.RequireExtension<IWorldGamemodeService>(),
-                GamemodeId,
-                session => new {{TYPE_NAME}}Session(Context, session),
-                new GamemodeDefinition(
-                    GamemodeId,
-                    "{{DISPLAY_NAME}}",
-                    "Custom gamemode scaffolded from the gamemode template."),
-                new GamemodeMenuEntry(
-                    "{{MOD_ID}}.menu",
-                    "{{DISPLAY_NAME}}",
-                    "Custom gamemode scaffolded from the gamemode template.",
-                    GamemodeId,
-                    WellKnownWorldIds.OpenSandboxWorld));
-            if (!hosted.TryGetValue(out var gamemodeHost))
-            {
-                Context.Logger.Warn("{{DISPLAY_NAME}} could not register: " + hosted.ErrorMessage);
-                return;
-            }
-
-            host = gamemodeHost;
-
-            // Actions are re-registered for every session, so this is declared once here rather than per session.
-            host.AddPauseAction(new WorldPauseAction(
-                "{{MOD_ID}}.restart",
-                "RESTART ROUND",
-                () => host?.Controller?.Restart(),
-                destructive: true));
-
-            Context.Logger.Info("{{DISPLAY_NAME}} gamemode registered.");
+            if (session == null) throw new ArgumentNullException(nameof(session));
+            cancellationToken.ThrowIfCancellationRequested();
+            session.CancellationToken.ThrowIfCancellationRequested();
+            session.Lifetime.StoppingToken.ThrowIfCancellationRequested();
+            return Task.FromResult(OperationResult<IGamemodeController>.Success(new {{TYPE_NAME}}Controller(session)));
         }
     }
 
-    /// <summary>Runs one round. Created when a session starts, disposed when it ends.</summary>
-    internal sealed class {{TYPE_NAME}}Session : System.IDisposable
+    /// <summary>Owns one round; all service allocations use the supplied session context.</summary>
+    internal sealed class {{TYPE_NAME}}Controller : IGamemodeController
     {
-        private readonly IModContext context;
-        private readonly WorldSession session;
-        private readonly System.IDisposable updateSubscription;
+        private readonly IGamemodeSession session;
+        private readonly IDisposable updateSubscription;
+        private readonly IDisposable? pauseAction;
+        private bool disposed;
 
-        public {{TYPE_NAME}}Session(IModContext context, WorldSession session)
+        public {{TYPE_NAME}}Controller(IGamemodeSession session)
         {
-            this.context = context;
             this.session = session;
-
-            // Subscribing here means the loop only runs during a session, and stops when this object is disposed.
-            updateSubscription = context.Events.SubscribeUpdate(OnUpdate);
-            context.Logger.Info("{{DISPLAY_NAME}} session started in world " + session.WorldId + ".");
+            updateSubscription = session.Context.Events.SubscribeUpdate(OnUpdate);
+            if (session.Context.TryGetExtension<IWorldPauseMenuService>(out var pause))
+            {
+                var registered = pause.RegisterAction(new WorldPauseAction(
+                    session.GamemodeId + ".restart", "RESTART ROUND",
+                    () => _ = RestartAsync(), destructive: true));
+                if (registered.TryGetValue(out var action)) pauseAction = action;
+                else session.Context.Logger.Warn("Restart action unavailable: " + registered.ErrorMessage);
+            }
+            session.Context.Logger.Info("{{DISPLAY_NAME}} session started in world " + session.WorldId + ".");
         }
 
-        public OperationResult<string> Restart()
+        private async Task RestartAsync()
         {
-            // Reset round state here.
-            context.Ui.ShowToast("Round restarted.", UiTone.Warning);
-            return OperationResult<string>.Success("Round restarted.");
+            try
+            {
+                var result = await session.RestartAsync();
+                if (!result.Succeeded && !session.CancellationToken.IsCancellationRequested)
+                    session.Context.Ui.ShowToast(result.ErrorMessage, UiTone.Warning);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception error) { session.Context.Logger.Warn("Restart failed: " + error.Message); }
         }
 
         public void Dispose()
         {
-            updateSubscription.Dispose();
-            context.Logger.Info("{{DISPLAY_NAME}} session ended.");
+            if (disposed) return;
+            disposed = true;
+            var failures = new List<Exception>();
+            try { pauseAction?.Dispose(); } catch (Exception error) { failures.Add(error); }
+            try { updateSubscription.Dispose(); } catch (Exception error) { failures.Add(error); }
+            if (failures.Count != 0) throw new AggregateException(failures);
         }
 
         private void OnUpdate(float deltaTime)
         {
-            // Per-round logic (wave timers, win conditions, HUD updates) goes here.
-            // To spawn or command robots, run `topiaforge mod add robotkit` — it adds the package reference and
-            // the manifest dependency together — then resolve Context.RequireExtension<IRobotAgentService>().
+            if (disposed || session.CancellationToken.IsCancellationRequested) return;
+            // Per-round timers, scoring and win conditions belong here. For robots,
+            // add the RobotKit dependency and resolve its service from session.Context.
         }
     }
 }

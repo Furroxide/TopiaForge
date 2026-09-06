@@ -6,7 +6,7 @@ namespace TopiaForge.ModManager.Core
     [DataContract]
     public sealed class ModManifest
     {
-        /// <summary>The immutable schema selector for the TopiaForge 1.0 manifest contract.</summary>
+        /// <summary>The legacy schema selector retained until manifest V5 retirement.</summary>
         public const int ManifestV5SchemaVersion = 5;
 
         /// <summary>
@@ -17,7 +17,7 @@ namespace TopiaForge.ModManager.Core
         public const int ManifestV6SchemaVersion = 6;
 
         /// <summary>The newest schema emitted by current tooling. Older supported readers must not depend on this.</summary>
-        public const int CurrentSchemaVersion = ManifestV5SchemaVersion;
+        public const int CurrentSchemaVersion = ManifestV6SchemaVersion;
 
         /// <summary>
         /// Whether a version has a reader at all. Every version gate routes through here, so admitting
@@ -169,8 +169,15 @@ namespace TopiaForge.ModManager.Core
         [DataMember(Name = "contributions", EmitDefaultValue = false)]
         public ModContributions? Contributions { get; set; }
 
-        [DataMember(Name = "worldGamemodes")]
+        [IgnoreDataMember]
         public List<ModGamemode> WorldGamemodes { get; set; } = new List<ModGamemode>();
+
+        [DataMember(Name = "worldGamemodes", EmitDefaultValue = false)]
+        private List<ModGamemode>? SerializedWorldGamemodes
+        {
+            get => SchemaVersion == ManifestV6SchemaVersion && WorldGamemodes?.Count == 0 ? null : WorldGamemodes;
+            set => WorldGamemodes = value ?? new List<ModGamemode>();
+        }
 
         [DataMember(Name = "multiplayer", EmitDefaultValue = false)]
         public ModMultiplayerMetadata? Multiplayer { get; set; }

@@ -69,14 +69,14 @@ namespace TopiaForge.ModManager
                 "RobotKit loaded, but did not register its objective service.",
                 "RobotKit objectives are unavailable.");
 
-            Report<IWorldGamemodeService>(
+            Report<IWorldSessionService>(
                 runtimeInfo,
                 registry,
                 WorldsProvider,
                 "worlds",
                 _ => true,
-                "Worlds loaded, but did not register its world and gamemode service.",
-                "World and gamemode registration is unavailable.");
+                "Worlds loaded, but did not publish its committed session observer.",
+                "World session observation is unavailable.");
             Report<IWorldPauseMenuService>(
                 runtimeInfo,
                 registry,
