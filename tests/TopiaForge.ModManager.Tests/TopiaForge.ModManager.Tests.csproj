@@ -264,4 +264,35 @@
     <Compile Include="TestingKitTests*.cs" />
     <Compile Include="TestingKitFocusedProgram.cs" />
   </ItemGroup>
+  <!-- Production binding and world-provider adapters exercised by the full offline harness. -->
+  <ItemGroup Condition="'$(TestingKitOnly)' != 'true'">
+    <Compile Include="../../src/TopiaForge.ModManager/RuntimeSessionImplementation.cs" Link="Runtime/RuntimeSessionImplementation.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/RuntimeBindingModels.cs" Link="Runtime/RuntimeBindingModels.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/RuntimeBindingAttempts.cs" Link="Runtime/RuntimeBindingAttempts.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/RuntimeBindingRegistry.cs" Link="Runtime/RuntimeBindingRegistry.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/RuntimeBindingRegistry.DiscoveryWork.cs" Link="Runtime/RuntimeBindingRegistry.DiscoveryWork.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/RuntimeWorldDiscovery.cs" Link="Runtime/RuntimeWorldDiscovery.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/RuntimeBindingRegistry.Discovery.cs" Link="Runtime/RuntimeBindingRegistry.Discovery.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/VerifiedPackageAssemblyLoader.cs" Link="Runtime/VerifiedPackageAssemblyLoader.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/RuntimeDeclarationBinder.cs" Link="Runtime/RuntimeDeclarationBinder.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/BuiltinWorldImplementation.cs" Link="Runtime/BuiltinWorldImplementation.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/AssetNativeOperation.cs" Link="Runtime/AssetNativeOperation.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/AssetNativeResource.cs" Link="Runtime/AssetNativeResource.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/AssetNativeWorkTracker.cs" Link="Runtime/AssetNativeWorkTracker.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/OwnerNativeSceneLoad.cs" Link="Runtime/OwnerNativeSceneLoad.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/OwnedWorldContent.cs" Link="Runtime/OwnedWorldContent.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/WorldRuntimeBackend.cs" Link="Runtime/WorldRuntimeBackend.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/OwnerWorldRuntimeService.cs" Link="Runtime/OwnerWorldRuntimeService.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/WorldPreparation.cs" Link="Runtime/WorldPreparation.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/GeneratedArenaGeometry.cs" Link="Worlds/GeneratedArenaGeometry.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/WorldDiscoveryIdentity.cs" Link="Worlds/WorldDiscoveryIdentity.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/WorldResourceScope.cs" Link="Worlds/WorldResourceScope.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/ScopedWorldInstance.cs" Link="Worlds/ScopedWorldInstance.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/WorldProviderLoader.cs" Link="Worlds/WorldProviderLoader.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/NativeWorldDiscoveryProvider.cs" Link="Worlds/NativeWorldDiscoveryProvider.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/CuratedLevelDiscoverySource.cs" Link="Worlds/CuratedLevelDiscoverySource.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/BuildSceneDiscoverySource.cs" Link="Worlds/BuildSceneDiscoverySource.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/WorldPlayerPlacement.cs" Link="Worlds/WorldPlayerPlacement.cs" />
+  </ItemGroup>
+
 </Project>

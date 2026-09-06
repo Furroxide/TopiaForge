@@ -66,21 +66,8 @@ namespace TopiaForge.ModManager
                     "The asset load was cancelled before it started."));
             }
 
-            AssetBundleCreateRequest request;
-            try
-            {
-                request = AssetBundle.LoadFromFileAsync(fullPath);
-            }
-            catch (Exception exception)
-            {
-                return Task.FromResult(OperationResult<IAssetBundle>.Failure(
-                    ModErrorCode.External,
-                    "The game rejected asset bundle '" + relativePath + "': " + exception.Message));
-            }
-
-            var state = new BundleLoadState(this, request, relativePath, lifetime, cancellationToken);
-            lifetime.Track(state);
-            return state.Task;
+            return AssetNativeOperation<IAssetBundle>.Start(lifetime, "Asset bundle '" + relativePath + "'",
+                () => new BundleRequest(this, fullPath, relativePath), cancellationToken);
         }
 
         public Task<OperationResult<IPrefabAsset>> LoadPrefabAsync(
@@ -121,27 +108,8 @@ namespace TopiaForge.ModManager
                     "The prefab load was cancelled before it started."));
             }
 
-            AssetBundleRequest request;
-            try
-            {
-                request = nativeBundle.Bundle.LoadAssetAsync<GameObject>(assetName);
-            }
-            catch (Exception exception)
-            {
-                return Task.FromResult(OperationResult<IPrefabAsset>.Failure(
-                    ModErrorCode.External,
-                    "The game rejected prefab '" + assetName + "': " + exception.Message));
-            }
-
-            var state = new PrefabLoadState(
-                this,
-                nativeBundle,
-                request,
-                assetName,
-                lifetime,
-                cancellationToken);
-            lifetime.Track(state);
-            return state.Task;
+            return AssetNativeOperation<IPrefabAsset>.Start(lifetime, "Prefab '" + assetName + "'",
+                () => new PrefabRequest(this, nativeBundle, assetName), cancellationToken);
         }
 
         public OperationResult<ISpawnedEntity> Spawn(AssetSpawnRequest request)
@@ -204,24 +172,24 @@ namespace TopiaForge.ModManager
 
         private sealed class UnityAssetBundleHandle : IAssetBundle
         {
-            private AssetBundle? bundle;
+            private readonly AssetNativeResource<AssetBundle> bundle;
 
             public UnityAssetBundleHandle(OwnerAssetService owner, string relativePath, AssetBundle bundle)
             {
                 Owner = owner;
                 RelativePath = relativePath;
-                this.bundle = bundle;
+                this.bundle = new AssetNativeResource<AssetBundle>(bundle, value => value.Unload(false));
             }
 
             public OwnerAssetService Owner { get; }
             public string RelativePath { get; }
-            public bool IsAlive => bundle != null;
-            public AssetBundle Bundle => bundle ?? throw new ObjectDisposedException(nameof(UnityAssetBundleHandle));
+            public bool IsAlive => bundle.IsAlive;
+            internal AssetNativeResource<AssetBundle>.Pin Acquire() => bundle.Acquire();
 
             public void Dispose()
             {
                 UnityMainThreadGuard.AssertCurrent();
-                Interlocked.Exchange(ref bundle, null)?.Unload(false);
+                bundle.Dispose();
             }
         }
 
@@ -285,200 +253,61 @@ namespace TopiaForge.ModManager
             }
         }
 
-        private sealed class BundleLoadState : IDisposable
+        private sealed class BundleRequest : IAssetNativeRequest<IAssetBundle>
         {
             private readonly OwnerAssetService owner;
-            private readonly AssetBundleCreateRequest request;
+            private readonly string fullPath;
             private readonly string relativePath;
-            private readonly IModLifetime lifetime;
-            private readonly TaskCompletionSource<OperationResult<IAssetBundle>> completion =
-                new TaskCompletionSource<OperationResult<IAssetBundle>>();
-            private readonly CancellationTokenRegistration stoppingRegistration;
-            private readonly CancellationTokenRegistration callerRegistration;
-            private int cancelled;
-            private int completed;
-
-            public BundleLoadState(
-                OwnerAssetService owner,
-                AssetBundleCreateRequest request,
-                string relativePath,
-                IModLifetime lifetime,
-                CancellationToken callerToken)
+            private AssetBundleCreateRequest? request;
+            internal BundleRequest(OwnerAssetService owner, string fullPath, string relativePath)
+            { this.owner = owner; this.fullPath = fullPath; this.relativePath = relativePath; }
+            public void Start() => request = AssetBundle.LoadFromFileAsync(fullPath)
+                ?? throw new InvalidOperationException("The engine did not return an asset bundle request.");
+            public bool HasStarted => request != null;
+            public bool IsDone => request!.isDone;
+            public OperationResult<IAssetBundle> ReadResult()
             {
-                this.owner = owner;
-                this.request = request;
-                this.relativePath = relativePath;
-                this.lifetime = lifetime;
-                stoppingRegistration = lifetime.StoppingToken.Register(Cancel);
-                callerRegistration = callerToken.CanBeCanceled ? callerToken.Register(Cancel) : default;
-                request.completed += OnCompleted;
-            }
-
-            public Task<OperationResult<IAssetBundle>> Task => completion.Task;
-
-            public void Dispose()
-            {
-                Cancel();
-            }
-
-            private void Cancel()
-            {
-                Interlocked.Exchange(ref cancelled, 1);
-                Finish(OperationResult<IAssetBundle>.Failure(
-                    ModErrorCode.Cancelled,
-                    "The asset bundle load was cancelled."));
-            }
-
-            private void OnCompleted(AsyncOperation _)
-            {
-                UnityMainThreadGuard.AssertCurrent();
-                request.completed -= OnCompleted;
-                var bundle = request.assetBundle;
-                if (Volatile.Read(ref cancelled) != 0 || lifetime.IsStopping)
+                var result = request!.assetBundle;
+                if (result == null) return OperationResult<IAssetBundle>.Failure(ModErrorCode.External,
+                    "The file is not a compatible asset bundle for this game build.");
+                try { return OperationResult<IAssetBundle>.Success(new UnityAssetBundleHandle(owner, relativePath, result)); }
+                catch (Exception creationFailure)
                 {
-                    bundle?.Unload(false);
-                    Finish(OperationResult<IAssetBundle>.Failure(
-                        ModErrorCode.Cancelled,
-                        "The asset bundle load was cancelled."));
-                    return;
-                }
-
-                if (bundle == null)
-                {
-                    Finish(OperationResult<IAssetBundle>.Failure(
-                        ModErrorCode.External,
-                        "The file is not a compatible asset bundle for this game build."));
-                    return;
-                }
-
-                var handle = new UnityAssetBundleHandle(owner, relativePath, bundle);
-                try
-                {
-                    lifetime.Track(handle);
-                    Finish(OperationResult<IAssetBundle>.Success(handle));
-                }
-                catch (ObjectDisposedException)
-                {
-                    Finish(OperationResult<IAssetBundle>.Failure(
-                        ModErrorCode.Cancelled,
-                        "The mod stopped before the asset bundle became available."));
+                    try { result.Unload(false); }
+                    catch (Exception cleanupFailure) { throw new AggregateException(creationFailure, cleanupFailure); }
+                    throw;
                 }
             }
-
-            private void Finish(OperationResult<IAssetBundle> result)
-            {
-                if (Interlocked.Exchange(ref completed, 1) != 0)
-                {
-                    return;
-                }
-
-                stoppingRegistration.Dispose();
-                callerRegistration.Dispose();
-                completion.TrySetResult(result);
-            }
+            public void Dispose() { request = null; }
         }
 
-        private sealed class PrefabLoadState : IDisposable
+        private sealed class PrefabRequest : IAssetNativeRequest<IPrefabAsset>
         {
             private readonly OwnerAssetService owner;
             private readonly UnityAssetBundleHandle bundle;
-            private readonly AssetBundleRequest request;
-            private readonly string assetName;
-            private readonly IModLifetime lifetime;
-            private readonly TaskCompletionSource<OperationResult<IPrefabAsset>> completion =
-                new TaskCompletionSource<OperationResult<IPrefabAsset>>();
-            private readonly CancellationTokenRegistration stoppingRegistration;
-            private readonly CancellationTokenRegistration callerRegistration;
-            private int cancelled;
-            private int completed;
-
-            public PrefabLoadState(
-                OwnerAssetService owner,
-                UnityAssetBundleHandle bundle,
-                AssetBundleRequest request,
-                string assetName,
-                IModLifetime lifetime,
-                CancellationToken callerToken)
+            private readonly string name;
+            private AssetNativeResource<AssetBundle>.Pin? pin;
+            private AssetBundleRequest? request;
+            internal PrefabRequest(OwnerAssetService owner, UnityAssetBundleHandle bundle, string name)
+            { this.owner = owner; this.bundle = bundle; this.name = name; }
+            public void Start()
             {
-                this.owner = owner;
-                this.bundle = bundle;
-                this.request = request;
-                this.assetName = assetName;
-                this.lifetime = lifetime;
-                stoppingRegistration = lifetime.StoppingToken.Register(Cancel);
-                callerRegistration = callerToken.CanBeCanceled ? callerToken.Register(Cancel) : default;
-                request.completed += OnCompleted;
+                pin = bundle.Acquire();
+                request = pin.Value.LoadAssetAsync<GameObject>(name)
+                    ?? throw new InvalidOperationException("The engine did not return a prefab request.");
             }
-
-            public Task<OperationResult<IPrefabAsset>> Task => completion.Task;
-
-            public void Dispose()
+            public bool HasStarted => request != null;
+            public bool IsDone => request!.isDone;
+            public OperationResult<IPrefabAsset> ReadResult()
             {
-                Cancel();
+                if (!bundle.IsAlive) return OperationResult<IPrefabAsset>.Failure(ModErrorCode.InvalidState,
+                    "The asset bundle was released before the prefab finished loading.");
+                var prefab = request!.asset as GameObject;
+                if (prefab == null) return OperationResult<IPrefabAsset>.Failure(ModErrorCode.NotFound,
+                    "Asset '" + name + "' was not found or is not a prefab.");
+                return OperationResult<IPrefabAsset>.Success(new UnityPrefabHandle(owner, bundle, name, prefab));
             }
-
-            private void Cancel()
-            {
-                Interlocked.Exchange(ref cancelled, 1);
-                Finish(OperationResult<IPrefabAsset>.Failure(
-                    ModErrorCode.Cancelled,
-                    "The prefab load was cancelled."));
-            }
-
-            private void OnCompleted(AsyncOperation _)
-            {
-                UnityMainThreadGuard.AssertCurrent();
-                request.completed -= OnCompleted;
-                if (Volatile.Read(ref cancelled) != 0 || lifetime.IsStopping)
-                {
-                    Finish(OperationResult<IPrefabAsset>.Failure(
-                        ModErrorCode.Cancelled,
-                        "The prefab load was cancelled."));
-                    return;
-                }
-
-                if (!bundle.IsAlive)
-                {
-                    Finish(OperationResult<IPrefabAsset>.Failure(
-                        ModErrorCode.InvalidState,
-                        "The asset bundle was released before the prefab finished loading."));
-                    return;
-                }
-
-                var prefab = request.asset as GameObject;
-                if (prefab == null)
-                {
-                    Finish(OperationResult<IPrefabAsset>.Failure(
-                        ModErrorCode.NotFound,
-                        "Asset '" + assetName + "' was not found or is not a prefab."));
-                    return;
-                }
-
-                var handle = new UnityPrefabHandle(owner, bundle, assetName, prefab);
-                try
-                {
-                    lifetime.Track(handle);
-                    Finish(OperationResult<IPrefabAsset>.Success(handle));
-                }
-                catch (ObjectDisposedException)
-                {
-                    Finish(OperationResult<IPrefabAsset>.Failure(
-                        ModErrorCode.Cancelled,
-                        "The mod stopped before the prefab became available."));
-                }
-            }
-
-            private void Finish(OperationResult<IPrefabAsset> result)
-            {
-                if (Interlocked.Exchange(ref completed, 1) != 0)
-                {
-                    return;
-                }
-
-                stoppingRegistration.Dispose();
-                callerRegistration.Dispose();
-                completion.TrySetResult(result);
-            }
+            public void Dispose() { request = null; Interlocked.Exchange(ref pin, null)?.Dispose(); }
         }
     }
 }

@@ -68,6 +68,13 @@ namespace TopiaForge.ModManager
             try
             {
                 var snapshot = environment.Capture();
+                if (snapshot.PackageCleanupPending)
+                {
+                    lifecycle.Release(lease!);
+                    CompleteCommand(completion, requestId, "launch-target", null,
+                        OperationResult<bool>.Failure(ModErrorCode.Conflict, "Package native cleanup is Busy."));
+                    return;
+                }
                 var resolved = LaunchResolver.ResolveAgain(descriptor, snapshot.Profile, snapshot.Observation, snapshot.Bindings);
                 if (!resolved.Resolved)
                 {
@@ -190,14 +197,14 @@ namespace TopiaForge.ModManager
         private sealed class SessionRecord
         {
             internal SessionRecord(SessionIdentity identity, LaunchPlan plan, RuntimeSessionSnapshot snapshot,
-                SessionImplementation<IGamemodeFactory> mode, SessionImplementation<IWorldContentProvider> world,
+                ISessionImplementation<IGamemodeFactory> mode, ISessionImplementation<IWorldContentProvider> world,
                 SessionOperationLease lease, INativeTransitionReservation reservation, TaskCompletionSource<OperationResult<bool>> start)
             { Identity = identity; Plan = plan; Snapshot = snapshot; Mode = mode; World = world; Lease = lease; Reservation = reservation; Start = start; }
             internal readonly SessionIdentity Identity;
             internal readonly LaunchPlan Plan;
             internal readonly RuntimeSessionSnapshot Snapshot;
-            internal readonly SessionImplementation<IGamemodeFactory> Mode;
-            internal readonly SessionImplementation<IWorldContentProvider> World;
+            internal readonly ISessionImplementation<IGamemodeFactory> Mode;
+            internal readonly ISessionImplementation<IWorldContentProvider> World;
             internal SessionOperationLease Lease;
             internal INativeTransitionReservation? Reservation;
             internal readonly TaskCompletionSource<OperationResult<bool>> Start;

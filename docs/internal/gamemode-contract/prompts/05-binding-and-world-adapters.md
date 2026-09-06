@@ -58,6 +58,21 @@ Keep first-party V6 activation and the canonical alias flip for slice 6.
   contract; preserve family and concrete instance identity and producer ownership.
 - Route all provider transitions through the shared executor and make provider
   resources session owned, including partial creation and canceled load cleanup.
+- Drain native bundle and prefab requests as part of world/session ownership. A
+  cancelled public asset task does not prove the engine request completed. Enrol
+  work in the owning lifetime before allocation, including failed scope construction;
+  retain backing bundles until pending prefab loads finish. Keep Busy and package
+  services alive through native completion and late handle cleanup, aggregating
+  failures. Use the existing session/scene admission boundary, not a second executor.
+- Keep failed entry construction/OnLoad in an owned cleanup transaction. Drain
+  native assets and that owner's scene operation before callbacks and services
+  are disposed; compose its Busy gate with the session gate for launches and
+  direct scene requests. Enrol core scenes before dispatch and retain hidden
+  late faults without converting already-delivered operation failures into teardown
+  failures. These allocation defects are the documented cleanup extension of slice 5.
+- Marshal discovery caller/deadline cancellation callbacks onto the host and retain
+  callback/cleanup faults in its work barrier through package shutdown. A handled
+  family discovery error can publish unavailability without poisoning cleanup.
 - Keep production registration paths reusable by synthetic packages and upcoming
   generated templates; do not expose test-only shortcuts as the acceptance path.
 

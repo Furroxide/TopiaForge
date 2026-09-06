@@ -60,6 +60,7 @@ namespace TopiaForge.ModManager
         }
 
         internal void DisposeResource(IDisposable resource) => Schedule(resource.Dispose);
+        internal Task DrainNativeWorkAsync() => OwnerLifetime.DrainNativeWorkAsync();
 
         private void Reject(IDisposable resource)
         {
@@ -133,7 +134,7 @@ namespace TopiaForge.ModManager
                         tasks = pending.ToArray();
                         pending.Clear();
                         if (resources.Length == 0 && tasks.Length == 0
-                            && cleanupPhase == CleanupPhase.Draining && activeDrains == 1)
+                            && cleanupPhase == CleanupPhase.Draining && activeDrains == 1 && !OwnerLifetime.HasPendingNativeWork)
                         {
                             // The empty check and seal share the submission lock. No worker can enqueue
                             // an unobserved resource between the last drain and terminal ownership release.
@@ -163,20 +164,27 @@ namespace TopiaForge.ModManager
 
         // Failed initialization has no returned owner. Keep the parent registration and host callback
         // alive until queued/rejected resources have drained, then propagate every cleanup failure.
-        internal Task CleanupFailedConstructionAsync() => dispatcher.InvokeCallbackAsync(async () =>
+        internal Task CleanupFailedConstructionAsync() => CloseAsync();
+
+        /// <summary>Closes a scope after every callback has returned; preserves all cleanup failures.</summary>
+        internal Task CloseAsync() => dispatcher.InvokeCallbackAsync(async () =>
         {
             var failures = new List<Exception>();
             Try(BeginStop, failures);
+            // Native requests may outlive their cancelled public task, including during failed initialization.
+            try { await DrainNativeWorkAsync(); } catch (Exception error) { failures.Add(error); }
             try { await DrainRejectedResourcesAsync(); } catch (Exception error) { failures.Add(error); }
             Try(Dispose, failures);
             try { await DrainRejectedResourcesAsync(); } catch (Exception error) { failures.Add(error); }
-            if (failures.Count != 0) throw new AggregateException("Failed scope initialization cleanup failed.", failures);
+            if (failures.Count != 0) throw new AggregateException("Scoped context cleanup failed.", failures);
             return true;
         });
 
         public void Dispose()
         {
             AssertHost();
+            if (OwnerLifetime.HasPendingNativeWork)
+                throw new InvalidOperationException("Native work must drain through CloseAsync before scope disposal.");
             lock (sync)
             {
                 if (cleanupPhase != CleanupPhase.Active) return;
@@ -204,7 +212,7 @@ namespace TopiaForge.ModManager
             lock (sync)
             {
                 if (cleanupPhase != CleanupPhase.Draining || activeDrains != 0
-                    || rejected.Count != 0 || pending.Count != 0) return;
+                    || rejected.Count != 0 || pending.Count != 0 || OwnerLifetime.HasPendingNativeWork) return;
                 cleanupPhase = CleanupPhase.Sealed;
             }
             parent.ReleaseChildScope(this);
