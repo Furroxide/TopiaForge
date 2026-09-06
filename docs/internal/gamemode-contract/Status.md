@@ -838,3 +838,54 @@ those local asset paths, without changing source, SDK caches, or verification ru
 The post-CLI solution restore and final diagnostic format check passed: zero of
 1074 files changed, with no missing-reference or workspace warning. The prior
 warning is retained above as an explained intermediate result.
+
+
+## Slice 6 PR review checkpoint
+
+[PR #111](https://github.com/Furroxide/TopiaForge/pull/111) was opened at
+`c8a982c159bfd8fe5b6f6b2ba8ca4e8d190e142b`. Exact-head
+[CI 34010461932](https://github.com/Furroxide/TopiaForge/actions/runs/34010461932)
+passed every functional job, including Windows data/Flutter checks, all seven
+compiled templates, and complete Linux guide/C#/Dart/search publication. This
+establishes publication for that committed source despite the reproduced local
+Windows Dartdoc defect; it does not certify a later follow-up commit.
+
+CodeQL reported new path flows in reflection-audit fixtures and an externally
+selected executable in generated acceptance (alerts 433-442). Review confirmed
+five real source-audit directory-link escapes on Windows; each failed before
+repair with no skipped cases. Follow-up fixes use owned temporary directories,
+repository/ancestor containment and a closed SDK tool choice. Arbitrary executable
+overrides fail before execution; generated gamemode and world acceptance then
+passed with the fixed repository FVM SDK. No alert was suppressed or dismissed.
+Follow-up exact-head CodeQL, functional CI and review resolution remain pending.
+
+Additional review identified Idle pause exit incorrectly reported as Busy and
+acceptance startup ignoring an independently cancelled session token. Both failed
+before repair; the rebuilt seven-case Worlds suite and five-case actual acceptance
+factory suite now pass. Null acceptance sessions receive an actionable argument
+error; ordinary missing-probe failures retain Unavailable. These suites are registered
+in the sequential full harness. Logs are under `.dart_tool/slice6-copilot-*`.
+Native game evidence and release qualification remain pending.
+
+
+A final independent review found delayed autoload could resume after a later
+explicit launch or main-menu operation. The temporary discovery adapter must
+serialize its generation check and both explicit commands on the host dispatcher,
+so waiting or queued old work cannot override a committed newer choice. Five controlled
+discovery/host-queue regressions failed before repair (menu, target, queued-menu,
+queued-target, worker-explicit). All eight discovery cases now pass; the plugin
+routes both explicit entry points through the same host-serialized generation gate.
+Logs are `tf-slice6-legacy-<case>-red.log` and `tf-slice6-legacy-admission-green.log`.
+Removing the temporary adapter in slice 7 must preserve this command-precedence invariant.
+
+
+The combined review follow-up Release solution passes with zero warnings/errors
+(`tf-slice6-review-solution-build.log`). Final format verification changed zero
+of 1075 files. Diagnostic output includes six Debug metadata-mapping notices;
+every referenced project loaded and ran analyzers, with no missing package,
+failed project load, or required-reference error. These notices are distinct from
+the earlier deleted CLI-cache failure. Dart format checked 358 files with zero
+changes; fatal-info analysis and all repository/fixture/Markdown audits pass.
+The complete rebuilt verification passed on this combined source: all 11 SDK
+packages and all seven sequential harnesses (`tf-slice6-review-seven-harnesses.log`).
+Exact-head functional CI and CodeQL remain required after the follow-up commit.

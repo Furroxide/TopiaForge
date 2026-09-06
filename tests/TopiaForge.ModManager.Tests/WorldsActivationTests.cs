@@ -17,8 +17,9 @@ namespace TopiaForge.ModManager.Tests
             CleanupAttemptsAllAndKeepsCapturedOwner();
             await PauseExitUsesOneBoundOperation();
             await PauseBlockAndNonRunningRefuse();
+            await IdlePauseExitReportsUnavailable();
             await ThrowingInterceptorStillUsesBoundExit();
-            Console.WriteLine("Worlds activation ownership tests passed (6 cases).");
+            Console.WriteLine("Worlds activation ownership tests passed (7 cases).");
         }
         private static async Task PauseExitUsesOneBoundOperation()
         {
@@ -38,6 +39,16 @@ namespace TopiaForge.ModManager.Tests
             var stopping = await exit.RunAsync(new WorldSessionSnapshot(WorldSessionPhase.Stopping, session, null, 5), null, _ => { });
             Assert(blocked.Succeeded && !blocked.Value && stopping.ErrorCode == ModErrorCode.Conflict && session.MenuCalls == 0,
                 "A veto or stopping session cannot dispatch a native menu transition.");
+        }
+        private static async Task IdlePauseExitReportsUnavailable()
+        {
+            var interceptorCalls = 0;
+            var result = await new PauseExitOperation().RunAsync(
+                new WorldSessionSnapshot(WorldSessionPhase.Idle, null, null, 0),
+                _ => { interceptorCalls++; return WorldPauseExitDecision.ReturnToMainMenu; },
+                _ => throw new Exception("Idle exit must not invoke an interceptor."));
+            Assert(result.ErrorCode == ModErrorCode.Unavailable && interceptorCalls == 0,
+                "Idle has no active session; pause exit must report Unavailable, not Busy.");
         }
         private static async Task ThrowingInterceptorStillUsesBoundExit()
         {

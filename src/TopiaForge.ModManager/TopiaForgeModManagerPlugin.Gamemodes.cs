@@ -26,7 +26,7 @@ namespace TopiaForge.ModManager
         {
             pendingWorldLaunch = WorldLaunchArming.Resolve(launchProfile, state?.WorldLaunch);
             pendingWorldLaunchWait = WorldLaunchMaxWaitSeconds;
-            launchDiscovery = new LegacyLaunchDiscovery(DiscoverForLaunchAsync);
+            launchDiscovery = new LegacyLaunchDiscovery(runtime.NativeDispatcher, DiscoverForLaunchAsync);
         }
         private void UpdatePendingWorldLaunch(float deltaTime)
         {
@@ -73,8 +73,13 @@ namespace TopiaForge.ModManager
         {
             try
             {
-                var result = await runtime.LaunchTargetAsync(new LaunchRequest(targetId, worldOverride, transitionOverride));
-                return (result.Succeeded, result.Succeeded ? "Launch target reached Running." : result.ErrorMessage);
+                return await launchDiscovery.ExplicitAsync(async () =>
+                {
+                    pendingWorldLaunch = null;
+                    if (!ready) return (false, "The runtime is not ready to launch a target.");
+                    var result = await runtime.LaunchTargetAsync(new LaunchRequest(targetId, worldOverride, transitionOverride));
+                    return (result.Succeeded, result.Succeeded ? "Launch target reached Running." : result.ErrorMessage);
+                });
             }
             catch (Exception error)
             {
@@ -86,8 +91,13 @@ namespace TopiaForge.ModManager
         {
             try
             {
-                var result = await runtime.Sessions.ReturnToMainMenuAsync();
-                return (result.Succeeded, result.Succeeded ? "Returned to the main menu." : result.ErrorMessage);
+                return await launchDiscovery.ExplicitAsync(async () =>
+                {
+                    pendingWorldLaunch = null;
+                    if (!ready) return (false, "The runtime is not ready to return to the main menu.");
+                    var result = await runtime.Sessions.ReturnToMainMenuAsync();
+                    return (result.Succeeded, result.Succeeded ? "Returned to the main menu." : result.ErrorMessage);
+                });
             }
             catch (Exception error) { return (false, "Return to menu failed: " + error.Message); }
         }

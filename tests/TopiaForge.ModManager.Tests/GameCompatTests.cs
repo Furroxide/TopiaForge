@@ -316,7 +316,8 @@ namespace TopiaForge.ModManager.Tests
 
         private static void AssertLinkedCompileSourcesAreAudited()
         {
-            var root = Path.Combine(Path.GetTempPath(), "TopiaForgeGameCompatLinked-" + Guid.NewGuid().ToString("N"));
+            var owned = Directory.CreateTempSubdirectory("TopiaForgeGameCompatLinked-");
+            var root = owned.FullName;
             var bindings = Path.Combine(root, "bindings");
             const string modId = "io.github.furroxide.topiaforge.linked";
             var mod = Path.Combine(root, "mods", "TopiaForge.Linked");
@@ -367,7 +368,7 @@ namespace TopiaForge.ModManager.Tests
             {
                 try
                 {
-                    Directory.Delete(root, recursive: true);
+                    owned.Delete(recursive: true);
                 }
                 catch
                 {

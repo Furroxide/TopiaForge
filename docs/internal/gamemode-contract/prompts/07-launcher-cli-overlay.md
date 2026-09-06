@@ -133,3 +133,17 @@ Refresh these locations after slice 6 merges; this inventory was read at `dde58f
   deferred until isolated acceptance prerequisites are met.
 - The CLI launch command currently creates its repository without a `finally` disposal boundary.
   Own and close the new observation monitor on success, failure, cancellation, and early exit.
+
+- Guard the manager/staging hierarchy before `ManagerPaths.EnsureCreated`, not merely
+  when consuming the request. Generic `JsonUtil` rotates `.bak` files and has a 4 MiB
+  ceiling; observations permit 16 MiB and require a dedicated bounded atomic writer.
+- Derive fixed lowercase storage keys from the complete ordinal request/producer identity
+  (for example SHA-256), so mixed-case transport IDs cannot alias on Windows. Preserve
+  the original identity in the strict payload and verify filename/payload agreement.
+  Reject malformed or foreign requests without deleting them; never sweep unrelated
+  staged files. Keep launch and terminal-session outcomes as separate records.
+
+- Preserve the slice-6 autoload supersession repair when removing its temporary
+  adapter: a delayed discovery continuation or queued host callback cannot launch
+  after a newer explicit target/menu request. Generation validation and command
+  admission belong to the same host dispatcher turn, including off-thread callers.

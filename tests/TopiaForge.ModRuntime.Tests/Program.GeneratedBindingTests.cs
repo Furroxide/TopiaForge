@@ -20,7 +20,7 @@ namespace TopiaForge.ModRuntime.Tests
 
         private static void TestGeneratedPackagesInFreshProcesses()
         {
-            foreach (var name in new[] { "gamemode", "world" })
+            foreach (var name in new[] { "tool-invocation", "gamemode", "world" })
             {
                 var start = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false, CreateNoWindow = true };
                 if (string.Equals(Path.GetFileNameWithoutExtension(Environment.ProcessPath), "dotnet", StringComparison.OrdinalIgnoreCase))
@@ -33,24 +33,30 @@ namespace TopiaForge.ModRuntime.Tests
 
         private static int RunGeneratedBindingCase(string name)
         {
+            if (name == "tool-invocation")
+            {
+                TestGeneratedToolRejectsExecutableOverride();
+                TestGeneratedToolArgumentsAndSdkGate();
+                Console.WriteLine("Generated tool invocation tests passed.");
+                return 0;
+            }
             if (name != "gamemode" && name != "world") return 2;
             var repository = FindGeneratedRepository();
             var root = Directory.CreateTempSubdirectory("TopiaForgeGeneratedBinding-").FullName;
             try
             {
                 var output = Path.Combine(root, "generated");
-                var dart = GeneratedDart();
-                Assert(RunGeneratedTool(dart, repository, "--version").Contains("Dart SDK version: 3.12.2 ", StringComparison.Ordinal),
+                Assert(RunGeneratedTool(GeneratedTool.Dart, repository, "--version").Contains("Dart SDK version: 3.12.2 ", StringComparison.Ordinal),
                     "generated acceptance requires exactly Dart 3.12.2");
                 var packageConfig = Path.Combine(repository, "apps", "topiaforge_cli", ".dart_tool", "package_config.json");
                 Assert(File.Exists(packageConfig), "run pinned Dart pub get --enforce-lockfile in apps/topiaforge_cli before C# verification");
-                RunGeneratedTool(dart, repository, "--packages=" + packageConfig,
+                RunGeneratedTool(GeneratedTool.Dart, repository, "--packages=" + packageConfig,
                     Path.Combine(repository, "tests", "TopiaForge.ModRuntime.Tests", "generate_template_packages.dart"), repository, output, name);
                 using var generated = JsonDocument.Parse(File.ReadAllText(Path.Combine(output, "generated.json")));
                 var item = generated.RootElement[0];
                 var project = item.GetProperty("project").GetString()!;
                 var assembly = item.GetProperty("assembly").GetString()!;
-                RunGeneratedTool("dotnet", repository, "build", Path.Combine(project, Path.ChangeExtension(assembly, ".csproj")), "-c", "Release", "--nologo");
+                RunGeneratedTool(GeneratedTool.Dotnet, repository, "build", Path.Combine(project, Path.ChangeExtension(assembly, ".csproj")), "-c", "Release", "--nologo");
                 foreach (var source in item.GetProperty("sources").EnumerateObject())
                     Assert(Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(Path.Combine(project, source.Name)))) == source.Value.GetString(),
                         "building must not rewrite generated source or manifest: " + source.Name);
@@ -189,23 +195,112 @@ namespace TopiaForge.ModRuntime.Tests
                 if (File.Exists(Path.Combine(directory.FullName, "TopiaForge.slnx"))) return directory.FullName;
             throw new InvalidOperationException("Generated package acceptance must run from this repository's build output.");
         }
+        private static void TestGeneratedToolRejectsExecutableOverride()
+        {
+            var root = Directory.CreateTempSubdirectory("TopiaForgeGeneratedTool-").FullName;
+            var previous = Environment.GetEnvironmentVariable("TOPIAFORGE_TEST_DART");
+            try
+            {
+                var unexpected = Path.Combine(root, "unexpected dart.exe");
+                File.WriteAllText(unexpected, "An existing arbitrary executable must never be admitted.");
+                Environment.SetEnvironmentVariable("TOPIAFORGE_TEST_DART", unexpected);
+                var rejected = false;
+                try { GeneratedDart(); }
+                catch (InvalidOperationException) { rejected = true; }
+                Assert(rejected, "an existing absolute executable override must be rejected before any process can start");
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("TOPIAFORGE_TEST_DART", previous);
+                TryDelete(root);
+            }
+        }
+        private static void TestGeneratedToolArgumentsAndSdkGate()
+        {
+            var root = Directory.CreateTempSubdirectory("TopiaForgeGeneratedSdk-").FullName;
+            try
+            {
+                var arguments = new[] { "build", "a project;echo unsafe.csproj", "literal\"argument" };
+                var command = CreateGeneratedToolStart(GeneratedTool.Dotnet, root, arguments);
+                Assert(command.FileName == "dotnet" && !command.UseShellExecute && command.CreateNoWindow
+                    && command.Arguments.Length == 0 && command.ArgumentList.SequenceEqual(arguments),
+                    "fixed tools keep each operand distinct without shell or combined argument parsing");
+                var rejected = false;
+                try { CreateGeneratedToolStart((GeneratedTool)99, root, arguments); }
+                catch (InvalidOperationException) { rejected = true; }
+                Assert(rejected, "unknown tool identities never become executable names");
+
+                var cache = Path.Combine(root, ".fvm", "flutter_sdk", "bin", "cache");
+                var sdk = Path.Combine(cache, "dart-sdk");
+                Directory.CreateDirectory(Path.Combine(sdk, "bin"));
+                var expected = Path.Combine(sdk, "bin", "dart.exe");
+                File.WriteAllText(expected, "Metadata fixture only: never executed.");
+                File.WriteAllText(Path.Combine(cache, "flutter.version.json"),
+                    "{\"frameworkVersion\":\"3.44.6\",\"dartSdkVersion\":\"3.12.2\"}");
+                foreach (var version in new[] { "", "3.12.1", "3.12.2 extra" })
+                {
+                    File.WriteAllText(Path.Combine(sdk, "version"), version);
+                    rejected = false;
+                    try { ValidateGeneratedWindowsSdk(root); }
+                    catch (InvalidOperationException) { rejected = true; }
+                    Assert(rejected, "SDK version metadata must be exact before any process can start");
+                }
+                File.WriteAllText(Path.Combine(sdk, "version"), "3.12.2\n");
+                Assert(ValidateGeneratedWindowsSdk(root) == expected,
+                    "the Windows executable is fixed inside the repository's pinned FVM SDK");
+                File.WriteAllText(Path.Combine(cache, "flutter.version.json"),
+                    "{\"frameworkVersion\":\"3.44.5\",\"dartSdkVersion\":\"3.12.2\"}");
+                rejected = false;
+                try { ValidateGeneratedWindowsSdk(root); }
+                catch (InvalidOperationException) { rejected = true; }
+                Assert(rejected, "a different Flutter SDK cannot be admitted by matching only Dart metadata");
+            }
+            finally { TryDelete(root); }
+        }
+
+        private enum GeneratedTool { Dart, Dotnet }
+
         private static string GeneratedDart()
         {
-            var configured = Environment.GetEnvironmentVariable("TOPIAFORGE_TEST_DART");
-            if (!string.IsNullOrWhiteSpace(configured))
-            {
-                Assert(Path.IsPathFullyQualified(configured) && File.Exists(configured), "TOPIAFORGE_TEST_DART must name an explicit existing SDK executable");
-                return configured;
-            }
-            return OperatingSystem.IsWindows() ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                "fvm", "versions", "3.44.6", "bin", "cache", "dart-sdk", "bin", "dart.exe") : "dart";
+            Assert(Environment.GetEnvironmentVariable("TOPIAFORGE_TEST_DART") == null,
+                "TOPIAFORGE_TEST_DART is retired; select the pinned SDK with the repository's .fvm/flutter_sdk link");
+            return OperatingSystem.IsWindows() ? ValidateGeneratedWindowsSdk(FindGeneratedRepository()) : "dart";
         }
-        private static string RunGeneratedTool(string executable, string workingDirectory, params string[] arguments)
+
+        private static string ValidateGeneratedWindowsSdk(string repository)
         {
-            var start = new ProcessStartInfo(executable) { WorkingDirectory = workingDirectory, UseShellExecute = false, CreateNoWindow = true };
-            foreach (var argument in arguments) start.ArgumentList.Add(argument);
-            return RunGeneratedProcess(start, executable, 180000);
+            var cache = Path.Combine(repository, ".fvm", "flutter_sdk", "bin", "cache");
+            var sdk = Path.Combine(cache, "dart-sdk");
+            var executable = Path.Combine(sdk, "bin", "dart.exe");
+            var version = Path.Combine(sdk, "version");
+            var flutterVersion = Path.Combine(cache, "flutter.version.json");
+            Assert(File.Exists(executable) && File.Exists(version) && File.Exists(flutterVersion),
+                "select Flutter 3.44.6 using the repository's .fvm/flutter_sdk link before C# verification");
+            Assert(File.ReadAllText(version).Trim() == "3.12.2", "generated acceptance requires exactly Dart 3.12.2 metadata");
+            using var flutter = JsonDocument.Parse(File.ReadAllText(flutterVersion));
+            Assert(flutter.RootElement.GetProperty("frameworkVersion").GetString() == "3.44.6"
+                && flutter.RootElement.GetProperty("dartSdkVersion").GetString() == "3.12.2",
+                "generated acceptance requires the pinned Flutter 3.44.6 SDK with Dart 3.12.2");
+            return executable;
         }
+
+        private static ProcessStartInfo CreateGeneratedToolStart(GeneratedTool tool, string workingDirectory, params string[] arguments)
+        {
+            var start = tool switch
+            {
+                GeneratedTool.Dart => new ProcessStartInfo(GeneratedDart()),
+                GeneratedTool.Dotnet => new ProcessStartInfo("dotnet"),
+                _ => throw new InvalidOperationException("Unknown generated acceptance tool.")
+            };
+            start.WorkingDirectory = workingDirectory;
+            start.UseShellExecute = false;
+            start.CreateNoWindow = true;
+            foreach (var argument in arguments) start.ArgumentList.Add(argument);
+            return start;
+        }
+
+        private static string RunGeneratedTool(GeneratedTool tool, string workingDirectory, params string[] arguments) =>
+            RunGeneratedProcess(CreateGeneratedToolStart(tool, workingDirectory, arguments), tool.ToString(), 180000);
         private static string RunGeneratedProcess(ProcessStartInfo start, string label, int timeout)
         {
             start.RedirectStandardOutput = true; start.RedirectStandardError = true;

@@ -18,7 +18,7 @@ namespace TopiaForge.ModManager.Tests
                 ("exact-zero-arity", ExactZeroArity), ("generic-arity", GenericArity), ("strict-type-identity", StrictTypeIdentity), ("public-static", PublicStatic),
                 ("one-overload-contract", OneOverloadContract), ("public-constructor", PublicConstructor),
                 ("field-access", FieldAccess), ("property-accessor", PropertyAccessor), ("property-indexer", PropertyIndexer),
-                ("external-own-members", ExternalOwnMembers), ("nested-generic-shape", NestedGenericShape), ("constraint-roundtrip", ConstraintRoundTrip), ("malformed-constraints", MalformedConstraints), ("manager-linked-audit", ManagerLinkedAudit) })
+                ("external-own-members", ExternalOwnMembers), ("nested-generic-shape", NestedGenericShape), ("constraint-roundtrip", ConstraintRoundTrip), ("malformed-constraints", MalformedConstraints), ("manager-linked-audit", ManagerLinkedAudit), ("auditor-directory-boundary", AuditorDirectoryBoundary) })
             {
                 try { test.Run(); Console.WriteLine("GameCompat activation " + test.Name + ": PASS"); }
                 catch (Exception exception)
@@ -151,7 +151,8 @@ namespace TopiaForge.ModManager.Tests
 
         private static void ManagerLinkedAudit()
         {
-            var root = Path.Combine(Path.GetTempPath(), "TopiaForgeManagerAudit-" + Guid.NewGuid().ToString("N"));
+            var owned = Directory.CreateTempSubdirectory("TopiaForgeManagerAudit-");
+            var root = owned.FullName;
             var manager = Path.Combine(root, "src", "TopiaForge.ModManager");
             var shared = Path.Combine(root, "mods", "Shared");
             Directory.CreateDirectory(manager); Directory.CreateDirectory(shared); Directory.CreateDirectory(Path.Combine(root, "bindings"));
@@ -168,7 +169,65 @@ namespace TopiaForge.ModManager.Tests
                     && findings.Any(f => f.Kind == "undeclared" && f.Detail.Contains("SharedOnly", StringComparison.Ordinal)),
                     "Manager native sources and their actual linked helper must both be audited.");
             }
-            finally { Directory.Delete(root, recursive: true); }
+            finally { owned.Delete(recursive: true); }
+        }
+        private static void AuditorDirectoryBoundary()
+        {
+            var failures = new List<Exception>();
+            foreach (var location in new[] { "manager", "src", "nested", "linked", "glob" })
+            {
+                try { AssertDirectoryLinkRejected(location); }
+                catch (Exception error) { failures.Add(new InvalidOperationException(location + ": " + error.Message, error)); }
+            }
+            if (failures.Count != 0) throw new AggregateException("The source audit crossed its repository boundary.", failures);
+        }
+
+        private static void AssertDirectoryLinkRejected(string location)
+        {
+            var owned = Directory.CreateTempSubdirectory("TopiaForgeAuditBoundary-");
+            FileSystemInfo? link = null;
+            try
+            {
+                var root = owned.CreateSubdirectory("repository").FullName;
+                var outside = owned.CreateSubdirectory("outside").FullName;
+                var bindings = Directory.CreateDirectory(Path.Combine(root, "bindings"));
+                const string id = "io.github.furroxide.topiaforge.modmanager";
+                File.WriteAllText(Path.Combine(bindings.FullName, id + ".gamebindings.json"),
+                    new BindingManifest { ModId = id }.ToCanonicalJson());
+                var manager = Path.Combine(root, "src", "TopiaForge.ModManager");
+                var escaped = location == "src" ? Directory.CreateDirectory(Path.Combine(outside, "TopiaForge.ModManager")).FullName : outside;
+                File.WriteAllText(Path.Combine(escaped, "Escaped.cs"), "class Escaped { object Bind() => System.Type.GetType(\"OutsideRepository, GameCode\"); }");
+                string linkPath;
+                if (location == "manager")
+                {
+                    Directory.CreateDirectory(Path.Combine(root, "src"));
+                    linkPath = manager;
+                }
+                else if (location == "src") linkPath = Path.Combine(root, "src");
+                else
+                {
+                    Directory.CreateDirectory(manager);
+                    linkPath = location == "nested" ? Path.Combine(manager, "Nested") : Path.Combine(root, "Shared");
+                    if (location != "nested")
+                    {
+                        var include = location == "glob" ? "../../Shared/**/*.cs" : "../../Shared/Escaped.cs";
+                        File.WriteAllText(Path.Combine(manager, "TopiaForge.ModManager.csproj"),
+                            "<Project Sdk=\"Microsoft.NET.Sdk\"><ItemGroup><Compile Include=\"" + include + "\" /></ItemGroup></Project>");
+                    }
+                }
+                link = Directory.CreateSymbolicLink(linkPath, outside);
+                var rejected = false;
+                try { GameReflectionAuditor.Audit(root); }
+                catch (InvalidDataException error)
+                { rejected = error.Message.Contains("link", StringComparison.OrdinalIgnoreCase); }
+                Assert(rejected, "The audit must reject a " + location + " directory link before reading outside source.");
+            }
+            finally
+            {
+                // Remove only the owned link before recursive fixture cleanup; never recurse through its target.
+                link?.Delete();
+                owned.Delete(recursive: true);
+            }
         }
     }
 }
