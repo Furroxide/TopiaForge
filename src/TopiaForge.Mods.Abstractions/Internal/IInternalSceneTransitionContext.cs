@@ -61,6 +61,7 @@ namespace TopiaForge.Mods.Internal
     {
         Task<OperationResult<SceneSnapshot>> Completion { get; }
         Task NativeDrained { get; }
+        Task<OperationResult<SceneSnapshot>> NativeCompletion { get; }
         NativeSceneDispatchStatus DispatchStatus { get; }
     }
 

@@ -6,6 +6,14 @@ using TopiaForge.Mods;
 
 namespace TopiaForge.ModManager
 {
+    internal sealed class ScopedContextConstructionException : AggregateException
+    {
+        internal ScopedContextConstructionException(Exception constructionFailure, Exception cleanupFailure)
+            : base("Scoped context construction and cleanup failed.", constructionFailure, cleanupFailure)
+        { CleanupFailure = cleanupFailure; }
+        internal Exception CleanupFailure { get; }
+    }
+
     internal sealed partial class ModContext
     {
         private bool scopeCreationStopped;
@@ -40,7 +48,7 @@ namespace TopiaForge.ModManager
             {
                 try { await scope.CleanupFailedConstructionAsync().ConfigureAwait(false); }
                 catch (Exception cleanupFailure)
-                { throw new AggregateException("Scoped context construction and cleanup failed.", constructionFailure, cleanupFailure); }
+                { throw new ScopedContextConstructionException(constructionFailure, cleanupFailure); }
                 throw;
             }
         }
@@ -80,6 +88,7 @@ namespace TopiaForge.ModManager
             Ui = gameplay.Ui;
             Ui.ApplyAccessibility(parent.Ui.Accessibility);
             SceneTransitions = gameplay.SceneTransitions;
+            WorldRuntime = gameplay.WorldRuntime;
             unityInterop = allowUnityInterop ? gameplay.UnityInterop : null;
             Localization = new OwnerLocalizationService(Lifetime, (OwnerLocalizationService)parent.Localization);
             Commands = new OwnerCommandService(Identity.Id, Lifetime, Logger, serviceRegistry);

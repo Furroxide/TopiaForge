@@ -7,9 +7,10 @@ using TopiaForge.Mods;
 namespace TopiaForge.ModManager
 {
     /// <summary>Runtime-owned, thread-safe resource lifetime for a single mod instance.</summary>
-    internal sealed class OwnerModLifetime : IModLifetime
+    internal sealed class OwnerModLifetime : IModLifetime, IInternalNativeWorkLifetime
     {
         private readonly object sync = new object();
+        private readonly AssetNativeWorkTracker nativeWork = new AssetNativeWorkTracker();
         private readonly CancellationTokenSource stoppingSource = new CancellationTokenSource();
         private readonly CancellationToken stoppingToken;
         private readonly List<TrackedResource> resources = new List<TrackedResource>();
@@ -30,6 +31,18 @@ namespace TopiaForge.ModManager
         public CancellationToken StoppingToken => stoppingToken;
 
         public bool IsStopping => Volatile.Read(ref stopping);
+
+        public AssetNativeWorkTicket RegisterNativeWork(string description)
+        {
+            lock (sync)
+            {
+                if (stopping || disposed) throw new ObjectDisposedException(nameof(OwnerModLifetime));
+                return nativeWork.Begin(description);
+            }
+        }
+
+        public Task DrainNativeWorkAsync() => nativeWork.DrainAsync();
+        internal bool HasPendingNativeWork => nativeWork.HasPendingWork;
 
         public IDisposable Track(IDisposable resource)
         {
@@ -82,6 +95,7 @@ namespace TopiaForge.ModManager
                 else
                 {
                     stopping = true;
+                    nativeWork.Stop();
                     cancellingThread = Thread.CurrentThread.ManagedThreadId;
                 }
             }
@@ -110,6 +124,12 @@ namespace TopiaForge.ModManager
                 // the remaining callbacks. The outer lifecycle operation retains disposal ownership.
                 if (!cancellationComplete) return;
                 if (disposed) return;
+                if (nativeWork.HasPendingWork)
+                    throw PendingNativeDisposal(failures);
+                var nativeDrain = nativeWork.DrainAsync();
+                if (!nativeDrain.IsCompleted) throw PendingNativeDisposal(failures);
+                try { nativeDrain.GetAwaiter().GetResult(); }
+                catch (Exception error) { AddFailure(ref failures, error); }
                 disposed = true;
                 snapshot = resources.ToArray();
                 resources.Clear();
@@ -132,6 +152,14 @@ namespace TopiaForge.ModManager
             {
                 throw new AggregateException("One or more mod lifetime resources failed to stop.", failures);
             }
+        }
+
+        private static Exception PendingNativeDisposal(List<Exception>? failures)
+        {
+            var pending = new InvalidOperationException("Native work must drain asynchronously before lifetime resources are disposed.");
+            if (failures == null) return pending;
+            failures.Add(pending);
+            return new AggregateException("Lifetime cancellation failed while native work remained pending.", failures);
         }
 
         private void Remove(TrackedResource resource)

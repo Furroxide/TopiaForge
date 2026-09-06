@@ -1,16 +1,19 @@
 using System;
 using System.Threading;
+using System.Threading.Tasks;
 using TopiaForge.Mods;
 
 namespace TopiaForge.ModManager
 {
     /// <summary>Author-facing lifetime: disposal requests a session stop, never destroys a scope.</summary>
-    internal sealed class ScopedModLifetime : IModLifetime
+    internal sealed class ScopedModLifetime : IModLifetime, IInternalNativeWorkLifetime
     {
         private readonly ModContextScope scope;
         internal ScopedModLifetime(ModContextScope scope) { this.scope = scope; }
         public CancellationToken StoppingToken => scope.OwnerLifetime.StoppingToken;
         public bool IsStopping => scope.OwnerLifetime.IsStopping;
+        public AssetNativeWorkTicket RegisterNativeWork(string description) => scope.OwnerLifetime.RegisterNativeWork(description);
+        public Task DrainNativeWorkAsync() => scope.OwnerLifetime.DrainNativeWorkAsync();
         public IDisposable Track(IDisposable resource)
         {
             if (ReferenceEquals(resource, this)) throw new ArgumentException("A lifetime cannot track itself.", nameof(resource));

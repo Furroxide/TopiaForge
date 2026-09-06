@@ -13,7 +13,7 @@ using TopiaForge.Mods.Interop.Unity;
 
 namespace TopiaForge.ModManager
 {
-    internal sealed partial class ModContext : IModContext, IUnityInteropContext, IInternalSceneTransitionContext
+    internal sealed partial class ModContext : IModContext, IUnityInteropContext, IInternalSceneTransitionContext, IInternalWorldRuntimeContext
     {
         private readonly OwnerModLifetime ownerLifetime;
         private readonly ModEvents modEvents;
@@ -94,6 +94,7 @@ namespace TopiaForge.ModManager
                 Audio = gameplay.Audio;
                 Ui = gameplay.Ui;
                 SceneTransitions = gameplay.SceneTransitions;
+                WorldRuntime = gameplay.WorldRuntime;
                 unityInterop = allowUnityInterop ? gameplay.UnityInterop : null;
 
                 Localization = new OwnerLocalizationService(Lifetime);
@@ -157,6 +158,7 @@ namespace TopiaForge.ModManager
         public IDiagnosticsService Diagnostics { get; }
         public IExtensionService Extensions { get; }
         public IInternalSceneTransitionService SceneTransitions { get; }
+        public IInternalWorldRuntimeService WorldRuntime { get; }
 
         IUnityInteropService IUnityInteropContext.UnityInterop => unityInterop
             ?? throw new InvalidOperationException(

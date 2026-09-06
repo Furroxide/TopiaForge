@@ -1,6 +1,6 @@
 # Gamemode contract redesign status
 
-Updated: 2026-09-05. This is an evidence ledger, not a completion declaration.
+Updated: 2026-09-06. This is an evidence ledger, not a completion declaration.
 The [canonical brief](../GamemodeContractRedesign.md) is normative. The
 [architecture report](../../GamemodeArchitectureReport.md) preserves the original investigation.
 
@@ -14,7 +14,8 @@ The [canonical brief](../GamemodeContractRedesign.md) is normative. The
 | `f2ec48b14a86adc93c8079fd1216e91a2d6a2764` | Slice 1 squash merge of PR #106 into `dev` | Canonical documents integrated; no production or live acceptance claim |
 | `c61d5fcf821ef726c2aea3ba35c092e314e1f6c4` | Slice 2 squash merge of PR #107, reviewed head `055a7d4` | Unused V6 contract integrated; alias and production manifests/templates remain V5 |
 | `41f14d078dca1830749f70cac9f72083c4fedd8c` | Slice 3 merged through PR #108; corrected pure resolver, immutable plans and inactive transport models | Full CI passed at reviewed head `63540e2`; no production caller or wire activation |
-| `feat/gamemode-runtime-foundations`, based on `41f14d0` | Slice 4, PR #109; lifecycle, scopes, native admission and shutdown foundations | Review head `930d0a2` passed full CI; PR remains unmerged pending CodeQL verification of atomic test-root allocation |
+| `9dc5613bc0cc8f2fa9b3c50b02357116f2540514` | Slice 4 squash merge of PR #109, reviewed head `4b12a1edcc56c033f1616931f40deaba44ee35c6` | Full CI and CodeQL passed; merged normally on 6 September with review threads resolved |
+| `feat/gamemode-bindings-world-adapters`, based on `9dc5613` | Slice 5 active working tree | Binding, discovery, world adapters and native cleanup implemented locally with focused evidence; final local checks passed; CI and integration pending |
 
 On 2026-09-05, PRs #102–105 were converted to draft for the approved re-cut.
 Their branch tips and existing review history were preserved. Both external
@@ -343,8 +344,8 @@ remain scoped evidence; C# tests were rerun after the final corrections. Logs us
 `tf-slice4-followup-*` in the temporary directory. The committed follow-up
 `930d0a2a093f706e14152b035b6eb975051aeaf2` passed full exact-head CI in run
 `33988344239`, including publication, Flutter and Windows data tests. No game or
-native-timing result is implied. PR #109 remains unmerged: the repository
-code-scanning ruleset independently blocks it on test-path alerts 428, 429 and 430.
+native-timing result is implied. At that head, PR #109 remained unmerged: the repository
+code-scanning ruleset independently blocked it on test-path alerts 428, 429 and 430.
 Passing the five named required checks alone does not satisfy every merge rule.
 
 The CodeQL annotations concern test fixture paths:
@@ -361,7 +362,7 @@ and directory creation with the framework atomic temporary-directory API. This
 keeps per-run ownership and final cleanup while removing the select/create race.
 No CodeQL alert has been dismissed or suppressed and no repository rule changed.
 An earlier combined dismissal/merge request was rejected by automatic approval
-review before execution; the source repair requires its own rebuilt harness and
+review before execution; the source repair then received its own rebuilt harness and
 exact-head CodeQL results before merge.
 
 The atomic-root follow-up passes fresh Release with zero warnings/errors, all
@@ -374,6 +375,161 @@ reference generation, then stopped in bundled dartdoc 9.0.4 while documenting
 This is an observed local tool failure, not a publication pass or a permanent
 exemption; exact-head Linux publication remains required. The Flutter SDK was
 not modified. Logs are `tf-slice4-security-*` in the temporary directory.
+
+## Slice 4 merged; slice 5 underway
+
+PR #109 merged normally on 2026-09-06 at 00:04:01 UTC as
+`9dc5613bc0cc8f2fa9b3c50b02357116f2540514`. Final head
+`4b12a1edcc56c033f1616931f40deaba44ee35c6` passed full CI run `33999792058`
+(including Linux documentation publication) and CodeQL run `33999790502`.
+All review threads were resolved and merge eligibility was clean. GitHub reports
+alerts 428, 429 and 430 as fixed by source changes. No dismissal, suppression,
+admin merge or repository-rule change was used.
+
+Slice 5 was cut from that merge only afterward. Its working tree introduces
+verified package binding and internal native-world services while keeping the V5
+alias, manifests and templates in place. Focused regressions have demonstrated
+readiness waits, partial bundle cleanup, late cancellation, foreign content
+rejection and cleanup aggregation. These are working-tree observations; full
+Release, seven-harness and exact-head CI evidence is not yet established for slice 5.
+No declaration activation or game acceptance is implied.
+
+The local Dartdoc failure is now independently isolated: Dartdoc 9.0.4 passes a
+pure-Dart LF comment containing `@docImport`, but its byte-equivalent CRLF input
+fails in `_stripDocImports`. A tiny LF Flutter project reproduces the exact
+9202/9089 failure through the unchanged SDK's `animation.dart` comments. This
+matches [upstream issue 4180](https://github.com/dart-lang/dartdoc/issues/4180).
+Reproduction files and logs are retained under the ignored
+`.dart_tool/dartdoc-repro-20260906/`; no SDK/cache modification or tool upgrade was
+used. This local limit does not replace exact-head publication CI, which passed
+for the merged foundation. The Windows release builder does not run this website
+publication command.
+
+## Slice 5 regression evidence in progress
+
+Evidence below describes the uncommitted working tree on 2026-09-06, based on
+`9dc5613bc0cc8f2fa9b3c50b02357116f2540514`. The slice is unmerged and remains in
+progress. Its production path starts with an explicit immutable effective-profile
+selection before `ModRuntime.Load`; unconfigured V5 callers retain their existing
+entry path. Synthetic packages load from real receipt-verified DLLs in separate
+child processes, exercising CLR location collisions and forwarding without manual
+factory registrations. First-party declarations and templates remain V5; production
+launch-surface activation is still assigned to slices 6 and 7.
+
+The provider-allocation review exposed a larger required repair: cancelling a
+public asset or core-scene task did not establish that the engine had completed
+its work. Synchronous failed-entry cleanup could also drop the only context that
+owned that pending work. Slice 5 therefore expanded beyond the initial provider
+helpers into native asset/core-scene ownership, child/owner lifetime drain, session
+cleanup and retained failed-entry cleanup. These changes are necessary for the
+provider ownership contract to hold through constructor/start failures and unload.
+They reuse the existing scene executor and compose its admission gates; they do
+not activate a second launch protocol. This scope expansion and its additional
+regressions must be included in the slice's review and final verification.
+
+Focused regression-first corrections include:
+
+| Boundary | Demonstrated defect and repaired behavior | Evidence state |
+| --- | --- | --- |
+| Verified entry assembly | An omitted optional entry hash allowed receipt verification before a file-sharing lease; mutation in that gap was accepted. Verify the inventory under the lease before loading the entry or declared implementation. | `entry-race` RED then GREEN; exact-head CI pending |
+| Longest owner | A shorter package's valid declaration could publish binding evidence under a longer selected owner's namespace. Reuse the resolver ownership algorithm for bindings, failures and discovery. | Isolated `ownership` case passes; failed longer owner stays authoritative |
+| Discovery lifetime | Package unload could run while a discovery callback retained its child scope. Register work before construction, revoke publication before shutdown, and await callback plus scope cleanup before package teardown. | `discovery-drain`, timeout and cancel-with-throwing-cleanup RED then GREEN; final retained-barrier regressions also GREEN |
+| Discovery cancellation and cleanup | Worker cancellation invoked package callbacks off the host thread, and a successful work barrier hid disposer faults from shutdown. Dispatch caller/deadline cancellation on the host, retain callback/cleanup failures, and distinguish actual cleanup faults from handled family failures. | `discover-worker-cancel`, `discover-worker-cancel-callback` and strengthened `discover-cancel-cleanup` RED then GREEN |
+| Failed discovery scope construction | Child construction could clean up before returning a context, leaving discovery without a scope reference from which to report cleanup failure. Carry the actual cleanup failure through the construction exception into the retained discovery barrier; ordinary construction failure remains availability evidence. | `discover-scope-construction` and `discover-scope-construction-cleanup` GREEN after the cleanup-propagation RED |
+| World readiness | Scene arrival alone, missing/duplicate markers, foreign roots and unavailable players could not establish readiness. Capture actual scene identity and validate content/player/spawn before return. | Focused readiness suite GREEN; native/game evidence pending |
+| Additive admission | Additive preparation skipped Busy and multiplayer authority checks and released ownership before readiness. Acquire through the same executor and retain admission through readiness or cleanup. | `TestAdditiveAdmission` RED then GREEN |
+| Partial allocation | Owner cancellation during native preparation allocation and throwing native drain could skip or misclassify cleanup. Retain ownership immediately and attempt every disposer. | Allocation/drain fault cases RED then GREEN |
+| Late native failure | An early cancelled caller result hid later managed/native/adapter faults. Keep immutable terminal native evidence separate from the caller acknowledgement and carry late faults into cleanup. | Cancellation, combined faults, provisional arrival and adapter-throw cases RED then GREEN |
+| Generated geometry | The spawn platform extended above the exact resolved spawn. Its surface now meets that spawn without adding an arbitrary player offset. | Pure geometry RED then GREEN; collider clearance pending live acceptance |
+| World owner stop | A late preparation returned after owner disposal was reported External. Preserve Cancelled while reclaiming the late owned result. | Provider loader RED then GREEN |
+| Built-in ownership | Early disposal/start failure leaked tracking leases, owner cancellation missed pending native work, and stop during registration could leak the returned lease. Retain/release the lease through reentrant disposal and keep owner/caller cancellation linked for the actual work. | Ten built-in provider tests GREEN after focused ownership/cancellation REDs |
+| Native asset ownership | Public cancellation could release a lifetime or backing bundle before a bundle/prefab request and its late cleanup completed. Enrol work before native allocation, retain backing resources, and distinguish a delivered expected failure from a later failure hidden by cancellation. | Thirteen fake-engine asset cases GREEN, including rejected handoff versus throwing late cleanup |
+| Core-scene ownership | Core scene calls dispatched without lifetime enrollment, allowing a caller cancellation to hide late native failure from package/session cleanup. Enrol before the existing executor dispatch and observe native drain and terminal native evidence. | Five core-scene cases GREEN after missing-enrollment RED; existing scene-arrival behavior retained |
+| Child/session drain | Synchronous disposal or failed scope construction could release parent ownership while native work continued. Close admission before cancellation, await native work before disposing controllers/worlds/scopes, retain Busy, and attempt every cleanup action. | Native lifetime/session/construction REDs then lifecycle suite GREEN; normal and throwing cleanup covered |
+| Terminal diagnostics | Flattening a wrapped failure to its base message discarded independently recorded late-native cleanup failures. Preserve independent nested messages in the bounded terminal outcome and retain full diagnostic exceptions. | Combined late-native and ordinary cleanup regression GREEN; exactly one terminal outcome asserted |
+| Failed entry cleanup | An `OnLoad` failure could call `OnUnload` and drop its context while assets or scene work remained pending. Retain a cleanup transaction before cancellation callbacks, drain native work before disposal, and await the transaction during shutdown. | `native-failed-owner` and `native-failed-scene` RED then GREEN; `native-owner-drain` GREEN |
+| Composed cleanup admission | Session admission could overwrite the independent failed-package cleanup gate. Keep runtime cleanup blocking direct and lifecycle scene reservations and launch admission until the retained work retires. | `native-gate` RED then GREEN |
+
+Focused evidence is deliberately separate from final whole-slice certification:
+
+| Invocation or scope | Observed result and retained evidence |
+| --- | --- |
+| Manager harness `--world-providers` | Discovery identity, resource scope, player placement, generated geometry and provider loader suites pass. Logs: `.dart_tool/slice5-worlds-red.log`, `slice5-worlds-owner-red.log`, `slice5-worlds-green.log`. |
+| Built-in provider ownership/cancellation | Ten tests pass. Logs: `.dart_tool/slice5-builtin-ownership-red.log`, `slice5-builtin-cancellation-red.log`, `slice5-builtin-ownership-green.log`. |
+| `dotnet run --project tests/TopiaForge.ModManager.Tests/TopiaForge.ModManager.Tests.csproj -c Release -- --session-lifecycle` | Session lifecycle/results/orchestrator, built-in providers, readiness, asset drain and native-work lifecycle suites pass. The native-work REDs and final `slice5-native-work-lifecycle-green.log` are retained under `.dart_tool/`. Session-bound `StopAsync` acknowledges acceptance; the owner-stop test waits for complete cleanup. |
+| Native asset/core-scene adapter runner | Thirteen asset invocations and five core-scene cases pass. Temporary-directory logs include `tf-slice5-asset-native-red.log`, `tf-slice5-asset-owner-handoff-red.log`, `tf-slice5-core-scene-native-red.log` and `tf-slice5-asset-and-scene-native-green.log`. |
+| `dotnet run --project tests/TopiaForge.ModRuntime.Tests/TopiaForge.ModRuntime.Tests.csproj -c Release` | The final no-argument runtime harness passes, including all 40 isolated binding/runtime integration cases: the previous 36 plus two worker-cancellation and two scope-construction cases. This is the isolated-case count, not the total assertions or all harness tests. Temporary-directory log: `tf-slice5-discovery-final-runtime.log`. |
+| Production project Release builds | Manager and Worlds each compiled with zero warnings/errors during focused work. Logs include temporary `tf-slice5-native-final-manager-build.log` and `.dart_tool/slice5-worlds-unity-build.log`. The final complete solution rebuild below also passed after every correction. |
+
+Final discovery review repaired the lost shutdown-cleanup evidence and off-host
+cancellation defects, then found and repaired the same cleanup-propagation gap
+when child scope construction failed before returning a context. Caller and
+deadline cancellation now run through the host; actual callback/cleanup failures
+reach the retained discovery barrier and runtime shutdown. Ordinary handled family
+or construction failures remain availability outcomes and do not by themselves
+poison otherwise clean teardown. Temporary-directory RED/GREEN pairs use
+`tf-slice5-discover-cancel-cleanup`, `tf-slice5-discover-worker-cancel` and
+`tf-slice5-discover-worker-cancel-callback` with `-red.log`/`-green.log` suffixes.
+The scope-cleanup RED is `tf-slice5-discovery-scope-cleanup-red.log`; the complete
+40-case runtime GREEN is `tf-slice5-discovery-final-runtime.log`. The final focused
+build reports zero warnings/errors in `tf-slice5-discovery-scope-build.log`.
+
+Review also found that the full solution built the two synthetic package projects
+as Debug while `CopySyntheticMod` consumed earlier Release outputs. Both projects
+have been added to the solution. The final complete Release build now builds both
+synthetic DLLs in Release and passes with zero warnings/errors. The rebuilt
+`verify-csharp-release-surface.sh` then passes all eleven SDK packages and all seven
+harnesses, including the 40 isolated runtime cases and embedded API baselines.
+Solution formatting verification passes. Temporary-directory logs are
+`tf-slice5-full-release.log`, `tf-slice5-seven-harnesses.log` and
+`tf-slice5-format-verify.log`. Exact-head CI remains pending. The canonical brief
+and slice 5/6 prompts include the cleanup/admission and discovery ownership rules.
+
+The pinned Dart conformance entry point passes 579 tests (including the 353 shared
+fixture corpus), and domain/data/CLI fatal-info analysis passes. Formatting checked
+354 files with zero changes; all 410 tracked non-generated Dart files meet the
+500-line cap. README counts, residue, trademark, asset-licence coverage and 125
+Markdown-link checks passed during this working-tree review. Final repository
+and fixture audits and publication-input checks also pass after the corrections
+(25 prepared pages and five snippets from three compiled template sources).
+Complete publication and exact-head CI remain pending; local UI Dartdoc has the
+separately reproduced toolchain limitation below. These checks do not certify
+unrun Flutter, Windows application or game acceptance for this slice. Open Sandbox geometry,
+player persistence/readiness, authored markers, native timing and teardown under
+in-game fault injection all remain unverified in the installed game.
+
+Activation handoff review also identified a compatibility-audit gap: the Manager
+native world adapter is outside the current mod-folder reflection source scan.
+The checked-in current-game metadata contains its referenced type names, but some
+existing loader bindings omit exact parameter or awaitable return contracts and
+one required no-argument constructor is undeclared. Slice 6 must extend the audit
+and tighten those bindings before activating these adapters. The green offline
+GameCompat count above does not certify these new native reflection paths.
+
+## Explicit release-preparation re-cut
+
+The user selected unsigned Windows x64 `0.1.0-rc.1`. The eight redesign slices
+remain required. An additional [release-preparation PR](prompts/07a-release-preparation.md)
+follows slice 7 and precedes slice 8's final acceptance candidate. Its separate
+scope repairs the candidate qualification cycle and unsigned packaging defects;
+it does not weaken any release gate or treat automated tests as game approval.
+
+Read-only review found that `release-admin` requires tracked P0-GAME-01 approval
+at the candidate SHA before building the bytes that supply that approval. The
+repair separates eligibility for a private build from qualification of exact tested
+bytes through detached, reviewed evidence. Four non-game blocking approvals remain
+prerequisites; all five blocking gates remain required for publication. Tracked
+approval after testing changes the SHA and cannot certify the original candidate.
+The release prompt records the bounded contracts and bypass/tamper regression matrix.
+
+The user reports that approval/rotation evidence and isolated QA resources exist;
+their concrete locations and host/session identity remain pending. No approval,
+evidence reference, credential rotation or game result has been inferred. Unity Hub
+3.21.0 is installed, and installed editors include 2022.3.22f1, 2022.3.50f1,
+6000.0.31f1, 6000.5.1f1 and 6000.7.0a1. The required authoring editor 6000.0.23f1
+is absent at its configured path; this corrects the earlier overly broad observation
+that no editor directory existed. No editor was installed. Local Node 24.19.0 is
+adequate development evidence but is distinct from the release pin 24.18.0.
 
 ## Live acceptance isolation prerequisite
 
@@ -448,11 +604,42 @@ The old four-PR stack is source material; it does not satisfy these eight delive
 | 1 | Review/brief/status/prompts and premature-claim corrections | Merged in PR #106 (`f2ec48b`) | Not applicable | Documentation checks and required CI passed at `16c75ba`; baseline Release/seven-harness checks passed | Not applicable |
 | 2 | Unused V6 contract/readers/validators/conformance; alias stays V5 | Merged in PR #107 (`c61d5fc`) | Intentionally unused | 149 C# fixtures; 479 domain, 358 data, 227 CLI tests; seven Release harnesses and required CI/publication passed at `055a7d4` | Not required for pure contract |
 | 3 | Pure resolution and immutable transport models | Merged in PR #108 (`41f14d0`) | Intentionally no production switch | 353 shared fixtures; 791 domain, 358 data, 227 CLI tests; full Release/seven harnesses and required CI/publication passed at `63540e2` | Not required for pure models |
-| 4 | Scoped ownership, lifecycle, shared transition foundations | Implemented in PR #109; unmerged pending test-root follow-up checks | Existing V5 scene routes use the shared executor; V6 orchestration activation remains pending | Review head `930d0a2` passed full CI (`33988344239`) and local Release/seven harnesses, formatting, analyzers and audits; atomic test-root local checks passed; CodeQL/full CI pending | Native behavior pending |
-| 5 | Verified factory bindings, providers/discovery, readiness adapters | Pending | Pending | Synthetic package and production-adapter coverage pending | World/readiness checks pending |
+| 4 | Scoped ownership, lifecycle, shared transition foundations | Merged in PR #109 (`9dc5613`) | Existing V5 scene routes use the shared executor; V6 orchestration activation remains pending | Final head `4b12a1e` passed full CI (`33999792058`), CodeQL (`33999790502`), local Release/seven harnesses and scoped audits | Native behavior pending |
+| 5 | Verified bindings, providers/discovery/readiness and native cleanup follow-up | PR #110 open on `dev` (`9dc5613`); initial head `dde58f2` passed CI; review correction awaiting its own CI | Explicit-selection production binder/discovery/adapters exercised by synthetic packages; default V5 consumers unchanged; activation remains slice 6 | Initial head CI `34004356327` and CodeQL `34004355404` passed. Review correction passed fresh Release, seven harnesses, formatting, Dart analysis and audits; new-head CI pending | World/readiness/native-timing checks pending |
 | 6 | Activate runtime and atomically flip manifests/templates | Original-stack migration is partial source material only | Pending | Rebuilt API baselines, generated package and consumer coverage pending | First-party gameplay pending |
 | 7 | Launcher/CLI/overlay preflight, wire V4, observations, durable state | Pending | Pending | Cross-language wire/profile/process/progress integration pending | Cold launch and multi-surface selection pending |
+| 7a | Release prerequisites, exact-byte qualification and unsigned Windows repair | Explicit additional PR planned | Pending | Qualification/bypass/tamper and packaging regressions pending | Reviewed evidence and isolated QA locations pending |
 | 8 | Retire V5, migration, publication, final acceptance | Original-stack migration/docs need repairs | Pending | Complete scoped matrix, audits, publication and CI pending | Full isolated-profile acceptance pending |
+
+## Slice 5 initial CI and review correction (6 September 2026)
+
+PR #110 initial head `dde58f290cc6470b38fefd77041186ddabd6f9c8` passed full
+[CI run 34004356327](https://github.com/Furroxide/TopiaForge/actions/runs/34004356327)
+and [CodeQL run 34004355404](https://github.com/Furroxide/TopiaForge/actions/runs/34004355404).
+This includes Linux documentation publication, Windows data tests, Flutter checks and
+all seven generated templates. It does not establish game readiness or closure of
+pre-existing workflow alerts.
+
+Review found world-provider and discovery errors included CLR stack formatting. A
+regression first failed, then passed after extracting ordered, deduplicated messages
+from every nested primary and cleanup cause. Retained logs are
+`%TEMP%/tf-pr110-world-error-messages-red.log` and `...-green.log`. The follow-up source
+passed full Release (zero warnings/errors), solution formatting, all 11 SDK packages
+and seven rebuilt C# harnesses (`tf-pr110-review-release.log`,
+`tf-pr110-review-format-verify.log`, `tf-pr110-review-seven-harnesses.log`). Pinned Dart
+3.12.2 toolchain analysis of domain/data/CLI, formatting (294 files, zero changes), tracked
+line limits, README/residue/assets/trademark/353-case fixture audits, 125-file Markdown
+links and publication preparation passed. These local results require a fresh exact-head
+CI run before merge. Strict generated Open Sandbox decoration remains intentional:
+incomplete required content fails the declared provider; legacy V5 behavior remains
+separate until activation. Geometry and engine readiness remain unverified in-game.
+
+Read-only release review also confirmed workflow alerts #409 and #417 are open on
+`dev` `9dc5613`; #416 is fixed on dev but remains open on old main. No alert was
+dismissed. The slice 7a prompt records source-repair/reassessment requirements and the
+protected release-branch promotion route. It requires final acceptance to bind the
+resulting main merge SHA. The slice 7 prompt now records exact installed-profile,
+selection, process-ownership, guarded-staging and acknowledgement integration seams.
 
 ## Updating and closing this ledger
 

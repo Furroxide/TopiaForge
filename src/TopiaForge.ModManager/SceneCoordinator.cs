@@ -15,6 +15,7 @@ namespace TopiaForge.ModManager
         private ISceneTransitionAuthorityPolicy authorityPolicy;
         private readonly HashSet<string> revokedOwnership = new HashSet<string>(StringComparer.Ordinal);
         private Func<bool> sessionAdmissionBusy = () => false;
+        private Func<bool> runtimeCleanupAdmissionBusy = () => false;
         internal readonly IHostDispatcher? Dispatcher;
         private NativeTransitionReservation? active;
 
@@ -66,6 +67,8 @@ namespace TopiaForge.ModManager
             foreach (var prefix in revokedOwnership)
                 if (owner.OwnershipId == prefix || owner.OwnershipId.StartsWith(prefix + ":", StringComparison.Ordinal))
                     return OperationResult<INativeTransitionReservation>.Failure(ModErrorCode.InvalidState, "The native transition owner was revoked.");
+            if (runtimeCleanupAdmissionBusy())
+                return OperationResult<INativeTransitionReservation>.Failure(ModErrorCode.Conflict, "Package native cleanup is Busy.");
             if (!lifecycle && sessionAdmissionBusy())
                 return OperationResult<INativeTransitionReservation>.Failure(ModErrorCode.Conflict, "The session lifecycle is Busy.");
             return null;
@@ -75,6 +78,12 @@ namespace TopiaForge.ModManager
         {
             AssertCurrent();
             sessionAdmissionBusy = isBusy ?? throw new ArgumentNullException(nameof(isBusy));
+        }
+
+        internal void SetRuntimeCleanupAdmissionGate(Func<bool> isBusy)
+        {
+            AssertCurrent();
+            runtimeCleanupAdmissionBusy = isBusy ?? throw new ArgumentNullException(nameof(isBusy));
         }
 
         internal void UpdateLogSink(Action<string> sink) { AssertCurrent(); logInfo = sink; }
@@ -116,6 +125,15 @@ namespace TopiaForge.ModManager
             lock (gate) held = active;
             if (held != null && held.OwnsPackage(ownerModId))
                 held.RevokeOwner();
+        }
+
+        internal Task RevokeOwnerAndDrainAsync(string ownerModId)
+        {
+            AssertCurrent();
+            NativeTransitionReservation? held;
+            lock (gate) held = active;
+            return held != null && held.OwnsPackage(ownerModId)
+                ? held.RevokeOwnerAndDrainAsync() : Task.CompletedTask;
         }
 
         public void RevokeOwnership(string ownershipId)
