@@ -18,6 +18,12 @@ namespace TopiaForge.ModManager
         private readonly OwnerModLifetime ownerLifetime;
         private readonly ModEvents modEvents;
         private readonly IUnityInteropService? unityInterop;
+        private readonly string packagePath;
+        private readonly string dataPath;
+        private readonly IGameplayContextFactory? gameplayFactory;
+        private readonly ModServiceRegistry serviceRegistry;
+        private readonly string[] visibleDependencies;
+        private readonly bool allowUnityInterop;
 
         public ModContext(
             ModManifest manifest,
@@ -45,56 +51,67 @@ namespace TopiaForge.ModManager
             if (logger == null) throw new ArgumentNullException(nameof(logger));
             if (serviceRegistry == null) throw new ArgumentNullException(nameof(serviceRegistry));
 
+            this.packagePath = packagePath;
+            this.gameplayFactory = gameplayFactory;
+            this.serviceRegistry = serviceRegistry;
+            visibleDependencies = VisibleDependencyIds(manifest, availableManifests).ToArray();
+            allowUnityInterop = manifest.Capabilities.Any(capability => string.Equals(
+                capability, "unsafe-native", StringComparison.OrdinalIgnoreCase));
             Identity = new ModIdentity(manifest.Id, manifest.Name, SemanticVersion.Parse(manifest.Version));
             Runtime = runtimeInfo ?? new RuntimeInfo();
             Logger = logger;
             ownerLifetime = new OwnerModLifetime();
             Lifetime = ownerLifetime;
-            modEvents = new ModEvents(ownerLifetime, logger);
-            Events = modEvents;
+            try
+            {
+                modEvents = new ModEvents(ownerLifetime, logger);
+                Events = modEvents;
 
-            var configPath = managerPaths.GetConfigPath(manifest.Id);
-            var dataPath = managerPaths.GetDataPath(manifest.Id);
-            Directory.CreateDirectory(dataPath);
-            Files = new ModFiles(packagePath, dataPath, Lifetime);
-            Config = new ModConfigService(configPath, logger);
-            LocalStorage = new LocalModStorageService(dataPath);
+                var configPath = managerPaths.GetConfigPath(manifest.Id);
+                dataPath = managerPaths.GetDataPath(manifest.Id);
+                Directory.CreateDirectory(dataPath);
+                Files = new ModFiles(packagePath, dataPath, Lifetime);
+                Config = new ModConfigService(configPath, logger);
+                LocalStorage = new LocalModStorageService(dataPath);
 
-            var gameplay = gameplayFactory?.Create(
+                var gameplay = gameplayFactory?.Create(
+                        Identity.Id,
+                        packagePath,
+                        dataPath,
+                        Lifetime,
+                        Logger)
+                    ?? GameplayContextServices.Unavailable(Lifetime);
+                Input = gameplay.Input;
+                Time = gameplay.Time;
+                Scheduler = gameplay.Scheduler;
+                LocalPlayer = new LifetimePlayerService(gameplay.LocalPlayer, Lifetime);
+                Scenes = gameplay.Scenes;
+                Entities = new LifetimeEntityService(gameplay.Entities, Lifetime);
+                Physics = gameplay.Physics;
+                Interactions = gameplay.Interactions;
+                Items = gameplay.Items;
+                Assets = gameplay.Assets;
+                Audio = gameplay.Audio;
+                Ui = gameplay.Ui;
+                SceneTransitions = gameplay.SceneTransitions;
+                unityInterop = allowUnityInterop ? gameplay.UnityInterop : null;
+
+                Localization = new OwnerLocalizationService(Lifetime);
+                Commands = new OwnerCommandService(Identity.Id, Lifetime, Logger, serviceRegistry);
+                Diagnostics = new OwnerDiagnosticsService(Logger);
+                Extensions = new OwnerExtensionService(
                     Identity.Id,
-                    packagePath,
-                    dataPath,
+                    visibleDependencies,
                     Lifetime,
-                    Logger)
-                ?? GameplayContextServices.Unavailable(Lifetime);
-            Input = gameplay.Input;
-            Time = gameplay.Time;
-            Scheduler = gameplay.Scheduler;
-            LocalPlayer = gameplay.LocalPlayer;
-            Scenes = gameplay.Scenes;
-            Entities = gameplay.Entities;
-            Physics = gameplay.Physics;
-            Interactions = gameplay.Interactions;
-            Items = gameplay.Items;
-            Assets = gameplay.Assets;
-            Audio = gameplay.Audio;
-            Ui = gameplay.Ui;
-            SceneTransitions = gameplay.SceneTransitions;
-            unityInterop = manifest.Capabilities.Any(capability => string.Equals(
-                capability,
-                "unsafe-native",
-                StringComparison.OrdinalIgnoreCase))
-                ? gameplay.UnityInterop
-                : null;
-
-            Localization = new OwnerLocalizationService(Lifetime);
-            Commands = new OwnerCommandService(Identity.Id, Lifetime, Logger, serviceRegistry);
-            Diagnostics = new OwnerDiagnosticsService(Logger);
-            Extensions = new OwnerExtensionService(
-                Identity.Id,
-                VisibleDependencyIds(manifest, availableManifests),
-                Lifetime,
-                serviceRegistry);
+                    serviceRegistry);
+            }
+            catch (Exception constructionFailure)
+            {
+                try { ownerLifetime.Dispose(); }
+                catch (Exception cleanupFailure)
+                { throw new AggregateException("Context construction and cleanup failed.", constructionFailure, cleanupFailure); }
+                throw;
+            }
         }
 
         private static IEnumerable<string> VisibleDependencyIds(
@@ -151,6 +168,14 @@ namespace TopiaForge.ModManager
         internal void RaiseSceneLifecycle(SceneLifecycleEvent scene) => modEvents.RaiseSceneLifecycle(scene);
         internal void RaiseFixedUpdate(GameTimeSample sample) => modEvents.RaiseFixedUpdate(sample);
         internal void RaiseLateUpdate(GameTimeSample sample) => modEvents.RaiseLateUpdate(sample);
-        internal void DisposeLifetime() => ownerLifetime.Dispose();
+        internal void DisposeLifetime()
+        {
+            lock (scopeSync)
+            {
+                if (childScopes.Count != 0)
+                    throw new InvalidOperationException("Session scopes must drain before their package context is disposed.");
+            }
+            ownerLifetime.Dispose();
+        }
     }
 }

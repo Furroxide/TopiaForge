@@ -1,3 +1,4 @@
+using TopiaForge.Mods.Internal;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -165,10 +166,8 @@ namespace TopiaForge.Worlds
                     ? world.SceneName
                     : SceneManager.GetActiveScene().name;
 
-            IDisposable? launchClaim = null;
+            IInternalSceneTransitionLease? launchClaim = null;
 
-            var dispatchesSceneTransition = hasCustomContent || useOpenSandbox || hasCheckpoint || useSceneReplacement;
-            if (dispatchesSceneTransition)
             {
                 var claimResult = sceneTransitions.Acquire(
                     targetScene,
@@ -202,15 +201,16 @@ namespace TopiaForge.Worlds
                     var transition = transitionTracker.Begin(
                         Time.realtimeSinceStartup,
                         world.SceneName);
-                    if (levelBridge.LaunchLevel(
-                            checkpoint!,
-                            message => transitionTracker.ReportFailure(transition, message)))
+                    var dispatched = levelBridge.LaunchLevel(
+                        checkpoint!, message => transitionTracker.ReportFailure(transition, message), launchClaim?.Transitions);
+                    if (dispatched.Accepted)
                     {
                         result = StartSession(world, gamemode, "gameScene", world.SceneName, launchClaim);
                     }
                     else
                     {
                         transitionTracker.Cancel(transition);
+                        if (!dispatched.CanFallback) return WorldLoadResult.Fail(dispatched.ErrorMessage, dispatched.ErrorCode);
                         logger.Warn("Worlds could not launch " + world.Name + " via the game loader; falling back.");
                         result = LoadSceneReplacement(world, gamemode, launchClaim);
                     }
@@ -248,7 +248,7 @@ namespace TopiaForge.Worlds
         private WorldLoadResult LoadSceneReplacement(
             WorldDefinition world,
             GamemodeDefinition gamemode,
-            IDisposable? launchClaim)
+            IInternalSceneTransitionLease? launchClaim)
         {
             if (!world.SupportsSceneReplacement || string.IsNullOrWhiteSpace(world.SceneName))
             {
@@ -259,15 +259,26 @@ namespace TopiaForge.Worlds
             var transition = transitionTracker.Begin(
                 Time.realtimeSinceStartup,
                 world.SceneName);
-            if (!levelBridge.LoadSceneByName(
-                    world.SceneName,
-                    message => transitionTracker.ReportFailure(transition, message)))
+            var dispatched = levelBridge.LoadSceneByName(world.SceneName,
+                message => transitionTracker.ReportFailure(transition, message), launchClaim?.Transitions);
+            if (!dispatched.Accepted)
             {
+                if (!dispatched.CanFallback)
+                {
+                    transitionTracker.Cancel(transition);
+                    return WorldLoadResult.Fail(dispatched.ErrorMessage, dispatched.ErrorCode);
+                }
                 try
                 {
                     // Last-resort fallback. First-party scenes are often addressable/streamed and not in
                     // build settings, so this can throw; degrade gracefully instead of crashing the game.
-                    SceneManager.LoadScene(world.SceneName, LoadSceneMode.Single);
+                    var direct = levelBridge.LoadSceneDirect(world.SceneName,
+                        message => transitionTracker.ReportFailure(transition, message), launchClaim?.Transitions);
+                    if (!direct.Accepted)
+                    {
+                        transitionTracker.Cancel(transition);
+                        return WorldLoadResult.Fail(direct.ErrorMessage, direct.ErrorCode);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -285,7 +296,7 @@ namespace TopiaForge.Worlds
         private WorldLoadResult LoadOpenSandbox(
             WorldDefinition selectedWorld,
             GamemodeDefinition gamemode,
-            IDisposable? launchClaim)
+            IInternalSceneTransitionLease? launchClaim)
         {
             UnloadArena();
 
@@ -297,8 +308,9 @@ namespace TopiaForge.Worlds
             var transition = transitionTracker.Begin(
                 Time.realtimeSinceStartup,
                 GameLevelBridge.SandboxSceneName);
-            if (levelBridge.LaunchOpenSandbox(
-                    message => transitionTracker.ReportFailure(transition, message)))
+            var dispatched = levelBridge.LaunchOpenSandbox(
+                message => transitionTracker.ReportFailure(transition, message), launchClaim?.Transitions);
+            if (dispatched.Accepted)
             {
                 ArmSandboxArena();
                 return StartSession(
@@ -310,6 +322,7 @@ namespace TopiaForge.Worlds
             }
 
             transitionTracker.Cancel(transition);
+            if (!dispatched.CanFallback) return WorldLoadResult.Fail(dispatched.ErrorMessage, dispatched.ErrorCode);
 
             // The game's play scene could not be loaded (missing symbol). A current-scene arena remains useful in
             // an existing gameplay scene, but creating one over a menu/boot/loader would leave a bogus session and
@@ -370,18 +383,19 @@ namespace TopiaForge.Worlds
             WorldDefinition world,
             GamemodeDefinition gamemode,
             ICustomWorldContent content,
-            IDisposable? launchClaim)
+            IInternalSceneTransitionLease? launchClaim)
         {
             UnloadArena();
 
             var transition = transitionTracker.Begin(
                 Time.realtimeSinceStartup,
                 GameLevelBridge.SandboxSceneName);
-            if (!levelBridge.LaunchOpenSandbox(
-                    message => transitionTracker.ReportFailure(transition, message)))
+            var dispatched = levelBridge.LaunchOpenSandbox(
+                message => transitionTracker.ReportFailure(transition, message), launchClaim?.Transitions);
+            if (!dispatched.Accepted)
             {
                 transitionTracker.Cancel(transition);
-                return WorldLoadResult.Fail("The game's sandbox play scene could not be loaded for '" + world.Name + "'.");
+                return WorldLoadResult.Fail(dispatched.ErrorMessage, dispatched.ErrorCode);
             }
 
             pendingCustomWorld = new PendingCustomWorld(world, content);

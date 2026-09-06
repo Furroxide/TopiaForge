@@ -1,166 +1,171 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.ModManager
 {
-    /// <summary>Internal owner-aware arbitration retained as a loader safety net behind owner-bound scene facades.</summary>
-    internal sealed class SceneCoordinator
+    /// <summary>One admission owner shared by every native route; ownership survives caller cancellation.</summary>
+    internal sealed class SceneCoordinator : INativeTransitionExecutor
     {
         private readonly object gate = new object();
-        private readonly List<Claim> claims = new List<Claim>();
-        private readonly Action<string> logInfo;
-        private readonly ISceneTransitionAuthorityPolicy authorityPolicy;
+        private Action<string> logInfo;
+        private ISceneTransitionAuthorityPolicy authorityPolicy;
+        private readonly HashSet<string> revokedOwnership = new HashSet<string>(StringComparer.Ordinal);
+        private Func<bool> sessionAdmissionBusy = () => false;
+        internal readonly IHostDispatcher? Dispatcher;
+        private NativeTransitionReservation? active;
 
-        public SceneCoordinator(
-            Action<string>? logInfo = null,
-            ISceneTransitionAuthorityPolicy? authorityPolicy = null)
+        public SceneCoordinator(Action<string>? logInfo = null,
+            ISceneTransitionAuthorityPolicy? authorityPolicy = null, IHostDispatcher? dispatcher = null)
         {
             this.logInfo = logInfo ?? (_ => { });
             this.authorityPolicy = authorityPolicy ?? StandaloneSceneTransitionAuthorityPolicy.Instance;
+            Dispatcher = dispatcher;
         }
 
-        public bool IsSceneBusy
-        {
-            get
-            {
-                lock (gate)
-                {
-                    return claims.Count > 0;
-                }
-            }
-        }
-
+        public bool IsSceneBusy { get { lock (gate) return active != null; } }
         public IReadOnlyList<SceneClaimInfo> ActiveClaims
         {
-            get
-            {
-                lock (gate)
-                {
-                    var view = new List<SceneClaimInfo>(claims.Count);
-                    foreach (var claim in claims)
-                    {
-                        view.Add(claim.Info);
-                    }
+            get { lock (gate) return active == null ? Array.Empty<SceneClaimInfo>() : new[] { active.Info }; }
+        }
 
-                    return view;
+        public OperationResult<INativeTransitionReservation> TryReserve(NativeTransitionOwner owner, string operationId)
+        {
+            var request = new SceneTransitionRequest(owner.PackageId, operationId, SceneTransitionPriority.UserInitiated);
+            return Reserve(owner, request, lifecycle: true);
+        }
+
+        internal OperationResult<INativeTransitionReservation> Reserve(NativeTransitionOwner owner, SceneTransitionRequest request, bool lifecycle = false)
+        {
+            AssertCurrent();
+            var refused = CheckAdmission(owner, lifecycle);
+            if (refused != null) return refused;
+            var denied = CheckAuthority(request);
+            if (denied != null) return OperationResult<INativeTransitionReservation>.Failure(ModErrorCode.NotAuthoritative, denied);
+            // The authority provider may synchronously close admission or revoke this owner.
+            refused = CheckAdmission(owner, lifecycle);
+            if (refused != null) return refused;
+            lock (gate)
+            {
+                if (active != null)
+                {
+                    var message = "'" + active.Info.OwnerModId + "' holds native transition admission; competing requests are Busy.";
+                    TryLog(message);
+                    return OperationResult<INativeTransitionReservation>.Failure(ModErrorCode.Conflict, message);
                 }
+                active = new NativeTransitionReservation(this, owner, request);
+                return OperationResult<INativeTransitionReservation>.Success(active);
             }
+        }
+
+        private OperationResult<INativeTransitionReservation>? CheckAdmission(NativeTransitionOwner owner, bool lifecycle)
+        {
+            foreach (var prefix in revokedOwnership)
+                if (owner.OwnershipId == prefix || owner.OwnershipId.StartsWith(prefix + ":", StringComparison.Ordinal))
+                    return OperationResult<INativeTransitionReservation>.Failure(ModErrorCode.InvalidState, "The native transition owner was revoked.");
+            if (!lifecycle && sessionAdmissionBusy())
+                return OperationResult<INativeTransitionReservation>.Failure(ModErrorCode.Conflict, "The session lifecycle is Busy.");
+            return null;
+        }
+
+        public void SetSessionAdmissionGate(Func<bool> isBusy)
+        {
+            AssertCurrent();
+            sessionAdmissionBusy = isBusy ?? throw new ArgumentNullException(nameof(isBusy));
+        }
+
+        internal void UpdateLogSink(Action<string> sink) { AssertCurrent(); logInfo = sink; }
+
+        internal void UpdateAuthorityPolicy(ISceneTransitionAuthorityPolicy policy)
+        {
+            AssertCurrent();
+            authorityPolicy = policy ?? throw new ArgumentNullException(nameof(policy));
+        }
+
+        public Task<NativeDrainResult> WaitForIdleAsync()
+        {
+            lock (gate) return active?.DrainTask ?? Task.FromResult(NativeDrainResult.Drained);
         }
 
         public SceneTransitionDecision RequestTransition(SceneTransitionRequest request)
         {
-            if (request == null)
+            if (request == null) throw new ArgumentNullException(nameof(request));
+            var result = Reserve(new NativeTransitionOwner(request.OwnerModId, request.OwnerModId), request);
+            return result.TryGetValue(out var reservation)
+                ? SceneTransitionDecision.Approve(reservation, "Approved for '" + request.SceneName + "'.")
+                : SceneTransitionDecision.Refuse(result.ErrorCode, result.ErrorMessage);
+        }
+
+        internal string? CheckAuthority(SceneTransitionRequest request)
+        {
+            try
             {
-                throw new ArgumentNullException(nameof(request));
+                var decision = authorityPolicy.Evaluate(request);
+                return decision.Allowed ? null : string.IsNullOrWhiteSpace(decision.Message)
+                    ? "The process is not authoritative for this native transition." : decision.Message;
             }
-
-            var authority = authorityPolicy.Evaluate(request);
-            if (!authority.Allowed)
-            {
-                var message = string.IsNullOrWhiteSpace(authority.Message)
-                    ? "The current process is not authoritative for scene transitions."
-                    : authority.Message;
-                TryLog("Scene transition refused for '" + request.OwnerModId + "' -> '"
-                    + request.SceneName + "': " + message);
-                return SceneTransitionDecision.Refuse(ModErrorCode.NotAuthoritative, message);
-            }
-
-            SceneTransitionDecision decision;
-            string? logMessage = null;
-            lock (gate)
-            {
-                if (request.Priority == SceneTransitionPriority.Automatic && claims.Count > 0)
-                {
-                    var blocker = claims[claims.Count - 1].Info;
-                    var message = "'" + blocker.OwnerModId + "' holds the scene"
-                        + (string.IsNullOrEmpty(blocker.Reason) ? "" : " (" + blocker.Reason + ")")
-                        + "; automatic transitions must yield.";
-                    logMessage = "Scene transition refused for '" + request.OwnerModId + "' -> '"
-                        + request.SceneName + "': " + message;
-                    decision = SceneTransitionDecision.Refuse(ModErrorCode.Conflict, message);
-                }
-                else
-                {
-                    var claim = new Claim(this, new SceneClaimInfo(
-                        request.OwnerModId,
-                        request.SceneName,
-                        request.Priority,
-                        request.Reason,
-                        DateTime.UtcNow));
-                    if (claims.Count > 0)
-                    {
-                        logMessage = "Scene transition approved for '" + request.OwnerModId + "' -> '"
-                            + request.SceneName + "' superseding " + claims.Count
-                            + " active claim(s) (first: '" + claims[0].Info.OwnerModId + "').";
-                    }
-
-                    claims.Add(claim);
-                    decision = SceneTransitionDecision.Approve(claim, "Approved for '" + request.SceneName + "'.");
-                }
-            }
-
-            if (logMessage != null)
-            {
-                TryLog(logMessage);
-            }
-
-            return decision;
+            catch (Exception error) { return "Scene authority could not be established: " + error.Message; }
         }
 
         public void ReleaseOwner(string ownerModId)
         {
-            if (string.IsNullOrWhiteSpace(ownerModId))
-            {
-                return;
-            }
-
-            lock (gate)
-            {
-                claims.RemoveAll(claim => string.Equals(
-                    claim.Info.OwnerModId,
-                    ownerModId,
-                    StringComparison.OrdinalIgnoreCase));
-            }
+            NativeTransitionReservation? held;
+            lock (gate) held = active;
+            if (held != null && held.OwnsPackage(ownerModId))
+                held.RevokeOwner();
         }
 
-        private void Release(Claim claim)
+        public void RevokeOwnership(string ownershipId)
         {
-            lock (gate)
-            {
-                claims.Remove(claim);
-            }
+            AssertCurrent();
+            revokedOwnership.Add(ownershipId);
+            NativeTransitionReservation? held;
+            lock (gate) held = active;
+            if (held != null && (held.Owner.OwnershipId == ownershipId
+                || held.Owner.OwnershipId.StartsWith(ownershipId + ":", StringComparison.Ordinal)))
+                held.RevokeOwner();
+        }
+
+        internal void Release(NativeTransitionReservation reservation)
+        {
+            AssertCurrent();
+            lock (gate) if (ReferenceEquals(active, reservation)) active = null;
+        }
+
+        public void NotifySceneArrived(SceneSnapshot scene)
+        {
+            AssertCurrent();
+            NativeTransitionReservation? held;
+            lock (gate) held = active;
+            held?.ObserveScene(scene);
+        }
+
+        public void CheckTimeout(DateTime nowUtc, TimeSpan timeout)
+        {
+            AssertCurrent();
+            NativeTransitionReservation? held;
+            lock (gate) held = active;
+            held?.CheckTimeout(nowUtc, timeout);
+        }
+
+        internal void Post(Action action)
+        {
+            if (Dispatcher != null && !Dispatcher.IsCurrent) Dispatcher.Post(action);
+            else action();
+        }
+
+        internal void AssertCurrent()
+        {
+            if (Dispatcher != null && !Dispatcher.IsCurrent)
+                throw new InvalidOperationException("Native transition admission requires the host thread.");
         }
 
         private void TryLog(string message)
         {
-            try
-            {
-                logInfo(message);
-            }
-            catch
-            {
-                // Correctness state must not depend on diagnostics.
-            }
-        }
-
-        private sealed class Claim : IDisposable
-        {
-            private SceneCoordinator? owner;
-
-            public Claim(SceneCoordinator owner, SceneClaimInfo info)
-            {
-                this.owner = owner;
-                Info = info;
-            }
-
-            public SceneClaimInfo Info { get; }
-
-            public void Dispose()
-            {
-                Interlocked.Exchange(ref owner, null)?.Release(this);
-            }
+            try { logInfo(message); } catch { }
         }
     }
 

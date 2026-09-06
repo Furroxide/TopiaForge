@@ -13,7 +13,8 @@ The [canonical brief](../GamemodeContractRedesign.md) is normative. The
 | `768fb0f386b5c16ac35d124e12819d58b60816b7` (`origin/dev` when the replacement slice was cut) | Base of `docs/gamemode-redesign-plan` in the registered `TopiaForge-gm` worktree | First replacement slice contains documentation only |
 | `f2ec48b14a86adc93c8079fd1216e91a2d6a2764` | Slice 1 squash merge of PR #106 into `dev` | Canonical documents integrated; no production or live acceptance claim |
 | `c61d5fcf821ef726c2aea3ba35c092e314e1f6c4` | Slice 2 squash merge of PR #107, reviewed head `055a7d4` | Unused V6 contract integrated; alias and production manifests/templates remain V5 |
-| `feat/gamemode-resolution-v4`, based on `c61d5fc` | Slice 3; corrected pure resolver, immutable plans and inactive transport models | Local verification passed; PR/CI integration pending; no production caller or wire activation |
+| `41f14d078dca1830749f70cac9f72083c4fedd8c` | Slice 3 merged through PR #108; corrected pure resolver, immutable plans and inactive transport models | Full CI passed at reviewed head `63540e2`; no production caller or wire activation |
+| `feat/gamemode-runtime-foundations`, based on `41f14d0` | Slice 4, PR #109; lifecycle, scopes, native admission and shutdown foundations | Review head `930d0a2` passed full CI; PR remains unmerged pending CodeQL verification of atomic test-root allocation |
 
 On 2026-09-05, PRs #102–105 were converted to draft for the approved re-cut.
 Their branch tips and existing review history were preserved. Both external
@@ -218,6 +219,162 @@ repository behavior change. Retained local build/format/harness logs use the
 `tf-slice3-*` prefix in the temporary directory; package test logs are ignored under
 `.dart_tool/slice3-*.log`. Exact committed CI evidence will be appended after review.
 
+## Slice 3 integration and slice 4 start
+
+PR #108 merged under normal protection on 5 September 2026 at
+`41f14d078dca1830749f70cac9f72083c4fedd8c`. Full CI run `33982437483` passed at
+reviewed head `63540e280cb5a9e15b5bdf8ece28b83e367c4ff3`, including Windows data,
+Flutter, all seven templates and full documentation publication. All five required
+checks passed, and the review thread was resolved before merge. Slice 4 was created
+from refreshed `dev` only after that merge; the historical draft stack is preserved.
+
+## Slice 4 verification in progress
+
+The first slice 4 runtime regression used the unmodified runtime binary and a newly
+built synthetic package to observe unload ordering. It expected
+`load, stopping, unload:stopping, cleanup`, but recorded
+`load, unload:active, stopping, cleanup`. Cancellation therefore occurred after the
+extension unload callback. The replacement shutdown sequence begins cancellation,
+awaits active session/native drain, then invokes package callbacks and disposers.
+The fresh runtime build also reproduced this ordering in partial-load failure.
+A separate regression showed that a throwing diagnostic sink aborted the remaining
+independent package load. Both fixes pass the rebuilt runtime integration suite. Multi-package tests use
+a second synthetic assembly: reusing one assembly under two package IDs is correctly
+rejected by production ownership checks and was an invalid initial test setup.
+
+Four RobotKit cancellation regressions failed against the real service source:
+a cancelled scope could replace or clear a newer same-package objective, publish a
+target, and receive delivery events. All four pass after early mutation guards and
+subscription liveness checks. These isolated tests do not establish Unity behavior.
+
+Controlled lifecycle tests reproduced a reentrant launch queued during Stopping
+and later admitted at Idle, a stop requested from the Running observer being lost,
+an oversized author exception stranding cleanup through transport validation, and
+cancelled startup incorrectly producing a successful terminal session outcome.
+Each fix has a failing regression followed by a passing focused run. The launch
+outcome may report cancellation early; the terminal session outcome waits for
+ignored callbacks and native work to drain.
+
+Further regression-first fixes cover global shutdown admission, cancellation of
+in-flight menu work, throwing cancellation callbacks, delayed scene notifications
+from a previous session, and re-reading mutable provider readiness. Shutdown waits
+for the complete admitted operation, including a replacement's temporary Idle
+phase. Child asset scopes can spawn parent package prefabs without taking ownership
+of the parent's handles. Asset initialization failures reclaim a newly allocated
+object; tracking rejection transfers cleanup ownership without double disposal.
+
+| Final local check on the slice 4 working tree | Result |
+| --- | --- |
+| Fresh `dotnet build TopiaForge.slnx -c Release --nologo` | Passed, zero warnings/errors |
+| Reviewed SDK baseline regeneration, then rebuilt embedded resources | Only Worlds changed: 74 additive baseline lines; assembly identity remains `0.1.0.0` |
+| `bash tools/verify-csharp-release-surface.sh` after rebuild | Eleven SDK packages and all seven no-argument harnesses passed, including all new suites and 353 shared fixtures |
+| Rebuilt ModRuntime synthetic-assembly integration suite | Passed: cancellation before callbacks, partial-load failure, ignored work drain, throwing cleanup/logging and normalized scene observation |
+| Flutter 3.44.6 bundled `dart test` from domain/data/CLI | 791 domain, 358 data and 227 CLI passed; four expected platform skips each in data/CLI |
+| `dart analyze --fatal-infos` and formatter from those three packages | Clean; 348 files, zero formatting changes |
+| Fixture index and closure self-tests | 353 cases and 31 self-tests passed |
+| Non-generated Dart line audit | 410 files; none over 500 lines |
+| README count, residue, trademark, asset-licence audits | Passed |
+| Website tests, Markdown links and content preparation | 33 tests passed; 124 Markdown files, 25 pages and 5 snippets passed |
+
+The first full C# harness run found an existing source convention requiring a
+semicolon directly after `OnHostDisposed(this)`. The new attempt-all wrapper
+retains that call inside a lambda; the convention now checks the invocation without
+requiring that incidental punctuation. The complete rebuilt gate subsequently passed.
+Local logs are retained in the temporary directory under `tf-slice4-*` names.
+`dotnet format TopiaForge.slnx --no-restore --verify-no-changes` passed (workspace
+load warnings only). `node scripts/build-reference.mjs` in website built the C#
+reference with zero warnings/errors: 388 managed-reference inputs, 392 models and
+391 HTML files. Full website publication remains an exact-head Linux CI gate;
+the previously matched Windows Dartdoc baseline limitation is unchanged. First-head
+[CI run 33986323680](https://github.com/Furroxide/TopiaForge/actions/runs/33986323680)
+passed at `6caceb9f7163b1b5532b645c5e2d25af7226b740`, including all five required
+checks, Flutter, Windows data, seven templates and full Linux publication. This
+result does not certify the subsequent review corrections.
+Production V6 binding/activation and every game/visual/native-timing acceptance
+remain pending; the new orchestrator is exercised through controlled foundation
+tests, while V5 production scene requests already use the shared executor.
+
+## Slice 4 independent review corrections
+
+Review of `6caceb9` reproduced additional failures before their fixes:
+
+- Matching scene arrival could release native ownership before the managed game
+  loader completed; a later loader fault then disappeared. Both completion signals
+  are now required. Structured cancellation/authority/busy refusals no longer turn
+  into fallback scene loads, and borrowed admission checks current authority.
+- An undefined SDK error enum could interrupt wire-outcome construction and strand
+  the session in Stopping. Author results are normalized before command completion
+  and notification; positive and negative unknown codes have regression cases.
+- Checkpoint subscriptions outlived cancellation. Callback delivery and subscription
+  creation now check owner liveness.
+- A disposer could submit another resource after the scope was marked disposed,
+  escaping the final drain and its aggregated failure. Scope cleanup now seals
+  ownership only after the rejected-resource and queued-work drain is empty.
+- Runtime shutdown without a session hook disposed V5 package services while native
+  work remained active. Missing, throwing, faulted and failed hooks all pass through
+  the native drain; host attachment remains until package teardown completes.
+- Unity does not await an `async void OnDestroy`. The plugin now starts shutdown
+  synchronously and gives the process host an observed completion task. Controlled
+  tests verify host-thread, exactly-once final cleanup after success or failure,
+  including a throwing diagnostic sink. Process-exit timing is still unverified.
+
+Independent cross-review then reproduced pending-constructor scope cleanup and
+checkpoint diagnostic isolation failures, plus eleven native timeout/admission
+failures. Async-only scope creation now awaits failed initialization cleanup and
+returns a successfully created scope before the caller handles cancellation. Native
+admission rechecks revocation, competing work, token/lifetime cancellation and the
+session gate after provider-backed authority callbacks. A loader timeout completes
+the caller while native ownership remains quarantined until both signals drain.
+
+The scope control that disposed its lifetime midway through initialization initially
+expected success incorrectly: later facade initialization correctly threw
+ObjectDisposedException. It now explicitly checks failed initialization, retained
+error evidence and cleanup. A separate completed-creation/cancel-before-consumption
+control verifies that successful scope ownership is preserved.
+
+Final local verification of the review follow-up to `6caceb9` passed: fresh full
+Release with zero warnings/errors; rebuilt eleven-SDK-package and all seven
+no-argument harnesses; whole-solution format verification; bundled-Dart fatal-info
+analysis and format verification (348 files, zero changes); 353-fixture closure and
+31 self-tests; 410 non-generated Dart files at or below 500 lines; README, residue,
+trademark and asset-licence audits; 33 website tests, 124 Markdown-link checks and
+25-page/five-snippet content preparation. The unchanged Dart test results above
+remain scoped evidence; C# tests were rerun after the final corrections. Logs use
+`tf-slice4-followup-*` in the temporary directory. The committed follow-up
+`930d0a2a093f706e14152b035b6eb975051aeaf2` passed full exact-head CI in run
+`33988344239`, including publication, Flutter and Windows data tests. No game or
+native-timing result is implied. PR #109 remains unmerged: the repository
+code-scanning ruleset independently blocks it on test-path alerts 428, 429 and 430.
+Passing the five named required checks alone does not satisfy every merge rule.
+
+The CodeQL annotations concern test fixture paths:
+`Program.cs` creates a fresh GUID-named directory under `Path.GetTempPath`, and
+`Program.SessionSceneTests.cs` reads trace paths created by the private fixture
+helper under that test root with constant package names. These paths do not come
+from a package manifest, wire request, or external user input. This assessment is
+limited to those test sites; no global security rule or production path check was
+relaxed. Review also corrected accidental mojibake in owned comments and this ledger;
+UTF-8 decoding and a targeted encoding audit pass for the follow-up source files.
+
+On 6 September, the test-root follow-up replaces manual temporary path selection
+and directory creation with the framework atomic temporary-directory API. This
+keeps per-run ownership and final cleanup while removing the select/create race.
+No CodeQL alert has been dismissed or suppressed and no repository rule changed.
+An earlier combined dismissal/merge request was rejected by automatic approval
+review before execution; the source repair requires its own rebuilt harness and
+exact-head CodeQL results before merge.
+
+The atomic-root follow-up passes fresh Release with zero warnings/errors, all
+eleven SDK package checks and seven no-argument harnesses, focused lifecycle and
+Runtime tests, C# format verification, bundled-Dart fatal-info analysis and format
+verification (348 files unchanged), line limits and repository/Markdown audits.
+Local publication passed website tests, Astro, C# reference and domain/data Dart
+reference generation, then stopped in bundled dartdoc 9.0.4 while documenting
+`launcher_ui`: `_stripDocImports` raised `RangeError` (end 9202, length 9089).
+This is an observed local tool failure, not a publication pass or a permanent
+exemption; exact-head Linux publication remains required. The Flutter SDK was
+not modified. Logs are `tf-slice4-security-*` in the temporary directory.
+
 ## Live acceptance isolation prerequisite
 
 Read-only inspection on 5 September 2026 found the installed Unity 6000.0.31f1
@@ -290,8 +447,8 @@ The old four-PR stack is source material; it does not satisfy these eight delive
 | --- | --- | --- | --- | --- | --- |
 | 1 | Review/brief/status/prompts and premature-claim corrections | Merged in PR #106 (`f2ec48b`) | Not applicable | Documentation checks and required CI passed at `16c75ba`; baseline Release/seven-harness checks passed | Not applicable |
 | 2 | Unused V6 contract/readers/validators/conformance; alias stays V5 | Merged in PR #107 (`c61d5fc`) | Intentionally unused | 149 C# fixtures; 479 domain, 358 data, 227 CLI tests; seven Release harnesses and required CI/publication passed at `055a7d4` | Not required for pure contract |
-| 3 | Pure resolution and immutable transport models | Implemented on `feat/gamemode-resolution-v4`; awaiting PR/CI integration | Intentionally no production switch | 340 shared fixtures; 771 domain tests; full Release/seven harnesses, data/CLI, formatting/analyzers and audits passed locally | Not required for pure models |
-| 4 | Scoped ownership, lifecycle, shared transition foundations | Pending | Pending | Fault-injection and admission coverage pending | Native behavior pending |
+| 3 | Pure resolution and immutable transport models | Merged in PR #108 (`41f14d0`) | Intentionally no production switch | 353 shared fixtures; 791 domain, 358 data, 227 CLI tests; full Release/seven harnesses and required CI/publication passed at `63540e2` | Not required for pure models |
+| 4 | Scoped ownership, lifecycle, shared transition foundations | Implemented in PR #109; unmerged pending test-root follow-up checks | Existing V5 scene routes use the shared executor; V6 orchestration activation remains pending | Review head `930d0a2` passed full CI (`33988344239`) and local Release/seven harnesses, formatting, analyzers and audits; atomic test-root local checks passed; CodeQL/full CI pending | Native behavior pending |
 | 5 | Verified factory bindings, providers/discovery, readiness adapters | Pending | Pending | Synthetic package and production-adapter coverage pending | World/readiness checks pending |
 | 6 | Activate runtime and atomically flip manifests/templates | Original-stack migration is partial source material only | Pending | Rebuilt API baselines, generated package and consumer coverage pending | First-party gameplay pending |
 | 7 | Launcher/CLI/overlay preflight, wire V4, observations, durable state | Pending | Pending | Cross-language wire/profile/process/progress integration pending | Cold launch and multi-surface selection pending |

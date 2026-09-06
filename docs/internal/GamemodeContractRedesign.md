@@ -209,7 +209,11 @@ Rebuild resource-producing facades against that scope with unchanged package ID,
 paths, permissions, capability checks, and dependency visibility. Forward scoped
 events from the parent event source. Reusing services that captured the parent
 lifetime would preserve partial-start leaks even with a new Lifetime property.
-Parent unload cancels/disposes all children. Package registrations and session
+Parent unload cancels all children and waits for callback/native drain before
+package callbacks and service disposal. A child asset facade may spawn from its
+own prefab or the explicitly attached parent package facade's prefab; sibling and
+foreign handles remain rejected. Spawned instances belong to the child, while the
+parent retains its prefab/bundle lifetime. Package registrations and session
 resources remain separate ownership categories.
 
 ### Lifecycle and scene authority
@@ -217,7 +221,16 @@ resources remain separate ownership categories.
 The single orchestrator commits `Idle -> Preparing -> LoadingWorld -> StartingMode
 -> Running -> Stopping`. Start completes successfully only at Running. A failed or
 cancelled launch has one operation outcome; a session has one terminal notification
-after stop. Notifications never start gameplay. Session handles reject stale IDs.
+after stop. The terminal session is cancelled when cancellation prevents Running,
+failed when startup or cleanup faults, and successful after an ordinary Running
+session stops cleanly. It is emitted only after callback and native drain; an early
+cancelled launch outcome is separate. Notifications never start gameplay. Session
+handles reject stale IDs.
+`StopAsync` acknowledges acceptance of the captured session's stop request; terminal
+session outcome records completed cleanup. This distinction also lets startup code
+request and await its own stop without waiting for its own callback to return.
+Restart/menu operations still require the corresponding Running/Idle result and
+reject competing requests during startup.
 
 Validate a replacement before stopping a Running session. Preparing, loading,
 starting, stopping, and quarantined native work reject all competing requests as
