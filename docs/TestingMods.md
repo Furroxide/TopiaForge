@@ -46,9 +46,11 @@ dotnet test --configuration Release
   `FakeCreatorProjectLibrary`, and `FakeCreatorSceneTarget` cover authenticated catalog
   registrations, owned spawns, exclusive temporary edits, fail-closed persistence isolation, and
   local event-project validation/storage.
-- `FakeWorldGamemodeService`, `FakeTimeControlService`, `FakePromptOverrideRegistry`, and
-  provide deterministic specialist-module behavior and leak-observable handles;
-  use `TryGetWorldContent` to exercise a registered custom-world factory without an engine installation.
+- `FakeGamemodeSession` supplies prepared world identity and bound operations to a real factory.
+  `FakeWorldSessionService` publishes explicit phase snapshots; notifications do not start a mode.
+  `FakeLocalWorldService` models session-bound import and owned prefab overrides.
+- `FakeTimeControlService` and `FakePromptOverrideRegistry` provide deterministic specialist-module
+  behavior and leak-observable handles.
 - `ControlledOperation<T>` lets a test choose when asynchronous work completes, fails, or cancels.
 
 ## Test failure paths

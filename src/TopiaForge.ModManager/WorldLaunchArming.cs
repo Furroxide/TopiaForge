@@ -33,14 +33,7 @@ namespace TopiaForge.ModManager
             if (profile != null)
             {
                 var commanded = profile.WorldLaunch;
-                if (commanded != null)
-                {
-                    return commanded.IsMainMenu ? null : commanded;
-                }
-
-                // A profile from a launcher that predates the command. It cannot have asked for a
-                // gamemode, but it also never asked to suppress the remembered one, so fall through
-                // rather than inventing an intention it never expressed.
+                return profile.SafeMode || commanded == null || commanded.IsMainMenu ? null : commanded;
             }
 
             if (remembered == null
@@ -55,7 +48,7 @@ namespace TopiaForge.ModManager
                 Command = WorldLaunchIntent.LaunchTargetCommand,
                 WorldId = remembered.SelectedWorldId ?? string.Empty,
                 GamemodeId = remembered.SelectedGamemodeId,
-                LoadMode = WorldLaunchSettings.NormalizeLoadMode(remembered.LoadMode),
+                LoadMode = remembered.LoadMode,
                 AllowAdditiveFallback = remembered.AllowAdditiveFallback
             };
         }

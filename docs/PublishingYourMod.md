@@ -20,7 +20,7 @@ topiaforge check package .
 ```
 
 Fix every line it prints — warnings included. Typical last-mile fixes are a valid SPDX expression and declared license
-file, only known [capability values](ManifestV5.md#package-contract), explicit author identity, and a real SemVer `version`.
+file, only known [capability values](ManifestV6.md#package-contract), explicit author identity, and a real SemVer `version`.
 If your mod has dependencies, add
 `--resolve` to dry-run resolution against your configured sources.
 

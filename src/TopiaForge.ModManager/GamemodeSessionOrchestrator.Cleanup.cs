@@ -29,7 +29,10 @@ namespace TopiaForge.ModManager
                 try { await scope.DrainNativeWorkAsync(); } catch (Exception error) { record.Errors.Add(error); }
             }
             // Clear owned references before invoking extension code; reentrancy cannot dispose them twice.
-            var resources = new IDisposable?[] { record.Controller, record.Factory as IDisposable, record.Instance, record.Provider as IDisposable };
+            var resources = new IDisposable?[] { record.Controller, record.Factory as IDisposable }
+                .Concat(record.ContentResources.AsEnumerable().Reverse())
+                .Concat(new IDisposable?[] { record.Instance, record.Provider as IDisposable }).ToArray();
+            record.ContentResources.Clear();
             record.Controller = null;
             record.Factory = null;
             record.Instance = null;

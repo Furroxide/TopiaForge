@@ -64,6 +64,9 @@ namespace TopiaForge.Mods
         public WorldReadiness(WorldSceneIdentity scene, TransformState spawn)
         {
             Scene = scene ?? throw new ArgumentNullException(nameof(scene));
+            if (!spawn.Position.IsFinite || !spawn.Rotation.IsFinite || spawn.Rotation.LengthSquared <= 0.000001f
+                || !spawn.Scale.IsFinite || spawn.Scale.X == 0f || spawn.Scale.Y == 0f || spawn.Scale.Z == 0f)
+                throw new ArgumentException("World readiness requires a finite spawn with a valid rotation and non-zero scale.", nameof(spawn));
             Spawn = spawn;
         }
         /// <summary>Gets the actual scene identity.</summary>

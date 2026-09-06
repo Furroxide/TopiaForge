@@ -116,19 +116,31 @@ The optional extracted-release journey is configured with `--dev-cli`, `--dev-pr
 Use repeatable `--case <id>` options for a diagnostic subset; omitting them requires the full
 canonical matrix.
 
-Launch **SDK Acceptance World** from the Worlds menu (or run the mod-scoped `run-world` command),
-interact with the cyan acceptance robot, then hold F9 while speaking and release it. These actions
-exercise the custom-world, pause/teardown, interaction, microphone, transcription, brain-query, and
-multi-turn dialogue contracts through safe APIs only.
+Select the **SDK Acceptance World** launch target
+(`dev.topiaforge.sdk-acceptance.menu`) in the manager. Its manifest declares the bundle world and
+`AcceptanceGamemodeFactory`; module loading and session notifications do not start controllers.
+Interact with the cyan acceptance robot, then hold F9 while speaking and release it. After all ten
+lifecycle cycles finish, use **FINISH SDK ACCEPTANCE** in the pause companion or the mod-scoped
+`finish-world` command. Both request main-menu return through the captured session.
+
+The world case emits PASS only after committed Running and Idle have both been observed and the
+controller plus its tracked session-scope cleanup marker have been released. A process starting or
+a factory returning does not satisfy this case. The automated acceptance driver must select that
+same target through the production launcher command and correlate runtime outcomes; that integration
+and live verification remain pending. Until it is available, select the target explicitly in-game.
 
 The `lifecycle.ten-cycles` marker is emitted only after ten live acquire/release/reacquire cycles of
 the automatable resource families named in `tests/live-game-acceptance.json`. The probe covers
 explicit lifetime cleanup, events, scheduler work and cancellation, input, nested player-control
 leases, asset/prefab/entity and interaction handles, audio, UI, localization, commands, extensions,
-Chronos, Prompts, RobotKit targets, Creator Content sessions, and Worlds registrations. It reuses stable ids,
-checks inactive handles, verifies callbacks stop after release, and performs a final reacquisition.
-Hardware-, dialogue-, robot-, pause-, and session-specific handles remain in their dedicated live
-cases rather than being misreported as automatic ten-cycle coverage.
+Chronos, Prompts, RobotKit targets, Creator Content sessions, and session-owned pause registrations
+and callback leases. Every cycle uses the immutable context supplied to the declared gamemode
+session. It reuses stable ids, checks inactive handles, verifies callbacks stop after release, and
+performs a final reacquisition.
+
+Hardware input, dialogue, robot interaction, actual pause-button actions, and session transitions
+still require their dedicated live cases. Automatically releasing a pause registration does not
+prove the native pause UI or a scene transition worked.
 
 The `integration.provider-scope` marker requires exactly one provider for each declared core module,
 and a deliberately absent optional provider that does not block

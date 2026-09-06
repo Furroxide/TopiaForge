@@ -55,6 +55,7 @@ namespace TopiaForge.ModManager
 
         private ModContext(ModContext parent, ModContextScope scope, NativeTransitionAccessSlot transitionAccess)
         {
+            scopeParent = parent;
             packagePath = parent.packagePath;
             dataPath = parent.dataPath;
             gameplayFactory = parent.gameplayFactory;
@@ -66,6 +67,7 @@ namespace TopiaForge.ModManager
             Logger = parent.Logger;
             ownerLifetime = scope.OwnerLifetime;
             Lifetime = scope.Lifetime;
+            if (parent.sessionOwner != null) ConfigureSessions(parent.sessionOwner);
             modEvents = new ModEvents(parent.modEvents, Lifetime);
             Events = modEvents;
             Files = new ModFiles(packagePath, dataPath, Lifetime);
@@ -93,7 +95,7 @@ namespace TopiaForge.ModManager
             Localization = new OwnerLocalizationService(Lifetime, (OwnerLocalizationService)parent.Localization);
             Commands = new OwnerCommandService(Identity.Id, Lifetime, Logger, serviceRegistry);
             Diagnostics = parent.Diagnostics;
-            Extensions = new OwnerExtensionService(Identity.Id, visibleDependencies, Lifetime, serviceRegistry);
+            Extensions = new OwnerExtensionService(Identity.Id, visibleDependencies, Lifetime, serviceRegistry, this);
         }
 
         internal void BeginStopping()

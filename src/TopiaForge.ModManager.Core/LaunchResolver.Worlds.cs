@@ -117,7 +117,7 @@ namespace TopiaForge.ModManager.Core
         private static bool SupportsThisInstall(InstallFacts install, ModManifest manifest) =>
             (install.Platform.Length == 0 || manifest.Platforms.Count == 0 || manifest.Platforms.Contains(install.Platform, StringComparer.OrdinalIgnoreCase))
             && (install.Architecture.Length == 0 || manifest.Architectures.Count == 0 || manifest.Architectures.Contains(install.Architecture, StringComparer.OrdinalIgnoreCase))
-            && (install.ContentTarget.Length == 0 || manifest.ContentTargets.Count == 0 || manifest.ContentTargets.Contains(install.ContentTarget, StringComparer.OrdinalIgnoreCase))
+            && (install.ContentTargets.Count == 0 || manifest.ContentTargets.Count == 0 || manifest.ContentTargets.Any(target => install.ContentTargets.Contains(target, StringComparer.OrdinalIgnoreCase)))
             && (install.GameVersion.Length == 0 || VersionUtil.AllowsRange(install.GameVersion, manifest.SupportedGameVersionRange));
     }
 }

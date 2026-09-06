@@ -8,7 +8,7 @@ using TopiaForge.Mods;
 namespace TopiaForge.Zombies
 {
     /// <summary>Safe-SDK wave-survival session using opaque, owner-scoped framework services.</summary>
-    internal sealed partial class ZombiesController : IDisposable
+    internal sealed partial class ZombiesController : IGamemodeController
     {
         private const int MaximumConsecutiveSpawnFailures = 10;
 
@@ -24,8 +24,9 @@ namespace TopiaForge.Zombies
         private readonly IModContext context;
         private readonly ZombiesConfig config;
         private readonly IRobotAgentService robots;
-        private readonly WorldSession session;
-        private readonly Func<CancellationToken, Task<OperationResult<SceneSnapshot>>> returnToMenu;
+        private readonly IGamemodeSession session;
+        private readonly Func<bool> isActive;
+        private readonly Func<CancellationToken, Task<OperationResult<bool>>> returnToMenu;
         private readonly ZombieRoster roster;
         private readonly List<ZombieEnemy> enemies = new List<ZombieEnemy>();
         private readonly ZombiesHudPresenter hud;
@@ -42,8 +43,8 @@ namespace TopiaForge.Zombies
 
         private readonly PendingOperation<ReachableSpawnResult> spawnSearch =
             new PendingOperation<ReachableSpawnResult>();
-        private readonly PendingOperation<SceneSnapshot> returnOperation =
-            new PendingOperation<SceneSnapshot>();
+        private readonly PendingOperation<bool> returnOperation =
+            new PendingOperation<bool>();
 
         private Random random;
         private IEntity? playerEntity;
@@ -79,19 +80,22 @@ namespace TopiaForge.Zombies
         private bool spawnFailureWarningLogged;
         private bool hordeMotionSuspendedForConversation;
         private bool disposed;
+        private readonly List<IDisposable> registrations = new List<IDisposable>();
+        internal bool IsDisposed => disposed;
+        internal void Own(IDisposable registration) => registrations.Add(registration);
 
         public ZombiesController(
             IModContext context,
             ZombiesConfig config,
             IRobotAgentService robots,
-            WorldSession session,
-            Func<CancellationToken, Task<OperationResult<SceneSnapshot>>> returnToMenu)
+            IGamemodeSession session, Func<bool>? isActive = null)
         {
             this.context = context ?? throw new ArgumentNullException(nameof(context));
             this.config = config ?? throw new ArgumentNullException(nameof(config));
             this.robots = robots ?? throw new ArgumentNullException(nameof(robots));
             this.session = session ?? throw new ArgumentNullException(nameof(session));
-            this.returnToMenu = returnToMenu ?? throw new ArgumentNullException(nameof(returnToMenu));
+            this.isActive = isActive ?? (() => true);
+            returnToMenu = session.ReturnToMainMenuAsync;
             roster = new ZombieRoster(config);
             random = CreateRandom();
 
@@ -166,24 +170,27 @@ namespace TopiaForge.Zombies
                 createdUpdate = context.Events.SubscribeUpdate(Update);
                 updateSubscription = createdUpdate;
             }
-            catch
+            catch (Exception constructionFailure)
             {
-                createdUpdate?.Dispose();
-                createdShopAction?.Dispose();
-                createdBroadcast?.Dispose();
-                createdOverride?.Dispose();
-                createdFire?.Dispose();
-                createdConversation?.Dispose();
-                createdShop?.Dispose();
-                createdGameOver?.Dispose();
-                createdHud?.Dispose();
+                var failures = new List<Exception> { constructionFailure };
+                TryCleanup(failures, () => createdUpdate?.Dispose());
+                TryCleanup(failures, () => createdShopAction?.Dispose());
+                TryCleanup(failures, () => createdBroadcast?.Dispose());
+                TryCleanup(failures, () => createdOverride?.Dispose());
+                TryCleanup(failures, () => createdFire?.Dispose());
+                TryCleanup(failures, () => createdConversation?.Dispose());
+                TryCleanup(failures, () => createdShop?.Dispose());
+                TryCleanup(failures, () => createdGameOver?.Dispose());
+                TryCleanup(failures, () => createdHud?.Dispose());
+                TryCleanup(failures, gameOverPause.Dispose);
+                if (failures.Count > 1) throw new AggregateException("Zombies construction and rollback failed.", failures);
                 throw;
             }
         }
 
         public OperationResult<string> Restart()
         {
-            if (disposed)
+            if (disposed || !isActive())
             {
                 return OperationResult<string>.Failure(ModErrorCode.InvalidState, "The Zombies session is not active.");
             }
@@ -212,37 +219,6 @@ namespace TopiaForge.Zombies
                 + ", pending=" + pendingSpawns.ToString(CultureInfo.InvariantCulture)
                 + ", integrity=" + integrity.ToString("0", CultureInfo.InvariantCulture)
                 + ", score=" + score.ToString(CultureInfo.InvariantCulture);
-        }
-
-        public void Dispose()
-        {
-            if (disposed)
-            {
-                return;
-            }
-
-            disposed = true;
-            updateSubscription.Dispose();
-            // Forget rather than Cancel: the update loop is gone, so nothing would ever drain these. The mod
-            // lifetime is stopping, so the runtime owns whatever the SDK still hands back.
-            spawnSearch.Forget();
-            returnOperation.Forget();
-            shop.Dispose();
-            conversation.Dispose();
-            hordeMotionSuspendedForConversation = false;
-            gameOverPresenter.Dispose();
-            fireAction?.Dispose();
-            overrideAction?.Dispose();
-            broadcastAction?.Dispose();
-            shopAction?.Dispose();
-            gameOverPause.Dispose();
-            superhotDriver?.Dispose();
-            superhotDriver = null;
-            playerExemption?.Dispose();
-            playerExemption = null;
-            RestoreNativeHealth();
-            ClearEnemies();
-            hud.Dispose();
         }
 
         private IInputAction? RegisterAction(InputActionDefinition definition)

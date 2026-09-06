@@ -14,6 +14,9 @@ namespace TopiaForge.ModManager
         private readonly EffectiveProfile profile;
         private readonly LaunchProfileIndex ownership;
         private readonly Dictionary<string, PackageState> packages;
+        private readonly HashSet<string> ambiguousOwners;
+        private readonly IReadOnlyList<RuntimeBindingFailure> ambiguousFailures;
+        private bool selectionVerified;
         private RuntimeSessionSnapshot snapshot = null!;
         private bool stopping;
         private bool packageCleanupPending;
@@ -23,7 +26,14 @@ namespace TopiaForge.ModManager
         {
             this.profile = profile ?? throw new ArgumentNullException(nameof(profile));
             ownership = new LaunchProfileIndex(profile);
-            packages = profile.Packages.ToDictionary(package => package.Id, package => new PackageState(package), StringComparer.OrdinalIgnoreCase);
+            var groups = profile.Packages.GroupBy(package => package.Id, StringComparer.OrdinalIgnoreCase).ToArray();
+            ambiguousOwners = new HashSet<string>(groups.Where(group => group.Count() > 1).Select(group => group.Key), StringComparer.OrdinalIgnoreCase);
+            ambiguousFailures = Array.AsReadOnly(groups.Where(group => group.Count() > 1).SelectMany(group => group)
+                .OrderBy(package => package.Id, StringComparer.Ordinal).ThenBy(package => package.Version, StringComparer.Ordinal)
+                .SelectMany(package => Failures(package, RuntimeBindingFailureCode.AmbiguousPackage,
+                    "The selected package id is ambiguous; no duplicate owner may load: " + package.Id + ".")).ToArray());
+            packages = groups.Where(group => group.Count() == 1).Select(group => group.Single())
+                .ToDictionary(package => package.Id, package => new PackageState(package), StringComparer.OrdinalIgnoreCase);
             foreach (var package in packages.Values) package.Failures = Failures(package.Selection, RuntimeBindingFailureCode.PackageNotLoaded, "The selected package has not loaded.");
             Publish();
         }
@@ -40,28 +50,42 @@ namespace TopiaForge.ModManager
             }
         }
 
+        internal bool IsAmbiguousOwner(string id) => ambiguousOwners.Contains(id);
+        internal IEnumerable<ModPackage> UnambiguousSelections(IEnumerable<ModPackage> selections) =>
+            selections.Where(package => package.Manifest != null && !IsAmbiguousOwner(package.Manifest.Id));
+
         internal IReadOnlyList<ModPackage> VerifyAndFreezeSelection(IReadOnlyList<ModPackage> incoming)
         {
             lock (gate)
             {
-                if (stopping || packages.Values.Any(package => package.Generation != 0)) throw new InvalidOperationException("The configured package selection can load only once.");
-                if (incoming.Count != packages.Count) throw new InvalidOperationException("The packages supplied to the runtime do not match its exact configured selection.");
-                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (stopping || selectionVerified || packages.Values.Any(package => package.Generation != 0))
+                    throw new InvalidOperationException("The configured package selection can load only once.");
+                if (incoming.Count != profile.Packages.Count)
+                    throw new InvalidOperationException("The packages supplied to the runtime do not match its exact configured selection.");
+                // Match the complete manifest multiset, including every ambiguous selection. A duplicate
+                // ID never picks a winner, and one repeated manifest cannot replace another selected manifest.
+                var remaining = profile.Packages.GroupBy(package => JsonUtil.Serialize(package.Manifest), StringComparer.Ordinal)
+                    .ToDictionary(group => group.Key, group => new Queue<ResolvedPackage>(group), StringComparer.Ordinal);
                 var frozen = new List<ModPackage>();
                 foreach (var package in incoming)
                 {
                     var manifest = package.Manifest;
-                    if (manifest == null || !package.IsEnabled || !seen.Add(manifest.Id)
-                        || !packages.TryGetValue(manifest.Id, out var selected) || selected.Selection.Version != manifest.Version
-                        || JsonUtil.Serialize(selected.Selection.Manifest) != JsonUtil.Serialize(new ResolvedPackage(manifest.Id, manifest.Version, manifest).Manifest))
+                    if (manifest == null || !package.IsEnabled)
                         throw new InvalidOperationException("A package manifest changed after the exact runtime selection was configured.");
-                    frozen.Add(new ModPackage(package.PackagePath, selected.Selection.Manifest,
-                        package.State == null ? null : JsonUtil.Clone(package.State), package.Errors.ToArray(), package.SelectionReason));
+                    var key = JsonUtil.Serialize(new ResolvedPackage(manifest.Id, manifest.Version, manifest).Manifest);
+                    if (!remaining.TryGetValue(key, out var matches) || matches.Count == 0)
+                        throw new InvalidOperationException("A package manifest changed after the exact runtime selection was configured.");
+                    var selected = matches.Dequeue();
+                    var errors = package.Errors.ToList();
+                    if (IsAmbiguousOwner(manifest.Id)) errors.Add("The selected package id is ambiguous: " + manifest.Id + ".");
+                    frozen.Add(new ModPackage(package.PackagePath, selected.Manifest,
+                        package.State == null ? null : JsonUtil.Clone(package.State),
+                        errors.Distinct(StringComparer.Ordinal).ToArray(), package.SelectionReason));
                 }
+                selectionVerified = true;
                 return frozen.AsReadOnly();
             }
         }
-
         internal RuntimePackageBindingAttempt BeginPackageLoad(PackageIdentity identity)
         {
             lock (gate)
@@ -170,12 +194,12 @@ namespace TopiaForge.ModManager
         private void Publish()
         {
             var states = packages.Values.OrderBy(package => package.Selection.Id, StringComparer.Ordinal).ToArray();
-            var failures = states.SelectMany(package => package.Failures).ToArray();
+            var failures = states.SelectMany(package => package.Failures).Concat(ambiguousFailures).ToArray();
             var modes = states.Where(package => package.Batch != null).SelectMany(package => package.Batch!.Gamemodes.Where(value => ownership.Owns(package.Selection, value.DeclarationId))).ToArray();
             var worlds = states.Where(package => package.Batch != null).SelectMany(package => package.Batch!.Worlds.Where(value => ownership.Owns(package.Selection, value.DeclarationId))).ToArray();
             var discoveries = states.Where(package => package.Batch != null).SelectMany(package => package.Batch!.DiscoverySources.Where(value => ownership.Owns(package.Selection, value.DeclarationId))).ToArray();
             var bindings = new RuntimeBindingSnapshot(profile.ProfileId, profile.Revision, PackageSetDigest.Of(profile.Packages),
-                worlds.Select(value => value.DeclarationId), modes.Select(value => value.DeclarationId), failures.Where(value => value.Kind != "package" && ownership.Owns(packages[value.Package.Id].Selection, value.DeclarationId)).Select(value => value.ToAvailability()));
+                worlds.Select(value => value.DeclarationId), modes.Select(value => value.DeclarationId), failures.Where(value => value.Kind != "package" && packages.TryGetValue(value.Package.Id, out var state) && ownership.Owns(state.Selection, value.DeclarationId)).Select(value => value.ToAvailability()));
             snapshot = new RuntimeSessionSnapshot(profile, bindings,
                 states.Where(package => package.Context != null).ToDictionary(package => package.Selection.Id, package => package.Context!, StringComparer.OrdinalIgnoreCase),
                 modes, worlds, RuntimeObservation.FromEnvelopes(profile, states.Where(package => package.Observation != null).Select(package => package.Observation!)), discoveries, failures, packageCleanupPending);

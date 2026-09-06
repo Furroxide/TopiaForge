@@ -309,7 +309,7 @@ class ModTemplateInfo {
 
 /// Everything `new mod` can customize at scaffold time: the template plus per-field manifest overrides. A null
 /// scalar / empty list means "not specified — keep the template's default".
-/// `hashes` (pack-time) and `schemaVersion` (pinned to 5) are deliberately not
+/// `hashes` (pack-time) and `schemaVersion` (pinned to the current contract) are deliberately not
 /// scaffoldable.
 class ModScaffoldOptions {
   const ModScaffoldOptions({
@@ -373,9 +373,22 @@ class ModScaffoldOptions {
   final String? source;
   final bool includeUnityCompanion;
 
+  /// Refuses retired metadata-only modes before any scaffold output is created.
+  void validateForScaffolding() {
+    if (gamemodes.isNotEmpty) {
+      throw ArgumentError(
+        'Metadata-only gamemode inputs are retired. Use --template gamemode '
+            'and declare contributions.gamemodes with a factory implementation, '
+            'plus contributions.launchTargets in topiaforge.mod.json.',
+        'gamemodes',
+      );
+    }
+  }
+
   /// Applies the specified overrides on top of [manifest] (a template-default or generated manifest map),
   /// returning the merged `topiaforge.mod.json` map. List/map fields replace wholesale when specified.
   Map<String, Object?> applyTo(Map<String, Object?> manifest) {
+    validateForScaffolding();
     final merged = Map<String, Object?>.of(manifest);
     void set(String key, Object? value) {
       if (value != null) merged[key] = value;
@@ -445,11 +458,7 @@ class ModScaffoldOptions {
     if (conflicts.isNotEmpty) {
       merged['conflicts'] = conflicts.map((item) => item.toJson()).toList();
     }
-    if (gamemodes.isNotEmpty) {
-      merged['worldGamemodes'] = gamemodes
-          .map((item) => item.toJson())
-          .toList();
-    }
+
     return merged;
   }
 }
