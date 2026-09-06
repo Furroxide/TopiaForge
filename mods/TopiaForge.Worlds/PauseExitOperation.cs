@@ -13,6 +13,8 @@ namespace TopiaForge.Worlds
             Func<WorldPauseExitContext, WorldPauseExitDecision>? interceptor,
             Action<Exception> reportInterceptorFailure, CancellationToken cancellationToken = default)
         {
+            if (snapshot.Phase == WorldSessionPhase.Idle)
+                return OperationResult<bool>.Failure(ModErrorCode.Unavailable, "There is no active world session.");
             if (snapshot.Phase != WorldSessionPhase.Running || snapshot.Session == null)
                 return OperationResult<bool>.Failure(ModErrorCode.Conflict, "The session is Busy.");
             if (Interlocked.CompareExchange(ref pending, 1, 0) != 0)

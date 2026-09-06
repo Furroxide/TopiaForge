@@ -141,3 +141,19 @@ using `RuntimeSessionSelection` before `Load`.
   Record each unrun live case as pending for slice 8.
 - Update the ledger and submit this coherent activation slice. Branch slice 7
   only after merge; do not split the alias from manifest/template migration.
+
+
+## Final activation review handoff
+
+Generated acceptance uses a closed tool choice. Windows uses the ignored repository
+`.fvm/flutter_sdk` link to Flutter 3.44.6 and verifies Flutter/Dart version metadata
+before executing its fixed Dart path; Linux uses the CI-pinned Dart command. Arbitrary
+`TOPIAFORGE_TEST_DART` executable overrides are rejected. CLI relocation tests overwrite
+ignored NuGet asset paths with a temporary cache: restore the solution after that suite
+before final C# formatting or builds. Do not patch SDK contents or weaken lock restores.
+
+Source reflection auditing must reject directory links at the source root, any ancestor,
+recursive source directory, and literal/glob project links that escape the repository.
+Valid `../Shared` links within ordinary repository directories remain supported. Use
+owned temporary directories in its regression fixtures rather than concatenating an
+externally supplied temporary-path string.

@@ -50,6 +50,11 @@ namespace TopiaForge.ModManager.Tests
                 finally { TryDelete(contentRoot); }
             }
 
+            if (args.Length == 1 && string.Equals(args[0], "--worlds-activation", StringComparison.Ordinal))
+            { WorldsActivationTests.RunAsync().GetAwaiter().GetResult(); return 0; }
+            if (args.Length == 1 && string.Equals(args[0], "--acceptance-factory", StringComparison.Ordinal))
+            { AcceptanceGamemodeFactoryTests.RunAsync().GetAwaiter().GetResult(); return 0; }
+
             if (args.Length == 1 && string.Equals(args[0], "--manifest-activation-serialization", StringComparison.Ordinal))
             { ManifestActivationSerializationTests.Run(); return 0; }
             if (args.Length == 1 && string.Equals(args[0], "--duplicate-selection", StringComparison.Ordinal))
@@ -60,6 +65,9 @@ namespace TopiaForge.ModManager.Tests
                 try { WorldReadinessContractTests.Run(readinessRoot); return 0; }
                 finally { TryDelete(readinessRoot); }
             }
+
+            if ((args.Length == 1 || args.Length == 2) && string.Equals(args[0], "--legacy-launch-discovery", StringComparison.Ordinal))
+            { LegacyLaunchDiscoveryTests.RunAsync(FindRepoRoot(), args.Length == 2 ? args[1] : null).GetAwaiter().GetResult(); return 0; }
 
             if (args.Length == 1 && string.Equals(args[0], "--session-lifecycle", StringComparison.Ordinal))
             {
@@ -72,6 +80,7 @@ namespace TopiaForge.ModManager.Tests
                     SessionActivationTests.Run(sessionRoot);
                     ContentAdmissionTests.Run(Path.Combine(sessionRoot, "content-admission"));
                     WorldsActivationTests.RunAsync().GetAwaiter().GetResult();
+                    AcceptanceGamemodeFactoryTests.RunAsync().GetAwaiter().GetResult();
                     LocalImportOperationTests.RunAsync().GetAwaiter().GetResult();
                     RuntimeSessionSelectionTests.Run();
                     NativeWorldReflectionTests.Run();
@@ -374,6 +383,7 @@ namespace TopiaForge.ModManager.Tests
                 LegacyLaunchDiscoveryTests.RunAsync(FindRepoRoot()).GetAwaiter().GetResult();
                 GamemodeConsumerRegressionTests.Run();
                 WorldsActivationTests.RunAsync().GetAwaiter().GetResult();
+                AcceptanceGamemodeFactoryTests.RunAsync().GetAwaiter().GetResult();
                 LocalImportOperationTests.RunAsync().GetAwaiter().GetResult();
                 WorldLaunchArmingTests.Run();
                 RoboWorldImportPlanTests.Run();

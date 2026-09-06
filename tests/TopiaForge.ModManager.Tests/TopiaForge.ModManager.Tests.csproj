@@ -22,6 +22,7 @@
          binding manifests against the checked-in surface baseline without ever loading the game DLL. -->
     <ProjectReference Include="..\..\src\TopiaForge.GameCompat.Surface\TopiaForge.GameCompat.Surface.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.GameCompat.Extractor\TopiaForge.GameCompat.Extractor.csproj" />
+    <ProjectReference Include="..\TopiaForge.SdkAcceptanceMod\TopiaForge.SdkAcceptanceMod.csproj" />
     <ProjectReference Include="..\TopiaForge.ValidTestMod\TopiaForge.ValidTestMod.csproj" />
     <ProjectReference Include="..\TopiaForge.ValidTestMod.Api\TopiaForge.ValidTestMod.Api.csproj" />
     <ProjectReference Include="..\..\mods\TopiaForge.CreatorContent\TopiaForge.CreatorContent.csproj" />

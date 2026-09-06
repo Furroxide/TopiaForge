@@ -9,7 +9,8 @@ namespace TopiaForge.SdkAcceptance
     {
         public Task<OperationResult<IGamemodeController>> StartAsync(IGamemodeSession session, CancellationToken cancellationToken)
         {
-            if (cancellationToken.IsCancellationRequested || session.Lifetime.IsStopping)
+            if (session == null) throw new ArgumentNullException(nameof(session));
+            if (cancellationToken.IsCancellationRequested || session.CancellationToken.IsCancellationRequested || session.Lifetime.IsStopping)
                 return Task.FromResult(OperationResult<IGamemodeController>.Failure(ModErrorCode.Cancelled, "Acceptance startup cancelled."));
             if (!session.Context.TryGetExtension<IAcceptanceSessionProbe>(out var probe) || probe == null)
                 return Task.FromResult(OperationResult<IGamemodeController>.Failure(ModErrorCode.Unavailable, "The owning acceptance probe is unavailable."));
