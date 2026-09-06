@@ -123,9 +123,11 @@ namespace TopiaForge.ModManager
                     managerLogger,
                     validationContext,
                     startupJournal == null ? null : new StartupJournalLoadObserver(startupJournal, managerLogger));
-                runtime.Load(loadOrder.OrderedPackages);
-                // Every mod's OnLoad has now run, so gamemodes contributed by mods that load after Worlds
-                // (all of them -- they declare loadAfter: worlds) are registered and can be launched into.
+                var selection = RuntimeSessionSelection.Create(launchProfile?.ProfileId ?? "direct-game", 0,
+                    packages, loadOrder, validationContext);
+                runtime.ActivateSessionRuntime(selection.Profile, rejectedSelections: selection.RejectedSelections);
+                runtime.Load(selection.Packages);
+                // Every selected package now has a binding result, including failed owners.
                 ArmWorldLaunch();
                 RecordStartupStage("mod-loading", stageStart);
                 if (launchProfile == null)

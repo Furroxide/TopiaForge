@@ -30,7 +30,9 @@ namespace TopiaForge.SdkAcceptance
         private ITimeControlService? timeControl;
         private ICreatorContentService? creatorContent;
         private IPromptOverrideRegistry? promptOverrides;
-        private IWorldGamemodeService? worlds;
+        private IWorldSessionService? worlds;
+        private IGamemodeSession? activeAcceptanceSession;
+        private AcceptanceSessionRecord? acceptanceSessionRecord;
         private int mainThreadId;
         private bool activeSceneSeen;
         private bool sceneCallbackSeen;
@@ -272,7 +274,7 @@ namespace TopiaForge.SdkAcceptance
                 "Run challenge " + acceptanceChallenge
                     + ". Close the confirmation; press F6, middle mouse, and gamepad A. "
                     + "Hold an item, interact with the acceptance robot, hold F9 to speak, "
-                    + "and launch SDK Acceptance World from the Worlds menu.",
+                    + "and select the SDK Acceptance World launch target in the manager.",
                 UiSurfaceKind.Hud,
                 520f,
                 180f));
@@ -300,113 +302,82 @@ namespace TopiaForge.SdkAcceptance
 
         private void RegisterProviderChecks()
         {
-            if (!RunProviderContractChecks() || worlds == null)
-            {
-                return;
-            }
-
-            worlds.SessionChanged += session =>
-            {
-                CheckMainThread("worlds.session-teardown", "session-started");
-                if (string.Equals(session.WorldId, AcceptanceWorldId, StringComparison.Ordinal))
-                {
-                    acceptanceWorldSessionSeen = true;
-                    Context.Logger.Info(Prefix + "|OBSERVE|world-session-started|" + session.Mode);
-                    RegisterPauseAcceptance();
-                }
-            };
-            worlds.SessionEnded += ended =>
-            {
-                CheckMainThread("worlds.session-teardown", "session-ended");
-                if (acceptanceWorldSessionSeen
-                    && string.Equals(ended.Session.WorldId, AcceptanceWorldId, StringComparison.Ordinal))
-                {
-                    Pass("worlds.session-teardown", ended.Reason.ToString());
-                }
-            };
-
-            var content = new BundleWorldContent(
-                Context.Assets,
-                "third_party/sdk-acceptance-world.bundle",
-                "Assets/World/World.prefab",
-                new TransformState(Vec3.Zero, Quat.Identity, new Vec3(1f, 1f, 1f)));
-            var worldRegistration = worlds.RegisterWorld(new WorldDefinition(
-                AcceptanceWorldId,
-                "SDK Acceptance World",
-                "Automated package-prefab world used by the V1 launch gate.",
-                supportsAdditiveArena: true), content);
-            var gamemodeRegistration = worlds.RegisterGamemode(new GamemodeDefinition(
-                AcceptanceGamemodeId,
-                "SDK Acceptance",
-                "Exercises world registration, loading, pause actions, and teardown."));
-            var menuRegistration = worlds.RegisterMenuEntry(new GamemodeMenuEntry(
-                AcceptanceMenuEntryId,
-                "SDK Acceptance World",
-                "Launch, wait for the ready toast, then exit the session.",
-                AcceptanceGamemodeId,
-                AcceptanceWorldId));
-            Context.Commands.Register(
-                new CommandDefinition("run-world", "Launches the registered SDK acceptance world."),
+            if (!RunProviderContractChecks() || worlds == null) return;
+            var registered = Context.Extensions.Register<IAcceptanceSessionProbe>(new AcceptanceSessionProbe(this));
+            if (!registered.Succeeded) { Fail("worlds.session-teardown", registered.ErrorMessage); return; }
+            worlds.StateChanged += ObserveAcceptanceSession;
+            Context.Commands.Register(new CommandDefinition("finish-world", "Finishes the currently running declared SDK acceptance session."),
                 invocation =>
                 {
-                    _ = RunWorldAcceptanceAsync();
-                    return OperationResult<string>.Success("SDK acceptance world launch requested.");
+                    var session = activeAcceptanceSession;
+                    if (session == null) return OperationResult<string>.Failure(ModErrorCode.InvalidState,
+                        "Select launch target " + AcceptanceMenuEntryId + " before finishing acceptance.");
+                    _ = FinishWorldAcceptanceAsync(session);
+                    return OperationResult<string>.Success("Bound SDK acceptance menu return requested.");
                 });
-            if (!worldRegistration.Succeeded || !gamemodeRegistration.Succeeded || !menuRegistration.Succeeded)
+            Context.Logger.Info(Prefix + "|ACTION|launch-target|" + AcceptanceMenuEntryId);
+        }
+
+        private void ObserveAcceptanceSession(WorldSessionSnapshot snapshot)
+        {
+            if (!CheckMainThread("worlds.session-teardown", "committed-" + snapshot.Phase)) return;
+            var record = acceptanceSessionRecord;
+            if (record == null) return;
+            if (snapshot.Phase == WorldSessionPhase.Running
+                && snapshot.Session?.SessionId == record.Session.SessionId
+                && snapshot.Session.WorldId == AcceptanceWorldId)
             {
-                Fail("worlds.session-teardown", "world, gamemode, or menu registration failed");
+                acceptanceWorldSessionSeen = true;
+                Context.Logger.Info(Prefix + "|OBSERVE|world-session-running|" + snapshot.Session.SessionId);
+            }
+            if (snapshot.Phase == WorldSessionPhase.Idle)
+            {
+                if (acceptanceWorldSessionSeen && record.ControllerDisposed && record.ScopeCleanup.DisposeCount == 1 && record.Session.Lifetime.IsStopping)
+                    Pass("worlds.session-teardown", "declared factory; committed Running/Idle; controller and scope released");
+                else Fail("worlds.session-teardown", "Idle was observed without controller and scope cleanup.");
+                acceptanceSessionRecord = null;
+                activeAcceptanceSession = null;
             }
         }
 
-        private void RegisterPauseAcceptance()
+        private OperationResult<IGamemodeController> BeginAcceptanceSession(IGamemodeSession session)
         {
-            if (!Context.TryGetExtension<IWorldPauseMenuService>(out var pause) || pause == null)
-            {
-                Fail("worlds.session-teardown", "pause-menu provider was not dependency-scoped");
-                return;
-            }
+            if (session.TargetId != AcceptanceMenuEntryId || session.GamemodeId != AcceptanceGamemodeId || session.WorldId != AcceptanceWorldId)
+                return OperationResult<IGamemodeController>.Failure(ModErrorCode.InvalidArgument, "Unexpected acceptance declaration identity.");
+            if (activeAcceptanceSession != null)
+                return OperationResult<IGamemodeController>.Failure(ModErrorCode.Conflict, "The prior acceptance session has not reached Idle.");
+            activeAcceptanceSession = session;
+            lifecycleProbeRunning = false;
+            acceptanceWorldSessionSeen = false;
+            var record = new AcceptanceSessionRecord(session);
+            acceptanceSessionRecord = record;
+            session.Lifetime.Track(record.ScopeCleanup);
+            RegisterPauseAcceptance(session);
+            return OperationResult<IGamemodeController>.Success(new AcceptanceController(record));
+        }
 
+        private void RegisterPauseAcceptance(IGamemodeSession session)
+        {
+            if (!session.Context.TryGetExtension<IWorldPauseMenuService>(out var pause) || pause == null)
+                throw new InvalidOperationException("The session pause provider was not dependency-scoped.");
             var action = pause.RegisterAction(new WorldPauseAction(
-                "finish-acceptance",
-                "FINISH SDK ACCEPTANCE",
-                () => worlds?.EndSession(WorldSessionEndReason.EndedByGamemode),
-                destructive: true));
-            var intercept = pause.InterceptExit(_ => WorldPauseExitDecision.EndSessionAndExit);
+                "finish-acceptance", "FINISH SDK ACCEPTANCE",
+                () => _ = FinishWorldAcceptanceAsync(session), destructive: true));
+            var intercept = pause.InterceptExit(_ => WorldPauseExitDecision.ReturnToMainMenu);
             if (!action.Succeeded || !intercept.Succeeded)
-            {
-                Fail("worlds.session-teardown", action.ErrorMessage + " " + intercept.ErrorMessage);
-            }
+                throw new InvalidOperationException("Session pause registration failed: " + action.ErrorMessage + " " + intercept.ErrorMessage);
         }
 
-        private async Task RunWorldAcceptanceAsync()
+        private async Task FinishWorldAcceptanceAsync(IGamemodeSession session)
         {
-            if (worlds == null)
+            if (acceptanceSessionRecord?.Session.SessionId != session.SessionId || !acceptanceSessionRecord.LifecycleCompleted)
             {
-                Fail("worlds.session-teardown", "world provider is unavailable");
+                session.Context.Ui.ShowToast("Wait for all ten SDK lifecycle cycles before finishing the acceptance session.", UiTone.Warning);
                 return;
             }
-
-            var loaded = await worlds.LaunchMenuEntryAsync(
-                AcceptanceMenuEntryId,
-                Context.Lifetime.StoppingToken);
-            if (!CheckMainThread("worlds.session-teardown", "load-completion") || !loaded.Succeeded)
-            {
-                Fail("worlds.session-teardown", loaded.ErrorMessage);
-                return;
-            }
-
-            Context.Ui.ShowToast("SDK acceptance world loaded. Use the pause action or run the session-end command.");
-            var delay = await Context.Scheduler.DelayAsync(
-                TimeSpan.FromSeconds(2),
-                Context.Lifetime.StoppingToken);
-            if (delay.Succeeded && CheckMainThread("worlds.session-teardown", "scheduled-end"))
-            {
-                var ended = worlds.EndSession(WorldSessionEndReason.EndedByGamemode);
-                if (!ended.Succeeded)
-                {
-                    Fail("worlds.session-teardown", ended.ErrorMessage);
-                }
-            }
+            var returned = await session.ReturnToMainMenuAsync(Context.Lifetime.StoppingToken);
+            if (!CheckMainThread("worlds.session-teardown", "menu-completion") || !returned.Succeeded)
+                Fail("worlds.session-teardown", returned.ErrorMessage);
         }
 
         private async Task RunAsyncChecks()
@@ -746,10 +717,11 @@ namespace TopiaForge.SdkAcceptance
                     && timeControl != null
                     && promptOverrides != null
                     && robotObjectives != null
-                    && worlds != null)
+                    && worlds?.Current.Phase == WorldSessionPhase.Running
+                    && activeAcceptanceSession != null)
                 {
                     lifecycleProbeRunning = true;
-                    _ = RunLifetimeCyclesAsync(player);
+                    _ = new AcceptanceLifecycleProbe(this, activeAcceptanceSession).RunLifetimeCyclesAsync(player);
                 }
 
                 if (!completed.Contains("player.health-and-control"))

@@ -78,4 +78,4 @@ $rows = @(); foreach ($file in rg --files -g "*.dart") { $count = (Get-Content -
 - Preserve `.topiaforgemod`, `topiaforge.mod.json`, dependency ordering, package inbox, manager logs, enable/disable state, and restart-required behavior.
 - Keep Unity/BepInEx-specific work in `src/TopiaForge.ModManager`.
 - Keep `src/TopiaForge.ModManager.Core` free of Unity references.
-- SDK conveniences in `TopiaForge.Mods.Abstractions` must remain additive and clean-room.
+- SDK conveniences compiled into the `TopiaForge.Mods.Abstractions` assembly must remain additive and clean-room. Source files in that directory compiled into `TopiaForge.Mods.Worlds` follow the approved gamemode contract redesign; its retired startup API is removed while assembly identity remains `0.1.0.0`.

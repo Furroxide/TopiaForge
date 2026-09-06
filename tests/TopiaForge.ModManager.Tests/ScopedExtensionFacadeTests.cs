@@ -39,7 +39,7 @@ namespace TopiaForge.ModManager.Tests
             var owner = pause.ForOwner(pauseLifetime);
             var actions = 0; var exits = 0;
             owner.RegisterAction(new WorldPauseAction("action", "Action", () => actions++));
-            owner.InterceptExit(_ => { exits++; return WorldPauseExitDecision.EndSessionAndExit; });
+            owner.InterceptExit(_ => { exits++; return WorldPauseExitDecision.ReturnToMainMenu; });
             pause.Action!.Callback(); pause.Interceptor!(null!);
             Assert(actions == 1 && exits == 1, "active pause callbacks should forward");
             pauseLifetime.BeginStop();

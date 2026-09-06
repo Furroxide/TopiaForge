@@ -18,7 +18,7 @@ namespace TopiaForge.ModManager.Tests
         {
             typeof(IModContext).Assembly,
             typeof(IRobotAgentService).Assembly,
-            typeof(IWorldGamemodeService).Assembly,
+            typeof(IWorldSessionService).Assembly,
             typeof(ITimeControlService).Assembly,
             typeof(ICreatorContentService).Assembly,
             typeof(IMultiplayerSession).Assembly,
@@ -275,7 +275,7 @@ namespace TopiaForge.ModManager.Tests
                     "prompt-overrides",
                     "robot-targets",
                     "creator-sessions",
-                    "world-registrations"
+                    "session-resources"
                 }), caseId + " resourceFamilies must exactly describe the automatable live cycle coverage");
 
             var body = ExtractMethodBody(source, RequiredText(acceptanceCase, "probeMethod"));
@@ -298,7 +298,7 @@ namespace TopiaForge.ModManager.Tests
                 "RegisterCyclePrompt(resources, cycle)",
                 "RegisterCycleRobotTarget(resources, player, cycle)",
                 "RegisterCycleCreatorSession(resources, cycle)",
-                "RegisterCycleWorlds(resources, out world, out gamemode, out menu)",
+                "RegisterCycleSessionResources(resources)",
                 "LoadCycleAssetsAsync(resources, player, cycle)",
                 "WaitForCycleCallbacksAsync(counters, cycle)",
                 "DisposeCycleResources(resources)",
@@ -405,19 +405,36 @@ namespace TopiaForge.ModManager.Tests
                 "service.TryResolveTarget",
                 "registration.IsActive"
             });
-            ValidateProbeMethod(source, "RegisterCycleWorlds", new[]
+            ValidateProbeMethod(source, "RegisterCycleSessionResources", new[]
             {
-                "service.RegisterWorld",
-                "service.RegisterGamemode",
-                "service.RegisterMenuEntry",
-                "world.IsActive"
+                "WorldSessionPhase.Running",
+                "session.SessionId",
+                "CycleContext.Events.SubscribeUpdate",
+                "pause.RegisterAction",
+                "resources.Push(owned)"
+            });
+            ValidateProbeMethod(source, "BeginAcceptanceSession", new[]
+            {
+                "IGamemodeController",
+                "session.Lifetime.Track(record.ScopeCleanup)",
+                "RegisterPauseAcceptance(session)",
+                "new AcceptanceController(record)"
+            });
+            ValidateProbeMethod(source, "ObserveAcceptanceSession", new[]
+            {
+                "WorldSessionPhase.Running",
+                "WorldSessionPhase.Idle",
+                "record.ControllerDisposed",
+                "record.ScopeCleanup.DisposeCount == 1",
+                "record.Session.Lifetime.IsStopping"
             });
             ValidateProbeMethod(source, "AssertCycleReleasedAsync", new[]
             {
                 "!extension.IsActive",
                 "prompt.IsDisposed",
                 "!target.IsActive",
-                "!world.IsActive",
+                "sessionResources.IsDisposed",
+                "sessionCallbacks == sessionResources.Callbacks",
                 "!assets.Bundle.IsAlive",
                 "!assets.Interaction.IsActive",
                 "Context.Scheduler.DelayAsync",

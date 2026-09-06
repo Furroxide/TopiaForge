@@ -6,14 +6,14 @@ import 'package:launcher_domain/launcher_domain.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test('versioned V5 schema is frozen and self-contained', () {
+  test('canonical alias is the frozen, self-contained V6 schema', () {
     final root = _repoRoot();
     Map<String, Object?> readSchema(String name) =>
         jsonDecode(File(_join(root.path, ['schemas', name])).readAsStringSync())
             as Map<String, Object?>;
 
     final latest = readSchema('topiaforge.mod.schema.json');
-    final versioned = readSchema('topiaforge.mod.v5.schema.json');
+    final versioned = readSchema('topiaforge.mod.v6.schema.json');
     expect(
       jsonEncode(versioned),
       isNot(contains('/schemas/topiaforge.mod.schema.json')),
@@ -34,8 +34,7 @@ void main() {
     expect(
       versioned,
       latest,
-      reason:
-          'while V5 is latest, its frozen schema and editor alias must remain semantically identical',
+      reason: 'V6 and the editor alias must remain semantically identical',
     );
   });
 
@@ -127,7 +126,7 @@ void main() {
     }
   });
 
-  test('checked-in manifests satisfy schema V5', () {
+  test('all 17 checked-in first-party manifests satisfy schema V6', () {
     final root = _repoRoot();
     final schemaJson =
         jsonDecode(
@@ -138,13 +137,23 @@ void main() {
             as Map<String, Object?>;
     final schema = JsonSchema.create(schemaJson);
     final manifestFiles = [
-      ...Directory(_join(root.path, ['mods']))
-          .listSync(recursive: true)
-          .whereType<File>()
-          .where((file) => file.path.endsWith('topiaforge.mod.json')),
+      for (final parts in [
+        ['mods'],
+        ['samples', 'multiplayer'],
+        ['tests', 'TopiaForge.SdkAcceptanceMod'],
+      ])
+        ...Directory(_join(root.path, parts))
+            .listSync(recursive: true, followLinks: false)
+            .whereType<File>()
+            .where((file) => file.path.endsWith('topiaforge.mod.json'))
+            .where(
+              (file) => !file.uri.pathSegments.any(
+                (part) => part == 'bin' || part == 'obj',
+              ),
+            ),
     ];
 
-    expect(manifestFiles, isNotEmpty);
+    expect(manifestFiles, hasLength(17));
     for (final file in manifestFiles) {
       final json = jsonDecode(file.readAsStringSync()) as Map<String, Object?>;
       final result = schema.validate(json);
@@ -216,7 +225,7 @@ void main() {
 
   test('shared V5 fixtures agree across schema and domain validators', () {
     final root = _repoRoot();
-    final schema = _manifestSchema();
+    final schema = _manifestSchema(version: 5);
     final fixtureRoot = _join(root.path, ['tests', 'fixtures', 'manifests']);
     final cases = File(_join(fixtureRoot, ['corpus.txt']))
         .readAsLinesSync()
@@ -258,12 +267,17 @@ void main() {
   });
 }
 
-JsonSchema _manifestSchema() {
+JsonSchema _manifestSchema({int? version}) {
   final root = _repoRoot();
   return JsonSchema.create(
     jsonDecode(
           File(
-            _join(root.path, ['schemas', 'topiaforge.mod.schema.json']),
+            _join(root.path, [
+              'schemas',
+              version == null
+                  ? 'topiaforge.mod.schema.json'
+                  : 'topiaforge.mod.v$version.schema.json',
+            ]),
           ).readAsStringSync(),
         )
         as Map<String, Object?>,
@@ -271,7 +285,7 @@ JsonSchema _manifestSchema() {
 }
 
 Map<String, Object?> _validManifest() => {
-  'schemaVersion': 5,
+  'schemaVersion': ModManifest.currentSchemaVersion,
   'name': 'sample.schema-parity',
   'displayName': 'Schema parity',
   'version': '1.2.3',

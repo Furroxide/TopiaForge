@@ -1166,7 +1166,8 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                 "TopiaForge.Mods.ICommandService", "TopiaForge.Mods.IDiagnosticsService",
                 "TopiaForge.Mods.IExtensionService", "TopiaForge.Mods.IMultiplayerSession",
                 "TopiaForge.Mods.IReplicatedObject", "TopiaForge.Mods.IReplicatedObjectTypeRegistration",
-                "TopiaForge.Mods.IPresentationEventRegistration", "TopiaForge.Mods.IWorldGamemodeService",
+                "TopiaForge.Mods.IPresentationEventRegistration", "TopiaForge.Mods.IWorldSessionService",
+                "TopiaForge.Mods.IWorldSession", "TopiaForge.Mods.ILocalWorldService",
                 "TopiaForge.Mods.ITimeControlService"
             };
             return banned.Any(value => symbol.IndexOf(value, StringComparison.Ordinal) >= 0);

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "modId": "io.github.furroxide.topiaforge.chronos",
   "modName": "TopiaForge Chronos",
   "bindings": [

@@ -317,6 +317,13 @@ namespace TopiaForge.GameCompat.Extractor
 
         private static string? ResolveModSourceDir(string repoRoot, string modId)
         {
+            // Manager lives under src and source-links the no-op importer helper. Normal project item
+            // discovery includes that actual shared source under the same audited ownership.
+            if (string.Equals(modId, "io.github.furroxide.topiaforge.modmanager", StringComparison.Ordinal))
+            {
+                var manager = Path.Combine(repoRoot, "src", "TopiaForge.ModManager");
+                return Directory.Exists(manager) ? manager : null;
+            }
             var modsRoot = Path.Combine(repoRoot, "mods");
             if (!Directory.Exists(modsRoot))
             {

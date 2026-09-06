@@ -1,11 +1,13 @@
 ---
 title: Manifest V5
-description: Canonical TopiaForge package manifest, including optional multiplayer metadata.
+description: Historical V5 package fields, superseded by the V6 authoring contract.
 ---
 
 # Manifest V5
 
-Manifest V5 is the sole manifest schema supported by TopiaForge. It is strict: unknown fields are
+This is the historical V5 field reference. [Manifest V6](ManifestV6.md) is the current authoring
+contract. Explicit V5 dispatch remains only during the sequential activation work and will be retired
+before release. Its field rules are retained below for migration context. Unknown fields are
 rejected unless their name begins with `x-`, and collections, strings, paths, and dependency graphs are
 bounded before an assembly loads. The `multiplayer` object is optional. Omitting it is the canonical
 standalone-only declaration.
@@ -13,15 +15,16 @@ standalone-only declaration.
 Manifest V4 was retired before the first public release. Tooling rejects it with a migration command
 instead of carrying a second permanent contract.
 
-The editor-friendly `topiaforge.mod.schema.json` URL names the latest supported schema. The immutable
-`topiaforge.mod.v5.schema.json` file is a self-contained V5 contract and never references that moving alias.
-Future loaders add a new version-specific reader and schema without changing the V5 parser or file.
+The editor-friendly `topiaforge.mod.schema.json` URL now names V6. During the activation
+transition, `topiaforge.mod.v5.schema.json` remains a self-contained historical V5 schema.
+The retirement slice replaces it with a rejecting stub and removes V5 dispatch before release;
+this temporary transition does not promise permanent V5 compatibility.
 
 ## Minimal standalone manifest
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+  "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.v5.schema.json",
   "schemaVersion": 5,
   "name": "example.first-mod",
   "displayName": "First Mod",
@@ -146,6 +149,6 @@ explicit approval.
 
 ## Compatibility rule
 
-V5 is the only supported schema. A future manifest schema must receive a new reader, validator, and explicit
-migration; it may not change what V5 means. See [Compatibility policy](CompatibilityPolicy.md) and
+V5 is superseded by V6 and scheduled for rejection before the first release. The canonical alias
+now names V6; use the [current reference](ManifestV6.md) for authoring. See [Compatibility policy](CompatibilityPolicy.md) and
 [Multiplayer API preview](Multiplayer.md).

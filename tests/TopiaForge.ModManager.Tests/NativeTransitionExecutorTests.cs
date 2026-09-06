@@ -38,30 +38,45 @@ namespace TopiaForge.ModManager.Tests
             var coordinator = new SceneCoordinator();
             var service = new OwnerSceneTransitionService("world.mod", coordinator);
             Start(service, out var pending);
-            var calls = 0;
-            OperationResult<bool> Import(Action entered)
-            {
-                calls++; entered(); return OperationResult<bool>.Success(true);
-            }
-            var blocked = TopiaForge.Worlds.LocalWorldImportOperation.Run(service,
-                new SceneSnapshot("SceneA", true, true), default, Import);
-            Assert(calls == 0 && blocked.ErrorCode == ModErrorCode.Conflict,
+            using var transaction = new LocalImportTransaction();
+            var scene = new WorldSceneIdentity(1, "SceneA");
+            var blocked = TopiaForge.Worlds.LocalWorldImportOperation.RunAsync(service,
+                scene, default, transaction).GetAwaiter().GetResult();
+            Assert(transaction.Calls == 0 && blocked.ErrorCode == ModErrorCode.Conflict,
                 "the real local-import route preserves Busy and never invokes the importer");
             pending.Sink!.NativeCompleted(Loaded());
             using var stopped = new CancellationTokenSource();
             stopped.Cancel();
-            var cancelled = TopiaForge.Worlds.LocalWorldImportOperation.Run(service,
-                new SceneSnapshot("SceneA", true, true), stopped.Token, Import);
-            Assert(calls == 0 && cancelled.ErrorCode == ModErrorCode.Cancelled,
+            var cancelled = TopiaForge.Worlds.LocalWorldImportOperation.RunAsync(service,
+                scene, stopped.Token, transaction).GetAwaiter().GetResult();
+            Assert(transaction.Calls == 0 && cancelled.ErrorCode == ModErrorCode.Cancelled,
                 "local-import cancellation remains distinct from invalid input");
-            var denied = TopiaForge.Worlds.LocalWorldImportOperation.Run(
+            var denied = TopiaForge.Worlds.LocalWorldImportOperation.RunAsync(
                 new OwnerSceneTransitionService("world.mod", new SceneCoordinator(authorityPolicy: new Deny())),
-                new SceneSnapshot("SceneA", true, true), default, Import);
-            Assert(calls == 0 && denied.ErrorCode == ModErrorCode.NotAuthoritative,
+                scene, default, transaction).GetAwaiter().GetResult();
+            Assert(transaction.Calls == 0 && denied.ErrorCode == ModErrorCode.NotAuthoritative,
                 "local-import authority refusal is preserved before effects");
-            Assert(TopiaForge.Worlds.LocalWorldImportOperation.Run(service,
-                new SceneSnapshot("SceneA", true, true), default, Import).Succeeded
-                && calls == 1 && !coordinator.IsSceneBusy, "fresh completed local imports release admission");
+            var imported = TopiaForge.Worlds.LocalWorldImportOperation.RunAsync(service,
+                scene, default, transaction).GetAwaiter().GetResult();
+            Assert(imported.TryGetValue(out var content) && ReferenceEquals(content, transaction.Content)
+                && transaction.Calls == 1 && !coordinator.IsSceneBusy, "fresh completed local imports return owned content and release admission");
+            content!.Dispose();
+            Assert(transaction.Content.Disposals == 1, "the captured imported content is independently owned");
+        }
+
+        private sealed class LocalImportTransaction : TopiaForge.Worlds.ILocalImportTransaction
+        {
+            internal int Calls;
+            internal readonly ImportedContent Content = new ImportedContent();
+            public bool NativeEntered => Calls != 0;
+            public bool NativeReturned => Calls != 0;
+            public OperationResult<IDisposable> Import() { Calls++; return OperationResult<IDisposable>.Success(Content); }
+            public void Dispose() { }
+        }
+        private sealed class ImportedContent : IDisposable
+        {
+            internal int Disposals;
+            public void Dispose() { Disposals++; }
         }
 
         private static void ForeignSessionGrantIsRejected()

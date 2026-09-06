@@ -17,7 +17,7 @@ namespace TopiaForge.SdkAcceptance
                 var robotBrainProviders = Context.Extensions.GetAll<IRobotBrainQueryService>();
                 var robotConversationProviders = Context.Extensions.GetAll<IRobotConversationService>();
                 var dialogueProviders = Context.Extensions.GetAll<IPlayerDialogueInputService>();
-                var worldProviders = Context.Extensions.GetAll<IWorldGamemodeService>();
+                var worldProviders = Context.Extensions.GetAll<IWorldSessionService>();
                 if (timeProviders.Count != 1
                     || creatorContentProviders.Count != 1
                     || promptProviders.Count != 1

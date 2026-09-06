@@ -97,7 +97,16 @@ The harness is a prerequisite for validation fixes:
 `EffectiveProfile` contains the exact enabled package selection, disabled installed
 packages for diagnostics, profile identity/revision, and installation facts. Build
 it from the installed package catalog and existing dependency planner; registry
-entries cannot supply declarations or satisfy an installed dependency.
+entries cannot supply declarations or satisfy an installed dependency. Preserve the full
+installation content-target set; compatibility accepts an intersection with that set,
+not whichever target happens to be enumerated first. Snapshot caller-owned collections.
+
+Keep duplicate selected identities visible and ambiguous; never choose the first or last
+package to make the profile appear valid. Load unrelated healthy packages without activating
+an ambiguous owner. Preserve malformed installed identities as diagnostic records with their
+original path, ID, version, enablement, and validation errors. An enabled rejected selection
+blocks gameplay before scene work while diagnostics and main-menu operations remain usable.
+A disabled rejected selection remains visible without blocking an otherwise valid launch.
 
 `LaunchRequest` selects a target and optional world/transition overrides.
 `LaunchResolution` returns either an immutable `LaunchPlan` or all determinable
@@ -180,6 +189,21 @@ which bindings failed. A matching snapshot must prove each selected binding;
 cached binding success cannot establish availability in the current process.
 
 ## 4. Runtime ownership and execution
+
+Session-bound restart and main-menu commands validate the actual caller scope and current
+session before admission. Once accepted, tearing down the old scope must not cancel its own
+transition; retain explicit caller cancellation separately. A callback from a stale or stopped
+session is a terminal no-op, including while a newer session is busy: it must never reschedule
+itself indefinitely. Local content imports share session and native admission, retain owned
+results until teardown, and keep Busy until native drain even after public cancellation.
+Reservation failures, cancellation callbacks, returned-resource disposal, and lease release
+are independent cleanup attempts; aggregate their failures without losing the primary cause.
+
+Native adapters validate exact member signatures and readiness values before effects. Match
+parameter types and count, generic arity, visibility, staticness, and property accessors against
+verified metadata. Reject invalid transforms and malformed awaiters before gameplay startup;
+readiness failure still disposes returned world ownership. Metadata and synthetic engine tests
+do not establish actual scene timing, geometry, or spawn placement in the game.
 
 ### Public Worlds interfaces
 

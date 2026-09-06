@@ -160,7 +160,6 @@
     <Compile Include="..\..\mods\TopiaForge.Chronos\TimeControlService.OwnerFacade.cs" />
     <Compile Include="..\..\mods\TopiaForge.Worlds\UgcImportCompletionPolicy.cs" />
     <Compile Include="..\..\mods\TopiaForge.Worlds\LocalWorldImportOperation.cs" />
-    <Compile Include="..\..\mods\TopiaForge.Worlds\WorldsService.OwnerFacade.cs" />
     <Compile Include="..\..\mods\TopiaForge.Worlds\SceneTransitionTracker.cs" />
     <Compile Include="..\..\mods\TopiaForge.Worlds\MainThreadDispatchQueue.cs" />
     <Compile Include="..\..\mods\TopiaForge.Worlds\RoboWorldImportPlan.cs" />
@@ -200,7 +199,7 @@
     <!-- Compiling the menu census here both unit-tests it and mechanically keeps it Unity-free, so the
          reporting that explains a missing main-menu entry point cannot regain a UnityEngine dependency. -->
     <Compile Include="..\..\src\TopiaForge.ModManager\MenuSurfaceCensus.cs" />
-    <Compile Include="..\..\src\TopiaForge.ModManager\WorldLaunchRouter.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/LegacyWorldLaunchAdapter.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\WorldLaunchArming.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\ModServiceRegistry.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\OwnerBoundModServiceRegistry.cs" />
@@ -295,4 +294,25 @@
     <Compile Include="../../mods/TopiaForge.Worlds/WorldPlayerPlacement.cs" Link="Worlds/WorldPlayerPlacement.cs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="../../mods/TopiaForge.Sandbox/SandboxMod.cs" />
+    <Compile Include="../../mods/TopiaForge.Sandbox/SandboxController.cs" />
+    <Compile Include="../../mods/TopiaForge.Sandbox/SandboxGamemode.cs" />
+    <Compile Include="../../mods/TopiaForge.Sandbox/SandboxSessionCommands.cs" />
+    <Compile Include="../../mods/TopiaForge.Zombies/ZombiesGamemode.cs" />
+    <Compile Include="../../mods/TopiaForge.Zombies/ZombiesSessionCommands.cs" />
+    <Compile Include="../../mods/TopiaForge.Zombies/ZombiesController.Cleanup.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/PauseExitOperation.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/LocalImportOwnership.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/LocalImportContracts.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/NativeImportOverrides.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/FreePlayGamemode.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/ContextWorldSessionService.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/ModContext.Sessions.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Observers.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Content.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/RuntimeSessionSelection.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/NativeWorldReflection.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/LegacyLaunchDiscovery.cs" />
+  </ItemGroup>
 </Project>

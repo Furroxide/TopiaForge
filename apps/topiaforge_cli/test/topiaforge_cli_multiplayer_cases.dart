@@ -1,7 +1,7 @@
 part of 'topiaforge_cli_test.dart';
 
 void _multiplayerCliTests(_CliTestHarness Function() currentHarness) {
-  test('mod add multiplayer keeps V5 and scaffolds the contract lock', () async {
+  test('mod add multiplayer keeps V6 and scaffolds the contract lock', () async {
     final created = await currentHarness().runCli([
       'new',
       'mod',
@@ -28,7 +28,7 @@ void _multiplayerCliTests(_CliTestHarness Function() currentHarness) {
               ).readAsStringSync(),
             )
             as Map<String, Object?>;
-    expect(manifest['schemaVersion'], 5);
+    expect(manifest['schemaVersion'], 6);
     expect(manifest['multiplayer'], {
       'mode': 'session',
       'presence': 'required',
@@ -118,10 +118,10 @@ void _multiplayerCliTests(_CliTestHarness Function() currentHarness) {
       projectDir,
     ]);
     expect(migrateNoOp.exitCode, 0);
-    expect(migrateNoOp.stdout, contains('supported schema V5'));
+    expect(migrateNoOp.stdout, contains('supported schema V6'));
   });
 
-  test('mod remove multiplayer keeps the project on standalone V5', () async {
+  test('mod remove multiplayer keeps the project on standalone V6', () async {
     final created = await currentHarness().runCli([
       'new',
       'mod',
@@ -159,7 +159,7 @@ void _multiplayerCliTests(_CliTestHarness Function() currentHarness) {
               ).readAsStringSync(),
             )
             as Map<String, Object?>;
-    expect(manifest['schemaVersion'], 5);
+    expect(manifest['schemaVersion'], 6);
     expect(manifest, isNot(contains('multiplayer')));
     expect(
       (manifest['dependencies'] as Map? ?? const {}).keys,

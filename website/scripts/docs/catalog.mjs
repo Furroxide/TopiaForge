@@ -18,6 +18,7 @@ export const pages = [
   page('docs/CliDevLoop.md', 'guides/cli-dev.md'),
   page('docs/UnityInterop.md', 'guides/interop.md', false),
   page('docs/ManifestV5.md', 'reference/manifest-v5.md'),
+  page('docs/ManifestV6.md', 'reference/manifest-v6.md'),
   page('docs/Diagnostics.md', 'reference/diagnostics.md'),
   page('docs/PrivacyAndCapabilities.md', 'reference/capabilities.md'),
   page(
