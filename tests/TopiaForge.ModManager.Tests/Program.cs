@@ -251,8 +251,7 @@ namespace TopiaForge.ModManager.Tests
                 }
             }
 
-            var root = Path.Combine(Path.GetTempPath(), "TopiaForgeModManagerTests-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(root);
+            var root = Directory.CreateTempSubdirectory("TopiaForgeModManagerTests-").FullName;
 
             try
             {

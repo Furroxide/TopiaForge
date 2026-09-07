@@ -1042,3 +1042,43 @@ which is also installed alongside 10.0.9; these development checks do not certif
 the release builder's pinned runtime. Release preparation must verify its actual
 frozen toolchain independently. Remote `dev` remained `bd7be8be` after the final
 build, and all pre-push repository/Markdown audits passed again.
+
+
+## Slice 7 hosted review and fixture corrections
+
+[PR #112](https://github.com/Furroxide/TopiaForge/pull/112) opened at
+`c75f3d2378102eb63a8cf1abf6d24df3da0ddb13`, based on `bd7be8be`.
+[CI 34167161651](https://github.com/Furroxide/TopiaForge/actions/runs/34167161651)
+passed C#, Flutter, all seven templates, repository hygiene, Linux domain (868),
+Linux CLI (270), Windows data (469 with four skips), and complete Linux
+[guide/API/search publication](https://github.com/Furroxide/TopiaForge/actions/runs/34167161651/job/101881159768).
+The overall run failed solely on two Linux data process-identity fixture cases
+(462 passed, two failed, nine skipped). These are actual failures, not exemptions.
+
+An isolated Ubuntu 24.04 run with native Dart 3.12.2 reproduced both failures.
+Dart's frontend changes the child image to `dartvm`; the test incorrectly expected
+the frontend image. Production image/generation comparison correctly rejected it.
+The fixture now launches the VM directly, as the Windows creation fixture already
+did. The same Linux control/epoch suite went from six passed/two failed to eight
+passed; the Windows creator/control/epoch suite passed all twelve cases. Production
+process ownership checks are unchanged. Logs:
+`%TEMP%/topiaforge-native-linux-zTuHF0/native-{before,after}.log` and
+`%TEMP%/tf-slice7-native-linux-fixture-windows.log`.
+
+The C# CodeQL SARIF analysis `1737970295` reported fifteen path findings
+[443–457](https://github.com/Furroxide/TopiaForge/security/code-scanning/443).
+Every trace originates at one of two test `Path.GetTempPath` roots, including
+flows into already-guarded production sinks. Negative containment/link review,
+including a dangling ancestor link, found no demonstrated production traversal
+bypass. Those fixtures now use `Directory.CreateTempSubdirectory` for atomic
+ownership. Production guards remain intact. The rebuilt solution and all eleven
+SDK/seven-harness checks passed after that repair. No alert was suppressed or
+dismissed; the next-head analysis must establish fixed instances. Logs:
+`tf-slice7-c75f3d2-codeql-csharp.sarif` and
+`tf-slice7-codeql-fixture-{format,build,seven-harness}.log` in the temporary directory.
+
+Review also identified two corrupted documentation dashes; both were repaired,
+along with the same encoding artifact in the log-truncation marker. These fixture
+and text corrections require fresh hosted evidence before merge. The successful
+publication above certifies `c75f3d2`, not an untested follow-up revision. Live-game
+and release qualification remain pending.
