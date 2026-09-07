@@ -10,6 +10,7 @@ import 'launcher_section.dart';
 import 'launcher_state.dart';
 
 part 'launcher_bloc_actions.dart';
+part 'launcher_launch_actions.dart';
 part 'launcher_event_dispatch.dart';
 part 'launcher_game_install_actions.dart';
 part 'launcher_profile_actions.dart';
@@ -27,6 +28,20 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
        _updateRepository = updateRepository,
        super(LauncherState.initial()) {
     on<LauncherEvent>(_dispatchEvent, transformer: sequential());
+    _launchActivitySub = _repository.launchActivities.listen(
+      (activity) {
+        if (!isClosed) add(LaunchActivityUpdated(activity));
+      },
+      onError: (Object error) {
+        if (!isClosed) {
+          add(
+            LaunchActivityMonitorFailed(
+              'Runtime status could not be read: $error',
+            ),
+          );
+        }
+      },
+    );
     _updateStatusSub = _updateRepository?.statuses.listen((status) {
       if (!isClosed) add(LauncherUpdateStatusChanged(status));
     });
@@ -38,6 +53,10 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
   final DependencyPlanner _dependencyPlanner = const DependencyPlanner();
 
   StreamSubscription<LauncherUpdateStatus>? _updateStatusSub;
+  StreamSubscription<LaunchActivity>? _launchActivitySub;
+  int _launchPreviewGeneration = 0;
+  String? _activeLaunchRequest;
+  LaunchActivity? _launchReceipt;
 
   String get dataRoot => _repository.dataRoot;
 
@@ -47,8 +66,15 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     // while pending handlers finish.
     final updateClose = _updateStatusSub?.cancel();
     _updateStatusSub = null;
+    final launchClose = _launchActivitySub?.cancel();
+    _launchActivitySub = null;
+    _launchPreviewGeneration++;
     final blocClose = super.close();
-    return Future.wait<void>([?updateClose, blocClose]).whenComplete(() async {
+    return Future.wait<void>([
+      ?updateClose,
+      ?launchClose,
+      blocClose,
+    ]).whenComplete(() async {
       await _updateRepository?.dispose();
       await _repository.dispose();
     });
@@ -58,6 +84,7 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     await _guard(emit, 'Refreshed launcher state.', () async {
       final snapshot = await _repository.loadSnapshot();
       emit(_snapshotState(snapshot, 'Ready.'));
+      _queueLaunchPreviews();
       if (event is LauncherStarted &&
           snapshot.launcherUpdates.enabled &&
           snapshot.launcherUpdates.checkAutomatically &&
@@ -365,13 +392,11 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
       id: 'profile-${DateTime.now().millisecondsSinceEpoch}',
     );
     final profiles = [...state.profiles, profile];
-    await _repository.saveProfiles(profiles, profile.id);
-    emit(
-      state.copyWith(
-        profiles: profiles,
-        selectedProfileId: profile.id,
-        statusMessage: 'Imported profile ${profile.name}.',
-      ),
+    await _persistProfiles(
+      profiles,
+      profile.id,
+      emit,
+      'Imported profile ${profile.name}.',
     );
   }
 
@@ -381,6 +406,15 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     String? selectedModId,
     IssueSeverity statusSeverity = IssueSeverity.info,
   }) {
+    final changedLaunchContext =
+        state.gameInstall?.path != snapshot.gameInstall?.path ||
+        state.selectedProfileId != snapshot.selectedProfileId ||
+        !snapshot.profiles.any(
+          (profile) =>
+              profile.id == state.selectedProfile?.id &&
+              profile.revision == state.selectedProfile?.revision,
+        );
+    if (changedLaunchContext) _activeLaunchRequest = null;
     final selected =
         selectedModId ??
         (snapshot.installedMods.any((mod) => mod.id == state.selectedModId)
@@ -406,19 +440,12 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
       registryMods: snapshot.registryMods,
       packageSources: snapshot.packageSources,
       sourceStatuses: snapshot.sourceStatuses,
-      worldCatalog: snapshot.worldCatalog,
+      previewsByProfile: snapshot.previewsByProfile,
+      clearLaunchActivity: changedLaunchContext,
       recentLog: snapshot.recentLog,
       launcherLog: snapshot.launcherLog,
       resolution: _dependencyPlanner.resolveInstalled(
         snapshot.installedMods,
-        gameVersion: snapshot.gameInstall?.gameVersion,
-        requireKnownGameVersion: true,
-        platform: _launcherGamePlatform(snapshot.gameInstall),
-        architecture: _launcherGameArchitecture(snapshot.gameInstall),
-        contentTargets: _launcherGameContentTargets(snapshot.gameInstall),
-      ),
-      profileResolution: _dependencyPlanner.resolveInstalled(
-        _profileEffectiveMods(snapshot),
         gameVersion: snapshot.gameInstall?.gameVersion,
         requireKnownGameVersion: true,
         platform: _launcherGamePlatform(snapshot.gameInstall),

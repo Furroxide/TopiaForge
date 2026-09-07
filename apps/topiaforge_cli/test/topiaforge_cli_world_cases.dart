@@ -142,9 +142,9 @@ void _worldCliTests(_CliTestHarness Function() currentHarness) {
               ).readAsStringSync(),
             )
             as Map<String, Object?>;
-    expect(config['worldId'], 't.paired');
+    expect(config['worldId'], 't.paired.world');
     expect(config['bundleName'], 't-paired');
-    expect(config['worldPrefab'], 'Assets/World/World.prefab');
+    expect(config['worldPrefab'], 'assets/world/world.prefab');
 
     // Dry run resolves the pairing without launching Unity.
     final dryRun = await currentHarness().runCli([

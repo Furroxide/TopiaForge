@@ -1,7 +1,8 @@
 part of '../launch_resolution.dart';
 
-/// Wire v4 is deliberately inactive until all production surfaces switch together.
+/// Explicit one-shot command, shared by launcher preflight and runtime intake.
 final class ProfileLaunchConfigurationV4 {
+  static const environmentVariable = 'TOPIAFORGE_LAUNCH_PROFILE';
   ProfileLaunchConfigurationV4({
     required String profileId,
     required int profileRevision,
@@ -41,7 +42,8 @@ final class ProfileLaunchConfigurationV4 {
     if ((digest != null && _digest(digest) != this.digest) ||
         (this.command == 'main-menu' && plan != null) ||
         (this.command == 'launch-target' && plan == null) ||
-        (safeMode && this.command != 'main-menu') ||
+        (safeMode &&
+            (this.command != 'main-menu' || this.packages.isNotEmpty)) ||
         (plan != null &&
             (!_samePackages(this.packages, plan!.packages) ||
                 plan!.digest != this.digest))) {

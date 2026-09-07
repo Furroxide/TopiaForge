@@ -72,8 +72,8 @@ namespace TopiaForge.ModManager.Tests
             stored.Normalize();
             Assert(stored.WorldLaunch!.SelectedGamemodeId == "a.b.c", "a stored selection must survive");
             Assert(stored.WorldLaunch.AutoLoadOnStart, "a stored auto-load choice must survive");
-            Assert(stored.WorldLaunch.LoadMode == WorldLaunchSettings.AdditiveArena,
-                "an unusable stored load mode must be clamped, not carried into the runtime");
+            Assert(stored.WorldLaunch.LoadMode == "bogus",
+                "an unknown stored load mode must remain available for explicit repair; versioned selection resolution refuses it");
         }
 
         private static void TestJsonObjectMergeRejectsMalformedValues()

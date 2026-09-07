@@ -9,7 +9,7 @@ This Manifest V6 package declares a bundle world in `AssetBundles/{{BUNDLE_NAME}
 3. Assemble `Assets/World/World.prefab`. Place exactly one descendant named `SpawnPoint` at the intended player position and rotation. Give walkable geometry colliders and use native Unity/HDRP components without custom scripts.
 4. Build and attest the bundle with `topiaforge world build` (or `TopiaForge → Build World Bundle` in Unity).
 5. Restore and test with `topiaforge restore` and `dotnet test tests/{{ASSEMBLY_NAME}}.Tests`, then validate, package and install with `topiaforge check package .`, `topiaforge pack` and `topiaforge install`.
-6. Start the game and select the `{{DISPLAY_NAME}}` launch target. Verify geometry, authored spawn and return-to-menu behavior in the installed game.
+6. Launch this package's target with `topiaforge launch --target {{MOD_ID}}.menu`, or run `topiaforge world play --target {{MOD_ID}}.menu` from its paired Unity project to build, package, install and launch it. The default CLI wait confirms Running only after a matching runtime acknowledgement; exit `3` means startup is unconfirmed. Verify geometry, authored spawn and return-to-menu behavior in the installed game.
 
 ## Contract and tests
 

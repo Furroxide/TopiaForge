@@ -10,63 +10,110 @@ namespace TopiaForge.ModManager
     public sealed partial class TopiaForgeModManagerPlugin
     {
         private const float WorldLaunchMaxWaitSeconds = 12f;
-        private WorldLaunchIntent? pendingWorldLaunch;
+        private bool pendingStartupLaunch;
+        private bool startupCommandIssued;
+        private LaunchSelection? pendingRememberedSelection;
         private float pendingWorldLaunchWait;
-        private LegacyLaunchDiscovery launchDiscovery = null!;
+        private LaunchDiscoveryGate launchDiscovery = null!;
         public IReadOnlyList<ModLaunchTargetDeclaration> GetLaunchTargets() => runtime == null
             ? Array.Empty<ModLaunchTargetDeclaration>() : runtime.LaunchTargets;
-        public IWorldSessionService? GetSessionService() => runtime == null ? null : runtime.Sessions;
-        public WorldLaunchSettings ReadWorldLaunchSettings() => state?.WorldLaunch ?? new WorldLaunchSettings();
-        public void SaveWorldLaunchSettings(WorldLaunchSettings settings)
+        public IReadOnlyList<LaunchTargetPreview> GetLaunchPreviews()
         {
-            state.WorldLaunch = settings ?? throw new ArgumentNullException(nameof(settings));
+            var snapshot = runtime.CaptureSessionRuntime();
+            return LaunchTargetPreviewBuilder.Build(snapshot.Profile, snapshot.Observation, snapshot.Bindings);
+        }
+        public IWorldSessionService? GetSessionService() => runtime == null ? null : runtime.Sessions;
+        public LaunchSelection ReadLaunchSelection() => state.LaunchSelection ?? LaunchSelection.UnresolvedLegacy("{}");
+        public LaunchSelectionResolution ResolveRememberedSelection()
+        {
+            var snapshot = runtime.CaptureSessionRuntime();
+            return LaunchSelectionResolver.Resolve(ReadLaunchSelection(), snapshot.Profile, snapshot.Observation, snapshot.Bindings);
+        }
+        public void SaveLaunchSelection(LaunchSelection selection, bool autoLoadOnStart)
+        {
+            if (!CanSaveState) throw new InvalidOperationException(StatePersistenceError);
+            state.LaunchSelection = selection ?? throw new ArgumentNullException(nameof(selection));
+            state.AutoLoadOnStart = autoLoadOnStart;
             SaveState();
         }
         private void ArmWorldLaunch()
         {
-            pendingWorldLaunch = WorldLaunchArming.Resolve(launchProfile, state?.WorldLaunch);
+            pendingRememberedSelection = WorldLaunchArming.Resolve(startupSelection, state.LaunchSelection, state.AutoLoadOnStart);
+            pendingStartupLaunch = hasLauncherCommand || startupSelection.SafeMode || pendingRememberedSelection != null;
             pendingWorldLaunchWait = WorldLaunchMaxWaitSeconds;
-            launchDiscovery = new LegacyLaunchDiscovery(runtime.NativeDispatcher, DiscoverForLaunchAsync);
+            launchDiscovery = new LaunchDiscoveryGate(runtime.NativeDispatcher, DiscoverForLaunchAsync);
         }
         private void UpdatePendingWorldLaunch(float deltaTime)
         {
             var scene = SceneManager.GetActiveScene().name;
             var atMenu = GameScenes.IsMainMenuScene(scene);
             if (atMenu) _ = launchDiscovery.Start();
-            var intent = pendingWorldLaunch;
-            if (intent == null) return;
+            if (!pendingStartupLaunch) return;
+            var menuCommand = rejectedLauncherCommand || startupSelection.SafeMode
+                || launchProfile?.Command == "main-menu" || pendingRememberedSelection?.Kind == "main-menu";
             pendingWorldLaunchWait -= deltaTime;
-            if (!atMenu && pendingWorldLaunchWait > 0f) return;
-            pendingWorldLaunch = null;
-            if (!atMenu && GameScenes.IsNonGameplayScene(scene))
-            {
-                managerLogger.Warn("Launch selection was not started because the menu was never reached.");
-                return;
-            }
-            _ = StartLegacyIntentAsync(intent);
+            if (!menuCommand && !atMenu && pendingWorldLaunchWait > 0f) return;
+            pendingStartupLaunch = false;
+            _ = DispatchStartupAsync(!menuCommand && !atMenu && GameScenes.IsNonGameplayScene(scene), !menuCommand);
         }
         private async Task DiscoverForLaunchAsync()
         {
-            try { await runtime.DiscoverWorldsAsync(); }
+            try { await runtime.DiscoverWorldsAsync(); PublishRuntimeObservations(); }
             catch (Exception error) { managerLogger.Error(error, "World discovery failed."); }
         }
-        private async Task StartLegacyIntentAsync(WorldLaunchIntent intent)
+        private async Task DispatchStartupAsync(bool menuUnavailable, bool requireDiscovery)
         {
             try
             {
-                await launchDiscovery.AfterAsync(async () =>
+                await launchDiscovery.AfterAsync(async stillCurrent =>
                 {
-                    // Shutdown may finish the discovery that this one-shot launch was awaiting.
                     if (!ready) return;
+                    startupCommandIssued = true;
+                    if (rejectedLauncherCommand)
+                    {
+                        var rejectedId = launchProfile?.RequestId ?? rejectedCorrelation?.RequestId;
+                        var rejectedCommand = launchProfile?.Command ?? rejectedCorrelation?.Command;
+                        if (rejectedId != null && rejectedCommand != null)
+                            await runtime.Sessions.RejectCommandAsync(rejectedId, rejectedCommand,
+                                ModErrorCode.InvalidArgument, "The launcher request was rejected: " + rejectionReason);
+                        if (ready && stillCurrent()) await runtime.Sessions.ReturnToMainMenuAsync();
+                        return;
+                    }
+                    if (launchProfile != null)
+                    {
+                        var result = menuUnavailable
+                            ? await runtime.Sessions.RejectCommandAsync(launchProfile.RequestId, launchProfile.Command, ModErrorCode.TimedOut,
+                                "The game menu was not ready before the launch deadline.")
+                            : await runtime.Sessions.ExecuteCommandAsync(launchProfile);
+                        if (!result.Succeeded) managerLogger.Warn("Launcher session did not start: " + result.ErrorMessage);
+                        var recoveryChanged = (startupSelection.SafeMode && !launchProfile.SafeMode)
+                            || startupSelection.QuarantinedPackageId.Length != 0;
+                        if (!result.Succeeded && recoveryChanged && ready && stillCurrent())
+                            await runtime.Sessions.ReturnToMainMenuAsync();
+                        return;
+                    }
+                    if (startupSelection.SafeMode || pendingRememberedSelection?.Kind == "main-menu")
+                    { await runtime.Sessions.ReturnToMainMenuAsync(); return; }
+                    if (menuUnavailable) { managerLogger.Warn("Remembered selection was not started: the menu was not ready."); return; }
                     var snapshot = runtime.CaptureSessionRuntime();
-                    var translated = LegacyWorldLaunchAdapter.Resolve(snapshot.Profile, snapshot.Observation, intent);
-                    if (!translated.TryGetValue(out var request)) { managerLogger.Warn(translated.ErrorMessage); return; }
-                    var result = await runtime.LaunchTargetAsync(request);
-                    if (result.Succeeded) managerLogger.Info("Launch target '" + request.TargetId + "' reached Running.");
-                    else managerLogger.Warn("Launch target failed: " + result.ErrorMessage);
-                });
+                    var resolved = LaunchSelectionResolver.Resolve(pendingRememberedSelection!, snapshot.Profile, snapshot.Observation, snapshot.Bindings);
+                    if (!resolved.Available || resolved.Request == null)
+                    { managerLogger.Warn("Remembered selection needs repair: " + resolved.RepairMessage); return; }
+                    var launched = await runtime.LaunchTargetAsync(resolved.Request);
+                    if (!launched.Succeeded) managerLogger.Warn("Remembered target did not start: " + launched.ErrorMessage);
+                }, requireDiscovery && !menuUnavailable);
             }
-            catch (Exception error) { managerLogger.Error(error, "The legacy launch selection could not start."); }
+            catch (Exception error) { managerLogger.Error(error, "Startup launch command failed."); }
+        }
+        private void CancelPendingStartup()
+        {
+            pendingStartupLaunch = false;
+            if (!startupCommandIssued && launchProfile != null)
+            {
+                startupCommandIssued = true;
+                _ = runtime.Sessions.RejectCommandAsync(launchProfile.RequestId, launchProfile.Command, ModErrorCode.Cancelled,
+                    "A manager command superseded the pending launcher command.");
+            }
         }
         public async Task<(bool Ok, string Message)> LaunchTarget(string targetId,
             string? worldOverride = null, string? transitionOverride = null)
@@ -75,7 +122,7 @@ namespace TopiaForge.ModManager
             {
                 return await launchDiscovery.ExplicitAsync(async () =>
                 {
-                    pendingWorldLaunch = null;
+                    CancelPendingStartup();
                     if (!ready) return (false, "The runtime is not ready to launch a target.");
                     var result = await runtime.LaunchTargetAsync(new LaunchRequest(targetId, worldOverride, transitionOverride));
                     return (result.Succeeded, result.Succeeded ? "Launch target reached Running." : result.ErrorMessage);
@@ -93,7 +140,7 @@ namespace TopiaForge.ModManager
             {
                 return await launchDiscovery.ExplicitAsync(async () =>
                 {
-                    pendingWorldLaunch = null;
+                    CancelPendingStartup();
                     if (!ready) return (false, "The runtime is not ready to return to the main menu.");
                     var result = await runtime.Sessions.ReturnToMainMenuAsync();
                     return (result.Succeeded, result.Succeeded ? "Returned to the main menu." : result.ErrorMessage);

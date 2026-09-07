@@ -200,7 +200,6 @@
     <!-- Compiling the menu census here both unit-tests it and mechanically keeps it Unity-free, so the
          reporting that explains a missing main-menu entry point cannot regain a UnityEngine dependency. -->
     <Compile Include="..\..\src\TopiaForge.ModManager\MenuSurfaceCensus.cs" />
-    <Compile Include="../../src/TopiaForge.ModManager/LegacyWorldLaunchAdapter.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\WorldLaunchArming.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\ModServiceRegistry.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\OwnerBoundModServiceRegistry.cs" />
@@ -266,6 +265,9 @@
   </ItemGroup>
   <!-- Production binding and world-provider adapters exercised by the full offline harness. -->
   <ItemGroup Condition="'$(TestingKitOnly)' != 'true'">
+    <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Commands.cs" Link="Runtime/GamemodeSessionOrchestrator.Commands.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/RuntimeBindingRegistry.Observations.cs" Link="Runtime/RuntimeBindingRegistry.Observations.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/RuntimeLaunchPublisher.cs" Link="Runtime/RuntimeLaunchPublisher.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/RuntimeSessionImplementation.cs" Link="Runtime/RuntimeSessionImplementation.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/RuntimeBindingModels.cs" Link="Runtime/RuntimeBindingModels.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/RuntimeBindingAttempts.cs" Link="Runtime/RuntimeBindingAttempts.cs" />
@@ -314,6 +316,6 @@
     <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Content.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/RuntimeSessionSelection.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/NativeWorldReflection.cs" />
-    <Compile Include="../../src/TopiaForge.ModManager/LegacyLaunchDiscovery.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/LaunchDiscoveryGate.cs" />
   </ItemGroup>
 </Project>

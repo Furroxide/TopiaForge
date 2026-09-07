@@ -96,14 +96,15 @@ File _createPackage(
   String? loaderVersionRange,
   String? sdkVersionRange,
   String category = '',
+  Map<String, Object?>? contributions,
 }) {
   final package = File(p.join(root.path, '$id-$version.topiaforgemod'));
   final archive = Archive()
     ..addFile(
       ArchiveFile.string(
         'topiaforge.mod.json',
-        jsonEncode(
-          _manifestJson(
+        jsonEncode({
+          ..._manifestJson(
             id,
             version,
             dependencies: dependencies,
@@ -114,7 +115,12 @@ File _createPackage(
             sdkVersionRange: sdkVersionRange,
             category: category,
           ),
-        ),
+          if (contributions != null) ...{
+            'schemaVersion': 6,
+            'capabilities': ['world-service'],
+            'contributions': contributions,
+          },
+        }),
       ),
     )
     ..addFile(ArchiveFile.string('${_assemblyName(id)}.dll', 'dll'));
