@@ -3,13 +3,13 @@ using System.Threading.Tasks;
 
 namespace TopiaForge.ModManager
 {
-    internal sealed class LegacyLaunchDiscovery
+    internal sealed class LaunchDiscoveryGate
     {
         private readonly IHostDispatcher dispatcher;
         private readonly Lazy<Task> attempt;
         private object generation = new object();
 
-        internal LegacyLaunchDiscovery(IHostDispatcher dispatcher, Func<Task> discover)
+        internal LaunchDiscoveryGate(IHostDispatcher dispatcher, Func<Task> discover)
         {
             this.dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
             if (discover == null) throw new ArgumentNullException(nameof(discover));
@@ -28,13 +28,16 @@ namespace TopiaForge.ModManager
             }).Unwrap();
         }
 
-        internal async Task AfterAsync(Func<Task> launch)
+        internal Task AfterAsync(Func<Task> launch, bool requireDiscovery = true)
+            => AfterAsync(_ => launch(), requireDiscovery);
+
+        internal async Task AfterAsync(Func<Func<bool>, Task> launch, bool requireDiscovery = true)
         {
             if (launch == null) throw new ArgumentNullException(nameof(launch));
             var captured = await dispatcher.InvokeAsync(() => generation).ConfigureAwait(false);
-            await Start().ConfigureAwait(false);
+            if (requireDiscovery) await Start().ConfigureAwait(false);
             await dispatcher.InvokeAsync(() =>
-                ReferenceEquals(captured, generation) ? launch() : Task.CompletedTask).Unwrap().ConfigureAwait(false);
+                ReferenceEquals(captured, generation) ? launch(() => ReferenceEquals(captured, generation)) : Task.CompletedTask).Unwrap().ConfigureAwait(false);
         }
     }
 }

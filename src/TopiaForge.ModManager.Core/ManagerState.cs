@@ -22,6 +22,11 @@ namespace TopiaForge.ModManager.Core
         /// processes merging into one document is what silently discarded every selection the launcher
         /// made. Manager-owned state belongs in manager-owned state.
         /// </summary>
+        [DataMember(Name = "launchSelection", EmitDefaultValue = false)]
+        public LaunchSelection? LaunchSelection { get; set; }
+        [DataMember(Name = "autoLoadOnStart")]
+        public bool AutoLoadOnStart { get; set; }
+
         [DataMember(Name = "worldLaunch")]
         public WorldLaunchSettings? WorldLaunch { get; set; }
 
@@ -44,7 +49,6 @@ namespace TopiaForge.ModManager.Core
 
             // GetUninitializedObject bypasses property initializers, so an absent member arrives null.
             WorldLaunch = WorldLaunch ?? new WorldLaunchSettings();
-            WorldLaunch.LoadMode = WorldLaunchSettings.NormalizeLoadMode(WorldLaunch.LoadMode);
             WorldLaunch.SelectedWorldId = WorldLaunch.SelectedWorldId ?? string.Empty;
             WorldLaunch.SelectedGamemodeId = WorldLaunch.SelectedGamemodeId ?? string.Empty;
 

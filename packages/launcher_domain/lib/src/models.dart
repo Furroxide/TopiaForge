@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'versioning.dart';
+import 'launch_resolution.dart';
 import 'package:unorm_dart/unorm_dart.dart' as unicode;
 
 part 'models/common_models.dart';
@@ -36,6 +39,11 @@ part 'models/scaffold_contracts.dart';
 part 'models/registry_index_models.dart';
 part 'models/source_models.dart';
 part 'models/profile_models.dart';
+part 'models/profile_json_parsing.dart';
 part 'models/world_authoring_models.dart';
 part 'models/world_models.dart';
 part 'models/update_models.dart';
+
+part 'models/launch_selection_models.dart';
+part 'models/launch_preview_models.dart';
+part 'models/launch_activity_models.dart';

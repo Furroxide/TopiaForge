@@ -1,133 +1,6 @@
 part of '../local_launcher_repository.dart';
 
 extension _ProfileLaunchHelpers on LocalLauncherRepository {
-  Future<File> _writeProfileLaunchConfiguration(
-    GameInstall install,
-    ProfileLaunchConfiguration configuration,
-  ) async {
-    final staging = _managerStaging(install)..createSync(recursive: true);
-    final token = '$pid-${DateTime.now().microsecondsSinceEpoch}';
-    final file = File(p.join(staging.path, 'launch-profile-$token.json'));
-    await _writeJsonFileAtomic(file, configuration.toJson());
-    return file;
-  }
-
-  Future<String?> _profileSelectionError(
-    GameInstall install,
-    ProfileLaunchConfiguration configuration,
-  ) async {
-    if (configuration.safeMode) {
-      return null;
-    }
-
-    final state = await _readManagerState(install);
-    final stateById = _stateByModId(state);
-    final catalog = await _loadInstalledVersionCatalog(
-      install,
-      stateById: stateById,
-    );
-    final missing = <String>[];
-
-    final effectiveIds = <String>{};
-    if (configuration.inheritManagerModState) {
-      for (final entry in stateById.entries) {
-        final versions = catalog[entry.key];
-        final manifest = versions == null || versions.isEmpty
-            ? null
-            : versions.first.manifest;
-        final enabledByDefault = manifest == null
-            ? true
-            : _isEnabledByDefault(manifest);
-        if (entry.value['enabled'] as bool? ?? enabledByDefault) {
-          effectiveIds.add(entry.key);
-        }
-      }
-      for (final id in configuration.selectedVersions.keys) {
-        if (!stateById.containsKey(id.toLowerCase())) {
-          effectiveIds.add(id.toLowerCase());
-        }
-      }
-    } else {
-      effectiveIds.addAll(
-        configuration.enabledMods.map((id) => id.toLowerCase()),
-      );
-    }
-
-    final selectedMods = <InstalledMod>[];
-    for (final key in effectiveIds.toList()..sort()) {
-      final versions = catalog[key];
-      if (versions == null || versions.isEmpty) {
-        missing.add(key);
-        continue;
-      }
-      final selectedVersion = _selectedProfileVersion(
-        key,
-        configuration,
-        stateById[key],
-      );
-      InstalledMod? selected;
-      if (selectedVersion != null) {
-        for (final version in versions) {
-          if (version.version == selectedVersion) {
-            selected = version;
-            break;
-          }
-        }
-      } else {
-        selected = _pickCurrentVersion(versions, stateById[key]);
-      }
-      if (selected == null) {
-        missing.add('$key $selectedVersion');
-        continue;
-      }
-      selectedMods.add(_profileEnabledMod(selected));
-    }
-
-    if (missing.isNotEmpty) {
-      final normalizedMissing = missing.toSet().toList()
-        ..sort(
-          (left, right) => left.toLowerCase().compareTo(right.toLowerCase()),
-        );
-      return 'Profile ${configuration.profileId} references unavailable '
-          'packages: ${normalizedMissing.join(', ')}.';
-    }
-
-    final resolution = _dependencyPlanner.resolveInstalled(
-      selectedMods,
-      gameVersion: install.gameVersion,
-      requireKnownGameVersion: true,
-      loaderVersion: _loaderVersion,
-      sdkVersion: _sdkVersion,
-      platform: _gamePlatform(install),
-      architecture: _gameArchitecture(install),
-      contentTargets: _gameContentTargets(install),
-    );
-    final blocking = resolution.issues
-        .where((issue) => issue.isBlocking)
-        .map((issue) => issue.message)
-        .toSet()
-        .toList();
-    if (blocking.isEmpty) {
-      return null;
-    }
-    blocking.sort();
-    return 'Profile ${configuration.profileId} cannot launch: '
-        '${blocking.join(' ')}';
-  }
-
-  String? _selectedProfileVersion(
-    String key,
-    ProfileLaunchConfiguration configuration,
-    Map<dynamic, dynamic>? stateItem,
-  ) {
-    for (final entry in configuration.selectedVersions.entries) {
-      if (entry.key.toLowerCase() == key) {
-        return entry.value;
-      }
-    }
-    return stateItem?['version'] as String?;
-  }
-
   InstalledMod _profileEnabledMod(InstalledMod mod) => InstalledMod(
     id: mod.id,
     name: mod.name,
@@ -156,7 +29,7 @@ extension _ProfileLaunchHelpers on LocalLauncherRepository {
   ) {
     final required = layout.launchEnvironment();
     final reserved = {
-      ProfileLaunchConfiguration.environmentVariable.toLowerCase(),
+      ProfileLaunchConfigurationV4.environmentVariable.toLowerCase(),
       ...required.keys.map((key) => key.toLowerCase()),
     };
     final environment = <String, String>{};
@@ -176,21 +49,9 @@ extension _ProfileLaunchHelpers on LocalLauncherRepository {
       environment[key] = entry.value;
     }
     environment.addAll(required);
-    environment[ProfileLaunchConfiguration.environmentVariable] =
+    environment[ProfileLaunchConfigurationV4.environmentVariable] =
         configurationPath;
     return environment;
-  }
-
-  Future<void> _deleteProfileLaunchConfiguration(File file) async {
-    try {
-      if (await file.exists()) {
-        await file.delete();
-      }
-    } on FileSystemException catch (error) {
-      await _appendLauncherLogBestEffort(
-        'Could not remove unused profile launch configuration: $error',
-      );
-    }
   }
 }
 

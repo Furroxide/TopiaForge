@@ -244,6 +244,33 @@ native ownership early. Cleanup cancels work, attempts all disposers, aggregates
 one terminal outcome. A stale handle cannot stop a newer session. See [Custom worlds](CustomWorlds.md)
 for compiled template examples and the session-bound local import API.
 
+### Launcher commands and observed availability
+
+Home, Setup, the CLI and the in-game manager select declared launch targets.
+World and transition overrides appear only when the target permits them. The
+launcher resolves the exact installed/enabled/pinned package set immediately before
+process creation; the runtime compares immutable package identities and resolves
+again against loaded manifests before scene work.
+
+One-shot launch wire version 4 carries an explicit `main-menu` or `launch-target`
+command, request ID, profile revision, package identities and digest. A target
+command also carries the resolved world/transition and original override presence.
+Explicit main-menu overrides remembered autoload; Safe Mode uses main-menu and an
+empty package set. Only direct startup without a launcher command may use the
+manager's remembered choice.
+
+Versioned runtime observations replace `catalog.json`. Their profile/revision,
+producer package and package digest must match installed content. Observations can
+supply discovered instances and availability reasons, but cannot add targets or
+restore disabled packages. A missing observation is unknown availability.
+
+Request-correlated progress and separate launch/terminal outcomes distinguish
+process creation, confirmed Running and session teardown. Missing acknowledgement
+remains unconfirmed. Durable legacy selections retain their original values when
+no unique valid target mapping exists, with explicit target or main-menu repair.
+See [Development loop](CliDevLoop.md#choose-and-confirm-the-launch) for CLI examples
+and acknowledgement behavior.
+
 ## Deliberate exclusions and retired fields
 
 V6 has no `options`, `optionValues` or `sessionExtensions`. `worldGamemodes` and the previously retired

@@ -12,82 +12,81 @@ void main() {
   // beside `value` rather than inside it, and the mod's next save deleted them -- so every game mode
   // anyone picked was silently discarded. The selection now rides the one-shot launch profile, and
   // the mod's config is none of the launcher's business.
-  test('launch leaves the Worlds mod config alone and carries the intent on '
-      'the launch profile', () async {
-    final root = Directory.systemTemp.createTempSync('world-config-merge-');
-    addTearDown(() => root.deleteSync(recursive: true));
-    final gameRoot = Directory(p.join(root.path, 'TopiaForge'))..createSync();
-    final repositoryRoot = Directory(p.join(root.path, 'repo'))..createSync();
-    final dataRoot = Directory(p.join(root.path, 'data'));
-    _createGame(gameRoot);
-    _createRuntimeSources(repositoryRoot);
-    final repository = LocalLauncherRepository(
-      dataRoot: dataRoot.path,
-      repositoryRoot: repositoryRoot.path,
-      gameProcessStarter: (_) async => 42,
-    );
-    var install = await repository.selectGameDirectory(gameRoot.path);
-    final repair = await repository.installOrRepairRuntime(install);
-    expect(repair.ok, isTrue);
-    install = await repository.selectGameDirectory(gameRoot.path);
-    final settingsFile = File(p.join(dataRoot.path, 'settings.json'));
-    final settings =
-        jsonDecode(settingsFile.readAsStringSync()) as Map<String, Object?>;
-    settings['wineCommand'] = 'synthetic-wine';
-    settingsFile.writeAsStringSync(jsonEncode(settings));
+  test(
+    'explicit main menu overrides remembered launch and leaves Worlds config alone',
+    () async {
+      final root = Directory.systemTemp.createTempSync('world-config-merge-');
+      addTearDown(() => root.deleteSync(recursive: true));
+      final gameRoot = Directory(p.join(root.path, 'TopiaForge'))..createSync();
+      final repositoryRoot = Directory(p.join(root.path, 'repo'))..createSync();
+      final dataRoot = Directory(p.join(root.path, 'data'));
+      _createGame(gameRoot);
+      _createRuntimeSources(repositoryRoot);
+      final repository = LocalLauncherRepository(
+        dataRoot: dataRoot.path,
+        repositoryRoot: repositoryRoot.path,
+        gameProcessStarter: (_) async => 42,
+        gameRunningProbe: (_) async => false,
+      );
+      addTearDown(repository.dispose);
+      var install = await repository.selectGameDirectory(gameRoot.path);
+      final repair = await repository.installOrRepairRuntime(install);
+      expect(repair.ok, isTrue);
+      install = await repository.selectGameDirectory(gameRoot.path);
+      final settingsFile = File(p.join(dataRoot.path, 'settings.json'));
+      final settings =
+          jsonDecode(settingsFile.readAsStringSync()) as Map<String, Object?>;
+      settings['wineCommand'] = Platform.resolvedExecutable;
+      settingsFile.writeAsStringSync(jsonEncode(settings));
 
-    const untouched =
-        '{"schemaVersion":2,"value":{"endSessionOnMenuScene":false,'
-        '"interceptPauseMenu":false,"futureRuntimeOption":{"enabled":true}}}';
-    final configFile = File(
-      p.join(
-        gameRoot.path,
-        'BepInEx',
-        'TopiaForge',
-        'config',
-        'topiaforge.worlds.json',
-      ),
-    )..writeAsStringSync(untouched);
-
-    final result = await repository.launch(
-      install,
-      const LauncherProfile(
-        id: 'world-config-test',
-        name: 'World Config Test',
-        worldSelection: WorldSelection(
-          worldId: 'io.github.furroxide.topiaforge.worlds.open_sandbox',
-          gamemodeId: 'io.github.furroxide.topiaforge.zombies.survival',
-          launchIntoGamemode: true,
+      const untouched =
+          '{"schemaVersion":2,"value":{"endSessionOnMenuScene":false,'
+          '"interceptPauseMenu":false,"futureRuntimeOption":{"enabled":true}}}';
+      final configFile = File(
+        p.join(
+          gameRoot.path,
+          'BepInEx',
+          'TopiaForge',
+          'config',
+          'topiaforge.worlds.json',
         ),
-      ),
-    );
-    expect(result.started, isTrue);
+      )..writeAsStringSync(untouched);
 
-    expect(
-      configFile.readAsStringSync(),
-      untouched,
-      reason: 'the mod owns this document; the launcher must not rewrite it',
-    );
+      final result = await repository.launch(
+        install,
+        const LauncherProfile(
+          id: 'world-config-test',
+          name: 'World Config Test',
+          worldSelection: WorldSelection(
+            worldId: 'io.github.furroxide.topiaforge.worlds.open_sandbox',
+            gamemodeId: 'io.github.furroxide.topiaforge.zombies.survival',
+            launchIntoGamemode: true,
+          ),
+        ),
+        selectionOverride: const LaunchSelection.mainMenu(),
+      );
+      expect(result.started, isTrue, reason: result.message);
 
-    final profileFile =
-        Directory(
-          p.join(gameRoot.path, 'BepInEx', 'TopiaForge', 'staging'),
-        ).listSync().whereType<File>().singleWhere(
-          (entry) => p.basename(entry.path).startsWith('launch-profile-'),
-        );
-    final profile =
-        jsonDecode(profileFile.readAsStringSync()) as Map<String, Object?>;
-    final intent = profile['worldLaunch'] as Map<String, Object?>;
-    expect(intent['command'], WorldSelection.launchTargetCommand);
-    expect(
-      intent['gamemodeId'],
-      'io.github.furroxide.topiaforge.zombies.survival',
-    );
-    expect(
-      intent['worldId'],
-      'io.github.furroxide.topiaforge.worlds.open_sandbox',
-    );
-  });
+      expect(
+        configFile.readAsStringSync(),
+        untouched,
+        reason: 'the mod owns this document; the launcher must not rewrite it',
+      );
+
+      final profileFile =
+          Directory(
+            p.join(gameRoot.path, 'BepInEx', 'TopiaForge', 'staging'),
+          ).listSync().whereType<File>().singleWhere(
+            (entry) => p.basename(entry.path).startsWith('launch-profile-'),
+          );
+      final profile =
+          jsonDecode(profileFile.readAsStringSync()) as Map<String, Object?>;
+      expect(profile['schemaVersion'], 4);
+      expect(profile['command'], 'main-menu');
+      expect(profile.containsKey('plan'), isFalse);
+      expect(profile.containsKey('worldLaunch'), isFalse);
+    },
+  );
 
   test('a profile that only remembers a world still boots normally', () async {
     final root = Directory.systemTemp.createTempSync('world-config-normal-');
@@ -101,7 +100,9 @@ void main() {
       dataRoot: dataRoot.path,
       repositoryRoot: repositoryRoot.path,
       gameProcessStarter: (_) async => 42,
+      gameRunningProbe: (_) async => false,
     );
+    addTearDown(repository.dispose);
     var install = await repository.selectGameDirectory(gameRoot.path);
     expect((await repository.installOrRepairRuntime(install)).ok, isTrue);
     install = await repository.selectGameDirectory(gameRoot.path);
@@ -111,7 +112,7 @@ void main() {
     final settingsFile = File(p.join(dataRoot.path, 'settings.json'));
     final settings =
         jsonDecode(settingsFile.readAsStringSync()) as Map<String, Object?>;
-    settings['wineCommand'] = 'synthetic-wine';
+    settings['wineCommand'] = Platform.resolvedExecutable;
     settingsFile.writeAsStringSync(jsonEncode(settings));
 
     final result = await repository.launch(
@@ -125,7 +126,7 @@ void main() {
         ),
       ),
     );
-    expect(result.started, isTrue);
+    expect(result.started, isTrue, reason: result.message);
 
     final profileFile =
         Directory(
@@ -135,13 +136,14 @@ void main() {
         );
     final profile =
         jsonDecode(profileFile.readAsStringSync()) as Map<String, Object?>;
+    expect(profile['schemaVersion'], 4);
     expect(
-      profile['worldLaunch'],
-      {'command': WorldSelection.mainMenuCommand},
+      profile['command'],
+      'main-menu',
       reason:
-          'remembering a world is not asking to launch into it, and the '
-          'manager must be told so rather than left to its own memory',
+          'Remembering a world cannot override an explicit launcher main-menu command.',
     );
+    expect(profile.containsKey('worldLaunch'), isFalse);
   });
 }
 

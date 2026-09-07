@@ -37,7 +37,13 @@ void main() {
           ['dev-install', '--game-dir', fixture.game.path],
           ['check', 'package', fixture.package.path],
           ['install', fixture.package.path, '--game-dir', fixture.game.path],
-          ['launch', '--game-dir', fixture.game.path],
+          [
+            'launch',
+            '--game-dir',
+            fixture.game.path,
+            '--target',
+            'dev.topiaforge.sdk-acceptance.menu',
+          ],
         ]),
       );
       final config = fixture.configJson();
@@ -92,7 +98,13 @@ void main() {
       expect(evidence.requiredLoadedPackageStatus, 'loaded');
       expect(
         packagedArguments,
-        containsAllInOrder(['dev', '--project', project.path]),
+        containsAllInOrder([
+          'dev',
+          '--project',
+          project.path,
+          '--target',
+          'dev.topiaforge.sdk-acceptance.menu',
+        ]),
       );
       expect(fixture.evidenceJson()['releaseJourneyAuthoringCommandCount'], 2);
     },

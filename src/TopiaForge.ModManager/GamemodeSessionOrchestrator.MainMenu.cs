@@ -10,12 +10,13 @@ namespace TopiaForge.ModManager
 {
     internal sealed partial class GamemodeSessionOrchestrator
     {
-        internal Task<OperationResult<bool>> ReturnToMainMenuAsync(string? sessionId = null, CancellationToken cancellationToken = default)
+        internal Task<OperationResult<bool>> ReturnToMainMenuAsync(string? sessionId = null, CancellationToken cancellationToken = default, string? requestedId = null)
         {
             var completion = Completion();
+            var requestId = requestedId ?? Guid.NewGuid().ToString("N");
+            _ = new LaunchProgress(requestId, 0, "idle");
             _ = dispatcher.InvokeAsync(() =>
             {
-                var requestId = Guid.NewGuid().ToString("N");
                 if (shuttingDown || cancellationToken.IsCancellationRequested)
                 { CompleteCommand(completion, requestId, "main-menu", null, ExceptionFailure(new OperationCanceledException())); return; }
                 var admission = lifecycle.TryAcquire(native.IsSceneBusy, sessionId, out var lease);
@@ -39,6 +40,8 @@ namespace TopiaForge.ModManager
                     CompleteCommand(completion, requestId, "main-menu", null, Failure(reserved));
                     return;
                 }
+                Publish(Progress, new LaunchProgress(requestId, NextSequence(), current == null ? "idle" : "stopping",
+                    current?.Identity.SessionId, nativeBusy: true));
                 RunDriver(() => MainMenuAsync(current, lease!, reservation, owner, requestId, cancellationToken, completion));
             });
             return completion.Task;
@@ -87,6 +90,8 @@ namespace TopiaForge.ModManager
                         .Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.Ordinal))));
                 foreach (var error in failures) Report(error);
             }
+            Publish(Progress, new LaunchProgress(requestId, NextSequence(), PhaseName(lifecycle.Current.Phase),
+                current?.Identity.SessionId, native.IsSceneBusy));
             lifecycle.Release(lease);
             CompleteCommand(completion, requestId, "main-menu", null, result);
             return result.Succeeded;

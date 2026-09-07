@@ -7,6 +7,19 @@ typedef RuntimeRepairCommitHook = FutureOr<void> Function(int committedCount);
 typedef UgcInspectionReadHook = FutureOr<void> Function(String snapshotPath);
 typedef GameProcessStarter = Future<int> Function(GameProcessRequest request);
 
+/// A process creation operation that captures identity from its original OS handle.
+typedef GameProcessCreator =
+    Future<LaunchProcessReceipt> Function(GameProcessRequest request);
+typedef GameProcessIdentityReader =
+    Future<LaunchProcessIdentity?> Function(
+      int processId,
+      String expectedExecutablePath,
+    );
+typedef GameProcessLiveness =
+    Future<bool?> Function(LaunchProcessIdentity identity);
+typedef GameProcessStopper =
+    Future<bool> Function(LaunchProcessIdentity identity);
+
 /// Reports whether a Robotopia process for this exact install is alive.
 ///
 /// Implementations must fail closed: when liveness cannot be determined they

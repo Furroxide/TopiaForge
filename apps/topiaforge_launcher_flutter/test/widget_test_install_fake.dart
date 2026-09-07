@@ -36,6 +36,14 @@ class _SingleInstallOnlyLauncherRepository implements LauncherRepository {
   _SingleInstallOnlyLauncherRepository() : snapshot = _readySnapshot();
 
   final LauncherSnapshot snapshot;
+  @override
+  Stream<LaunchActivity> get launchActivities => const Stream.empty();
+  @override
+  Future<LaunchPreview> previewLaunch(
+    GameInstall install,
+    LauncherProfile profile, {
+    LaunchSelection? selectionOverride,
+  }) async => _buildFakePreview(snapshot, install, profile, selectionOverride);
   String? selectedPath;
 
   @override
