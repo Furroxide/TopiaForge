@@ -291,7 +291,7 @@ String _sanitizeLauncherLogMessage(String message) {
   final singleLine = message.replaceAll(RegExp(r'[\u0000-\u001f\u007f]+'), ' ');
   return singleLine.length <= _maxLauncherLogMessageCharacters
       ? singleLine
-      : '${singleLine.substring(0, _maxLauncherLogMessageCharacters)}â€¦';
+      : '${singleLine.substring(0, _maxLauncherLogMessageCharacters)}\u2026';
 }
 
 Future<void> _writeJsonFileAtomic(

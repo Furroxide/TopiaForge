@@ -13,7 +13,7 @@ void main() {
       try {
         final identity = await readLaunchProcessIdentity(
           owned.process.pid,
-          Platform.resolvedExecutable,
+          owned.executable,
         );
         expect(identity, isNotNull);
         expect(identity!.pid, owned.process.pid);
@@ -55,11 +55,11 @@ void main() {
       try {
         final firstId = (await readLaunchProcessIdentity(
           first.process.pid,
-          Platform.resolvedExecutable,
+          first.executable,
         ))!;
         final secondId = (await readLaunchProcessIdentity(
           second.process.pid,
-          Platform.resolvedExecutable,
+          second.executable,
         ))!;
         final stale = LaunchProcessIdentity(
           pid: firstId.pid,
@@ -131,23 +131,27 @@ Future<_Child> _child() async {
   await script.writeAsString(
     "import 'dart:io'; void main() { stdout.writeln('READY'); stdin.listen((_) {}); }",
   );
-  final process = await Process.start(Platform.resolvedExecutable, [
-    script.path,
-  ]);
+  // Dart 3.12's frontend re-execs dartvm on Linux, changing /proc/<pid>/exe.
+  // Start the VM itself so the expected image is exactly the owned child image.
+  final vmName = Platform.isWindows ? 'dartvm.exe' : 'dartvm';
+  final vm = File('${File(Platform.resolvedExecutable).parent.path}/$vmName');
+  final executable = await vm.exists() ? vm.path : Platform.resolvedExecutable;
+  final process = await Process.start(executable, [script.path]);
   final stderr = process.stderr.drain<void>();
   await process.stdout
       .transform(utf8.decoder)
       .transform(const LineSplitter())
       .firstWhere((line) => line == 'READY')
       .timeout(const Duration(seconds: 15));
-  return _Child(directory, process, stderr);
+  return _Child(directory, process, stderr, executable);
 }
 
 class _Child {
-  _Child(this.directory, this.process, this.stderr);
+  _Child(this.directory, this.process, this.stderr, this.executable);
   final Directory directory;
   final Process process;
   final Future<void> stderr;
+  final String executable;
   Future<void> dispose() async {
     await process.stdin.close();
     await process.exitCode.timeout(const Duration(seconds: 10));

@@ -49,8 +49,8 @@ namespace TopiaForge.ModManager.Tests
         }
         private static void RejectMalformedPrimaryAndEnvelope()
         {
-            var directory = Path.Combine(Path.GetTempPath(), "topiaforge-manager-state-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(directory);
+            var owned = Directory.CreateTempSubdirectory("topiaforge-manager-state-");
+            var directory = owned.FullName;
             try
             {
                 var path = Path.Combine(directory, "state.json");
@@ -86,7 +86,7 @@ namespace TopiaForge.ModManager.Tests
                 if (!rejected) throw new InvalidDataException("An invalid state path cannot bypass storage protection through recovery.");
                 if (File.ReadAllText(path) != "{broken latest state") throw new InvalidDataException("State validation must not write recovery data.");
             }
-            finally { Directory.Delete(directory, true); }
+            finally { owned.Delete(true); }
         }
     }
 }
