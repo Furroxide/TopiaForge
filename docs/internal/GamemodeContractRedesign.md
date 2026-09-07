@@ -334,8 +334,8 @@ descriptor whose package identities and digest must match the envelope. Main-men
 forbids a plan. Existing profile enablement/pin/safe-mode fields remain explicit.
 For explicit non-safe-mode selections, enabled IDs equal the envelope package
 set. A pin for an actual envelope package must match its version; pins for disabled
-packages may remain. Safe mode may preserve enabled preferences while carrying
-the actual package set and an explicit main-menu command. The main-menu command
+packages may remain. Safe mode preserves enabled preferences while carrying
+an empty package set and an explicit main-menu command. The main-menu command
 cannot fall through to remembered autoload. Only direct startup without a launcher command
 may use the manager's own remembered target. Consume the guarded one-shot request
 once; never modify a mod's config to convey launch intent.
@@ -358,6 +358,44 @@ termination so teardown never overwrites the start result. Progress uses the sam
 six lifecycle phases and ordered sequence; optional `nativeBusy` describes executor
 ownership independently instead of inventing a seventh lifecycle phase. Explicit
 nulls and empty values for present optional IDs are invalid on the wire.
+
+Process admission spans independent launcher and CLI instances for one install.
+Hold a guarded, nonblocking staging-file lease through preparation and process
+creation; release it on every exit. A complete process probe establishes absence;
+query failures, unreadable candidates and uncertain identities retain Busy.
+Compare canonical image paths, including install aliases and relative Wine targets.
+
+A Windows creation receipt captures PID, UTC creation time, exact native creation
+token and executable identity from the original suspended process handle before
+resuming its thread. A later PID lookup cannot establish initial ownership.
+Restart verifies and stops that same recorded generation through one held handle.
+On platforms without creation proof, retain process-start evidence but refuse
+owned restart; never manufacture ownership from a detached PID. Native Linux
+process verification requires pidfd support and glibc 2.36 or newer; its display
+UTC epoch stays stable within the launcher lifetime. Process exit without runtime
+acknowledgement or a terminal record remains unconfirmed. A successful main-menu
+acknowledgement does not require a terminal gameplay-session record.
+
+Bind progress to the authoritative process receipt's request, profile, revision,
+install, package digest, command and available process identity. Reject foreign,
+stale or changed-session callbacks. Launch and terminal outcomes are independently
+monotonic and may arrive out of order; retain both. Waiting for acknowledgement
+must not block the Bloc event queue that receives progress. Use monotonic deadlines.
+
+The launcher profile store and exported profiles use schema version 3; durable
+`launchSelection` has its own version 1. Profile revisions are nonnegative integers
+bounded by the shared wire limit. Preserve absent versus explicit legacy values
+before applying defaults. Reject malformed present arrays/maps/flags and duplicate
+package selections rather than coercing or dropping entries. Refuse a profile
+conversion without writing when numeric values cannot survive an exact JSON
+round trip. Fence stale whole-list saves so concurrent profile additions, edits
+and deletions cannot be erased or resurrected by another client.
+
+Malformed manager-state content is retained unchanged. Ordinary launcher commands
+remain blocked; explicit safe-mode main-menu can use an empty read-only recovery
+state. Do not rotate a stale backup over the primary or apply inbox/uninstall and
+durable overlay mutations during that recovery. Linked or nonordinary state and
+staging paths remain blocking; content recovery does not bypass filesystem guards.
 
 Version durable target selection and migrate prior profile/manager selections
 without losing unrelated state. A legacy mode/world tuple maps automatically only

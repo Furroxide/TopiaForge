@@ -14,11 +14,11 @@ class LauncherState {
     required this.registryMods,
     required this.packageSources,
     required this.sourceStatuses,
-    required this.worldCatalog,
+    this.previewsByProfile = const {},
+    this.launchActivity,
     required this.recentLog,
     required this.launcherLog,
     required this.resolution,
-    required this.profileResolution,
     required this.launcherUpdates,
     this.launcherUpdateStatus = const LauncherUpdateStatus(),
     this.gameInstall,
@@ -53,15 +53,9 @@ class LauncherState {
     registryMods: const [],
     packageSources: const [],
     sourceStatuses: const [],
-    worldCatalog: WorldCatalog.fallback(),
     recentLog: '',
     launcherLog: '',
     resolution: const DependencyResolutionResult(
-      orderedMods: [],
-      issues: [],
-      graph: {},
-    ),
-    profileResolution: const DependencyResolutionResult(
       orderedMods: [],
       issues: [],
       graph: {},
@@ -81,18 +75,12 @@ class LauncherState {
   final List<RegistryMod> registryMods;
   final List<PackageSource> packageSources;
   final List<PackageSourceStatus> sourceStatuses;
-  final WorldCatalog worldCatalog;
+  final Map<String, LaunchPreview> previewsByProfile;
+  final LaunchActivity? launchActivity;
   final String recentLog;
   final String launcherLog;
   final DependencyResolutionResult resolution;
 
-  /// Resolution over only what the selected profile will actually load.
-  ///
-  /// [resolution] covers every installed mod, which is what the Mods screen shows. Launch is gated on
-  /// this narrower result instead, so a profile that already excludes a conflicting mod is not blocked
-  /// by a conflict it will never load. It mirrors the repository's own pre-launch check, so the button
-  /// and the launch attempt agree rather than disagreeing one screen apart.
-  final DependencyResolutionResult profileResolution;
   final LauncherUpdateSettings launcherUpdates;
   final LauncherUpdateStatus launcherUpdateStatus;
   final String? selectedModId;
@@ -138,7 +126,7 @@ class LauncherState {
         return profile;
       }
     }
-    return profiles.isEmpty ? null : profiles.first;
+    return null;
   }
 
   InstalledMod? get selectedMod {
@@ -153,38 +141,33 @@ class LauncherState {
     return installedMods.first;
   }
 
-  /// Blocking issues among the mods the selected profile will load.
-  ///
-  /// Safe mode bypasses every mod, so nothing can block it.
-  List<LauncherIssue> get blockingLaunchIssues {
-    if (selectedProfile?.launchSettings.safeMode ?? false) {
-      return const [];
-    }
-    return profileResolution.issues
-        .where((issue) => issue.isBlocking)
-        .toList(growable: false);
+  LaunchPreview? previewFor(LauncherProfile profile) {
+    final preview = previewsByProfile[profile.id];
+    return preview?.profileId == profile.id &&
+            preview?.profileRevision == profile.revision
+        ? preview
+        : null;
   }
 
-  bool get canLaunch {
-    return gameInstall != null &&
-        gameInstall!.canLaunch &&
-        !gameInstall!.needsRepair &&
-        selectedProfile != null &&
-        blockingLaunchIssues.isEmpty;
-  }
+  LaunchPreview? get launchPreview =>
+      selectedProfile == null ? null : previewFor(selectedProfile!);
 
-  /// Whether a launch attempt is worth starting.
-  ///
-  /// Deliberately ignores [GameInstall.needsRepair], because launching repairs a stale runtime on the
-  /// way. A blocking mod issue is different: the repository refuses the launch outright, so leaving the
-  /// button live only turns a visible problem into a one-line failure after the click.
-  bool get canStartLaunchFlow {
-    return gameInstall != null &&
-        gameInstall!.canLaunch &&
-        selectedProfile != null &&
-        blockingLaunchIssues.isEmpty;
-  }
+  List<LauncherIssue> get blockingLaunchIssues => [
+    ...?launchPreview?.issues.where((issue) => issue.isBlocking),
+    for (final block
+        in launchPreview?.resolution?.blocks ?? const <LaunchBlock>[])
+      LauncherIssue(severity: IssueSeverity.error, message: block.message),
+  ];
 
+  bool canStartProfileLaunch(LauncherProfile profile) =>
+      gameInstall != null &&
+      gameInstall!.canLaunch &&
+      previewFor(profile)?.canLaunch == true;
+
+  bool get canLaunch => canStartLaunchFlow && !gameInstall!.needsRepair;
+
+  bool get canStartLaunchFlow =>
+      selectedProfile != null && canStartProfileLaunch(selectedProfile!);
   int get availableModUpdateCount {
     return registryMods.where((mod) => mod.updateAvailable).length;
   }
@@ -218,11 +201,12 @@ class LauncherState {
     List<RegistryMod>? registryMods,
     List<PackageSource>? packageSources,
     List<PackageSourceStatus>? sourceStatuses,
-    WorldCatalog? worldCatalog,
+    Map<String, LaunchPreview>? previewsByProfile,
+    LaunchActivity? launchActivity,
+    bool clearLaunchActivity = false,
     String? recentLog,
     String? launcherLog,
     DependencyResolutionResult? resolution,
-    DependencyResolutionResult? profileResolution,
     LauncherUpdateSettings? launcherUpdates,
     LauncherUpdateStatus? launcherUpdateStatus,
     String? selectedModId,
@@ -265,11 +249,13 @@ class LauncherState {
       registryMods: registryMods ?? this.registryMods,
       packageSources: packageSources ?? this.packageSources,
       sourceStatuses: sourceStatuses ?? this.sourceStatuses,
-      worldCatalog: worldCatalog ?? this.worldCatalog,
+      previewsByProfile: previewsByProfile ?? this.previewsByProfile,
+      launchActivity: clearLaunchActivity
+          ? null
+          : launchActivity ?? this.launchActivity,
       recentLog: recentLog ?? this.recentLog,
       launcherLog: launcherLog ?? this.launcherLog,
       resolution: resolution ?? this.resolution,
-      profileResolution: profileResolution ?? this.profileResolution,
       launcherUpdates: launcherUpdates ?? this.launcherUpdates,
       launcherUpdateStatus: launcherUpdateStatus ?? this.launcherUpdateStatus,
       selectedModId: clearSelectedMod

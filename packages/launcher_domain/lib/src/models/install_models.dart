@@ -354,11 +354,22 @@ class LaunchResult {
     required this.started,
     required this.message,
     this.processId,
+    this.requestId,
+    this.process,
+    this.issues = const [],
+    this.blocks = const [],
+    this.latestActivity,
   });
 
   final bool started;
   final String message;
   final int? processId;
+  bool get processStarted => started;
+  final String? requestId;
+  final LaunchProcessIdentity? process;
+  final List<LauncherIssue> issues;
+  final List<LaunchBlock> blocks;
+  final LaunchActivity? latestActivity;
 }
 
 class LauncherSnapshot {
@@ -376,8 +387,10 @@ class LauncherSnapshot {
     this.developerMode = false,
     this.sourceStatuses = const [],
     this.launcherLog = '',
+    this.previewsByProfile = const {},
   });
 
+  final Map<String, LaunchPreview> previewsByProfile;
   final GameInstall? gameInstall;
   final List<GameInstallCandidate> gameInstallCandidates;
   final List<LauncherProfile> profiles;

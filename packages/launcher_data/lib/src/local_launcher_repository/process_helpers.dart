@@ -4,6 +4,7 @@ extension _ProcessHelpers on LocalLauncherRepository {
   Future<LaunchResult> _startGame(
     GameInstall install,
     LauncherProfile profile, {
+    LaunchSelection? selectionOverride,
     required String message,
   }) async {
     final refreshed = await _validateGameDirectory(install.path);
@@ -14,7 +15,6 @@ extension _ProcessHelpers on LocalLauncherRepository {
             'TopiaForge runtime is missing or stale. Repair Runtime before launch.',
       );
     }
-
     final layout = GameLayout.resolve(refreshed.path);
     if (layout == null || !File(layout.executablePath).existsSync()) {
       return const LaunchResult(
@@ -22,275 +22,219 @@ extension _ProcessHelpers on LocalLauncherRepository {
         message: 'The Robotopia game was not found.',
       );
     }
-
-    ProfileLaunchConfiguration configuration;
-    try {
-      configuration = ProfileLaunchConfiguration.fromProfile(profile);
-    } on FormatException catch (error) {
-      return LaunchResult(started: false, message: error.message.toString());
-    }
-
-    final selectionError = await _profileSelectionError(
-      refreshed,
-      configuration,
-    );
-    if (selectionError != null) {
-      return LaunchResult(started: false, message: selectionError);
-    }
-
     var executable = layout.executablePath;
     var arguments = profile.launchSettings.extraArguments;
-    var logSuffix = '';
     if (layout.kind == GameInstallLayout.linuxProton) {
       final settings = await _loadSettings();
-      final wineCommand = (settings['wineCommand'] as String?)?.trim() ?? '';
-      if (wineCommand.isEmpty) {
-        return const LaunchResult(
-          started: false,
-          message:
-              'Mods are installed. Launch Robotopia through your usual '
-              'launcher (Tomato Cake/Steam/Proton) with '
-              'WINEDLLOVERRIDES="winhttp=n,b" so the mod loader injects. '
-              'Alternatively set "wineCommand" in the launcher settings to '
-              'launch directly.',
-        );
+      try {
+        executable = configuredWineExecutable(settings['wineCommand']);
+      } on FormatException catch (error) {
+        return LaunchResult(started: false, message: error.message);
       }
-      executable = wineCommand;
-      arguments = [
-        layout.executablePath,
-        ...profile.launchSettings.extraArguments,
-      ];
-      logSuffix = ' via configured Wine/Proton command';
+      arguments = [layout.executablePath, ...arguments];
     }
 
-    final launchFile = await _writeProfileLaunchConfiguration(
+    final preview = await _previewLaunch(
       refreshed,
-      configuration,
+      profile,
+      selectionOverride: selectionOverride,
     );
+    if (!preview.canLaunch) return _previewLaunchFailure(preview);
+    final requestId = _newLaunchRequestId();
+    final configuration = ProfileLaunchConfigurationV4(
+      profileId: profile.id,
+      profileRevision: profile.revision,
+      requestId: requestId,
+      command: preview.effectiveSelection.kind == LaunchSelectionKind.mainMenu
+          ? 'main-menu'
+          : 'launch-target',
+      safeMode: profile.launchSettings.safeMode,
+      inheritManagerModState: profile.inheritManagerModState,
+      enabledMods: profile.enabledMods,
+      selectedVersions: profile.selectedVersions,
+      packages: preview.packages,
+      digest: preview.packageDigest,
+      plan: preview.resolution?.plan?.descriptor,
+    );
+    final store = LaunchStagingStore(refreshed.path);
+    final launchFile = await store.writeRequest(configuration);
     late final Map<String, String> environment;
     try {
       environment = _profileLaunchEnvironment(layout, profile, launchFile.path);
-    } on Object catch (error) {
-      await _deleteProfileLaunchConfiguration(launchFile);
-      return LaunchResult(started: false, message: error.toString());
+      if (await _runningForLaunch(refreshed)) {
+        await store.deleteRequest(configuration);
+        return const LaunchResult(
+          started: false,
+          message:
+              'TopiaForge is Busy: this install already has a running or unverified process.',
+        );
+      }
+      final finalPreview = await _previewLaunch(
+        refreshed,
+        profile,
+        selectionOverride: selectionOverride,
+      );
+      if (!finalPreview.canLaunch) {
+        await store.deleteRequest(configuration);
+        return _previewLaunchFailure(finalPreview);
+      }
+      if (finalPreview.packageDigest != preview.packageDigest ||
+          _canonicalProfileValue(
+                finalPreview.resolution?.plan?.descriptor.toJson(),
+              ) !=
+              _canonicalProfileValue(configuration.plan?.toJson()) ||
+          finalPreview.effectiveSelection != preview.effectiveSelection) {
+        await store.deleteRequest(configuration);
+        return const LaunchResult(
+          started: false,
+          message:
+              'Installed launch content changed during preflight. Refresh the selection and launch again.',
+        );
+      }
+      await _requireCurrentProfileRevision(profile);
+    } on Object {
+      await store.deleteRequest(configuration);
+      rethrow;
     }
-
-    final int processId;
+    if (_disposed) {
+      await store.deleteRequest(configuration);
+      return const LaunchResult(
+        started: false,
+        message: 'The launcher repository closed before process creation.',
+      );
+    }
+    final LaunchProcessReceipt receipt;
     try {
-      processId = await _gameProcessStarter(
+      receipt = await _createGameProcess(
         GameProcessRequest(
           executable: executable,
           arguments: arguments,
           workingDirectory: layout.gameRoot,
           environment: environment,
         ),
+        layout.executablePath,
       );
-    } on Object catch (error) {
-      await _deleteProfileLaunchConfiguration(launchFile);
-      try {
-        await _appendLauncherLogBestEffort(
-          'Game process start failed (${error.runtimeType}).',
-        );
-      } on Object {
-        // Launch failure is already represented by the returned result.
-      }
-      return const LaunchResult(
+    } on Object {
+      await store.deleteRequest(configuration);
+      return LaunchResult(
         started: false,
+        requestId: requestId,
         message: 'TopiaForge could not be started. No mod state was changed.',
       );
     }
-
-    try {
-      await _appendLauncherLogBestEffort('$message$logSuffix pid=$processId');
-    } on Object {
-      // The detached process owns the one-shot file now; logging must not turn
-      // a successful start into a failure or delete its launch configuration.
+    final processId = receipt.pid > 0 && receipt.pid <= 2147483647
+        ? receipt.pid
+        : null;
+    final process = _correlatedReceiptIdentity(receipt, layout.executablePath);
+    final identity = _launchInstallIdentity(refreshed);
+    if (!_disposed && process != null) {
+      _ownedLaunchProcesses[identity] = process;
     }
-    return LaunchResult(started: true, message: message, processId: processId);
-  }
-
-  Future<bool> _stopGameIfRunning(GameInstall install) async {
-    if (!Platform.isWindows) {
-      return _stopGameUnix(install);
-    }
-
-    final result = await runBoundedProcess('powershell.exe', [
-      '-NoProfile',
-      '-NonInteractive',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-Command',
-      _stopTopiaForgeScript,
-      install.executablePath,
-    ], timeout: const Duration(seconds: 15));
-
-    if (result.exitCode == 0) {
-      await _appendLauncherLogBestEffort('Stopped TopiaForge before restart.');
-      return true;
-    }
-    if (result.exitCode == 2) {
-      await _appendLauncherLogBestEffort('No running Robotopia process found.');
-      return false;
-    }
-
-    final detail = '${result.stdout}\n${result.stderr}'.trim();
-    throw StateError(
-      detail.isEmpty ? 'Unable to stop TopiaForge before restart.' : detail,
+    final activity = LaunchActivity(
+      requestId: requestId,
+      profileId: profile.id,
+      profileRevision: profile.revision,
+      installIdentity: identity,
+      packageDigest: configuration.digest,
+      command: configuration.command,
+      process: process,
+      unconfirmed: true,
     );
-  }
-
-  /// Unix counterpart of the PowerShell stop script: find the game process,
-  /// SIGTERM it, and wait up to five seconds for it to exit. Returns false
-  /// when nothing was running, true when a process was stopped, and throws
-  /// when a process refused to exit — the same contract as the Windows path.
-  Future<bool> _stopGameUnix(GameInstall install) async {
-    final layout = GameLayout.resolve(install.path);
-    if (layout == null) {
-      throw StateError('Unable to resolve the Robotopia executable to stop.');
+    if (_disposed) {
+      return LaunchResult(
+        started: true,
+        message:
+            '$message Runtime acknowledgement is unconfirmed because the launcher closed.',
+        processId: processId,
+        process: process,
+        requestId: requestId,
+        latestActivity: activity,
+      );
     }
-
-    Future<List<int>> matchingPids() =>
-        findUnixGameProcessIds(layout.executablePath);
-
-    final pids = await matchingPids();
-    if (pids.isEmpty) {
-      await _appendLauncherLogBestEffort('No running Robotopia process found.');
-      return false;
-    }
-
-    final terminated = await runBoundedProcess(
-      'kill',
-      ['--', ...pids.map((processId) => '$processId')],
-      timeout: const Duration(seconds: 5),
-      maxStdoutBytes: 64 * 1024,
-      maxStderrBytes: 64 * 1024,
+    final monitor = LaunchActivityMonitor(
+      store: store,
+      current: activity,
+      processAlive: _gameProcessLiveness,
+      onChanged: (value) {
+        if (!_disposed) _launchActivities.add(value);
+      },
     );
-    if (terminated.exitCode != 0) {
-      throw StateError('Unable to stop the matching Robotopia process.');
-    }
-    final deadline = DateTime.now().add(const Duration(seconds: 5));
-    while (DateTime.now().isBefore(deadline)) {
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-      if ((await matchingPids()).isEmpty) {
-        await _appendLauncherLogBestEffort(
-          'Stopped TopiaForge before restart.',
-        );
-        return true;
-      }
-    }
-    throw StateError('TopiaForge did not exit before the restart timeout.');
+    _launchMonitors[requestId] = monitor;
+    if (!_disposed) _launchActivities.add(activity);
+    await monitor.start();
+    await _appendLauncherLogBestEffort(
+      'Started process for request $requestId pid=$processId; runtime session acknowledgement is separate.',
+    );
+    return LaunchResult(
+      started: true,
+      message:
+          '$message Runtime acknowledgement is ${monitor.current.acknowledged ? 'available.' : 'unconfirmed.'}',
+      processId: processId,
+      process: process,
+      requestId: requestId,
+      latestActivity: monitor.current,
+    );
   }
 }
 
-Future<int> _startDetachedGameProcess(GameProcessRequest request) async {
-  final process = await Process.start(
-    request.executable,
-    request.arguments,
-    workingDirectory: request.workingDirectory,
-    environment: request.environment,
-    mode: ProcessStartMode.detached,
-  );
-  return process.pid;
+Future<LaunchProcessReceipt> _startGameWithReceipt(
+  GameProcessRequest request,
+) => startLaunchProcessWithReceipt(
+  executable: request.executable,
+  arguments: request.arguments,
+  workingDirectory: request.workingDirectory,
+  environment: request.environment,
+);
+
+extension _ProcessCreation on LocalLauncherRepository {
+  Future<LaunchProcessReceipt> _createGameProcess(
+    GameProcessRequest request,
+    String expectedImage,
+  ) async {
+    final creator = _gameProcessCreator;
+    if (creator != null) return creator(request);
+    final processId = await _gameProcessStarter!(request);
+    LaunchProcessIdentity? identity;
+    try {
+      identity = await _gameProcessIdentityReader(processId, expectedImage);
+    } on Object {
+      identity = null;
+    }
+    return LaunchProcessReceipt(pid: processId, identity: identity);
+  }
 }
 
-/// Exit code the probe script reserves for "no matching process", mirroring
-/// the not-running code the stop script already uses.
-const int _gameNotRunningExitCode = 2;
-
-/// Read-only counterpart of the stop path: reports whether a Robotopia process
-/// for this exact install is alive, without touching it.
-///
-/// Matching is by full executable path and never by basename, for the same
-/// reason the stop path refuses a basename fallback: two installs may both
-/// contain Robotopia.exe, and this must never answer for the other one.
-///
-/// Every failure path answers true. A probe that could not read the process
-/// list must not be mistaken for one that looked and found nothing, or an
-/// unrelated environment fault would silently clear a pending restart warning.
-Future<bool> _defaultGameRunningProbe(GameInstall install) async {
-  if (!Platform.isWindows) {
-    final layout = GameLayout.resolve(install.path);
-    if (layout == null) {
-      return true;
-    }
-    try {
-      return (await findUnixGameProcessIds(layout.executablePath)).isNotEmpty;
-    } on Object {
-      return true;
-    }
+LaunchProcessIdentity? _correlatedReceiptIdentity(
+  LaunchProcessReceipt receipt,
+  String expectedImage,
+) {
+  final identity = receipt.identity;
+  if (identity == null ||
+      receipt.pid <= 0 ||
+      receipt.pid > 2147483647 ||
+      identity.pid != receipt.pid ||
+      !identity.startTimeUtc.isUtc ||
+      identity.nativeStartToken.isEmpty ||
+      !p.isAbsolute(identity.executablePath) ||
+      identity.executablePath.contains('\u0000')) {
+    return null;
   }
-
   try {
-    final result = await runBoundedProcess('powershell.exe', [
-      '-NoProfile',
-      '-NonInteractive',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-Command',
-      _probeTopiaForgeScript,
-      install.executablePath,
-    ], timeout: const Duration(seconds: 10));
-    return result.exitCode != _gameNotRunningExitCode;
-  } on Object {
-    return true;
+    var expected = File(expectedImage).resolveSymbolicLinksSync();
+    var actual = File(identity.executablePath).resolveSymbolicLinksSync();
+    if (Platform.isWindows) {
+      expected = expected.toLowerCase();
+      actual = actual.toLowerCase();
+    }
+    return actual == expected ? identity : null;
+  } on FileSystemException {
+    return null;
   }
 }
 
-const String _probeTopiaForgeScript = r'''
-param([string]$TargetPath)
-
-$target = [System.IO.Path]::GetFullPath($TargetPath)
-
-$running = @(
-  Get-CimInstance Win32_Process -Filter "Name = 'Robotopia.exe'" |
-    Where-Object {
-      $_.ExecutablePath -and
-      ([System.IO.Path]::GetFullPath($_.ExecutablePath) -ieq $target)
-    }
-)
-
-if ($running.Count -eq 0) { exit 2 }
-exit 0
-''';
-
-const String _stopTopiaForgeScript = r'''
-param([string]$TargetPath)
-
-$target = [System.IO.Path]::GetFullPath($TargetPath)
-$terminated = 0
-
-function Get-MatchingProcess {
-  Get-CimInstance Win32_Process -Filter "Name = 'Robotopia.exe'" |
-    Where-Object {
-      $_.ExecutablePath -and
-      ([System.IO.Path]::GetFullPath($_.ExecutablePath) -ieq $target)
-    }
+/// Unknown liveness retains Busy and restart-required state.
+Future<bool> _defaultGameRunningProbe(GameInstall install) async {
+  final layout = GameLayout.resolve(install.path);
+  if (layout == null) return true;
+  return await probeLaunchProcessRunning(layout.executablePath) ?? true;
 }
-
-$matches = @(Get-MatchingProcess)
-foreach ($process in $matches) {
-  $result = Invoke-CimMethod -InputObject $process -MethodName Terminate
-  if ($result.ReturnValue -ne 0) {
-    Write-Error "Terminate failed for PID $($process.ProcessId)."
-    exit 3
-  }
-  $terminated += 1
-}
-
-if ($terminated -eq 0) {
-  exit 2
-}
-
-$deadline = (Get-Date).AddSeconds(5)
-do {
-  Start-Sleep -Milliseconds 200
-  $remaining = @(Get-MatchingProcess)
-} while ($remaining.Count -gt 0 -and (Get-Date) -lt $deadline)
-
-if ($remaining.Count -gt 0) {
-  Write-Error "TopiaForge did not exit before the restart timeout."
-  exit 4
-}
-
-exit 0
-''';

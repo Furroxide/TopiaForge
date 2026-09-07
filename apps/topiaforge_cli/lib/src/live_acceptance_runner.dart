@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:path/path.dart' as p;
 
 import 'live_acceptance_evidence.dart';
+import 'live_acceptance_log_reader.dart';
 import 'live_acceptance_models.dart';
 import 'live_acceptance_trust.dart';
 
@@ -78,7 +79,7 @@ final class LiveAcceptanceRunner {
     final lastRunFile = File(p.join(logsDirectory, 'last-run.json'));
     _writeSchemaOneConfig(configDirectory, challenge);
 
-    final logReader = _IncrementalLogReader(managerLog);
+    final logReader = AcceptanceIncrementalLogReader(managerLog);
     final startedAtUtc = _clock().toUtc();
     LiveAcceptancePackageReceipt? expectedJourneyReceipt;
     if (!options.skipLaunch) {
@@ -89,12 +90,20 @@ final class LiveAcceptanceRunner {
           options.devProjectPath,
           '--game-dir',
           options.gameDirectory,
+          '--target',
+          'dev.topiaforge.sdk-acceptance.menu',
           '--launch',
           '--no-tail',
         ]);
         expectedJourneyReceipt = readGeneratedJourneyReceipt(options);
       } else {
-        await _runCliStage(['launch', '--game-dir', options.gameDirectory]);
+        await _runCliStage([
+          'launch',
+          '--game-dir',
+          options.gameDirectory,
+          '--target',
+          'dev.topiaforge.sdk-acceptance.menu',
+        ]);
       }
     }
 
@@ -452,46 +461,5 @@ final class LiveAcceptanceRunner {
       mode: ProcessStartMode.inheritStdio,
     );
     return process.exitCode;
-  }
-}
-
-final class _IncrementalLogReader {
-  _IncrementalLogReader(this.file)
-    : _offset = file.existsSync() ? file.lengthSync() : 0;
-
-  final File file;
-  int _offset;
-  String _pending = '';
-
-  Future<List<String>> readNewLines() async {
-    try {
-      if (!file.existsSync()) return const [];
-      final length = file.lengthSync();
-      if (_offset > length) {
-        _offset = 0;
-        _pending = '';
-      }
-      if (_offset == length) return const [];
-      final handle = await file.open();
-      List<int> bytes;
-      try {
-        await handle.setPosition(_offset);
-        bytes = await handle.read(length - _offset);
-        _offset = await handle.position();
-      } finally {
-        await handle.close();
-      }
-      final combined = _pending + utf8.decode(bytes, allowMalformed: true);
-      final lines = combined.split('\n');
-      _pending = lines.removeLast();
-      return lines
-          .map(
-            (line) =>
-                line.endsWith('\r') ? line.substring(0, line.length - 1) : line,
-          )
-          .toList();
-    } on FileSystemException {
-      return const [];
-    }
   }
 }

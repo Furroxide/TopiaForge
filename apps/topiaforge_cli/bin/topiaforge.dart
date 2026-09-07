@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:topiaforge/src/cli_launch_options.dart';
+import 'package:topiaforge/src/cli_launch_workflow.dart';
 import 'package:launcher_data/launcher_data.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
@@ -32,6 +34,7 @@ part 'topiaforge_dev_commands.dart';
 part 'topiaforge_environment_commands.dart';
 part 'topiaforge_help.dart';
 part 'topiaforge_launcher_commands.dart';
+part 'topiaforge_launch_commands.dart';
 part 'topiaforge_mod_commands.dart';
 part 'topiaforge_manifest_migration_commands.dart';
 part 'topiaforge_mod_module_commands.dart';
@@ -370,54 +373,6 @@ class _TopiaForgeCli {
     await launcher.installPackage(packagePath, install);
     stdout.writeln('Installed $packagePath');
     return 0;
-  }
-
-  Future<int> _launch(List<String> args, {required bool restart}) async {
-    final requestedGamePath = _option(args, '--game-dir');
-    final launcher = LocalLauncherRepository(knownGamePath: requestedGamePath);
-    final snapshot = await launcher.loadSnapshot();
-    final install = requestedGamePath == null
-        ? snapshot.gameInstall
-        : await launcher.detectKnownInstall();
-    if (install == null) {
-      throw StateError(_noInstallRemedy);
-    }
-    var profile = snapshot.profiles.firstWhere(
-      (item) => item.id == snapshot.selectedProfileId,
-      orElse: () => snapshot.profiles.first,
-    );
-
-    // `--gamemode <id>` starts that game mode for this run only, without editing the saved profile.
-    // `--gamemode none` forces an ordinary boot even when the profile is set to launch into one.
-    final requestedGamemode = _option(args, '--gamemode');
-    if (requestedGamemode != null) {
-      final selection = profile.worldSelection;
-      if (requestedGamemode == 'none') {
-        profile = profile.copyWith(
-          worldSelection: selection.copyWith(launchIntoGamemode: false),
-        );
-      } else {
-        // Prefer the world the game mode's own menu entry declares over whatever the profile last
-        // remembered, so `--gamemode zombies` starts where Zombies expects to start.
-        final entry = snapshot.worldCatalog.menuEntryFor(requestedGamemode);
-        final worldId = entry != null && entry.worldId.isNotEmpty
-            ? entry.worldId
-            : selection.worldId;
-        profile = profile.copyWith(
-          worldSelection: selection.copyWith(
-            gamemodeId: requestedGamemode,
-            worldId: worldId,
-            launchIntoGamemode: true,
-          ),
-        );
-      }
-    }
-
-    final result = restart
-        ? await launcher.restart(install, profile)
-        : await launcher.launch(install, profile);
-    stdout.writeln(result.message);
-    return result.started ? 0 : 1;
   }
 
   int _unknown(String command) {

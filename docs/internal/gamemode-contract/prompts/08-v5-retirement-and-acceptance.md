@@ -62,6 +62,10 @@ live acceptance for the integrated redesign. Do not waive pending game evidence.
   Verify actual runtime roots before gameplay and abort on normal-user save paths.
   Retain PID, start time and executable identity; never stop all processes matching
   the game's path. Test stale acknowledgements, PID reuse and unrelated processes.
+  Reuse the slice-7 original-handle Windows creation receipt; do not replace it
+  with a post-start PID lookup or the runner's historical stop-by-image helper.
+  Exercise native identity-read/resume failure cleanup as well as engine faults;
+  successful harmless-child tests do not establish those un-injected failures.
   A separate Windows user/session or VM may require user assistance. Do not create
   accounts or copy normal authentication/save data as an implicit setup step.
 - Exercise cold launch, actual Open Sandbox geometry/environment/kill-plane/spawn,
@@ -83,3 +87,16 @@ game-verified evidence for every acceptance item. Submit the final slice against
 slices are integrated, obsolete launch paths are removed, replacement documents
 are published, and the required live cases have evidence. Report any remaining
 blocked acceptance plainly; do not label a partial or unverified result complete.
+
+
+## Authoring evidence to reconcile before acceptance
+
+The slice-7 command-guide review confirmed that the Unity companion exports the
+configured prefab, not `Example.unity`; the template introduction now says so.
+Inspect `WorldValidator.CheckSpawnPoint`: its current `FindDescendant` accepts the
+first named marker, whereas runtime startup rejects ambiguous authored markers.
+Add a failing duplicate-marker authoring regression and align validation before
+claiming the generated-world authoring journey is complete. Also verify
+`Assets/World/README.md` environment and kill-plane claims against the active bundle
+provider, and remove obsolete registration-code instructions. Keep the pinned
+6000.0.23f1 authoring editor distinct from the installed game's runtime version.

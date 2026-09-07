@@ -14,6 +14,9 @@ part 'launch_resolution/runtime_observation.dart';
 part 'launch_resolution/profile_transport.dart';
 part 'launch_resolution/outcome_transport.dart';
 part 'launch_resolution/owner_index.dart';
+part 'launch_resolution/launch_preview_builder.dart';
+part 'launch_resolution/legacy_selection_resolution.dart';
+part 'launch_resolution/launch_block_messages.dart';
 
 /// Shared, closed resolution reasons. Ordering uses their ordinal wire names.
 enum LaunchBlockCode {

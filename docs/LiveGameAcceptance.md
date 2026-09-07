@@ -107,7 +107,8 @@ cannot see.
 
 The local Windows and same-host WSL2/Proton runs also extract their candidate developer payload,
 use only its packaged CLI to create a fresh minimal mod outside the extraction, and pass that
-project to the harness. The harness runs `topiaforge dev --launch --no-tail`; success additionally
+project to the harness. The harness runs
+`topiaforge dev --launch --no-tail --target dev.topiaforge.sdk-acceptance.menu`; success additionally
 requires the unique package to be `valid` and `loaded` in the fresh run plus its exact attributed
 `OnLoad` marker. This proves the promised `new mod` → `dev` journey in two authoring commands.
 

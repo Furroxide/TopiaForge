@@ -15,6 +15,7 @@ part 'topiaforge_cli_world_cases.dart';
 part 'topiaforge_cli_world_contract_cases.dart';
 part 'topiaforge_cli_registry_cases.dart';
 part 'topiaforge_cli_scaffold_cases.dart';
+part 'topiaforge_cli_launch_cases.dart';
 part 'topiaforge_cli_multiplayer_cases.dart';
 
 void main() {
@@ -36,5 +37,6 @@ void main() {
   _worldContractCliTests(() => harness);
   _registryCliTests(() => harness);
   _scaffoldCliTests(() => harness);
+  _launchCliTests(() => harness);
   _multiplayerCliTests(() => harness);
 }

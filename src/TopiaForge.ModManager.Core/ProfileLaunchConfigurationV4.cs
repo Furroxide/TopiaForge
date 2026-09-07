@@ -4,9 +4,10 @@ using System.Linq;
 
 namespace TopiaForge.ModManager.Core
 {
-    /// <summary>Inactive v4 command wire. Production remains on ProfileLaunchConfiguration v3 until both ends activate.</summary>
+    /// <summary>Authoritative V4 one-shot command with exact package identities and correlated runtime outcomes.</summary>
     public sealed class ProfileLaunchConfigurationV4
     {
+        public const string EnvironmentVariable = "TOPIAFORGE_LAUNCH_PROFILE";
         public const int SchemaVersion = 4;
 
         public ProfileLaunchConfigurationV4(string profileId, int profileRevision, string requestId, string command,
@@ -21,6 +22,7 @@ namespace TopiaForge.ModManager.Core
             Packages = LaunchContractValues.Packages(packages);
             Digest = LaunchContractValues.Digest(digest);
             if (Digest != PackageSetDigest.Of(Packages)) throw new ArgumentException("Profile digest must match its package set.");
+            if (safeMode && Packages.Count != 0) throw new ArgumentException("Safe mode must have an empty effective package set.", nameof(packages));
             SafeMode = safeMode;
             InheritManagerModState = inheritManagerModState;
             var enabled = enabledMods.ToArray();
@@ -45,6 +47,29 @@ namespace TopiaForge.ModManager.Core
                 throw new ArgumentException("Command, safe mode, and launch plan disagree.");
             if (Plan != null && (Plan.Digest != Digest || !LaunchContractValues.SamePackages(Packages, Plan.Packages)))
                 throw new ArgumentException("Profile and launch plan package identities must agree.");
+        }
+
+        public ManagerState CreateEffectiveState(ManagerState durableState)
+        {
+            var effective = JsonUtil.Clone(durableState ?? throw new ArgumentNullException(nameof(durableState)));
+            effective.LaunchSelection = durableState.LaunchSelection;
+            ApplyTo(effective);
+            return effective;
+        }
+        public void ApplyTo(ManagerState state)
+        {
+            if (state == null) throw new ArgumentNullException(nameof(state));
+            if (SafeMode) { foreach (var mod in state.Mods) mod.Enabled = false; return; }
+            var enabled = new HashSet<string>(Packages.Select(package => package.Id), StringComparer.OrdinalIgnoreCase);
+            foreach (var mod in state.Mods) mod.Enabled = enabled.Contains(mod.Id);
+            foreach (var package in Packages)
+            {
+                var mod = state.Find(package.Id);
+                if (mod == null) { mod = new InstalledModState { Id = package.Id }; state.Mods.Add(mod); }
+                mod.Enabled = true;
+                mod.Version = package.Version;
+                mod.VersionPinned = true;
+            }
         }
 
         public string ProfileId { get; }

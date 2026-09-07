@@ -75,11 +75,27 @@ abstract interface class LauncherRepository {
   /// Starts [install] with [profile] as a process-scoped snapshot. Profile mod
   /// enablement, version pins, safe mode, arguments, and environment must not
   /// be persisted into the manager's global state when launch fails or exits.
-  Future<LaunchResult> launch(GameInstall install, LauncherProfile profile);
+  Stream<LaunchActivity> get launchActivities;
 
-  /// Stops the matching game process, then follows the same process-scoped
-  /// profile contract as [launch].
-  Future<LaunchResult> restart(GameInstall install, LauncherProfile profile);
+  Future<LaunchPreview> previewLaunch(
+    GameInstall install,
+    LauncherProfile profile, {
+    LaunchSelection? selectionOverride,
+  });
+
+  Future<LaunchResult> launch(
+    GameInstall install,
+    LauncherProfile profile, {
+    LaunchSelection? selectionOverride,
+  });
+
+  /// Preflights before stopping the owned process and resolves again before
+  /// creating its replacement. The optional command never changes saved intent.
+  Future<LaunchResult> restart(
+    GameInstall install,
+    LauncherProfile profile, {
+    LaunchSelection? selectionOverride,
+  });
 
   Future<DiagnosticBundle> createDiagnosticBundle(
     GameInstall install,
@@ -203,7 +219,7 @@ abstract interface class DeveloperRepository {
   /// Throws if the directory is not a recognized project. Returns the updated project list.
   Future<List<RegisteredProject>> addExistingProject(String path);
 
-  /// Removes a project from the registry (untrack only — never deletes files). Returns the updated list.
+  /// Removes a project from the registry (untrack only â€” never deletes files). Returns the updated list.
   Future<List<RegisteredProject>> removeProject(String path);
 
   /// Creates a new Unity authoring project from the bundled template (copies it and registers it).
@@ -279,7 +295,7 @@ abstract interface class DeveloperRepository {
   /// Builds the paired world prefab into an AssetBundle by running the Unity editor headlessly
   /// (`-batchmode -executeMethod` against the world-companion package's builder) and verifies the bundle
   /// landed in the paired mod's `AssetBundles/` folder. [modPath]/[bundleName]/[unityExePath] override the
-  /// config/auto-detected values. Never throws for build failures — inspect the result.
+  /// config/auto-detected values. Never throws for build failures â€” inspect the result.
   Future<WorldBundleBuildResult> buildWorldBundle({
     required String unityProjectPath,
     String modPath = '',

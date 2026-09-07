@@ -1,6 +1,6 @@
 # Gamemode contract redesign status
 
-Updated: 2026-09-06. This is an evidence ledger, not a completion declaration.
+Updated: 2026-09-08. This is an evidence ledger, not a completion declaration.
 The [canonical brief](../GamemodeContractRedesign.md) is normative. The
 [architecture report](../../GamemodeArchitectureReport.md) preserves the original investigation.
 
@@ -16,7 +16,8 @@ The [canonical brief](../GamemodeContractRedesign.md) is normative. The
 | `41f14d078dca1830749f70cac9f72083c4fedd8c` | Slice 3 merged through PR #108; corrected pure resolver, immutable plans and inactive transport models | Full CI passed at reviewed head `63540e2`; no production caller or wire activation |
 | `9dc5613bc0cc8f2fa9b3c50b02357116f2540514` | Slice 4 squash merge of PR #109, reviewed head `4b12a1edcc56c033f1616931f40deaba44ee35c6` | Full CI and CodeQL passed; merged normally on 6 September with review threads resolved |
 | `b7390fb6a8376c58c77d18f20e287bacbd427850` | Slice 5 merge of PR #110, final reviewed head `7907398cc9d21dc18d8b9481690dd434f7f30595` | Final exact-head CI and CodeQL passed; merged normally at 2026-09-06T02:07:23Z |
-| `feat/gamemode-runtime-activation`, based on `b7390fb6` | Slice 6 active working tree | Runtime composition, consumers and manifest/template activation implemented locally; combined verification in progress; uncommitted and not integrated |
+| `bd7be8be386c51713fa1099488e1e4d36ba130a5` | Slice 6 merge of PR #111, final reviewed head `584349c123c72075b8922093a9486ae0491d041d` | Exact-head CI, full publication and CodeQL passed; normal merge at 2026-09-06T04:46:28Z |
+| `feat/gamemode-launcher-integration`, based on `bd7be8be` | Slice 7 active working tree | Shared selection, preview, wire and progress integration in progress; not integrated or game-verified |
 
 On 2026-09-05, PRs #102–105 were converted to draft for the approved re-cut.
 Their branch tips and existing review history were preserved. Both external
@@ -889,3 +890,155 @@ changes; fatal-info analysis and all repository/fixture/Markdown audits pass.
 The complete rebuilt verification passed on this combined source: all 11 SDK
 packages and all seven sequential harnesses (`tf-slice6-review-seven-harnesses.log`).
 Exact-head functional CI and CodeQL remain required after the follow-up commit.
+
+
+## Slice 6 final integration and slice 7 start
+
+PR [#111](https://github.com/Furroxide/TopiaForge/pull/111) merged normally into
+`dev` at `bd7be8be386c51713fa1099488e1e4d36ba130a5` on 2026-09-06T04:46:28Z.
+The reviewed head was `584349c123c72075b8922093a9486ae0491d041d`.
+[CI 34011825891](https://github.com/Furroxide/TopiaForge/actions/runs/34011825891)
+passed every required job, including C#, both Windows and Linux launcher_data,
+Flutter, all seven templates, and complete Linux documentation publication.
+[CodeQL 34011825742](https://github.com/Furroxide/TopiaForge/actions/runs/34011825742)
+passed at that same head; all ten findings 433–442 have `fixed` instances on
+`refs/pull/111/head`. None were dismissed or suppressed. All review threads were
+resolved after source repairs and regression evidence. A cancelled duplicate policy
+run reported failure because its prerequisite was cancelled; the replacement
+required policy check passed, and normal merge eligibility was clean.
+
+These results supersede the pending hosted-check statements in the dated slice-6
+checkpoints above. The local Windows Dartdoc 9.0.4 CRLF failure remains recorded;
+the exact-head Linux publication completed successfully without patching the SDK.
+They establish implementation, production connection and automated verification,
+not Unity scene timing, generated geometry, authored spawn correctness, or live
+teardown behavior. No game or release was launched to obtain these results.
+
+Slice 7 was branched from the verified merge only after it landed. Early regression
+work has reproduced legacy profile value loss, per-profile Home gating mistakes,
+unsafe staging ancestors, unpinned package selection drift and request activity
+correlation failures. Repairs and focused tests are being combined; the slice is
+not yet committed, independently green, integrated, or game-verified. Release
+preparation (7a), V5 retirement (8), isolated game evidence and final qualification
+remain mandatory before a release claim.
+
+
+## Slice 7 working-tree review, 8 September
+
+The branch remains based on `bd7be8be`; this checkpoint is uncommitted source,
+not an integrated or release-qualified revision. V4 production intake, target
+controls, exact preflight and correlated activity are connected in the working
+tree. V3 command readers and the temporary startup adapter are removed. The
+malformed-state recovery and final process creation changes are under final checks.
+
+| Area | Implemented / connected evidence | Automated evidence at this checkpoint | Game-verified |
+| --- | --- | --- | --- |
+| Shared profile/target contract | Strict raw selections, immutable previews, policy-filtered worlds/transitions and versioned revisions | Full domain 867 passed before the final integer-selection-version fix; that final focused suite passed 8 cases | Pending |
+| Launcher UI | Per-profile Home gating, Home/Setup/Profiles target controls, repair states and receipt-bound activity | Full app 75 passed; extra stale/foreign/process-exit, exception and 200% text regressions failed before their fixes | Pending |
+| Data admission | Exact installed package snapshots, duplicate/malformed diagnostics, final preflight, guarded cross-instance lease and stale-save fencing | Clean `bd7be8be` multiplayer baseline 10 passed under the same short Windows PATH; current full data passed 423 before later review additions | Pending |
+| Runtime composition | V4 request intake, production binder/orchestrator, guarded observations/outcomes, overlay controls and read-only malformed-state recovery | Rebuilt solution: zero warnings/errors; 11 SDK packages plus all 7 harnesses passed; final raw-state identity fix followed by full rebuild and manager run | Pending |
+| Windows process ownership | Original suspended creation handle supplies PID, image and native creation token; restart verifies one held generation | 8 harmless-child creator/control cases passed, including arguments/environment/cwd and detached survival | Pending |
+| Process admission probes | Failed/unreadable queries remain unknown; canonical Windows aliases and relative native/Wine targets cannot establish false absence | 13 probe regressions/control cases passed; Linux process-epoch plus native control coverage passed separately | Pending |
+
+The earlier Windows multiplayer failures were reproduced as tool PATH pollution,
+then cleared on the matching clean baseline. They are not a standing exemption.
+Four platform/privilege skips in earlier broad runs are recorded as skips, not
+passes. Full CLI, final data/UI checks, Windows build and current-head publication
+are still required. Exact-head hosted CI and CodeQL cannot be claimed before a
+commit and PR exist.
+
+Review also found unsafe initial ownership from detached PID lookup, hidden
+Loading/Starting progress, stale callbacks accepted without a receipt, lost profile
+values during coercion, simultaneous-launch races, and stale full-list saves that
+could erase or resurrect profiles. Each repair has a preceding failing regression.
+Evidence lives in `tf-slice7-*` temporary logs and the checked-in test cases; native
+identity/resume failure cleanup is implemented but not yet fault-injected.
+
+No game, normal-user save/authentication data, release tag, release dispatch or
+published package was used for these results. The isolated game acceptance matrix,
+release-preparation slice 7a and V5-retirement slice 8 remain pending.
+
+
+## Slice 7 final local verification, 8 September
+
+This checkpoint supersedes the earlier partial-suite counts. It describes the
+working tree based on `bd7be8be`, before its commit and hosted checks. Production
+Home, Setup, Profiles, CLI and manager overlay use target selection and the same
+resolver; both process producer and runtime consumer use wire V4. The original
+Windows creation handle establishes restart ownership. A detached PID lookup does
+not establish that ownership. Linux creation currently returns an unverified
+receipt, so the launcher will not claim authority to terminate it.
+
+| Verification | Result |
+| --- | --- |
+| Domain | 868 passed; fatal-info analysis clean; a later test-file split passed its 58 affected cases |
+| Windows data | 469 passed, 4 existing symlink-privilege skips; fatal-info analysis clean |
+| CLI and generated SDK packages | 266 passed, 4 documented platform skips; all 7 templates passed both relocation paths; fatal-info analysis clean |
+| Flutter | App 75 and shared UI 3 passed; both analyzers clean; Windows x64 debug build passed |
+| C# | Final Release solution: 0 warnings/errors; 11 SDK package audits and all 7 rebuilt sequential harnesses passed, including publication retries |
+| Dart formatting and size | 477 files checked, 0 changes; 476 non-generated files checked, none above 500 lines |
+| Repository audits | README counts, rename residue, trademark and asset-licence checks passed |
+| Website sources | 33 unit tests, 126 Markdown files and 521 repository data files passed; Astro checked 26 files with 0 errors/warnings/hints; guide build produced 27 pages |
+| API publication | C# reference produced 381 HTML pages with 0 warnings/errors; domain/data Dart references generated; UI Dart reference failed as detailed below |
+
+The final data regressions prevent `loadSnapshot` from rewriting malformed manager
+state during restart reconciliation, reject duplicate properties and lossy numeric
+normalization before decoding, preserve current selection presence, and match the
+runtime's 4 MiB manager-state bound. A missing primary with an existing backup
+cannot silently become empty state. Explicit safe mode remains a read-only empty
+main-menu recovery; ordinary launch reports repair requirements. Native fixture
+teardown now waits for its recorded process generation to exit before removing the
+working directory. The complete concurrent data run includes that regression.
+
+Local publication remains incomplete because the unmodified pinned Flutter 3.44.6
+Dartdoc 9.0.4 fails in `_stripDocImports` with a CRLF-related RangeError while
+processing launcher_ui. Unified search correctly rejects the missing searchable
+UI reference; built-link verification reports 25 missing `/api/dart/` landing
+links. This reproduces the recorded slice-6 tool failure. It is not a publication
+pass or permission to skip exact-head Linux publication. No SDK cache was patched.
+
+Logs are in the temporary directory under `tf-slice7-*`, including
+`domain-final`, `cli-full-current`, `flutter-app-full-current`,
+`flutter-ui-full-current`, `flutter-windows-debug-current`, `dart-format-final`,
+`astro-check`, `docs-csharp`, `docs-dart`, `docs-search` and `docs-built-links`.
+The final data logs are
+`packages/launcher_data/.dart_tool/slice7-data-final-complete*.log`.
+These ignored machine-local logs supplement checked-in regressions; hosted evidence
+must identify the actual committed revision before integration.
+
+Implemented and connected: slice-7 launch paths and durable/one-shot contracts.
+Automated-tested: the results above; exact-head hosted checks remain pending at
+this checkpoint. Game-verified: pending in every area. No game,
+normal-user save/authentication data, release tag, dispatch or package publication
+was used. Native identity/resume fault injection, isolated gameplay acceptance,
+release preparation (7a), V5 retirement (8), and final qualification remain open.
+
+
+The final runtime follow-up reproduced two publication defects before repair:
+a failed observation write suppressed retries until the registry changed, and
+one-shot progress/outcome write failures lost those records permanently. The
+publisher now keeps the latest progress and one immutable record per outcome
+channel, retries on monotonic bounded intervals even with an unchanged registry,
+and attempts one final disposal flush. Successful channels are not rewritten;
+retries never emit lifecycle notifications. All seven publication scenarios and
+the complete rebuilt release harness passed on the combined source. Logs:
+`tf-slice7-observation-retry-{red,green}.log`,
+`tf-slice7-terminal-retry-{red,green,build}.log`, and
+`tf-slice7-final-seven-harness.log` in the temporary directory.
+
+The final public-guide review corrected retired CLI flags, acknowledgement exit
+codes, required world-play targets, and prefab export instructions. The guide
+build passed again after those edits. The next prompts now identify the remaining
+authoring marker-validation gap and distinguish already-completed unsigned P7S
+omission from the outstanding release qualification/signing work. These are
+handoff instructions, not claims that slice 7a or 8 is implemented.
+
+
+Final full C# format verification exited 0 and changed 0 of 1095 files. Its six
+Debug project/metadata mapping notices match the previously explained workspace
+notices; all projects loaded and analyzers ran, with no missing package or failed
+project load. The actual SDK is 10.0.301. The format host reports runtime 10.0.11,
+which is also installed alongside 10.0.9; these development checks do not certify
+the release builder's pinned runtime. Release preparation must verify its actual
+frozen toolchain independently. Remote `dev` remained `bd7be8be` after the final
+build, and all pre-push repository/Markdown audits passed again.
