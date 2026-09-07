@@ -34,18 +34,39 @@ void main() {
       final profile = LauncherProfile(
         id: 'boundary',
         name: 'Boundary',
-        worldSelection: WorldSelection(
-          worldId: id,
-          gamemodeId: id,
-          launchIntoGamemode: true,
+        launchSelection: LaunchSelection.target(
+          LaunchRequest(targetId: id, worldOverride: id),
         ),
       );
       final restored = LauncherProfile.fromJson(profile.toJson());
-      expect(restored.worldSelection.worldId, id);
-      expect(restored.worldSelection.gamemodeId, id);
-      final wire = ProfileLaunchConfiguration.fromProfile(restored).toJson();
-      expect(wire['worldLaunch'], containsPair('worldId', id));
-      expect(wire['worldLaunch'], containsPair('gamemodeId', id));
+      expect(restored.launchSelection.request!.targetId, id);
+      expect(restored.launchSelection.request!.worldOverride, id);
+      final plan = LaunchPlanDescriptor(
+        targetId: id,
+        gamemodeId: id,
+        worldId: id,
+        transition: ModTransitions.additiveArena,
+        request: restored.launchSelection.request!,
+        packages: [],
+      );
+      final wire = ProfileLaunchConfigurationV4(
+        profileId: profile.id,
+        profileRevision: 0,
+        requestId: 'boundary-request',
+        command: 'launch-target',
+        safeMode: false,
+        inheritManagerModState: false,
+        enabledMods: [],
+        selectedVersions: {},
+        packages: [],
+        plan: plan,
+      );
+      final read = LaunchTransport.readProfile(
+        LaunchTransport.writeProfile(wire),
+      );
+      expect(read.plan!.targetId, id);
+      expect(read.plan!.worldId, id);
+      expect(read.plan!.gamemodeId, id);
     });
   }
 
@@ -64,15 +85,10 @@ void main() {
           throwsFormatException,
         );
         expect(
-          () => ProfileLaunchConfiguration.fromProfile(
-            LauncherProfile(
-              id: 'invalid',
-              name: 'Invalid',
-              worldSelection: selection,
-            ),
-          ),
+          () => LaunchRequest(targetId: 'valid.target', worldOverride: id),
           throwsFormatException,
         );
+        expect(() => LaunchRequest(targetId: id), throwsFormatException);
       }
     });
     test('invalid menu world reference $id is filtered independently', () {
@@ -105,7 +121,17 @@ void main() {
       ),
     ]) {
       expect(
-        () => ProfileLaunchConfiguration.fromProfile(profile),
+        () => ProfileLaunchConfigurationV4(
+          profileId: profile.id,
+          profileRevision: 0,
+          requestId: 'boundary-request',
+          command: 'main-menu',
+          safeMode: false,
+          inheritManagerModState: false,
+          enabledMods: profile.enabledMods,
+          selectedVersions: profile.selectedVersions,
+          packages: [],
+        ),
         throwsFormatException,
       );
     }

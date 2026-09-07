@@ -2,7 +2,7 @@
   "id": "wire-profile-safe-main-menu",
   "channel": "serialization",
   "kind": "transport-codec",
-  "summary": "Inactive profile codec safe main menu",
+  "summary": "Safe mode starts the main menu with an empty exact effective package set.",
   "transport": "profile",
   "payload": {
     "schemaVersion": 4,
@@ -20,17 +20,8 @@
       "base.mod": "1.0.0",
       "mode.mod": "2.3.4"
     },
-    "packages": [
-      {
-        "id": "base.mod",
-        "version": "1.0.0"
-      },
-      {
-        "id": "mode.mod",
-        "version": "2.3.4"
-      }
-    ],
-    "digest": "6a4a1aa84ed69e17"
+    "packages": [],
+    "digest": "cbf29ce484222325"
   },
   "expect": {
     "csharp": {
@@ -51,17 +42,8 @@
           "base.mod": "1.0.0",
           "mode.mod": "2.3.4"
         },
-        "packages": [
-          {
-            "id": "base.mod",
-            "version": "1.0.0"
-          },
-          {
-            "id": "mode.mod",
-            "version": "2.3.4"
-          }
-        ],
-        "digest": "6a4a1aa84ed69e17"
+        "packages": [],
+        "digest": "cbf29ce484222325"
       }
     },
     "dart": {
@@ -82,17 +64,8 @@
           "base.mod": "1.0.0",
           "mode.mod": "2.3.4"
         },
-        "packages": [
-          {
-            "id": "base.mod",
-            "version": "1.0.0"
-          },
-          {
-            "id": "mode.mod",
-            "version": "2.3.4"
-          }
-        ],
-        "digest": "6a4a1aa84ed69e17"
+        "packages": [],
+        "digest": "cbf29ce484222325"
       }
     }
   }

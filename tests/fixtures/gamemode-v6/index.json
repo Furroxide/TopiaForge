@@ -1945,6 +1945,12 @@
       "path": "serialization/transport/wire-profile-safe-main-menu.json"
     },
     {
+      "id": "wire-profile-safe-mode-nonempty-packages",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-safe-mode-nonempty-packages.json"
+    },
+    {
       "id": "wire-profile-safe-target",
       "channel": "serialization",
       "kind": "transport-codec",

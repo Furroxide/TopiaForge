@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi' as ffi;
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
@@ -14,11 +15,17 @@ import 'bounded_process.dart';
 import 'data_root.dart';
 import 'dotnet_sdk.dart';
 import 'game_install_discovery.dart';
-import 'process_identity.dart';
+import 'launch_running_probe.dart';
+import 'launch_wine_configuration.dart';
+import 'profile_json_preservation.dart';
 import 'package_contract.dart';
 import 'public_url.dart';
 import 'secure_http.dart';
 import 'safe_zip_archive.dart';
+import 'launch_staging_store.dart';
+import 'launch_storage_keys.dart';
+import 'launch_activity_monitor.dart';
+import 'launch_process_control.dart';
 
 part 'local_launcher_repository/game_layout.dart';
 part 'local_launcher_repository/game_install_discovery_helpers.dart';
@@ -26,6 +33,7 @@ part 'local_launcher_repository/game_architecture.dart';
 part 'local_launcher_repository/diagnostics_helpers.dart';
 part 'local_launcher_repository/game_runtime_helpers.dart';
 part 'local_launcher_repository/manager_state_helpers.dart';
+part 'local_launcher_repository/manager_state_validation.dart';
 part 'local_launcher_repository/installed_package_validation.dart';
 part 'local_launcher_repository/noncritical_logging.dart';
 part 'local_launcher_repository/package_install_receipt.dart';
@@ -38,6 +46,10 @@ part 'local_launcher_repository/package_metadata_validation.dart';
 part 'local_launcher_repository/package_helpers.dart';
 part 'local_launcher_repository/path_helpers.dart';
 part 'local_launcher_repository/profile_launch_helpers.dart';
+part 'local_launcher_repository/effective_launch_selection.dart';
+part 'local_launcher_repository/launch_preview.dart';
+part 'local_launcher_repository/launch_admission.dart';
+part 'local_launcher_repository/profile_persistence.dart';
 part 'local_launcher_repository/process_helpers.dart';
 part 'local_launcher_repository/registry_source_helpers.dart';
 part 'local_launcher_repository/registry_source_models.dart';
@@ -58,7 +70,11 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
     PackageInstallCommitHook? packageInstallCommitHook,
     RuntimeRepairCommitHook? runtimeRepairCommitHook,
     GameProcessStarter? gameProcessStarter,
+    GameProcessCreator? gameProcessCreator,
     GameRunningProbe? gameRunningProbe,
+    GameProcessIdentityReader? gameProcessIdentityReader,
+    GameProcessLiveness? gameProcessLiveness,
+    GameProcessStopper? gameProcessStopper,
   }) : _dataRoot = Directory(dataRoot ?? resolveTopiaForgeDataRoot()),
        _repositoryRoot = Directory(
          repositoryRoot ?? _findRepositoryRoot(workingDirectory),
@@ -71,8 +87,21 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
        _packageMetadataValidator = packageMetadataValidator,
        _packageInstallCommitHook = packageInstallCommitHook,
        _runtimeRepairCommitHook = runtimeRepairCommitHook,
-       _gameProcessStarter = gameProcessStarter ?? _startDetachedGameProcess,
-       _gameRunningProbe = gameRunningProbe ?? _defaultGameRunningProbe;
+       _gameProcessStarter = gameProcessStarter,
+       _gameProcessCreator =
+           gameProcessCreator ??
+           (gameProcessStarter == null ? _startGameWithReceipt : null),
+       _gameRunningProbe = gameRunningProbe ?? _defaultGameRunningProbe,
+       _gameProcessIdentityReader =
+           gameProcessIdentityReader ?? _unverifiedInjectedProcess,
+       _gameProcessLiveness = gameProcessLiveness ?? isLaunchProcessAlive,
+       _gameProcessStopper = gameProcessStopper ?? stopLaunchProcess {
+    if (gameProcessCreator != null && gameProcessStarter != null) {
+      throw ArgumentError(
+        'Choose a creation receipt hook or a legacy process starter.',
+      );
+    }
+  }
   final Directory _dataRoot;
   final Directory _repositoryRoot;
   final String? _knownGamePath;
@@ -82,11 +111,27 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
   final Map<String, Future<List<String>>> _installedMetadataCache = {};
   final PackageInstallCommitHook? _packageInstallCommitHook;
   final RuntimeRepairCommitHook? _runtimeRepairCommitHook;
-  final GameProcessStarter _gameProcessStarter;
+  final GameProcessStarter? _gameProcessStarter;
+  final GameProcessCreator? _gameProcessCreator;
   final GameRunningProbe _gameRunningProbe;
+  final GameProcessIdentityReader _gameProcessIdentityReader;
+  final GameProcessLiveness _gameProcessLiveness;
+  final GameProcessStopper _gameProcessStopper;
+  final Set<String> _launchAdmissions = {};
+  final Map<String, LaunchProcessIdentity> _ownedLaunchProcesses = {};
+  final Map<String, LaunchActivityMonitor> _launchMonitors = {};
   Future<void> _settingsMutationTail = Future<void>.value();
   Future<void> _launcherLogMutationTail = Future<void>.value();
   bool _disposed = false;
+  final _launchActivities = StreamController<LaunchActivity>.broadcast();
+  @override
+  Stream<LaunchActivity> get launchActivities => _launchActivities.stream;
+  @override
+  Future<LaunchPreview> previewLaunch(
+    GameInstall install,
+    LauncherProfile profile, {
+    LaunchSelection? selectionOverride,
+  }) => _previewLaunch(install, profile, selectionOverride: selectionOverride);
   @override
   String get dataRoot => _dataRoot.path;
   File get _settingsFile => File(p.join(_dataRoot.path, 'settings.json'));
@@ -107,15 +152,27 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
     final discovery = await _resolveGameInstallDiscovery(settings);
     final gameInstallCandidates = discovery.candidates;
     final gameInstall = discovery.install;
-    final installedMods = gameInstall == null
-        ? <InstalledMod>[]
-        : await _loadInstalledMods(gameInstall);
+    var installedMods = <InstalledMod>[];
+    if (gameInstall != null) {
+      try {
+        installedMods = await _loadInstalledMods(gameInstall);
+      } on _ManagerStateContentException {
+        // Keep profiles and their explicit recovery previews available. Never
+        // reconcile or replace manager state whose content cannot be trusted.
+      }
+    }
     final packageSources = await _loadPackageSources();
     final registryOutcome = await _loadRegistryOutcome(
       installedMods,
       packageSources,
     );
     final registryMods = registryOutcome.mods;
+    final previews = <String, LaunchPreview>{};
+    if (gameInstall != null) {
+      for (final profile in profiles) {
+        previews[profile.id] = await previewLaunch(gameInstall, profile);
+      }
+    }
     return LauncherSnapshot(
       gameInstall: gameInstall,
       gameInstallCandidates: gameInstallCandidates,
@@ -124,9 +181,8 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
       installedMods: installedMods,
       registryMods: registryMods,
       packageSources: packageSources,
-      worldCatalog: gameInstall == null
-          ? WorldCatalog.fallback()
-          : await _loadWorldCatalog(gameInstall, installedMods, registryMods),
+      worldCatalog: const WorldCatalog(worlds: [], gamemodes: []),
+      previewsByProfile: previews,
       recentLog: gameInstall == null
           ? await _readLauncherLog()
           : await readRecentLog(gameInstall),
@@ -288,29 +344,7 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
   Future<List<LauncherProfile>> saveProfiles(
     List<LauncherProfile> profiles,
     String selectedProfileId,
-  ) async {
-    final normalizedProfiles = profiles.isEmpty
-        ? [LauncherProfile.defaultProfile()]
-        : profiles;
-    for (final profile in normalizedProfiles) {
-      _requireValidLauncherProfile(profile);
-    }
-    await _writeJsonFileAtomic(
-      _profilesFile,
-      {
-        'schemaVersion': _profileFormatVersion,
-        'profiles': normalizedProfiles
-            .map((profile) => profile.toJson())
-            .toList(),
-      },
-      maxBytes: _maxProfilesBytes,
-      label: 'Launcher profiles',
-    );
-    await _updateSettings(
-      (settings) => settings['selectedProfileId'] = selectedProfileId,
-    );
-    return normalizedProfiles;
-  }
+  ) => _saveVersionedProfiles(profiles, selectedProfileId);
 
   @override
   Future<void> exportProfile(LauncherProfile profile, String path) async {
@@ -325,67 +359,32 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
   }
 
   @override
-  Future<LauncherProfile> importProfile(String path) async {
-    _requireProfileExportPath(path);
-    final decoded = await _readJsonFileBounded(
-      File(path),
-      maxBytes: _maxProfilesBytes,
-      label: 'Imported launcher profile',
-    );
-    if (decoded is! Map || decoded['schemaVersion'] != _profileFormatVersion) {
-      throw const FormatException(
-        'Imported launcher profile must use TopiaForge schemaVersion 2.',
-      );
-    }
-    final profile = decoded['profile'];
-    if (profile is! Map) {
-      throw const FormatException(
-        'Imported launcher profile is missing profile.',
-      );
-    }
-    return _requireValidLauncherProfile(
-      LauncherProfile.fromJson(
-        profile.map((key, value) => MapEntry(key.toString(), value)),
-      ),
-    );
-  }
+  Future<LauncherProfile> importProfile(String path) =>
+      _importVersionedProfile(path);
 
   @override
   Future<LaunchResult> launch(
     GameInstall install,
-    LauncherProfile profile,
-  ) async {
-    final prepared = await _prepareRuntimeForLaunch(install);
-    if (prepared.failure != null) {
-      return prepared.failure!;
-    }
-    final launchInstall = prepared.install!;
-    final message = profile.launchSettings.safeMode
-        ? 'Launched TopiaForge in safe mode for this run only.'
-        : 'Launched TopiaForge.';
-    return _startGame(launchInstall, profile, message: message);
-  }
+    LauncherProfile profile, {
+    LaunchSelection? selectionOverride,
+  }) => _launchProfile(
+    install,
+    profile,
+    selectionOverride: selectionOverride,
+    restart: false,
+  );
 
   @override
   Future<LaunchResult> restart(
     GameInstall install,
-    LauncherProfile profile,
-  ) async {
-    final stopped = await _stopGameIfRunning(install);
-    final prepared = await _prepareRuntimeForLaunch(install);
-    if (prepared.failure != null) {
-      return prepared.failure!;
-    }
-    final launchInstall = prepared.install!;
-    final message = switch ((stopped, profile.launchSettings.safeMode)) {
-      (true, true) => 'Restarted TopiaForge in safe mode for this run only.',
-      (true, false) => 'Restarted TopiaForge.',
-      (false, true) =>
-        'Started TopiaForge in temporary safe mode. No running process was found.',
-      (false, false) => 'Started TopiaForge. No running process was found.',
-    };
-    return _startGame(launchInstall, profile, message: message);
-  }
+    LauncherProfile profile, {
+    LaunchSelection? selectionOverride,
+  }) => _launchProfile(
+    install,
+    profile,
+    selectionOverride: selectionOverride,
+    restart: true,
+  );
 
   @override
   Future<DiagnosticBundle> createDiagnosticBundle(
@@ -413,5 +412,10 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
+    for (final monitor in _launchMonitors.values) {
+      await monitor.dispose();
+    }
+    _launchMonitors.clear();
+    await _launchActivities.close();
   }
 }

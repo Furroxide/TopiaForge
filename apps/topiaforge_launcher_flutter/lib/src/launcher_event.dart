@@ -161,26 +161,36 @@ class ProfileImported extends LauncherEvent {
   final String path;
 }
 
-class WorldSelectionChanged extends LauncherEvent {
-  const WorldSelectionChanged({
-    this.worldId,
-    this.gamemodeId,
-    this.loadMode,
-    this.launchIntoGamemode,
-  });
-
-  final String? worldId;
-  final String? gamemodeId;
-  final String? loadMode;
-  final bool? launchIntoGamemode;
+class LaunchSelectionChanged extends LauncherEvent {
+  const LaunchSelectionChanged(this.selection);
+  final LaunchSelection selection;
 }
 
-/// Home's gamemode picker. A null [gamemodeId] is the explicit "None — play normally" choice, which
-/// leaves the remembered world alone and simply stops Launch from starting a session.
-class LaunchGamemodeSelected extends LauncherEvent {
-  const LaunchGamemodeSelected(this.gamemodeId);
+class LaunchPreviewUpdated extends LauncherEvent {
+  const LaunchPreviewUpdated({
+    required this.profileId,
+    required this.revision,
+    required this.installPath,
+    required this.generation,
+    this.preview,
+    this.error,
+  });
+  final String profileId;
+  final int revision;
+  final String installPath;
+  final int generation;
+  final LaunchPreview? preview;
+  final String? error;
+}
 
-  final String? gamemodeId;
+class LaunchActivityUpdated extends LauncherEvent {
+  const LaunchActivityUpdated(this.activity);
+  final LaunchActivity activity;
+}
+
+class LaunchActivityMonitorFailed extends LauncherEvent {
+  const LaunchActivityMonitorFailed(this.message);
+  final String message;
 }
 
 class PackageSourceAdded extends LauncherEvent {

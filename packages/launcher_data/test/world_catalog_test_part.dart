@@ -6,7 +6,7 @@ void _registerWorldCatalogTests({
   required Directory Function() gameRoot,
   required LocalLauncherRepository Function() repository,
 }) {
-  test('adds installed manifest gamemodes to world catalog', () async {
+  test('legacy manifest metadata cannot become a launch target', () async {
     final install = await repository().selectGameDirectory(gameRoot().path);
     final package = _createPackage(
       root(),
@@ -26,16 +26,14 @@ void _registerWorldCatalogTests({
 
     expect(
       snapshot.worldCatalog.gamemodes.map((mode) => mode.id),
-      contains('mode.mod.survival'),
+      isNot(contains('mode.mod.survival')),
     );
   });
 
-  test('reads the world catalog the runtime actually publishes', () async {
+  test('obsolete unprovenanced catalog cannot add launch content', () async {
     final install = await repository().selectGameDirectory(gameRoot().path);
-    // The runtime writes this through its mod-scoped data service, which keys the directory by the
-    // raw mod id. The launcher used to look under the shortened config-file name instead, found
-    // nothing, and silently fell back to a one-world built-in catalog -- so every real Robotopia
-    // level the runtime published was unreachable from the launcher, with no error anywhere.
+    // Old catalogs had no profile/package provenance. Even valid-looking
+    // declarations in this legacy file cannot become launch authority.
     final catalogFile = File(
       p.join(
         gameRoot().path,
@@ -78,24 +76,17 @@ void _registerWorldCatalogTests({
 
     final snapshot = await repository().loadSnapshot();
 
+    expect(snapshot.worldCatalog.worlds, isEmpty);
+    expect(snapshot.worldCatalog.gamemodes, isEmpty);
+    expect(snapshot.worldCatalog.menuEntries, isEmpty);
     expect(
-      snapshot.worldCatalog.worlds.map((world) => world.id),
-      contains('io.github.furroxide.topiaforge.worlds.level.introsewer'),
-      reason: 'the published world list must reach the launcher',
-    );
-    final entry = snapshot.worldCatalog.menuEntryFor(
-      'io.github.furroxide.topiaforge.zombies.survival',
-    );
-    expect(entry, isNotNull);
-    expect(
-      entry!.worldId,
-      'io.github.furroxide.topiaforge.worlds.level.introsewer',
-      reason: 'a menu entry names the world its gamemode wants to start in',
+      snapshot.previewsByProfile.values.expand((preview) => preview.targets),
+      isEmpty,
     );
     expect(install.path, gameRoot().path);
   });
 
-  test('adds installed registry gamemodes to world catalog', () async {
+  test('registry metadata cannot become launch content', () async {
     final install = await repository().selectGameDirectory(gameRoot().path);
     final package = _createPackage(
       root(),
@@ -108,7 +99,7 @@ void _registerWorldCatalogTests({
 
     expect(
       snapshot.worldCatalog.gamemodes.map((mode) => mode.id),
-      contains('registry.sample.survival'),
+      isNot(contains('registry.sample.survival')),
     );
   });
 }

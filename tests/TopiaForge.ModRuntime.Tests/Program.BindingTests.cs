@@ -17,7 +17,7 @@ namespace TopiaForge.ModRuntime.Tests
     internal static partial class Program
     {
         private const string BindingAssembly = "TopiaForge.BindingTestMod.dll";
-        private static readonly string[] BindingCases = { "success", "shapes", "hash", "hash-missing", "hash-valid", "location", "forwarder", "receipt", "entry-race", "selection-drift", "snapshot", "ownership", "registry", "discovery-drain", "discover-valid", "discover-failed", "discover-bounded", "discover-constructor", "discover-stale", "discover-cancel", "discover-cancel-cleanup", "discover-worker-cancel", "discover-worker-cancel-callback", "discover-scope-construction", "discover-scope-construction-cleanup", "discover-malformed", "discover-duplicate", "discover-null", "discover-null-result", "discover-null-item", "discover-cleanup", "discover-limits", "discover-timeout", "startup", "constructor", "failed-owner", "native-owner-drain", "native-failed-owner", "native-failed-scene", "native-gate" };
+        private static readonly string[] BindingCases = { "wire-success", "wire-menu", "wire-drift", "wire-provider-failed", "wire-observation", "success", "shapes", "hash", "hash-missing", "hash-valid", "location", "forwarder", "receipt", "entry-race", "selection-drift", "snapshot", "ownership", "registry", "discovery-drain", "discover-valid", "discover-failed", "discover-bounded", "discover-constructor", "discover-stale", "discover-cancel", "discover-cancel-cleanup", "discover-worker-cancel", "discover-worker-cancel-callback", "discover-scope-construction", "discover-scope-construction-cleanup", "discover-malformed", "discover-duplicate", "discover-null", "discover-null-result", "discover-null-item", "discover-cleanup", "discover-limits", "discover-timeout", "startup", "constructor", "failed-owner", "native-owner-drain", "native-failed-owner", "native-failed-scene", "native-gate" };
 
         private static void TestProductionBindingsInFreshProcesses()
         {
@@ -96,6 +96,7 @@ namespace TopiaForge.ModRuntime.Tests
                 }
                 var profile = new EffectiveProfile("binding-profile", 7, selectedPackages.Select(package => new ResolvedPackage(package.Manifest!.Id, package.Manifest.Version, package.Manifest)).ToArray());
                 var runtime = fixture.CreateRuntimeInstance();
+                if (name.StartsWith("wire-", StringComparison.Ordinal)) { TestProductionWire(fixture, runtime, profile, selectedPackages, name); return 0; }
                 runtime.ConfigureSessionSelection(profile);
                 if (name == "selection-drift")
                 {

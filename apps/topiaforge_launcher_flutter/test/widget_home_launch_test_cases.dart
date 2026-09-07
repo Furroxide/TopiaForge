@@ -1,63 +1,49 @@
 part of 'widget_test.dart';
 
-/// What Home's Launch affordance says it will do, and when it refuses to do it.
 void _registerHomeLaunchTests(_PumpHome pumpHome) {
-  testWidgets('home game-mode picker makes Launch start that mode', (
-    tester,
-  ) async {
+  testWidgets('home target picker starts the declared target', (tester) async {
     final repository = _FakeLauncherRepository(
-      snapshot: _readySnapshot(worldCatalog: _gamemodeCatalog()),
+      snapshot: _readySnapshot(installedMods: _declaredLaunchMods()),
     );
     await pumpHome(tester, repository);
-
-    // Play normally is the default, and it is a visible choice rather than an absence.
     expect(find.text('LAUNCH'), findsOneWidget);
-
-    await tester.tap(find.byType(DropdownButton<String?>));
+    await tester.tap(find.byType(DropdownButtonFormField<String>).first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Zombies').last);
     await tester.pumpAndSettle();
-
-    // The button now states what it will do, so the intent is visible before it is pressed.
-    expect(find.text('LAUNCH ZOMBIES'), findsOneWidget);
-
-    final saved = repository.savedProfiles.single.worldSelection;
-    expect(saved.launchIntoGamemode, isTrue);
-    expect(saved.gamemodeId, 'io.github.furroxide.topiaforge.zombies.survival');
-    expect(
-      saved.worldId,
-      'io.github.furroxide.topiaforge.worlds.open_sandbox',
-      reason: "the mode's own menu entry decides where it starts",
-    );
+    expect(find.text('LAUNCH'), findsOneWidget);
+    final saved = repository.savedProfiles.single.launchSelection;
+    expect(saved.kind, LaunchSelectionKind.target);
+    expect(saved.request!.targetId, _targetId);
+    expect(saved.request!.worldOverride, isNull);
+    expect(saved.request!.transitionOverride, isNull);
+    expect(repository.savedProfiles.single.revision, greaterThan(0));
   });
 
-  testWidgets('home game-mode picker can go back to playing normally', (
+  testWidgets('home target picker explicitly returns to main menu', (
     tester,
   ) async {
-    final launching = LauncherProfile.defaultProfile().copyWith(
-      worldSelection: const WorldSelection(
-        gamemodeId: 'io.github.furroxide.topiaforge.zombies.survival',
-        launchIntoGamemode: true,
+    final profile = LauncherProfile.defaultProfile().copyWith(
+      launchSelection: LaunchSelection.target(
+        LaunchRequest(targetId: _targetId),
       ),
     );
     final repository = _FakeLauncherRepository(
       snapshot: _readySnapshot(
-        profiles: [launching],
-        worldCatalog: _gamemodeCatalog(),
+        profiles: [profile],
+        installedMods: _declaredLaunchMods(),
       ),
     );
     await pumpHome(tester, repository);
-    expect(find.text('LAUNCH ZOMBIES'), findsOneWidget);
-
-    await tester.tap(find.byType(DropdownButton<String?>));
+    expect(find.text('LAUNCH'), findsOneWidget);
+    await tester.tap(find.byType(DropdownButtonFormField<String>).first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('None — play normally').last);
+    await tester.tap(find.text('Main menu').last);
     await tester.pumpAndSettle();
-
     expect(find.text('LAUNCH'), findsOneWidget);
     expect(
-      repository.savedProfiles.single.worldSelection.launchIntoGamemode,
-      isFalse,
+      repository.savedProfiles.single.launchSelection.kind,
+      LaunchSelectionKind.mainMenu,
     );
   });
 
@@ -66,20 +52,33 @@ void _registerHomeLaunchTests(_PumpHome pumpHome) {
       snapshot: _readySnapshot(installedMods: _conflictingMods()),
     );
     await pumpHome(tester, repository);
-
-    // The game itself is fine, so the old copy would have claimed "Almost ready" and pointed at the
-    // runtime-repair button, which cannot fix a mod conflict.
     expect(find.text('Mods need attention'), findsOneWidget);
     expect(find.text('Almost ready'), findsNothing);
-
-    final glowButton = tester.widget<GlowButton>(find.byType(GlowButton));
-    expect(
-      glowButton.onPressed,
-      isNull,
-      reason: 'launch must be blocked before the attempt, not after it fails',
-    );
-
-    // A bare count would read "0 mods enabled" and leave the player to notice a number went down.
+    final button = tester.widget<GlowButton>(find.byType(GlowButton));
+    expect(button.onPressed, isNull);
     expect(find.text('0 of 2 mods enabled'), findsOneWidget);
+  });
+  testWidgets('confirms restart before relaunching TopiaForge', (tester) async {
+    final repository = _FakeLauncherRepository(
+      snapshot: _updateSnapshot(needsRepair: true),
+    );
+    await tester.pumpWidget(TopiaForgeLauncherApp(repository: repository));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Mods'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Restart').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Restart TopiaForge?'), findsOneWidget);
+    expect(repository.restartCount, 0);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Restart'));
+    await tester.pumpAndSettle();
+
+    expect(repository.installOrRepairRuntimeCount, 1);
+    expect(repository.restartCount, 1);
+    expect(find.textContaining('session start is unconfirmed'), findsOneWidget);
   });
 }

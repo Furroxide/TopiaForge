@@ -12,7 +12,7 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static async Task RunAsync(string repositoryRoot, string? selected = null)
         {
-            if (selected is not null and not ("remembered" or "failure" or "cancel" or "menu" or "target" or "queued-menu" or "queued-target" or "worker-explicit"))
+            if (selected is not null and not ("remembered" or "failure" or "cancel" or "menu" or "target" or "queued-menu" or "queued-target" or "worker-explicit" or "menu-no-discovery" or "stale-fallback"))
                 throw new ArgumentException("Unknown legacy launch discovery case.", nameof(selected));
             if (selected == null || selected == "remembered") await DelayedDiscoveryRetainsRememberedInstance(repositoryRoot);
             if (selected == null || selected == "failure") await FailedDiscoveryDoesNotStart();
@@ -22,7 +22,27 @@ namespace TopiaForge.ModManager.Tests
             if (selected == null || selected == "queued-menu") SupersededAutoloadCannotDispatch("main-menu", true);
             if (selected == null || selected == "queued-target") SupersededAutoloadCannotDispatch("target-B", true);
             if (selected == null || selected == "worker-explicit") ExplicitCommandAdmissionBelongsToHost();
-            Console.WriteLine("Legacy launch discovery tests passed (" + (selected ?? "8 cases") + ").");
+            if (selected == null || selected == "menu-no-discovery") await MainMenuDoesNotWaitForDiscovery();
+            if (selected == null || selected == "stale-fallback") await SupersededCommandCannotRunFallback();
+            Console.WriteLine("Launch discovery gate tests passed (" + (selected ?? "10 cases") + ").");
+        }
+        private static async Task MainMenuDoesNotWaitForDiscovery()
+        {
+            var discoveryCalls = 0; var menuCalls = 0;
+            var gate = new LaunchDiscoveryGate(new InlineDiscoveryDispatcher(), () => { discoveryCalls++; return new TaskCompletionSource<bool>().Task; });
+            var menu = gate.AfterAsync(() => { menuCalls++; return Task.CompletedTask; }, requireDiscovery: false);
+            await menu;
+            Assert(menuCalls == 1 && discoveryCalls == 0, "Explicit main-menu acknowledgement must not wait for world discovery.");
+        }
+        private static async Task SupersededCommandCannotRunFallback()
+        {
+            var gate = new LaunchDiscoveryGate(new InlineDiscoveryDispatcher(), () => Task.CompletedTask);
+            var cancelledCommand = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var fallback = 0;
+            var pending = gate.AfterAsync(async stillCurrent => { await cancelledCommand.Task; if (stillCurrent()) fallback++; });
+            await gate.ExplicitAsync(() => Task.FromResult(true));
+            cancelledCommand.SetResult(true); await pending;
+            Assert(fallback == 0, "A recovery fallback queued by an older command cannot stop a newer explicit session.");
         }
         private static async Task DelayedDiscoveryRetainsRememberedInstance(string repositoryRoot)
         {
@@ -40,38 +60,40 @@ namespace TopiaForge.ModManager.Tests
                 WorldId = root.GetProperty("request").GetProperty("worldOverride").GetString()!,
                 LoadMode = WorldLaunchSettings.SceneReplacement
             };
-            Assert(!LegacyWorldLaunchAdapter.Resolve(profile, RuntimeObservation.None, intent).Succeeded,
+            var saved = LaunchSelection.UnresolvedLegacy("{\"worldLaunch\":" + JsonUtil.Serialize(new WorldLaunchSettings
+            { SelectedGamemodeId = intent.GamemodeId, SelectedWorldId = intent.WorldId, LoadMode = intent.LoadMode }) + "}");
+            Assert(!LaunchSelectionResolver.Resolve(saved, profile, RuntimeObservation.None).Available,
                 "The fixture must actually require a discovered instance before translating its remembered selection.");
             var release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             var observation = RuntimeObservation.None;
             var discoveryCalls = 0; var translations = 0;
-            var preparation = new LegacyLaunchDiscovery(new InlineDiscoveryDispatcher(), async () =>
+            var preparation = new LaunchDiscoveryGate(new InlineDiscoveryDispatcher(), async () =>
             {
                 discoveryCalls++;
                 await release.Task;
                 observation = committed;
             });
             _ = preparation.Start(); // The menu starts the discovery that autoload must share.
-            OperationResult<LaunchRequest>? selected = null;
+            LaunchSelectionResolution? selected = null;
             var pending = preparation.AfterAsync(() =>
             {
                 translations++;
-                selected = LegacyWorldLaunchAdapter.Resolve(profile, observation, intent);
+                selected = LaunchSelectionResolver.Resolve(saved, profile, observation);
                 return Task.CompletedTask;
             });
             Assert(!pending.IsCompleted && translations == 0,
                 "Remembered discovered content must wait without consuming its sole translation attempt.");
             release.SetResult(true);
             await pending;
-            Assert(discoveryCalls == 1 && translations == 1 && selected?.Succeeded == true
-                && selected.Value!.WorldOverride == intent.WorldId,
+            Assert(discoveryCalls == 1 && translations == 1 && selected?.Available == true
+                && selected.Request!.WorldOverride == intent.WorldId,
                 "Launch must translate once against the committed observation from the same discovery attempt.");
         }
 
         private static async Task FailedDiscoveryDoesNotStart()
         {
             var launched = false;
-            var preparation = new LegacyLaunchDiscovery(new InlineDiscoveryDispatcher(), () => Task.FromException(new InvalidOperationException("discovery fault")));
+            var preparation = new LaunchDiscoveryGate(new InlineDiscoveryDispatcher(), () => Task.FromException(new InvalidOperationException("discovery fault")));
             try
             {
                 await preparation.AfterAsync(() => { launched = true; return Task.CompletedTask; });
@@ -84,7 +106,7 @@ namespace TopiaForge.ModManager.Tests
         private static async Task CancelledDiscoveryDoesNotStart()
         {
             var launched = false;
-            var preparation = new LegacyLaunchDiscovery(new InlineDiscoveryDispatcher(), () => Task.FromCanceled(new System.Threading.CancellationToken(true)));
+            var preparation = new LaunchDiscoveryGate(new InlineDiscoveryDispatcher(), () => Task.FromCanceled(new System.Threading.CancellationToken(true)));
             try
             {
                 await preparation.AfterAsync(() => { launched = true; return Task.CompletedTask; });
@@ -98,7 +120,7 @@ namespace TopiaForge.ModManager.Tests
         {
             using var host = new HostDispatcher();
             var discovery = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            var preparation = new LegacyLaunchDiscovery(host, () => discovery.Task);
+            var preparation = new LaunchDiscoveryGate(host, () => discovery.Task);
             var actual = "idle";
             var legacyCalls = 0;
             var pending = preparation.AfterAsync(() =>
@@ -132,7 +154,7 @@ namespace TopiaForge.ModManager.Tests
         private static void ExplicitCommandAdmissionBelongsToHost()
         {
             using var host = new HostDispatcher();
-            var preparation = new LegacyLaunchDiscovery(host, () => Task.CompletedTask);
+            var preparation = new LaunchDiscoveryGate(host, () => Task.CompletedTask);
             var commandCalls = 0;
             var pending = Task.Run(() => preparation.ExplicitAsync(() =>
             {

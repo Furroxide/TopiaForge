@@ -47,7 +47,7 @@ The user selected an unsigned Windows x64 0.x prerelease, version 0.1.0-rc.1. Li
 2. tools/release/build-windows.ps1:341-349 currently unconditionally requires certificate/password/timestamp credentials after branching on mode. Require these only for signed mode.
 3. apps/topiaforge_cli/lib/src/release_package_builder.dart:131-141 always invokes WindowsPackageSigner.signIfConfigured. Explicit unsigned policy must skip Authenticode even when ambient signing environment variables exist. A contradictory --require-windows-signing must fail before writes.
 4. Retain package validation proving all three executables are unsigned: launcher, CLI, and GameCompat extractor.
-5. For unsigned mode the detached handoff P7S field and file must be absent, not empty/null placeholders. Signed mode keeps its existing strict certificate and timestamp checks.
+5. Preserve the existing unsigned P7S file and field omission in admin staging, publisher allowlists and hosted attestations; do not rebuild it. Add regression coverage where missing. Empty/null placeholders remain invalid. Signed mode keeps its strict certificate and timestamp checks.
 6. Keep Ed25519 update-metadata signatures, checksums, BOM/SBOM, exact artifact verification, provenance, protected environment approval, and immutable publication. Unsigned executables do not mean unsigned update metadata.
 7. Correct stale AdminRelease, LiveGameAcceptance, ReleaseChecklist, LaunchBlockers, and release-note claims. Do not claim the unsigned path is blocked on buying an Authenticode certificate.
 
@@ -96,6 +96,34 @@ The user stated that approval/rotation records and isolated QA resources are ava
 - The pinned Unity authoring editor 6000.0.23f1 and activated license on the release builder; the configured C:\Program Files\Unity\Hub\Editor\6000.0.23f1\Editor\Unity.exe is absent locally. Game runtime Unity 6000.0.31f1 is a separate identity, not this editor requirement.
 - Pinned build toolchain including Node 24.18.0 (the currently located bundled Node is 24.19.0), Flutter 3.44.6, Dart 3.12.2, .NET SDK 10.0.301/runtime 10.0.9, MSVC and Windows SDK pins.
 
-The acceptance runner currently writes to an ordinary install even in skip-runtime-install paths, and its Windows stop helper can kill all matching executables. Repair isolation and use retained PID/start-time/executable ownership before live work. Verify actual BepInExRoot/ManagerRoot/persistentDataPath and abort if the ordinary user data root is selected. Keep raw logs private; only bounded redacted evidence leaves the QA host.
+The acceptance runner still installs packages and writes configuration in skip-runtime-install paths. Slice 7 removed the blanket stop helper from the reviewed launcher/acceptance paths, but the acceptance runner receives CLI exit codes rather than retained game-process creation receipts. Establish isolation attestation and receipt ownership before live work. Verify actual BepInExRoot/ManagerRoot/persistentDataPath and abort if the ordinary user data root is selected. Keep raw logs private; only bounded redacted evidence leaves the QA host.
 
 Existing historical ZIPs and current-tree logs are not evidence for a new frozen candidate. Run scoped Dart/PowerShell regressions, format/analyze/line limits, repository audits, website publication, Windows packaging/release validation and exact-head CI. Record commands, revisions, actual evidence and pending external prerequisites in the ledger. Submit only this slice; create the slice 8 branch only after its normal green merge.
+
+
+## Source refresh from the slice-7 handoff
+
+Read-only review on 8 September, before slice 7 commits, confirmed these seams.
+Recheck them at its merged revision before editing:
+
+- `release_readiness.dart` has 469 lines. Split by responsibility before adding a
+  separate four-gate private-build assessment; preserve the final twelve-gate
+  qualification policy and exact-Git-SHA tests.
+- Admin preflight still calls tracked `validate-readiness`; `Invoke-Stage` accepts
+  `built`, and `Invoke-All` immediately stages it. Add the detached `qualify` step
+  and `accepted` state with no-write/tampering/interruption regressions in the
+  existing PowerShell import/mock harness.
+- `release_metadata.dart` generation and verification plus the BOM schema and all
+  three hosted readiness checks must consume detached qualification. Loading only
+  the tracked readiness and schema at the candidate SHA is insufficient; bind the
+  reviewed policy/catalog/schema digests too.
+- `ReleasePackageBuilder.build` mutates staging before validating policy/signing,
+  then always calls the signer. Move contradictory-mode refusal before writes and
+  prove unsigned policy ignores ambient Authenticode credentials. The PowerShell
+  Windows builder still requires credentials unconditionally.
+- Shared Flutter setup still uses a read/write cache. Alert #417's old line range
+  has drifted to the residue/upload boundary: fetch the current per-ref trace
+  instead of applying a fix by historical line number. The four listed website
+  dependency versions remain unchanged at this checkpoint.
+- Keep ten in-game cycles and sixteen Unity authoring cycles as distinct evidence
+  requirements. Neither set replaces the other.

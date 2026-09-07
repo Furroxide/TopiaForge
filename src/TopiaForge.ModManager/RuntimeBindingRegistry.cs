@@ -193,6 +193,7 @@ namespace TopiaForge.ModManager
         }
         private void Publish()
         {
+            publicationRevision = checked(publicationRevision + 1);
             var states = packages.Values.OrderBy(package => package.Selection.Id, StringComparer.Ordinal).ToArray();
             var failures = states.SelectMany(package => package.Failures).Concat(ambiguousFailures).ToArray();
             var modes = states.Where(package => package.Batch != null).SelectMany(package => package.Batch!.Gamemodes.Where(value => ownership.Owns(package.Selection, value.DeclarationId))).ToArray();

@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:launcher_data/launcher_data.dart';
+import 'package:launcher_data/src/launch_storage_keys.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
@@ -13,6 +15,11 @@ part 'installed_build_provenance_test_part.dart';
 part 'launcher_data_diagnostics_test_part.dart';
 part 'devtool_installation_test_part.dart';
 part 'profile_launch_test_part.dart';
+part 'launch_selection_regression_test_part.dart';
+part 'launch_v4_integration_test_part.dart';
+part 'launch_v4_admission_test_part.dart';
+part 'launch_safe_mode_recovery_test_part.dart';
+part 'launch_creation_receipt_test_part.dart';
 part 'runtime_repair_security_test_part.dart';
 part 'runtime_loader_payload_test_part.dart';
 part 'restart_requirement_test_part.dart';
@@ -59,7 +66,8 @@ void main() {
     );
   });
 
-  tearDown(() {
+  tearDown(() async {
+    await repository.dispose();
     if (root.existsSync()) {
       root.deleteSync(recursive: true);
     }
@@ -72,6 +80,34 @@ void main() {
   );
   _registerProfileLaunchTests(
     root: () => root,
+    dataRoot: () => dataRoot,
+    repositoryRoot: () => repoRoot,
+    gameRoot: () => gameRoot,
+  );
+  _registerLaunchSelectionRegressions(
+    root: () => root,
+    dataRoot: () => dataRoot,
+    repositoryRoot: () => repoRoot,
+    gameRoot: () => gameRoot,
+  );
+  _registerLaunchV4IntegrationTests(
+    root: () => root,
+    dataRoot: () => dataRoot,
+    repositoryRoot: () => repoRoot,
+    gameRoot: () => gameRoot,
+  );
+  _registerLaunchV4AdmissionTests(
+    root: () => root,
+    dataRoot: () => dataRoot,
+    repositoryRoot: () => repoRoot,
+    gameRoot: () => gameRoot,
+  );
+  _registerLaunchCreationReceiptTests(
+    dataRoot: () => dataRoot,
+    repositoryRoot: () => repoRoot,
+    gameRoot: () => gameRoot,
+  );
+  _registerLaunchSafeModeRecoveryTests(
     dataRoot: () => dataRoot,
     repositoryRoot: () => repoRoot,
     gameRoot: () => gameRoot,

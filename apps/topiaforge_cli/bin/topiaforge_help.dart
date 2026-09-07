@@ -163,13 +163,22 @@ extension _HelpCommand on _TopiaForgeCli {
       '  topiaforge dev-install [--game-dir p]  Install the loader + dev mods into the game.',
     );
     stdout.writeln(
-      '  topiaforge launch [--game-dir p] [--gamemode id|none]  Launch Robotopia.',
+      '  topiaforge launch [--game-dir p] [--profile id] [--target id | --main-menu]',
     );
     stdout.writeln(
-      '  topiaforge restart [--gamemode id|none] Restart Robotopia.',
+      '  topiaforge restart [--target id | --main-menu] Restart and confirm the requested start.',
     );
     stdout.writeln(
-      '      --gamemode starts that game mode for one run; none forces a normal boot.',
+      '      --target selects a declared launch target for one run; --main-menu overrides remembered autoload.',
+    );
+    stdout.writeln(
+      '      --world id and --transition scene-replacement|additive-arena require --target and permitted policy.',
+    );
+    stdout.writeln(
+      '      --wait-seconds 1..300 bounds acknowledgement wait (default 30); exit 3 means unconfirmed.',
+    );
+    stdout.writeln(
+      '      --no-wait reports process creation only; it never confirms session startup.',
     );
     stdout.writeln(
       '  topiaforge compat [--json]             Resolve declared game bindings against the install.',
@@ -186,13 +195,13 @@ extension _HelpCommand on _TopiaForgeCli {
       '  topiaforge new unity-world <name>      Scaffold a Unity world project paired with a mod.',
     );
     stdout.writeln(
-      '  topiaforge world link --project <p> --mod <m>  Pair a Unity project with a world mod.',
+      '  topiaforge world link --project <p> --mod <m> [--world id] Pair a declared bundle world.',
     );
     stdout.writeln(
       '  topiaforge world build [--project p]   Build the world asset bundle via Unity.',
     );
     stdout.writeln(
-      '  topiaforge world play [--project p]    Build, install, and launch the world mod.',
+      '  topiaforge world play --target <id> [--project p] Build, install, and confirm that target.',
     );
     stdout.writeln(
       '  topiaforge unity <subcommand>          Unity package management (new-package, resolve, add, remove,',
