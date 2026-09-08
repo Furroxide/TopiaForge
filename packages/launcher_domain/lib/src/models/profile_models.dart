@@ -65,8 +65,16 @@ class LauncherProfile {
   final int revision;
   final LaunchSelection? _launchSelection;
 
-  LaunchSelection get launchSelection =>
-      _launchSelection ?? const LaunchSelection.mainMenu();
+  LaunchSelection get launchSelection {
+    final selection = _launchSelection;
+    if (selection == null ||
+        (selection.kind == LaunchSelectionKind.unresolvedLegacy &&
+            selection.legacy!.isEmpty)) {
+      return const LaunchSelection.mainMenu();
+    }
+    return selection;
+  }
+
   final Map<String, Object?> backupMetadata;
 
   factory LauncherProfile.defaultProfile() {

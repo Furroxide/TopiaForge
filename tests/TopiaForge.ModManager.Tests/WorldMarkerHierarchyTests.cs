@@ -23,32 +23,39 @@ namespace TopiaForge.ModManager.Tests
                 catch (Exception error) { failures.Add(label + ": " + error.Message); }
             }
             Case("zero", () => Assert(Find(new Node("World")).Status == WorldMarkerStatus.Missing, "zero marker must fail"));
-            Case("one", () => {
+            Case("one", () =>
+            {
                 var world = new Node("World"); var marker = new Node("SpawnPoint"); world.Children.Add(marker);
                 var result = Find(world); Assert(result.Status == WorldMarkerStatus.Unique && ReferenceEquals(result.Marker, marker), "one marker identity");
             });
-            Case("two", () => {
+            Case("two", () =>
+            {
                 var world = new Node("World"); world.Children.Add(new Node("SpawnPoint")); world.Children.Add(new Node("SpawnPoint"));
                 var result = Find(world); Assert(result.Status == WorldMarkerStatus.Ambiguous && result.Marker == null, "duplicates cannot select first");
             });
-            Case("root", () => {
+            Case("root", () =>
+            {
                 var world = new Node("SpawnPoint"); Assert(ReferenceEquals(Find(world).Marker, world), "root participates like runtime");
             });
-            Case("inactive", () => {
+            Case("inactive", () =>
+            {
                 var world = new Node("World"); var marker = new Node("SpawnPoint", false); world.Children.Add(marker);
                 Assert(!marker.Active && ReferenceEquals(Find(world).Marker, marker), "inactive marker must participate");
             });
-            Case("case", () => {
+            Case("case", () =>
+            {
                 var world = new Node("World"); world.Children.Add(new Node("spawnpoint"));
                 Assert(Find(world).Status == WorldMarkerStatus.Missing, "runtime names use ordinal case");
             });
-            foreach (var size in new[] { 16384, 16385 }) Case("bound-" + size, () => {
+            foreach (var size in new[] { 16384, 16385 }) Case("bound-" + size, () =>
+            {
                 var world = new Node("World"); var tail = world;
-                for (var i = 1; i < size; i++) { var next = new Node(i == size-1 ? "SpawnPoint" : "Node"); tail.Children.Add(next); tail = next; }
+                for (var i = 1; i < size; i++) { var next = new Node(i == size - 1 ? "SpawnPoint" : "Node"); tail.Children.Add(next); tail = next; }
                 var result = Find(world);
                 Assert(result.Status == (size == 16384 ? WorldMarkerStatus.Unique : WorldMarkerStatus.LimitExceeded), "16384-node traversal boundary");
             });
-            Case("production-export-order", () => {
+            Case("production-export-order", () =>
+            {
                 var editor = Path.Combine(root, "templates", "TopiaForge.UnityWorldTemplate", "Packages",
                     "io.github.furroxide.topiaforge.world-companion", "Editor");
                 var source = File.ReadAllText(Path.Combine(editor, "WorldBundleBuilder.cs"));

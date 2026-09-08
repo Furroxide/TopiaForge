@@ -33,11 +33,18 @@ void main() {
   const writer = ManifestMigrationWriter();
   ManifestMigrationPlan plan(ManifestMigrationSnapshot s) =>
       const ManifestMigrationPlanner().plan(s.sourceText, sourceLabel: s.path);
-  Future<void> finish(Process process) async {
-    process.stdin.writeln('finish');
-    await process.stdin.close();
+  Future<void> finish(
+    Process process, {
+    required bool resume,
+    bool requireSuccess = true,
+  }) async {
     try {
-      expect(await process.exitCode.timeout(const Duration(seconds: 10)), 0);
+      if (resume) {
+        process.stdin.writeln('finish');
+        await process.stdin.close();
+      }
+      final code = await process.exitCode.timeout(const Duration(seconds: 10));
+      if (requireSuccess) expect(code, 0);
     } on Object {
       process.kill();
       await process.exitCode;
@@ -56,6 +63,7 @@ void main() {
       manifest.path,
     ], workingDirectory: packageRoot);
     final errors = process.stderr.transform(utf8.decoder).join();
+    var ready = false;
     try {
       expect(
         await process.stdout
@@ -65,6 +73,7 @@ void main() {
             .timeout(const Duration(seconds: 15)),
         'ready',
       );
+      ready = true;
       final snapshot = await writer.prepare(manifest.path);
       await expectLater(
         writer.commit(snapshot, plan(snapshot)),
@@ -72,7 +81,7 @@ void main() {
       );
       expect(manifest.readAsStringSync(), snapshot.sourceText);
     } finally {
-      await finish(process);
+      await finish(process, resume: ready, requireSuccess: ready);
     }
     expect(await errors, isEmpty);
     expect(
@@ -127,7 +136,7 @@ finally { $file.Dispose() }
         expect(root.listSync(), hasLength(1));
       } finally {
         release.writeAsStringSync('finish');
-        await finish(process);
+        await finish(process, resume: false);
         release.deleteSync();
       }
       expect(await errors, isEmpty);
@@ -136,6 +145,34 @@ finally { $file.Dispose() }
     },
     skip: !Platform.isWindows ? 'Windows sharing semantics.' : false,
   );
+  for (final ancestor in [false, true]) {
+    test(
+      'preparation rejects a linked ${ancestor ? 'ancestor' : 'source'} before canonicalization',
+      () async {
+        final link = Link(
+          p.join(root.path, ancestor ? 'linked-root' : 'linked.json'),
+        );
+        try {
+          link.createSync(ancestor ? root.path : manifest.path);
+        } on FileSystemException {
+          markTestSkipped('Host does not permit symbolic-link creation.');
+          return;
+        }
+        final before = manifest.readAsBytesSync();
+        try {
+          await expectLater(
+            writer.prepare(
+              ancestor ? p.join(link.path, 'topiaforge.mod.json') : link.path,
+            ),
+            throwsStateError,
+          );
+          expect(manifest.readAsBytesSync(), before);
+        } finally {
+          link.deleteSync();
+        }
+      },
+    );
+  }
   test('link substitution after preparation never writes through it', () async {
     final snapshot = await writer.prepare(manifest.path);
     final outside = File(p.join(root.path, 'outside.json'))

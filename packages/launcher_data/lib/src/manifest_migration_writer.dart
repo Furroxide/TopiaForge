@@ -34,7 +34,15 @@ final class ManifestMigrationWriter {
   static final _activePaths = <String>{};
 
   Future<ManifestMigrationSnapshot> prepare(String manifestPath) async {
-    final path = p.normalize(p.absolute(manifestPath));
+    final requested = p.normalize(p.absolute(manifestPath));
+    // Windows TEMP and callers may use legitimate 8.3 spellings. Reject
+    // linked input first, then freeze one filesystem name for snapshot/lease.
+    _unlinkedFile(requested);
+    final path = File(requested).resolveSymbolicLinksSync();
+    _unlinkedFile(requested);
+    if (!p.equals(File(requested).resolveSymbolicLinksSync(), path)) {
+      throw StateError('Manifest path changed while preparing migration.');
+    }
     final bytes = _readSource(path);
     return ManifestMigrationSnapshot._(path, utf8.decode(bytes), bytes);
   }
@@ -69,11 +77,10 @@ final class ManifestMigrationWriter {
     File? staging;
     var committed = false;
     try {
+      _ordinaryAncestors(Directory.systemTemp.path);
+      final temporaryRoot = Directory.systemTemp.resolveSymbolicLinksSync();
       final directory = Directory(
-        p.join(
-          Directory.systemTemp.path,
-          'topiaforge-manifest-migration-locks',
-        ),
+        p.join(temporaryRoot, 'topiaforge-manifest-migration-locks'),
       );
       _ordinaryAncestors(directory.parent.path);
       if (!directory.existsSync()) {
@@ -201,13 +208,19 @@ List<int> _readSource(String path) {
 }
 
 void _ordinaryFile(String path) {
+  _unlinkedFile(path);
+  if (!p.equals(
+    File(path).resolveSymbolicLinksSync(),
+    p.normalize(p.absolute(path)),
+  )) {
+    throw StateError('Expected a regular unlinked manifest file: $path');
+  }
+}
+
+void _unlinkedFile(String path) {
   _ordinaryAncestors(p.dirname(path));
   if (FileSystemEntity.typeSync(path, followLinks: false) !=
-          FileSystemEntityType.file ||
-      !p.equals(
-        File(path).resolveSymbolicLinksSync(),
-        p.normalize(p.absolute(path)),
-      )) {
+      FileSystemEntityType.file) {
     throw StateError('Expected a regular unlinked manifest file: $path');
   }
 }
