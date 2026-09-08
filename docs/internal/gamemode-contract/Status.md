@@ -1418,3 +1418,17 @@ This completes local source verification for slice 7a. Fresh CI and CodeQL must
 certify the pushed follow-up before normal integration. Slice 8 has not begun;
 its read-only port map is preserved at `.dart_tool/slice8-port-repair-plan.md`.
 No exact candidate build, isolated gameplay acceptance or publication is claimed.
+
+
+The unsigned implementation at `eb54909535bf6d47a096904472b76396f2617d99`
+passed full hosted CI, including documentation publication, in
+[34182926560](https://github.com/Furroxide/TopiaForge/actions/runs/34182926560),
+and all four CodeQL analyses in
+[34182924300](https://github.com/Furroxide/TopiaForge/actions/runs/34182924300)
+reported zero findings. A duplicate PR-policy run canceled during ready/edit
+events left a failed required gate; the complete run
+[34183004289](https://github.com/Furroxide/TopiaForge/actions/runs/34183004289)
+was rerun normally and passed. No branch rule was bypassed. The canonical
+brief's remaining pending-permission sentence is corrected in this documentation
+follow-up. Exact follow-up CI and the normal prerequisite merge still precede
+slice 8 implementation.
