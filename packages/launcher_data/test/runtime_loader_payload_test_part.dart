@@ -99,21 +99,29 @@ void _registerRuntimeLoaderPayloadTests({
     );
   }
 
-  test('missing validator dependencies make the loader stale', () async {
-    var install = await repository().selectGameDirectory(gameRoot().path);
-    var report = await repository().installOrRepairRuntime(install);
-    expect(report.ok, isTrue);
+  for (final dll in validatorDependencyDlls) {
+    test(
+      'missing validator dependency makes the loader stale ($dll)',
+      () async {
+        final fixtureRepository = repository();
+        final fixtureGamePath = gameRoot().path;
+        final fixtureDll = installedDll(dll);
+        var install = await fixtureRepository.selectGameDirectory(
+          fixtureGamePath,
+        );
+        var report = await fixtureRepository.installOrRepairRuntime(install);
+        expect(report.ok, isTrue);
 
-    for (final dll in validatorDependencyDlls) {
-      installedDll(dll).deleteSync();
+        fixtureDll.deleteSync();
 
-      install = await repository().selectGameDirectory(gameRoot().path);
-      expect(install.loaderStatus, ComponentState.partial, reason: dll);
-      expect(install.needsRepair, isTrue, reason: dll);
+        install = await fixtureRepository.selectGameDirectory(fixtureGamePath);
+        expect(install.loaderStatus, ComponentState.partial, reason: dll);
+        expect(install.needsRepair, isTrue, reason: dll);
 
-      report = await repository().installOrRepairRuntime(install);
-      expect(report.ok, isTrue, reason: dll);
-      expect(installedDll(dll).existsSync(), isTrue, reason: dll);
-    }
-  });
+        report = await fixtureRepository.installOrRepairRuntime(install);
+        expect(report.ok, isTrue, reason: dll);
+        expect(fixtureDll.existsSync(), isTrue, reason: dll);
+      },
+    );
+  }
 }
