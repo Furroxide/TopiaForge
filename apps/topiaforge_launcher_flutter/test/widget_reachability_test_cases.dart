@@ -91,6 +91,33 @@ void registerReachabilityProbeWidgetTests() {
     expect(probe.runCount, isZero);
   });
 
+  testWidgets('probe discloses remote endpoint exposure before opt-in', (
+    tester,
+  ) async {
+    final probe = _FakeReachabilityProbe();
+    await tester.pumpWidget(
+      TopiaForgeLauncherApp(
+        repository: _FakeLauncherRepository(developerMode: true),
+        reachabilityProbe: probe,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openReachabilityPane(tester);
+
+    final disclosure = find.textContaining('source IP address and port');
+    expect(disclosure, findsOneWidget);
+    final text = tester.widget<Text>(disclosure).data!;
+    expect(text, contains('configured STUN servers'));
+    expect(text, contains('No aggregate result is uploaded'));
+    final optIn = find.byKey(const Key('reachability-enabled-switch'));
+    expect(
+      tester.getTopLeft(disclosure).dy,
+      lessThan(tester.getTopLeft(optIn).dy),
+    );
+    expect(tester.widget<SwitchListTile>(optIn).value, isFalse);
+    expect(probe.runCount, isZero);
+  });
+
   testWidgets('sharing cannot be consented to while the probe is off', (
     tester,
   ) async {
@@ -180,6 +207,10 @@ void registerReachabilityProbeWidgetTests() {
     await tester.pumpAndSettle();
     await _openReachabilityPane(tester);
 
+    await tester.ensureVisible(
+      find.byKey(const Key('reachability-run-button')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('reachability-run-button')));
     await tester.pumpAndSettle();
 
@@ -210,6 +241,10 @@ void registerReachabilityProbeWidgetTests() {
     await tester.pumpAndSettle();
     await _openReachabilityPane(tester);
 
+    await tester.ensureVisible(
+      find.byKey(const Key('reachability-run-button')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('reachability-run-button')));
     await tester.pumpAndSettle();
 

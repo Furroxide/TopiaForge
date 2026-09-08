@@ -1,5 +1,5 @@
 /// Opt-in settings, the aggregate report shape, and the gates that keep the reachability probe from becoming
-/// telemetry.
+/// telemetry. A diagnostic run still sends STUN traffic to measurement servers.
 ///
 /// `docs/PrivacyAndCapabilities.md` makes an approved privacy notice a release blocker for every TopiaForge data
 /// collection. The probe therefore ships **off**, behind developer mode, and with reporting held shut by a constant
@@ -93,7 +93,9 @@ class ReachabilityProbePolicy {
 
   /// Whether the probe may run locally, showing its result only to the person who ran it.
   ///
-  /// Running locally is not collection: nothing leaves the machine, so this does not require the privacy notice.
+  /// A run sends UDP to configured STUN servers, which see the source IP address and port.
+  /// These developer/opt-in gates restrict activation; they are not privacy approval or an exemption from
+  /// P0-PRIV-01. Aggregate uploading remains separately blocked by [reportingApproved].
   ReachabilityProbeRefusal? refuseRun({
     required bool developerMode,
     required ReachabilityProbeSettings settings,
@@ -129,7 +131,8 @@ class ReachabilityProbePolicy {
 ///
 /// Aggregate by construction: three enum names and a schema version. There is no field for an address, hostname,
 /// ISP, region, machine identifier, session identifier, or timestamp. A population distribution is recoverable by
-/// counting these; an individual is not identifiable from one.
+/// counting these. Address-free fields do not make a future upload anonymous: a receiver could still observe
+/// connection metadata. The current build has no upload path.
 class ReachabilityReport {
   const ReachabilityReport({required this.classification});
 

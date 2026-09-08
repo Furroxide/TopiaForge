@@ -19,7 +19,8 @@ import 'reachability/stun_transport.dart';
 
 /// Runs the probe subject to the policy gates, and persists the player's opt-in.
 ///
-/// Nothing this class produces leaves the machine. There is deliberately no reporting transport: the aggregate
+/// A run sends UDP STUN requests to configured servers, exposing the source IP address and port to those servers.
+/// Classification results remain on this machine. There is no reporting transport: the aggregate
 /// report shape exists in `launcher_domain`, but no code sends it, because
 /// [ReachabilityProbePolicy.reportingApproved] is `false` and an approved privacy notice is a release blocker.
 class ReachabilityProbeService implements ReachabilityProbeGateway {
