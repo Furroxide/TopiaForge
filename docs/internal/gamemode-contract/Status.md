@@ -20,7 +20,7 @@ The [canonical brief](../GamemodeContractRedesign.md) is normative. The
 | `da47dc7f89462c4473bac54db7e1c98acecda52d` | Slice 7 merge of PR #112, reviewed head `7bc19231bf6ea12bb708ef318774d78fffee72cd` | Exact-head CI 34167871674 and CodeQL 34167870357 passed; normal merge at 2026-09-07T22:58:39Z |
 | `31ff4d49bd30c593e484a01407e47ca7871f7ca7` | Slice 7a normal merge of PR #114, reviewed head `80fa8f9fb6e8b1a7cc4af0d8c6c00d31820e1437` | CI 34185465503 and CodeQL 34185463190 passed; all four review threads resolved; merged at 2026-09-08T04:10:41Z |
 | `1fbd32d2524a13e2dad0d5f705da8301dec952e6` | Slice 8a normal merge of PR #115, final reviewed head `0c4a3061d286db17c4d6f20ca5b07489a42eeafe` | Full CI 34193577478 and CodeQL 34193574648 passed; all review threads resolved; merged at 2026-09-08T06:21:07Z |
-| `feat/isolated-release-acceptance`, based on `1fbd32d` | Slice 8b in PR #116, created only after PR #115 merged | Initial head `1689db3` passed hosted publication and CodeQL; Windows test-fixture failures and two review findings are addressed in the follow-up below |
+| `0182e19f166383685210151f07948e9909977b03` | Slice 8b normal merge of PR #116, final reviewed head `eda671d40b51cddff098f34437510be552c6e46e` | Full CI 34199629221 and CodeQL 34199625355 passed; both review threads resolved; merged at 2026-09-08T07:42:38Z |
 
 
 The historical rows describe each slice at its own merge. Current state:
@@ -33,10 +33,10 @@ The historical rows describe each slice at its own merge. Current state:
 | Unsigned RC package construction | Integrated after explicit authorization on 8 September | Builder and Windows orchestration honor recorded policy | Final PR #114 hosted checks passed; local regression details below | Pending |
 | V5 retirement, migration and obsolete models | Integrated through slice 8a | Readers and CLI atomic writer connected; old models removed | Full final-head CI, including Windows data and publication, passed at `0c4a306` | Pending |
 | Authored-world marker validation | Integrated through slice 8a | Editor validation and owned prefab instantiation connected | Full CI and CodeQL passed; fifteen additional filesystem-only fixture checks pass locally | Fourteen Unity EditMode cases and actual spawn pending |
-| Acceptance isolation | Slice 8b through PR #116; not yet integrated at this update | Runtime/CLI/release admission connected | Full local C#/Dart/Flutter and Windows build pass; initial hosted publication and CodeQL pass; repaired Windows tests need fresh CI | Pending isolated host and actual game evidence |
+| Acceptance isolation | Integrated through slice 8b | Runtime, CLI and release admission connected with request-bound original receipts | Full final-head Windows/Linux CI, publication and CodeQL pass at `eda671d` | Pending isolated host and actual game evidence |
 
 No release tag, release dispatch or publication has occurred. The checkout is
-not release-ready. Slice 8b starts from the merged slice 8a revision; no subsequent
+not release-ready. Source slices through 8b are integrated, but no subsequent
 release branch or candidate can treat pending acceptance as complete.
 
 On 2026-09-05, PRs #102–105 were converted to draft for the approved re-cut.
@@ -1868,4 +1868,56 @@ restore and exact whole-solution formatting pass. The fresh Release build has
 zero warnings/errors and all eleven SDK packages plus seven rebuilt no-argument
 harnesses pass. Required repository, fixture, README and documentation audits
 pass. Logs use `tf-pr116-{data,cli,final}-*.log` in the private temporary directory.
-Fresh Windows/Linux hosted CI still precedes integration.
+Final Windows/Linux hosted CI completed before integration; the following
+section records the exact runs and merge.
+
+
+## Slice 8b integration and remaining release work
+
+Final reviewed head `eda671d40b51cddff098f34437510be552c6e46e` passed all final
+required checks, including full
+[CI 34199629221](https://github.com/Furroxide/TopiaForge/actions/runs/34199629221)
+and [CodeQL 34199625355](https://github.com/Furroxide/TopiaForge/actions/runs/34199625355).
+Fresh Windows and Linux data tests, CLI, C#, Flutter, seven generated templates
+and complete documentation publication pass. All four CodeQL analyses pass with
+zero open findings. Both review threads were answered and resolved. Updating the
+final PR description briefly required a fresh policy check; it passed before
+normal merge. No protection was bypassed.
+
+[PR #116](https://github.com/Furroxide/TopiaForge/pull/116) merged at
+`0182e19f166383685210151f07948e9909977b03` on 2026-09-08 at 07:42:38 UTC. The merge
+tree equals the reviewed source tree. This checkpoint was cut from refreshed dev
+only after that merge. It changes documentation only and records source readiness,
+not acceptance of a release candidate.
+
+The current release decision still blocks on actual IP, OSS, privacy and
+credential-rotation records (`P0-IP-01`, `P0-OSS-01`, `P0-PRIV-01`, `P0-CRED-01`).
+The game gate remains pending. The unsigned RC1 decision is already authorized;
+Ed25519 signatures, exact payload hashes, provenance, detached qualification and
+protected publication remain required. Normal release promotion and a frozen
+main merge SHA precede candidate construction. No candidate, game acceptance,
+release tag or publication has occurred.
+
+The exact Unity Editor installer `6000.0.23f1` / `1c4764c07fb4` was downloaded from
+Unity's official release endpoint into the ignored tool cache: 4,033,958,912 bytes,
+SHA-256 `6e9f5f189079460cad6603ef5a5a8a3919fd6fe178cc579784ec788155c8a3c3`, with
+valid Authenticode from Unity Technologies SF. Its explicit license agreement and
+possible file-association changes require the requested setup authorization;
+setup has not run. Other installed Editor versions and license-file presence do
+not establish this pinned test result or valid headless entitlement.
+
+A disposable project contains all 81 tracked UnityWorldTemplate files byte-for-byte
+from `eda671d`, with a private input-hash inventory and the exact production
+companion test assembly selected. Fourteen real NUnit cases are ready to run after
+approved setup and successful existing-license admission. No facade substitutes
+for these cases; no Unity XML or Editor result is claimed. An existing isolated
+Windows QA context and the full visual/native game matrix also remain pending.
+Keep raw paths, identity details, Editor logs and eventual private acknowledgement
+records outside public release assets.
+
+
+Checkpoint validation passes fifty website tests, 127-file Markdown links,
+26-page content preparation, 532-file repository data parsing, README counts,
+residue, trademark, asset-licence coverage and 363-case fixture closure. Runtime,
+Dart and Flutter source trees are unchanged from the fully verified #116 head;
+no new runtime or game result is inferred from this documentation-only update.

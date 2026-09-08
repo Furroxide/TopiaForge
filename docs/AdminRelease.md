@@ -199,8 +199,8 @@ ship without one — shipping unsigned has to be written down.
 when no certificate is pinned; `release validate-policy` rejects a policy that
 carries both. Unsigned Windows RC1 is authorized, and the checked-in policy now
 records `windowsDistribution: unsigned`. The construction repairs are implemented
-and their synthetic regressions pass; revision-specific results and remaining
-suite verification are recorded in
+and their synthetic regressions pass. Final source CI, including Windows/Linux
+tests and documentation publication, passes; revision-specific evidence is in
 [`gamemode-contract/Status.md`](internal/gamemode-contract/Status.md).
 No candidate is qualified. Building the exact frozen payloads, isolated live
 acceptance and remaining gate approvals are still required.

@@ -6,13 +6,13 @@ working session that closed two advisory gates and moved engineering work on fou
 others; see [Second reconciliation](#second-reconciliation-2026-08-28).
 Product candidate: `0.1.0-rc.1`. Recommendation: **NO-SHIP**.
 
-**Current redesign checkpoint, 8 September 2026:** slices 1–7, release-preparation
-slice 7a and retirement/world-fix slice 8a are integrated (`1fbd32d`). Slice 8a
-passed full CI and CodeQL through #115; its superseded #102–105 source stack is
-archived and closed. Slice 8b adds isolated acceptance through #116; initial hosted
-publication and CodeQL pass, while its Windows test-fixture and review repairs
-require fresh CI.
-Candidate qualification and live acceptance remain pending.
+**Current redesign checkpoint, 8 September 2026:** source slices 1-7, release
+preparation 7a, retirement/world fixes 8a and isolated acceptance 8b are integrated
+through `0182e19`. Final #116 CI, Windows/Linux tests, full documentation publication
+and CodeQL pass; all redesign review threads are resolved. The superseded #102-105
+source stack is archived and closed. Candidate qualification and live acceptance
+remain pending. The pinned Editor installer and disposable fourteen-case project
+are prepared; actual setup/test execution awaits the requested authorization.
 The dated evidence below is historical and does not certify this candidate.
 Current revision-specific results are in
 [`gamemode-contract/Status.md`](internal/gamemode-contract/Status.md).
