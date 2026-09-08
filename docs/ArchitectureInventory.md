@@ -93,19 +93,23 @@ author identity is supplied.
   pin; proprietary assemblies are never committed or released.
 - Flutter platform registrants, lock files, Unity `.meta` files, bundle manifests, prefab assets, and VPM listings are
   generated artifacts whose source/provenance must agree with their generators.
-- The RC1 candidate consists of one canonical deterministic ecosystem payload plus Windows x64 and Linux x64
-  platform archives. Nested mod/VPM hashes must be identical between the two archives. Generic macOS packaging
-  remains in source for a later release but is not part of RC1's exact asset inventory.
-- Production Windows bytes are built and validated on the administrator workstation; Linux x64 is built in Ubuntu
-  24.04 under WSL2 on that same workstation. RC1 also runs Robotopia through pinned Proton under WSLg and records that
-  the evidence is same-host and non-independent. `release-platform-bundle-v1` and `release-handoff-v1` bind both
-  outputs and scrubbed QA evidence to one source SHA.
-- Candidate metadata includes `release-bom.json`, `SHA256SUMS`, SPDX SBOMs,
-  project/third-party notices, BepInEx provenance, two platform manifests, the
-  aggregate handoff manifest and its detached pinned-certificate CMS
-  signature, signed launcher-update metadata and sidecar, and checked-in
-  release notes. The manual release catalog is future stable-only Pages output,
-  not an RC1 asset.
+- RC1 declares one Windows x64 archive plus thirteen mod packages: fourteen catalog payloads. The canonical
+  ecosystem embeds the two VPM packages and the same thirteen mods. Two independent ecosystem builds must be
+  byte-identical, and nested payload hashes must match the reviewed ecosystem inventory.
+- Production Windows bytes and isolated Unity/Robotopia acceptance are produced on administrator-controlled
+  machines. RC1 has no Linux or macOS archive. Retained WSL2/Proton and generic macOS tooling require a separately
+  reviewed policy change before use in a future candidate, and publication requires platform acceptance.
+  Same-host evidence must be identified accurately where applicable.
+- RC1 stages eighteen human-owned assets: the fourteen catalog payloads, one Windows
+  `release-platform-bundle-v1` manifest, the aggregate `release-handoff-v1` manifest and both detached candidate
+  qualification records. The current explicit unsigned policy requires all three Windows executables verified
+  unsigned and the handoff CMS asset/digest absent. A future signed Windows policy requires its pinned certificate,
+  timestamps and detached CMS verification.
+- Protected finalization adds the five policy-declared metadata assets: `release-bom.json`,
+  `release-sbom.spdx.json`, `SHA256SUMS`, `topiaforge-update-v1.json` and its Ed25519 sidecar, bringing the current
+  public inventory to twenty-three assets. Project/third-party notices and BepInEx provenance remain in the
+  validated payloads. The checked-in release notes feed the release; the manual catalog is future stable-only
+  Pages output, not an RC1 asset. Inventory readiness does not authorize construction or publication.
 
 ## CI and privilege boundaries
 
