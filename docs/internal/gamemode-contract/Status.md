@@ -17,7 +17,22 @@ The [canonical brief](../GamemodeContractRedesign.md) is normative. The
 | `9dc5613bc0cc8f2fa9b3c50b02357116f2540514` | Slice 4 squash merge of PR #109, reviewed head `4b12a1edcc56c033f1616931f40deaba44ee35c6` | Full CI and CodeQL passed; merged normally on 6 September with review threads resolved |
 | `b7390fb6a8376c58c77d18f20e287bacbd427850` | Slice 5 merge of PR #110, final reviewed head `7907398cc9d21dc18d8b9481690dd434f7f30595` | Final exact-head CI and CodeQL passed; merged normally at 2026-09-06T02:07:23Z |
 | `bd7be8be386c51713fa1099488e1e4d36ba130a5` | Slice 6 merge of PR #111, final reviewed head `584349c123c72075b8922093a9486ae0491d041d` | Exact-head CI, full publication and CodeQL passed; normal merge at 2026-09-06T04:46:28Z |
-| `feat/gamemode-launcher-integration`, based on `bd7be8be` | Slice 7 active working tree | Shared selection, preview, wire and progress integration in progress; not integrated or game-verified |
+| `da47dc7f89462c4473bac54db7e1c98acecda52d` | Slice 7 merge of PR #112, reviewed head `7bc19231bf6ea12bb708ef318774d78fffee72cd` | Exact-head CI 34167871674 and CodeQL 34167870357 passed; normal merge at 2026-09-07T22:58:39Z |
+| `feat/release-candidate-qualification`, based on `da47dc7f` | Slice 7a active worktree and draft review checkpoint | Qualification, workflow and documentation repairs have local evidence; unsigned construction awaits permission; no release qualification or game acceptance |
+
+
+The historical rows describe each slice at its own merge. Current state:
+
+| Area | Implemented | Connected | Automated-tested | Game-verified |
+| --- | --- | --- | --- | --- |
+| V6 contract, resolver, runtime lifecycle and binding | Integrated through slices 2-6 | Runtime activation integrated | Exact-head CI for each slice passed | Pending |
+| Target selection, V4 wire and correlated outcomes | Integrated through slice 7 | Home, Setup, CLI and manager share resolution | Slice 7 exact-head CI and CodeQL passed | Pending |
+| Candidate qualification and publication guards | Slice 7a source checkpoint | CLI, administrator and publication paths connected in this branch | Local regressions passed; checkpoint CI pending | Pending; synthetic acceptance is not game evidence |
+| Unsigned RC package construction | Permission-blocked proposal only | Not applied | Three new local Dart regressions remain red | Pending |
+| V5 retirement and final acceptance | Slice 8 not started | Pending | Pending | Pending |
+
+No release tag, release dispatch or publication has occurred. The checkout is
+not release-ready. Slice 7a must finish and merge before a slice 8 branch is cut.
 
 On 2026-09-05, PRs #102–105 were converted to draft for the approved re-cut.
 Their branch tips and existing review history were preserved. Both external
@@ -1082,3 +1097,106 @@ along with the same encoding artifact in the log-truncation marker. These fixtur
 and text corrections require fresh hosted evidence before merge. The successful
 publication above certifies `c75f3d2`, not an untested follow-up revision. Live-game
 and release qualification remain pending.
+
+
+## Slice 7 merged; slice 7a active
+
+PR #112 merged normally on 7 September at 22:58:39 UTC as
+`da47dc7f89462c4473bac54db7e1c98acecda52d`, preserving reviewed head
+`7bc19231bf6ea12bb708ef318774d78fffee72cd`. Final
+[CI 34167871674](https://github.com/Furroxide/TopiaForge/actions/runs/34167871674)
+and [CodeQL 34167870357](https://github.com/Furroxide/TopiaForge/actions/runs/34167870357)
+passed. This includes rebuilt C#/SDK/extracted-template checks, Linux domain 868,
+Linux data 464 plus nine skips, Windows data 469 plus four skips, Linux CLI 270,
+Flutter, templates, hygiene, and complete Linux documentation publication.
+C# analysis 1737999993 returned zero results on the exact reviewed head; all
+fifteen alerts 443–457 are fixed on that PR ref, with no dismissals. The merge
+used ordinary branch policy, with no administrator bypass.
+
+The sequential `feat/release-candidate-qualification` branch was created without
+an upstream from that refreshed `origin/dev` only after the merge. Slice 7a is
+in progress; no release tags, dispatches, publication, or live game runs occurred.
+Seven new prerequisite CLI regressions first failed for the actual missing
+private assessment and legacy no-assets publication behavior, then passed.
+Separate duplicate-readiness-property regressions reproduced silent acceptance
+before parser hardening. Logs use `tf-slice7a-prerequisites-{red,green}.log` and
+`tf-slice7a-readiness-strict-red.log` in the temporary directory. Earlier setup
+failures are not regression evidence.
+
+Automatic approval review refused the unsigned policy/build mutation because it
+could not establish explicit user authorization from the available context.
+The user has been asked directly; that mutation remains pending, while unrelated
+qualification, workflow-security and dependency work proceeds. Existing approval
+and credential-rotation records and the isolated QA host/session locations remain
+unsupplied. No synthetic test approval is production evidence. Game verification,
+release qualification and slice 8 remain pending.
+
+
+## Slice 7a qualification checkpoint, 8 September
+
+This checkpoint binds qualification to exact Git blobs and staged bytes. It adds
+strict detached decision/acceptance schemas, the fixed 36-case acceptance inventory,
+private-build prerequisite assessment, immutable qualification summaries, BOM v4,
+and repeated validation across administrator and hosted approval boundaries.
+Source checks resist Git replacement refs and index hints, duplicate JSON keys,
+metadata-path substitution, payload/embedded-package disagreement, and changes
+between validation and publication. Signed P7S identity remains bound when the
+selected policy requires it. Hashes establish identity, not human approval.
+
+Workflow repairs constrain source provenance, remove unused arbitrary-source
+inputs, and use restore-only Flutter caching. Four compatible website dependency
+patches remove the recorded audit findings. Exact-head hosted CodeQL must confirm
+new alert instances; no alert dismissal is evidence of a fix.
+
+This is a draft review checkpoint of the completed qualification/workflow/docs
+work, not the completed release-preparation slice. Three pending unsigned test
+files are retained locally and excluded from this checkpoint commit:
+
+- `apps/topiaforge_cli/test/release_package_builder_test.dart` (two-line registration).
+- `apps/topiaforge_cli/test/release_package_builder_unsigned_cases.dart`.
+- `tools/release/test-windows-signing-policy.ps1`.
+
+The corresponding three-file production proposal is preserved as an inactive
+patch under the ignored `.dart_tool` directory. It has not been applied, compiled
+or behavior-tested. Its SHA-256 is
+`5f9262629668a2c745fef38c08a00686fedf4a24eeaa525ae2a569869ad72a48`.
+The registered local tests remain failing; excluding their unfinished work from a
+draft checkpoint does not waive them or qualify the complete working tree.
+Production release policy and Windows signing behavior remain unchanged.
+
+| Verification | Recorded local evidence | Limit |
+| --- | --- | --- |
+| Fresh Release build | Zero warnings/errors; `tf-slice7a-csharp-build.log` | SDK 10.0.301; installed development runtime 10.0.11 does not certify the release runtime pin |
+| Rebuilt C# release surface | Eleven SDK packages and all seven harnesses passed; `tf-slice7a-seven-harness-final.log` | No live scene, player, spawn or teardown evidence |
+| Complete CLI working-tree suite | 376 passed, four platform skips, three failures; `tf-slice7a-cli-full.log` | The failures are the pending unsigned regressions; this is not a green full-worktree claim |
+| Candidate acceptance and signing shapes | 54 acceptance cases and four signing-shape cases passed | Synthetic packages, signatures and approvals only |
+| Frozen source contracts | 32 cases passed; `tf-slice7a-frozen-source-green.log` | Exact Git inputs, not real release approval |
+| Metadata source content | Fourteen focused and fourteen adjacent cases passed; CLI `.dart_tool/slice7a-metadata-source-*-green.log` | Includes index-hint and hydrated-LFS regressions in owned temporary repositories |
+| Administrator and publication | Mock lifecycle, qualification, stdout capture, asset ownership and approval-boundary tampering tests passed | No real staging, dispatch or publication |
+| Website | 37 tests passed; npm audit reported zero vulnerabilities | Locked dependencies, not release package qualification |
+| Windows documentation publication | Guides, C# API, domain/data Dartdoc passed; launcher UI Dartdoc hit the recorded SDK-comment RangeError | Full Linux publication required on this checkpoint head; no SDK patch or exemption |
+| Repository audits | Residue, trademark, asset licence, counts, Markdown and guide catalog checks passed; 83 audit regression tests passed | Counts derived from the actual tree; no game acceptance |
+
+Logs beginning `tf-slice7a-` above are in the local temporary directory unless a
+repository-relative location is given. Final checkpoint-specific test and hosted
+results must be appended after they finish. Four required non-game approval and
+credential-rotation records, plus an isolated QA host/session with explicit paths,
+remain unsupplied. All live acceptance and final release decisions remain pending.
+
+
+Final combined qualification verification passed after all source repairs: 138
+cases across 17 selected CLI test files, with zero failures or skips. Full CLI
+`analyze --fatal-infos` reported no issues, and `format --output=none
+--set-exit-if-changed .` checked 165 files with zero changes. Exact arguments and
+logs are under `apps/topiaforge_cli/.dart_tool/slice7a-cli-final-*`. This focused
+run excludes the separately recorded unfinished unsigned-builder suite; its
+failures remain unresolved. All tracked and new non-generated Dart files satisfy
+the 500-line limit.
+
+The final workflow review passed three source-trust tests, the pinned restore-only
+Flutter cache contract, eight Pages/dependency cases and actionlint 1.7.7 across
+all six edited workflows. Local actionlint disabled external ShellCheck and
+Pyflakes; hosted checks remain required. A fresh lockfile audit still reported
+zero vulnerabilities. README counts, residue, trademark, asset-licence, Markdown
+(126 files), guide catalog (26 pages, five snippets) and whitespace checks passed
+again after the current-state documentation update.

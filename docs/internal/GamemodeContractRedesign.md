@@ -1,7 +1,8 @@
 # Gamemode contract redesign
 
-Status: approved implementation specification, 5 September 2026. This document
-supersedes the external ManifestV6 stage-1 brief and stage-2 prompt. It describes
+Status: implementation specification approved 5 September 2026; qualification
+contract updated 8 September 2026. Unsigned package construction still requires
+the permission recorded as pending in the evidence ledger. This document supersedes the external ManifestV6 stage-1 brief and stage-2 prompt. It describes
 the required result, not a claim that the result exists. Read the
 [evidence ledger](gamemode-contract/Status.md) for implementation and verification
 status and the [execution prompts](gamemode-contract/prompts/README.md) for the
@@ -517,3 +518,79 @@ Retain the launched process identity and stop only that owned process.
 Completion requires integrated slices, removed obsolete launch paths, published
 replacement guidance, passing automated evidence, and recorded game acceptance.
 Unavailable native-timing or visual checks stay explicitly pending.
+
+
+## 8. Exact candidate qualification
+
+Private preparation and permission to publish are separate assessments. The
+tracked register retains all twelve gates. `release validate-prerequisites
+--version <version> --target-sha <sha>` loads the exact Git blobs, requiring the
+four non-game blocking approvals and deferring only `P0-GAME-01`. Its successful
+status is `eligible-for-private-build`; it never returns a publishable decision.
+Git replacement refs and working-tree drift cannot change the resolved contracts.
+
+After the frozen payloads and aggregate handoff exist, actual acceptance and
+review produce two bounded, redacted JSON records in the candidate asset folder:
+
+- `release-candidate-readiness-v1.json`: schema identifier, canonical repository
+  `Furroxide/TopiaForge`, release version, exact lowercase source SHA, ready status,
+  all twelve gate rows, exact sorted payload name/positive integer size/SHA-256
+  records, and base readiness/schema/policy/catalog/contract/handoff/acceptance
+  digests. Only GAME may supersede its tracked row; the complete effective gate
+  register is validated again. Signed mode also requires
+  `handoffSignatureSha256`; unsigned mode omits that field and the P7S file.
+- `release-candidate-acceptance-v1.json`: the same source, contract, handoff and
+  payload identities; pinned game build; passed result; ten game cycles and
+  sixteen authoring cycles; every case from the tracked 36-case redesign matrix;
+  bound SDK/game/authoring receipts; isolated Windows-user or VM attestation; and
+  approved GAME evidence IDs, required roles, opaque `review:<id>` references and
+  evidence digests. No paths, host names, authentication data or raw logs belong
+  in the public record. Every reference must identify an actual reviewed record.
+
+Their complete schemas are
+`schemas/topiaforge.release-candidate-readiness-v1.schema.json` and
+`schemas/topiaforge.release-candidate-acceptance-v1.schema.json`. Decision input is
+limited to 128 KiB and acceptance input to 256 KiB. Duplicate JSON properties,
+unknown fields, wrong raw types, fractional integers, missing evidence and
+incomplete/failed cases are refused. The validator verifies evidence structure and
+bindings; it cannot establish a human reviewer's identity or manufacture consent.
+
+`contractSha256` hashes UTF-8 records consisting of the fixed tracked path, a NUL,
+its exact blob SHA-256 and LF, in ordinal path order. The path set is defined in
+`release_candidate_contract.dart`: readiness, policy, catalog and their schemas;
+both detached schemas; platform toolchains; pinned game-build metadata; and the
+SDK and redesign acceptance inventories. Missing/oversized blobs fail before
+buffering. Handoff verification reads an owned snapshot of these exact blobs.
+It cannot follow a candidate-supplied metadata path into the surrounding machine.
+
+The payload namespace is exactly the catalog platform archives plus declared
+mod/version packages. Generated metadata is a separate fixed namespace. Catalog
+`ready` means the inventory has been reviewed, never that release approval exists.
+Qualification rehashes actual payloads, verifies the archive's canonical ecosystem,
+and checks separately distributed mod bytes against that embedded ecosystem.
+Decision, acceptance, handoff, bundle and signed-mode P7S identities are reread
+before success; independently generated BOM/SBOM/update metadata/checksums remain
+downstream of qualification so there is no recursive hash dependency. Existing
+platform signature, timestamp, chain and package validation remains required;
+P7S hash identity does not replace CMS trust verification.
+
+The administrator lifecycle is `preflight -> platforms-built -> built -> accepted
+-> staged -> dispatch-requested -> published`. `qualify` validates the reviewed
+records and atomically freezes the complete normalized summary at `accepted`.
+Matching retries are idempotent; mismatched retries fail. Stage, dispatch and
+resume revalidate source and bytes. Accepted candidates cannot be rebuilt or
+repacked. Rehearsals are permanently non-publishable.
+
+Publication-grade `release validate-readiness --version <version> --target-sha
+<sha> --assets <dir>` requires detached qualification with no tracked-ready
+fallback. Metadata generation/verification binds the full qualification summary
+in BOM v4 and rejects source drift. Hosted verification downloads and validates
+human-owned candidate records before approval, compares the same decision and
+acceptance digests after protected approval, and verifies them again immediately
+before publication. The strict asset allowlist and uploader/no-replacement rules
+apply to both records. Ed25519 update signing remains mandatory in either Windows
+distribution mode.
+
+This specification does not close the live acceptance or human approval gates.
+The ledger distinguishes implemented machinery, connected callers, automated
+verification, and actual isolated game observations at each revision.

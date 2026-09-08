@@ -41,7 +41,7 @@ Managed-reference caches in Pages and release-package-build are already restore-
 
 ## Settled distribution and bounded repairs
 
-The user selected an unsigned Windows x64 0.x prerelease, version 0.1.0-rc.1. Linux/Proton/macOS are outside RC1. Preserve signed defaults and the restriction permitting unsigned only for 0.x prereleases.
+The earlier planning record selected an unsigned Windows x64 0.x prerelease, version 0.1.0-rc.1. Automatic approval review subsequently could not establish explicit authorization for the production signing-policy change; that implementation remains pending the direct permission request recorded in Status.md. The steps below describe the reviewable proposal, not permission to apply it. Linux/Proton/macOS remain outside RC1. Preserve signed defaults and the restriction permitting unsigned only for 0.x prereleases.
 
 1. Set signingIdentities.windowsDistribution to unsigned in reviewed release policy, without a Windows certificate pin.
 2. tools/release/build-windows.ps1:341-349 currently unconditionally requires certificate/password/timestamp credentials after branching on mode. Require these only for signed mode.
@@ -103,8 +103,9 @@ Existing historical ZIPs and current-tree logs are not evidence for a new frozen
 
 ## Source refresh from the slice-7 handoff
 
-Read-only review on 8 September, before slice 7 commits, confirmed these seams.
-Recheck them at its merged revision before editing:
+Historical read-only review on 8 September, before slice 7a implementation,
+identified these seams. The active handoff and Status.md below supersede this
+starting-state inventory; do not repeat fixes already implemented:
 
 - `release_readiness.dart` has 469 lines. Split by responsibility before adding a
   separate four-gate private-build assessment; preserve the final twelve-gate
@@ -127,3 +128,36 @@ Recheck them at its merged revision before editing:
   dependency versions remain unchanged at this checkpoint.
 - Keep ten in-game cycles and sixteen Unity authoring cycles as distinct evidence
   requirements. Neither set replaces the other.
+
+
+## Active implementation handoff
+
+Slice 7 merged as `da47dc7f89462c4473bac54db7e1c98acecda52d`; the only active
+replacement branch is `feat/release-candidate-qualification`, created afterward.
+The current worktree contains the qualification implementation and regressions;
+read `Status.md` before resuming. Do not recreate the earlier branch or reset
+these owned edits.
+
+The normative detached record shape and canonical digest recipe are now in
+section 8 of `GamemodeContractRedesign.md`, with executable schemas and a tracked
+36-case redesign inventory. Preserve the fixes for Git replacement refs, duplicate
+JSON properties, fixed metadata paths, exact catalog namespace, embedded/external
+package equality, signed P7S identity, stdout-only CLI summary capture, immutable
+accepted state, source drift and approval-boundary asset replacement.
+
+The unsigned construction fix remains pending explicit permission following an
+automatic approval-review rejection. Its new Dart/PowerShell regressions are
+intentionally failing until that authorized repair can be applied; do not skip,
+suppress or misclassify them. The draft qualification checkpoint excludes the
+three unfinished regression files listed in Status.md while preserving them in
+the worktree. A green draft CI result does not complete unsigned construction or
+permit merging slice 7a. Qualification and workflow changes have independent
+regressions. Keep Ed25519 metadata signing and signed-mode defaults intact.
+
+Before committing, finish the combined CLI suite, formatter/analyzer and line
+limits, administrator/publisher tests, workflow checks and repository/documentation
+audits. Obtain exact-head Linux documentation publication and CodeQL evidence;
+local Windows Dartdoc 9.0.4 still has the recorded SDK-comment RangeError. No live
+game or release publication is authorized by passing these source checks. Record
+actual approval/rotation record locations and isolated QA host identity before
+release preparation or acceptance execution.

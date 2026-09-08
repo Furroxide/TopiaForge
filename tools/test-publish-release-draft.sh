@@ -2,11 +2,29 @@
 set -euo pipefail
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-publisher="$script_dir/publish-release-draft.sh"
-fetcher="$script_dir/fetch-release-assets.sh"
 fake_gh="$script_dir/test-support/fake-gh-release.sh"
 temp_root=$(mktemp -d)
 trap 'rm -rf "$temp_root"' EXIT
+
+publisher_root="$temp_root/publisher-repo"
+mkdir -p "$publisher_root/tools" "$publisher_root/release" "$publisher_root/.github" \
+  "$publisher_root/apps/topiaforge_cli/bin"
+for script in publish-release-draft.sh fetch-release-assets.sh verify-release-tag.sh; do
+  cp "$script_dir/$script" "$publisher_root/tools/"
+done
+if [[ -f $script_dir/release-asset-policy.sh ]]; then
+  cp "$script_dir/release-asset-policy.sh" "$publisher_root/tools/"
+fi
+cp "$script_dir/../.github/repository-governance.json" "$publisher_root/.github/"
+jq '.signingIdentities = {}' "$script_dir/../release/release-policy.json" \
+  >"$publisher_root/release/release-policy.json"
+jq -n '{releases: ["0.1.0-rc.1", "1.0.2"] | map({version: .,
+  artifacts: ["TopiaForge-windows-x64.zip", "example.topiaforgemod"]})}' \
+  >"$publisher_root/release/catalog.json"
+printf '// Synthetic validator, intercepted by fake Dart.\n' \
+  >"$publisher_root/apps/topiaforge_cli/bin/topiaforge.dart"
+publisher="$publisher_root/tools/publish-release-draft.sh"
+fetcher="$publisher_root/tools/fetch-release-assets.sh"
 
 git init --quiet --bare "$temp_root/remote.git"
 git init --quiet "$temp_root/work"
@@ -26,6 +44,16 @@ git -C "$temp_root/work" push --quiet origin \
 
 mkdir -p "$temp_root/bin" "$temp_root/assets" "$temp_root/state"
 cp "$fake_gh" "$temp_root/bin/gh"
+cat >"$temp_root/bin/dart" <<'DART'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >>"$FAKE_GH_STATE/qualification-calls"
+[[ ${FAKE_QUALIFICATION_INVALID:-false} != true ]] || exit 1
+qualification_count=$(wc -l <"$FAKE_GH_STATE/qualification-calls" | tr -d ' ')
+[[ $qualification_count != "${FAKE_QUALIFICATION_REJECT_AT:-never}" ]] || exit 1
+[[ $* == *'release validate-readiness'* && $* == *'--assets '* ]] || exit 1
+DART
+chmod +x "$temp_root/bin/dart"
 printf 'release notes\n' >"$temp_root/notes.md"
 printf '{"distributable":true,"blockingReasons":[]}\n' \
   >"$temp_root/assets/release-bom.json"
@@ -35,7 +63,7 @@ printf '{"version":"0.1.0-rc.1"}\n' \
   >"$temp_root/assets/topiaforge-update-v1.json"
 printf 'update-signature\n' \
   >"$temp_root/assets/topiaforge-update-v1.json.sig"
-for platform in windows-x64 linux-x64; do
+for platform in windows-x64; do
   printf '{"schema":"release-platform-bundle-v1","platform":"%s"}\n' \
     "$platform" \
     >"$temp_root/assets/release-platform-bundle-v1-$platform.json"
@@ -45,7 +73,6 @@ printf '{"schema":"release-handoff-v1"}\n' \
 printf 'detached-cms-signature\n' \
   >"$temp_root/assets/release-handoff-v1.json.p7s"
 printf 'windows archive\n' >"$temp_root/assets/TopiaForge-windows-x64.zip"
-printf 'linux archive\n' >"$temp_root/assets/TopiaForge-linux-x64.zip"
 printf 'canonical mod\n' >"$temp_root/assets/example.topiaforgemod"
 checksum_temp="$temp_root/SHA256SUMS.tmp"
 (
@@ -135,6 +162,30 @@ write_publish_uploader_fixture() {
       end
     )' "$source" >"$destination"
 }
+
+# A direct publisher must refuse missing detached qualification before mutation.
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
+test ! -e "$FAKE_GH_STATE/release.json"
+for name in release-candidate-readiness-v1.json release-candidate-acceptance-v1.json; do
+  printf '{"syntheticQualificationFixture":true}\n' >"$temp_root/assets/$name"
+  (cd "$temp_root/assets" && sha256sum "$name") >>"$temp_root/assets/SHA256SUMS"
+done
+sort -o "$temp_root/assets/SHA256SUMS" "$temp_root/assets/SHA256SUMS"
+expected_asset_count=$((expected_asset_count + 2))
+export FAKE_QUALIFICATION_INVALID=true
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
+test ! -e "$FAKE_GH_STATE/release.json"
+unset FAKE_QUALIFICATION_INVALID
+for name in release-candidate-readiness-v1.json release-candidate-acceptance-v1.json; do
+  mv "$temp_root/assets/$name" "$temp_root/$name"
+  must_fail run_publisher v0.1.0-rc.1 "$target_sha"
+  test ! -e "$FAKE_GH_STATE/release.json"
+  mv "$temp_root/$name" "$temp_root/assets/$name"
+done
+printf 'not reviewed\n' >"$temp_root/assets/unreviewed-candidate.json"
+must_fail run_publisher v0.1.0-rc.1 "$target_sha"
+test ! -e "$FAKE_GH_STATE/release.json"
+rm "$temp_root/assets/unreviewed-candidate.json"
 
 # New draft: the POST omits target_commitish, so GitHub cannot synthesize a tag.
 must_fail run_publisher_with_flag v0.1.0-rc.1 "$target_sha" false
@@ -327,6 +378,24 @@ write_publish_uploader_fixture \
   "$FAKE_GH_STATE/assets.publish-good.json"
 cp "$FAKE_GH_STATE/assets.publish-good.json" "$FAKE_GH_STATE/assets.json"
 
+# Requalification must run again after reconciliation, before draft:false.
+qualification_calls_before=$(wc -l <"$FAKE_GH_STATE/qualification-calls" | tr -d ' ')
+export FAKE_QUALIFICATION_REJECT_AT=$((qualification_calls_before + 2))
+must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
+jq -e '.draft == true' "$FAKE_GH_STATE/release.json" >/dev/null
+unset FAKE_QUALIFICATION_REJECT_AT
+
+# Detached qualification is always human-reviewed material, including resume.
+for name in release-candidate-readiness-v1.json release-candidate-acceptance-v1.json; do
+  jq --arg name "$name" 'map(if .name == $name then
+    .uploader = {login:"github-actions[bot]", id:41898282, type:"Bot"}
+    else . end)' "$FAKE_GH_STATE/assets.publish-good.json" >"$FAKE_GH_STATE/assets.json"
+  must_fail run_publisher v0.1.0-rc.1 "$target_sha" publish
+  mkdir "$temp_root/wrong-qualification-uploader-$name"
+  must_fail run_fetcher "$temp_root/wrong-qualification-uploader-$name"
+done
+cp "$FAKE_GH_STATE/assets.publish-good.json" "$FAKE_GH_STATE/assets.json"
+
 # A finalizer may upload every generated metadata asset and then stop before
 # the draft:false transition. The next run must accept the pinned Actions
 # uploader on that still-draft inventory, fetch the exact bytes, and publish
@@ -471,8 +540,12 @@ jq -e \
 # from, because both paths are derived from the script's own location.
 # See P0-WIN-01 in docs/LaunchBlockers.md.
 unsigned_root="$temp_root/unsigned-repo"
-mkdir -p "$unsigned_root/tools" "$unsigned_root/release" "$unsigned_root/.github"
+mkdir -p "$unsigned_root/tools" "$unsigned_root/release" "$unsigned_root/.github" \
+  "$unsigned_root/apps/topiaforge_cli/bin"
 cp "$script_dir/publish-release-draft.sh" "$unsigned_root/tools/"
+cp "$script_dir/release-asset-policy.sh" "$unsigned_root/tools/"
+cp "$publisher_root/release/catalog.json" "$unsigned_root/release/"
+cp "$publisher_root/apps/topiaforge_cli/bin/topiaforge.dart" "$unsigned_root/apps/topiaforge_cli/bin/"
 cp "$script_dir/verify-release-tag.sh" "$unsigned_root/tools/"
 cp "$script_dir/../.github/repository-governance.json" "$unsigned_root/.github/"
 jq '.signingIdentities.windowsDistribution = "unsigned"' \

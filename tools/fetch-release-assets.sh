@@ -184,6 +184,17 @@ jq -e 'type == "array" and length > 0 and length < 100' \
 }
 verify_asset_uploaders "$assets_file" "$release_state"
 
+asset_policy=$(bash "$script_dir/release-asset-policy.sh" "$repository_root" "${tag#v}")
+jq -e --argjson policy "$asset_policy" '
+  . as $assets |
+  all(.[]; .name as $name | ($policy.all | index($name)) != null) and
+  all($policy.human[]; . as $name |
+    any($assets[]; .name == $name and .state == "uploaded"))
+' "$assets_file" >/dev/null || {
+  echo 'Staged release asset inventory is outside the reviewed allowlist or missing qualified inputs.' >&2
+  exit 1
+}
+
 declare -A seen_names
 starter_count=0
 downloaded_count=0
