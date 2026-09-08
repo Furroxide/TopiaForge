@@ -71,26 +71,33 @@ void _registerRuntimeLoaderPayloadTests({
     }
   });
 
-  test(
-    'every missing module or interop contract makes the loader stale',
-    () async {
-      var install = await repository().selectGameDirectory(gameRoot().path);
-      var report = await repository().installOrRepairRuntime(install);
-      expect(report.ok, isTrue);
+  // Each missing assembly gets the normal test timeout and a fresh fixture.
+  // Keeping all seven repairs in one async body races teardown on slower hosts.
+  for (final dll in moduleAndInteropDlls) {
+    test(
+      'missing module or interop contract makes the loader stale ($dll)',
+      () async {
+        final fixtureRepository = repository();
+        final fixtureGamePath = gameRoot().path;
+        final fixtureDll = installedDll(dll);
+        var install = await fixtureRepository.selectGameDirectory(
+          fixtureGamePath,
+        );
+        var report = await fixtureRepository.installOrRepairRuntime(install);
+        expect(report.ok, isTrue);
 
-      for (final dll in moduleAndInteropDlls) {
-        installedDll(dll).deleteSync();
+        fixtureDll.deleteSync();
 
-        install = await repository().selectGameDirectory(gameRoot().path);
+        install = await fixtureRepository.selectGameDirectory(fixtureGamePath);
         expect(install.loaderStatus, ComponentState.partial, reason: dll);
         expect(install.needsRepair, isTrue, reason: dll);
 
-        report = await repository().installOrRepairRuntime(install);
+        report = await fixtureRepository.installOrRepairRuntime(install);
         expect(report.ok, isTrue, reason: dll);
-        expect(installedDll(dll).existsSync(), isTrue, reason: dll);
-      }
-    },
-  );
+        expect(fixtureDll.existsSync(), isTrue, reason: dll);
+      },
+    );
+  }
 
   test('missing validator dependencies make the loader stale', () async {
     var install = await repository().selectGameDirectory(gameRoot().path);
