@@ -167,6 +167,31 @@ void main() {
           )
           as Map<String, Object?>;
   final manifestSchema = JsonSchema.create(schemaDocument);
+  test('Unicode declaration fixture isolates its invalid identifier', () {
+    final body = _readCase(
+      fixtureRoot,
+      'serialization/manifest/v6-unicode-declaration-id.json',
+    );
+    final manifest = body['manifest']! as Map<String, Object?>;
+    final contributions = manifest['contributions']! as Map<String, Object?>;
+    final gamemode = (contributions['gamemodes']! as List).single as Map;
+    gamemode['id'] = '${manifest['name']}.ascii-mode';
+
+    final schemaResult = manifestSchema.validate(manifest);
+    expect(
+      schemaResult.isValid,
+      isTrue,
+      reason: schemaResult.errors.join('\n'),
+    );
+    final readerResult = runManifest(body);
+    expect(
+      readerResult.accepted,
+      isTrue,
+      reason:
+          'Replacing only the invalid identifier must remove every defect: '
+          '${readerResult.detail}',
+    );
+  });
   test('normalization explicitly covers every contribution schema field', () {
     const definitions = {
       'worlds': 'worldDeclaration',

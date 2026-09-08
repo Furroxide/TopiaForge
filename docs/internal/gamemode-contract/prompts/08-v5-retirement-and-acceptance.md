@@ -100,3 +100,25 @@ claiming the generated-world authoring journey is complete. Also verify
 `Assets/World/README.md` environment and kill-plane claims against the active bundle
 provider, and remove obsolete registration-code instructions. Keep the pinned
 6000.0.23f1 authoring editor distinct from the installed game's runtime version.
+
+
+## Review obligations carried from the superseded retirement PR
+
+The 8 September review of [PR #105](https://github.com/Furroxide/TopiaForge/pull/105)
+confirmed that two comments require this slice's atomic retirement change:
+
+- [V4 retirement guidance](https://github.com/Furroxide/TopiaForge/pull/105#discussion_r3929384378):
+  update `ManifestValidator` and the other dispatch/validation messages to V6 only
+  when V3/V4/V5 migration actually produces V6. Current V4-to-V5 guidance matches
+  the temporary implementation; changing just the text would misdescribe the CLI.
+- [Standalone V5 test naming](https://github.com/Furroxide/TopiaForge/pull/105#discussion_r3929384409):
+  replace the still-valid V5 acceptance assertion with retirement coverage, and
+  name new V6 tests accurately. The current `AllowsStandaloneV5` helper really
+  parses V5; the historical PR's misleading V6 body was not integrated.
+
+The same review's suppressed `v6-valid-session.json` finding must be checked during
+fixture conversion: every fixture's version and explicit schema URL must agree.
+That historical V6 fixture never landed; the current V5 session fixture correctly
+uses the V5 schema. Do not weaken these checks or copy the mismatched historical
+fixture while retiring V5. Resolve the two linked threads only after the new
+implementation and migration tests land.
