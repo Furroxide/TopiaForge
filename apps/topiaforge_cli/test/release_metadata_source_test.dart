@@ -7,6 +7,51 @@ import 'package:topiaforge/src/release_metadata_source.dart';
 import 'package:topiaforge/src/release_policy.dart';
 
 void main() {
+  for (final unexpected in <String?>[null, 'asset', 'metadata']) {
+    test(
+      unexpected == null
+          ? 'nested caller resolves relative assets and metadata from its CWD'
+          : 'nested caller refuses same-name $unexpected under candidate root',
+      () async {
+        final fixture = _SourceFixture.create();
+        addTearDown(() => fixture.root.deleteSync(recursive: true));
+        final caller = Directory(p.join(fixture.root.path, 'apps/worker'))
+          ..createSync(recursive: true);
+        final artifact = TopiaForgeReleaseCatalog.load(
+          fixture.root.path,
+        ).release('0.1.0-rc.1').artifacts.first;
+        final assets = p.join('src', 'assets');
+        final metadata = p.join('src', 'metadata');
+        void write(String base, String relative, String name) =>
+            File(p.join(base, relative, name))
+              ..createSync(recursive: true)
+              ..writeAsStringSync('Synthetic output, not candidate evidence.');
+        write(caller.path, assets, artifact);
+        write(caller.path, metadata, 'release-bom.json');
+        if (unexpected != null) {
+          write(
+            fixture.root.path,
+            unexpected == 'asset' ? assets : metadata,
+            unexpected == 'asset' ? artifact : 'release-bom.json',
+          );
+        }
+        final result = await Process.run(Platform.resolvedExecutable, [
+          p.absolute('test/fixtures/release_metadata_source_probe.dart'),
+          fixture.root.path,
+          fixture.sha,
+          assets,
+          metadata,
+        ], workingDirectory: caller.path);
+        if (unexpected == null) {
+          expect(result.exitCode, 0, reason: '${result.stderr}');
+          expect(result.stdout, contains('source accepted'));
+        } else {
+          expect(result.exitCode, isNot(0));
+          expect(result.stderr, contains('untracked source inputs'));
+        }
+      },
+    );
+  }
   test(
     'source guard permits separate hosted downloads and metadata outputs',
     () async {

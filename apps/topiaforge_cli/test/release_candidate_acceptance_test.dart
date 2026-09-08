@@ -49,6 +49,13 @@ void main() {
     handoff: handoff,
   );
   test('complete exact candidate acceptance is valid', validate);
+  test('acceptance reader preserves payload SemVer build metadata', () {
+    const name =
+        'io.github.furroxide.topiaforge.worlds-0.1.0-rc.1+build.01.topiaforgemod';
+    ((acceptance['payloads'] as List).first as Map)['name'] = name;
+    validate();
+    expect(((acceptance['payloads'] as List).first as Map)['name'], name);
+  });
   final schema = JsonSchema.create(
     _json(
       p.join(

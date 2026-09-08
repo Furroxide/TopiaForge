@@ -65,7 +65,7 @@
         "properties": {
           "name": {
             "type": "string",
-            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,179}$"
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,179}$"
           },
           "size": {
             "type": "integer",
