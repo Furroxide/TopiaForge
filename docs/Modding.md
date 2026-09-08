@@ -49,16 +49,16 @@ topiaforge new mod example.my-mod --template gameplay --name "My Mod" --author "
 | --- | --- |
 | `minimal` | Typed validated/migrating config, logging, and a namespaced command. |
 | `gameplay` | Named input, player aim, a safe physics query, logging, and a toast. |
-| `gamemode` | Worlds registration, session events, and automatic teardown. |
+| `gamemode` | Declared launch targets, `StartAsync` controllers, and session-owned teardown. |
 | `service` | A dependency-scoped typed provider plus consumer contract. |
 | `ui` | Configurable input and a TopiaForgeUi-backed window. |
 | `asset` | Package bundle/prefab loading, spawning, and result handling. |
-| `world` | Bundle-backed world/menu registration and save-aware teardown. |
+| `world` | Declared bundle worlds and launch targets with session-owned loading, readiness, and cleanup. |
 
 Every scaffold includes:
 
 - an exact V1 `PackageReference` and analyzer;
-- manifest schema V5 with current compatibility defaults;
+- manifest schema V6 with current compatibility defaults;
 - project-local `global.json` and NuGet lock state;
 - source-control rules for generated restore output; and
 - an NUnit project using `TopiaForge.Mods.Testing`.
@@ -88,7 +88,7 @@ Mods should disable only the affected feature and show a useful message.
 
 ## Manifest, restore, and packaging
 
-`topiaforge.mod.json` schema V5 is canonical. Omit `multiplayer` for a standalone-only mod; add it through the multiplayer module command when needed. Required dependencies and optional dependencies are
+`topiaforge.mod.json` schema V6 is canonical. Omit `multiplayer` for a standalone-only mod; add it through the multiplayer module command when needed. Required dependencies and optional dependencies are
 ID-to-range maps. Compatibility ranges, platform/architecture/content constraints, capabilities,
 load-order hints, exported API assemblies, and namespaced `x-*` metadata are validated before code
 executes. Read [Manifest V6](ManifestV6.md) for every field and

@@ -11,7 +11,7 @@ the ordinary-world persistence-isolation gate.
 
 ## Dependencies
 
-The manifest declares schema V5 dependencies on Worlds, RobotKit, and Creator Content. The consumer project references
+The manifest declares schema V6 dependencies on Worlds, RobotKit, and Creator Content. The consumer project references
 only their Unity-free contracts and links the shared workbench presentation/controller source. Providers are resolved
 through the owner-scoped extension service.
 

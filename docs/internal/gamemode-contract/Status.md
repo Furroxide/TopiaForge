@@ -1267,3 +1267,59 @@ temporary directory use `tf-pr114-protected-main-{red,green}.log`,
 `tf-pr114-pages-main-{red,green}.log` and `tf-pr114-pages-full-green.log`.
 This establishes local source behavior; the next hosted CodeQL gate remains
 required. The unsigned proposal and production signing source hashes are unchanged.
+
+
+## Open PR comment review, 8 September
+
+The requested audit covered all eight open PRs authored by the project account:
+#68, #92, #99, #102, #103, #104, #105 and #114. It read conversation comments,
+review bodies (including suppressed findings), and all review threads, with no
+remaining pagination. Ten unresolved inline threads were on the superseded
+#102-105 stack. Historical branches remain preserved rather than reconstructed.
+
+The ASCII identifier/type findings in #102 were fixed by merged #107 (`c61d5fc`).
+The #103 Sandbox registration ownership and Zombies stale-session path findings
+were fixed in #111 (`c8a982c`, merged `bd7be8b`). All three #104 owner-selection
+threads, including suppressed ambiguity diagnostics, were fixed by #108 (`41f14d0`).
+The standalone module guide finding in #105 was fixed by #111. Replies must point
+to these actual replacements; none establishes live gameplay acceptance.
+
+Review found a remaining current-guide defect: Modding still called V5 canonical.
+Related current instructions in ModPackaging and Sandbox also named V5. Three new
+cross-artifact website regressions first failed against the actual V6 alias and
+Sandbox manifest, then passed after the prose was corrected. Modding's template
+table now describes declared targets/controllers and session-owned world loading.
+The full website suite passed all 41 cases. Logs:
+`tf-pr-comments-authoring-{red,green}.log` and `tf-pr-comments-website.log` in the
+local temporary directory.
+
+Tracing #102's Unicode coverage also exposed a masked negative fixture: an
+unrelated launch target named a nonexistent gamemode. A new control test first
+failed when replacing only the invalid Unicode ID with valid ASCII. Removing
+that unrelated target makes the identifier the sole defect. The original fixture
+still rejects; repairing only its ID now passes both schema and reader checks.
+All 585 focused Dart cases, 356 C# conformance cases, fixture closure, analysis and
+formatting passed. Logs: `tf-pr102-unicode-fixture-{red,green,csharp}.log`.
+
+Two #105 threads remain open and explicitly carried in the slice-8 prompt: V4
+migration guidance must change with the actual V6 migration path, and the existing
+V5 acceptance test must change when V5 is retired. Their current implementations
+are consistent with temporary V5 support; claiming them fixed would be premature.
+The suppressed historical session-fixture schema mismatch is also recorded there.
+
+PR #68 has separate review-driven transport/disclosure repairs in its own isolated
+checkout; they are not part of this qualification branch. #92 remains constrained
+by the existing release-only route into main; its Dependabot guards already exist
+on dev and must be carried by normal promotion. The #99 helper issue was already
+fixed at its reviewed head. #114 had no actionable reviewer comments at inventory.
+No unsigned policy, approval evidence or game acceptance changed during this audit.
+
+
+The required pre-push release-surface check passed again with all eleven SDK
+packages and all seven C# harnesses; see `tf-pr-comments-seven-harness.log` in the
+local temporary directory. Its first attempt correctly rejected duplicate source
+references because the separate PR #68 checkout had initially been nested under
+this worktree. That owned checkout was relocated, with both agents paused, to an
+isolated temporary directory; the unchanged audit then passed. The initial log
+is preserved as `tf-pr-comments-seven-harness-nested-checkout.log`. No source-census
+rule or test expectation was weakened to accommodate the second checkout.
