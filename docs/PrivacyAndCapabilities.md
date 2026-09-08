@@ -82,7 +82,7 @@ quietly optimising against player safety. Refusing to notice that is how it ship
 4. **Disclosure is a capability question, and the current label does not cover it.** `network` means "opens outbound
    network connections". That does not tell a player that other *players* will learn their address. A distinct
    canonical label is required before any live provider ships. Adding one is a coordinated change across
-   `schemas/topiaforge.mod.schema.json`, `schemas/topiaforge.mod.v5.schema.json`,
+   `schemas/topiaforge.mod.schema.json`, `schemas/topiaforge.mod.v6.schema.json` (and the temporarily supported V5 schema),
    `src/TopiaForge.ModManager.Core/ManifestValidator.cs`, and
    `packages/launcher_domain/lib/src/models/manifest_contract_constants.dart`, and publication validation treats
    unknown labels as findings. **It is deliberately not being made now**, because shipping a multiplayer capability

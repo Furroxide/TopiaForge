@@ -145,6 +145,7 @@ The classification is shown in the pane and goes nowhere else.
 
 Tests: `packages/launcher_domain/test/reachability_probe_test.dart`,
 `packages/launcher_data/test/reachability_probe_test.dart`,
+`packages/launcher_data/test/stun_transport_test.dart`,
 `apps/topiaforge_launcher_flutter/test/widget_reachability_test_cases.dart`.
 
 ## Open questions
