@@ -63,8 +63,12 @@ foreach ($archive in $manifest.archives) {
 
 $action = Get-Content -LiteralPath (Join-Path $PSScriptRoot "action.yml") -Raw
 if ($action -notmatch
-    'actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830') {
-    throw "The Flutter setup action must pin actions/cache to its approved full SHA."
+    'actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830') {
+    throw "The Flutter setup action must pin restore-only actions/cache to its approved full SHA."
+}
+
+if ($action -match 'uses:\s+actions/cache(?:/save)?@') {
+    throw "Shared Flutter setup must never register a post-job cache writer."
 }
 
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot "../../..")).Path

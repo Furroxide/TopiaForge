@@ -5,13 +5,36 @@ Last audited: 2026-07-31. Reconciled against the 2409 tree on 2026-08-27; see
 working session that closed two advisory gates and moved engineering work on four
 others; see [Second reconciliation](#second-reconciliation-2026-08-28).
 Product candidate: `0.1.0-rc.1`. Recommendation: **NO-SHIP**.
+
+**Current redesign checkpoint, 8 September 2026:** slices 1–7 are integrated;
+release qualification (7a) and V5 retirement/live acceptance (8) remain pending.
+The dated evidence below is historical and does not certify this candidate.
+Current revision-specific results are in
+[`gamemode-contract/Status.md`](internal/gamemode-contract/Status.md).
+
+Private build eligibility requires the four non-game blocking approvals from the
+frozen register. Final publication requires detached candidate qualification,
+including the reviewed full redesign matrix and exact package/handoff/acceptance
+hashes. The generic smoke criteria below cannot waive those requirements. Catalog
+`ready` approves inventory only. No final candidate, approval records or isolated
+QA host have been qualified in this redesign session.
+
+Unsigned Windows RC1 is authorized as of 8 September 2026 and the checked-in
+policy records `windowsDistribution: unsigned`. The PowerShell credential guard
+and Dart ambient-signer/refusal-order repairs are implemented and their synthetic
+regressions pass; exact results and remaining suite verification are in
+[Status](internal/gamemode-contract/Status.md). The exact candidate build and
+isolated acceptance remain pending. No candidate is qualified. Authorization does not supply approval
+records, isolated QA evidence or permission to bypass qualification. Historical
+unsigned archives do not establish current candidate readiness.
+
 Governance relaxed for the `0.x` line on 2026-08-22; see
 [What blocks a `0.x` release](#what-blocks-a-0x-release).
 
 Scope change on 2026-08-12: **Linux is out of `0.1.0-rc.1`** and returns in `0.1.0-rc.2`.
 The administrator host cannot reach a GPU Vulkan implementation inside WSL2, and
 Robotopia's Direct3D 12 renderer requires it through VKD3D, so no credible Proton
-acceptance evidence was obtainable. RC1 ships Windows x64 only. See `P0-LINUX-01`.
+acceptance evidence was obtainable. RC1 is scoped to Windows x64 only. See `P0-LINUX-01`.
 
 A first-party mod audit on 2026-07-27 found and fixed one critical and two high-severity engineering defects that
 the prior remediation had missed (see [First-party mod audit](#first-party-mod-audit-2026-07-27) below). No further
@@ -68,7 +91,7 @@ which gate matters. So five gates stay **blocking** and seven become **advisory*
 | `P0-PRIV-01` | blocking | `RoboApiClient` posts to an unapproved third-party backend reusing the player's token. |
 | `P0-CRED-01` | blocking | Exposed credentials stay exposed regardless of version number. |
 | `P0-GAME-01` | blocking | Obtainable by the maintainer alone, and it is the claim the product *is*. |
-| `P0-WIN-01` | advisory | `0.x` ships unsigned with a documented SmartScreen warning; see the gate. |
+| `P0-WIN-01` | advisory | Unsigned RC1 is authorized and recorded; exact unsigned artifacts and candidate QA still require verification. |
 | `P0-TRUST-01` | advisory | The trust model is disclosed, not enforced; approving it is a `1.0` question. |
 | `P0-HOST-01` | advisory | Protected-host configuration is org administration, not product state. |
 | `P0-CAND-01` | advisory | Freeze discipline is process; a `0.x` prerelease is not immutable-forever. |
@@ -147,8 +170,9 @@ shipped product with users.
   the attestation subject, and `publish-release-draft.sh`, and deleted the guard step that rejected
   an unsigned distribution outright. The signature field is now *absent* for an unsigned build
   rather than present-and-empty, and verification fails closed in both directions. The gate
-  **stays advisory and open**: shipping unsigned is a decision nobody has recorded, and a signed
-  distribution still needs a purchased certificate.
+  **remained advisory and open at that checkpoint**: no unsigned decision had been recorded, and a signed
+  distribution still needed a reviewed certificate. The authorization recorded above supersedes that decision gap;
+  it does not qualify an archive.
 - **`P0-PRIV-01`** — part of the evidence half advanced. The RoboAPI client's offline, timeout,
   cancellation, response-cap, request-cap, and log-redaction paths now have regressions behind
   them, driven against loopback sockets. HTTP 401/429/5xx, redirect refusal, and TLS failure remain
@@ -231,8 +255,8 @@ check is silently skipped.
 | Release-policy/BOM/SBOM/checksum machinery | PASS | Strict policy and metadata regressions cover AGPL-3.0-or-later, actual platform trust, signed update metadata/sidecar, checksums, BOM, SBOM, and immutable asset inventory. |
 | Repository and CI hygiene | PASS | actionlint `1.7.7`, PowerShell/bash parsing, 164 JSON/YAML files, 118 Markdown files, 1,943 built HTML links, action pins, conflict markers, LF policy, and the 381-file non-generated Dart line cap passed. PSScriptAnalyzer `1.25.0` is rerun after every release-script edit. |
 | Credential exposure containment | BLOCKED | The affected workspace DerivedData and launcher build logs were removed, and a scrubbed exact-toolchain sentinel build passed; 13 newly produced Xcode activity logs contained no credential-shaped variable names. Credential owners must still rotate the previously exposed values and confirm revocation. See `P0-CRED-01`. |
-| Strict distributable-release policy | NEEDS RERUN | RC1 policy is scoped to Windows x64 only, forbids signing exceptions, and requires an exact nonzero Windows certificate SHA-256 pin plus an authenticated detached CMS handoff. |
-| Windows x64 RC1 package and clean-host run | BLOCKED (unsigned archive built) | An unsigned 63.4 MB `TopiaForge-windows-x64.zip` was produced from `dev` on 2026-08-28 and passes `release test-package --platform windows --zip <archive> --require-windows-unsigned --run-embedded-cli`; doing it found and fixed two defects on the package-construction path, which CI never exercises. Still requires a reviewed code-signing certificate/PFX, RFC 3161 timestamp service, a frozen clean candidate, exact timestamped-signature verification, Unity/Robotopia evidence, and clean-machine QA; see `P0-WIN-01`. |
+| Strict distributable-release policy | HISTORICAL; NEEDS CANDIDATE RERUN | The dated signed-mode policy required an exact certificate pin and CMS handoff. RC1 now explicitly selects unsigned Windows x64; its three executables must be verified unsigned and the CMS asset/digest absent. Exact candidate qualification remains required. |
+| Windows x64 RC1 package and clean-host run | BLOCKED (unsigned archive built) | An unsigned 63.4 MB `TopiaForge-windows-x64.zip` was produced from `dev` on 2026-08-28 and passes `release test-package --platform windows --zip <archive> --require-windows-unsigned --run-embedded-cli`; doing it found and fixed two defects on the package-construction path, which CI never exercises. This historical archive is not the candidate. Current unsigned RC1 requires a frozen clean candidate, exact unsigned verification, complete isolated Unity/game acceptance and clean-machine QA; a certificate/PFX and timestamp service apply only if a future candidate selects signed mode. See `P0-WIN-01`. |
 | Linux x64 package and Proton run | OUT OF RC1 | The WSL2 builder is fully provisioned and every pinned Linux toolchain verifies, but no GPU-backed Vulkan implementation is reachable there: NVIDIA ships no Vulkan ICD for WSL2 and Ubuntu does not package Mesa's Dozen driver, leaving only software lavapipe. Robotopia's Direct3D 12 renderer reaches Proton through VKD3D, which requires Vulkan, so the working OpenGL-over-d3d12 path cannot serve it. RC1 is therefore Windows-only; see `P0-LINUX-01`. |
 | Authorized Robotopia acceptance on the pinned build | BLOCKED (current-tree evidence recorded) | The 2026-07-28 build-`2309` evidence stays void. All three re-scoped criteria were met on the current tree on 2026-08-28 — see `P0-GAME-01` for the captured log lines — but the gate binds its evidence to a frozen candidate SHA, and `P0-CAND-01` is open, so this remains **BLOCKED**. |
 | Native UX/accessibility acceptance | BLOCKED | Screen Recording permission prevented screenshot comparison; screen-reader and native-platform manual QA remain; see `P1-UX-01`. |
@@ -501,8 +525,11 @@ automated tests cannot close Unity object lifetime.
   evidence and mode disagreeing fails closed either way. The guard step is deleted, which was the last move of that
   work rather than the first.
 
-  Selecting `unsigned` now produces a publishable candidate. **The gate stays open**: nobody has recorded the
-  decision to ship unsigned, and the signed path below still needs a purchased, reviewed certificate.
+  Historical result: the distribution checks accept explicit unsigned policy.
+  The current release-preparation changes and their regressions do not establish
+  a qualified archive or completed live acceptance. The owner has now authorized unsigned RC1 and the policy
+  records that choice. **The gate stays open** until its exact archive and QA evidence are validated; the signed
+  path below applies only when that mode is explicitly selected or the optional mode field is absent.
 
   **First unsigned archive produced and validated, 2026-08-28.** `release build-package --platform windows`
   completed from the `dev` tree and emitted a 63.4 MB `TopiaForge-windows-x64.zip` containing the launcher, the
@@ -530,14 +557,18 @@ automated tests cannot close Unity object lifetime.
   therefore found by a human building a package, or not at all. Both of these sat on the unsigned path that #87
   had just made load-bearing.
 
-  **None of this closes the gate.** The archive was built from `dev` rather than a frozen candidate SHA, it is
-  unsigned by necessity rather than by a recorded decision, and no clean-host QA journey has been run against it.
-  What changed is that the Windows package path is now known to work end to end.
+  **None of this closes the gate.** The archive was built from `dev` rather than a frozen candidate SHA,
+  was unsigned without a recorded decision at that time, and had no clean-host QA journey.
+  That dated result does not prove today's construction path or qualify the redesigned runtime.
 
   One environment constraint worth recording, because the failure it produces names the wrong component: MSBuild's
   FileTracker refuses to create its `.tlog` files under the system temporary directory, so a build tree under
   `%TEMP%` fails with `No CMAKE_CXX_COMPILER could be found` while the toolchain is entirely healthy. Only
   `CMakeConfigureLog.yaml` names the real cause, `MSB8029` / `FTK1011`. Build from an ordinary path.
+
+  Exit criteria for the authorized unsigned RC1: build from the frozen SHA, verify all three Windows
+  executables unsigned, omit the CMS asset and its decision digest, and qualify the complete isolated acceptance
+  record against those exact payloads. Construction tests alone cannot close this gate.
 
   Exit criteria for signed distribution: build from the frozen SHA on the administrator Windows
   workstation. Require the CLI, GameCompat extractor, and launcher to have
@@ -778,16 +809,14 @@ automated tests cannot close Unity object lifetime.
 
 ## Ship decision
 
-**NO-SHIP**, unchanged by the 2026-08-28 session. All five blocking gates — `P0-IP-01`, `P0-OSS-01`, `P0-PRIV-01`,
-`P0-CRED-01`, `P0-GAME-01` — are open, so the computed readiness status is `blocked` on its own terms. Separately,
-`release validate-policy` still fails on the unset Windows signing identity and the deliberately `blocked` catalog
-status.
+**NO-SHIP** at the current redesign checkpoint. All five blocking gates — `P0-IP-01`, `P0-OSS-01`,
+`P0-PRIV-01`, `P0-CRED-01`, `P0-GAME-01` — remain open in the tracked register. The catalog is deliberately
+`blocked`. Unsigned RC1 authorization removes the signing-mode decision gap, not these evidence requirements.
 
-What that session did change is the shape of what is left. Two advisory gates are closed on a recorded owner
-decision, and of the five blocking gates, three now have nothing further an engineer can do: `P0-OSS-01` needs
-compliance review, `P0-CRED-01` needs credentials rotated, and `P0-IP-01` needs counsel. `P0-GAME-01` needs a frozen
-candidate rather than any new capability, and `P0-PRIV-01` needs backend authorisation plus the three HTTP-status
-rows a trusted local certificate fixture would unlock. **None of the remaining blocking work is a code defect.**
+The 2026-08-28 results above remain historical. The current work must complete the redesign and validate
+construction before freezing a candidate; counsel/compliance, backend/privacy and credential-rotation records
+must be supplied by their actual owners, and the full isolated game matrix must be exercised on the frozen bytes.
+No build or unit-test result can substitute for those records or native observations.
 
 The recommendation may change once every blocking gate is closed with evidence from the frozen candidate SHA, the
 final matrix is rerun against it, and no new critical/high finding or unexplained warning remains. Advisory gates

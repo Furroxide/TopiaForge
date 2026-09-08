@@ -1,0 +1,357 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.release-candidate-readiness-v1.schema.json",
+  "title": "TopiaForge detached exact-candidate qualification",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "repository",
+    "releaseVersion",
+    "targetSha",
+    "status",
+    "baseReadinessSha256",
+    "baseSchemaSha256",
+    "policySha256",
+    "catalogSha256",
+    "contractSha256",
+    "handoffSha256",
+    "acceptanceSha256",
+    "payloads",
+    "gates"
+  ],
+  "properties": {
+    "schema": {
+      "const": "release-candidate-readiness-v1"
+    },
+    "repository": {
+      "const": "Furroxide/TopiaForge"
+    },
+    "releaseVersion": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$"
+    },
+    "targetSha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "status": {
+      "const": "ready"
+    },
+    "baseReadinessSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "baseSchemaSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "policySha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "catalogSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "contractSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "handoffSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "acceptanceSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "payloads": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "size",
+          "sha256"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 180,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 536870912
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    "gates": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 12,
+      "items": {
+        "$ref": "#/definitions/gate"
+      }
+    },
+    "handoffSignatureSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  },
+  "definitions": {
+    "reviewerRole": {
+      "enum": [
+        "accessibility-reviewer",
+        "backend-owner",
+        "credential-owner",
+        "external-author-reviewer",
+        "external-player-reviewer",
+        "github-administrator",
+        "incident-owner",
+        "ip-trademark-counsel",
+        "linux-release-qa",
+        "native-qa",
+        "privacy-legal",
+        "product-owner",
+        "project-owner",
+        "registry-owner",
+        "release-manager",
+        "release-owner",
+        "robotopia-owner",
+        "runtime-mod-qa",
+        "security-intake-owner",
+        "security-owner",
+        "support-owner",
+        "windows-release-qa"
+      ]
+    },
+    "evidenceId": {
+      "type": "string",
+      "pattern": "^EVID-(P0|P1)-[A-Z0-9]+(?:-[A-Z0-9]+)*-[0-9]{4}$"
+    },
+    "acceptedRisk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "decisionEvidenceId"
+      ],
+      "properties": {
+        "scope": {
+          "enum": [
+            "rc1-independent-player-author-e2e",
+            "rc1-native-ux-accessibility",
+            "rc1-support-incident-ownership"
+          ]
+        },
+        "decisionEvidenceId": {
+          "$ref": "#/definitions/evidenceId"
+        }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "priority",
+        "enforcement",
+        "status",
+        "reviewerRoles",
+        "evidenceIds"
+      ],
+      "properties": {
+        "id": {
+          "enum": [
+            "P0-CAND-01",
+            "P0-CRED-01",
+            "P0-GAME-01",
+            "P0-HOST-01",
+            "P0-IP-01",
+            "P0-OSS-01",
+            "P0-PRIV-01",
+            "P0-TRUST-01",
+            "P0-WIN-01",
+            "P1-E2E-01",
+            "P1-SUPPORT-01",
+            "P1-UX-01"
+          ]
+        },
+        "priority": {
+          "enum": [
+            "P0",
+            "P1"
+          ]
+        },
+        "enforcement": {
+          "enum": [
+            "advisory",
+            "blocking"
+          ]
+        },
+        "status": {
+          "enum": [
+            "accepted-risk",
+            "approved",
+            "blocked"
+          ]
+        },
+        "reasonCode": {
+          "enum": [
+            "acceptance-evidence-missing",
+            "approval-evidence-missing",
+            "candidate-evidence-missing",
+            "host-evidence-missing",
+            "independent-evidence-missing",
+            "ownership-evidence-missing",
+            "platform-evidence-missing",
+            "rotation-evidence-missing"
+          ]
+        },
+        "reviewerRoles": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/definitions/reviewerRole"
+          }
+        },
+        "evidenceIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/definitions/evidenceId"
+          }
+        },
+        "acceptedRisk": {
+          "$ref": "#/definitions/acceptedRisk"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "priority": {
+                "const": "P0"
+              }
+            },
+            "required": [
+              "priority"
+            ]
+          },
+          "then": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "approved",
+                  "blocked"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "blocked"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "required": [
+              "reasonCode"
+            ],
+            "properties": {
+              "evidenceIds": {
+                "maxItems": 0
+              }
+            },
+            "not": {
+              "required": [
+                "acceptedRisk"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "approved"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "evidenceIds": {
+                "minItems": 1
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "acceptedRisk"
+                  ]
+                },
+                {
+                  "required": [
+                    "reasonCode"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "accepted-risk"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "required": [
+              "acceptedRisk"
+            ],
+            "properties": {
+              "priority": {
+                "const": "P1"
+              },
+              "evidenceIds": {
+                "minItems": 1
+              }
+            },
+            "not": {
+              "required": [
+                "reasonCode"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

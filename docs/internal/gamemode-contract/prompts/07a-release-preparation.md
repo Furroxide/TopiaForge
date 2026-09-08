@@ -15,7 +15,7 @@ The 2026-09-06 remote check found default branch `main` at `f7d154a5bc5880b75f9f
 - Obtain all six required hosted checks on that release head with their existing workflow/run/job provenance. `Required / Release packages` must come from a release-branch **push**, not a manually dispatched substitute.
 - Freeze and test the final `main` merge SHA. `release-admin` requires a clean local `main` exactly matching `origin/main`; build/stage and protected verification recheck it. A release-head SHA is not the acceptance SHA even when trees match. Moving `main` invalidates the candidate; preserve this rule in the detached qualification repair.
 - Dispatch `release.yml` only from the exact signed annotated version tag, using the journaled request ID. Preserve tag-only protected approval, governance checks and revalidation after approval and immediately before publication. Never run a stale/default-branch publisher or bypass promotion protections to finish acceptance.
-- Pages accepts successful `main` push CI, explicit `main`, or a published immutable **stable** release tag. An RC prerelease tag does not satisfy its stable-tag gate. Verify the promoted workflow source before publication and keep this trust boundary intact.
+- Pages accepts successful `main` push CI, explicit `main`, or a published immutable **stable** release tag. An RC prerelease tag does not satisfy its stable-tag gate. Verify the promoted workflow source before publication and keep this trust boundary intact. For CI refreshes, check out protected `refs/heads/main` from the current repository and verify its commit equals the completed CI head before executing repository code. Refuse a delayed completion after main has advanced; never select a checkout directly from event payload data. Manual and stable-release dispatches retain their exact admitted `github.sha`.
 
 ## Actions security findings by ref
 
@@ -41,11 +41,11 @@ Managed-reference caches in Pages and release-package-build are already restore-
 
 ## Settled distribution and bounded repairs
 
-The user selected an unsigned Windows x64 0.x prerelease, version 0.1.0-rc.1. Linux/Proton/macOS are outside RC1. Preserve signed defaults and the restriction permitting unsigned only for 0.x prereleases.
+The user explicitly authorized unsigned Windows `0.1.0-rc.1` on 8 September. This supersedes the earlier automatic approval-review rejection; implement and verify the reviewed change below. Linux/Proton/macOS remain outside RC1. Preserve signed defaults and the restriction permitting unsigned only for 0.x prereleases. That authorization supplies neither reviewer evidence nor game acceptance.
 
 1. Set signingIdentities.windowsDistribution to unsigned in reviewed release policy, without a Windows certificate pin.
-2. tools/release/build-windows.ps1:341-349 currently unconditionally requires certificate/password/timestamp credentials after branching on mode. Require these only for signed mode.
-3. apps/topiaforge_cli/lib/src/release_package_builder.dart:131-141 always invokes WindowsPackageSigner.signIfConfigured. Explicit unsigned policy must skip Authenticode even when ambient signing environment variables exist. A contradictory --require-windows-signing must fail before writes.
+2. Keep certificate/password/timestamp credential checks in `tools/release/build-windows.ps1` exclusive to signed mode. Validate raw signing fields, version eligibility and canonical input before output writes.
+3. Keep explicit unsigned policy from invoking `WindowsPackageSigner` in `release_package_builder.dart`, including when ambient signing variables exist. Reject contradictory `--require-windows-signing` before writes, and retain the admitted policy across asynchronous build work.
 4. Retain package validation proving all three executables are unsigned: launcher, CLI, and GameCompat extractor.
 5. Preserve the existing unsigned P7S file and field omission in admin staging, publisher allowlists and hosted attestations; do not rebuild it. Add regression coverage where missing. Empty/null placeholders remain invalid. Signed mode keeps its strict certificate and timestamp checks.
 6. Keep Ed25519 update-metadata signatures, checksums, BOM/SBOM, exact artifact verification, provenance, protected environment approval, and immutable publication. Unsigned executables do not mean unsigned update metadata.
@@ -94,7 +94,7 @@ The user stated that approval/rotation records and isolated QA resources are ava
 - Four non-game blocking approval/rotation records with real evidence and authorized reviewer attribution.
 - An isolated Windows user/session or VM with authorized installed-game access and genuine input/visual observation. An alternate launcher profile or BepInEx directory alone does not isolate Unity persistentDataPath/native saves/authentication. No supported native-save override has been established.
 - The pinned Unity authoring editor 6000.0.23f1 and activated license on the release builder; the configured C:\Program Files\Unity\Hub\Editor\6000.0.23f1\Editor\Unity.exe is absent locally. Game runtime Unity 6000.0.31f1 is a separate identity, not this editor requirement.
-- Pinned build toolchain including Node 24.18.0 (the currently located bundled Node is 24.19.0), Flutter 3.44.6, Dart 3.12.2, .NET SDK 10.0.301/runtime 10.0.9, MSVC and Windows SDK pins.
+- Pinned build toolchain including Node 24.18.0, Flutter 3.44.6, Dart 3.12.2, .NET SDK 10.0.301/runtime 10.0.9, MSVC and Windows SDK pins. Node 24.18.0 was provisioned locally on 8 September with its official archive checksum verified; see Status.md for the isolated path and digest. Revalidate every actual release-builder tool instead of relying on PATH or this development-host result.
 
 The acceptance runner still installs packages and writes configuration in skip-runtime-install paths. Slice 7 removed the blanket stop helper from the reviewed launcher/acceptance paths, but the acceptance runner receives CLI exit codes rather than retained game-process creation receipts. Establish isolation attestation and receipt ownership before live work. Verify actual BepInExRoot/ManagerRoot/persistentDataPath and abort if the ordinary user data root is selected. Keep raw logs private; only bounded redacted evidence leaves the QA host.
 
@@ -103,8 +103,9 @@ Existing historical ZIPs and current-tree logs are not evidence for a new frozen
 
 ## Source refresh from the slice-7 handoff
 
-Read-only review on 8 September, before slice 7 commits, confirmed these seams.
-Recheck them at its merged revision before editing:
+Historical read-only review on 8 September, before slice 7a implementation,
+identified these seams. The active handoff and Status.md below supersede this
+starting-state inventory; do not repeat fixes already implemented:
 
 - `release_readiness.dart` has 469 lines. Split by responsibility before adding a
   separate four-gate private-build assessment; preserve the final twelve-gate
@@ -127,3 +128,37 @@ Recheck them at its merged revision before editing:
   dependency versions remain unchanged at this checkpoint.
 - Keep ten in-game cycles and sixteen Unity authoring cycles as distinct evidence
   requirements. Neither set replaces the other.
+
+
+## Active implementation handoff
+
+Slice 7 merged as `da47dc7f89462c4473bac54db7e1c98acecda52d`; the only active
+replacement branch is `feat/release-candidate-qualification`, created afterward.
+The current worktree contains the qualification implementation and regressions;
+read `Status.md` before resuming. Do not recreate the earlier branch or reset
+these owned edits.
+
+The normative detached record shape and canonical digest recipe are now in
+section 8 of `GamemodeContractRedesign.md`, with executable schemas and a tracked
+36-case redesign inventory. Preserve the fixes for Git replacement refs, duplicate
+JSON properties, fixed metadata paths, exact catalog namespace, embedded/external
+package equality, signed P7S identity, stdout-only CLI summary capture, immutable
+accepted state, source drift and approval-boundary asset replacement.
+
+Explicit user authorization for unsigned Windows RC1 was received on 8 September.
+The original and expanded Dart/PowerShell regressions captured failures before
+production edits. Finish raw-presence validation, version parity, pre-write
+refusal and policy snapshot checks, then run the combined suites. Do not skip or
+suppress failing regressions. The prior draft checkpoint `4000af7` passed all 31
+hosted checks; that evidence does not certify the subsequent unsigned edits or
+permit merging unfinished slice 7a. Qualification and workflow changes have
+independent regressions. Keep Ed25519 metadata signing and signed-mode defaults
+intact.
+
+Before committing, finish the combined CLI suite, formatter/analyzer and line
+limits, administrator/publisher tests, workflow checks and repository/documentation
+audits. Obtain exact-head Linux documentation publication and CodeQL evidence;
+local Windows Dartdoc 9.0.4 still has the recorded SDK-comment RangeError. No live
+game or release publication is authorized by passing these source checks. Record
+actual approval/rotation record locations and isolated QA host identity before
+release preparation or acceptance execution.

@@ -40,7 +40,9 @@
     ],
     "canonicalEcosystemPayload": true
   },
-  "signingIdentities": {},
+  "signingIdentities": {
+    "windowsDistribution": "unsigned"
+  },
   "bepInEx": {
     "version": "5.4.23.5",
     "provenanceFile": "third_party/BepInEx/provenance.json",

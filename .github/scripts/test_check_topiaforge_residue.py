@@ -60,6 +60,18 @@ class GeneratedPayloadAuditTests(unittest.TestCase):
         AUDIT_MODULE.check_path(policy_path, policy_path, failures)
         return failures
 
+    def test_candidate_qa_key_exception_remains_literal_only(self) -> None:
+        game = "robo" + "topia"
+        for path in (
+            "apps/topiaforge_cli/lib/src/release_candidate_acceptance.dart",
+            "apps/topiaforge_cli/test/release_candidate_acceptance_fixture.dart",
+            "apps/topiaforge_cli/test/release_candidate_acceptance_test.dart",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual([], self.scan_text(path, "qa['" + game + "']"))
+                self.assertTrue(self.scan_text(path, game + " interface"))
+                self.assertTrue(self.scan_text(path, "qa['" + game + "'] com." + game))
+
     def test_clean_nested_package_passes(self) -> None:
         package = zip_bytes(
             {

@@ -51,15 +51,13 @@ void _exactTargetCommitTests() {
           targetSha: commit,
           allowUnresolved: true,
         );
-        expect(metadataReadiness.status, 'blocked');
-        expect(metadataReadiness.blobSha256, decision.readinessBlobSha256);
-        expect(metadataReadiness.summary, decision.toPublicSummary());
-        // Five blocking gates, not twelve: the advisory seven stay in the
-        // summary but no longer make the candidate non-distributable.
-        expect(metadataReadiness.blockingReasons, hasLength(5));
+        expect(metadataReadiness.status, 'unavailable');
+        expect(metadataReadiness.blobSha256, isNull);
+        expect(metadataReadiness.summary, isNull);
+        expect(metadataReadiness.blockingReasons, hasLength(1));
         expect(
-          metadataReadiness.blockingReasons,
-          isNot(contains(contains('P0-WIN-01'))),
+          metadataReadiness.blockingReasons.single,
+          contains('Detached candidate qualification'),
         );
         final bomSchema = _readinessBomSchema(repositoryRoot);
         final bomSchemaResult = bomSchema.validate(
@@ -84,7 +82,7 @@ void _exactTargetCommitTests() {
             isA<StateError>().having(
               (error) => error.message,
               'message',
-              contains('Release readiness validation failed'),
+              contains('qualification requires --assets'),
             ),
           ),
         );
@@ -106,10 +104,10 @@ void _exactTargetCommitTests() {
         ], workingDirectory: temp.path);
         expect(
           cli.exitCode,
-          1,
+          2,
           reason: 'stdout: ${cli.stdout}\nstderr: ${cli.stderr}',
         );
-        expect(cli.stderr, contains('P0-IP-01 is blocked'));
+        expect(cli.stderr, contains('--assets'));
 
         _git(temp.path, [
           'rm',

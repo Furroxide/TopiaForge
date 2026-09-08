@@ -334,6 +334,9 @@ jobs:
         shell: pwsh
         run: ./.github/actions/setup-flutter/test-setup-flutter.ps1
 
+      - name: Test executable workflow source trust
+        run: python3 .github/scripts/test_workflow_source_trust.py
+
       - name: Test repository governance audit
         run: python3 .github/scripts/test_audit_repository_governance.py
 
@@ -344,6 +347,7 @@ jobs:
           bash tools/test-verify-release-governance.sh
           pwsh -NoProfile -File tools/release/test-verify-robotopia-install.ps1
           pwsh -NoProfile -File tools/release/test-handoff-signature.ps1
+          pwsh -NoProfile -File tools/release/test-windows-signing-policy.ps1
 
       - name: Test release tag and draft publication safety
         run: |

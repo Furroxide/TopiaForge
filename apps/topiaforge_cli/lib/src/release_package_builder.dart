@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:launcher_data/launcher_data.dart';
+import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 
 import 'release_package_io.dart';
@@ -44,6 +45,7 @@ class ReleasePackageBuilder {
   final ReleaseFileOps fileOps;
 
   Future<String> build() async {
+    final windowsPolicy = _admitWindowsPolicy();
     final output = Directory(outputRoot)..createSync(recursive: true);
     final assetName = platform.archiveName;
     final stageRoot = Directory(
@@ -69,12 +71,39 @@ class ReleasePackageBuilder {
     if (platform == ReleasePackagePlatform.macos) {
       await _finishMacPackage(stageRoot);
     } else {
-      await _finishFlatPackage(stageRoot);
+      await _finishFlatPackage(stageRoot, windowsPolicy);
     }
 
     await fileOps.writePlatformZip(stageRoot, zipPath, platform);
     stdout.writeln('Created ${zipPath.path}');
     return zipPath.path;
+  }
+
+  TopiaForgeReleasePolicy? _admitWindowsPolicy() {
+    if (platform != ReleasePackagePlatform.windows) return null;
+    final file = File(p.join(repositoryRoot, 'release', 'release-policy.json'));
+    if (!file.existsSync() && !requireWindowsSigning) return null;
+    final policy = TopiaForgeReleasePolicy.load(repositoryRoot);
+    if (policy.windowsDistribution != 'signed' &&
+        policy.windowsDistribution != 'unsigned') {
+      throw StateError('Unknown Windows distribution mode.');
+    }
+    if (!policy.distributesWindowsUnsigned) return policy;
+    if (requireWindowsSigning) {
+      throw StateError(
+        'An unsigned Windows policy conflicts with --require-windows-signing.',
+      );
+    }
+    final version = SemanticVersion.tryParse(policy.productVersion);
+    if (policy.windowsCertificateSha256.isNotEmpty ||
+        version == null ||
+        version.majorDigits != '0' ||
+        !version.isPrerelease) {
+      throw StateError(
+        'An unsigned Windows policy requires a 0.x prerelease and no certificate pin.',
+      );
+    }
+    return policy;
   }
 
   Future<void> _rebuildRuntimePayload() async {
@@ -122,17 +151,19 @@ class ReleasePackageBuilder {
     ], workingDirectory: cliApp);
   }
 
-  Future<void> _finishFlatPackage(Directory stageRoot) async {
+  Future<void> _finishFlatPackage(
+    Directory stageRoot,
+    TopiaForgeReleasePolicy? windowsPolicy,
+  ) async {
     await _buildCli(stageRoot.path);
     await _payloadWriter.copyCommonPayload(stageRoot.path);
     if (rebuildRuntimePayload) {
       await _payloadWriter.copyLoaderRuntime(stageRoot.path);
     }
-    if (platform == ReleasePackagePlatform.windows) {
+    if (platform == ReleasePackagePlatform.windows &&
+        windowsPolicy?.distributesWindowsUnsigned != true) {
       final expectedSigner = requireWindowsSigning
-          ? TopiaForgeReleasePolicy.load(
-              repositoryRoot,
-            ).windowsCertificateSha256
+          ? windowsPolicy!.windowsCertificateSha256
           : '';
       await WindowsPackageSigner(
         processRunner: processRunner,
