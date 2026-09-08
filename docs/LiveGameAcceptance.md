@@ -60,18 +60,24 @@ exact structured line to `dev.topiaforge.sdk-acceptance`; substring matches and 
 mods do not count. The generated-journey load marker must likewise be an exact attributed message
 from the generated package ID.
 
-`acceptance-result.json` schema 2 records that challenge, the exact manager
+`acceptance-result.json` schema 3 records that challenge, the exact manager
 `lastRunSessionId`, and the acceptance and generated-journey package receipts. A pass requires each
 `last-run.json` `sourceSha256` and ordered critical-file digest inventory to match the bytes of the
 package the harness actually installed. Stale sessions, replayed challenges, spoofed logger
-sources, and different package bytes fail closed.
+sources, and different package bytes fail closed. The required private `isolation`
+object records the provisioned isolation kind, the actual provisioning-record and
+acknowledgement byte hashes, the full correlated runtime acknowledgement, and
+`processExitConfirmed: true`. The recorded game directory is the admitted QA
+installation. These records contain private paths and OS identities; keep them on
+the QA host. Public qualification carries reviewed evidence hashes and results,
+never the full acknowledgement, SID, user paths or raw logs.
 
 Run the complete launch-blocking matrix on an authorized Robotopia build-2409 host (all cases are
 required by default):
 
 ```powershell
 cd apps/topiaforge_cli
-dart run bin/topiaforge.dart acceptance run --game-dir C:\Games\Robotopia
+dart run bin/topiaforge.dart acceptance run --game-dir C:\Games\Robotopia --isolation-record C:\QA\isolation.json --output C:\QA\evidence
 ```
 
 While it runs, a tester supplies keyboard, mouse, gamepad, modal, held-item, world-session, and
@@ -79,13 +85,39 @@ robot/dialogue/voice interactions. `--all` is retained as an explicit completene
 is equivalent to the default:
 
 ```powershell
-dart run bin/topiaforge.dart acceptance run --game-dir C:\Games\Robotopia --all --timeout-seconds 1800
+dart run bin/topiaforge.dart acceptance run --game-dir C:\Games\Robotopia --isolation-record C:\QA\isolation.json --output C:\QA\evidence --all --timeout-seconds 1800
 ```
 
-The harness installs the current runtime and first-party mods, packs and validates the safe
-acceptance mod, seeds a schema-1 config fixture, launches Robotopia, validates `last-run.json`, and
-writes `acceptance-result.json`. A pass requires the exact package to be valid and loaded, an empty
-root startup error, and every requested marker.
+Before any acceptance staging, installation, config or launch writes, the harness
+requires an existing provisioned QA layout. `--game-dir` identifies the verified
+source installation; the record supplies a separate pre-provisioned `gameRoot`,
+launcher data root, evidence root and actual Unity persistent-data root. The
+command's output path must match the record. The operator must already be in the
+approved separate Windows user/session or VM; the tool does not create accounts,
+load another user's profile or copy authentication/save data.
+
+The private record uses `schemaVersion: 1` with `kind` (`windows-user` or
+`virtual-machine`), `sourceGameRoot`, `gameRoot`, `launcherRoot`, `outputRoot`,
+`persistentDataRoot`, `userSid`, `userProfile`, `localAppDataLow`, `normalUserSid`,
+`normalUserProfile` and nonempty `reviewerEvidence`. Paths are absolute local paths
+without linked ancestors. Supply measured values and actual reviewer evidence;
+a sample placeholder is not proof of isolation. `USERPROFILE` or `APPDATA`
+environment overrides do not establish the primary OS identity or Unity save root.
+
+The harness installs into the admitted layout, packs and validates the acceptance
+mod, seeds its config, and launches through the production resolver. A private
+request sidecar binds the exact V4 profile bytes, challenge, provisioning-record
+hash, expected primary-token identity and runtime roots. The suspended native
+child is inspected before resume. Before manager persistence or package loading,
+the plugin measures its own OS identity and Unity persistent-data path, validates
+the sidecar and publishes a write-once correlated acknowledgement. Isolation
+admission does not establish Running; the normal session outcome is still required.
+
+A pass requires the exact packages to be valid and loaded, an empty root startup
+error, every requested marker and confirmed exit of the original owned process.
+Skip flags never bypass isolation or supply live success evidence. Missing,
+stale or mismatched acknowledgements remain failure/unconfirmed; preserve the
+layout when owned-process termination cannot be confirmed.
 
 ## Creator workbench manual matrix
 
@@ -150,10 +182,9 @@ The world case emits PASS only after committed Running and Idle have both been o
 controller plus its tracked session-scope cleanup marker have been released. A process starting or
 a factory returning does not satisfy this case. The automated acceptance driver
 already selects `dev.topiaforge.sdk-acceptance.menu` through the production CLI
-launch command, including the generated development journey. Completing its owned
-process receipt and request-correlated runtime-outcome integration, and recording
-actual isolated live evidence, remain acceptance work; target selection alone is
-not a verified game run.
+launch command, including the generated development journey. Its owned process receipt, isolation acknowledgement and request-correlated
+runtime outcome must all agree. Actual isolated game evidence remains pending
+until this complete path and the manual matrix are exercised on the candidate.
 
 The `lifecycle.ten-cycles` marker is emitted only after ten live acquire/release/reacquire cycles of
 the automatable resource families named in `tests/live-game-acceptance.json`. The probe covers

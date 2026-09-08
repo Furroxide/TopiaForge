@@ -22,6 +22,7 @@ final class LiveAcceptanceOptions {
     required this.outputDirectory,
     required this.timeout,
     this.packagePath = '',
+    this.isolationRecordPath = '',
     this.requiredCases = const [],
     this.requireAll = false,
     this.skipRuntimeInstall = false,
@@ -35,6 +36,7 @@ final class LiveAcceptanceOptions {
   final String repositoryRoot;
   final String gameDirectory;
   final String packagePath;
+  final String isolationRecordPath;
   final String outputDirectory;
   final List<String> requiredCases;
   final Duration timeout;

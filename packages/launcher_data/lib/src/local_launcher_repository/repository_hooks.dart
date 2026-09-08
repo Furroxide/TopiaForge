@@ -33,6 +33,8 @@ class GameProcessRequest {
     required List<String> arguments,
     required this.workingDirectory,
     required Map<String, String> environment,
+    this.inheritParentEnvironment = true,
+    this.requiredWindowsIdentity,
   }) : arguments = List.unmodifiable(arguments),
        environment = Map.unmodifiable(environment);
 
@@ -40,4 +42,6 @@ class GameProcessRequest {
   final List<String> arguments;
   final String workingDirectory;
   final Map<String, String> environment;
+  final bool inheritParentEnvironment;
+  final WindowsAcceptanceIdentity? requiredWindowsIdentity;
 }
