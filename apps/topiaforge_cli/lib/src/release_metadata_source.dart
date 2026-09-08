@@ -9,6 +9,8 @@ import 'release_metadata_source_content.dart';
 import 'release_policy.dart';
 
 /// Publication reads source files only from an unchanged candidate checkout.
+/// Asset and metadata paths resolve from the caller's working directory, just
+/// like the builder's Directory consumers; only Git paths are relative to root.
 Future<void> verifyMetadataPublicationSource(
   String root,
   String targetSha,

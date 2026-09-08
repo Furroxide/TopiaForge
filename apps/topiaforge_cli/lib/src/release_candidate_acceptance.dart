@@ -124,7 +124,7 @@ void _payloads(Object? value) {
     _keys(payload, const {'name', 'size', 'sha256'}, 'payload');
     final name = _text(
       payload['name'],
-      RegExp(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,179}$'),
+      RegExp(r'^[A-Za-z0-9][A-Za-z0-9._+-]{0,179}$'),
       'payload name',
     );
     if (previous != null && name.compareTo(previous) <= 0 ||

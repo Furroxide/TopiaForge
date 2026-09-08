@@ -100,7 +100,7 @@ List<String> candidateNames(Object? raw, String label) {
       raw.any(
         (value) =>
             value is! String ||
-            !RegExp(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,179}$').hasMatch(value),
+            !RegExp(r'^[A-Za-z0-9][A-Za-z0-9._+-]{0,179}$').hasMatch(value),
       )) {
     throw StateError('$label must be a bounded array of safe asset names.');
   }

@@ -1432,3 +1432,47 @@ was rerun normally and passed. No branch rule was bypassed. The canonical
 brief's remaining pending-permission sentence is corrected in this documentation
 follow-up. Exact follow-up CI and the normal prerequisite merge still precede
 slice 8 implementation.
+
+
+## Release-preparation review follow-up, 8 September
+
+The documentation follow-up `6df74c465ab950d0ca945c24cc74912e467a3763` passed
+full CI [34183972734](https://github.com/Furroxide/TopiaForge/actions/runs/34183972734)
+and CodeQL [34183970216](https://github.com/Furroxide/TopiaForge/actions/runs/34183970216).
+All four scans reported zero new results; the temporarily missing C# configuration
+cleared when its analysis completed. The ordinary merge API then identified four
+unresolved Copilot conversations. The earlier review snapshots at 03:22:07/09 UTC
+preceded their 03:22:29/30 arrival by twenty seconds; the previous empty inventory
+was a stale snapshot, not proof that the PR had no later feedback. No merge or
+protection bypass occurred.
+
+Three comments identified inconsistent payload-name grammar: the catalog/BOM
+filename contracts permit `+`, while both detached schemas and both candidate
+readers rejected it. The regression run recorded 55 passes and six failures before
+the repair; all 61 focused cases pass after adding only literal `+` to the existing
+ASCII classes. Length, collection, path and case-insensitive collision restrictions
+remain intact. Top-level release-version/tag and catalog-version rules are unchanged;
+this evidence establishes filename parity, not a new promise that every component
+version with build metadata qualifies. Logs are `tf-pr114-payload-names-red.log` and
+`tf-pr114-payload-names-green.log` in the local temporary directory.
+
+The fourth comment proposed resolving output paths against the repository root.
+The actual CLI and builder consistently consume these paths relative to the caller's
+working directory; changing only the source guard would break that agreement. Three
+new subprocess regressions confirm nested-CWD acceptance and reject same-name asset
+or metadata files under the wrong root. All eleven source tests pass, with no
+functional path change (`tf-pr114-metadata-cwd-regression.log`). The API comment now
+states the existing semantics. These are passing regression protections, not claimed
+pre-fix failures. Combined verification and a fresh feedback inventory precede push
+and normal integration. Slice 8 and live acceptance remain pending.
+
+
+Combined local verification for this review follow-up passed: **441 CLI tests
+with four platform-specific skips**, full fatal-info analysis, formatting of all
+168 CLI Dart files, and all **513 non-generated Dart files** within 500 lines.
+After restoring normal NuGet assets following the relocatable-SDK fixture, the
+release-surface script verified eleven SDK packages and all seven C# harnesses.
+Logs are `tf-pr114-review-cli-full.log` and `tf-pr114-review-seven-harness.log`
+in the local temporary directory. All 50 website tests, 524 JSON/YAML files,
+126 Markdown files, the documentation catalog and required repository audits
+passed. Fresh hosted CI and current review-thread resolution still precede merge.
