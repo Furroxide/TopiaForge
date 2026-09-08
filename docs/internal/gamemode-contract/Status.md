@@ -2336,3 +2336,19 @@ PR #123 merged normally at `3a953f338e9ed1ec9bd84b2978abf9898f542f5a`,
 with a valid signature/sign-off and the reviewed source tree preserved. Its CI
 and review completed before this separate operator-documentation correction.
 That merge does not qualify a private candidate or supply game evidence.
+CI for the operator guides at `4edfdcd` exposed an obsolete assertion in
+`V1LaunchCoverageTests.ValidateLaunchGateDisclosures`: it still required the
+current guide to bind a WSL2/Proton journey to the handoff. The C# build and
+SDK audits passed before this documentation-sensitive harness failure. The
+retired runner is not restored to satisfy the assertion. The accompanying
+contract test is updated to preserve exact-candidate/handoff requirements while
+checking current Windows isolation and explicit Proton retirement disclosures.
+This adds test maintenance to the guide correction; production behavior and
+release gate decisions remain unchanged. The failed hosted log is retained and
+a rebuilt harness run plus fresh hosted verification are required afterward.
+After the test-contract correction, a fresh Release solution build passes with
+zero warnings/errors. All eleven SDK audits and seven rebuilt no-argument C#
+harnesses pass, including V1 launch coverage and 363 conformance fixtures.
+The test also requires schema-3 acknowledgement hashes and confirmed owned
+process exit. Scoped formatting and whitespace checks pass. This is automated
+disclosure-contract coverage; it supplies no live native or candidate evidence.

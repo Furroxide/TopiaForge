@@ -849,10 +849,24 @@ namespace TopiaForge.ModManager.Tests
                 && live.Contains("cannot mark a live", StringComparison.Ordinal)
                 && live.Contains("exact frozen candidate package hashes", StringComparison.Ordinal),
                 "live acceptance docs must distinguish real game evidence from offline/static checks");
+            Assert(live.Contains("separate Windows user/session or VM", StringComparison.Ordinal)
+                && live.Contains("isolates Unity persistent data", StringComparison.Ordinal)
+                && live.Contains("BepInEx profile alone is insufficient", StringComparison.Ordinal)
+                && live.Contains("original process-creation identity", StringComparison.Ordinal),
+                "live acceptance docs must require native Windows isolation and owned-process identity");
             Assert(live.Contains("release-handoff-v1", StringComparison.Ordinal)
-                && live.Contains("WSL2", StringComparison.Ordinal)
-                && live.Contains("same-host and non-independent", StringComparison.Ordinal),
-                "live acceptance docs must bind current-host Proton evidence to the release handoff");
+                && live.Contains("`acceptance-result.json` schema 3", StringComparison.Ordinal)
+                && live.Contains("acknowledgement byte hashes", StringComparison.Ordinal)
+                && live.Contains("full correlated runtime acknowledgement", StringComparison.Ordinal)
+                && live.Contains("`processExitConfirmed: true`", StringComparison.Ordinal),
+                "live acceptance docs must bind correlated isolation evidence and confirmed exit to the release handoff");
+            Assert(live.Contains("Linux/Proton", StringComparison.Ordinal)
+                && live.Contains("unavailable until native isolation", StringComparison.Ordinal)
+                && live.Contains("schema2 evidence path are retired", StringComparison.Ordinal)
+                && live.Contains("cannot restore them", StringComparison.Ordinal)
+                && live.Contains("future same-host evidence", StringComparison.Ordinal)
+                && live.Contains("non-independent", StringComparison.Ordinal),
+                "live acceptance docs must disclose retired Proton evidence and conditions on future same-host acceptance");
         }
 
         private static bool IsBuildOutput(string path)
