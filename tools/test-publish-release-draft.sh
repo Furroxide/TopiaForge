@@ -378,6 +378,27 @@ write_publish_uploader_fixture \
   "$FAKE_GH_STATE/assets.publish-good.json"
 cp "$FAKE_GH_STATE/assets.publish-good.json" "$FAKE_GH_STATE/assets.json"
 
+# GitHub canonicalizes login casing independently of its stable actor IDs.
+# Exercise both the read-only fetcher and final publication transition.
+jq '.author.login="Furroxide"' "$FAKE_GH_STATE/release.json" >"$FAKE_GH_STATE/release.tmp"
+mv "$FAKE_GH_STATE/release.tmp" "$FAKE_GH_STATE/release.json"
+jq 'map(if .uploader.id == 221987073 then .uploader.login="FURROXIDE"
+  else .uploader.login="GitHub-Actions[bot]" end)' \
+  "$FAKE_GH_STATE/assets.publish-good.json" >"$FAKE_GH_STATE/assets.json"
+mkdir "$temp_root/canonical-login-fetch"
+identity_failures=0
+if ! run_fetcher "$temp_root/canonical-login-fetch" >/dev/null; then
+  echo "Fetcher rejected canonical GitHub login casing." >&2
+  identity_failures=$((identity_failures + 1))
+fi
+if ! run_publisher v0.1.0-rc.1 "$target_sha" publish >/dev/null; then
+  echo "Publisher rejected canonical GitHub login casing." >&2
+  identity_failures=$((identity_failures + 1))
+fi
+[[ $identity_failures == 0 ]] || exit 1
+reset_matching_release
+cp "$FAKE_GH_STATE/assets.publish-good.json" "$FAKE_GH_STATE/assets.json"
+
 # Requalification must run again after reconciliation, before draft:false.
 qualification_calls_before=$(wc -l <"$FAKE_GH_STATE/qualification-calls" | tr -d ' ')
 export FAKE_QUALIFICATION_REJECT_AT=$((qualification_calls_before + 2))

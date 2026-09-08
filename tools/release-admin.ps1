@@ -2787,7 +2787,8 @@ function Invoke-Stage {
         Join-Path $repositoryRoot ".github/repository-governance.json"
     ) -Raw | ConvertFrom-Json
     if ([int]$governance.schema_version -ne 2 -or
-        [string]$governance.repository_full_name -cne $Repository) {
+        -not (Test-GitHubIdentityEquals -Actual $governance.repository_full_name `
+            -Expected $Repository)) {
         throw "Release asset authority governance is invalid."
     }
     $workflowPrincipal = $governance.release_workflow_principal
@@ -2842,8 +2843,8 @@ function Invoke-Stage {
         if ($isAllowedFinalizerMetadata) {
             if ($asset.PSObject.Properties.Name -notcontains "uploader" -or
                 $null -eq $asset.uploader -or
-                [string]$asset.uploader.login -cne
-                    [string]$workflowPrincipal.login -or
+                -not (Test-GitHubIdentityEquals -Actual $asset.uploader.login `
+                    -Expected $workflowPrincipal.login) -or
                 [string]$asset.uploader.id -cne
                     [string]$workflowPrincipal.actor_id -or
                 [string]$asset.uploader.type -cne
@@ -3057,6 +3058,19 @@ function Write-FinalizerState {
         }
 }
 
+function Test-GitHubIdentityEquals {
+    param(
+        [AllowNull()][AllowEmptyString()][string]$Actual,
+        [AllowNull()][AllowEmptyString()][string]$Expected
+    )
+
+    # GitHub owner/repository/login spelling is ASCII and case-insensitive.
+    # Never apply this comparison to refs, artifact names, paths, hashes or IDs.
+    return $Actual -cmatch "\A[\x21-\x7E]+\z" -and
+        $Expected -cmatch "\A[\x21-\x7E]+\z" -and
+        [string]::Equals($Actual, $Expected, [StringComparison]::OrdinalIgnoreCase)
+}
+
 function Assert-FinalizerRunIdentity {
     param(
         [Parameter(Mandatory = $true)][psobject]$Run,
@@ -3086,7 +3100,8 @@ function Assert-FinalizerRunIdentity {
         [string]$Run.event -cne "workflow_dispatch" -or
         [string]$Run.headBranch -cne $tag -or
         [string]$Run.headSha -cne $SourceSha -or
-        [string]$Run.repository -cne $Repository -or
+        -not (Test-GitHubIdentityEquals -Actual $Run.repository `
+            -Expected $Repository) -or
         [string]$Run.workflowPath -cne ".github/workflows/release.yml") {
         throw (
             "GitHub finalizer run $runId does not exactly match request " +
