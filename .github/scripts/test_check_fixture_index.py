@@ -20,13 +20,13 @@ def _case(**overrides) -> dict:
     case = {
         "id": "a-case",
         "channel": "serialization",
-        "kind": "launch-intent-hostile",
+        "kind": "transport-codec",
         "summary": "A case that exists only to exercise the index audit.",
-        "intent": {},
-        "operations": {"csharp": "read-intent", "dart": "write-intent"},
+        "transport": "plan",
+        "payload": {},
         "expect": {
-            "csharp": {"outcome": "reject", "errorCodes": ["worldLaunch.gamemodeId"]},
-            "dart": {"outcome": "reject", "errorCodes": ["writer-cannot-emit"]},
+            "csharp": {"outcome": "reject", "errorCodes": ["transport"]},
+            "dart": {"outcome": "reject", "errorCodes": ["transport"]},
         },
     }
     case.update(overrides)
@@ -39,7 +39,7 @@ class FixtureIndexAuditTests(unittest.TestCase):
         self.addCleanup(self._temp.cleanup)
         root = Path(self._temp.name)
         fixtures = root / "tests" / "fixtures" / "gamemode-v6"
-        (fixtures / "serialization" / "launch-intent").mkdir(parents=True)
+        (fixtures / "serialization" / "transport").mkdir(parents=True)
 
         self._restore = (
             AUDIT_MODULE.ROOT,
@@ -52,7 +52,7 @@ class FixtureIndexAuditTests(unittest.TestCase):
         self.addCleanup(self._restore_module)
 
         self.fixtures = fixtures
-        self.cases = fixtures / "serialization" / "launch-intent"
+        self.cases = fixtures / "serialization" / "transport"
 
     def _restore_module(self) -> None:
         AUDIT_MODULE.ROOT, AUDIT_MODULE.FIXTURE_ROOT, AUDIT_MODULE.INDEX = self._restore
@@ -79,8 +79,8 @@ class FixtureIndexAuditTests(unittest.TestCase):
                 {
                     "id": "a-case",
                     "channel": "serialization",
-                    "kind": "launch-intent-hostile",
-                    "path": "serialization/launch-intent/a-case.json",
+                    "kind": "transport-codec",
+                    "path": "serialization/transport/a-case.json",
                 }
             ],
         )
@@ -106,8 +106,12 @@ class FixtureIndexAuditTests(unittest.TestCase):
         self._write("a-case.json", _case(channel="resolution"))
         self._expect_failure("The directory decides the channel")
 
+    def test_retired_launch_intent_operation_is_rejected(self) -> None:
+        self._write("a-case.json", _case(kind="launch-intent-hostile"))
+        self._expect_failure("does not define")
+
     def test_an_unknown_kind_is_rejected_rather_than_indexed(self) -> None:
-        self._write("a-case.json", _case(kind="launch-intent-imaginary"))
+        self._write("a-case.json", _case(kind="transport-imaginary"))
         self._expect_failure("does not define")
 
     def test_every_obliged_runner_must_state_an_outcome(self) -> None:
@@ -151,7 +155,9 @@ class FixtureIndexAuditTests(unittest.TestCase):
         self._expect_failure("requires schemaOutcome")
 
     def test_manifest_cannot_have_different_codes(self) -> None:
-        self._write("a-case.json", _case(kind="manifest-rejects", schemaOutcome="reject"))
+        self._write("a-case.json", _case(kind="manifest-rejects", schemaOutcome="reject",
+            expect={"csharp": {"outcome": "reject", "errorCodes": ["one"]},
+                    "dart": {"outcome": "reject", "errorCodes": ["two"]}}))
         self._expect_failure("divergent same-operation")
 
     def test_manifest_acceptance_requires_normalization(self) -> None:

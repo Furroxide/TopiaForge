@@ -44,7 +44,7 @@ void _registerProfileLaunchTests({
 
         final result = await repository.launch(
           install,
-          const LauncherProfile(
+          LauncherProfile(
             id: 'old-version',
             name: 'Old Version',
             enabledMods: {'versioned.mod'},
@@ -98,7 +98,7 @@ void _registerProfileLaunchTests({
 
         final result = await repository.launch(
           install,
-          const LauncherProfile(
+          LauncherProfile(
             id: 'isolated',
             name: 'Isolated',
             enabledMods: {'alpha.mod'},
@@ -155,7 +155,7 @@ void _registerProfileLaunchTests({
 
         final result = await repository.launch(
           install,
-          const LauncherProfile(
+          LauncherProfile(
             id: 'disabled-pin',
             name: 'Disabled Pin',
             enabledMods: {'alpha.mod'},
@@ -198,7 +198,7 @@ void _registerProfileLaunchTests({
 
         final result = await repository.launch(
           install,
-          const LauncherProfile(
+          LauncherProfile(
             id: 'safe',
             name: 'Safe',
             enabledMods: {'missing.mod'},
@@ -256,7 +256,7 @@ void _registerProfileLaunchTests({
 
         final result = await repository.launch(
           install,
-          const LauncherProfile(
+          LauncherProfile(
             id: 'failure',
             name: 'Failure',
             enabledMods: {'alpha.mod'},
@@ -285,7 +285,7 @@ void _registerProfileLaunchTests({
 
       final result = await prepared.$1.launch(
         prepared.$2,
-        const LauncherProfile(
+        LauncherProfile(
           id: 'reserved-environment',
           name: 'Reserved environment',
           launchSettings: LaunchSettings(
@@ -332,10 +332,14 @@ void _registerProfileLaunchTests({
         LauncherProfile(
           id: 'retired-world',
           name: 'Retired world',
-          worldSelection: WorldSelection(
-            worldId: retired,
-            launchIntoGamemode: true,
-          ),
+          launchSelection: LaunchSelection.unresolvedLegacy({
+            'worldSelection': {
+              'worldId': retired,
+              'gamemodeId': 'io.github.furroxide.topiaforge.worlds.sandbox',
+              'loadMode': 'additiveArena',
+              'launchIntoGamemode': true,
+            },
+          }),
         ),
       );
 

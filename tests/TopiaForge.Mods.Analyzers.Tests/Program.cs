@@ -156,7 +156,7 @@ namespace TopiaForge.Mods.Analyzers.Tests
         {
             var module = SpecialistModules.Single(item => item.AssemblyName.EndsWith("RobotKit", StringComparison.Ordinal));
             const string spoofedManifest = "{"
-                + "\"schemaVersion\":5,"
+                + "\"schemaVersion\":6,"
                 + "\"name\":\"example.spoof\","
                 + "\"description\":\"unsafe-native io.github.furroxide.topiaforge.robotkit\","
                 + "\"capabilities\":[],"
@@ -231,7 +231,7 @@ namespace TopiaForge.Mods.Analyzers.Tests
             Assert(missing.Any(item => item.Id == "TF1006"),
                 "Interop.Unity should require the unsafe-native capability");
 
-            const string spoofed = "{\"schemaVersion\":5,\"name\":\"example.interop\","
+            const string spoofed = "{\"schemaVersion\":6,\"name\":\"example.interop\","
                 + "\"description\":\"unsafe-native\",\"capabilities\":[],\"dependencies\":{},"
                 + "\"x-capabilities\":[\"unsafe-native\"]}";
             var spoofedDiagnostics = Analyze(
@@ -473,7 +473,7 @@ namespace TopiaForge.Mods.Analyzers.Tests
             string dependencies = "",
             string optionalDependencies = "")
         {
-            return "{\"schemaVersion\":5,\"name\":\"example.mod\",\"capabilities\":["
+            return "{\"schemaVersion\":6,\"name\":\"example.mod\",\"capabilities\":["
                 + capabilities + "],\"dependencies\":{" + dependencies
                 + "},\"optionalDependencies\":{" + optionalDependencies + "}}";
         }

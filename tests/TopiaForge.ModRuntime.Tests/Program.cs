@@ -90,7 +90,7 @@ namespace TopiaForge.ModRuntime.Tests
             Environment.SetEnvironmentVariable("TOPIAFORGE_RUNTIME_TEST_TRACE", tracePath);
             var manifest = new ModManifest
             {
-                SchemaVersion = 5,
+                SchemaVersion = 6,
                 Id = "tests." + name,
                 Name = "Runtime " + name,
                 Version = "1.0.0",

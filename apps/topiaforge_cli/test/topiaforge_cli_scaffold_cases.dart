@@ -82,7 +82,7 @@ void _scaffoldCliTests(_CliTestHarness Function() currentHarness) {
           expect(result.stdout, isNot(contains('already uses')));
           expect(result.stderr, contains('gamemodes'));
         } else {
-          expect(result.stdout, contains('supported schema V6'));
+          expect(result.stdout, contains('valid schema V6; no files changed'));
         }
       },
     );

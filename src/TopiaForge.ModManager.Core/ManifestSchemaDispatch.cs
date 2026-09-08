@@ -8,7 +8,6 @@ namespace TopiaForge.ModManager.Core
     /// </summary>
     internal enum ManifestSchemaContract
     {
-        V5 = ModManifest.ManifestV5SchemaVersion,
         V6 = ModManifest.ManifestV6SchemaVersion
     }
 
@@ -16,17 +15,12 @@ namespace TopiaForge.ModManager.Core
     {
         public static ManifestSchemaContract Resolve(int schemaVersion)
         {
-            if (schemaVersion == 4)
+            if (schemaVersion == 4 || schemaVersion == ModManifest.ManifestV5SchemaVersion)
             {
                 throw new InvalidDataException(
-                    "Manifest schemaVersion 4 was retired before TopiaForge 1.0. " +
-                    "Run 'topiaforge migrate-manifest --project <path>' to create schemaVersion 5; " +
+                    "Manifest schemaVersion " + schemaVersion + " was retired before TopiaForge 1.0. " +
+                    "Run 'topiaforge migrate-manifest --project <path>' to create schemaVersion 6; " +
                     "omit multiplayer for a standalone-only mod.");
-            }
-
-            if (schemaVersion == ModManifest.ManifestV5SchemaVersion)
-            {
-                return ManifestSchemaContract.V5;
             }
 
             if (schemaVersion == ModManifest.ManifestV6SchemaVersion)
@@ -35,7 +29,7 @@ namespace TopiaForge.ModManager.Core
             }
 
             throw new InvalidDataException(
-                "Unsupported manifest schemaVersion " + schemaVersion + "; schemaVersion 5 or 6 is required.");
+                "Unsupported manifest schemaVersion " + schemaVersion + "; schemaVersion 6 is required.");
         }
     }
 }

@@ -102,7 +102,7 @@ extension _HelpCommand on _TopiaForgeCli {
       '  topiaforge mod set <field> <value>     Update a manifest field (validated on write).',
     );
     stdout.writeln(
-      '  topiaforge mod add|remove <kind> <v>   Add/remove capability, dependency, conflict, gamemode, ...',
+      '  topiaforge mod add|remove <kind> <v>   Add/remove capability, dependency, conflict, ...',
     );
     stdout.writeln(
       '  topiaforge mod add|remove <module>     Couple a V1 module PackageReference with its runtime dependency.',
@@ -114,7 +114,7 @@ extension _HelpCommand on _TopiaForgeCli {
       '  topiaforge mod bump [major|minor|patch]  Increment the manifest version.',
     );
     stdout.writeln(
-      '  topiaforge migrate-manifest            Convert a schema-V3 or retired V4 manifest to V5.',
+      '  topiaforge migrate-manifest            Migrate V3/V4/V5 to V6; --stub writes invalid author TODOs.',
     );
     stdout.writeln(
       '  topiaforge check project [path]        Validate a developer project.',

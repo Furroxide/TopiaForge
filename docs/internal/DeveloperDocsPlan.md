@@ -1,6 +1,13 @@
 # TopiaForge Developer Docs — Decision Document
 
-Status: Proposed · Date: 2026-06-29 · Owner: docs/platform · Repo: repository root
+Status: Historical proposal · Date: 2026-06-29 · Owner: docs/platform · Repo: repository root
+
+This document preserves the original documentation proposal and its dated rollout
+notes. Its API names, manifest versions and page-status estimates are historical.
+Current manifest behavior is specified in [ManifestV6.md](../ManifestV6.md);
+the [gamemode redesign brief](GamemodeContractRedesign.md) and
+[evidence ledger](gamemode-contract/Status.md) govern the redesign. The active
+publication implementation and required checks are in `website/` and CI.
 
 ---
 

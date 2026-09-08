@@ -3,7 +3,7 @@ import 'package:test/test.dart';
 
 void main() {
   group('manifest schema dispatch', () {
-    test('rejects retired V4 before interpreting V5 multiplayer fields', () {
+    test('rejects retired V4 before interpreting V6 multiplayer fields', () {
       expect(
         () => ModManifest.fromJson({
           ..._manifest(),
@@ -25,13 +25,13 @@ void main() {
               .having(
                 (error) => error.message,
                 'message',
-                contains('schemaVersion 5'),
+                contains('schemaVersion 6'),
               ),
         ),
       );
     });
 
-    test('rejects unsupported old and future schemas before V5 fields', () {
+    test('rejects unsupported old and future schemas before V6 fields', () {
       for (final schemaVersion in const [3, 7]) {
         expect(
           () => ModManifest.fromJson({
@@ -54,7 +54,7 @@ void main() {
       }
     });
 
-    test('validator does not reinterpret a future schema through V5', () {
+    test('validator does not reinterpret a future schema through V6', () {
       final manifest = ModManifest(
         schemaVersion: 7,
         id: '',
@@ -65,7 +65,7 @@ void main() {
 
       final issues = manifest.validate();
       expect(issues, hasLength(1));
-      expect(issues.single.message, contains('schemaVersion must be 5 or 6'));
+      expect(issues.single.message, contains('schemaVersion must be 6'));
     });
 
     test('rejects missing and non-integer schema selectors', () {
@@ -98,7 +98,6 @@ void main() {
       });
 
       expect(manifest.schemaVersion, 6);
-      expect(manifest.worldGamemodes, isEmpty);
       expect(
         manifest.contributions?.gamemodes.single.implementation?.type,
         'Sample.SchemaDispatch.Mode',
@@ -120,27 +119,7 @@ void main() {
       );
     });
 
-    test('a V5 manifest cannot declare contributions', () {
-      final issues = ModManifest.fromJson({
-        ..._manifest(),
-        'contributions': {
-          'gamemodes': [
-            {
-              'id': 'sample.schema-dispatch.mode',
-              'name': 'Dispatch Mode',
-              'implementation': {'type': 'Sample.SchemaDispatch.Mode'},
-            },
-          ],
-        },
-      }).validate();
-
-      expect(
-        issues.map((issue) => issue.message),
-        contains(contains('contributions requires schemaVersion 6')),
-      );
-    });
-
-    test('dispatches V5 to the multiplayer decoder', () {
+    test('dispatches V6 to the multiplayer decoder', () {
       final manifest = ModManifest.fromJson({
         ..._manifest(),
         'multiplayer': {
@@ -151,7 +130,7 @@ void main() {
         },
       });
 
-      expect(manifest.schemaVersion, 5);
+      expect(manifest.schemaVersion, 6);
       expect(manifest.multiplayer?.mode, ModMultiplayerMode.session);
       expect(manifest.multiplayer?.protocol?.version, '1.2.3');
     });
@@ -159,7 +138,7 @@ void main() {
 }
 
 Map<String, Object?> _manifest() => {
-  'schemaVersion': 5,
+  'schemaVersion': 6,
   'name': 'sample.schema-dispatch',
   'displayName': 'Schema Dispatch',
   'version': '1.0.0',

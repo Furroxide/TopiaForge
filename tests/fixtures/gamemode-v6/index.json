@@ -427,114 +427,6 @@
       "path": "resolution/world-package-does-not-support-this-install.json"
     },
     {
-      "id": "empty-intent-object",
-      "channel": "serialization",
-      "kind": "launch-intent-hostile",
-      "path": "serialization/launch-intent/empty-intent-object.json"
-    },
-    {
-      "id": "launch-intent-carries-a-long-declaration-id",
-      "channel": "serialization",
-      "kind": "launch-intent-round-trip",
-      "path": "serialization/launch-intent/launch-intent-carries-a-long-declaration-id.json"
-    },
-    {
-      "id": "launch-intent-gamemode-length-65",
-      "channel": "serialization",
-      "kind": "launch-intent-round-trip",
-      "path": "serialization/launch-intent/launch-intent-gamemode-length-65.json"
-    },
-    {
-      "id": "launch-intent-gamemode-length-96",
-      "channel": "serialization",
-      "kind": "launch-intent-round-trip",
-      "path": "serialization/launch-intent/launch-intent-gamemode-length-96.json"
-    },
-    {
-      "id": "launch-intent-gamemode-length-97",
-      "channel": "serialization",
-      "kind": "launch-intent-hostile",
-      "path": "serialization/launch-intent/launch-intent-gamemode-length-97.json"
-    },
-    {
-      "id": "launch-intent-overlong-gamemode-id",
-      "channel": "serialization",
-      "kind": "launch-intent-hostile",
-      "path": "serialization/launch-intent/launch-intent-overlong-gamemode-id.json"
-    },
-    {
-      "id": "launch-intent-unicode-gamemode",
-      "channel": "serialization",
-      "kind": "launch-intent-hostile",
-      "path": "serialization/launch-intent/launch-intent-unicode-gamemode.json"
-    },
-    {
-      "id": "launch-intent-unicode-world",
-      "channel": "serialization",
-      "kind": "launch-intent-hostile",
-      "path": "serialization/launch-intent/launch-intent-unicode-world.json"
-    },
-    {
-      "id": "launch-intent-world-length-65",
-      "channel": "serialization",
-      "kind": "launch-intent-round-trip",
-      "path": "serialization/launch-intent/launch-intent-world-length-65.json"
-    },
-    {
-      "id": "launch-intent-world-length-96",
-      "channel": "serialization",
-      "kind": "launch-intent-round-trip",
-      "path": "serialization/launch-intent/launch-intent-world-length-96.json"
-    },
-    {
-      "id": "launch-intent-world-length-97",
-      "channel": "serialization",
-      "kind": "launch-intent-hostile",
-      "path": "serialization/launch-intent/launch-intent-world-length-97.json"
-    },
-    {
-      "id": "launch-target-additive-arena",
-      "channel": "serialization",
-      "kind": "launch-intent-round-trip",
-      "path": "serialization/launch-intent/launch-target-additive-arena.json"
-    },
-    {
-      "id": "launch-target-scene-replacement",
-      "channel": "serialization",
-      "kind": "launch-intent-round-trip",
-      "path": "serialization/launch-intent/launch-target-scene-replacement.json"
-    },
-    {
-      "id": "main-menu-carrying-a-gamemode",
-      "channel": "serialization",
-      "kind": "launch-intent-hostile",
-      "path": "serialization/launch-intent/main-menu-carrying-a-gamemode.json"
-    },
-    {
-      "id": "main-menu-command",
-      "channel": "serialization",
-      "kind": "launch-intent-round-trip",
-      "path": "serialization/launch-intent/main-menu-command.json"
-    },
-    {
-      "id": "unknown-command",
-      "channel": "serialization",
-      "kind": "launch-intent-hostile",
-      "path": "serialization/launch-intent/unknown-command.json"
-    },
-    {
-      "id": "unknown-load-mode-clamped-by-writer",
-      "channel": "serialization",
-      "kind": "launch-intent-round-trip",
-      "path": "serialization/launch-intent/unknown-load-mode-clamped-by-writer.json"
-    },
-    {
-      "id": "unknown-load-mode-on-the-wire",
-      "channel": "serialization",
-      "kind": "launch-intent-hostile",
-      "path": "serialization/launch-intent/unknown-load-mode-on-the-wire.json"
-    },
-    {
       "id": "v6-absent-flags-are-not-false",
       "channel": "serialization",
       "kind": "manifest-accepts",
@@ -835,6 +727,24 @@
       "path": "serialization/manifest/v6-fractional-sort-key.json"
     },
     {
+      "id": "v6-game-range-ascii-whitespace",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-game-range-ascii-whitespace.json"
+    },
+    {
+      "id": "v6-game-range-empty",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-game-range-empty.json"
+    },
+    {
+      "id": "v6-game-range-unicode-whitespace",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-game-range-unicode-whitespace.json"
+    },
+    {
       "id": "v6-game-scene-with-prohibited-implementation",
       "channel": "serialization",
       "kind": "manifest-rejects",
@@ -899,6 +809,24 @@
       "channel": "serialization",
       "kind": "manifest-rejects",
       "path": "serialization/manifest/v6-list-policy-without-allow.json"
+    },
+    {
+      "id": "v6-loader-range-ascii-whitespace",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-loader-range-ascii-whitespace.json"
+    },
+    {
+      "id": "v6-loader-range-empty",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-loader-range-empty.json"
+    },
+    {
+      "id": "v6-loader-range-unicode-whitespace",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-loader-range-unicode-whitespace.json"
     },
     {
       "id": "v6-longest-declaration-id",
@@ -1181,6 +1109,24 @@
       "channel": "serialization",
       "kind": "manifest-rejects",
       "path": "serialization/manifest/v6-retired-world-gamemodes.json"
+    },
+    {
+      "id": "v6-sdk-range-ascii-whitespace",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-sdk-range-ascii-whitespace.json"
+    },
+    {
+      "id": "v6-sdk-range-empty",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-sdk-range-empty.json"
+    },
+    {
+      "id": "v6-sdk-range-unicode-whitespace",
+      "channel": "serialization",
+      "kind": "manifest-rejects",
+      "path": "serialization/manifest/v6-sdk-range-unicode-whitespace.json"
     },
     {
       "id": "v6-session-extensions-remain-excluded",
@@ -1699,6 +1645,12 @@
       "path": "serialization/transport/wire-plan-duplicate-package.json"
     },
     {
+      "id": "wire-plan-empty-object",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-empty-object.json"
+    },
+    {
       "id": "wire-plan-empty-override",
       "channel": "serialization",
       "kind": "transport-codec",
@@ -1721,6 +1673,78 @@
       "channel": "serialization",
       "kind": "transport-codec",
       "path": "serialization/transport/wire-plan-family-95-empty-suffix.json"
+    },
+    {
+      "id": "wire-plan-isolated-gamemodeid-unicode",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-isolated-gamemodeid-unicode.json"
+    },
+    {
+      "id": "wire-plan-isolated-gamemodeid-width-65",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-isolated-gamemodeid-width-65.json"
+    },
+    {
+      "id": "wire-plan-isolated-gamemodeid-width-96",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-isolated-gamemodeid-width-96.json"
+    },
+    {
+      "id": "wire-plan-isolated-gamemodeid-width-97",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-isolated-gamemodeid-width-97.json"
+    },
+    {
+      "id": "wire-plan-isolated-targetid-unicode",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-isolated-targetid-unicode.json"
+    },
+    {
+      "id": "wire-plan-isolated-targetid-width-65",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-isolated-targetid-width-65.json"
+    },
+    {
+      "id": "wire-plan-isolated-targetid-width-96",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-isolated-targetid-width-96.json"
+    },
+    {
+      "id": "wire-plan-isolated-targetid-width-97",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-isolated-targetid-width-97.json"
+    },
+    {
+      "id": "wire-plan-isolated-worldid-unicode",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-isolated-worldid-unicode.json"
+    },
+    {
+      "id": "wire-plan-isolated-worldid-width-65",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-isolated-worldid-width-65.json"
+    },
+    {
+      "id": "wire-plan-isolated-worldid-width-96",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-isolated-worldid-width-96.json"
+    },
+    {
+      "id": "wire-plan-isolated-worldid-width-97",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-isolated-worldid-width-97.json"
     },
     {
       "id": "wire-plan-newline-id",
@@ -1799,6 +1823,18 @@
       "channel": "serialization",
       "kind": "transport-codec",
       "path": "serialization/transport/wire-plan-unknown-field.json"
+    },
+    {
+      "id": "wire-plan-unknown-transition-override",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-unknown-transition-override.json"
+    },
+    {
+      "id": "wire-plan-unknown-transition",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-plan-unknown-transition.json"
     },
     {
       "id": "wire-plan-version-carriage-return",
@@ -1967,6 +2003,12 @@
       "channel": "serialization",
       "kind": "transport-codec",
       "path": "serialization/transport/wire-profile-target-missing-plan.json"
+    },
+    {
+      "id": "wire-profile-unknown-command",
+      "channel": "serialization",
+      "kind": "transport-codec",
+      "path": "serialization/transport/wire-profile-unknown-command.json"
     },
     {
       "id": "wire-profile-unknown-field",

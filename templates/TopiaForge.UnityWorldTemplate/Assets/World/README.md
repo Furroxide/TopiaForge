@@ -5,18 +5,22 @@ Assemble your world as **one prefab** at `Assets/World/World.prefab`. `TopiaForg
 
 ## The prefab contract
 
-- A descendant named **`SpawnPoint`** (an empty GameObject) marks where the player stands. Place it
-  ≥ 1 m above walkable ground.
+- Exactly one object named **`SpawnPoint`**, with this exact case, marks the player position and
+  rotation. The prefab root and inactive children participate; duplicate markers fail validation.
+  Place it ≥ 1 m above walkable ground. Marker inspection stops at 16,384 objects and refuses
+  larger hierarchies before export.
 - **No custom scripts.** Only native Unity/HDRP components survive the trip into the game (colliders,
   lights + HDAdditionalLightData, HDRP Volumes, reflection probes, audio sources, LOD groups...).
   The validator fails the build on any custom MonoBehaviour.
 - **Colliders on all walkable geometry** — the player falls through anything without one. For Blender
   imports use a MeshCollider (or cheaper primitive colliders for simple shapes).
-- Optional: a child (suggested name `Environment`) carrying a **global HDRP Volume** with your own
-  sky/exposure/fog. When present, the game skips its default sky. Without it you get the framework's
-  gradient sky + sun automatically — no lighting setup needed.
-- Do **not** add cameras or event systems; the game's play scene owns those. A fall below 100 m under
-  the spawn respawns the player automatically (tunable from the mod's registration code).
+- Author the lighting and environment your world needs, for example with native lights and a
+  global HDRP Volume. The bundle provider does not inspect an `Environment` child to select or
+  suppress a generated sky; verify the result in the installed game.
+- Do **not** add cameras or event systems; the game's play scene owns those. The bundle provider
+  does not install a kill plane or automatic fall respawn. Open Sandbox supplies those behaviors
+  in its own provider. Custom gameplay behavior belongs in the owning V6 gamemode/session code;
+  there is no old world registration API to configure.
 
 ## Importing from Blender
 
@@ -33,3 +37,8 @@ Assemble your world as **one prefab** at `Assets/World/World.prefab`. `TopiaForg
 5. Drag everything under one root GameObject, add the `SpawnPoint` child, and save the root as
    `Assets/World/World.prefab` (overwrite the sample).
 6. `TopiaForge → Validate World Prefab`, fix anything it flags, then build.
+
+The template includes Edit Mode tests in `Assets/Tests/Editor`. Run them in a disposable
+copy of the authoring project with Unity 6000.0.23f1; the export-refusal test temporarily
+replaces the pairing configuration and restores it in cleanup. These tests exercise actual
+prefabs and refusal before output writes; they do not establish installed-game readiness.

@@ -333,7 +333,7 @@ Map<String, Object?> _manifestJson(
   String version, {
   List<String> apiAssemblies = const [],
 }) => {
-  'schemaVersion': 5,
+  'schemaVersion': 6,
   'name': id,
   'displayName': id,
   'version': version,

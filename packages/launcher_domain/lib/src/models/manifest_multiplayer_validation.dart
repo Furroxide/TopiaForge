@@ -14,7 +14,7 @@ void _validateManifestMultiplayer(
     );
   }
 
-  if (manifest.schemaVersion != 5) return;
+  if (!ModManifest.isSupportedSchemaVersion(manifest.schemaVersion)) return;
 
   final multiplayer = manifest.multiplayer;
   if (!manifest.multiplayerIsPresent || multiplayer == null) {

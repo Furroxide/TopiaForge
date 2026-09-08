@@ -379,7 +379,6 @@ class LauncherSnapshot {
     required this.installedMods,
     required this.registryMods,
     required this.packageSources,
-    required this.worldCatalog,
     required this.recentLog,
     this.gameInstall,
     this.gameInstallCandidates = const [],
@@ -398,7 +397,6 @@ class LauncherSnapshot {
   final List<InstalledMod> installedMods;
   final List<RegistryMod> registryMods;
   final List<PackageSource> packageSources;
-  final WorldCatalog worldCatalog;
   final String recentLog;
   final LauncherUpdateSettings launcherUpdates;
 

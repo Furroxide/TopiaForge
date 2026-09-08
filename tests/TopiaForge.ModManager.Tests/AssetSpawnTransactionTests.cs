@@ -39,7 +39,53 @@ namespace TopiaForge.ModManager.Tests
             Assert(success.Destroyed == 0, "successful allocation remains live until lifetime cleanup");
             lifetime.Dispose();
             Assert(success.Destroyed == 1, "successful allocation is owned by its lifetime");
-            Console.WriteLine("AssetSpawnTransactionTests passed.");
+            PrefabNamesRemainAuthoredAndOwned();
+            Console.WriteLine("AssetSpawnTransactionTests passed (generic transaction and 5 prefab cases).");
+        }
+        private static void PrefabNamesRemainAuthoredAndOwned()
+        {
+            var failures = new List<string>(); var passed = 0;
+            void Case(string name, Action test)
+            { try { test(); passed++; } catch (Exception error) { failures.Add(name + ": " + error.Message); } }
+            foreach (var authored in new[] { "SpawnPoint", "SpawnPoint(Clone)" }) Case(authored, () =>
+            {
+                using var lifetime = new OwnerModLifetime();
+                var allocation = new Allocation { Name = authored + "(Clone)" };
+                var initialized = false;
+                AssetSpawnTransaction.CreatePrefab(() => allocation, authored, (item, name) => item.Name = name,
+                    item => { Assert(item.Name == authored, "exact authored name must be set before entity publication"); initialized = true; return new Resource(item); },
+                    item => item.Destroy(), lifetime);
+                Assert(initialized && allocation.Destroyed == 0, "named instance remains owned and live");
+                lifetime.Dispose();
+                Assert(allocation.Destroyed == 1, "named prefab lifetime destroys exactly once");
+            });
+            Case("name-set-failure", () =>
+            {
+                using var lifetime = new OwnerModLifetime(); var allocation = new Allocation(); var initialized = false;
+                Throws<InvalidOperationException>(() => AssetSpawnTransaction.CreatePrefab(() => allocation, "SpawnPoint",
+                    (_, _) => throw new InvalidOperationException("name assignment failed"),
+                    item => { initialized = true; return new Resource(item); }, item => item.Destroy(), lifetime));
+                Assert(!initialized && allocation.Destroyed == 1, "name failure destroys before entity publication");
+                lifetime.Dispose(); Assert(allocation.Destroyed == 1, "failed naming cannot transfer ownership");
+            });
+            Case("later-entity-failure", () =>
+            {
+                using var lifetime = new OwnerModLifetime(); var allocation = new Allocation { Name = "SpawnPoint(Clone)" };
+                Throws<InvalidOperationException>(() => AssetSpawnTransaction.CreatePrefab<Allocation, Resource>(() => allocation,
+                    "SpawnPoint", (item, name) => item.Name = name,
+                    _ => throw new InvalidOperationException("entity setup failed"), item => item.Destroy(), lifetime));
+                Assert(allocation.Name == "SpawnPoint" && allocation.Destroyed == 1, "later initialization failure cleans named instance once");
+            });
+            Case("lifetime-rejection", () =>
+            {
+                using var lifetime = new DeferredRejection(); var allocation = new Allocation { Name = "SpawnPoint(Clone)" };
+                Throws<ObjectDisposedException>(() => AssetSpawnTransaction.CreatePrefab(() => allocation, "SpawnPoint",
+                    (item, name) => item.Name = name, item => new Resource(item), item => item.Destroy(), lifetime));
+                Assert(allocation.Name == "SpawnPoint" && allocation.Destroyed == 0 && lifetime.Resources.Count == 1,
+                    "rejected lifetime retains sole cleanup ownership of named instance until drain");
+                lifetime.Dispose(); Assert(allocation.Destroyed == 1, "rejected named instance drained once");
+            });
+            if (failures.Count != 0) throw new InvalidOperationException("Prefab cases passed " + passed + "; failed " + failures.Count + ":\n" + string.Join("\n", failures));
         }
         private static void Assert(bool condition, string message)
         { if (!condition) throw new InvalidOperationException(message); }
@@ -48,6 +94,7 @@ namespace TopiaForge.ModManager.Tests
         private sealed class Allocation
         {
             internal int Destroyed;
+            internal string Name = string.Empty;
             internal void Destroy() => Destroyed++;
         }
         private sealed class Resource : IDisposable

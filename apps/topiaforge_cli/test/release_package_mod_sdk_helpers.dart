@@ -320,7 +320,7 @@ Future<void> _expectPackagedCliRejectsBadPe(
       ArchiveFile.string(
         'topiaforge.mod.json',
         jsonEncode({
-          'schemaVersion': 5,
+          'schemaVersion': 6,
           'name': 'test.packaged.bad-pe',
           'displayName': 'Packaged Bad PE',
           'version': '1.0.0',
