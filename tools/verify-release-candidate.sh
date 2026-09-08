@@ -37,6 +37,16 @@ gh_api() {
     "$@"
 }
 
+# GitHub repository/login spelling is case-insensitive; path suffixes, numeric
+# actors, workflow identities, refs and source hashes remain exact.
+repository_identity_jq='
+def same_repository:
+  type == "string" and ascii_downcase == ($repository | ascii_downcase);
+def repository_url($prefix; $suffix):
+  type == "string" and startswith($prefix) and endswith($suffix) and
+  (ltrimstr($prefix) | rtrimstr($suffix) | same_repository);
+'
+
 tag_ref="refs/tags/$tag"
 [[ $(git cat-file -t "$tag_ref" 2>/dev/null || true) == tag ]] || {
   echo "Release tag $tag must be an annotated tag object." >&2
@@ -84,9 +94,9 @@ release_pr=$(jq -ec \
   --arg repository "$repository" \
   --arg head "release/$version" \
   --arg target "$target_sha" \
-  '[.[] | select(
+  "$repository_identity_jq"'[.[] | select(
     .base.ref == "main" and
-    .head.repo.full_name == $repository and
+    (.head.repo.full_name | same_repository) and
     .head.ref == $head and
     .merged_at != null and
     .merge_commit_sha == $target
@@ -193,9 +203,10 @@ require_check() {
     echo "GitHub Actions check '$name' has no job provenance URL." >&2
     exit 1
   }
-  if [[ $details_url =~ ^https://github\.com/${repository}/actions/runs/([1-9][0-9]*)/job/([1-9][0-9]*)$ ]]; then
-    run_id=${BASH_REMATCH[1]}
-    job_id=${BASH_REMATCH[2]}
+  if [[ $details_url =~ ^https://github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/actions/runs/([1-9][0-9]*)/job/([1-9][0-9]*)$ ]] &&
+    [[ ${BASH_REMATCH[1],,} == "${repository,,}" ]]; then
+    run_id=${BASH_REMATCH[2]}
+    job_id=${BASH_REMATCH[3]}
   else
     echo "GitHub Actions check '$name' has an unexpected provenance URL." >&2
     exit 1
@@ -209,9 +220,9 @@ require_check() {
     --arg sha "$sha" \
     --arg branch "$expected_branch" \
     --argjson run_id "$run_id" \
-    '.id == $run_id and
-     .repository.full_name == $repository and
-     .head_repository.full_name == $repository and
+    "$repository_identity_jq"'.id == $run_id and
+     (.repository.full_name | same_repository) and
+     (.head_repository.full_name | same_repository) and
      .path == $workflow and
      .event == $event and
      .head_sha == $sha and
@@ -233,18 +244,15 @@ require_check() {
       --arg branch "$expected_branch" \
       --arg sha "$sha" \
       --argjson release_pr_number "$release_pr_number" \
-      '(.pull_requests | type == "array" and length == 1) and
+      "$repository_identity_jq"'(.pull_requests | type == "array" and length == 1) and
        .pull_requests[0].number == $release_pr_number and
-       .pull_requests[0].url ==
-         ("https://api.github.com/repos/" + $repository + "/pulls/" +
-           ($release_pr_number | tostring)) and
+       (.pull_requests[0].url | repository_url("https://api.github.com/repos/";
+         "/pulls/" + ($release_pr_number | tostring))) and
        .pull_requests[0].head.ref == $branch and
        .pull_requests[0].head.sha == $sha and
-       .pull_requests[0].head.repo.url ==
-         ("https://api.github.com/repos/" + $repository) and
+       (.pull_requests[0].head.repo.url | repository_url("https://api.github.com/repos/"; "")) and
        .pull_requests[0].base.ref == "main" and
-       .pull_requests[0].base.repo.url ==
-         ("https://api.github.com/repos/" + $repository)' \
+       (.pull_requests[0].base.repo.url | repository_url("https://api.github.com/repos/"; ""))' \
       <<<"$run" >/dev/null || {
       echo "GitHub Actions run '$name' is not associated with release PR #$release_pr_number targeting main." >&2
       exit 1
@@ -257,12 +265,12 @@ require_check() {
     --arg path "$expected_workflow" \
     --arg name "$expected_workflow_name" \
     --argjson workflow_id "$workflow_id" \
-    '.id == $workflow_id and
+    "$repository_identity_jq"'.id == $workflow_id and
      .path == $path and
      .name == $name and
      .state == "active" and
-     .html_url == ("https://github.com/" + $repository + "/actions/workflows/" +
-       ($path | split("/") | last))' \
+     (.html_url | repository_url("https://github.com/";
+       "/actions/workflows/" + ($path | split("/") | last)))' \
     <<<"$workflow" >/dev/null || {
     echo "GitHub Actions workflow identity is invalid for '$name'." >&2
     exit 1
@@ -275,17 +283,18 @@ require_check() {
   jq -e \
     --arg name "$name" \
     --arg sha "$sha" \
-    --arg details_url "$details_url" \
+    --arg repository "$repository" \
     --argjson job_id "$job_id" \
     --argjson run_id "$run_id" \
     --argjson run_attempt "$run_attempt" \
-    '[.jobs[] | select(.id == $job_id)] |
+    "$repository_identity_jq"'[.jobs[] | select(.id == $job_id)] |
      length == 1 and
      .[0].name == $name and
      .[0].run_id == $run_id and
      .[0].run_attempt == $run_attempt and
      .[0].head_sha == $sha and
-     .[0].html_url == $details_url and
+     (.[0].html_url | repository_url("https://github.com/";
+       "/actions/runs/" + ($run_id | tostring) + "/job/" + ($job_id | tostring))) and
      .[0].status == "completed" and
      .[0].conclusion == "success"' \
     <<<"$attempt_jobs" >/dev/null || {

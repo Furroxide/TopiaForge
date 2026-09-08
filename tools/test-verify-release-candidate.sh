@@ -31,6 +31,12 @@ cat >"$temp_root/bin/gh" <<'FAKE_GH'
 set -euo pipefail
 [[ ${1:-} == api ]] || exit 64
 url=${*: -1}
+request_prefix="repos/${FAKE_REQUEST_REPOSITORY:-furroxide/TopiaForge}/"
+if [[ $url == "$request_prefix"* ]]; then
+  url="repos/furroxide/TopiaForge/${url#"$request_prefix"}"
+fi
+api_repository=${FAKE_API_REPOSITORY:-furroxide/TopiaForge}
+url_repository=${FAKE_URL_REPOSITORY:-furroxide/TopiaForge}
 
 metadata_for_run() {
   local run_id=$1
@@ -123,7 +129,7 @@ emit_check() {
   local name=$2
   local sha=$3
   local conclusion=$4
-  local details_repository=furroxide/TopiaForge
+  local details_repository=$url_repository
   if [[ $name == "${FAKE_BAD_CHECK:-}" &&
         ${FAKE_BAD_MODE:-} == wrong_details_repository ]]; then
     details_repository=attacker/TopiaForge
@@ -143,8 +149,8 @@ case "$url" in
       "$FAKE_TARGET" "$FAKE_VERIFIED" "$FAKE_REASON"
     ;;
   repos/furroxide/TopiaForge/commits/*/pulls?per_page=100)
-    printf '[{"number":7,"base":{"ref":"main"},"head":{"ref":"release/1.0.0","sha":"%s","repo":{"full_name":"furroxide/TopiaForge"}},"merged_at":"2026-07-15T00:00:00Z","merge_commit_sha":"%s"}]\n' \
-      "$FAKE_RELEASE_HEAD" "$FAKE_TARGET"
+    printf '[{"number":7,"base":{"ref":"main"},"head":{"ref":"release/1.0.0","sha":"%s","repo":{"full_name":"%s"}},"merged_at":"2026-07-15T00:00:00Z","merge_commit_sha":"%s"}]\n' \
+      "$FAKE_RELEASE_HEAD" "$api_repository" "$FAKE_TARGET"
     ;;
   repos/furroxide/TopiaForge/commits/*/check-runs?filter=all\&per_page=100)
     sha=${url#repos/furroxide/TopiaForge/commits/}
@@ -186,15 +192,15 @@ case "$url" in
       job_attempt=$((attempt - 1))
     fi
     printf \
-      '{"total_count":1,"jobs":[{"id":%s,"run_id":%s,"run_attempt":%s,"head_sha":"%s","name":"%s","status":"completed","conclusion":"success","html_url":"https://github.com/furroxide/TopiaForge/actions/runs/%s/job/%s"}]}\n' \
+      '{"total_count":1,"jobs":[{"id":%s,"run_id":%s,"run_attempt":%s,"head_sha":"%s","name":"%s","status":"completed","conclusion":"success","html_url":"https://github.com/%s/actions/runs/%s/job/%s"}]}\n' \
       "$job_id" "$run_id" "$job_attempt" "$FAKE_RELEASE_HEAD" \
-      "$check_name" "$run_id" "$job_id"
+      "$check_name" "$url_repository" "$run_id" "$job_id"
     ;;
   repos/furroxide/TopiaForge/actions/runs/*)
     run_id=${url##*/}
     metadata_for_run "$run_id"
-    run_repository=furroxide/TopiaForge
-    head_repository=furroxide/TopiaForge
+    run_repository=$api_repository
+    head_repository=$api_repository
     head_sha=$FAKE_RELEASE_HEAD
     head_branch=release/1.0.0
     run_attempt=1
@@ -224,19 +230,20 @@ case "$url" in
         --argjson number "$pull_request_number" \
         --arg base "$pull_request_base" \
         --arg head_sha "$head_sha" \
+        --arg repository "$url_repository" \
         '[
           {
             number:$number,
-            url:("https://api.github.com/repos/furroxide/TopiaForge/pulls/" +
+            url:("https://api.github.com/repos/" + $repository + "/pulls/" +
               ($number | tostring)),
             head:{
               ref:"release/1.0.0",
               sha:$head_sha,
-              repo:{url:"https://api.github.com/repos/furroxide/TopiaForge"}
+              repo:{url:("https://api.github.com/repos/" + $repository)}
             },
             base:{
               ref:$base,
-              repo:{url:"https://api.github.com/repos/furroxide/TopiaForge"}
+              repo:{url:("https://api.github.com/repos/" + $repository)}
             }
           }
         ]')
@@ -283,7 +290,7 @@ case "$url" in
       --arg path "$workflow_path" \
       --arg state "$workflow_state" \
       --arg html_url \
-        "https://github.com/furroxide/TopiaForge/actions/workflows/${workflow_path##*/}" \
+        "https://github.com/$url_repository/actions/workflows/${workflow_path##*/}" \
       '{id:$id,name:$name,path:$path,state:$state,html_url:$html_url}'
     ;;
   *)
@@ -310,6 +317,16 @@ export FAKE_BAD_MODE=
   cd "$temp_root/source"
   "$verifier" furroxide/TopiaForge v1.0.0 1.0.0 "$target_sha" >/dev/null
 )
+
+# Canonical response casing may differ from the requested repository spelling.
+export FAKE_API_REPOSITORY=Furroxide/TopiaForge
+export FAKE_URL_REPOSITORY=fUrRoXiDe/tOpIaFoRgE
+export FAKE_REQUEST_REPOSITORY=FURROXIDE/TOPIAFORGE
+(
+  cd "$temp_root/source"
+  "$verifier" "$FAKE_REQUEST_REPOSITORY" v1.0.0 1.0.0 "$target_sha" >/dev/null
+)
+unset FAKE_API_REPOSITORY FAKE_URL_REPOSITORY FAKE_REQUEST_REPOSITORY
 
 export FAKE_VERIFIED=false
 export FAKE_REASON=unsigned
