@@ -71,6 +71,33 @@ class ExecutableSourceTests(unittest.TestCase):
         self.assertEqual(len(setup), 1)
         self.assertLess(setup[0], before[-1])
 
+    def test_shipped_clis_compile_from_neutral_source_sdk_and_cache(self):
+        source = read_workflow("release-package-build.yml")
+        steps = re.split(r"(?m)(?=      - name:)", source)
+        names = ("Build x64 CLI", "Prepare architecture-dispatched macOS CLI",
+                 "Build neutral CLI")
+        for name in names:
+            with self.subTest(name=name):
+                selected = [step for step in steps if f"- name: {name}\n" in step]
+                self.assertEqual(len(selected), 1, name)
+                step = selected[0]
+                for prerequisite in (
+                    'source "$GITHUB_WORKSPACE/tools/prepare-neutral-build-root.sh"',
+                    '"$TOPIAFORGE_NEUTRAL_SOURCE/apps/topiaforge_cli"',
+                    '"$TOPIAFORGE_NEUTRAL_ROOT/dart-sdk/bin"',
+                    'PUB_CACHE="$TOPIAFORGE_NEUTRAL_PUB_CACHE"',
+                    'dart_bin="$(cygpath -u "$dart_bin")"',
+                    'export PATH="$dart_bin:$PATH"',
+                    'test "${resolved_dart%.exe}" = "$dart_bin/dart"',
+                    'Dart SDK version: 3.12.2 ',
+                    'dart pub get --enforce-lockfile',
+                ):
+                    self.assertIn(prerequisite, step)
+                    self.assertLess(step.index(prerequisite), step.index("dart compile exe"))
+        package = next(step for step in steps if "- name: Build release package\n" in step)
+        self.assertIn('--prebuilt-cli "$temp/topiaforge-neutral-cli$suffix"', package)
+        self.assertIn('--prebuilt-cli "$temp/topiaforge-macos-cli"', package)
+
     def test_pages_separates_dispatch_and_workflow_run_revisions(self):
         source = read_workflow("deploy-pages.yml")
         steps = checkout_steps(source)

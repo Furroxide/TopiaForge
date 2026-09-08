@@ -90,12 +90,44 @@ foreach ($workflowName in @("ci.yml", "deploy-pages.yml", "flutter-launcher-buil
     }
 }
 
-# The installer's ownership guard is only meaningful while the action keeps pointing both
-# directories at their dedicated runner-temp leaves, so pin that decision where it is made.
-if ($action -notmatch
-    ('(?m)^\s+TOPIAFORGE_FLUTTER_INSTALL_DIRECTORY:\s+' +
-        '\$\{\{\s*runner\.temp\s*\}\}/topiaforge-flutter-sdk\s*$')) {
-    throw "The Flutter setup action must install into its dedicated runner-temp directory."
+# Shared setup keeps the existing default while release builds opt into their verified
+# neutral workspace. Both paths retain the installer's dedicated-leaf ownership guard.
+if ($action -notmatch '(?m)^  install_directory:\s*$' -or
+    $action -notmatch '(?m)^    required: false\s*$') {
+    throw "Pinned Flutter setup must expose an optional neutral install_directory input."
+}
+$installExpression = "TOPIAFORGE_FLUTTER_INSTALL_DIRECTORY: " +
+    '${{ inputs.install_directory || format(''{0}/topiaforge-flutter-sdk'', runner.temp) }}'
+if (-not $action.Contains($installExpression)) {
+    throw "Flutter setup must honor the verified install override and preserve the runner-temp default."
+}
+$launcherWorkflow = Get-Content -LiteralPath (
+    Join-Path $workflowDirectory "flutter-launcher-builds.yml"
+) -Raw
+$launcherSteps = @([regex]::Split($launcherWorkflow, '(?m)(?=      - name:)'))
+$preparation = @($launcherSteps | Where-Object { $_ -match 'id: neutral' })
+if ($preparation.Count -ne 1 -or
+    -not $preparation[0].Contains('source "$GITHUB_WORKSPACE/tools/prepare-neutral-build-root.sh" "$GITHUB_WORKSPACE"') -or
+    -not $preparation[0].Contains('"$TOPIAFORGE_NEUTRAL_PUB_CACHE" >> "$GITHUB_ENV"')) {
+    throw "Launcher builds must prepare a hydrated neutral source and export its private PUB_CACHE."
+}
+if ($launcherWorkflow.IndexOf('id: neutral') -gt
+    $launcherWorkflow.IndexOf('uses: ./.github/actions/setup-flutter')) {
+    throw "Neutral launcher paths must be established before Flutter setup generates package state."
+}
+if (-not $launcherWorkflow.Contains(
+        'install_directory: ${{ steps.neutral.outputs.root }}/topiaforge-flutter-sdk')) {
+    throw "Release launchers must install the verified Flutter SDK beneath the neutral root."
+}
+foreach ($stepName in @('Build launcher', 'Verify unsigned macOS launcher policy', 'Pack launcher artifact')) {
+    $matching = @($launcherSteps | Where-Object { $_ -match ('(?m)^      - name: ' + [regex]::Escape($stepName) + '\s*$') })
+    if ($matching.Count -ne 1 -or
+        -not $matching[0].Contains('working-directory: ${{ steps.neutral.outputs.source }}')) {
+        throw "$stepName must consume the same neutral physical launcher source."
+    }
+}
+if ($launcherWorkflow -match '(?m)^\s*(?:export\s+)?HOME=') {
+    throw "Neutral launcher builds must not repurpose the runner HOME."
 }
 if ($action -notmatch
     ('(?m)^\s+TOPIAFORGE_FLUTTER_ARCHIVE_DIRECTORY:\s+' +

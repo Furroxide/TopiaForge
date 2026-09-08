@@ -56,8 +56,21 @@ jobs:
                 fi
               done
 
+      - name: Prepare neutral build root
+        id: neutral
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "$GITHUB_WORKSPACE/tools/prepare-neutral-build-root.sh" "$GITHUB_WORKSPACE"
+          printf 'root=%s\nsource=%s\npub_cache=%s\n' \
+            "$TOPIAFORGE_NEUTRAL_ROOT" "$TOPIAFORGE_NEUTRAL_SOURCE" \
+            "$TOPIAFORGE_NEUTRAL_PUB_CACHE" >> "$GITHUB_OUTPUT"
+          printf 'PUB_CACHE=%s\n' "$TOPIAFORGE_NEUTRAL_PUB_CACHE" >> "$GITHUB_ENV"
+
       - name: Set up Flutter
         uses: ./.github/actions/setup-flutter
+        with:
+          install_directory: ${{ steps.neutral.outputs.root }}/topiaforge-flutter-sdk
 
       - name: Install Linux desktop dependencies
         if: matrix.platform == 'linux'
@@ -67,10 +80,11 @@ jobs:
 
       - name: Build launcher
         shell: bash
-        working-directory: apps/topiaforge_launcher_flutter
+        working-directory: ${{ steps.neutral.outputs.source }}/apps/topiaforge_launcher_flutter
         env:
           # Flutter forwards FLUTTER_XCODE_* variables as Xcode build settings.
-          # The protected release job signs this reusable build output later.
+          # Hosted smoke builds stay unsigned; production signing, when required,
+          # belongs to the administrator-controlled build flow.
           FLUTTER_XCODE_CODE_SIGNING_ALLOWED: ${{ matrix.platform == 'macos' && 'NO' || '' }}
           FLUTTER_XCODE_CODE_SIGNING_REQUIRED: ${{ matrix.platform == 'macos' && 'NO' || '' }}
           LAUNCHER_PLATFORM: ${{ matrix.platform }}
@@ -86,6 +100,7 @@ jobs:
       - name: Verify unsigned macOS launcher policy
         if: matrix.platform == 'macos'
         shell: bash
+        working-directory: ${{ steps.neutral.outputs.source }}
         run: |
           set -euo pipefail
           project_dir="apps/topiaforge_launcher_flutter/macos"
@@ -136,6 +151,7 @@ jobs:
 
       - name: Pack launcher artifact
         shell: bash
+        working-directory: ${{ steps.neutral.outputs.source }}
         env:
           LAUNCHER_PLATFORM: ${{ matrix.platform }}
         run: |
