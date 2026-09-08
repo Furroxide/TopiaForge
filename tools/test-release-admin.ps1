@@ -964,6 +964,12 @@ exit 0
             Join-Path $repositoryRootForTest `
                 ".github/repository-governance.json"
         ) -Destination $stageGovernanceDirectory
+        # GitHub reports canonical casing even when the requested repository is lowercase.
+        $stageGovernancePath = Join-Path $stageGovernanceDirectory "repository-governance.json"
+        $stageGovernance = Get-Content -LiteralPath $stageGovernancePath -Raw | ConvertFrom-Json
+        $stageGovernance.repository_full_name = "Furroxide/TopiaForge"
+        $stageGovernance | ConvertTo-Json -Depth 20 |
+            Set-Content -LiteralPath $stageGovernancePath -Encoding utf8NoBOM
         Set-Content -LiteralPath (
             Join-Path $stageNotesDirectory "v0.1.0-rc.1.md"
         ) -Value "stage notes" -Encoding utf8NoBOM
@@ -1306,7 +1312,7 @@ printf 'dart %s\n' "$*" >>"$FAKE_STAGE_LOG"
                         name = "release-bom.json"
                         state = "uploaded"
                         uploader = [ordered]@{
-                            login = "github-actions[bot]"
+                            login = "GitHub-Actions[bot]"
                             id = 41898282
                             type = "Bot"
                         }
@@ -1319,7 +1325,7 @@ printf 'dart %s\n' "$*" >>"$FAKE_STAGE_LOG"
                         name = "release-sbom.spdx.json"
                         state = "starter"
                         uploader = [ordered]@{
-                            login = "github-actions[bot]"
+                            login = "GitHub-Actions[bot]"
                             id = 41898282
                             type = "Bot"
                         }
@@ -1354,7 +1360,38 @@ printf 'dart %s\n' "$*" >>"$FAKE_STAGE_LOG"
                 "Invoke-Stage trusted stranded generated metadata from the " +
                 "wrong uploader."
             )
+            foreach ($untrustedLogin in @(
+                    "other-actions[bot]",
+                    "github-act$([char]0x0131)ons[bot]",
+                    "github-actions[bot] "
+                )) {
+                $wrongLoginAssets = @($strandedStageAssetsJson | ConvertFrom-Json)
+                @($wrongLoginAssets | Where-Object { $_.name -ceq "release-bom.json" })[0].uploader.login = $untrustedLogin
+                $env:FAKE_STAGE_ASSET_JSON = ConvertTo-Json -Compress `
+                    -InputObject ([object[]]$wrongLoginAssets)
+                Assert-ThrowsMatch -Action {
+                    Invoke-Stage | Out-Null
+                } -Pattern "pinned GitHub Actions principal" -Message (
+                    "Invoke-Stage trusted a different, non-ASCII or padded uploader login."
+                )
+            }
             $env:FAKE_STAGE_ASSET_JSON = $strandedStageAssetsJson
+            foreach ($untrustedRepository in @(
+                    "Furroxide/Other", "Furroxide/TopiaForge ",
+                    "Furrox$([char]0x0131)de/TopiaForge"
+                )) {
+                $stageGovernance.repository_full_name = $untrustedRepository
+                $stageGovernance | ConvertTo-Json -Depth 20 |
+                    Set-Content -LiteralPath $stageGovernancePath -Encoding utf8NoBOM
+                Assert-ThrowsMatch -Action {
+                    Invoke-Stage | Out-Null
+                } -Pattern "asset authority governance is invalid" -Message (
+                    "Invoke-Stage trusted a different, non-ASCII or padded repository."
+                )
+            }
+            $stageGovernance.repository_full_name = "Furroxide/TopiaForge"
+            $stageGovernance | ConvertTo-Json -Depth 20 |
+                Set-Content -LiteralPath $stageGovernancePath -Encoding utf8NoBOM
         }
         finally {
             Set-Item Function:Assert-SourceStillExact `
@@ -1526,7 +1563,7 @@ if ($cli.Count -ge 2 -and
         conclusion = $run.conclusion
         path = $workflowPath
         repository = [pscustomobject]@{
-            full_name = "furroxide/TopiaForge"
+            full_name = "Furroxide/TopiaForge"
         }
     }
     ConvertTo-Json -InputObject $restRun -Compress
@@ -1708,6 +1745,32 @@ exit 64
                 "Dispatch did not journal the attempt before sending the " +
                 "unique request ID to release.yml."
             )
+
+            $identityProbe = [pscustomobject]@{
+                databaseId = "1001"
+                displayTitle = "Finalize $tag ($successRequestId)"
+                event = "workflow_dispatch"
+                headBranch = $tag
+                headSha = $stageSourceSha
+                status = "completed"
+                conclusion = "success"
+                repository = "Furroxide/TopiaForge"
+                workflowPath = ".github/workflows/release.yml"
+            }
+            $null = Assert-FinalizerRunIdentity -Run $identityProbe `
+                -RequestId $successRequestId -SourceSha $stageSourceSha
+            foreach ($untrustedRepository in @(
+                    "Furroxide/Other", "Furroxide/TopiaForge ",
+                    "Furrox$([char]0x0131)de/TopiaForge"
+                )) {
+                $identityProbe.repository = $untrustedRepository
+                Assert-ThrowsMatch -Action {
+                    Assert-FinalizerRunIdentity -Run $identityProbe `
+                        -RequestId $successRequestId -SourceSha $stageSourceSha
+                } -Pattern "does not exactly match request" -Message (
+                    "Finalizer admitted a different, non-ASCII or padded repository."
+                )
+            }
 
             $crashRequestId =
                 "release-admin-77777777777777777777777777777777"
