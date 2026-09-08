@@ -14,6 +14,7 @@ namespace TopiaForge.ModManager.Tests
         private static int Main(string[] args)
         {
             UnityMainThreadGuard.CaptureCurrentThread();
+            if (args.Length == 1 && args[0] == "--harness-workspaces") { HarnessWorkspaceTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--robo-api-client")
             {
                 var owned = Directory.CreateTempSubdirectory("TopiaForgeRoboApi-");
@@ -87,7 +88,7 @@ namespace TopiaForge.ModManager.Tests
                 {
                     HostDispatcherTests.Run();
                     SessionLifecycleTests.Run(Path.Combine(sessionRoot, "state"));
-                    GamemodeSessionOrchestratorTests.Run(sessionRoot);
+                    GamemodeSessionOrchestratorTests.Run(Path.Combine(sessionRoot, "orchestrator"));
                     SessionActivationTests.Run(sessionRoot);
                     ContentAdmissionTests.Run(Path.Combine(sessionRoot, "content-admission"));
                     WorldsActivationTests.RunAsync().GetAwaiter().GetResult();
@@ -110,14 +111,11 @@ namespace TopiaForge.ModManager.Tests
 
             if (args.Length == 1 && string.Equals(args[0], "--sdk-lifecycle", StringComparison.Ordinal))
             {
-                var lifecycleRoot = Path.Combine(
-                    Path.GetTempPath(),
-                    "TopiaForgeSdkLifecycleTests-" + Guid.NewGuid().ToString("N"));
-                Directory.CreateDirectory(lifecycleRoot);
+                var lifecycleRoot = Directory.CreateTempSubdirectory("TopiaForgeSdkLifecycleTests-").FullName;
                 try
                 {
                     SdkLifecycleTests.Run(lifecycleRoot);
-                    ScopedModContextTests.Run(lifecycleRoot);
+                    ScopedModContextTests.Run(Path.Combine(lifecycleRoot, "scoped-context"));
                     ScopedAssetOwnershipTests.Run(lifecycleRoot);
                     AssetSpawnTransactionTests.Run();
                     UiHotkeyOwnershipTests.Run();
@@ -189,10 +187,7 @@ namespace TopiaForge.ModManager.Tests
             }
             if (args.Length == 1 && string.Equals(args[0], "--manifest-v6", StringComparison.Ordinal))
             {
-                var manifestRoot = Path.Combine(
-                    Path.GetTempPath(),
-                    "TopiaForgeManifestV6Tests-" + Guid.NewGuid().ToString("N"));
-                Directory.CreateDirectory(manifestRoot);
+                var manifestRoot = Directory.CreateTempSubdirectory("TopiaForgeManifestV6Tests-").FullName;
                 try
                 {
                     TestStrictManifestExtensions();
@@ -279,6 +274,7 @@ namespace TopiaForge.ModManager.Tests
                     return 0;
                 }
 
+                HarnessWorkspaceTests.Run();
                 TestInstallSuccess(root);
                 TestLegacyPackageExtensionRejected(root);
                 TestUpdatePreservesDisabledState(root);
@@ -356,21 +352,21 @@ namespace TopiaForge.ModManager.Tests
                 V1LaunchCoverageTests.Run();
                 GameplayFacadeTests.Run();
                 HostDispatcherTests.Run();
-                SessionLifecycleTests.Run(root + "-state");
-                GamemodeSessionOrchestratorTests.Run(root + "-session");
-                SessionActivationTests.Run(root + "-activation");
-                ContentAdmissionTests.Run(root + "-content-admission");
+                SessionLifecycleTests.Run(Path.Combine(root, "state"));
+                GamemodeSessionOrchestratorTests.Run(Path.Combine(root, "session"));
+                SessionActivationTests.Run(Path.Combine(root, "activation"));
+                ContentAdmissionTests.Run(Path.Combine(root, "content-admission"));
                 RuntimeSessionSelectionTests.Run();
                 BuiltinWorldProviderTests.Run();
                 WorldRuntimeReadinessTests.Run();
-                WorldReadinessContractTests.Run(root + "-readiness-contract");
+                WorldReadinessContractTests.Run(Path.Combine(root, "readiness-contract"));
                 DuplicateSelectionTests.Run();
                 NativeWorldReflectionTests.Run();
                 AssetNativeDrainTests.Run();
                 OwnerNativeSceneLoadTests.Run();
                 NativeWorkLifecycleTests.Run(Path.Combine(root, "native-work"));
                 SdkLifecycleTests.Run(root);
-                ScopedModContextTests.Run(root);
+                ScopedModContextTests.Run(Path.Combine(root, "scoped-context"));
                 ScopedAssetOwnershipTests.Run(root);
                 AssetSpawnTransactionTests.Run();
                 UiHotkeyOwnershipTests.Run();

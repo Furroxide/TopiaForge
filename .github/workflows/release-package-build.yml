@@ -143,6 +143,13 @@ jobs:
           --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
           -c Release -- --source public --require-latest
 
+      - name: Restore CLI dependencies for generated-package tests
+        shell: bash
+        working-directory: apps/topiaforge_cli
+        run: |
+          set -euo pipefail
+          dart pub get --enforce-lockfile
+
       - name: Validate 11 SDK packages and all 7 C# harnesses
         shell: bash
         run: |
@@ -157,7 +164,6 @@ jobs:
         run: |
           set -euo pipefail
           test "$(dotnet --version)" = 10.0.301
-          dart pub get --enforce-lockfile
           dotnet build \
             "$GITHUB_WORKSPACE/src/TopiaForge.ModPackageValidator/TopiaForge.ModPackageValidator.csproj" \
             -c Release --nologo
