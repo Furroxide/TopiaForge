@@ -43,8 +43,9 @@ account or approve its layout.
 
 Each canonical ecosystem pass runs in its own detached clean worktree. The
 SHA-256 of the normalized, sorted tree manifest is the ecosystem identity; the
-single tar sent to WSL has a separate transport digest. Every
-platform validation summary binds both values.
+canonical tar has a separate transport digest. Every platform validation summary
+binds both values. Sending that tar to WSL applies only when a reviewed policy
+includes the Linux archive; Windows-only RC1 does not run the WSL/Proton path.
 
 ## Private build and exact candidate qualification
 
