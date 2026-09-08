@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 6,
+  "name": "fixtures.v6-extension",
+  "displayName": "Namespaced Extension Fixture",
+  "version": "1.0.0",
+  "author": { "name": "TopiaForge Tests" },
+  "entryAssembly": "Fixture.dll",
+  "entryType": "Fixtures.V6Mod",
+  "supportedGameVersionRange": ">=0.0.2409 <0.0.2600",
+  "supportedLoaderVersionRange": ">=0.1.0-rc.1 <0.2.0",
+  "supportedSdkVersionRange": ">=0.1.0-rc.1 <0.2.0",
+  "x-fixture": {
+    "vendorOwnsThisShape": true,
+    "nested": [{ "future": "metadata" }]
+  }
+}

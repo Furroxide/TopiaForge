@@ -330,7 +330,6 @@ class ModScaffoldOptions {
     this.dependencies = const [],
     this.optionalDependencies = const [],
     this.conflicts = const [],
-    this.gamemodes = const [],
     this.entryAssembly,
     this.entryType,
     this.gameVersionRange,
@@ -362,7 +361,6 @@ class ModScaffoldOptions {
   final List<ModDependency> dependencies;
   final List<ModDependency> optionalDependencies;
   final List<ModConflict> conflicts;
-  final List<GamemodeDefinition> gamemodes;
   final String? entryAssembly;
   final String? entryType;
   final VersionRange? gameVersionRange;
@@ -373,14 +371,15 @@ class ModScaffoldOptions {
   final String? source;
   final bool includeUnityCompanion;
 
-  /// Refuses retired metadata-only modes before any scaffold output is created.
-  void validateForScaffolding() {
-    if (gamemodes.isNotEmpty) {
+  /// Refuses retired fields in template defaults before any scaffold output.
+  void validateForScaffolding(Map<String, Object?> manifest) {
+    for (final field in const ['worldGamemodes', 'gamemodes']) {
+      if (!manifest.containsKey(field)) continue;
       throw ArgumentError(
-        'Metadata-only gamemode inputs are retired. Use --template gamemode '
-            'and declare contributions.gamemodes with a factory implementation, '
-            'plus contributions.launchTargets in topiaforge.mod.json.',
-        'gamemodes',
+        'Metadata-only $field inputs are retired. Use --template gamemode '
+        'and declare contributions.gamemodes with a factory implementation, '
+        'plus contributions.launchTargets in topiaforge.mod.json.',
+        field,
       );
     }
   }
@@ -388,7 +387,7 @@ class ModScaffoldOptions {
   /// Applies the specified overrides on top of [manifest] (a template-default or generated manifest map),
   /// returning the merged `topiaforge.mod.json` map. List/map fields replace wholesale when specified.
   Map<String, Object?> applyTo(Map<String, Object?> manifest) {
-    validateForScaffolding();
+    validateForScaffolding(manifest);
     final merged = Map<String, Object?>.of(manifest);
     void set(String key, Object? value) {
       if (value != null) merged[key] = value;

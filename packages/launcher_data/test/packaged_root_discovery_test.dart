@@ -164,7 +164,7 @@ File _createPackage(
 }
 
 Map<String, Object?> _manifestJson(String id, String version) => {
-  'schemaVersion': 5,
+  'schemaVersion': 6,
   'name': id,
   'displayName': id,
   'version': version,

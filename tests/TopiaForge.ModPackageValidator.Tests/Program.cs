@@ -125,7 +125,7 @@ internal static class Program
         var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath)).RootElement;
         WriteJson(manifestPath, new
         {
-            schemaVersion = 5,
+            schemaVersion = 6,
             name = "../../outside",
             displayName = manifest.GetProperty("displayName").GetString(),
             version = "1.0.0",
@@ -246,7 +246,7 @@ internal static class Program
         File.WriteAllBytes(Path.Combine(packageRoot, "Example.dll"), "managed fixture"u8.ToArray());
         WriteJson(Path.Combine(packageRoot, "topiaforge.mod.json"), new
         {
-            schemaVersion = 5,
+            schemaVersion = 6,
             name = "example.handcrafted-session",
             displayName = "Handcrafted session",
             version = "1.0.0",
@@ -319,7 +319,7 @@ internal static class Program
         File.WriteAllText(Path.Combine(project, "topiaforge.dev.props"), "<Project />");
         WriteJson(Path.Combine(project, "topiaforge.mod.json"), new
         {
-            schemaVersion = 5,
+            schemaVersion = 6,
             name = "example.scaffold",
             displayName = "Example scaffold",
             version = "1.0.0",

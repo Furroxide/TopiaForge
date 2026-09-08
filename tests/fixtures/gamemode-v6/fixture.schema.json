@@ -29,8 +29,6 @@
     },
     "kind": {
       "enum": [
-        "launch-intent-round-trip",
-        "launch-intent-hostile",
         "manifest-accepts",
         "manifest-rejects",
         "manifest-model-rejects",
@@ -43,14 +41,6 @@
       "type": "string",
       "minLength": 8,
       "maxLength": 240
-    },
-    "selection": {
-      "type": "object",
-      "description": "The launcher-side WorldSelection JSON. Required by 'launch-intent-round-trip'; forbidden elsewhere."
-    },
-    "intent": {
-      "type": "object",
-      "description": "The one-shot worldLaunch intent carried on the launch profile."
     },
     "expect": {
       "type": "object",
@@ -66,12 +56,6 @@
         }
       }
     },
-    "divergenceReason": {
-      "type": "string",
-      "minLength": 16,
-      "maxLength": 512,
-      "description": "Explains a deliberate wire producer/consumer difference. Manifest reader/model operations cannot exempt equivalent-operation parity."
-    },
     "manifest": {
       "type": "object",
       "description": "A whole topiaforge.mod.json document. Required by the manifest kinds; forbidden elsewhere."
@@ -81,22 +65,6 @@
         "accept",
         "reject"
       ]
-    },
-    "operations": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "csharp",
-        "dart"
-      ],
-      "properties": {
-        "csharp": {
-          "const": "read-intent"
-        },
-        "dart": {
-          "const": "write-intent"
-        }
-      }
     },
     "modelMutation": {
       "enum": [
@@ -205,86 +173,6 @@
       "if": {
         "properties": {
           "kind": {
-            "const": "launch-intent-round-trip"
-          }
-        },
-        "required": [
-          "kind"
-        ]
-      },
-      "then": {
-        "required": [
-          "selection",
-          "intent",
-          "operations"
-        ],
-        "not": {
-          "anyOf": [
-            {
-              "required": [
-                "manifest"
-              ]
-            },
-            {
-              "required": [
-                "schemaOutcome"
-              ]
-            },
-            {
-              "required": [
-                "modelMutation"
-              ]
-            }
-          ]
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "kind": {
-            "const": "launch-intent-hostile"
-          }
-        },
-        "required": [
-          "kind"
-        ]
-      },
-      "then": {
-        "required": [
-          "intent",
-          "operations"
-        ],
-        "not": {
-          "anyOf": [
-            {
-              "required": [
-                "selection"
-              ]
-            },
-            {
-              "required": [
-                "manifest"
-              ]
-            },
-            {
-              "required": [
-                "schemaOutcome"
-              ]
-            },
-            {
-              "required": [
-                "modelMutation"
-              ]
-            }
-          ]
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "kind": {
             "const": "manifest-accepts"
           }
         },
@@ -299,26 +187,6 @@
         ],
         "not": {
           "anyOf": [
-            {
-              "required": [
-                "selection"
-              ]
-            },
-            {
-              "required": [
-                "intent"
-              ]
-            },
-            {
-              "required": [
-                "operations"
-              ]
-            },
-            {
-              "required": [
-                "divergenceReason"
-              ]
-            },
             {
               "required": [
                 "modelMutation"
@@ -348,26 +216,6 @@
           "anyOf": [
             {
               "required": [
-                "selection"
-              ]
-            },
-            {
-              "required": [
-                "intent"
-              ]
-            },
-            {
-              "required": [
-                "operations"
-              ]
-            },
-            {
-              "required": [
-                "divergenceReason"
-              ]
-            },
-            {
-              "required": [
                 "modelMutation"
               ]
             }
@@ -391,31 +239,7 @@
           "manifest",
           "schemaOutcome",
           "modelMutation"
-        ],
-        "not": {
-          "anyOf": [
-            {
-              "required": [
-                "selection"
-              ]
-            },
-            {
-              "required": [
-                "intent"
-              ]
-            },
-            {
-              "required": [
-                "operations"
-              ]
-            },
-            {
-              "required": [
-                "divergenceReason"
-              ]
-            }
-          ]
-        }
+        ]
       }
     },
     {
@@ -453,16 +277,6 @@
             {
               "required": [
                 "manifest"
-              ]
-            },
-            {
-              "required": [
-                "operations"
-              ]
-            },
-            {
-              "required": [
-                "divergenceReason"
               ]
             }
           ]
@@ -508,16 +322,6 @@
             },
             {
               "required": [
-                "selection"
-              ]
-            },
-            {
-              "required": [
-                "intent"
-              ]
-            },
-            {
-              "required": [
                 "transport"
               ]
             },
@@ -529,16 +333,6 @@
             {
               "required": [
                 "wireJson"
-              ]
-            },
-            {
-              "required": [
-                "operations"
-              ]
-            },
-            {
-              "required": [
-                "divergenceReason"
               ]
             }
           ]

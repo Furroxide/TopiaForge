@@ -101,9 +101,7 @@ void main() {
       );
       final directory = (body['kind']! as String).startsWith('manifest-')
           ? 'manifest'
-          : body['kind'] == 'transport-codec'
-          ? 'transport'
-          : 'launch-intent';
+          : 'transport';
       expect(
         path.startsWith(
           body['channel'] == 'resolution'
@@ -147,11 +145,6 @@ void main() {
             reason: path,
           );
         }
-      } else {
-        expect(body['operations'], {
-          'csharp': 'read-intent',
-          'dart': 'write-intent',
-        }, reason: path);
       }
     }
   });
@@ -371,10 +364,6 @@ ConformanceOutcome _execute(
   String path,
 ) {
   switch (kind) {
-    case 'launch-intent-round-trip':
-      return runLaunchIntentRoundTrip(body);
-    case 'launch-intent-hostile':
-      return runLaunchIntentHostile(body);
     case 'manifest-accepts':
     case 'manifest-rejects':
     case 'manifest-model-rejects':

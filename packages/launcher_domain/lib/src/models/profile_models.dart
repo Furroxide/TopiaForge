@@ -47,12 +47,10 @@ class LauncherProfile {
     this.selectedVersions = const {},
     this.configMetadata = const {},
     this.launchSettings = const LaunchSettings(),
-    WorldSelection? worldSelection,
     LaunchSelection? launchSelection,
     this.revision = 0,
     this.backupMetadata = const {},
-  }) : _worldSelection = worldSelection,
-       _launchSelection = launchSelection;
+  }) : _launchSelection = launchSelection;
 
   final String id;
   final String name;
@@ -65,19 +63,10 @@ class LauncherProfile {
   final Map<String, Object?> configMetadata;
   final LaunchSettings launchSettings;
   final int revision;
-  final WorldSelection? _worldSelection;
   final LaunchSelection? _launchSelection;
 
-  /// Legacy input retained while callers migrate; never runtime authority.
-  WorldSelection get worldSelection =>
-      _worldSelection ?? const WorldSelection();
   LaunchSelection get launchSelection =>
-      _launchSelection ??
-      (_worldSelection == null
-          ? const LaunchSelection.mainMenu()
-          : LaunchSelection.unresolvedLegacy({
-              'worldSelection': _worldSelection.toJson(),
-            }));
+      _launchSelection ?? const LaunchSelection.mainMenu();
   final Map<String, Object?> backupMetadata;
 
   factory LauncherProfile.defaultProfile() {
@@ -149,7 +138,6 @@ class LauncherProfile {
     Set<String>? enabledMods,
     Map<String, String>? selectedVersions,
     LaunchSettings? launchSettings,
-    WorldSelection? worldSelection,
     LaunchSelection? launchSelection,
     int? revision,
   }) {
@@ -162,10 +150,7 @@ class LauncherProfile {
       selectedVersions: selectedVersions ?? this.selectedVersions,
       configMetadata: configMetadata,
       launchSettings: launchSettings ?? this.launchSettings,
-      worldSelection: worldSelection ?? _worldSelection,
-      launchSelection:
-          launchSelection ??
-          (worldSelection == null ? this.launchSelection : null),
+      launchSelection: launchSelection ?? this.launchSelection,
       revision: revision ?? this.revision,
       backupMetadata: backupMetadata,
     );

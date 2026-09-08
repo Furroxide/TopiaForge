@@ -444,10 +444,15 @@ targets. Stage owned paths only; never use git add -A in the shared environment.
 | 6 | Atomic V6 alias/manifest/template flip, live declaration activation, consumer migration, old SDK startup API removal. |
 | 7 | Launcher/CLI/overlay target selection, preflight, wire/state migration, observations/outcomes. |
 | 7a | Separate release preparation: unsigned Windows policy, private-build prerequisites and detached exact-byte qualification; all publication gates preserved. |
-| 8 | V5 retirement, author migration, obsolete models removed, complete public docs and game acceptance. |
+| 8a | V5 retirement, lossless author migration/refusal, obsolete model removal, complete manifest reference and authored-world validation fixes. |
+| 8b | Isolated acceptance admission, retained native ownership, schema3 evidence/release integration, and actual game/editor acceptance. |
 
 The release request adds slice 7a as a separately reviewable PR after launcher
-integration and before final acceptance. This preserves the eight redesign slices.
+integration and before final acceptance. Slice 8 is re-cut into 8a and 8b because
+measured OS identity, guarded runtime acknowledgement and release-script admission
+form a separate reviewable change from manifest retirement. Preserve that prepared
+source, but create the 8b delivery branch only after 8a merges. Both require fresh
+CI against `dev`; neither local preparation nor integration substitutes for game evidence.
 RC1 is unsigned Windows x64 `0.1.0-rc.1`; update metadata remains Ed25519 signed.
 Separate private-build prerequisites from final release permission: the four
 non-game blocking gates must already have reviewed approval before building, and
@@ -516,6 +521,24 @@ Launcher-profile separation alone does not establish native-save isolation. Veri
 the actual loader, manager and native persistent-data roots before gameplay; use
 a separate native user environment when no supported save-root override exists.
 Retain the launched process identity and stop only that owned process.
+
+Acceptance uses an explicit private provisioning record before any staging,
+installation or launch writes. Read the primary process token and OS known
+folders; environment paths cannot substitute for them. Check the suspended
+child's original native handle before resume and constrain bootstrap configuration
+before native loader writes. The private schema-1 sidecar binds the exact V4
+profile bytes, request ID, challenge, provisioning-record hash, expected identity
+and four runtime roots. The plugin checks its actual identity/roots before manager
+persistence or package loading, consumes only the admitted profile and writes one
+correlated acknowledgement. Malformed/denied acceptance cannot fall through normal
+safe startup. Native cancellation does not grant permission to stop an unrelated
+process or discard a layout whose owned process may still be running.
+
+The private schema-3 acceptance result retains the full acknowledgement, its exact
+byte hash, the provisioning-record hash and confirmed owned-process exit. Runtime
+admission is separate from confirmed Running and the manual case matrix. Public
+qualification includes reviewed results and hashes without SID, paths or raw logs.
+
 
 Completion requires integrated slices, removed obsolete launch paths, published
 replacement guidance, passing automated evidence, and recorded game acceptance.

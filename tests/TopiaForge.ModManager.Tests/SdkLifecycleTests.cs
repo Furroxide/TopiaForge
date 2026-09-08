@@ -161,7 +161,7 @@ namespace TopiaForge.ModManager.Tests
             var context = new ModContext(
                 new ModManifest
                 {
-                    SchemaVersion = 5,
+                    SchemaVersion = 6,
                     Id = "example.lifecycle",
                     Name = "Lifecycle Example",
                     Version = "1.2.3-beta.1+test",
@@ -219,7 +219,7 @@ namespace TopiaForge.ModManager.Tests
             var failingContext = new ModContext(
                 new ModManifest
                 {
-                    SchemaVersion = 5,
+                    SchemaVersion = 6,
                     Id = "example.partial",
                     Name = "Partial Example",
                     Version = "1.0.0",

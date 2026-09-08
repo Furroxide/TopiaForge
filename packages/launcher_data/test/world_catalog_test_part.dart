@@ -21,12 +21,24 @@ void _registerWorldCatalogTests({
       ],
     );
 
-    await repository().installPackage(package.path, install);
+    await expectLater(
+      repository().installPackage(package.path, install),
+      throwsA(
+        predicate<Object>(
+          (error) => error.toString().contains('worldGamemodes'),
+        ),
+      ),
+    );
     final snapshot = await repository().loadSnapshot();
 
     expect(
-      snapshot.worldCatalog.gamemodes.map((mode) => mode.id),
-      isNot(contains('mode.mod.survival')),
+      snapshot.installedMods.where((mod) => mod.id == 'mode.mod'),
+      isEmpty,
+    );
+    expect(snapshot.previewsByProfile, isNotEmpty);
+    expect(
+      snapshot.previewsByProfile.values.expand((preview) => preview.targets),
+      isEmpty,
     );
   });
 
@@ -76,9 +88,11 @@ void _registerWorldCatalogTests({
 
     final snapshot = await repository().loadSnapshot();
 
-    expect(snapshot.worldCatalog.worlds, isEmpty);
-    expect(snapshot.worldCatalog.gamemodes, isEmpty);
-    expect(snapshot.worldCatalog.menuEntries, isEmpty);
+    expect(snapshot.previewsByProfile, isNotEmpty);
+    expect(
+      snapshot.previewsByProfile.values.expand((preview) => preview.worlds),
+      isEmpty,
+    );
     expect(
       snapshot.previewsByProfile.values.expand((preview) => preview.targets),
       isEmpty,
@@ -98,8 +112,13 @@ void _registerWorldCatalogTests({
     final snapshot = await repository().loadSnapshot();
 
     expect(
-      snapshot.worldCatalog.gamemodes.map((mode) => mode.id),
-      isNot(contains('registry.sample.survival')),
+      snapshot.installedMods.where((mod) => mod.id == 'registry.sample'),
+      isNotEmpty,
+    );
+    expect(snapshot.previewsByProfile, isNotEmpty);
+    expect(
+      snapshot.previewsByProfile.values.expand((preview) => preview.targets),
+      isEmpty,
     );
   });
 }

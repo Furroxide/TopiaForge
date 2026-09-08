@@ -114,7 +114,6 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
     bool includeUnityCompanion = false,
     ModScaffoldOptions options = const ModScaffoldOptions(),
   }) async {
-    options.validateForScaffolding();
     final safeName = _safeName(id);
     final root = Directory(p.join(parentDirectory, safeName));
     if (root.existsSync()) {
@@ -126,6 +125,7 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
       (template) => template.id == options.template,
       orElse: () => ModTemplateInfo(id: options.template),
     );
+    options.validateForScaffolding(templateInfo.manifestDefaults);
     final withCompanion =
         includeUnityCompanion ||
         options.includeUnityCompanion ||

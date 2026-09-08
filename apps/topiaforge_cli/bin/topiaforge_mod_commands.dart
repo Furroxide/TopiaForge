@@ -64,7 +64,9 @@ extension _TopiaForgeModCommands on _TopiaForgeCli {
           '  topiaforge mod add|remove dependency|optional-dependency|conflict <id[@range]> [--project path]',
         );
         stdout.writeln(
-          '  topiaforge mod add|remove gamemode <id:Name[:description]> [--project path]',
+          '  Gamemodes: topiaforge new mod <id> --template gamemode; then edit '
+          'contributions.gamemodes and contributions.launchTargets in '
+          'topiaforge.mod.json.',
         );
         stdout.writeln(
           '  topiaforge mod add|remove <chronos|creatorcontent|prompts|robotkit|worlds|multiplayer|interop-unity> [--project path]',
@@ -172,6 +174,14 @@ extension _TopiaForgeModCommands on _TopiaForgeCli {
 
   Future<int> _modEditList(List<String> args, {required bool add}) async {
     var kind = args.firstOrNull;
+    if (kind == 'gamemode') {
+      throw UsageError(
+        'Metadata-only gamemode editing is retired. Use '
+        '`topiaforge new mod <id> --template gamemode` and edit '
+        'contributions.gamemodes and contributions.launchTargets in '
+        'topiaforge.mod.json.',
+      );
+    }
     var value = args.length > 1 ? args[1] : null;
     if (kind != null &&
         _sdkModules.containsKey(kind) &&
@@ -182,7 +192,7 @@ extension _TopiaForgeModCommands on _TopiaForgeCli {
     if (kind == null || value == null) {
       throw UsageError(
         'Usage: topiaforge mod ${add ? 'add' : 'remove'} <kind> <value> [--project path]\n'
-        'Kinds: ${_listFields.keys.join(', ')}, dependency, optional-dependency, conflict, gamemode',
+        'Kinds: ${_listFields.keys.join(', ')}, dependency, optional-dependency, conflict',
       );
     }
 
@@ -260,21 +270,6 @@ extension _TopiaForgeModCommands on _TopiaForgeCli {
             map['conflicts'] = items;
           }
         });
-      case 'gamemode':
-        final gamemode = _parseGamemodeSpec(value);
-        return _mutateManifest(args, (map) {
-          final items = _jsonMapList(
-            map['worldGamemodes'],
-          ).where((item) => item['id'] != gamemode.id).toList();
-          if (add) {
-            items.add(gamemode.toJson());
-          }
-          if (items.isEmpty) {
-            map.remove('worldGamemodes');
-          } else {
-            map['worldGamemodes'] = items;
-          }
-        });
       default:
         throw UsageError('Unknown kind: $kind');
     }
@@ -309,44 +304,6 @@ extension _TopiaForgeModCommands on _TopiaForgeCli {
       return (spec, const VersionRange.any());
     }
     return (spec.substring(0, at), VersionRange.parse(spec.substring(at + 1)));
-  }
-
-  String _migrateV3DependencyRange(String value) {
-    final range = value.trim();
-    try {
-      VersionRange.parse(range);
-      return range.isEmpty ? '*' : range;
-    } on FormatException {
-      // V3's vpmDependencies name encouraged the VPM caret/tilde syntax.
-      // Canonical V5 ranges use the framework's explicit comparator form.
-      if (range.length < 2 || (range[0] != '^' && range[0] != '~')) {
-        return range;
-      }
-      final minimum = SemanticVersion.tryParse(range.substring(1));
-      if (minimum == null) return range;
-      final maximum = range[0] == '~'
-          ? minimum.incrementMinor()
-          : minimum.majorNumber.isPositive
-          ? minimum.incrementMajor()
-          : minimum.minorNumber.isPositive
-          ? minimum.incrementMinor()
-          : minimum.incrementPatch();
-      return '>=$minimum <$maximum';
-    }
-  }
-
-  GamemodeDefinition _parseGamemodeSpec(String spec) {
-    final parts = spec.split(':');
-    if (parts.first.trim().isEmpty) {
-      throw StateError('Gamemode spec must be <id:Name[:description]>.');
-    }
-    return GamemodeDefinition(
-      id: parts[0].trim(),
-      name: parts.length > 1 && parts[1].trim().isNotEmpty
-          ? parts[1].trim()
-          : parts[0].trim(),
-      description: parts.length > 2 ? parts.sublist(2).join(':').trim() : '',
-    );
   }
 
   List<String> _jsonStringList(Object? value) =>

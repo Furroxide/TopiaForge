@@ -49,8 +49,6 @@ CHANNEL_RUNNERS = {
 # harness rather than skipping.
 KNOWN_KINDS = {
     "serialization": {
-        "launch-intent-round-trip",
-        "launch-intent-hostile",
         "manifest-accepts",
         "manifest-rejects",
         "manifest-model-rejects",
@@ -140,7 +138,7 @@ def _load_case(path: Path) -> dict:
                 raise FixtureIndexError(f"{relative} repeats errorCodes for {runner}.")
         elif "errorCodes" in expectation:
             raise FixtureIndexError(f"{relative} cannot accept with errorCodes for {runner}.")
-    directory = "manifest" if case["kind"].startswith("manifest-") else "transport" if case["kind"] == "transport-codec" else "launch-intent"
+    directory = "manifest" if case["kind"].startswith("manifest-") else "transport"
     if channel == "resolution": directory = ""
     if not relative.startswith(f"{channel}/" + (f"{directory}/" if directory else "")):
         raise FixtureIndexError(f"{relative} is misplaced; its kind belongs under {channel}/{directory}/.")
@@ -166,9 +164,6 @@ def _load_case(path: Path) -> dict:
     elif channel == "resolution" or case["kind"] == "transport-codec":
         if case["expect"]["csharp"] != case["expect"]["dart"]:
             raise FixtureIndexError(f"{relative} has divergent same-operation expectations.")
-    else:
-        if case.get("operations") != {"csharp": "read-intent", "dart": "write-intent"}:
-            raise FixtureIndexError(f"{relative} requires explicit wire operations.")
     if case["kind"] == "transport-codec" or channel == "resolution":
         expectation = case["expect"]["csharp"]
         if expectation["outcome"] == "accept" and not isinstance(expectation.get("normalized"), dict):

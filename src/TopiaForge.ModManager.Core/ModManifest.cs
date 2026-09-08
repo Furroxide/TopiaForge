@@ -25,7 +25,7 @@ namespace TopiaForge.ModManager.Core
         /// silently stops applying is worse than one that rejects.
         /// </summary>
         public static bool IsSupportedSchemaVersion(int schemaVersion) =>
-            schemaVersion == ManifestV5SchemaVersion || schemaVersion == ManifestV6SchemaVersion;
+            schemaVersion == ManifestV6SchemaVersion;
 
         [DataMember(Name = "$schema", EmitDefaultValue = false)]
         public string SchemaUrl { get; set; } = string.Empty;
@@ -163,21 +163,10 @@ namespace TopiaForge.ModManager.Core
         public List<string> ApiAssemblies { get; set; } = new List<string>();
 
         /// <summary>
-        /// The worlds, gamemodes and launch targets this package declares. V6 only; null on a V5
-        /// manifest, which had no way to express any of them.
+        /// The worlds, gamemodes and launch targets this package declares.
         /// </summary>
         [DataMember(Name = "contributions", EmitDefaultValue = false)]
         public ModContributions? Contributions { get; set; }
-
-        [IgnoreDataMember]
-        public List<ModGamemode> WorldGamemodes { get; set; } = new List<ModGamemode>();
-
-        [DataMember(Name = "worldGamemodes", EmitDefaultValue = false)]
-        private List<ModGamemode>? SerializedWorldGamemodes
-        {
-            get => SchemaVersion == ManifestV6SchemaVersion && WorldGamemodes?.Count == 0 ? null : WorldGamemodes;
-            set => WorldGamemodes = value ?? new List<ModGamemode>();
-        }
 
         [DataMember(Name = "multiplayer", EmitDefaultValue = false)]
         public ModMultiplayerMetadata? Multiplayer { get; set; }
@@ -220,6 +209,9 @@ namespace TopiaForge.ModManager.Core
         [DataMember(Name = "packageHashes", EmitDefaultValue = false)]
         private Dictionary<string, string>? UnsupportedPackageHashes { get; set; }
 
+        [DataMember(Name = "worldGamemodes", EmitDefaultValue = false)]
+        private List<object>? UnsupportedWorldGamemodes { get; set; }
+
         [DataMember(Name = "gamemodes", EmitDefaultValue = false)]
         private List<object>? UnsupportedGamemodes { get; set; }
 
@@ -244,6 +236,7 @@ namespace TopiaForge.ModManager.Core
             if (UnsupportedSdkVersionRange != null) yield return "sdkVersionRange";
             if (UnsupportedPackageHashes != null) yield return "packageHashes";
             if (UnsupportedGamemodes != null) yield return "gamemodes";
+            if (UnsupportedWorldGamemodes != null) yield return "worldGamemodes";
             if (UnsupportedLegacyFolders != null) yield return "legacyFolders";
             if (UnsupportedLegacyFiles != null) yield return "legacyFiles";
             if (UnsupportedLegacyPackages != null) yield return "legacyPackages";
@@ -399,16 +392,4 @@ namespace TopiaForge.ModManager.Core
         public string Reason { get; set; } = string.Empty;
     }
 
-    [DataContract]
-    public sealed class ModGamemode
-    {
-        [DataMember(Name = "id", IsRequired = true)]
-        public string Id { get; set; } = string.Empty;
-
-        [DataMember(Name = "name", IsRequired = true)]
-        public string Name { get; set; } = string.Empty;
-
-        [DataMember(Name = "description")]
-        public string Description { get; set; } = string.Empty;
-    }
 }

@@ -36,7 +36,7 @@ void main() {
 
   void writeManifest([Map<String, Object?>? overrides]) {
     final manifest = <String, Object?>{
-      'schemaVersion': 5,
+      'schemaVersion': 6,
       'name': 'sample.mod',
       'displayName': 'Sample Mod',
       'version': '1.2.3',

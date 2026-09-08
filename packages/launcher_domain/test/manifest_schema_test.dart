@@ -38,65 +38,23 @@ void main() {
     );
   });
 
-  test('versioned V6 schema carries the V5 body over verbatim', () {
-    final root = _repoRoot();
-    Map<String, Object?> readSchema(String name) =>
-        jsonDecode(File(_join(root.path, ['schemas', name])).readAsStringSync())
-            as Map<String, Object?>;
-
-    final v5 = readSchema('topiaforge.mod.v5.schema.json');
-    final v6 = readSchema('topiaforge.mod.v6.schema.json');
-    expect(
-      jsonEncode(v6),
-      isNot(contains('/schemas/topiaforge.mod.schema.json')),
-      reason:
-          'a frozen versioned schema must never reference the mutable latest schema',
-    );
-    expect(
-      ((v6['properties'] as Map)['schemaVersion'] as Map)['const'],
-      ModManifest.manifestV6SchemaVersion,
-    );
-
-    // V6 changes exactly two properties and adds one. Everything else is the V5
-    // body unchanged, and this is what makes that a fact rather than a claim: a
-    // hand edit that drifts one carried-over rule fails here.
-    final v5Properties = v5['properties']! as Map<String, Object?>;
-    final v6Properties = v6['properties']! as Map<String, Object?>;
-    for (final name in v5Properties.keys) {
-      if (name == 'schemaVersion' || name == 'worldGamemodes') {
-        continue;
+  test('retired V4 and V5 schemas reject every manifest', () {
+    for (final version in [4, 5]) {
+      final schema = _manifestSchema(version: version);
+      for (final value in [
+        <String, Object?>{},
+        _validManifest(),
+        {..._validManifest(), 'schemaVersion': version},
+        null,
+        [],
+      ]) {
+        expect(
+          schema.validate(value).isValid,
+          isFalse,
+          reason: 'V$version must reject $value',
+        );
       }
-      expect(
-        v6Properties[name],
-        v5Properties[name],
-        reason: 'property $name must be carried over from V5 unchanged',
-      );
     }
-    expect(v6Properties.keys.toSet().difference(v5Properties.keys.toSet()), {
-      'contributions',
-    });
-
-    final v5Definitions = v5['definitions']! as Map<String, Object?>;
-    final v6Definitions = v6['definitions']! as Map<String, Object?>;
-    for (final name in v5Definitions.keys) {
-      if (!v6Definitions.containsKey(name)) {
-        // `gamemode` described a V5 worldGamemodes entry. Nothing in V6 refers
-        // to it, and V5 keeps its own frozen copy, so carrying it would be dead
-        // schema.
-        expect(name, 'gamemode');
-        continue;
-      }
-      expect(
-        v6Definitions[name],
-        v5Definitions[name],
-        reason: 'definition $name must be carried over from V5 unchanged',
-      );
-    }
-    expect(
-      jsonEncode(v6),
-      isNot(contains('#/definitions/gamemode"')),
-      reason: 'a definition V6 dropped must not still be referenced',
-    );
   });
 
   test('the retired V6 worldGamemodes stub rejects any value', () {
@@ -223,48 +181,53 @@ void main() {
     }
   });
 
-  test('shared V5 fixtures agree across schema and domain validators', () {
-    final root = _repoRoot();
-    final schema = _manifestSchema(version: 5);
-    final fixtureRoot = _join(root.path, ['tests', 'fixtures', 'manifests']);
-    final cases = File(_join(fixtureRoot, ['corpus.txt']))
-        .readAsLinesSync()
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty && !line.startsWith('#'));
+  test(
+    'shared current and retired fixtures agree across schema and domain validators',
+    () {
+      final root = _repoRoot();
+      final schema = _manifestSchema();
+      final fixtureRoot = _join(root.path, ['tests', 'fixtures', 'manifests']);
+      final cases = File(_join(fixtureRoot, ['corpus.txt']))
+          .readAsLinesSync()
+          .map((line) => line.trim())
+          .where((line) => line.isNotEmpty && !line.startsWith('#'));
 
-    for (final testCase in cases) {
-      final separator = testCase.indexOf(' ');
-      final expectation = testCase.substring(0, separator);
-      final fixtureName = testCase.substring(separator + 1).trim();
-      final json =
-          jsonDecode(File(_join(fixtureRoot, [fixtureName])).readAsStringSync())
-              as Map<String, Object?>;
-      final expectedValid = expectation == 'valid';
-      final expectedSchemaValid = expectation != 'invalid-schema';
-      final schemaValid = schema.validate(json).isValid;
-      var domainValid = false;
-      try {
-        domainValid = ModManifest.fromJson(
-          json,
-        ).validate().every((issue) => !issue.isBlocking);
-      } on FormatException {
-        domainValid = false;
-      } on TypeError {
-        domainValid = false;
+      for (final testCase in cases) {
+        final separator = testCase.indexOf(' ');
+        final expectation = testCase.substring(0, separator);
+        final fixtureName = testCase.substring(separator + 1).trim();
+        final json =
+            jsonDecode(
+                  File(_join(fixtureRoot, [fixtureName])).readAsStringSync(),
+                )
+                as Map<String, Object?>;
+        final expectedValid = expectation == 'valid';
+        final expectedSchemaValid = expectation != 'invalid-schema';
+        final schemaValid = schema.validate(json).isValid;
+        var domainValid = false;
+        try {
+          domainValid = ModManifest.fromJson(
+            json,
+          ).validate().every((issue) => !issue.isBlocking);
+        } on FormatException {
+          domainValid = false;
+        } on TypeError {
+          domainValid = false;
+        }
+
+        expect(
+          schemaValid,
+          expectedSchemaValid,
+          reason: 'JSON Schema disagreed for $fixtureName',
+        );
+        expect(
+          domainValid,
+          expectedValid,
+          reason: 'Dart validator disagreed for $fixtureName',
+        );
       }
-
-      expect(
-        schemaValid,
-        expectedSchemaValid,
-        reason: 'JSON Schema disagreed for $fixtureName',
-      );
-      expect(
-        domainValid,
-        expectedValid,
-        reason: 'Dart validator disagreed for $fixtureName',
-      );
-    }
-  });
+    },
+  );
 }
 
 JsonSchema _manifestSchema({int? version}) {
