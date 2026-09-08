@@ -47,7 +47,7 @@ tag_is_prerelease=false
   echo "Assets directory must be a real directory: $assets_dir" >&2
   exit 1
 }
-for command in gh git jq sha256sum; do
+for command in gh git jq sha256sum dart; do
   command -v "$command" >/dev/null || {
     echo "$command is required." >&2
     exit 1
@@ -105,6 +105,8 @@ done < <(jq -r '.[]' <<<"$workflow_generated_json" | tr -d '\r')
 # be lifted with the policy. See P0-LINUX-01 in docs/LaunchBlockers.md.
 required_handoff_assets=(
   release-handoff-v1.json
+  release-candidate-readiness-v1.json
+  release-candidate-acceptance-v1.json
 )
 # An unsigned distribution has no certificate and therefore no detached CMS
 # handoff signature. Demanding the P7S unconditionally is what made the hosted
@@ -171,6 +173,24 @@ if [[ $mode == publish ]]; then
   )
 fi
 
+asset_policy=$(bash "$script_dir/release-asset-policy.sh" "$repository_root" "${tag#v}")
+declare -A allowed_assets
+while IFS= read -r name; do allowed_assets[$name]=1; done < <(
+  jq -r '.all[]' <<<"$asset_policy" | tr -d '\r'
+)
+while IFS= read -r name; do
+  [[ -f $assets_dir/$name && ! -L $assets_dir/$name && -s $assets_dir/$name ]] || {
+    echo "Required admin-staged candidate asset is missing or unsafe: $name" >&2; exit 1;
+  }
+done < <(jq -r '.human[]' <<<"$asset_policy" | tr -d '\r')
+assets_dir=$(CDPATH='' cd -- "$assets_dir" && pwd)
+validate_qualification() {
+  (cd "$repository_root/apps/topiaforge_cli" &&
+    dart run bin/topiaforge.dart release validate-readiness \
+      --version "${tag#v}" --target-sha "$target_sha" --assets "$assets_dir")
+}
+validate_qualification
+
 mapfile -d '' local_paths < <(
   find "$assets_dir" -mindepth 1 -maxdepth 1 -type f -print0 | sort -z
 )
@@ -195,6 +215,10 @@ for path in "${local_paths[@]}"; do
     exit 1
   }
   local_path[$name]=$path
+  [[ -n ${allowed_assets[$name]+x} ]] || {
+    echo "Local release asset is outside the exact reviewed allowlist: $name" >&2
+    exit 1
+  }
   local_sha[$name]=$(sha256sum "$path" | awk '{print $1}')
   local_size[$name]=$(wc -c <"$path" | tr -d ' ')
 done
@@ -465,6 +489,7 @@ if [[ $draft == true ]]; then
   }
   "$script_dir/verify-release-tag.sh" "$tag" "$target_sha" origin >/dev/null
   reconcile_assets "$release_id" false
+  validate_qualification
   jq -n '{draft:false}' |
     gh_api --method PATCH "repos/$repository/releases/$release_id" --input - \
       >"$release_file"

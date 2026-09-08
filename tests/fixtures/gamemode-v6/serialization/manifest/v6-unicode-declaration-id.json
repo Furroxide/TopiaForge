@@ -46,17 +46,6 @@
             "type": "Fixture.SurvivalGamemode"
           }
         }
-      ],
-      "launchTargets": [
-        {
-          "id": "io.github.furroxide.topiaforge.fixture.play",
-          "title": "Play",
-          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
-          "world": {
-            "policy": "fixed",
-            "default": "io.github.furroxide.topiaforge.fixture.arena"
-          }
-        }
       ]
     }
   },

@@ -1,7 +1,7 @@
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
     [Parameter(Position = 0, Mandatory = $true)]
-    [ValidateSet("preflight", "build", "stage", "dispatch", "resume", "all")]
+    [ValidateSet("preflight", "build", "qualify", "stage", "dispatch", "resume", "all")]
     [string]$Command,
 
     [string]$Version,
@@ -113,13 +113,20 @@ function Invoke-Checked {
         [string[]]$Arguments = @(),
         [Parameter()]
         [string]$WorkingDirectory = $repositoryRoot,
-        [switch]$Capture
+        [switch]$Capture,
+        [switch]$StandardOutputOnly
     )
 
     Push-Location $WorkingDirectory
     try {
         if ($Capture) {
-            $result = & $FilePath @Arguments 2>&1
+            $result = if ($StandardOutputOnly) {
+                # Readiness emits JSON on stdout and advisory diagnostics on stderr.
+                & $FilePath @Arguments
+            }
+            else {
+                & $FilePath @Arguments 2>&1
+            }
             if ($LASTEXITCODE -ne 0) {
                 throw "'$FilePath' failed with exit code $LASTEXITCODE.`n$($result | Out-String)"
             }
@@ -787,7 +794,7 @@ function Use-StateConfiguration {
         $hasStoredValue = $State.PSObject.Properties.Name -contains $stateName -and
             -not [string]::IsNullOrWhiteSpace([string]$State.$stateName)
         $evidenceIsFrozen = [string]$State.phase -in @(
-            "built", "staged", "dispatch-requested", "published"
+            "built", "accepted", "staged", "dispatch-requested", "published"
         )
         if ($explicitParameters.ContainsKey($parameterName)) {
             $requestedValue = [string](Get-Variable -Scope Script -Name $parameterName).Value
@@ -842,9 +849,9 @@ function Write-State {
         $body[$entry.Key] = $entry.Value
     }
     $temporary = "$statePath.tmp"
-    $body | ConvertTo-Json -Depth 8 |
+    $body | ConvertTo-Json -Depth 32 |
         Set-Content -LiteralPath $temporary -Encoding utf8NoBOM
-    Move-Item -LiteralPath $temporary -Destination $statePath -Force
+    [System.IO.File]::Move($temporary, $statePath, $true)
 }
 
 function Assert-SourceStillExact {
@@ -975,6 +982,132 @@ function Get-DartAndFlutter {
     }
 }
 
+function ConvertTo-CanonicalReleaseJson {
+    param([AllowNull()][object]$Value)
+    if ($null -eq $Value) { return "null" }
+    if ($Value -is [System.Collections.IDictionary] -or $Value -is [pscustomobject]) {
+        $names = if ($Value -is [System.Collections.IDictionary]) {
+            [string[]]@($Value.Keys)
+        } else { [string[]]@($Value.PSObject.Properties.Name) }
+        [Array]::Sort($names, [StringComparer]::Ordinal)
+        $pairs = foreach ($name in $names) {
+            $entry = if ($Value -is [System.Collections.IDictionary]) { $Value[$name] } else { $Value.$name }
+            ($name | ConvertTo-Json -Compress) + ':' + (ConvertTo-CanonicalReleaseJson $entry)
+        }
+        return '{' + [string]::Join(',', @($pairs)) + '}'
+    }
+    if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [string]) {
+        $items = foreach ($entry in $Value) { ConvertTo-CanonicalReleaseJson $entry }
+        return '[' + [string]::Join(',', @($items)) + ']'
+    }
+    return ConvertTo-Json -InputObject $Value -Compress -Depth 32
+}
+
+function Get-ReleaseAssessment {
+    param(
+        [Parameter(Mandatory = $true)][string]$SourceSha,
+        [ValidateSet("prerequisites", "readiness")][string]$Kind = "readiness"
+    )
+    $sdk = Get-DartAndFlutter
+    $arguments = @(
+        "run", "bin/topiaforge.dart", "release", "validate-$Kind",
+        "--version", $Version, "--target-sha", $SourceSha
+    )
+    if ($Kind -ceq "readiness") { $arguments += @("--assets", $assetsDirectory) }
+    $assessment = Invoke-Checked $sdk.Dart $arguments `
+        -WorkingDirectory (Join-Path $repositoryRoot "apps/topiaforge_cli") `
+        -Capture -StandardOutputOnly |
+        ConvertFrom-Json
+    $expectedSchema = if ($Kind -ceq "readiness") {
+        "release-candidate-readiness-summary-v1"
+    } else { "release-prerequisites-summary-v1" }
+    $expectedStatus = if ($Kind -ceq "readiness") { "ready" } else { "eligible-for-private-build" }
+    foreach ($identity in @(
+            @("schema", $expectedSchema), @("status", $expectedStatus),
+            @("targetSha", $SourceSha), @("releaseVersion", $Version)
+        )) {
+        if ($null -eq $assessment -or
+            $assessment.PSObject.Properties.Name -notcontains $identity[0] -or
+            $assessment.($identity[0]) -isnot [string] -or
+            $assessment.($identity[0]) -cne $identity[1]) {
+            throw "Release $Kind assessment does not match the exact candidate."
+        }
+    }
+    $digestNames = @("baseReadinessSha256")
+    if ($Kind -ceq "readiness") {
+        $digestNames += @("decisionSha256", "acceptanceSha256", "handoffSha256",
+            "baseSchemaSha256", "policySha256", "catalogSha256", "contractSha256")
+        Assert-ExactJsonProperties -Value $assessment -Expected (
+            @("schema", "repository", "releaseVersion", "targetSha", "status", "payloads", "gates") + $digestNames
+        ) -Label "Release qualification summary"
+        if ($assessment.repository -isnot [string] -or $assessment.repository -ine $Repository -or
+            $assessment.payloads -isnot [array] -or $assessment.payloads.Count -eq 0 -or
+            $assessment.gates -isnot [array] -or $assessment.gates.Count -eq 0) {
+            throw "Release qualification summary is not a complete candidate assessment."
+        }
+    }
+    foreach ($name in $digestNames) {
+        if ($assessment.PSObject.Properties.Name -notcontains $name -or
+            $assessment.$name -isnot [string] -or $assessment.$name -cnotmatch '^[0-9a-f]{64}$') {
+            throw "Release $Kind summary has an invalid $name."
+        }
+    }
+    return $assessment
+}
+
+function Assert-CandidateBuild {
+    param([Parameter(Mandatory = $true)][psobject]$State)
+    if ($State.schema -cne "release-admin-state-v1" -or $State.version -cne $Version -or
+        $State.tag -cne $tag -or $State.sourceSha -cnotmatch '^[0-9a-f]{40}$') {
+        throw "Release state does not identify the exact candidate."
+    }
+    Assert-SourceStillExact ([string]$State.sourceSha)
+    Assert-OriginStillExact ([string]$State.sourceSha)
+    Build-Handoff -SourceSha $State.sourceSha -CanonicalSha $State.canonicalSha256 `
+        -CanonicalArchiveSha $State.canonicalArchiveSha256 `
+        -EcosystemEvidenceSha $State.ecosystemEvidenceSha256 -VerifyOnly
+}
+
+function Assert-CandidateQualification {
+    param([Parameter(Mandatory = $true)][psobject]$State)
+    if ($State.phase -notin @("accepted", "staged", "dispatch-requested", "published") -or
+        $State.PSObject.Properties.Name -notcontains "qualification" -or $null -eq $State.qualification) {
+        throw "Run release-admin.ps1 qualify before publication; accepted qualification is missing."
+    }
+    Assert-CandidateBuild -State $State
+    $current = Get-ReleaseAssessment -SourceSha ([string]$State.sourceSha)
+    if ((ConvertTo-CanonicalReleaseJson $current) -cne
+        (ConvertTo-CanonicalReleaseJson $State.qualification)) {
+        throw "The accepted candidate qualification changed; publication is forbidden."
+    }
+}
+
+function Invoke-Qualify {
+    $state = Read-State
+    if ($null -eq $state -or $state.phase -notin @("built", "accepted")) {
+        throw "A fully verified built candidate is required before qualify."
+    }
+    Use-StateConfiguration $state
+    if ($Rehearsal -or [bool]$state.rehearsal) {
+        throw "A rehearsal can never qualify for publication."
+    }
+    if ($state.phase -ceq "accepted") {
+        Assert-CandidateQualification -State $state
+        Write-Host "The exact candidate qualification already exists and verifies."
+        return [string]$state.sourceSha
+    }
+    Assert-CandidateBuild -State $state
+    $assessment = Get-ReleaseAssessment -SourceSha ([string]$state.sourceSha)
+    Write-State -Phase "accepted" -SourceSha ([string]$state.sourceSha) -Additional @{
+        canonicalSha256 = [string]$state.canonicalSha256
+        canonicalArchiveSha256 = [string]$state.canonicalArchiveSha256
+        ecosystemEvidenceSha256 = [string]$state.ecosystemEvidenceSha256
+        qualification = $assessment
+    }
+    Write-Host "Exact candidate payloads, handoff, acceptance and decision are qualified."
+    return [string]$state.sourceSha
+}
+
 function Invoke-Preflight {
     $existingState = Read-State
     if ($null -ne $existingState) {
@@ -982,7 +1115,7 @@ function Invoke-Preflight {
             $existingState.version -ne $Version -or
             $existingState.tag -ne $tag -or
             $existingState.phase -notin @(
-                "preflight", "platforms-built", "built", "staged",
+                "preflight", "platforms-built", "built", "accepted", "staged",
                 "dispatch-requested", "published"
             )) {
             throw "Existing release state is invalid or belongs to another candidate."
@@ -1052,16 +1185,7 @@ function Invoke-Preflight {
         throw "Production release forbids every code-signing exception."
     }
     $sdk = Get-DartAndFlutter
-    Invoke-Checked $sdk.Dart @(
-        "run",
-        "bin/topiaforge.dart",
-        "release",
-        "validate-readiness",
-        "--version",
-        $Version,
-        "--target-sha",
-        $head
-    ) -WorkingDirectory (Join-Path $repositoryRoot "apps/topiaforge_cli")
+    Get-ReleaseAssessment -SourceSha $head -Kind prerequisites | Out-Null
     $windowsCertificatePin = ""
     if ($policyAtHead.signingIdentities.PSObject.Properties.Name -contains
         "windowsCertificateSha256") {
@@ -2636,18 +2760,19 @@ function Build-Handoff {
 function Invoke-Build {
     $state = Read-State
     if ($null -eq $state -or $state.phase -notin @(
-            "preflight", "platforms-built", "built", "staged",
+            "preflight", "platforms-built", "built", "accepted", "staged",
             "dispatch-requested", "published"
         )) {
         throw "Run release-admin.ps1 preflight before build."
     }
     Use-StateConfiguration $state
+    if ($state.phase -in @("accepted", "staged", "dispatch-requested", "published")) {
+        throw "An accepted candidate cannot be rebuilt or repacked; resume its qualified bytes."
+    }
     $sourceSha = [string]$state.sourceSha
     Assert-SourceStillExact $sourceSha
     Assert-OriginStillExact $sourceSha
-    if ($state.phase -in @(
-            "built", "staged", "dispatch-requested", "published"
-        )) {
+    if ($state.phase -ceq "built") {
         Build-Handoff -SourceSha $sourceSha -CanonicalSha $state.canonicalSha256 `
             -CanonicalArchiveSha $state.canonicalArchiveSha256 `
             -EcosystemEvidenceSha $state.ecosystemEvidenceSha256 -VerifyOnly
@@ -2803,7 +2928,11 @@ function Get-StagedAssetPaths {
     if ((Get-WindowsDistributionMode -PolicyObject $policy) -cne "unsigned") {
         $handoffNames += "release-handoff-v1.json.p7s"
     }
-    $names = @($release.artifacts) + $bundleNames + $handoffNames
+    $qualificationNames = @(
+        "release-candidate-readiness-v1.json",
+        "release-candidate-acceptance-v1.json"
+    )
+    $names = @($release.artifacts) + $bundleNames + $handoffNames + $qualificationNames
     return @($names | ForEach-Object {
             $path = Join-Path $assetsDirectory $_
             if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
@@ -2929,22 +3058,18 @@ function Invoke-Stage {
 
     $state = Read-State
     if ($null -eq $state -or $state.phase -notin @(
-            "built", "staged", "dispatch-requested", "published"
+            "accepted", "staged", "dispatch-requested", "published"
         )) {
-        throw "A fully verified local build is required before staging."
+        throw "Run release-admin.ps1 qualify for the exact built candidate before staging."
     }
     Use-StateConfiguration $state
     if ($Rehearsal -or [bool]$state.rehearsal) {
         throw "A rehearsal can never create tags or mutate GitHub releases."
     }
     $originalPhase = [string]$state.phase
-    $allowMutation = $originalPhase -eq "built"
+    $allowMutation = $originalPhase -eq "accepted"
     $sourceSha = [string]$state.sourceSha
-    Assert-SourceStillExact $sourceSha
-    Assert-OriginStillExact $sourceSha
-    Build-Handoff -SourceSha $sourceSha -CanonicalSha $state.canonicalSha256 `
-        -CanonicalArchiveSha $state.canonicalArchiveSha256 `
-        -EcosystemEvidenceSha $state.ecosystemEvidenceSha256 -VerifyOnly
+    Assert-CandidateQualification -State $state
     Invoke-Checked $gitHubCli @("auth", "status", "--hostname", "github.com")
     $isAdmin = Invoke-Checked $gitHubCli @(
         "api", "repos/$Repository", "--jq", ".permissions.admin"
@@ -2985,16 +3110,7 @@ function Invoke-Stage {
         "api", "user", "--jq", ".login"
     ) -Capture
     Assert-GitHubTagSigningIdentity -GitHubLogin $stageGitHubLogin
-    Invoke-Checked $sdk.Dart @(
-        "run",
-        "bin/topiaforge.dart",
-        "release",
-        "validate-readiness",
-        "--version",
-        $Version,
-        "--target-sha",
-        $sourceSha
-    ) -WorkingDirectory (Join-Path $repositoryRoot "apps/topiaforge_cli")
+    Assert-CandidateQualification -State $state
     Assert-ExactSignedTag -SourceSha $sourceSha -AllowCreation $allowMutation
 
     $releaseJson = & $gitHubCli release view $tag --repo $Repository `
@@ -3212,11 +3328,13 @@ function Invoke-Stage {
             Assert-RemoteAssetMatches -AssetName $name -LocalPath $localAsset
         }
     }
-    if ($originalPhase -eq "built") {
+    Assert-CandidateQualification -State $state
+    if ($originalPhase -eq "accepted") {
         Write-State -Phase "staged" -SourceSha $sourceSha -Additional @{
             canonicalSha256 = [string]$state.canonicalSha256
             canonicalArchiveSha256 = [string]$state.canonicalArchiveSha256
             ecosystemEvidenceSha256 = [string]$state.ecosystemEvidenceSha256
+            qualification = $state.qualification
         }
     }
     Write-Host "Exact local handoff is staged on the GitHub draft."
@@ -3323,6 +3441,7 @@ function Write-FinalizerState {
                 [string]$State.canonicalArchiveSha256
             ecosystemEvidenceSha256 =
                 [string]$State.ecosystemEvidenceSha256
+            qualification = $State.qualification
             finalizerRequestId = $RequestId
             finalizerRunId = $RunId
             finalizerDispatchAttempt = $DispatchAttempt
@@ -3651,6 +3770,8 @@ function Invoke-Dispatch {
         throw "A rehearsal can never dispatch the protected publisher."
     }
 
+    Assert-CandidateQualification -State $state
+
     if ($state.phase -eq "published") {
         $publishedRequestId = Get-FinalizerRequestId -State $state
         $publishedRunId = Get-FinalizerRunId -State $state -Required
@@ -3791,6 +3912,9 @@ function Invoke-All {
         return
     }
     if ($state.phase -eq "built") {
+        throw "Candidate bytes are built. Run release-admin.ps1 qualify with reviewed detached evidence before publication."
+    }
+    if ($state.phase -eq "accepted") {
         Invoke-Stage | Out-Null
         $state = Read-State
     }
@@ -3807,6 +3931,7 @@ if ($env:TOPIAFORGE_RELEASE_TEST_IMPORT -ne "1") {
         switch ($Command) {
             "preflight" { Invoke-Preflight | Out-Null }
             "build" { Invoke-Build | Out-Null }
+            "qualify" { Invoke-Qualify | Out-Null }
             "stage" { Invoke-Stage | Out-Null }
             "dispatch" { Invoke-Dispatch }
             "resume" { Invoke-All }

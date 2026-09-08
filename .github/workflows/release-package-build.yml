@@ -3,10 +3,6 @@ name: Unsigned release package dry-run build
 on:
   workflow_call:
     inputs:
-      source_sha:
-        description: "Exact commit to package."
-        required: true
-        type: string
       fail_on_missing_refs:
         description: "Fail when public managed references are unavailable."
         required: false
@@ -28,13 +24,22 @@ env:
 jobs:
   build-launchers:
     name: Build Flutter launcher artifacts
+    needs: preflight
     uses: ./.github/workflows/flutter-launcher-builds.yml
     with:
       artifact_retention_days: ${{ inputs.artifact_retention_days }}
-      source_sha: ${{ inputs.source_sha }}
 
   preflight:
     name: Verify release package inputs
+    # A reusable workflow sees its caller's github context. Never execute an
+    # independently supplied revision inside that caller's cache/artifact scope.
+    if: >-
+      github.repository == 'Furroxide/TopiaForge' &&
+      ((github.event_name == 'push' &&
+      startsWith(github.ref, 'refs/heads/release/')) ||
+      (github.event_name == 'workflow_dispatch' &&
+      (github.ref == 'refs/heads/main' ||
+      startsWith(github.ref, 'refs/heads/release/'))))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -43,7 +48,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ inputs.source_sha }}
+          ref: ${{ github.sha }}
           lfs: true
           persist-credentials: false
 
@@ -88,7 +93,7 @@ jobs:
       - name: Checkout exact source with LFS payloads
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ inputs.source_sha }}
+          ref: ${{ github.sha }}
           lfs: true
           persist-credentials: false
 
@@ -117,7 +122,7 @@ jobs:
           --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
           -c Release -- --source public --cache-key-only
 
-      # Restore-only. This job checks out a caller-supplied ref, so letting it
+      # Restore-only. This job executes the admitted caller commit, so letting it
       # write the cache would let that ref plant an entry the default branch
       # later restores -- and a cache hit is currently accepted on a structural
       # check alone, without re-asserting the pinned archive SHA-256. Entries
@@ -226,7 +231,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ inputs.source_sha }}
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - name: Set up Dart
@@ -276,7 +281,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ inputs.source_sha }}
+          ref: ${{ github.sha }}
           lfs: true
           persist-credentials: false
 
@@ -323,7 +328,7 @@ jobs:
           --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
           -c Release -- --cache-key-only
 
-      # Restore-only. This job checks out a caller-supplied ref, so letting it
+      # Restore-only. This job executes the admitted caller commit, so letting it
       # write the cache would let that ref plant an entry the default branch
       # later restores -- and a cache hit is currently accepted on a structural
       # check alone, without re-asserting the pinned archive SHA-256. Entries

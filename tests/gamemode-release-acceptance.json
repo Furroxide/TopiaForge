@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "gameBuild": "2409",
+  "requiredLifecycleCycles": 10,
+  "requiredAuthoringCycles": 16,
+  "cases": [
+    {
+      "id": "launch.cold-cli",
+      "description": "Cold launch from the packaged CLI resolves exact enabled and pinned packages before process creation."
+    },
+    {
+      "id": "launch.cold-home",
+      "description": "Cold launch from Home reaches the selected target and reports the correlated session outcome."
+    },
+    {
+      "id": "launch.cold-setup",
+      "description": "Cold launch from Setup honors the selected target and permitted world and transition overrides."
+    },
+    {
+      "id": "launch.correlated-outcomes",
+      "description": "Progress and outcomes match their request; process start alone or missing acknowledgement stays unconfirmed."
+    },
+    {
+      "id": "launch.disabled-provider",
+      "description": "Disabled target, gamemode and world providers fail preflight and cannot launch via stale observations."
+    },
+    {
+      "id": "launch.legacy-unavailable",
+      "description": "Unresolved legacy selections stay unavailable with repair choices and no silent remapping."
+    },
+    {
+      "id": "launch.main-menu-precedence",
+      "description": "Explicit main-menu overrides remembered autoload; direct startup alone may use remembered selection."
+    },
+    {
+      "id": "launch.manager-overlay",
+      "description": "Manager overlay selects targets through the authoritative resolver and session lifecycle."
+    },
+    {
+      "id": "launch.profile-switch",
+      "description": "Switching profiles isolates durable selections, packages, requests and observations."
+    },
+    {
+      "id": "launch.safe-mode",
+      "description": "Safe mode loads no mods, reaches main-menu and preserves malformed durable state without rewriting it."
+    },
+    {
+      "id": "launch.stale-observations",
+      "description": "Observations from another profile, revision or provenance cannot add targets or revive disabled packages."
+    },
+    {
+      "id": "mode.free-play-without-sandbox",
+      "description": "Free Play launches and runs with Sandbox absent or disabled."
+    },
+    {
+      "id": "mode.sandbox-f5-pause",
+      "description": "Sandbox creator registration, F5 and pause actions work and release with the session."
+    },
+    {
+      "id": "mode.zombies",
+      "description": "Zombies starts, owns pause actions within its session and releases them on stop."
+    },
+    {
+      "id": "native.competing-requests",
+      "description": "Competing scene and launch requests are Busy during preparing, loading, starting, stopping and native draining."
+    },
+    {
+      "id": "native.late-completion",
+      "description": "Late native completion is quarantined or safely retired before a later request owns the executor."
+    },
+    {
+      "id": "native.multiplayer-authority",
+      "description": "World and scene requests preserve multiplayer authority and reject unauthorized transitions."
+    },
+    {
+      "id": "native.scene-change-policy",
+      "description": "Native scene changes apply sceneChangePolicy without implicitly recreating controllers."
+    },
+    {
+      "id": "packages.generated-gamemode",
+      "description": "A generated gamemode loads through production assembly binding and orchestration without test-only registration."
+    },
+    {
+      "id": "packages.generated-world",
+      "description": "A generated world loads through production provider binding, readiness and owned cleanup."
+    },
+    {
+      "id": "session.cancel-loading",
+      "description": "Cancellation during LoadingWorld retains native ownership until safe retirement and cleans late arrivals."
+    },
+    {
+      "id": "session.cancel-preparing",
+      "description": "Cancellation during Preparing releases allocations and emits one terminal outcome."
+    },
+    {
+      "id": "session.cancel-starting",
+      "description": "Cancellation during StartingMode releases factory and session resources without publishing Running."
+    },
+    {
+      "id": "session.cancel-stopping",
+      "description": "Cancellation during Stopping attempts every cleanup and preserves native ownership until drained."
+    },
+    {
+      "id": "session.constructor-failure",
+      "description": "A constructor failure after scoped allocation releases every acquired resource."
+    },
+    {
+      "id": "session.main-menu",
+      "description": "Main-menu return stops gameplay and disposes resources without stale controllers or pause actions."
+    },
+    {
+      "id": "session.owner-unload",
+      "description": "Owner unload cancels the session and removes its bindings and scoped resources atomically."
+    },
+    {
+      "id": "session.restart",
+      "description": "Restart ends the old session exactly once and creates the new session through the same resolver and executor."
+    },
+    {
+      "id": "session.stale-callback",
+      "description": "An old session callback cannot stop or restart a newer session."
+    },
+    {
+      "id": "session.start-failure",
+      "description": "A startup failure after allocation releases the world, controller and scoped services."
+    },
+    {
+      "id": "session.throwing-cleanup",
+      "description": "Throwing disposers do not skip later cleanup; failures aggregate into one terminal outcome."
+    },
+    {
+      "id": "world.authored-markers",
+      "description": "An authored-marker world waits for scene, content, player and spawn readiness before gameplay."
+    },
+    {
+      "id": "world.discovered-builtin",
+      "description": "The built-in discovery source enumerates and loads a declared-family concrete instance."
+    },
+    {
+      "id": "world.discovered-local",
+      "description": "The local discovery source enumerates and loads a declared-family concrete instance."
+    },
+    {
+      "id": "world.invalid-markers",
+      "description": "Missing or ambiguous authored spawn markers fail startup with cleanup and an actionable result."
+    },
+    {
+      "id": "world.open-sandbox",
+      "description": "Open Sandbox generates its real environment, geometry, spawn and kill-plane behavior."
+    }
+  ]
+}

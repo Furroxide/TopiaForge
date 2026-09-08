@@ -9,6 +9,7 @@ import 'package:topiaforge/src/release_handoff.dart';
 import 'package:topiaforge/src/release_handoff_models.dart';
 import 'package:topiaforge/src/release_policy.dart';
 
+import 'release_handoff_policy_fixture.dart';
 import 'release_handoff_qa_fixture.dart';
 
 void main() {
@@ -18,10 +19,10 @@ void main() {
   late String root;
 
   setUp(() {
-    root = _repositoryRoot();
     temp = Directory.systemTemp.createTempSync(
       'topiaforge-handoff-embedded-test-',
     );
+    root = writeSignedReleaseHandoffRoot(temp);
   });
 
   tearDown(() {
@@ -252,15 +253,4 @@ void _writeEcosystemArchives(
       p.join(assets.path, archiveEntry.value),
     ).writeAsBytesSync(ZipEncoder().encode(archive));
   }
-}
-
-String _repositoryRoot() {
-  var directory = Directory.current.absolute;
-  while (!File(p.join(directory.path, 'TopiaForge.slnx')).existsSync()) {
-    if (directory.parent.path == directory.path) {
-      throw StateError('Repository root not found.');
-    }
-    directory = directory.parent;
-  }
-  return directory.path;
 }

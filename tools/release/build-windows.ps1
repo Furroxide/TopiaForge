@@ -286,7 +286,6 @@ if ($privateEvidenceRoot.Equals(
     )) {
     throw "Private Windows evidence must not overlap the public asset directory."
 }
-New-Item -ItemType Directory -Force -Path $output | Out-Null
 
 $head = (& git -C $repository rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or $head -ne $SourceSha) {
@@ -310,45 +309,64 @@ if ($policy.versioning.productVersion -ne $Version) {
     throw "The requested version does not match release-policy.json."
 }
 $windowsCertificatePin = ""
-if ($policy.signingIdentities.PSObject.Properties.Name -contains
-    "windowsCertificateSha256") {
-    $windowsCertificatePin =
-        [string]$policy.signingIdentities.windowsCertificateSha256
+if ($null -ne $policy.signingIdentities.PSObject.Properties["windowsCertificateSha256"]) {
+    $pinValue = $policy.signingIdentities.windowsCertificateSha256
+    if ($pinValue -isnot [string] -or [string]::IsNullOrEmpty($pinValue)) {
+        throw "Windows signing certificate pin must be a nonempty string when present."
+    }
+    $windowsCertificatePin = $pinValue
 }
 $hasWindowsCertificatePin =
-    $windowsCertificatePin -cmatch "^(?!0{64}$)[0-9a-f]{64}$"
+    $windowsCertificatePin -cmatch "\A(?!0{64}\z)[0-9a-f]{64}\z"
 if ($policy.publication.PSObject.Properties.Name -contains
     "codeSigningException") {
     throw "Production Windows builds forbid every code-signing exception."
 }
 $windowsDistribution = "signed"
-if ($policy.signingIdentities.PSObject.Properties.Name -contains
-    "windowsDistribution") {
-    $windowsDistribution = [string]$policy.signingIdentities.windowsDistribution
+if ($null -ne $policy.signingIdentities.PSObject.Properties["windowsDistribution"]) {
+    $modeValue = $policy.signingIdentities.windowsDistribution
+    if ($modeValue -isnot [string] -or [string]::IsNullOrEmpty($modeValue)) {
+        throw "Windows distribution mode must be a nonempty string when present."
+    }
+    $windowsDistribution = $modeValue
 }
 if ($windowsDistribution -cne "signed" -and $windowsDistribution -cne "unsigned") {
     throw "Unknown Windows distribution mode '$windowsDistribution'; expected 'signed' or 'unsigned'."
 }
-if ($windowsDistribution -ceq "unsigned" -and $hasWindowsCertificatePin) {
-    throw "An unsigned Windows distribution must not also pin a signing certificate."
+if ($windowsDistribution -ceq "unsigned") {
+    if (-not [string]::IsNullOrEmpty($windowsCertificatePin)) {
+        throw "An unsigned Windows distribution must not also pin a signing certificate."
+    }
+    # Match the Dart SemVer reader, including metadata and numeric identifier rules.
+    $prereleaseIdentifier = '(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)'
+    $unsignedVersionPattern = '\A0\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)-' +
+        $prereleaseIdentifier + '(?:\.' + $prereleaseIdentifier + ')*' +
+        '(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\z'
+    if ($policy.versioning.productVersion -isnot [string] -or
+        $policy.versioning.productVersion -cnotmatch $unsignedVersionPattern) {
+        throw "An unsigned Windows distribution is only allowed for a 0.x prerelease."
+    }
 }
 if ($windowsDistribution -ceq "signed" -and -not $hasWindowsCertificatePin) {
     throw "release-policy.json must pin the reviewed Windows signing certificate."
 }
-foreach ($name in @(
-        "WINDOWS_CERTIFICATE_PFX",
-        "WINDOWS_CERTIFICATE_PASSWORD",
-        "WINDOWS_TIMESTAMP_URL"
-    )) {
-    if ([string]::IsNullOrWhiteSpace(
-            [Environment]::GetEnvironmentVariable($name)
+if ($windowsDistribution -ceq "signed") {
+    foreach ($name in @(
+            "WINDOWS_CERTIFICATE_PFX",
+            "WINDOWS_CERTIFICATE_PASSWORD",
+            "WINDOWS_TIMESTAMP_URL"
         )) {
-        throw "$name is mandatory for a production Windows build."
+        if ([string]::IsNullOrWhiteSpace(
+                [Environment]::GetEnvironmentVariable($name)
+            )) {
+            throw "$name is mandatory for a production Windows build."
+        }
     }
 }
 if ((Get-Sha256 $canonical) -ne $CanonicalArchiveSha256) {
     throw "The canonical ecosystem transport archive digest does not match."
 }
+New-Item -ItemType Directory -Force -Path $output | Out-Null
 
 $flutterCommand = Get-Command $FlutterPath -CommandType Application -ErrorAction SilentlyContinue |
     Select-Object -First 1

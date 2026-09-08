@@ -247,7 +247,10 @@ extension _HelpCommand on _TopiaForgeCli {
       '  topiaforge release validate-policy ... Check catalog, pins, licensing, and provenance.',
     );
     stdout.writeln(
-      '  topiaforge release validate-readiness ... Check exact-SHA human decision gates.',
+      '  topiaforge release validate-prerequisites ... Check private build eligibility.',
+    );
+    stdout.writeln(
+      '  topiaforge release validate-readiness ... Verify exact candidate qualification.',
     );
     stdout.writeln(
       '  topiaforge release build-metadata ...  Build deterministic BOM, SBOM, and checksums.',

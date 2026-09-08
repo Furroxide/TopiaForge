@@ -1,0 +1,198 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.release-candidate-acceptance-v1.schema.json",
+  "title": "TopiaForge exact candidate acceptance evidence",
+  "description": "Scrubbed evidence references for actual isolated live acceptance. Schema validity is not proof of reviewer identity or authorization.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "repository",
+    "releaseVersion",
+    "targetSha",
+    "contractSha256",
+    "handoffSha256",
+    "payloads",
+    "gameBuildId",
+    "result",
+    "gameCycles",
+    "authoringCycles",
+    "gameEvidenceSha256",
+    "authoringEvidenceSha256",
+    "isolation",
+    "cases",
+    "reviewerEvidence"
+  ],
+  "properties": {
+    "schema": {
+      "const": "release-candidate-acceptance-v1"
+    },
+    "repository": {
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+    },
+    "releaseVersion": {
+      "type": "string",
+      "maxLength": 96,
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "targetSha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "contractSha256": {
+      "type": "string",
+      "pattern": "^(?!0{64}$)[0-9a-f]{64}$"
+    },
+    "handoffSha256": {
+      "type": "string",
+      "pattern": "^(?!0{64}$)[0-9a-f]{64}$"
+    },
+    "payloads": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "size",
+          "sha256"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,179}$"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^(?!0{64}$)[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    "gameBuildId": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "result": {
+      "const": "passed"
+    },
+    "gameCycles": {
+      "type": "integer",
+      "const": 10
+    },
+    "authoringCycles": {
+      "type": "integer",
+      "const": 16
+    },
+    "gameEvidenceSha256": {
+      "type": "string",
+      "pattern": "^(?!0{64}$)[0-9a-f]{64}$"
+    },
+    "authoringEvidenceSha256": {
+      "type": "string",
+      "pattern": "^(?!0{64}$)[0-9a-f]{64}$"
+    },
+    "isolation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "evidenceSha256",
+        "persistentDataIsolated",
+        "normalUserDataAccessed"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "windows-user",
+            "virtual-machine"
+          ]
+        },
+        "evidenceSha256": {
+          "type": "string",
+          "pattern": "^(?!0{64}$)[0-9a-f]{64}$"
+        },
+        "persistentDataIsolated": {
+          "const": true
+        },
+        "normalUserDataAccessed": {
+          "const": false
+        }
+      }
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "result",
+          "evidenceSha256"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 96,
+            "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$"
+          },
+          "result": {
+            "const": "passed"
+          },
+          "evidenceSha256": {
+            "type": "string",
+            "pattern": "^(?!0{64}$)[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    "reviewerEvidence": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "evidenceId",
+          "role",
+          "reference",
+          "sha256"
+        ],
+        "properties": {
+          "evidenceId": {
+            "type": "string",
+            "pattern": "^EVID-P0-GAME-01-[0-9]{4}$"
+          },
+          "role": {
+            "enum": [
+              "robotopia-owner",
+              "runtime-mod-qa"
+            ]
+          },
+          "reference": {
+            "type": "string",
+            "pattern": "^review:[a-z0-9][a-z0-9._-]{0,95}$"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^(?!0{64}$)[0-9a-f]{64}$"
+          }
+        }
+      }
+    }
+  }
+}

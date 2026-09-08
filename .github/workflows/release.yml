@@ -44,6 +44,8 @@ jobs:
       target_sha: ${{ steps.metadata.outputs.target_sha }}
       notes_file: ${{ steps.metadata.outputs.notes_file }}
       platform_matrix: ${{ steps.metadata.outputs.platform_matrix }}
+      decision_sha256: ${{ steps.qualification.outputs.decision_sha256 }}
+      acceptance_sha256: ${{ steps.qualification.outputs.acceptance_sha256 }}
       release_head_sha: ${{ steps.evidence.outputs.release_head_sha }}
       release_pr_number: ${{ steps.evidence.outputs.release_pr_number }}
     steps:
@@ -134,12 +136,31 @@ jobs:
           dart run bin/topiaforge.dart release validate-policy
           --version "${{ steps.metadata.outputs.version }}"
 
-      - name: Verify exact release readiness decision
-        working-directory: apps/topiaforge_cli
+      - name: Fetch candidate bytes before protected approval
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >-
-          dart run bin/topiaforge.dart release validate-readiness
-          --version "${{ steps.metadata.outputs.version }}"
-          --target-sha "${{ steps.metadata.outputs.target_sha }}"
+          bash ./tools/fetch-release-assets.sh
+          "$GITHUB_REPOSITORY"
+          "${{ steps.metadata.outputs.tag }}"
+          "${{ steps.metadata.outputs.target_sha }}"
+          "TopiaForge ${{ steps.metadata.outputs.version }}"
+          "${{ steps.metadata.outputs.notes_file }}"
+          staged-assets
+          "${{ steps.metadata.outputs.prerelease }}"
+
+      - name: Verify exact release readiness decision
+        id: qualification
+        working-directory: apps/topiaforge_cli
+        run: |
+          set -euo pipefail
+          dart run bin/topiaforge.dart release validate-readiness \
+            --version "${{ steps.metadata.outputs.version }}" \
+            --target-sha "${{ steps.metadata.outputs.target_sha }}" \
+            --assets "$GITHUB_WORKSPACE/staged-assets" >"$RUNNER_TEMP/qualification.json"
+          jq -er '"decision_sha256=" + .decisionSha256,
+                  "acceptance_sha256=" + .acceptanceSha256' \
+            "$RUNNER_TEMP/qualification.json" >>"$GITHUB_OUTPUT"
 
       - name: Verify tag, exact release PR, and hosted checks
         id: evidence
@@ -206,6 +227,16 @@ jobs:
           "${{ needs.verify-candidate.outputs.notes_file }}"
           staged-assets
           "${{ needs.verify-candidate.outputs.prerelease }}"
+
+      - name: Bind platform verification to the approved candidate records
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s  %s\n' \
+            '${{ needs.verify-candidate.outputs.decision_sha256 }}' \
+            'staged-assets/release-candidate-readiness-v1.json' \
+            '${{ needs.verify-candidate.outputs.acceptance_sha256 }}' \
+            'staged-assets/release-candidate-acceptance-v1.json' | sha256sum --check --strict
 
       - name: Verify authenticated admin handoff
         shell: pwsh
@@ -408,6 +439,8 @@ jobs:
             --arg archiveSha256 "$archive_sha" \
             --argjson archiveSize "$archive_size" \
             --arg handoffSha256 "$handoff_sha" \
+            --arg decisionSha256 "${{ needs.verify-candidate.outputs.decision_sha256 }}" \
+            --arg acceptanceSha256 "${{ needs.verify-candidate.outputs.acceptance_sha256 }}" \
             --argjson handoffSignatureSha256 "$handoff_signature_json" \
             --arg trustCheck "$trust_check" \
             '{
@@ -421,7 +454,9 @@ jobs:
                 sha256: $archiveSha256,
                 size: $archiveSize
               },
-              handoffSha256: $handoffSha256
+              handoffSha256: $handoffSha256,
+              decisionSha256: $decisionSha256,
+              acceptanceSha256: $acceptanceSha256
             }
             + (if $handoffSignatureSha256 == null then {}
                else {handoffSignatureSha256: $handoffSignatureSha256} end)
@@ -505,13 +540,6 @@ jobs:
           "${{ needs.verify-candidate.outputs.version }}"
           "${{ needs.verify-candidate.outputs.target_sha }}"
 
-      - name: Revalidate exact release readiness after approval
-        working-directory: apps/topiaforge_cli
-        run: >-
-          dart run bin/topiaforge.dart release validate-readiness
-          --version "${{ needs.verify-candidate.outputs.version }}"
-          --target-sha "${{ needs.verify-candidate.outputs.target_sha }}"
-
       - name: Fetch exact admin-staged release assets
         id: release
         env:
@@ -525,6 +553,20 @@ jobs:
           "${{ needs.verify-candidate.outputs.notes_file }}"
           staged-assets
           "${{ needs.verify-candidate.outputs.prerelease }}"
+
+      - name: Revalidate exact release readiness after approval
+        working-directory: apps/topiaforge_cli
+        run: |
+          set -euo pipefail
+          dart run bin/topiaforge.dart release validate-readiness \
+            --version "${{ needs.verify-candidate.outputs.version }}" \
+            --target-sha "${{ needs.verify-candidate.outputs.target_sha }}" \
+            --assets "$GITHUB_WORKSPACE/staged-assets" >"$RUNNER_TEMP/qualification.json"
+          jq -e \
+            --arg decision "${{ needs.verify-candidate.outputs.decision_sha256 }}" \
+            --arg acceptance "${{ needs.verify-candidate.outputs.acceptance_sha256 }}" \
+            '.decisionSha256 == $decision and .acceptanceSha256 == $acceptance' \
+            "$RUNNER_TEMP/qualification.json" >/dev/null
 
       - name: Verify authenticated admin handoff
         shell: pwsh
@@ -653,12 +695,16 @@ jobs:
               --arg tag "${{ needs.verify-candidate.outputs.tag }}" \
               --arg targetSha "${{ needs.verify-candidate.outputs.target_sha }}" \
               --arg handoffSha256 "$handoff_sha" \
+              --arg decisionSha256 "${{ needs.verify-candidate.outputs.decision_sha256 }}" \
+              --arg acceptanceSha256 "${{ needs.verify-candidate.outputs.acceptance_sha256 }}" \
               --arg handoffSignatureSha256 "${handoff_signature_sha:-}" \
               '.schema == "release-hosted-verification-v1" and
                .version == $version and
                .tag == $tag and
                .targetSha == $targetSha and
                .handoffSha256 == $handoffSha256 and
+               .decisionSha256 == $decisionSha256 and
+               .acceptanceSha256 == $acceptanceSha256 and
                '"$handoff_signature_filter"' and
                .packageValidation == "passed" and
                .result == "passed"' "$evidence" >/dev/null
@@ -702,6 +748,11 @@ jobs:
             test -f "staged-assets/$name"
             cp -- "staged-assets/$name" "release-assets/$name"
           done
+          asset_policy=$(bash tools/release-asset-policy.sh "$GITHUB_WORKSPACE" \
+            "${{ needs.verify-candidate.outputs.version }}")
+          while IFS= read -r name; do
+            cp -- "staged-assets/$name" "release-assets/$name"
+          done < <(jq -r '.human[]' <<<"$asset_policy")
           cp "$RUNNER_TEMP/platform-trust-evidence.json" \
             release-assets/.platform-trust-evidence.json
 
@@ -736,52 +787,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          handoff_names=(
-            release-handoff-v1.json
-          )
-          windows_distribution=$(jq -er '
-            .signingIdentities.windowsDistribution // "signed"
-          ' release/release-policy.json | tr -d '\r')
-          case "$windows_distribution" in
-            signed|unsigned) ;;
-            *) echo "Unknown Windows distribution mode: $windows_distribution" >&2; exit 1 ;;
-          esac
-          if [ "$windows_distribution" != unsigned ]; then
-            handoff_names+=(release-handoff-v1.json.p7s)
-          fi
-          while IFS= read -r bundle_name; do
-            handoff_names+=("$bundle_name")
-          done < <(jq -er '
-            [
-              .artifactPolicy.platformArchives[] |
-              "release-platform-bundle-v1-" +
-              (ltrimstr("TopiaForge-") | rtrimstr(".zip")) + ".json"
-            ] |
-            sort | .[]
-          ' release/release-policy.json | tr -d '\r')
-          for name in "${handoff_names[@]}"; do
-            cp -- "staged-assets/$name" "release-assets/$name"
-          done
-          (
-            cd release-assets
-            for name in "${handoff_names[@]}"; do
-              sha256sum "$name"
-            done
-          ) >>release-assets/SHA256SUMS
-          sort -o release-assets/SHA256SUMS release-assets/SHA256SUMS
+          asset_policy=$(bash tools/release-asset-policy.sh "$GITHUB_WORKSPACE" \
+            "${{ needs.verify-candidate.outputs.version }}")
           (
             cd release-assets
             sha256sum --check --strict SHA256SUMS
           )
-          {
-            jq -er \
-              --arg version "${{ needs.verify-candidate.outputs.version }}" \
-              '.releases[] | select(.version == $version) | .artifacts[]' \
-              release/catalog.json
-            jq -er '.artifactPolicy.generatedMetadata[]' \
-              release/release-policy.json
-            printf '%s\n' "${handoff_names[@]}"
-          } | sort >"$RUNNER_TEMP/expected-release-assets"
+          jq -r '.all[]' <<<"$asset_policy" >"$RUNNER_TEMP/expected-release-assets"
           find release-assets -mindepth 1 -maxdepth 1 -type f \
             -printf '%f\n' | sort >"$RUNNER_TEMP/actual-release-assets"
           diff -u \
@@ -821,12 +833,16 @@ jobs:
           bom_sha=$(sha256sum release-assets/release-bom.json |
             awk '{print $1}')
           readiness=$(
-            jq -ecS '
+            jq -ecS \
+              --arg decision "$(sha256sum release-assets/release-candidate-readiness-v1.json | awk '{print $1}')" \
+              --arg acceptance "$(sha256sum release-assets/release-candidate-acceptance-v1.json | awk '{print $1}')" '
               .readiness |
               select(
-                .binding == "git-blob-at-target-sha" and
+                .binding == "detached-candidate-at-target-sha" and
                 .status == "ready" and
-                (.blobSha256 | test("^[0-9a-f]{64}$")) and
+                .blobSha256 == $decision and
+                .summary.decisionSha256 == $decision and
+                .summary.acceptanceSha256 == $acceptance and
                 .summary.status == "ready"
               )
             ' release-assets/release-bom.json
@@ -973,7 +989,13 @@ jobs:
             cd apps/topiaforge_cli
             dart run bin/topiaforge.dart release validate-readiness \
               --version "${{ needs.verify-candidate.outputs.version }}" \
-              --target-sha "${{ needs.verify-candidate.outputs.target_sha }}"
+              --target-sha "${{ needs.verify-candidate.outputs.target_sha }}" \
+              --assets "$GITHUB_WORKSPACE/release-assets" >"$RUNNER_TEMP/final-qualification.json"
+            jq -e \
+              --arg decision "${{ needs.verify-candidate.outputs.decision_sha256 }}" \
+              --arg acceptance "${{ needs.verify-candidate.outputs.acceptance_sha256 }}" \
+              '.decisionSha256 == $decision and .acceptanceSha256 == $acceptance' \
+              "$RUNNER_TEMP/final-qualification.json" >/dev/null
           )
           dotnet run \
             --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj \
