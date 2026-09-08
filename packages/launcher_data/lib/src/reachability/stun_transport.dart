@@ -27,7 +27,8 @@ abstract class StunTransport {
   /// treat `null` as evidence, not as an error.
   ///
   /// [changeAddress] and [changePort] ask the server to answer from a different address and/or port (RFC 5780
-  /// CHANGE-REQUEST), which is how NAT filtering behaviour is observed.
+  /// CHANGE-REQUEST), which is how NAT filtering behaviour is observed. Responses must arrive with exactly the
+  /// requested source components changed; an unrequested address or port change is also ignored.
   Future<StunBindingResponse?> request(
     StunEndpoint server, {
     bool changeAddress = false,
@@ -139,7 +140,12 @@ class UdpStunTransport implements StunTransport {
       changeAddress: changeAddress,
       changePort: changePort,
     );
-    final transaction = _StunTransaction(transactionId);
+    final transaction = _StunTransaction(
+      transactionId,
+      server,
+      changeAddress: changeAddress,
+      changePort: changePort,
+    );
     _pending = transaction;
     transaction.deadline = Timer(_timeout, () => _finish(transaction, null));
     try {
@@ -162,7 +168,7 @@ class UdpStunTransport implements StunTransport {
       datagram = _socket.receive()
     ) {
       final transaction = _pending;
-      if (transaction == null) continue;
+      if (transaction == null || !transaction.acceptsSource(datagram)) continue;
       final decoded = _codec.decodeBindingResponse(
         Uint8List.fromList(datagram.data),
         transaction.id,
@@ -199,9 +205,38 @@ class UdpStunTransport implements StunTransport {
 }
 
 class _StunTransaction {
-  _StunTransaction(this.id);
+  _StunTransaction(
+    this.id,
+    StunEndpoint server, {
+    required this.changeAddress,
+    required this.changePort,
+  }) : serverAddress = Uint8List.fromList(server.address),
+       serverPort = server.port;
 
   final Uint8List id;
+  final Uint8List serverAddress;
+  final int serverPort;
+  final bool changeAddress;
+  final bool changePort;
   final Completer<StunBindingResponse?> completer = Completer();
   Timer? deadline;
+
+  // https://www.rfc-editor.org/rfc/rfc5780.html#section-6.1, Table 1.
+  // A matching transaction ID alone cannot prove that CHANGE-REQUEST was honored.
+  bool acceptsSource(Datagram datagram) {
+    final address = datagram.address.rawAddress;
+    if (address.length != serverAddress.length) return false;
+    var sameAddress = true;
+    for (var index = 0; index < address.length; index++) {
+      if (address[index] != serverAddress[index]) {
+        sameAddress = false;
+        break;
+      }
+    }
+    final addressMatches = changeAddress ? !sameAddress : sameAddress;
+    final portMatches = changePort
+        ? datagram.port != serverPort
+        : datagram.port == serverPort;
+    return addressMatches && portMatches;
+  }
 }

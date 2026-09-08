@@ -63,7 +63,7 @@ may retain network metadata; this implementation neither controls nor establishe
 | --- | --- | --- |
 | STUN measurement servers | Yes | Receive the request source IP address and port; operator retention is not established here. |
 | `launcher_data` STUN codec and runner | Yes, transiently | Compares reflexive endpoints in memory and discards them. Never persists or logs one. |
-| `NatObservation` (`launcher_domain`) | **No** | Six booleans and one counter. No field can hold an address, port, hostname, or timestamp. |
+| `NatObservation` (`launcher_domain`) | **No** | Boolean evidence and one transaction counter. No field can hold an address, port, hostname, or timestamp. |
 | `NatClassification` | **No** | Three enum values. |
 | `ReachabilityReport` | **No** | A schema version and three enum names. That is the entire payload that could ever be sent. |
 
@@ -121,7 +121,10 @@ TOPIAFORGE_REACHABILITY_SERVERS=203.0.113.10:3478,203.0.113.11:3478
 ```
 
 Behaviour discovery needs a server that advertises an alternate address (RFC 5780 `OTHER-ADDRESS`) and honours
-`CHANGE-REQUEST`. Against a server that does not, the probe reports mapping as `unknown` rather than guessing.
+`CHANGE-REQUEST`. An absent or unusable alternate stops discovery after the initial binding response: filtering
+remains `unknown`, and mapping remains `unknown` unless the observed endpoint matches the local socket. The
+alternate must use the same address family, a different IP address, and a different nonzero port. Completed filtering
+probes against a supported server may report restrictive filtering when no replies arrive; missing support cannot.
 
 Every entry has to name the same address family. One run binds one unconnected socket and decides mapping by
 comparing reflexive endpoints across a server address and port, and endpoints in two families are not comparable, so
