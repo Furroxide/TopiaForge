@@ -19,7 +19,7 @@ The [canonical brief](../GamemodeContractRedesign.md) is normative. The
 | `dd1a7f9bca405d8b64afa6f04e3ec5dc7a0aa18a` | Slice 6 merge of PR #111, final reviewed head `307430daa8af70c12bc17dbad09c6aefaf69e3ee` | Exact-head CI, full publication and CodeQL passed; normal merge at 2026-09-06T04:46:28Z |
 | `d21b2dc932d4f879d7fd41309fb290e80c82a05c` | Slice 7 merge of PR #112, reviewed head `ff65b6efee1978c1661e923f18a2250706d1e6f4` | Exact-head CI 34167871674 and CodeQL 34167870357 passed; normal merge at 2026-09-07T22:58:39Z |
 | `e8925f201924ee0181479da007e59279b0bc1cb4` | Slice 7a normal merge of PR #114, reviewed head `a97a4093d325079e14fc64230809559e4bc496d6` | CI 34185465503 and CodeQL 34185463190 passed; all four review threads resolved; merged at 2026-09-08T04:10:41Z |
-| `feat/gamemode-retirement-acceptance`, based on `e8925f20` | Slice 8a delivery, created only after PR #114 merged | Retirement, migration, legacy model removal and authored-world fixes under final verification; acceptance delivery re-cut into 8b |
+| `feat/gamemode-retirement-acceptance`, based on `e8925f20`; PR #115 initial head `27fa368` | Slice 8a delivery, created only after PR #114 merged | Initial CI found formatting and Windows migration failures plus five Editor-fixture CodeQL alerts; repairs under fresh verification; acceptance delivery remains 8b |
 
 
 The historical rows describe each slice at its own merge. Current state:
@@ -30,8 +30,8 @@ The historical rows describe each slice at its own merge. Current state:
 | Target selection, V4 wire and correlated outcomes | Integrated through slice 7 | Home, Setup, CLI and manager share resolution | Slice 7 exact-head CI and CodeQL passed | Pending |
 | Candidate qualification and publication guards | Integrated through slice 7a | CLI, administrator and publication paths connected | Final reviewed-head CI and CodeQL passed at `a97a409`; 441 local CLI tests passed with four platform skips | Pending; synthetic acceptance is not game evidence |
 | Unsigned RC package construction | Integrated after explicit authorization on 8 September | Builder and Windows orchestration honor recorded policy | Final PR #114 hosted checks passed; local regression details below | Pending |
-| V5 retirement, migration and obsolete models | Slice 8a working tree | Readers and CLI atomic writer connected; old models removed | RED/GREEN evidence below; final scoped verification pending | Pending |
-| Authored-world marker validation | Slice 8a working tree | Editor validation and owned prefab instantiation connected | Nine helper and five owned-instantiation regressions pass | Seven Unity EditMode cases and actual spawn pending |
+| V5 retirement, migration and obsolete models | PR #115 with local review repairs | Readers and CLI atomic writer connected; old models removed | 1,079 domain and 494 Windows data tests pass locally; fresh hosted checks pending | Pending |
+| Authored-world marker validation | PR #115 with local review repairs | Editor validation and owned prefab instantiation connected | Nine helper, five owned-instantiation and fifteen filesystem-only fixture checks pass | Fourteen Unity EditMode cases and actual spawn pending |
 | Acceptance isolation | Prepared source preserved for slice 8b, outside 8a delivery | Runtime/CLI/release integration prepared; not integrated | Focused synthetic tests pass; fresh 8b verification required | Pending isolated host and actual game evidence |
 
 No release tag, release dispatch or publication has occurred. The checkout is
@@ -1600,3 +1600,52 @@ Worlds/Free Play/session ownership. Its fourteen source packages and thirteen
 non-DevTool payloads were verified from manifests and packaging behavior. The older
 June documentation proposal remains intact as explicitly historical evidence with
 current authority links. These documentation edits provide no game verification.
+
+
+## PR #115 review and first hosted checks
+
+Initial head `27fa368d83fb89647e8f14cd5ae08551467c462f` failed
+[CI 34191489810](https://github.com/Furroxide/TopiaForge/actions/runs/34191489810)
+on C# formatting and Windows migration tests. Linux domain/data/CLI, Flutter,
+repository audits and Unity source checks passed. Template and full publication
+jobs were skipped because their C# prerequisite failed. The CodeQL analyses
+completed, but five new Editor-fixture path alerts failed the result gate; a
+completed analysis was not a clean result. No merge or alert dismissal occurred.
+
+The Windows failure was a new migration defect, distinct from the old multiplayer
+observation: hosted TEMP used a legitimate 8.3 path that the new ordinary-file
+check rejected. Three real short-path regressions failed before canonicalization.
+The repair rejects source links and linked ancestors before resolving one canonical
+snapshot and lease identity, and canonicalizes the ordinary OS temporary root.
+Fifteen focused tests now pass, including lease contention and actual link refusal.
+The full Windows data suite passes **494 tests with four existing platform skips**;
+its analyzer and formatting pass. The full log is retained privately at
+`packages/launcher_data/.dart_tool/pr115-windows-data-full-final.log`.
+
+Copilot found that a minimal profile with no remembered selection was surfaced as
+unavailable. Five new cases failed before the fix (six preservation cases passed).
+An empty legacy selection now means main menu; explicit legacy property values,
+including null and empty objects, remain preserved for repair. Malformed explicit
+current selections still fail. All fifteen focused cases and **1,079 domain tests**
+pass, with clean analysis. The application again passes **75 Flutter tests**, clean
+analysis and the Windows debug build. Real CLI migration subprocesses also pass
+all four `migrate` and seventeen `migration` cases after the writer repair.
+
+The Editor fixture now owns its paired directory under its disposable project,
+checks containment and ordinary filesystem kinds, bounds traversal and byte reads,
+fences configuration restoration against external changes, and refuses export
+command-line overrides. A compile-only Unity/NUnit facade harness recorded one pass
+and three failures before these guards, then **fifteen filesystem checks passed**.
+The subsequent repository source audit caught three unbounded assertion reads;
+those now use the same bounded reader. This harness establishes filesystem behavior
+only. All **fourteen actual Unity EditMode cases remain unrun**, and CodeQL must
+confirm the path repairs on the pushed revision.
+
+The two C# test files now satisfy the exact whole-solution CI formatting command.
+Fresh Release compilation passes with zero warnings/errors; the rebuilt release
+runner passes all eleven SDK packages and seven C# harnesses
+(`tf-pr115-seven-harness-final.log`). All 530 non-generated Dart files meet the
+500-line cap and all 460 scoped Dart files pass formatting. Repository audits,
+363-case fixture closure, 127-file Markdown links and documentation content checks
+pass. Refreshed `origin/dev` remains `e8925f20`. Fresh hosted CI, full publication, template checks and CodeQL remain required
+before normal integration; this review follow-up provides no game evidence.

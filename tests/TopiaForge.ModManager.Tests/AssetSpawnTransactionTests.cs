@@ -47,7 +47,8 @@ namespace TopiaForge.ModManager.Tests
             var failures = new List<string>(); var passed = 0;
             void Case(string name, Action test)
             { try { test(); passed++; } catch (Exception error) { failures.Add(name + ": " + error.Message); } }
-            foreach (var authored in new[] { "SpawnPoint", "SpawnPoint(Clone)" }) Case(authored, () => {
+            foreach (var authored in new[] { "SpawnPoint", "SpawnPoint(Clone)" }) Case(authored, () =>
+            {
                 using var lifetime = new OwnerModLifetime();
                 var allocation = new Allocation { Name = authored + "(Clone)" };
                 var initialized = false;
@@ -58,7 +59,8 @@ namespace TopiaForge.ModManager.Tests
                 lifetime.Dispose();
                 Assert(allocation.Destroyed == 1, "named prefab lifetime destroys exactly once");
             });
-            Case("name-set-failure", () => {
+            Case("name-set-failure", () =>
+            {
                 using var lifetime = new OwnerModLifetime(); var allocation = new Allocation(); var initialized = false;
                 Throws<InvalidOperationException>(() => AssetSpawnTransaction.CreatePrefab(() => allocation, "SpawnPoint",
                     (_, _) => throw new InvalidOperationException("name assignment failed"),
@@ -66,14 +68,16 @@ namespace TopiaForge.ModManager.Tests
                 Assert(!initialized && allocation.Destroyed == 1, "name failure destroys before entity publication");
                 lifetime.Dispose(); Assert(allocation.Destroyed == 1, "failed naming cannot transfer ownership");
             });
-            Case("later-entity-failure", () => {
+            Case("later-entity-failure", () =>
+            {
                 using var lifetime = new OwnerModLifetime(); var allocation = new Allocation { Name = "SpawnPoint(Clone)" };
                 Throws<InvalidOperationException>(() => AssetSpawnTransaction.CreatePrefab<Allocation, Resource>(() => allocation,
                     "SpawnPoint", (item, name) => item.Name = name,
                     _ => throw new InvalidOperationException("entity setup failed"), item => item.Destroy(), lifetime));
                 Assert(allocation.Name == "SpawnPoint" && allocation.Destroyed == 1, "later initialization failure cleans named instance once");
             });
-            Case("lifetime-rejection", () => {
+            Case("lifetime-rejection", () =>
+            {
                 using var lifetime = new DeferredRejection(); var allocation = new Allocation { Name = "SpawnPoint(Clone)" };
                 Throws<ObjectDisposedException>(() => AssetSpawnTransaction.CreatePrefab(() => allocation, "SpawnPoint",
                     (item, name) => item.Name = name, item => new Resource(item), item => item.Destroy(), lifetime));
