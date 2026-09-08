@@ -110,15 +110,28 @@ jobs:
              .published_at != null and
              .immutable == true' <<<"$release" >/dev/null
 
-      # Keep the write-capable dispatch path free of workflow_run source data.
-      - name: Checkout exact successful main CI revision
+      # CI completion order can differ from commit order. Select protected main,
+      # then reject an older run before executing any checked-out repository code.
+      - name: Checkout protected main for completed CI
         if: github.event_name == 'workflow_run'
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          repository: ${{ github.repository }}
+          ref: refs/heads/main
           lfs: true
           persist-credentials: false
 
+      - name: Require completed CI to match protected main
+        if: github.event_name == 'workflow_run'
+        shell: bash
+        env:
+          EXPECTED_CI_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_CI_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git --no-replace-objects rev-parse HEAD)" = "$EXPECTED_CI_SHA"
+
+      # The write-capable dispatch path uses only its own admitted revision.
       - name: Checkout exact admitted dispatch revision
         if: github.event_name == 'workflow_dispatch'
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0

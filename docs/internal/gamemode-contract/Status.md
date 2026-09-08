@@ -1200,3 +1200,70 @@ Pyflakes; hosted checks remain required. A fresh lockfile audit still reported
 zero vulnerabilities. README counts, residue, trademark, asset-licence, Markdown
 (126 files), guide catalog (26 pages, five snippets) and whitespace checks passed
 again after the current-state documentation update.
+
+
+## Slice 7a first hosted checkpoint
+
+[Draft PR #114](https://github.com/Furroxide/TopiaForge/pull/114) opened at signed
+commit `5cc2bda3afb60de3185aa8a092bf80408794cf20`, targeting `dev` at `da47dc7f`.
+[CI 34172424504](https://github.com/Furroxide/TopiaForge/actions/runs/34172424504)
+passed every job, including rebuilt C#, all seven templates, Linux CLI (393 tests),
+domain/data, Windows data, Flutter, hygiene, and complete Linux guide/C#/Dart/search
+publication. Dependency review, PR policy, registry and Unity source validation
+also passed. This independently certifies the committed checkpoint, not the three
+unfinished local unsigned regression files. After the long build, refreshed
+`origin/dev` remained `da47dc7f`.
+
+[CodeQL workflow 34172423419](https://github.com/Furroxide/TopiaForge/actions/runs/34172423419)
+completed successfully, but the separate **CodeQL gate failed**. Analysis
+1738183793 (Actions) returned three findings: open #409 and historically dismissed
+#1/#2. Its trace flows from the Pages `workflow_run.head_sha` checkout into build
+steps while identifying the separate `workflow_dispatch` event context. Review
+found mutually exclusive event guards, not a demonstrated executable bypass;
+nevertheless #409 remains open and is not waived. C# analysis 1738188633,
+JavaScript/TypeScript 1738184121 and C/C++ 1738183971 returned zero results on this
+head. #416/#417 were absent from the Actions results at this PR ref; that does not
+close their older default-branch instances. No alert was dismissed or suppressed.
+
+The follow-up narrows the Pages CI refresh to protected `refs/heads/main` and
+requires its checked-out commit to equal the successful CI head before repository
+code executes. A delayed CI completion for an older main commit must fail rather
+than replace newer documentation. Exact-head regressions, workflow checks and a
+new CodeQL analysis must establish the repaired result; the initial successful
+build does not certify this follow-up source.
+
+GitHub reported eight open dependency advisories on the default branch. They all
+refer to the four website packages patched in this checkpoint. The clean local
+lockfile audit and passing dependency review do not substitute for promotion and
+fresh default-branch evidence. No release preparation approval or game acceptance
+has been manufactured from these test results.
+
+
+First-head Actions evidence is retained in the local temporary directory as
+`tf-pr114-actions-1738183793.sarif.json`, `tf-pr114-alerts.json` and
+`tf-pr114-actions-per-ref-instances.json`. The last file distinguishes main, dev
+and PR instances; global dismissal state and raw per-ref instance state are not
+interchangeable. Hosted CLI and publication logs are
+`tf-slice7a-114-{cli,publication}-hosted.log`.
+
+
+Before the Pages follow-up push, the unchanged release-surface script passed
+again: all eleven SDK projects rebuilt and packed without warnings, followed by
+all seven no-argument C# harnesses. The final log is
+`tf-slice7a-pages-followup-seven-harness.log` in the local temporary directory.
+An earlier invocation used incorrect MSYS path-conversion settings, so Bash
+could not enumerate the eleven packages written by dotnet; that setup failure
+is retained separately as `tf-slice7a-pages-followup-seven-harness-path-mismatch.log`.
+The corrected invocation changed no source or test expectation.
+
+
+The new Pages regressions failed before the guard existed: Python reported one
+failure and two missing-step errors across five cases; Node reported two failures
+across five cases. After the protected-main checkout and exact-head guard were
+added, all five Python cases passed, including seven executed Bash scenarios for
+matching, stale and malformed CI heads. All 38 website tests, the Flutter cache
+contract and actionlint across six changed workflows passed. Logs in the local
+temporary directory use `tf-pr114-protected-main-{red,green}.log`,
+`tf-pr114-pages-main-{red,green}.log` and `tf-pr114-pages-full-green.log`.
+This establishes local source behavior; the next hosted CodeQL gate remains
+required. The unsigned proposal and production signing source hashes are unchanged.
