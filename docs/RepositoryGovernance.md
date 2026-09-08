@@ -210,10 +210,11 @@ them only after that rehearsal, then rerun the governance audit.
    verify identical state; mismatches fail closed. Verify the immutable result with `gh release verify` and asset
    verification.
 
-RC1 has no Linux or macOS archive. Retained Linux/WSL2/Proton tooling applies only when a future candidate's reviewed
-policy restores that platform; publication also requires its native acceptance. Disclose same-host/non-independent
-evidence where applicable. A future macOS release requires reviewed signing/notarization and advanced Swift CodeQL
-checks. See [`AdminRelease.md`](AdminRelease.md) for these conditional future requirements.
+RC1 has no Linux or macOS archive. The Linux/Proton acceptance runner is retired; enabling an archive in policy
+does not restore it. Review native isolation and exact-candidate evidence verification before separately
+enabling Linux in policy for private candidate construction. Require actual acceptance of the resulting bytes
+before qualification or publication. Disclose same-host/non-independent evidence where applicable. A future macOS release requires reviewed signing/notarization
+and advanced Swift CodeQL checks. See the [future Linux prerequisites](AdminRelease.md#future-linux-acceptance).
 
 The unsigned hosted release dry run is secretless and executes on every `release/*` update. Production archives
 are built only on administrator-controlled machines for the platforms declared by policy; GitHub's protected

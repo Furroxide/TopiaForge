@@ -44,8 +44,9 @@ account or approve its layout.
 Each canonical ecosystem pass runs in its own detached clean worktree. The
 SHA-256 of the normalized, sorted tree manifest is the ecosystem identity; the
 canonical tar has a separate transport digest. Every platform validation summary
-binds both values. Sending that tar to WSL applies only when a reviewed policy
-includes the Linux archive; Windows-only RC1 does not run the WSL/Proton path.
+binds both values. Windows-only RC1 does not run a WSL/Proton acceptance path.
+The future Linux prerequisites below must be implemented before a reviewed
+policy can enable a Linux candidate.
 
 ## Private build and exact candidate qualification
 
@@ -165,49 +166,62 @@ winget install jqlang.jq
 
 ## Build from a neutral root
 
-Compilers record where they ran. Roslyn writes the absolute PDB path into every
-assembly's CodeView debug directory, and the Dart AOT snapshot records a
-`file:///` URI for each library outside a `package:` root. A build run straight
-from `C:\Users\<account>\...` therefore ships the administrator's account name
-and folder layout inside the binaries, where nothing in the package listing
-shows it. That contradicts the rule in `ReleaseOperations.md` that usernames,
-hostnames, and local paths stay off GitHub.
+Dart and Flutter binaries can retain absolute paths from the source checkout,
+SDK and pub cache. A neutral checkout alone does not prevent the administrator's
+account name or folder layout from entering an artifact. `subst`, a junction or
+an FVM link back into a personal profile does not establish physical isolation.
+Stripping debug information and running `flutter clean` are not substitutes for
+preparing all three inputs under physical paths that identify no account.
 
-Two mechanisms keep it out, and `release test-package` fails the package if
-either is missed:
+Provision the following before running any administrator release phase. These
+example paths describe the required layout; they do not indicate an existing
+installation or authorize a build:
 
-- **.NET** needs nothing extra. `Directory.Build.props` sets `PathMap` for every
-  project, so assemblies record `/_/...` from any checkout. It is deliberately
-  unconditional rather than tied to `$(CI)`, because release packages are built
-  on this workstation and never by CI.
-- **Dart and Flutter** have no equivalent switch. `dart compile exe -S` strips
-  debugging information but leaves the library URIs, and Flutter's
-  `--split-debug-info` does not remove them at all. The only fix is to compile
-  from a path that names nobody. Map the checkout to a spare drive letter
-  first — `subst` needs no elevation and copies nothing:
+| Input | Required preparation |
+| --- | --- |
+| Source checkout | A real, clean `main` checkout exactly equal to `origin/main`, with hydrated Git LFS files, for example `C:\TopiaForgeBuild\source`. Retain its Git metadata and source identity. |
+| Transaction worktrees | Use a physical neutral state directory, for example `-StateRoot C:\TopiaForgeBuild\state`, consistently for every phase. The default is `.release-local` under the checkout; it is neutral only when that checkout is neutral. The administrator creates exact-SHA build worktrees below `<StateRoot>/<version>/worktrees`. |
+| Flutter and Dart SDK | Install a fresh official pinned Flutter `3.44.6` SDK, including its Dart `3.12.2`, at a physical neutral location such as `C:\TopiaForgeBuild\flutter-3.44.6`. Do not copy a personal SDK's generated caches. |
+| Pub cache | Set `PUB_CACHE` to a fresh, dedicated neutral directory, for example `C:\TopiaForgeBuild\pub-cache`. Populate it through the checked-in lockfiles, not by copying a personal cache. |
 
-```powershell
-subst T: C:\path\to\TopiaForge
-Push-Location                         # remember where you were, so a failure still returns here
-try {
-    Set-Location T:\apps\topiaforge_launcher_flutter
-    flutter clean                     # stale C:-path objects otherwise fail MSB8028
-    flutter build windows --release --dart-define=TOPIAFORGE_PRODUCT_VERSION=<version>
-    Set-Location T:\apps\topiaforge_cli
-    dart compile exe bin/topiaforge.dart -o <staging>\topiaforge.exe
-}
-finally {
-    Pop-Location                      # leave T: before removing it, or the shell is stranded
-    subst T: /D
-}
-```
+`release-admin.ps1` resolves Flutter and Dart through
+[`tools/flutter-sdk.ps1`](../tools/flutter-sdk.ps1): it prefers
+`.fvm/flutter_sdk/bin` in the administrator checkout, then `PATH`. Ensure any
+preferred FVM SDK resolves to the prepared neutral SDK; otherwise use a clean
+checkout without that link and prepend the neutral SDK's `bin` to `PATH`.
+Changing `PATH` cannot override an existing preferred FVM installation. The
+administrator passes the selected commands to `build-windows.ps1` as `-DartPath`
+and `-FlutterPath`; the child builds inherit `PUB_CACHE`.
 
-`flutter clean` is not optional: a `build/` directory left from a `C:`-path
-build makes MSBuild fail with `MSB8028` about shared intermediate directories,
-and the reported error names neither the drive letter nor the cause.
+Configure `PATH` and `PUB_CACHE` in a dedicated release PowerShell process.
+Do not reassign `HOME` or `USERPROFILE`, import credentials or launcher profiles,
+or copy personal SDK/pub caches into the build layout. Keep the isolated game
+installation and its provisioning record separate, as required by
+[Live Game Acceptance](LiveGameAcceptance.md). Neutral compiler paths do not
+satisfy the game-isolation or approval prerequisites.
 
-The Linux builder already satisfies this — it checks out at
-`/root/topiaforge-build`, which identifies no account.
+Start from fresh source worktrees, without reused `.dart_tool`, build outputs or
+package configurations from another location. The existing administrator path
+already restores the canonical CLI with `pub get --enforce-lockfile`. The
+Windows builder cleans Flutter output, restores its locked dependencies, and
+removes the CLI's `.dart_tool` before its locked restore and AOT compilation.
+These steps prevent stale source paths but depend on the SDK and cache prepared
+above. Version checks do not verify that those paths are neutral.
+
+`Directory.Build.props` continues to map repository .NET source paths to `/_/`.
+It does not rewrite every SDK or precompiled native input. The final
+`release test-package` scan remains the enforcement boundary for embedded host
+paths; the administrator scripts do not automatically provision or relocate
+neutral SDK/cache roots. A scan failure stops the candidate and requires a
+corrected build environment, not a broader scanner exception.
+
+Hosted dry runs use `tools/prepare-neutral-build-root.sh` plus separate neutral
+SDK/cache preparation. That helper deliberately copies only tracked files and
+excludes `.git`; its output cannot replace the administrator's final-`main`
+checkout or the exact-SHA transaction worktrees. A successful hosted dry run
+therefore does not establish that the private administrator layout is ready.
+Any future platform build must also prepare its source, SDK and cache roots;
+a neutral Linux checkout path alone is insufficient.
 
 ## Signed or unsigned distribution
 
@@ -274,161 +288,35 @@ GitHub CLI token for the audit secret.
 The preflight opens the exact Unity project in batch mode to prove that the
 local activation is usable. It never needs Unity email/password credentials.
 
-> **Out of `0.1.0-rc.1`.** Linux is descoped from RC1 and returns in `0.1.0-rc.2`, so
-> everything from here to the end of *Same-host WSL2/WSLg Proton evidence* is inert for
-> this candidate. `release-admin.ps1` reads `release/release-policy.json` and skips the
-> WSL build, the Proton acceptance, and their preflight checks whenever
-> `TopiaForge-linux-x64.zip` is absent from `platformArchives`; re-adding it turns the
-> whole path back on unchanged. The instructions are retained for rc.2.
->
-> Note for rc.2: WSL2 on this host cannot reach a GPU Vulkan implementation. NVIDIA
-> ships no Vulkan ICD for WSL2 and Ubuntu does not package Mesa's Dozen driver, so only
-> software lavapipe is available, while Robotopia's Direct3D 12 renderer needs Vulkan
-> through VKD3D. A venue that provides real Vulkan is required before Linux acceptance
-> can be recorded; if it is not this Windows workstation, the `wsl2-wslg` execution
-> environment in the evidence contract and the WSL-driven collection below must be
-> reworked first.
+## Future Linux acceptance
 
-Firmware virtualization must be enabled manually. Then install WSL2 and the
-named distribution from an elevated terminal, rebooting when Windows asks:
+RC1 includes only the Windows x64 archive. Linux/Proton acceptance is currently
+unavailable: `tools/release/test-proton.sh` is a refusing stub, and
+`release-admin.ps1` rejects a policy containing `TopiaForge-linux-x64.zip` during
+preflight and build. Re-adding that archive to `platformArchives` does not restore
+the retired runner or make its historical evidence valid.
 
-```powershell
-wsl --install --no-distribution
-wsl --install --distribution Ubuntu-24.04
-wsl --set-version Ubuntu-24.04 2
-```
+A future Linux candidate requires a reviewed native isolation implementation
+that proves the runtime identity and persistent-data boundary before staging or
+launch, integration with exact-candidate evidence verification, and actual
+acceptance on the supported game/rendering configuration. A Wine prefix, WSL
+distribution or alternate BepInEx profile alone does not establish that boundary.
+Review the isolation and evidence implementation before separately enabling the
+platform in policy for private candidate construction. The resulting exact bytes
+must then pass actual acceptance before qualification or publication. No later
+release version or Linux approval is implied by retained platform pins or
+successful hosted packaging tests.
 
-Install the pinned Linux toolchains, Git LFS, Flutter desktop prerequisites,
-Steam, and Proton `10.0-4` inside that distribution: clang `18.1.3`, CMake
-`3.28.3`, Ninja `1.11.1`, and GTK `3.24.41`. WSLg and a working virtual GPU
-are required for the real Robotopia run. Preflight runs `git lfs fsck` and
-rejects pointer-file checkouts on both Windows and WSL. All platform pins live
-in `release/platform-toolchains.json`.
+The earlier WSL2/Proton setup, descriptor and schema2 acceptance commands are
+historical material, not runnable release instructions. See the
+[isolation implementation handoff](internal/gamemode-contract/prompts/08b-isolated-acceptance.md)
+and [revision-specific evidence](internal/gamemode-contract/Status.md) for the
+retirement decision. Any future same-host evidence must disclose that it is
+non-independent; it cannot be presented as independent QA.
 
-### Obtaining the exact pinned Proton build
-
-`Proton 10.0-4` is pinned by Steam provenance, not by display name.
-`tools/release/test-proton.sh` requires all of the following, and the display
-name alone satisfies none of them:
-
-| Pin | Value | Where it is checked |
-| --- | --- | --- |
-| Steam app id | `3658110` | `appid` in `steamapps/appmanifest_3658110.acf` |
-| Steam build id | `21617411` | `buildid` in the same appmanifest |
-| Depot id | `3658111` | depot block in the same appmanifest |
-| Depot manifest id | `5413949673798237105` | `manifest` inside that depot block |
-| Reported version | contains `10.0-4` | `proton --version` |
-| Runtime tree | canonical SHA-256 | hashed before and after acceptance; it must not change |
-
-Each appmanifest key must appear exactly once, the file must be a regular file
-rather than a symbolic link, and the Proton executable must be the launcher at
-the root of `steamapps/common/<installdir>` named by that same appmanifest.
-
-The deterministic procedure is:
-
-1. In the WSLg Steam client, enable Steam Play compatibility tools and install
-   `Proton 10.0`. Installing through Steam is what writes the appmanifest; a
-   bare depot download does not produce one.
-2. Before using it, read `steamapps/appmanifest_3658110.acf` and confirm every
-   value in the table above.
-3. Run the preflight from inside the WSL distribution. It checks the same values,
-   plus the WSL2/WSLg environment, without launching the game:
-
-```bash
-tools/release/test-proton.sh --preflight-only --repo "$repo" --source-sha "$sha" --version 0.1.0-rc.1 --game-dir "$gameDir" --game-build-id 2409 --proton-executable "$proton" --steam-root "$steamRoot" --compat-data-root "$compatData"
-```
-
-If Steam has moved `Proton 10.0` to a newer build, the appmanifest will carry a
-different `buildid` and depot `manifest`. That is a stop condition: report it and
-do not proceed. A newer runtime under the same display name is not equivalent,
-because the recorded evidence claims this exact tree.
-
-To recover the exact historical depot for comparison, use `steamcmd`:
-
-```bash
-steamcmd +login <account> +download_depot 3658110 3658111 5413949673798237105 +quit
-```
-
-That yields the pinned depot content under
-`steamapps/content/app_3658110/depot_3658111` for a canonical-digest comparison
-against the installed tree. It does not create an appmanifest, so it supplements
-the Steam install rather than replacing it.
-
-Never hand-edit the appmanifest to make the check pass. The `.acf` is plain text,
-so an edited `buildid` or `manifest` would satisfy every assertion above while the
-installed bytes remain a different runtime — which defeats the entire pin and
-makes the recorded Linux evidence false.
-
-`protonSourceCommit` (`e2becb87430ca3ff510d949d9e75fa9b401da489`) is verified as a
-policy pin, not against the installed tree; it identifies the reviewed
-Proton source revision for audit.
-
-### WSL paths
-
-Configure absolute paths inside the WSL distribution:
-
-```powershell
-$env:TOPIAFORGE_PROTON_EXECUTABLE = "/home/release/.steam/root/steamapps/common/Proton 10.0/proton"
-$env:TOPIAFORGE_STEAM_ROOT = "/home/release/.steam/root"
-$env:TOPIAFORGE_COMPAT_DATA_ROOT = "/home/release/.local/share/topiaforge/compatdata"
-```
-
-The equivalent command parameters are `-ProtonExecutable`, `-SteamRoot`, and
-`-CompatDataRoot`. `-WslDistribution` defaults to `Ubuntu-24.04`;
-`-GameDirectory` identifies the current Windows Robotopia installation and is
-translated into its WSL path by the orchestrator.
-
-macOS packaging remains source-tested as future-platform capability, but RC1
-has no macOS archive, remote builder, Apple identity, notarization step, or
+macOS packaging remains tested as future-platform capability, but RC1 has no
+macOS archive, remote production builder, Apple identity, notarization step, or
 macOS handoff manifest.
-
-## Same-host WSL2/WSLg Proton evidence
-
-The orchestrator, rather than an imported external descriptor, runs the exact
-Linux archive through pinned Proton in the same workstation's WSL2
-distribution. Configure the environment-backed absolute Linux paths documented
-by `release-admin.ps1` for the Proton executable, Steam root, and dedicated
-compat-data root. The runner creates a private wrapper that sets
-`STEAM_COMPAT_DATA_PATH`, `STEAM_COMPAT_CLIENT_INSTALL_PATH`, and
-`WINEDLLOVERRIDES=winhttp=n,b`, then uses only the packaged Linux CLI for the
-release journey.
-
-The generated descriptor is deterministic JSON and binds at least:
-
-```json
-{
-  "schema": "release-proton-evidence-v1",
-  "version": "0.1.0-rc.1",
-  "targetSha": "0123456789abcdef0123456789abcdef01234567",
-  "platform": "linux-proton",
-  "executionEnvironment": "wsl2-wslg",
-  "independentQa": false,
-  "archiveSha256": "64-lowercase-hex",
-  "archiveSize": 123456,
-  "canonicalEcosystemSha256": "64-lowercase-hex",
-  "gameBuildId": 2409,
-  "protonVersion": "10.0-4",
-  "protonRuntimeSha256": "64-lowercase-hex",
-  "wineDllOverrides": "winhttp=n,b",
-  "result": "pass",
-  "suite": "full",
-  "caseInventorySha256": "sha256-of-the-source-SHA-case-inventory-blob",
-  "requiredCasesSha256": "sha256-of-the-sorted-required-case-set",
-  "passedCasesSha256": "sha256-of-the-sorted-passed-case-set",
-  "evidenceSha256": "sha256-of-the-retained-bundle",
-  "evidenceSize": 654321
-}
-```
-
-The runner hashes the complete canonical Proton runtime tree and the raw case
-inventory blob from `targetSha`; it verifies every required case appears
-exactly once, every result passes, the release journey package loads, and the
-evidence bundle bytes match the descriptor. Do not put usernames, hostnames,
-paths, timestamps,
-credentials, or raw game logs in the deterministic descriptor. Both QA bundles
-remain private local evidence; only their scrubbed digests enter the public
-handoff. If this retained runner is used for RC2, record its evidence as
-same-host and non-independent. It does not establish Linux acceptance for RC1.
 
 ## Staging and publication
 
