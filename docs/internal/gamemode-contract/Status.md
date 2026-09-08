@@ -22,6 +22,7 @@ The [canonical brief](../GamemodeContractRedesign.md) is normative. The
 | `1fbd32d2524a13e2dad0d5f705da8301dec952e6` | Slice 8a normal merge of PR #115, final reviewed head `0c4a3061d286db17c4d6f20ca5b07489a42eeafe` | Full CI 34193577478 and CodeQL 34193574648 passed; all review threads resolved; merged at 2026-09-08T06:21:07Z |
 | `0182e19f166383685210151f07948e9909977b03` | Slice 8b normal merge of PR #116, final reviewed head `eda671d40b51cddff098f34437510be552c6e46e` | Full CI 34199629221 and CodeQL 34199625355 passed; both review threads resolved; merged at 2026-09-08T07:42:38Z |
 | `5acead7c855e899f0331b042a6794f424f48a467` | Documentation checkpoint normal merge of PR #117, final reviewed head `c2b410df7f6f11ea35525e25b265612631f11f26` | Full CI 34201562208 and CodeQL 34201557620 passed; review resolved; merged at 2026-09-08T08:03:20Z |
+| `c0be924a23c6739ce5e1daa114e729261e8bd13d` | PR #118 integration, final reviewed head `54c9722ca3a6fc76410189c7801b9b50dc5945f5` | Full CI 34205824535 and CodeQL 34205822728 passed; review returned no findings; merged at 2026-09-08T08:51:03Z |
 
 
 The historical rows describe each slice at its own merge. Current state:
@@ -2031,3 +2032,81 @@ the 500-line cap; formatting checks 483 scoped files with zero changes, and
 domain/data/CLI analyzers report no issues. A local report wrapper first failed
 printing a Unicode test-status symbol under Windows' default console encoding;
 its UTF-8 rerun completed successfully. This was not a website test failure.
+
+
+## Draft RC promotion and release-specific stabilization
+
+[PR #118](https://github.com/Furroxide/TopiaForge/pull/118) passed the complete
+hosted source matrix, including all seven generated templates and documentation
+publication, before normal protected integration. The resulting `c0be924` tree
+is identical to reviewed `54c9722`. After fetching that merge,
+`release/0.1.0-rc.1` was created through the configured administrator-only
+reference-creation allowance, and [draft PR #119](https://github.com/Furroxide/TopiaForge/pull/119)
+was opened into `main` with auto-merge off. No update/merge checks or protected
+publication approval were bypassed. The branch is review preparation, not a
+frozen main candidate, tag or production build.
+
+The fresh release-head [dry run 34206842067](https://github.com/Furroxide/TopiaForge/actions/runs/34206842067)
+failed before ecosystem construction: the seven C# harnesses ran before the
+locked CLI dependency restore required by the production generated-gamemode
+binding test. The ModRuntime harness stopped with its actionable restore error.
+Input verification, launcher builds and macOS x64 CLI completed; ecosystem and
+platform packaging did not. These hosted dry-run outputs are not candidate
+acceptance or evidence extending RC1's Windows-only distribution scope.
+
+A workflow regression reproduced the missing prerequisite ordering before the
+fix. The canonical ecosystem job now restores `apps/topiaforge_cli` with pinned
+Dart and `pub get --enforce-lockfile` before any C# release harness. All six
+workflow source-trust tests pass, and all 532 repository JSON/YAML files parse.
+The redundant later restore is removed; every SDK/harness and deterministic
+payload check remains required. A fresh actual release-head dry run must prove
+the repaired cold-job sequence after stabilization merges.
+
+The main-targeted CodeQL check also reported ten high path-injection findings
+(alerts 431 and 463-471), although the narrower PR #118 comparison had reported
+none. Exact SARIF traces all ten to two test-runner temporary roots allocated
+with `GetTempPath`, a generated suffix and non-exclusive `CreateDirectory`;
+eight downstream locations are fixed test fixtures, not manifest-controlled
+paths. Those two entries now use atomic owned temporary-directory allocation,
+matching the existing full-run convention. No finding is dismissed or
+suppressed, and production reader/validator paths remain unchanged. The exact
+failing security check is the recorded pre-fix evidence; no exploit or failing
+production validator is claimed. Hosted CodeQL must re-evaluate the repaired
+release head before promotion.
+
+A separate behavioral probe found cleanup failures despite successful test exits:
+`--sdk-lifecycle`, `--session-lifecycle` and the full manager run left 6, 30 and
+40 sibling fixture directories respectively. Their call sites now give each
+suite a child of the runner-owned root, including suites that append their own
+suffix. The same probes then left zero siblings and retained an unrelated
+sentinel in all three modes. No historical temporary directory was removed.
+
+`HarnessWorkspaceTests` makes this regression reusable in the seven-harness
+verification path. It launches three existing focused modes in independently
+owned temporary parents, checks their exit codes and the retained sentinel,
+and rejects leftover fixtures. The committed test failed against the old SDK
+and session call sites before the fixed calls were restored. It runs in the
+normal no-argument manager suite as well as `--harness-workspaces`; its children
+return before that registration and cannot recursively launch the full suite.
+Child execution, termination and output drain are bounded. Independent review
+also moved cleanup admission after successful process retirement and output
+drain, so a failed drain preserves the private parent for diagnosis.
+
+Final local stabilization verification rebuilt the full Release solution with
+zero warnings/errors, then rebuilt/audited all eleven SDK packages and ran all
+seven no-argument C# harnesses successfully. Whole-solution formatting returned
+zero with the existing workspace-load warning. The workflow regression suite,
+README counts, residue, trademark, asset-licence and 363-case fixture closure
+checks pass. Pinned Dart formatting reports 489 files with no changes;
+domain/data/CLI analyzers report no issues, and every tracked non-generated Dart
+file remains at or below 500 lines. These local checks do not substitute for
+fresh hosted CodeQL, cold release packaging or exact-candidate game acceptance.
+
+The active governance, architecture inventory, administrator guide, blocker
+runbook and update guide are aligned with the recorded Windows-only, unsigned
+RC1 policy. They distinguish its fourteen catalog payloads, eighteen human-staged
+assets and five finalizer-generated metadata assets from future platform or
+signing requirements. Qualification, exact-byte staging, Ed25519 update
+signatures and protected approval remain required. Pages source rules now match
+the implemented trusted-main/stable-tag workflow. No policy, readiness row,
+credential or repository protection changed in this documentation correction.

@@ -51,6 +51,26 @@ class ExecutableSourceTests(unittest.TestCase):
             body = source.split(f"  {job}:\n", 1)[1].split("    steps:", 1)[0]
             self.assertIn("preflight", body)
 
+    def test_release_csharp_harnesses_have_cli_dependencies_before_running(self):
+        source = read_workflow("release-package-build.yml")
+        job = source.split("  canonical-ecosystem:\n", 1)[1].split(
+            "\n  macos-cli-x64:", 1
+        )[0]
+        steps = re.split(r"(?m)(?=      - name:)", job)
+        harnesses = [i for i, step in enumerate(steps)
+                     if "bash tools/verify-csharp-release-surface.sh" in step]
+        restores = [i for i, step in enumerate(steps)
+                    if re.search(r"(?m)^          dart pub get --enforce-lockfile$", step)]
+        self.assertEqual(len(harnesses), 1)
+        self.assertTrue(restores, "Generated-package tests need the locked CLI dependency graph")
+        before = [i for i in restores if i < harnesses[0]]
+        self.assertTrue(before, "Restore CLI dependencies before any C# release harness")
+        self.assertRegex(steps[before[-1]],
+                         r"(?m)^        working-directory: apps/topiaforge_cli$")
+        setup = [i for i, step in enumerate(steps) if "uses: dart-lang/setup-dart@" in step]
+        self.assertEqual(len(setup), 1)
+        self.assertLess(setup[0], before[-1])
+
     def test_pages_separates_dispatch_and_workflow_run_revisions(self):
         source = read_workflow("deploy-pages.yml")
         steps = checkout_steps(source)

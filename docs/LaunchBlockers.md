@@ -724,8 +724,8 @@ automated tests cannot close Unity object lifetime.
   independently recovery-test the protected update seed and remove plaintext
   local duplicates; enable reviewed Pages and immutable-release policy; protect creation of the annotated
   `v0.1.0-rc.1` tag while forbidding mutation/deletion; retain an administrator-reviewed dry run. Complete one
-  non-publishing two-platform rehearsal before deleting the obsolete live `unity-validation` and
-  `game-acceptance` environments.
+  non-publishing rehearsal covering every platform in `artifactPolicy` before deleting the obsolete live
+  `unity-validation` and `game-acceptance` environments. Current RC1 declares Windows x64 only.
 
 - [ ] **P0-CRED-01 — Rotate credentials exposed through the local Xcode build log.** *(blocking)*
 
