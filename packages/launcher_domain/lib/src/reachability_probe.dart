@@ -9,8 +9,8 @@
 /// Nothing here touches Robotopia, and nothing here depends on the multiplayer hosting feasibility gate being
 /// closed. It measures the launcher's own host, which is the same host a session would run on.
 ///
-/// **Privacy is structural, not procedural.** [NatObservation] carries only booleans. An address is compared where
-/// it is observed, in the data layer, and only the comparison result crosses into the domain. No type in this file
+/// **Privacy is structural, not procedural.** [NatObservation] carries only booleans and a counter. Addresses are
+/// compared in the data layer, and only the comparison results cross into the domain. No type in this file
 /// can hold an IP address, so no amount of downstream carelessness can log, persist, or report one.
 library;
 
@@ -77,14 +77,15 @@ enum HostReachability {
 
 /// The PII-free evidence a probe run produces.
 ///
-/// Every field is a boolean comparison already performed against a raw endpoint that has since been discarded. The
-/// class deliberately has no field capable of holding an address, port, hostname, or timestamp.
+/// Boolean evidence and a transaction count are reduced from raw endpoints in the data layer. The class
+/// deliberately has no field capable of holding an address, port, hostname, or timestamp.
 class NatObservation {
   const NatObservation({
     this.respondedAtAll = false,
     this.mappedMatchesLocalEndpoint = false,
     this.sameMappingAcrossServerAddresses = false,
     this.sameMappingAcrossServerPorts = false,
+    this.filteringProbesCompleted = false,
     this.acceptedFromUnsolicitedAddress = false,
     this.acceptedFromUnsolicitedPort = false,
     this.completedMappingTransactions = 0,
@@ -101,6 +102,11 @@ class NatObservation {
 
   /// The same external endpoint was observed when probing two ports on one server address.
   final bool sameMappingAcrossServerPorts;
+
+  /// Filtering probes completed against a server advertising a usable RFC 5780
+  /// alternate address and port. A timeout is a completed probe; absent server
+  /// support or unperformed probes are not evidence of restrictive filtering.
+  final bool filteringProbesCompleted;
 
   /// A response arrived from an address the client had not sent to.
   final bool acceptedFromUnsolicitedAddress;
@@ -209,6 +215,9 @@ class ReachabilityClassifier {
   }
 
   NatFilteringBehavior _filtering(NatObservation observation) {
+    if (!observation.filteringProbesCompleted) {
+      return NatFilteringBehavior.unknown;
+    }
     if (observation.acceptedFromUnsolicitedAddress) {
       return NatFilteringBehavior.endpointIndependent;
     }

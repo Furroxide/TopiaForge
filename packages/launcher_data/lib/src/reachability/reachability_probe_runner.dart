@@ -27,8 +27,8 @@ class ReachabilityProbeRunner {
   ///    `M3` from the alternate address and port. `M1 == M2` means the mapping ignores the destination address;
   ///    `M2 == M3` means it ignores the destination port.
   ///
-  /// A server that advertises no alternate address leaves mapping undetermined, which the classifier reports as
-  /// [HostReachability.unknown] rather than guessing.
+  /// Without a usable alternate address and port, discovery stops after the initial binding response. Filtering
+  /// remains unknown; mapping remains unknown unless the observed endpoint matches the local socket.
   Future<NatObservation> run(
     StunTransport transport,
     List<StunEndpoint> servers,
@@ -46,6 +46,14 @@ class ReachabilityProbeRunner {
     if (primary == null || first == null) return const NatObservation();
 
     final mappedMatchesLocal = transport.matchesLocalEndpoint(first.mapped);
+    final alternate = first.otherAddress;
+    if (alternate == null || !_isUsableAlternate(primary, alternate)) {
+      return NatObservation(
+        respondedAtAll: true,
+        mappedMatchesLocalEndpoint: mappedMatchesLocal,
+        completedMappingTransactions: 1,
+      );
+    }
 
     final unsolicitedAddress = await transport.request(
       primary,
@@ -58,22 +66,19 @@ class ReachabilityProbeRunner {
     var sameAcrossAddresses = false;
     var sameAcrossPorts = false;
 
-    final alternate = first.otherAddress;
-    if (alternate != null) {
-      final alternateAddressOriginalPort = StunEndpoint(
-        alternate.address,
-        primary.port,
-      );
-      final second = await transport.request(alternateAddressOriginalPort);
-      if (second != null) {
-        completedMappingTransactions++;
-        sameAcrossAddresses = second.mapped == first.mapped;
+    final alternateAddressOriginalPort = StunEndpoint(
+      alternate.address,
+      primary.port,
+    );
+    final second = await transport.request(alternateAddressOriginalPort);
+    if (second != null) {
+      completedMappingTransactions++;
+      sameAcrossAddresses = second.mapped == first.mapped;
 
-        final third = await transport.request(alternate);
-        if (third != null) {
-          completedMappingTransactions++;
-          sameAcrossPorts = third.mapped == second.mapped;
-        }
+      final third = await transport.request(alternate);
+      if (third != null) {
+        completedMappingTransactions++;
+        sameAcrossPorts = third.mapped == second.mapped;
       }
     }
 
@@ -82,11 +87,21 @@ class ReachabilityProbeRunner {
       mappedMatchesLocalEndpoint: mappedMatchesLocal,
       sameMappingAcrossServerAddresses: sameAcrossAddresses,
       sameMappingAcrossServerPorts: sameAcrossPorts,
+      filteringProbesCompleted: true,
       acceptedFromUnsolicitedAddress: unsolicitedAddress != null,
       acceptedFromUnsolicitedPort: unsolicitedPort != null,
       completedMappingTransactions: completedMappingTransactions,
     );
   }
+
+  // RFC 5780 OTHER-ADDRESS names the alternate IP and alternate port in the
+  // same address family. Degenerate endpoints cannot exercise both changes.
+  bool _isUsableAlternate(StunEndpoint primary, StunEndpoint alternate) =>
+      alternate.address.length == primary.address.length &&
+      alternate.port > 0 &&
+      alternate.port <= 65535 &&
+      alternate.port != primary.port &&
+      StunEndpoint(alternate.address, primary.port) != primary;
 }
 
 /// Parses `host:port` probe server entries into endpoints.

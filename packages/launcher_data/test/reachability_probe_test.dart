@@ -211,6 +211,16 @@ void main() {
       final observation = await runner.run(transport, [primary]);
 
       expect(observation.completedMappingTransactions, 3);
+      expect(observation.filteringProbesCompleted, isTrue);
+      expect(
+        const ReachabilityClassifier().classify(observation).filtering,
+        NatFilteringBehavior.addressAndPortDependent,
+      );
+      expect(transport.calls.take(3), [
+        '$primary change=false/false',
+        '$primary change=true/true',
+        '$primary change=false/true',
+      ]);
       expect(observation.sameMappingAcrossServerAddresses, isTrue);
       expect(observation.sameMappingAcrossServerPorts, isTrue);
       expect(
@@ -260,7 +270,7 @@ void main() {
     });
 
     test(
-      'leaves mapping unknown without an alternate server address',
+      'leaves mapping and filtering unknown without an alternate address',
       () async {
         final transport = _FakeStunTransport(
           mappedFor: {
@@ -271,6 +281,12 @@ void main() {
         final observation = await runner.run(transport, [primary]);
 
         expect(observation.completedMappingTransactions, 1);
+        expect(observation.filteringProbesCompleted, isFalse);
+        expect(
+          const ReachabilityClassifier().classify(observation).filtering,
+          NatFilteringBehavior.unknown,
+        );
+        expect(transport.calls, ['$primary change=false/false']);
         expect(
           const ReachabilityClassifier().classify(observation).reachability,
           HostReachability.unknown,
@@ -278,12 +294,44 @@ void main() {
       },
     );
 
+    final unusableAlternates = <String, StunEndpoint?>{
+      'missing': null,
+      'same endpoint': primary,
+      'same address': StunEndpoint(primary.address, alternate.port),
+      'same port': alternateOnPrimaryPort,
+      'zero port': StunEndpoint(alternate.address, 0),
+      'different family': const StunServerList().parseOne('[2001:db8::1]:3479'),
+    };
+    for (final entry in unusableAlternates.entries) {
+      test('skips unsupported discovery: ${entry.key}', () async {
+        final transport = _FakeStunTransport(
+          mappedFor: {
+            primary: _v4([192, 0, 2, 55], 51234),
+          },
+          otherAddress: entry.value,
+          // An unsupported response must not manufacture positive evidence.
+          answersChangeAddress: true,
+          answersChangePort: true,
+        );
+
+        final observation = await runner.run(transport, [primary]);
+        final result = const ReachabilityClassifier().classify(observation);
+
+        expect(result.filtering, NatFilteringBehavior.unknown);
+        expect(observation.filteringProbesCompleted, isFalse);
+        expect(result.mapping, NatMappingBehavior.unknown);
+        expect(observation.completedMappingTransactions, 1);
+        expect(transport.calls, ['$primary change=false/false']);
+      });
+    }
+
     test(
       'records filtering behaviour from the CHANGE-REQUEST probes',
       () async {
         final reflexive = _v4([192, 0, 2, 55], 51234);
         final transport = _FakeStunTransport(
           mappedFor: {primary: reflexive},
+          otherAddress: alternate,
           answersChangePort: true,
         );
 
@@ -305,12 +353,14 @@ void main() {
           mappedFor: {
             primary: _v4([192, 0, 2, 55], 51234),
           },
+          otherAddress: alternate,
           answersChangeAddress: true,
           answersChangePort: true,
         );
 
         final observation = await runner.run(transport, [primary]);
 
+        expect(observation.filteringProbesCompleted, isTrue);
         expect(observation.acceptedFromUnsolicitedAddress, isTrue);
         expect(
           const ReachabilityClassifier().classify(observation).filtering,

@@ -13,11 +13,30 @@ void main() {
       expect(result.filtering, NatFilteringBehavior.unknown);
     });
 
+    for (final observation in const [
+      NatObservation(respondedAtAll: true, completedMappingTransactions: 1),
+      NatObservation(
+        respondedAtAll: true,
+        acceptedFromUnsolicitedAddress: true,
+      ),
+      NatObservation(respondedAtAll: true, acceptedFromUnsolicitedPort: true),
+    ]) {
+      test('leaves filtering unknown without completed discovery '
+          '${observation.acceptedFromUnsolicitedAddress}/'
+          '${observation.acceptedFromUnsolicitedPort}', () {
+        expect(
+          classifier.classify(observation).filtering,
+          NatFilteringBehavior.unknown,
+        );
+      });
+    }
+
     test('reports a direct host when the mapping is the local endpoint', () {
       final result = classifier.classify(
         const NatObservation(
           respondedAtAll: true,
           mappedMatchesLocalEndpoint: true,
+          filteringProbesCompleted: true,
           acceptedFromUnsolicitedAddress: true,
           completedMappingTransactions: 4,
         ),
@@ -34,6 +53,7 @@ void main() {
           respondedAtAll: true,
           sameMappingAcrossServerAddresses: true,
           sameMappingAcrossServerPorts: true,
+          filteringProbesCompleted: true,
           completedMappingTransactions: 4,
         ),
       );
@@ -61,6 +81,7 @@ void main() {
         const NatObservation(
           respondedAtAll: true,
           sameMappingAcrossServerPorts: true,
+          filteringProbesCompleted: true,
           completedMappingTransactions: 4,
         ),
       );
@@ -89,6 +110,7 @@ void main() {
           respondedAtAll: true,
           sameMappingAcrossServerAddresses: true,
           sameMappingAcrossServerPorts: true,
+          filteringProbesCompleted: true,
           acceptedFromUnsolicitedPort: true,
           completedMappingTransactions: 4,
         ),

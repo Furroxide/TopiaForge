@@ -16,10 +16,7 @@ void main() {
     fixture.reply(await fixture.nextRequest(), mappedPort: 41001);
     expect((await first)?.mapped.port, 41001);
 
-    final second = fixture.transport.request(
-      fixture.endpoint,
-      changePort: true,
-    );
+    final second = fixture.transport.request(fixture.endpoint);
     fixture.reply(await fixture.nextRequest(), mappedPort: 41002);
     expect((await second)?.mapped.port, 41002);
     expect(fixture.requestCount, 2);
@@ -87,6 +84,57 @@ void main() {
     expect((await first)?.mapped.port, 41001);
     expect(fixture.requestCount, 1);
   });
+  // RFC 5780 section 6.1, Table 1: each flag changes only its named source
+  // component. All responders below are owned sockets in the loopback range.
+  const origins = [
+    (name: 'same endpoint', address: false, port: false),
+    (name: 'different port', address: false, port: true),
+    (name: 'different address', address: true, port: false),
+    (name: 'different address and port', address: true, port: true),
+  ];
+  for (final requested in origins) {
+    for (final actual in origins) {
+      test('request ${requested.name}, response ${actual.name}', () async {
+        final fixture = await _LoopbackFixture.create(
+          timeout: const Duration(seconds: 1),
+        );
+        addTearDown(fixture.close);
+        final sender = await fixture.replySource(
+          changeAddress: actual.address,
+          changePort: actual.port,
+        );
+        final pending = fixture.transport.request(
+          fixture.endpoint,
+          changeAddress: requested.address,
+          changePort: requested.port,
+        );
+        fixture.reply(
+          await fixture.nextRequest(),
+          mappedPort: 41001,
+          from: sender,
+        );
+        final result = await pending;
+        final matches =
+            requested.address == actual.address &&
+            requested.port == actual.port;
+        expect(result, matches ? isNotNull : isNull);
+      });
+    }
+  }
+
+  test('an unrelated source cannot consume the pending request', () async {
+    final fixture = await _LoopbackFixture.create();
+    addTearDown(fixture.close);
+    final sender = await fixture.replySource(
+      changeAddress: false,
+      changePort: true,
+    );
+    final pending = fixture.transport.request(fixture.endpoint);
+    final request = await fixture.nextRequest();
+    fixture.reply(request, mappedPort: 41001, from: sender);
+    fixture.reply(request, mappedPort: 41002);
+    expect((await pending)?.mapped.port, 41002);
+  });
 }
 
 /// An owned loopback responder. Tests never contact a public STUN server.
@@ -130,6 +178,7 @@ class _LoopbackFixture {
   final RawDatagramSocket _server;
   final UdpStunTransport transport;
   final Queue<Datagram> _requests = Queue<Datagram>();
+  final List<RawDatagramSocket> _replySources = [];
   late final StreamSubscription<RawSocketEvent> _subscription;
   Completer<void> _arrival = Completer<void>();
   int requestCount = 0;
@@ -144,7 +193,38 @@ class _LoopbackFixture {
     return _requests.removeFirst();
   }
 
-  void reply(Datagram request, {required int mappedPort}) {
+  Future<RawDatagramSocket> replySource({
+    required bool changeAddress,
+    required bool changePort,
+  }) async {
+    if (!changeAddress && !changePort) return _server;
+    final address = changeAddress
+        ? InternetAddress('127.0.0.2')
+        : InternetAddress.loopbackIPv4;
+    RawDatagramSocket? reservation;
+    if (changeAddress && changePort) {
+      // Reserve a distinct port on the primary address before binding it on the
+      // alternate address, avoiding accidental reuse of the primary port.
+      reservation = await RawDatagramSocket.bind(
+        InternetAddress.loopbackIPv4,
+        0,
+      );
+      _replySources.add(reservation);
+    }
+    final socket = await RawDatagramSocket.bind(
+      address,
+      changePort ? reservation?.port ?? 0 : _server.port,
+    );
+    _replySources.add(socket);
+    expect(socket.port == _server.port, !changePort);
+    return socket;
+  }
+
+  void reply(
+    Datagram request, {
+    required int mappedPort,
+    RawDatagramSocket? from,
+  }) {
     final response = Uint8List(32);
     final view = ByteData.sublistView(response);
     view.setUint16(0, 0x0101);
@@ -158,7 +238,11 @@ class _LoopbackFixture {
       response[28 + index] =
           request.address.rawAddress[index] ^ response[4 + index];
     }
-    final sent = _server.send(response, request.address, request.port);
+    final sent = (from ?? _server).send(
+      response,
+      request.address,
+      request.port,
+    );
     expect(
       sent,
       response.length,
@@ -169,6 +253,9 @@ class _LoopbackFixture {
   Future<void> close() async {
     await transport.close();
     await _subscription.cancel();
+    for (final socket in _replySources) {
+      socket.close();
+    }
     _server.close();
   }
 }
