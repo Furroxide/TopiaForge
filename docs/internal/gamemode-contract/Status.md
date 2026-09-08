@@ -2291,6 +2291,7 @@ seconds; it did not cause this failure. Auditing the other runtime-repair tests
 found no further batch of independent transactional repairs inside one test.
 All ten focused payload tests pass after the split. Candidate readiness rows,
 Unity authorization, isolated QA and actual game acceptance remain pending.
+
 Final local verification passes with 585 Windows data tests and four platform
 skips, plus the targeted CLI doctor case. An initial overlapping run recorded
 584 passes, four skips and a missing analyzer DLL while the C# SDK audit was
@@ -2305,3 +2306,33 @@ non-generated Dart files remain within 500 lines. README, residue, trademark,
 asset licensing, 363-case fixture closure, 533 JSON/YAML files, documentation
 content and 127 Markdown link checks pass. Hosted verification of the committed
 fix and subsequent release-head packaging remain separate requirements.
+
+## Administrator neutral-build instructions correction — 8 September 2026
+
+Read-only tracing at `27b5b962b6006570522c657ca134b28f36d1f831` confirmed that
+private Windows candidate construction selects the checkout's FVM SDK before
+`PATH`, inherits `PUB_CACHE`, and checks SDK versions before building. It does
+not relocate personal SDK/cache roots; `release test-package` remains the final
+embedded-path enforcement boundary. `AdminRelease.md` now requires physical
+neutral source, exact-SHA worktree, fresh pinned SDK and pub-cache locations,
+with locked restores and no copied personal caches or profile/credential import.
+The obsolete `subst` recipe is removed. The hosted neutral helper omits `.git`
+and cannot replace the administrator's final-main source-provenance checkout.
+
+This is an operator-instruction correction only. No build scripts, scanner
+allowances, release policy, gate decisions or qualification evidence changed.
+No private candidate build or game acceptance was performed; the actual Unity,
+isolated QA and human review prerequisites remain pending.
+
+The same operator audit found obsolete executable WSL2/Proton instructions and
+claims that a policy change would restore the retired runner. The administrator,
+live acceptance, release operations, governance and blocker guides now state the
+actual refusal and the need for reviewed native isolation and candidate evidence
+before future platform approval. Historical setup and descriptor commands are
+removed from the active runbook; prior graphics evidence remains historical, and
+no future release version is promised.
+
+PR #123 merged normally at `b1d98904636f0f96e15e6678817c935cd300b705`,
+with a valid signature/sign-off and the reviewed source tree preserved. Its CI
+and review completed before this separate operator-documentation correction.
+That merge does not qualify a private candidate or supply game evidence.

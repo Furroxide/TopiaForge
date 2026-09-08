@@ -36,10 +36,12 @@ unsigned archives do not establish current candidate readiness.
 Governance relaxed for the `0.x` line on 2026-08-22; see
 [What blocks a `0.x` release](#what-blocks-a-0x-release).
 
-Scope change on 2026-08-12: **Linux is out of `0.1.0-rc.1`** and returns in `0.1.0-rc.2`.
-The administrator host cannot reach a GPU Vulkan implementation inside WSL2, and
-Robotopia's Direct3D 12 renderer requires it through VKD3D, so no credible Proton
-acceptance evidence was obtainable. RC1 is scoped to Windows x64 only. See `P0-LINUX-01`.
+Historical scope change on 2026-08-12: **Linux is out of `0.1.0-rc.1`**. The recorded
+administrator-host WSL2 graphics limitation prevented credible Proton acceptance.
+The earlier RC2 target was a plan, not platform approval. The Proton runner is now
+retired; native isolation and exact-candidate evidence must be implemented and
+reviewed before any future Linux candidate. See `P0-LINUX-01` and the
+[active administrator prerequisites](AdminRelease.md#future-linux-acceptance).
 
 A first-party mod audit on 2026-07-27 found and fixed one critical and two high-severity engineering defects that
 the prior remediation had missed (see [First-party mod audit](#first-party-mod-audit-2026-07-27) below). No further
@@ -262,7 +264,7 @@ check is silently skipped.
 | Credential exposure containment | BLOCKED | The affected workspace DerivedData and launcher build logs were removed, and a scrubbed exact-toolchain sentinel build passed; 13 newly produced Xcode activity logs contained no credential-shaped variable names. Credential owners must still rotate the previously exposed values and confirm revocation. See `P0-CRED-01`. |
 | Strict distributable-release policy | HISTORICAL; NEEDS CANDIDATE RERUN | The dated signed-mode policy required an exact certificate pin and CMS handoff. RC1 now explicitly selects unsigned Windows x64; its three executables must be verified unsigned and the CMS asset/digest absent. Exact candidate qualification remains required. |
 | Windows x64 RC1 package and clean-host run | BLOCKED (unsigned archive built) | An unsigned 63.4 MB `TopiaForge-windows-x64.zip` was produced from `dev` on 2026-08-28 and passes `release test-package --platform windows --zip <archive> --require-windows-unsigned --run-embedded-cli`; doing it found and fixed two defects on the package-construction path, which CI never exercises. This historical archive is not the candidate. Current unsigned RC1 requires a frozen clean candidate, exact unsigned verification, complete isolated Unity/game acceptance and clean-machine QA; a certificate/PFX and timestamp service apply only if a future candidate selects signed mode. See `P0-WIN-01`. |
-| Linux x64 package and Proton run | OUT OF RC1 | The WSL2 builder is fully provisioned and every pinned Linux toolchain verifies, but no GPU-backed Vulkan implementation is reachable there: NVIDIA ships no Vulkan ICD for WSL2 and Ubuntu does not package Mesa's Dozen driver, leaving only software lavapipe. Robotopia's Direct3D 12 renderer reaches Proton through VKD3D, which requires Vulkan, so the working OpenGL-over-d3d12 path cannot serve it. RC1 is therefore Windows-only; see `P0-LINUX-01`. |
+| Linux x64 package and Proton run | OUT OF RC1 | Historical deferral evidence recorded a provisioned WSL2 builder with passing pinned toolchain checks, but no GPU-backed Vulkan implementation is reachable there: NVIDIA ships no Vulkan ICD for WSL2 and Ubuntu does not package Mesa's Dozen driver, leaving only software lavapipe. Robotopia's Direct3D 12 renderer reaches Proton through VKD3D, which requires Vulkan, so the working OpenGL-over-d3d12 path cannot serve it. RC1 remains Windows-only. The current retired-runner/native-isolation blocker is recorded separately in `P0-LINUX-01`. |
 | Authorized Robotopia acceptance on the pinned build | BLOCKED (current-tree evidence recorded) | The 2026-07-28 build-`2309` evidence stays void. All three re-scoped criteria were met on the current tree on 2026-08-28 — see `P0-GAME-01` for the captured log lines — but the gate binds its evidence to a frozen candidate SHA, and `P0-CAND-01` is open, so this remains **BLOCKED**. |
 | Native UX/accessibility acceptance | BLOCKED | Screen Recording permission prevented screenshot comparison; screen-reader and native-platform manual QA remain; see `P1-UX-01`. |
 | Project license and OSS redistribution inventory | FAIL | TopiaForge-owned surfaces use AGPL-3.0-or-later and DCO 1.1 governs post-cutover contributions, but the notice inventory was a fixed allowlist that never covered the Unity TextMesh Pro directory. EmojiOne shipped with no redistribution grant, Liberation Sans shipped with no notice, and Quicksand was sourced from the Robotopia web bundle. All fixed; see the re-opened `P0-OSS-01`. IP/brand authority remains tracked separately in `P0-IP-01`. |
@@ -286,8 +288,9 @@ cannot reach `ready` while any *blocking* gate is unresolved and an unmet
 advisory gate is still visible in the published summary.
 
 The decision carries **twelve** gates for RC1. `P0-LINUX-01` is deliberately absent
-because Linux is out of this candidate; restoring it belongs to `0.1.0-rc.2`
-alongside the policy archive entry and both schema gate contracts. `P0-OSS-01` is
+because Linux is out of this candidate. Any future restoration needs reviewed
+native isolation and acceptance tooling as well as the policy archive entry and
+applicable gate contracts; changing policy alone does not enable it. `P0-OSS-01` is
 present: it was re-opened on 2026-08-06 and the readiness contract must be able to
 carry it rather than infer it from the legal inventory passing.
 
@@ -593,14 +596,16 @@ automated tests cannot close Unity object lifetime.
   update, forced rollback, and uninstall journeys.
 
 - **P0-LINUX-01 — Produce and validate Linux x64 and Proton behavior.** *(OUT OF RC1;
-  deferred to `0.1.0-rc.2` on 2026-08-12)*
+  no future release version approved)*
 
   Owner: Linux/Proton release QA.
 
-  Why it is deferred: the WSL2 builder is fully provisioned on the administrator host and
-  every pinned Linux toolchain verifies exactly — clang `18.1.3`, CMake `3.28.3`, Ninja
-  `1.11.1`, GTK `3.24.41`, .NET `10.0.301`, Node `24.18.0`, Flutter `3.44.6`, Dart `3.12.2`.
-  The blocker is the graphics stack, not the toolchain. NVIDIA ships no Vulkan ICD for
+  Historical evidence recorded at deferral: the WSL2 builder was provisioned on the
+  administrator host and the recorded Linux toolchain checks passed — clang `18.1.3`,
+  CMake `3.28.3`, Ninja `1.11.1`, GTK `3.24.41`, .NET `10.0.301`, Node `24.18.0`,
+  Flutter `3.44.6`, Dart `3.12.2`. The following graphics diagnosis explains that earlier
+  deferral; it is not fresh host verification or the complete current blocker list.
+  The recorded blocker was the graphics stack: NVIDIA ships no Vulkan ICD for
   WSL2 and Ubuntu 24.04 does not package Mesa's Dozen (`dzn`) Vulkan-over-D3D12 driver, so
   the only Vulkan implementation reachable inside WSLg is software lavapipe. Robotopia
   ships the Direct3D 12 Agility SDK and reaches Proton through VKD3D, which requires
@@ -611,22 +616,25 @@ automated tests cannot close Unity object lifetime.
   bar was written precisely to stop this kind of shortcut, so the platform is deferred
   rather than weakened.
 
-  RC1 consequences: `release/release-policy.json` targets Windows x64 only, the readiness
-  and BOM gate contracts drop `P0-LINUX-01`, and the orchestrator's WSL
-  build, Proton acceptance, and their preflight checks are gated on the policy rather than
-  removed. Linux support is untouched in the source tree.
+  Current state on 2026-09-08: `release/release-policy.json` targets Windows x64 only,
+  and `P0-LINUX-01` is absent from the readiness and BOM gate contracts. The Proton
+  acceptance runner is a refusing stub; administrator preflight and build reject a
+  Linux archive in policy. Retained Linux packaging code and toolchain pins do not
+  restore native acceptance or validate historical schema2 evidence.
 
-  Exit criteria for `0.1.0-rc.2`: restore the Linux archive to the policy, the gate to both
-  schemas, and `P0-LINUX-01` to the readiness decision, then build Linux x64 from the frozen
+  Future exit criteria: implement and review native runtime/persistent-data isolation
+  and exact-candidate evidence verification before separately reviewing a Linux
+  policy archive and the applicable schema/readiness gate changes. No Wine prefix or
+  alternate BepInEx profile alone establishes isolation. Build Linux x64 from the frozen
   SHA and inspect final ZIP executable modes, links, checksums, notices, and bundled
   payloads. Run the actual Robotopia matrix for the pinned build through Proton with
   `WINEDLLOVERRIDES=winhttp=n,b` **on a host that can reach a GPU Vulkan implementation**,
   exercise the native Linux launcher/CLI, discovery, path translation, process launch,
   runtime repair, custom-world, recovery, and uninstall flows, and return a scrubbed
   evidence bundle tied to the exact archive digest. A build-only run still does not pass.
-  If that host is not the Windows administrator workstation, the evidence contract's
-  `wsl2-wslg` execution environment and the orchestrator's WSL-driven collection must be
-  reworked first.
+  The future evidence contract must describe the actual approved execution host and
+  isolation boundary; the retired WSL2 collection is not a fallback. See the
+  [active administrator prerequisites](AdminRelease.md#future-linux-acceptance).
 
 - [ ] **P0-GAME-01 — Complete authorized runtime and first-party-mod acceptance on the pinned build.**
   *(blocking)*

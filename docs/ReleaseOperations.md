@@ -16,8 +16,10 @@ are monitored and name a delegate for any role it cannot cover.
 ## Administrator-orchestrated release
 
 Production bytes are created only on administrator-controlled machines. RC1 is Windows x64 only;
-Linux/Proton acceptance is deferred to RC2. Any future WSL2/WSLg run must disclose that its evidence is
-same-host and non-independent where applicable; it cannot establish RC1 acceptance. The Windows workstation drives
+Linux/Proton acceptance is unavailable until a reviewed native isolation implementation and its exact-candidate
+evidence path exist. The retired runner cannot be restored by a policy change; see the
+[future Linux prerequisites](AdminRelease.md#future-linux-acceptance). Any future same-host evidence must disclose
+that it is non-independent. The Windows workstation drives
 `release-admin.ps1`. Its two canonical ecosystem builds must be byte-identical before packaging.
 
 Private preparation requires the four non-game blocking approvals in the frozen twelve-gate register and the
