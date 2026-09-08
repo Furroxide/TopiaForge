@@ -69,7 +69,8 @@ jobs:
       (github.event_name == 'workflow_run' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_branch == 'main') ||
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository) ||
       (github.event_name == 'workflow_dispatch' &&
       (github.ref == 'refs/heads/main' ||
       startsWith(github.ref, 'refs/tags/v')))
@@ -82,13 +83,6 @@ jobs:
       manual_releases: ${{ steps.feeds.outputs.manual_releases }}
       registry_mod_count: ${{ steps.feeds.outputs.registry_mod_count }}
     steps:
-      - name: Checkout exact triggering revision
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-          lfs: true
-          persist-credentials: false
-
       - name: Require a trusted Pages source
         if: github.event_name == 'workflow_dispatch'
         shell: bash
@@ -115,6 +109,23 @@ jobs:
              .prerelease == false and
              .published_at != null and
              .immutable == true' <<<"$release" >/dev/null
+
+      # Keep the write-capable dispatch path free of workflow_run source data.
+      - name: Checkout exact successful main CI revision
+        if: github.event_name == 'workflow_run'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          lfs: true
+          persist-credentials: false
+
+      - name: Checkout exact admitted dispatch revision
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.sha }}
+          lfs: true
+          persist-credentials: false
 
       - name: Configure Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5

@@ -1302,6 +1302,7 @@ printf 'dart %s\n' "$*" >>"$FAKE_STAGE_LOG"
         $originalAssertSourceStillExact = ${function:Assert-SourceStillExact}
         $originalAssertOriginStillExact = ${function:Assert-OriginStillExact}
         $originalBuildHandoff = ${function:Build-Handoff}
+        $originalAssertCandidateQualification = ${function:Assert-CandidateQualification}
         $originalAssertExactSignedTag = ${function:Assert-ExactSignedTag}
         $originalAssertLatestRobotopiaBuild =
             ${function:Assert-LatestRobotopiaBuild}
@@ -1344,6 +1345,11 @@ printf 'dart %s\n' "$*" >>"$FAKE_STAGE_LOG"
                     $EcosystemEvidenceSha,
                     $VerifyOnly
                 )
+            }
+            function Assert-CandidateQualification {
+                param([psobject]$State)
+                Assert-True ($null -ne $State.qualification) "Stage lost accepted qualification."
+                Add-Content -LiteralPath $stageLog -Value "qualification-verified"
             }
             function Assert-ExactSignedTag {
                 param([string]$SourceSha, [bool]$AllowCreation)
@@ -1392,7 +1398,7 @@ printf 'dart %s\n' "$*" >>"$FAKE_STAGE_LOG"
                 version = $Version
                 tag = $tag
                 sourceSha = $stageSourceSha
-                phase = "built"
+                phase = "accepted"
                 rehearsal = $false
                 repository = "furroxide/TopiaForge"
                 wslDistribution = $WslDistribution
@@ -1404,6 +1410,7 @@ printf 'dart %s\n' "$*" >>"$FAKE_STAGE_LOG"
                 canonicalSha256 = $canonicalSha
                 canonicalArchiveSha256 = $canonicalSha
                 ecosystemEvidenceSha256 = $canonicalSha
+                qualification = [pscustomobject]@{ fixture = "accepted-candidate" }
             }
             $stageStateBody | ConvertTo-Json -Depth 8 |
                 Set-Content -LiteralPath $script:statePath `
@@ -1523,6 +1530,7 @@ printf 'dart %s\n' "$*" >>"$FAKE_STAGE_LOG"
             Set-Item Function:Assert-OriginStillExact `
                 -Value $originalAssertOriginStillExact
             Set-Item Function:Build-Handoff -Value $originalBuildHandoff
+            Set-Item Function:Assert-CandidateQualification -Value $originalAssertCandidateQualification
             Set-Item Function:Assert-ExactSignedTag `
                 -Value $originalAssertExactSignedTag
             Set-Item Function:Assert-LatestRobotopiaBuild `
@@ -1762,6 +1770,7 @@ exit 64
                 canonicalSha256 = $canonicalSha
                 canonicalArchiveSha256 = $canonicalSha
                 ecosystemEvidenceSha256 = $canonicalSha
+                qualification = [pscustomobject]@{ fixture = "accepted-candidate" }
             }
             if (-not [string]::IsNullOrWhiteSpace($RequestId)) {
                 $body.finalizerRequestId = $RequestId
@@ -1806,6 +1815,7 @@ exit 64
         $originalRegistrationPollDelay =
             $script:finalizerRegistrationPollDelayMilliseconds
         $originalInvokeStage = ${function:Invoke-Stage}
+        $originalDispatchAssertCandidateQualification = ${function:Assert-CandidateQualification}
         $originalNewFinalizerRequestId = ${function:New-FinalizerRequestId}
         try {
             $script:repositoryRoot = $stageRepository
@@ -1817,6 +1827,11 @@ exit 64
             $script:finalizerRegistrationGraceAttempts = 2
             $script:finalizerRegistrationPollDelayMilliseconds = 0
             $env:FAKE_DISPATCH_STATE_PATH = $script:statePath
+            function Assert-CandidateQualification {
+                param([psobject]$State)
+                Assert-True ($null -ne $State.qualification) "Dispatch lost accepted qualification."
+                Add-Content -LiteralPath $dispatchLog -Value "qualification-verified"
+            }
             function Invoke-Stage {
                 [System.IO.File]::AppendAllText(
                     $env:FAKE_DISPATCH_LOG,
@@ -2017,6 +2032,7 @@ exit 64
         }
         finally {
             Set-Item Function:Invoke-Stage -Value $originalInvokeStage
+            Set-Item Function:Assert-CandidateQualification -Value $originalDispatchAssertCandidateQualification
             Set-Item Function:New-FinalizerRequestId `
                 -Value $originalNewFinalizerRequestId
             $script:repositoryRoot = $originalDispatchRepositoryRoot
@@ -2057,6 +2073,10 @@ exit 64
             -ErrorAction SilentlyContinue
     }
 
+    & (Join-Path $PSHOME $powerShellName) -NoProfile -File (
+        Join-Path $PSScriptRoot "test-release-admin-qualification.ps1"
+    )
+    if ($LASTEXITCODE -ne 0) { throw "Release qualification regression tests failed." }
     Write-Host "release-admin orchestration tests passed."
 }
 finally {

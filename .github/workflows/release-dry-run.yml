@@ -22,7 +22,6 @@ jobs:
       startsWith(github.ref, 'refs/heads/release/')
     uses: ./.github/workflows/release-package-build.yml
     with:
-      source_sha: ${{ github.sha }}
       fail_on_missing_refs: true
       artifact_retention_days: 7
 

@@ -204,6 +204,11 @@ MAX_ARCHIVE_DEPTH = 8
 MAX_ARCHIVE_UNCOMPRESSED_BYTES = 8 * 1024 * 1024 * 1024
 
 LOWERCASE_LITERAL_ALLOWLIST = {
+    # Exact quoted QA keys read from the verified target-game handoff. Other
+    # lowercase uses and every retired-identity rule remain enforced.
+    "apps/topiaforge_cli/lib/src/release_candidate_acceptance.dart",
+    "apps/topiaforge_cli/test/release_candidate_acceptance_fixture.dart",
+    "apps/topiaforge_cli/test/release_candidate_acceptance_test.dart",
     "packages/launcher_data/lib/src/local_launcher_repository/game_layout.dart",
     "packages/launcher_data/lib/src/local_launcher_repository/game_runtime_helpers.dart",
     "packages/launcher_data/test/game_layout_test.dart",

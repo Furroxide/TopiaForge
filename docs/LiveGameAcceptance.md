@@ -7,23 +7,44 @@ The safe SDK has an instrumented, non-distributable acceptance mod under
 
 ## Administrator-controlled launch gates
 
-This is a native launch gate, not an offline or GitHub-hosted test. The administrator-controlled
-Windows workstation runs the complete Windows matrix as part of `release-admin.ps1`. For RC1, the
-same workstation's Ubuntu 24.04 WSL2 environment runs the Proton matrix through WSLg against the
-exact staged Linux archive. Both runs require the supported Robotopia build with real keyboard,
-mouse, gamepad, audio, microphone, and rendered output. Source-only CI, a WSL build without the
-actual WSLg/Proton game run, unit tests, synthetic runtime tests, and the static capability audit
-cannot mark a live case as passed or waive missing Robotopia evidence. RC1 metadata explicitly
-records that the WSL2/WSLg Proton run is same-host and non-independent.
+The administrator-controlled Windows workstation must run the complete Windows
+matrix against the frozen candidate. RC1 is Windows x64 only; Linux/Proton
+acceptance is deferred to RC2. Real keyboard, mouse, gamepad, audio, microphone,
+and rendered output are required. Unit tests and source-only CI cannot mark a live
+native or visual case as passed.
+
+Use a separate Windows user/session or VM that isolates Unity persistent data,
+with authorized access to the verified installed game. An alternate launcher or
+BepInEx profile alone is insufficient. Record a redacted isolation attestation;
+do not access or copy a normal player's authentication data or saves. Retain the
+original process-creation identity and stop only that owned process.
+
+The redesign adds the complete case matrix in
+[`tests/gamemode-release-acceptance.json`](../tests/gamemode-release-acceptance.json).
+Its 36 cases include generated Open Sandbox geometry, environment and kill plane,
+both discovery sources, authored markers, Zombies, Sandbox F5/pause, Free Play
+without Sandbox, restart/menu, and startup/teardown/native-drain failures. All
+fifteen SDK cases and ten game lifecycle cycles remain required. Sixteen Unity
+6000.0.23f1 authoring cycles are a separate requirement; they do not replace game
+cycles. Runtime Unity 6000.0.31f1 is a different version identity.
+
+After testing, the reviewed `release-candidate-acceptance-v1.json` binds those
+observations to the exact source, payload inventory, handoff and game/authoring
+receipts. Its companion decision may approve only the tracked GAME row; other
+gate decisions cannot change. `release-admin.ps1 qualify` validates the records
+and freezes `accepted` state before any staging. Evidence references require
+actual reviewer authorization; synthetic fixture hashes never count as evidence.
 
 Acceptance evidence is valid only for the exact frozen candidate package hashes recorded by the
-harness in `acceptance-result.json` and `last-run.json`. Orchestrator-produced Proton evidence must
+harness in `acceptance-result.json` and `last-run.json`. For RC2, orchestrator-produced Proton evidence must
 also bind the source SHA, release version, platform archive SHA-256 and size, canonical ecosystem
 digest, Robotopia build, full case inventory, pinned Proton runtime identity, `WINEDLLOVERRIDES`,
 execution environment, result, and scrubbed evidence digests. Until the automated Windows result and
 the evidence for every platform in `artifactPolicy` match the candidate, `P0-GAME-01` stays
 blocked.
-Custom-world live acceptance remains scoped to authorized Windows/Proton hosts. Mods execute as
+RC1 custom-world live acceptance remains scoped to authorized Windows hosts.
+If RC2 reuses the WSL2/Proton runner, its evidence is same-host and non-independent;
+it must not be presented as independent QA or as completed RC1 evidence. Mods execute as
 [trusted full-process code](PrivacyAndCapabilities.md); the capability declarations checked here
 are disclosure, not a sandbox.
 
@@ -68,12 +89,13 @@ root startup error, and every requested marker.
 
 ## Creator workbench manual matrix
 
-**Not a release gate.** `P0-CREATOR-01` and the challenge-bound evidence collector that attested it
-were retired with the `0.x` governance change: they existed to prove an interactive workbench
-session from a frozen candidate SHA, and the workbench is now a Sandbox feature rather than a
-shipped package of its own. What remains is the checklist below — useful manual QA for anyone
-touching `mods/TopiaForge.Sandbox/CreatorTools`, with no machine-checked evidence attached to it.
-`P0-GAME-01`'s mod-load smoke is what a release actually turns on.
+`P0-CREATOR-01` and its separate challenge-bound workbench collector were retired
+with the `0.x` governance change. The workbench is a Sandbox feature, and the
+checklist below remains additional manual QA for
+`mods/TopiaForge.Sandbox/CreatorTools`. It does not create a separate creator gate.
+The Sandbox F5/pause and session-cleanup cases in the gamemode release inventory
+remain mandatory under `P0-GAME-01`; a mod-load smoke does not replace that full
+SDK and redesign acceptance matrix.
 
 On an authorized build-2409 host, the workbench checks are:
 
@@ -105,9 +127,9 @@ The Unity-free lifecycle suite protects the same ownership and rollback policies
 change that breaks them fails there first; this matrix is what catches the native-only behaviour it
 cannot see.
 
-The local Windows and same-host WSL2/Proton runs also extract their candidate developer payload,
-use only its packaged CLI to create a fresh minimal mod outside the extraction, and pass that
-project to the harness. The harness runs
+The local Windows run extracts its candidate developer payload, uses only its
+packaged CLI to create a fresh minimal mod outside the extraction, and passes that
+project to the harness. The retained same-host WSL2/Proton journey is for RC2 only. The harness runs
 `topiaforge dev --launch --no-tail --target dev.topiaforge.sdk-acceptance.menu`; success additionally
 requires the unique package to be `valid` and `loaded` in the fresh run plus its exact attributed
 `OnLoad` marker. This proves the promised `new mod` → `dev` journey in two authoring commands.
@@ -126,9 +148,12 @@ lifecycle cycles finish, use **FINISH SDK ACCEPTANCE** in the pause companion or
 
 The world case emits PASS only after committed Running and Idle have both been observed and the
 controller plus its tracked session-scope cleanup marker have been released. A process starting or
-a factory returning does not satisfy this case. The automated acceptance driver must select that
-same target through the production launcher command and correlate runtime outcomes; that integration
-and live verification remain pending. Until it is available, select the target explicitly in-game.
+a factory returning does not satisfy this case. The automated acceptance driver
+already selects `dev.topiaforge.sdk-acceptance.menu` through the production CLI
+launch command, including the generated development journey. Completing its owned
+process receipt and request-correlated runtime-outcome integration, and recording
+actual isolated live evidence, remain acceptance work; target selection alone is
+not a verified game run.
 
 The `lifecycle.ten-cycles` marker is emitted only after ten live acquire/release/reacquire cycles of
 the automatable resource families named in `tests/live-game-acceptance.json`. The probe covers

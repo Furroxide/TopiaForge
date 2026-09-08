@@ -16,46 +16,83 @@ The entry point is:
 acceptance run needs roughly 30 minutes at the keyboard with a gamepad and
 microphone. See [`LiveGameAcceptance.md`](LiveGameAcceptance.md).
 
-Then continue:
+A successful build stops at `built`. Prepare and review the detached candidate
+decision and acceptance records described below, then continue explicitly:
 
 ```powershell
+./tools/release-admin.ps1 qualify
 ./tools/release-admin.ps1 stage
 ./tools/release-admin.ps1 dispatch
 ```
 
-`resume` continues from the durable local state and `all` runs every remaining
-phase. Add `-Rehearsal` to `all` for a verified, non-publishing
-rehearsal of every platform in `artifactPolicy`. Local state and raw evidence
-live under `.release-local/`, which is ignored by Git.
+The durable phases are `preflight → platforms-built → built → accepted → staged
+→ dispatch-requested → published`. `resume` and `all` continue only through
+already authorized phases: both stop at `built` with instructions to run
+`qualify`. Neither command grants acceptance. Add `-Rehearsal` to `all` for a
+verified, non-publishing rehearsal of every platform in `artifactPolicy`. A
+rehearsal can never qualify, create a tag, stage assets, or dispatch publication.
+Local state and raw evidence live under `.release-local/`, which is ignored by
+Git.
 
 Each canonical ecosystem pass runs in its own detached clean worktree. The
 SHA-256 of the normalized, sorted tree manifest is the ecosystem identity; the
 single tar sent to WSL has a separate transport digest. Every
 platform validation summary binds both values.
 
-The machine-readable ship decision is
-`release/release-readiness.json`. It is read from the exact target commit,
-validated against the schema from that same commit, and bound into the BOM by
-digest and gate summary. It carries one entry for each of the twelve
-recorded gates in [`LaunchBlockers.md`](LaunchBlockers.md), so no gate that can stop a
-release is tracked only in prose.
+## Private build and exact candidate qualification
 
-Each gate declares an `enforcement`, pinned per gate id in
-`release_readiness.dart` so the decision file cannot relax itself. On this `0.x`
-line five gates are `blocking` — `P0-IP-01`, `P0-OSS-01`, `P0-PRIV-01`,
-`P0-CRED-01`, and `P0-GAME-01` — and each must be `approved` before the computed
-status can reach `ready`. The other seven are `advisory`: still recorded, still
-reported by `release validate-readiness` (as warnings), and still approvable,
-but they do not by themselves hold a candidate. An advisory P1 gate may also
-carry `accepted-risk` with an allowed scope and evidence identifier. A missing,
-malformed, working-tree-only, or wrong-version decision, or one whose blocking
-gates are unmet, stops preflight, staging, and the protected finalizer. The catalog
-must remain `blocked` until the reviewed decision is committed. The CLI treats
-the `evidenceIds` as manually reviewed attestation references: it validates
-their exact syntax, uniqueness, gate binding, and exact-commit digest, but does
-not resolve an external evidence registry or prove reviewer identity. Evidence
-existence and reviewer authorization are therefore part of the protected
-`release` environment's final human approval.
+Preflight invokes `release validate-prerequisites --version <version>
+--target-sha <final-main-sha>`. It reads `release/release-readiness.json` and its
+schema from that exact commit. All twelve gates remain represented. The four
+blocking non-game gates (`P0-IP-01`, `P0-OSS-01`, `P0-PRIV-01`, and `P0-CRED-01`)
+must already be approved. Only `P0-GAME-01` may await the candidate's live
+acceptance. Success means `eligible-for-private-build`; it is not a ship
+approval. Advisory gates retain their recorded enforcement and reporting rules.
+
+Obtain the final source through the policy-approved same-repository release PR
+into `main`. Preserve its two-parent merge and required hosted checks; freeze
+the final `main` merge SHA, not the release-branch head. Local `main` must remain
+clean and exactly equal to `origin/main`. Moving that source invalidates the
+candidate even when a later commit has the same tree.
+
+`build` still requires the actual SDK, authored-world and live-game checks
+before sealing its validated handoff. Run live acceptance in an isolated Windows
+user/session or virtual machine that isolates Unity's persistent data and does
+not access the normal user's data. A separate BepInEx profile alone is
+insufficient. The acceptance record carries the isolation kind and proof digest,
+not public usernames or paths. Once those exact bytes and private
+evidence exist, place these reviewed, schema-valid records in the candidate's
+assets directory (normally `.release-local/<version>/assets`):
+
+- `release-candidate-readiness-v1.json`: the detached final decision, bound to
+  the frozen source and tracked contracts. Only the game gate may supersede its
+  tracked base decision; the other gates retain their reviewed values.
+- `release-candidate-acceptance-v1.json`: the actual acceptance evidence for that
+  same candidate, with the required cases and reviewer references. Keep raw
+  logs, personal paths, credentials and other private evidence outside public
+  assets. Do not fabricate passing cases or approval references.
+
+Use the schemas from the frozen commit. `qualify` invokes
+`release validate-readiness --version <version> --target-sha <final-main-sha>
+--assets <assets-directory>`. The validator binds the decision, acceptance,
+handoff, sorted payload names/sizes/SHA-256 values, and exact tracked readiness,
+schemas, policy and catalog. It must return `ready`. The administrator tool then
+atomically records the complete normalized assessment and its hashes in
+`accepted` state. An interrupted write preserves the preceding state; retrying
+the same qualification is safe and does not rewrite an existing acceptance.
+
+`stage`, `dispatch` and `resume` revalidate that frozen assessment, source,
+receipts and handoff. Changed payloads, evidence, decision, contract or source
+fail closed. Accepted bytes cannot be rebuilt or repacked through `build`.
+Keep superseded candidates for diagnosis; prepare a new candidate and obtain
+fresh acceptance when any bound input changes. Publication metadata is derived
+from the qualified inventory afterward; it is not part of its own payload hash
+inputs.
+
+Machine validation checks evidence structure and binding. It does not prove a
+reviewer's identity or permission to approve. Actual reviewer authorization,
+evidence inspection and the protected `release` environment approval remain
+human responsibilities.
 
 ## Admin Windows machine
 
@@ -144,23 +181,26 @@ which one this candidate is. The key is optional and its absence means `signed`,
 so a certificate that simply went missing can never be read as a decision to
 ship without one — shipping unsigned has to be written down.
 
-`unsigned` is accepted only on a `0.x` prerelease, and only when no certificate
-is pinned; `release validate-policy` rejects a policy that carries both. In that
-mode `build-windows.ps1` drops `--require-windows-signing` and adds
-`--require-windows-unsigned`, so the artifacts are proved unsigned rather than
-merely unchecked, and preflight and handoff staging skip the certificate and the
-detached CMS signature.
+`unsigned` is accepted by policy validation only on a `0.x` prerelease and only
+when no certificate is pinned; `release validate-policy` rejects a policy that
+carries both. The validator, handoff and qualification contracts already require
+unsigned executable evidence and omission of the detached CMS signature in that
+mode. The construction path remains incomplete: the PowerShell builder still
+requires signing credentials, and the Dart builder still invokes an ambient
+signer. Their repairs await explicit permission; do not use these contract checks
+as evidence that unsigned package construction succeeds.
 
-> **Not yet publishable.** The hosted publication path still embeds
-> `release-handoff-v1.json.p7s` in its verification evidence, its final asset
-> inventory, and its attestation subject. Until that is reshaped, `release.yml`
-> rejects an unsigned distribution outright rather than publishing a candidate
-> whose provenance record silently lost its signature field. An unsigned
-> candidate therefore builds and validates locally and stops at publication.
+The checked-in policy currently leaves `signingIdentities` empty, so the signed
+default remains active and the required reviewed certificate is not configured.
+Explicit authorization to select unsigned `0.1.0-rc.1` is still pending. The
+implemented unsigned qualification path records unsigned trust, requires the CMS asset and its
+decision digest to be absent, and retains the handoff, qualification and payload
+digests. It does not select that mode automatically when credentials are missing.
+Ed25519 update signing, candidate qualification and protected publication approval
+remain required in either mode.
 
-The rest of this section describes the `signed` path.
-
-RC1 and every later production release require Authenticode. Before freezing
+The following certificate requirements apply when the policy selects `signed`
+(including when the optional distribution field is absent). Before freezing
 the release commit, pin the reviewed leaf certificate SHA-256 in
 `signingIdentities.windowsCertificateSha256` and supply
 `WINDOWS_CERTIFICATE_PFX`, `WINDOWS_CERTIFICATE_PASSWORD`, and an HTTPS
@@ -352,22 +392,23 @@ evidence bundle bytes match the descriptor. Do not put usernames, hostnames,
 paths, timestamps,
 credentials, or raw game logs in the deterministic descriptor. Both QA bundles
 remain private local evidence; only their scrubbed digests enter the public
-handoff. This is intentionally recorded as same-host, non-independent RC1
-evidence.
+handoff. If this retained runner is used for RC2, record its evidence as
+same-host and non-independent. It does not establish Linux acceptance for RC1.
 
 ## Staging and publication
 
-Only a fully verified local build can enter `stage`. That phase creates or
+Only an `accepted` candidate can first enter `stage`. That phase creates or
 verifies the signed annotated version tag, creates or resumes the exact draft
-release, and uploads all catalog assets plus the two platform manifests, the
-aggregate handoff manifest, and its detached
-`release-handoff-v1.json.p7s` CMS signature.
+release, and uploads the strict allowlist: catalog assets, the platform
+manifests required by policy, the aggregate handoff, both detached candidate
+qualification records, and `release-handoff-v1.json.p7s` only for a signed
+Windows distribution.
 The release author and every draft asset uploader must be the governance-pinned
 `furroxide` user at immutable actor ID `221987073`; matching a mutable login
 without the actor ID and `User` type is insufficient.
 Existing assets are downloaded and byte-compared; replacement is forbidden.
 An interrupted draft upload reported by GitHub as `state=starter` is the sole
-exception: while the durable phase is still `built`, the orchestrator deletes
+exception: while the durable phase is still `accepted`, the orchestrator deletes
 that exact asset ID and retries it. An `uploaded` byte mismatch always fails
 closed.
 
@@ -397,19 +438,21 @@ run. If it completed with `failure` or `cancelled`, `resume` uses GitHub's
 rerun operation on the same run ID and verifies the rerun; it does not create
 a second workflow-dispatch run. After approval, GitHub rechecks live release
 governance, then verifies the tag, source, exact workflow/run/job provenance
-for every required hosted check, draft, pinned CMS handoff signature, exact
-timestamped Windows trust state, and QA evidence; generates update metadata, BOM,
+for every required hosted check, draft, detached qualification, declared Windows trust state (including the
+pinned timestamped CMS and Authenticode signatures when signed), and QA evidence; generates update metadata, BOM,
 SBOM, and checksums; creates a custom verifier attestation; publishes
 automatically; and re-verifies the immutable release. Governance and candidate
 identity are checked again immediately before publication.
 The generated metadata names are the only assets permitted to identify
 `github-actions[bot]` (actor ID `41898282`, type `Bot`) as uploader. If GitHub
 returns performing-App metadata, it must identify GitHub Actions integration
-ID `15368`. Catalog bytes, handoff manifests, and any local detached handoff
-signature must continue to identify the pinned human staging principal.
-Each hosted platform-verification record includes both the handoff digest and
-the exact detached-P7S digest. The protected finalizer rehashes both draft
-assets and rejects evidence from any other signature bytes.
+ID `15368`. Catalog bytes, handoff manifests, both detached candidate qualification records,
+and any local detached handoff signature must continue to identify the pinned
+human staging principal. Each hosted platform-verification record binds the
+handoff and qualification digests. Signed distributions additionally bind the
+exact detached-P7S digest; unsigned distributions explicitly omit that signature.
+The protected finalizer rehashes the declared draft assets and rejects changed
+qualification or trust evidence.
 
 GitHub does not support conditional requests for unsafe `PATCH` operations
 unless an endpoint explicitly documents them, and the release-update endpoint

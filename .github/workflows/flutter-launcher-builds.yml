@@ -8,11 +8,6 @@ on:
         required: false
         type: number
         default: 14
-      source_sha:
-        description: "Exact commit to build."
-        required: false
-        type: string
-        default: ""
   workflow_dispatch:
     inputs:
       artifact_retention_days:
@@ -43,7 +38,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ inputs.source_sha || github.sha }}
+          ref: ${{ github.sha }}
           lfs: true
           persist-credentials: false
 

@@ -5,13 +5,36 @@ Last audited: 2026-07-31. Reconciled against the 2409 tree on 2026-08-27; see
 working session that closed two advisory gates and moved engineering work on four
 others; see [Second reconciliation](#second-reconciliation-2026-08-28).
 Product candidate: `0.1.0-rc.1`. Recommendation: **NO-SHIP**.
+
+**Current redesign checkpoint, 8 September 2026:** slices 1–7 are integrated;
+release qualification (7a) and V5 retirement/live acceptance (8) remain pending.
+The dated evidence below is historical and does not certify this candidate.
+Current revision-specific results are in
+[`gamemode-contract/Status.md`](internal/gamemode-contract/Status.md).
+
+Private build eligibility requires the four non-game blocking approvals from the
+frozen register. Final publication requires detached candidate qualification,
+including the reviewed full redesign matrix and exact package/handoff/acceptance
+hashes. The generic smoke criteria below cannot waive those requirements. Catalog
+`ready` approves inventory only. No final candidate, approval records or isolated
+QA host have been qualified in this redesign session.
+
+Two reproduced unsigned construction defects remain unresolved: unconditional
+signing credentials in the PowerShell builder and ambient signer activation with
+staging before refusal in the Dart builder. Their repairs await explicit permission;
+the new local regressions remain failing outside the draft qualification checkpoint.
+The checked-in policy still uses
+the signed default, with no reviewed certificate configured, while explicit
+authorization for unsigned RC1 is pending. Historical unsigned archives do not
+establish current candidate readiness.
+
 Governance relaxed for the `0.x` line on 2026-08-22; see
 [What blocks a `0.x` release](#what-blocks-a-0x-release).
 
 Scope change on 2026-08-12: **Linux is out of `0.1.0-rc.1`** and returns in `0.1.0-rc.2`.
 The administrator host cannot reach a GPU Vulkan implementation inside WSL2, and
 Robotopia's Direct3D 12 renderer requires it through VKD3D, so no credible Proton
-acceptance evidence was obtainable. RC1 ships Windows x64 only. See `P0-LINUX-01`.
+acceptance evidence was obtainable. RC1 is scoped to Windows x64 only. See `P0-LINUX-01`.
 
 A first-party mod audit on 2026-07-27 found and fixed one critical and two high-severity engineering defects that
 the prior remediation had missed (see [First-party mod audit](#first-party-mod-audit-2026-07-27) below). No further
@@ -68,7 +91,7 @@ which gate matters. So five gates stay **blocking** and seven become **advisory*
 | `P0-PRIV-01` | blocking | `RoboApiClient` posts to an unapproved third-party backend reusing the player's token. |
 | `P0-CRED-01` | blocking | Exposed credentials stay exposed regardless of version number. |
 | `P0-GAME-01` | blocking | Obtainable by the maintainer alone, and it is the claim the product *is*. |
-| `P0-WIN-01` | advisory | `0.x` ships unsigned with a documented SmartScreen warning; see the gate. |
+| `P0-WIN-01` | advisory | Explicit unsigned distribution requires a recorded decision; the current policy retains the signed default. |
 | `P0-TRUST-01` | advisory | The trust model is disclosed, not enforced; approving it is a `1.0` question. |
 | `P0-HOST-01` | advisory | Protected-host configuration is org administration, not product state. |
 | `P0-CAND-01` | advisory | Freeze discipline is process; a `0.x` prerelease is not immutable-forever. |
@@ -501,7 +524,9 @@ automated tests cannot close Unity object lifetime.
   evidence and mode disagreeing fails closed either way. The guard step is deleted, which was the last move of that
   work rather than the first.
 
-  Selecting `unsigned` now produces a publishable candidate. **The gate stays open**: nobody has recorded the
+  Historical result: the distribution checks accept explicit unsigned policy.
+  The current release-preparation changes and their regressions do not establish
+  a qualified archive or completed live acceptance. **The gate stays open**: nobody has recorded the
   decision to ship unsigned, and the signed path below still needs a purchased, reviewed certificate.
 
   **First unsigned archive produced and validated, 2026-08-28.** `release build-package --platform windows`

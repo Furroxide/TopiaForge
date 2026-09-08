@@ -23,13 +23,22 @@ test('complete Pages workflow has trusted CI, manual, and stable-release entrypo
   assert.match(build.if, /event == 'push'/u);
   assert.match(build.if, /head_branch == 'main'/u);
   assert.match(build.if, /startsWith\(github\.ref, 'refs\/tags\/v'\)/u);
-  const checkout = build.steps.find((step) => step.name === 'Checkout exact triggering revision');
-  assert.match(checkout.with.ref, /workflow_run\.head_sha/u);
-  assert.match(checkout.uses, /^actions\/checkout@9c091bb/u);
-  assert.equal(checkout.with.lfs, true);
+  const checkouts = build.steps.filter((step) => step.uses?.startsWith('actions/checkout@'));
+  assert.equal(checkouts.length, 2);
+  assert.equal(checkouts[0].if, "github.event_name == 'workflow_run'");
+  assert.equal(checkouts[0].with.ref, '${{ github.event.workflow_run.head_sha }}');
+  assert.equal(checkouts[1].if, "github.event_name == 'workflow_dispatch'");
+  assert.equal(checkouts[1].with.ref, '${{ github.sha }}');
+  assert.match(build.if, /head_repository.full_name == github.repository/u);
+  for (const checkout of checkouts) {
+    assert.match(checkout.uses, /^actions\/checkout@9c091bb/u);
+    assert.equal(checkout.with.lfs, true);
+    assert.equal(checkout.with['persist-credentials'], false);
+  }
   const trustedSource = build.steps.find(
     (step) => step.name === 'Require a trusted Pages source',
   );
+  assert.ok(build.steps.indexOf(trustedSource) < build.steps.indexOf(checkouts[0]));
   assert.match(trustedSource.run, /refs\/heads\/main/u);
   assert.match(trustedSource.run, /releases\/tags\/\$SOURCE_TAG/u);
   assert.match(trustedSource.run, /\.immutable == true/u);

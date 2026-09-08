@@ -9,16 +9,21 @@ Machine setup and the resumable command sequence are in
 ## 1. Scope, policy, and ownership
 
 - [x] Product version is `0.1.0-rc.1`; components/mods version independently; initial release has no rollback target.
-- [ ] `release/release-readiness.json` is committed on the frozen candidate,
-      matches that exact version and SHA, and approves every **blocking** gate:
-      `P0-IP-01`, `P0-OSS-01`, `P0-PRIV-01`, `P0-CRED-01`, and `P0-GAME-01`. The
-      seven advisory gates should each be closed or given a dated disposition,
-      but an open one does not stop the release on a `0.x` line; see
-      [What blocks a `0.x` release](LaunchBlockers.md#what-blocks-a-0x-release).
-      Its `evidenceIds` are attestation references, not machine-resolved
-      evidence: the protected release approver must verify their existence and
-      reviewer authorization. The catalog remains `blocked` before that
-      decision.
+- [ ] Freeze the tracked twelve-gate register at the candidate SHA. Run
+      `release validate-prerequisites --version <version> --target-sha <sha>`:
+      `P0-IP-01`, `P0-OSS-01`, `P0-PRIV-01`, and `P0-CRED-01` require real
+      approvals before private preparation. Only `P0-GAME-01` may remain deferred.
+      `eligible-for-private-build` never authorizes publication.
+- [ ] Review the exact catalog inventory separately from permission to publish.
+      Catalog `ready` means its package/platform list was reviewed; the detached
+      candidate decision remains the final release gate. Preserve all seven
+      advisory rows and their actual dispositions.
+- [ ] After exercising the exact payloads, obtain reviewed
+      `release-candidate-readiness-v1.json` and
+      `release-candidate-acceptance-v1.json`. Only the GAME row may supersede the
+      tracked register. Reviewer references and evidence hashes do not prove
+      reviewer identity: the protected approver must verify actual records and
+      authorization. Never infer approval from a test pass.
 - [x] RC discovery is GitHub Releases only; stable Pages/manual and official registry feeds exclude prereleases.
 - [x] The stale `release/0.1.1` line is retired and is neither reused nor deleted during RC preparation.
 - [x] Robotopia support is build `2409` (`0.0.2409`). Public-latest drift stops CI and release, which makes an
@@ -152,18 +157,21 @@ Machine setup and the resumable command sequence are in
       to baseline.
 - [ ] UiGallery covers loading, empty, information, warning, error, success, disabled, focus, long/scroll content,
       destructive modal, toast, scale, contrast, and reduced-motion states.
-- [ ] `P0-GAME-01` is closed on the pinned build: a startup smoke reporting the detected version, at least one
-      `GameCode`-coupled first-party mod reaching `Loaded`, and `gamecompat verify` exiting 0 against that install's
-      `Managed` directory. The wider source-mod, profiler, and allocation matrix is manual QA in
-      [`LiveGameAcceptance.md`](LiveGameAcceptance.md), not a `0.x` gate.
+- [ ] `P0-GAME-01` approves the tested frozen candidate. The generic startup,
+      first-party GameCode loading, and gamecompat checks are necessary but do not
+      replace this redesign's full acceptance: all fifteen SDK cases, ten game
+      lifecycle cycles, sixteen Unity authoring cycles, and every case in
+      `tests/gamemode-release-acceptance.json`. Record isolation and actual native
+      and visual observations; unavailable checks remain pending.
 - [ ] Local Windows acceptance passes from the frozen SHA with all canonical markers, main-thread assertions, ten
       resource cycles, exact package hashes, and a scrubbed validation summary.
-- [ ] The exact Windows archive verifies (launcher, CLI, and GameCompat extractor Authenticode-signed and RFC 3161
-      timestamped by the pinned certificate).
+- [ ] The exact Windows archive matches its reviewed distribution mode. Signed mode requires all three
+      executables signed and timestamped by the pinned certificate. Explicit unsigned mode requires all three
+      unsigned; a missing certificate never selects that mode implicitly.
 - [ ] *(Out of RC1; `0.1.0-rc.2`.)* The Proton evidence bundle matches the exact Linux archive digest and covers real
       discovery, path/process, repair, custom-world, runtime, and uninstall behavior with Proton `10.0-4`.
-      Metadata records that this RC1 evidence is non-independent; build output without the actual game run is not
-      accepted.
+      Metadata records whether this future evidence is same-host and non-independent;
+      build output without the actual game run is not accepted.
 - [ ] An independent clean-machine author with only Robotopia, the release archive, and its pinned .NET SDK creates
       and launches a working safe code mod in at most five commands, without a source checkout or Unity installation.
 
@@ -175,7 +183,7 @@ Machine setup and the resumable command sequence are in
       contains that exact ecosystem digest.
 - [ ] Directly inspect final extracted archives for missing/extra/duplicate/linked entries, case collisions, modes,
       executability, hashes, notices, runtime assets, nested payload equality, secrets, and update metadata.
-- [ ] RC1's Windows CLI, GameCompat extractor, and launcher all have valid
+- [ ] In signed mode, the Windows CLI, GameCompat extractor, and launcher all have valid
       Authenticode signatures from the exact reviewed leaf-certificate
       SHA-256 pin and valid HTTPS RFC 3161 timestamps. Unsigned, partly signed,
       untimestamped, expired-at-signing, mismatched, or invalid output fails.
@@ -190,10 +198,21 @@ Machine setup and the resumable command sequence are in
 
 ## 9. Release metadata and protected publication
 
+- [ ] Run `release-admin.ps1 qualify` after `built`. It validates the detached
+      decision and evidence, then atomically records `accepted`. Stage, dispatch,
+      and resume revalidate the full summary and exact bytes; they cannot skip
+      qualification. Accepted candidates cannot be rebuilt or repacked.
+- [ ] In unsigned mode, omit both P7S and its decision digest. In signed mode,
+      `handoffSignatureSha256` binds its exact bytes; the existing CMS trust
+      verification still verifies certificate, timestamp and chains separately.
+- [ ] Stage both fixed candidate JSON records as human-owned immutable assets.
+      Publication metadata is downstream of qualification. Generated metadata
+      cannot become an input payload or replace a human-owned decision.
+
 - [ ] Each platform emits a deterministic `release-platform-bundle-v1` manifest, and the administrator stages one
       `release-handoff-v1` manifest binding version, source SHA, platform asset digests/sizes, canonical ecosystem
       digest, pinned toolchains, signing state, validation results, and scrubbed QA evidence digests.
-- [ ] The administrator stages `release-handoff-v1.json.p7s`, a detached CMS
+- [ ] In signed mode, the administrator stages `release-handoff-v1.json.p7s`, a detached CMS
       signature over the exact handoff bytes from the same pinned Windows
       code-signing certificate. It contains exactly one cryptographically
       verified RFC 3161 timestamp; the signer and TSA chains, EKUs, and
@@ -266,9 +285,10 @@ Machine setup and the resumable command sequence are in
 
 ## 10. Final decision
 
-- [ ] Re-run `release validate-readiness` against the frozen target SHA
-      immediately before tag creation and again after protected-environment
-      approval; the exact committed decision and BOM binding remain ready.
+- [ ] Re-run `release validate-readiness --version <version> --target-sha <sha> --assets <dir>`
+      before protected approval, after it, and immediately before publication. The
+      exact detached decision/acceptance digests, payloads, handoff and BOM binding
+      remain unchanged. A tracked-ready register alone cannot qualify a release.
 - [ ] Rerun [`LaunchBlockers.md`](LaunchBlockers.md) against the frozen SHA: every blocking gate closed, every
       advisory gate closed or given a dated owner disposition, zero critical/high defects, zero unexplained
       warnings/failures/flakes, and zero skips.

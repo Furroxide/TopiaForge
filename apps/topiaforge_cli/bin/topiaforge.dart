@@ -25,6 +25,8 @@ import 'package:topiaforge/src/release_handoff.dart';
 import 'package:topiaforge/src/release_metadata.dart';
 import 'package:topiaforge/src/release_policy.dart';
 import 'package:topiaforge/src/release_readiness.dart';
+import 'package:topiaforge/src/release_prerequisites.dart';
+import 'package:topiaforge/src/release_candidate_qualification.dart';
 import 'package:topiaforge/src/release_update_metadata.dart';
 
 part 'topiaforge_check_commands.dart';
@@ -43,6 +45,7 @@ part 'topiaforge_package_validation.dart';
 part 'topiaforge_scaffold_validation.dart';
 part 'topiaforge_registry_commands.dart';
 part 'topiaforge_release_commands.dart';
+part 'topiaforge_release_readiness_commands.dart';
 part 'topiaforge_update_commands.dart';
 part 'topiaforge_ui_bundle_commands.dart';
 part 'topiaforge_unity_commands.dart';

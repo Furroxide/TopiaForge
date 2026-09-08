@@ -176,7 +176,13 @@ class TopiaForgeReleaseHandoff {
     required String assetsDirectory,
     String? trustOutputPath,
     bool verifyEmbeddedEcosystem = false,
+    bool verifyCanonicalPackages = false,
   }) async {
+    if (verifyCanonicalPackages && !verifyEmbeddedEcosystem) {
+      throw ArgumentError(
+        'Canonical package verification requires embedded ecosystem verification.',
+      );
+    }
     final context = _loadHandoffContext(repositoryRoot, version, targetSha);
     final assets = _requireAssetsDirectory(assetsDirectory);
     _rejectUnexpectedBundleNames(assets, context.targetPlatforms);
@@ -233,6 +239,7 @@ class TopiaForgeReleaseHandoff {
         final embeddedDigest = await _embeddedEcosystemDigest(
           File(p.join(assets.path, reference.archive.name)),
           context.release,
+          canonicalAssets: verifyCanonicalPackages ? assets : null,
         );
         if (embeddedDigest != bundle.canonicalEcosystemSha256) {
           throw StateError(
