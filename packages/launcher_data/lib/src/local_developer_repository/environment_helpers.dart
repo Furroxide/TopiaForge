@@ -22,23 +22,34 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
       );
     }
 
-    final unityHub = await _findUnityHub();
-    final unityEditor = await _findUnityEditor(workspace.project);
-    messages.add(
-      unityHub.isEmpty ? 'Unity Hub not detected.' : 'Unity Hub: $unityHub',
+    final hubProbe = await _probeOptionalTool('Unity Hub', _findUnityHub);
+    final editorProbe = await _probeOptionalTool(
+      'Unity Editor',
+      () => _findUnityEditor(workspace.project),
     );
-    messages.add(
-      unityEditor.isEmpty
-          ? 'Unity Editor not detected.'
-          : 'Unity Editor: $unityEditor',
-    );
+    for (final (name, probe) in [
+      ('Unity Hub', hubProbe),
+      ('Unity Editor', editorProbe),
+    ]) {
+      if (probe.warning.isNotEmpty) {
+        issues.add(
+          LauncherIssue(
+            severity: IssueSeverity.warning,
+            message: '${probe.warning} $_optionalToolRetry',
+          ),
+        );
+      } else {
+        final path = probe.value!;
+        messages.add(path.isEmpty ? '$name not detected.' : '$name: $path');
+      }
+    }
 
     return DeveloperDoctorReport(
       projectRoot: workspace.projectRoot,
       messages: messages,
       hasProject: workspace.hasProject,
-      unityHubPath: unityHub,
-      unityEditorPath: unityEditor,
+      unityHubPath: hubProbe.value ?? '',
+      unityEditorPath: editorProbe.value ?? '',
       issues: issues,
     );
   }
@@ -77,14 +88,34 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
     }
 
     // Unity — only needed to build custom-world AssetBundles.
-    final unityHub = await _findUnityHub();
+    final hubProbe = await _probeOptionalTool('Unity Hub', _findUnityHub);
+    final unityHub = hubProbe.value ?? '';
+    if (hubProbe.warning.isNotEmpty) {
+      checks.add(
+        ToolCheck(
+          name: 'Unity Hub',
+          status: ToolStatus.warning,
+          purpose: ToolPurpose.optional,
+          detail: hubProbe.warning,
+          remediation: _optionalToolRetry,
+        ),
+      );
+    }
     // World/UI bundle builds must use the exact game-player editor.
-    final editors = await _scanUnityEditors();
+    final editorProbe = await _probeOptionalTool(
+      'Unity Editor',
+      _scanUnityEditors,
+    );
+    final editors = editorProbe.value ?? const <UnityEditor>[];
     final unityEditor = RobotopiaGameUnityCompatibility.selectEditor(editors);
     final ToolStatus unityStatus;
     final String unityDetail;
     final String unityRemediation;
-    if (editors.isEmpty) {
+    if (editorProbe.warning.isNotEmpty) {
+      unityStatus = ToolStatus.warning;
+      unityDetail = editorProbe.warning;
+      unityRemediation = _optionalToolRetry;
+    } else if (editors.isEmpty) {
       unityStatus = ToolStatus.missing;
       unityDetail = unityHub.isEmpty
           ? 'Unity not detected (optional).'
@@ -115,14 +146,23 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
     );
 
     // Git — optional but recommended for version control.
-    final git = await _which('git');
+    final gitProbe = await _probeOptionalTool('Git', () => _which('git'));
+    final git = gitProbe.value ?? '';
     checks.add(
       ToolCheck(
         name: 'Git',
         status: git.isEmpty ? ToolStatus.warning : ToolStatus.ok,
         purpose: ToolPurpose.optional,
-        detail: git.isEmpty ? 'Not found (recommended).' : git,
-        remediation: git.isEmpty ? 'Install Git for version control.' : '',
+        detail: gitProbe.warning.isNotEmpty
+            ? gitProbe.warning
+            : git.isEmpty
+            ? 'Not found (recommended).'
+            : git,
+        remediation: gitProbe.warning.isNotEmpty
+            ? _optionalToolRetry
+            : git.isEmpty
+            ? 'Install Git for version control.'
+            : '',
         url: 'https://git-scm.com/downloads',
       ),
     );
@@ -163,6 +203,50 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
       environment: environment,
       actions: actions,
       issues: issues,
+    );
+  }
+}
+
+const _optionalToolRetry =
+    'Check tool discovery permissions and PATH, then retry the diagnostic.';
+
+class _OptionalToolProbe<T> {
+  const _OptionalToolProbe({this.value, this.warning = ''});
+
+  final T? value;
+  final String warning;
+}
+
+// Failure containment belongs only to reports. Required editor selection and
+// world builds still use the original discovery methods and their error paths.
+Future<_OptionalToolProbe<T>> _probeOptionalTool<T>(
+  String name,
+  Future<T> Function() probe,
+) async {
+  try {
+    return _OptionalToolProbe(value: await probe());
+  } on Exception catch (error) {
+    final reason = switch (error) {
+      BoundedProcessException(failure: BoundedProcessFailure.timeout) =>
+        'the discovery process timed out',
+      BoundedProcessException(
+        failure: BoundedProcessFailure.outputReadFailed,
+      ) =>
+        'the discovery process output could not be read',
+      BoundedProcessException(
+        failure: BoundedProcessFailure.terminationFailed,
+      ) =>
+        'the discovery process exceeded a bound and could not be terminated',
+      BoundedProcessException() =>
+        'the discovery process exceeded an output bound',
+      ProcessException() => 'the discovery process could not be started',
+      FileSystemException() => 'installed-tool locations could not be read',
+      TimeoutException() => 'the discovery probe timed out',
+      _ => 'the discovery probe failed (${error.runtimeType})',
+    };
+    // Process output and exception messages can contain private host details.
+    return _OptionalToolProbe(
+      warning: '$name availability is unknown: $reason.',
     );
   }
 }

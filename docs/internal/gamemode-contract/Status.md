@@ -2238,3 +2238,70 @@ domain/data/CLI fatal-info analyzers are clean and all 555 non-generated Dart
 files stay within 500 lines. README, residue, trademark, asset licensing,
 363-case fixture closure, 533 JSON/YAML files and documentation content/links
 pass. Actual compiled-CLI and fresh hosted verification remain separate below.
+
+## Optional diagnostic discovery after successful package validation
+
+PR #122 squash-merged normally at `c76cfd6a00d946b9302e8c638eb5dc69e1feadfd`
+on 8 September at 11:13:25 UTC. The signature/sign-off are valid and its tree
+matches reviewed `6179d6d`. CI 34218468036 and CodeQL 34218468336 passed on
+that reviewed source. The sole review comment overlooked the immutability
+test's guarded cleanup; the recorded red run demonstrated the intended matcher
+failure without a cleanup exception, and the evidence reply resolved it.
+
+[Release dry run 34219552876](https://github.com/Furroxide/TopiaForge/actions/runs/34219552876)
+passed all eleven jobs on `c76cfd6`: all three platform package smoke tests,
+signed-update and forced-rollback tests, every packaged template lifecycle,
+residue checks and uploads. Neutral launcher/CLI builds, eleven SDK audits,
+seven C# harnesses and the exact ecosystem comparison also passed. These are
+hosted synthetic artifacts; no administrator candidate was built or qualified.
+
+The same-head release-push CI 34219552329 passed, but main-targeted CI
+34219557490 exposed a different Windows defect: optional `where "Unity Hub.exe"`
+exceeded its existing five-second bound and its exception aborted the entire
+environment report. The failed test was supposed to retain an actionable,
+blocking missing-.NET SDK result. All seven previously split DLL cases passed.
+GitHub's tested main merge `ffa38b6` and the release head have identical trees,
+so this difference did not come from extra main-branch source. The exact results
+were 567 passes, one failure and four skips versus 568 passes and four skips.
+
+Optional discovery is now isolated at the diagnostic report boundary. Unity
+Hub, Editor and Git failures become explicit availability-unknown warnings;
+each remaining probe still runs and a known matching Editor stays usable when
+Hub discovery fails. The doctor retains its existing Hub/Editor scope. Both
+reports preserve blocking required-SDK failures, and confirmed empty lookups
+still mean not detected. Process/exception details are sanitized in warnings.
+The five-second and output-size bounds are unchanged. Required editor discovery
+and world-build callers retain their original error behavior, and programming
+errors are not silently converted to optional-tool warnings.
+
+The typed lookup seam precedes any configured Hub override, so regressions do
+not depend on a user's ambient Unity installation. The original missing-SDK test
+also supplies lookup/editor fixtures rather than spawning unrelated real probes.
+Thirteen deterministic cases failed before the report repair; sixteen new
+regression/control cases and thirty-four combined focused cases pass afterward.
+The matrix covers timeout/spawn failure, independent and combined outcomes,
+unknown versus absent, a usable SDK, a matching Editor, sanitized diagnostics,
+and preservation of non-report and programming failures. Independent review
+found no actionable issue.
+
+The final two validator-DLL scenarios also receive individual captured fixtures
+and unchanged default timeouts, matching the seven module cases. Their prior
+three-transaction case passed the slow runner in approximately seventeen
+seconds; it did not cause this failure. Auditing the other runtime-repair tests
+found no further batch of independent transactional repairs inside one test.
+All ten focused payload tests pass after the split. Candidate readiness rows,
+Unity authorization, isolated QA and actual game acceptance remain pending.
+Final local verification passes with 585 Windows data tests and four platform
+skips, plus the targeted CLI doctor case. An initial overlapping run recorded
+584 passes, four skips and a missing analyzer DLL while the C# SDK audit was
+rewriting that output; the retained log and file timestamps identify the
+coordination error. The complete data suite then passed after all build writers
+finished. No source, assertion or timeout was changed between those runs.
+
+The freshly rebuilt Release solution has zero warnings/errors and all eleven
+SDK audits and seven no-argument harnesses pass. Formatting changes none of
+464 checked Dart files; all three fatal-info analyzers are clean and all 556
+non-generated Dart files remain within 500 lines. README, residue, trademark,
+asset licensing, 363-case fixture closure, 533 JSON/YAML files, documentation
+content and 127 Markdown link checks pass. Hosted verification of the committed
+fix and subsequent release-head packaging remain separate requirements.

@@ -1,5 +1,10 @@
 part of '../local_developer_repository.dart';
 
+/// Resolves a developer executable, including an optional configured path.
+/// Production lookups retain their bounded where/which process.
+typedef DeveloperExecutableLookup =
+    Future<String> Function(String executable, {String? configuredPath});
+
 extension LocalDeveloperIoHelpers on LocalDeveloperRepository {
   Directory? _findProjectRoot(String startPath) {
     var current = FileSystemEntity.isDirectorySync(startPath)
@@ -318,7 +323,16 @@ ${references.join('\n')}
     return '';
   }
 
-  Future<String> _which(String executable) async {
+  Future<String> _which(String executable, {String? configuredPath}) async {
+    final lookup = _executableLookup;
+    if (lookup != null) {
+      return lookup(executable, configuredPath: configuredPath);
+    }
+    if (configuredPath != null &&
+        configuredPath.isNotEmpty &&
+        File(configuredPath).existsSync()) {
+      return configuredPath;
+    }
     final command = Platform.isWindows ? 'where' : 'which';
     final result = await runBoundedProcess(
       command,
@@ -334,11 +348,10 @@ ${references.join('\n')}
   }
 
   Future<String> _findUnityHub() async {
-    final env = Platform.environment['UNITY_HUB_PATH'];
-    if (env != null && env.isNotEmpty && File(env).existsSync()) {
-      return env;
-    }
-    return _which(Platform.isWindows ? 'Unity Hub.exe' : 'unityhub');
+    return _which(
+      Platform.isWindows ? 'Unity Hub.exe' : 'unityhub',
+      configuredPath: Platform.environment['UNITY_HUB_PATH'],
+    );
   }
 
   Future<String> _findUnityEditor(DeveloperProject? project) async {
