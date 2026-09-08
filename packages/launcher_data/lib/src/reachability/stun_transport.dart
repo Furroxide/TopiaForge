@@ -50,7 +50,16 @@ class UdpStunTransport implements StunTransport {
     this._addressLength,
     this._localAddresses,
     this._timeout,
-  ) : _random = Random.secure();
+  ) : _random = Random.secure() {
+    _socket.writeEventsEnabled = false;
+    // RawDatagramSocket is single-subscription, and cancelling that subscription
+    // closes the socket. Its listener belongs to the entire probe run.
+    _subscription = _socket.listen(
+      _onSocketEvent,
+      onError: (Object _) => unawaited(close()),
+      onDone: _onSocketDone,
+    );
+  }
 
   /// Binds an ephemeral UDP port for [family] and snapshots this machine's own interface addresses.
   ///
@@ -70,19 +79,24 @@ class UdpStunTransport implements StunTransport {
       wantsIPv6 ? InternetAddress.anyIPv6 : InternetAddress.anyIPv4,
       0,
     );
-    final addresses = <StunEndpoint>[];
-    for (final interface in await NetworkInterface.list(
-      includeLoopback: false,
-      includeLinkLocal: false,
-    )) {
-      for (final address in interface.addresses) {
-        if (address.rawAddress.length != addressLength) continue;
-        addresses.add(
-          StunEndpoint(Uint8List.fromList(address.rawAddress), socket.port),
-        );
+    try {
+      final addresses = <StunEndpoint>[];
+      for (final interface in await NetworkInterface.list(
+        includeLoopback: false,
+        includeLinkLocal: false,
+      )) {
+        for (final address in interface.addresses) {
+          if (address.rawAddress.length != addressLength) continue;
+          addresses.add(
+            StunEndpoint(Uint8List.fromList(address.rawAddress), socket.port),
+          );
+        }
       }
+      return UdpStunTransport._(socket, addressLength, addresses, timeout);
+    } catch (_) {
+      socket.close();
+      rethrow;
     }
-    return UdpStunTransport._(socket, addressLength, addresses, timeout);
   }
 
   final RawDatagramSocket _socket;
@@ -91,21 +105,28 @@ class UdpStunTransport implements StunTransport {
   final Duration _timeout;
   final Random _random;
   final StunCodec _codec = const StunCodec();
+  late final StreamSubscription<RawSocketEvent> _subscription;
+  _StunTransaction? _pending;
+  Future<void>? _closing;
+  bool _closed = false;
 
   @override
   bool matchesLocalEndpoint(StunEndpoint candidate) =>
       _localAddresses.contains(candidate);
 
+  /// Refuses overlapping requests and requests after close with `null`, leaving
+  /// the active transaction untouched. A probe run sends its requests in order.
   @override
   Future<StunBindingResponse?> request(
     StunEndpoint server, {
     bool changeAddress = false,
     bool changePort = false,
   }) async {
-    // The socket cannot reach another family, and `send` would throw rather than report it. Callers pick the
-    // family before binding, so this only fires on a programming error; it stays a `null` because the whole
-    // transport contract is that a transaction reports evidence, never an exception.
-    if (server.address.length != _addressLength) return null;
+    if (_closed ||
+        _pending != null ||
+        server.address.length != _addressLength) {
+      return null;
+    }
 
     final transactionId = Uint8List.fromList(
       List<int>.generate(
@@ -118,53 +139,69 @@ class UdpStunTransport implements StunTransport {
       changeAddress: changeAddress,
       changePort: changePort,
     );
-
-    // Drain anything still queued from an earlier transaction so a late reply cannot be mistaken for this one.
-    while (_socket.receive() != null) {}
-
-    final destination = InternetAddress.fromRawAddress(server.address);
-    if (_socket.send(message, destination, server.port) <= 0) return null;
-
-    final completer = Completer<StunBindingResponse?>();
-    late StreamSubscription<RawSocketEvent> subscription;
-    Timer? deadline;
-
-    void finish(StunBindingResponse? response) {
-      if (completer.isCompleted) return;
-      deadline?.cancel();
-      unawaited(subscription.cancel());
-      completer.complete(response);
+    final transaction = _StunTransaction(transactionId);
+    _pending = transaction;
+    transaction.deadline = Timer(_timeout, () => _finish(transaction, null));
+    try {
+      while (_socket.receive() != null) {}
+      final destination = InternetAddress.fromRawAddress(server.address);
+      if (_socket.send(message, destination, server.port) <= 0) {
+        _finish(transaction, null);
+      }
+    } on SocketException {
+      _finish(transaction, null);
     }
+    return transaction.completer.future;
+  }
 
-    subscription = _socket.listen(
-      (event) {
-        if (event != RawSocketEvent.read) return;
-        for (
-          var datagram = _socket.receive();
-          datagram != null;
-          datagram = _socket.receive()
-        ) {
-          final decoded = _codec.decodeBindingResponse(
-            Uint8List.fromList(datagram.data),
-            transactionId,
-          );
-          if (decoded != null) {
-            finish(decoded);
-            return;
-          }
-        }
-      },
-      onError: (_) => finish(null),
-      cancelOnError: true,
-    );
+  void _onSocketEvent(RawSocketEvent event) {
+    if (event != RawSocketEvent.read || _closed) return;
+    for (
+      var datagram = _socket.receive();
+      datagram != null;
+      datagram = _socket.receive()
+    ) {
+      final transaction = _pending;
+      if (transaction == null) continue;
+      final decoded = _codec.decodeBindingResponse(
+        Uint8List.fromList(datagram.data),
+        transaction.id,
+      );
+      if (decoded != null) _finish(transaction, decoded);
+    }
+  }
 
-    deadline = Timer(_timeout, () => finish(null));
-    return completer.future;
+  void _finish(_StunTransaction transaction, StunBindingResponse? response) {
+    if (!identical(_pending, transaction)) return;
+    _pending = null;
+    transaction.deadline?.cancel();
+    transaction.completer.complete(response);
+  }
+
+  void _onSocketDone() {
+    _closed = true;
+    _localAddresses.clear();
+    final transaction = _pending;
+    if (transaction != null) _finish(transaction, null);
   }
 
   @override
-  Future<void> close() async {
-    _localAddresses.clear();
-    _socket.close();
+  Future<void> close() => _closing ??= _close();
+
+  Future<void> _close() async {
+    _onSocketDone();
+    try {
+      await _subscription.cancel();
+    } finally {
+      _socket.close();
+    }
   }
+}
+
+class _StunTransaction {
+  _StunTransaction(this.id);
+
+  final Uint8List id;
+  final Completer<StunBindingResponse?> completer = Completer();
+  Timer? deadline;
 }
