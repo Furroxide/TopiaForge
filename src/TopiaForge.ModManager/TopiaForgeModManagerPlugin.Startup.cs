@@ -9,12 +9,27 @@ namespace TopiaForge.ModManager
         private RuntimeStartupSelection startupSelection = null!;
         private RuntimeLaunchPublisher? launchPublisher;
         private bool hasLauncherCommand;
+        private bool acceptanceAdmitted;
         private bool rejectedLauncherCommand;
         private LaunchRequestCorrelation? rejectedCorrelation;
         private string rejectionReason = string.Empty;
 
+        private void AdmitStartup()
+        {
+            launchStaging = new LaunchStagingStore(paths);
+            var acceptanceRequest = Environment.GetEnvironmentVariable(AcceptanceIsolationGate.EnvironmentVariable);
+            if (acceptanceRequest == null) return;
+            launchProfile = launchStaging.AdmitAcceptance(acceptanceRequest,
+                Environment.GetEnvironmentVariable(ProfileLaunchConfigurationV4.EnvironmentVariable),
+                () => AcceptanceRuntimeProbe.Read(BepInEx.Paths.GameRootPath, BepInEx.Paths.BepInExRootPath,
+                    paths.Root, UnityEngine.Application.persistentDataPath), DateTimeOffset.UtcNow);
+            acceptanceAdmitted = true;
+            hasLauncherCommand = true;
+        }
+
         private ProfileLaunchConfigurationV4? ConsumeLaunchProfile()
         {
+            if (acceptanceAdmitted) return launchProfile;
             var configuredPath = Environment.GetEnvironmentVariable(ProfileLaunchConfigurationV4.EnvironmentVariable);
             hasLauncherCommand = !string.IsNullOrWhiteSpace(configuredPath);
             if (!hasLauncherCommand) return null;

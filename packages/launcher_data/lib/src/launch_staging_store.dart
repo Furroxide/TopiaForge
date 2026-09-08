@@ -7,6 +7,10 @@ import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 
 import 'launch_storage_keys.dart';
+import 'package:crypto/crypto.dart';
+import 'acceptance_isolation_context.dart';
+
+part 'acceptance_isolation_staging.dart';
 
 /// One bounded launch protocol directory beneath a caller-established game root.
 final class LaunchStagingStore {

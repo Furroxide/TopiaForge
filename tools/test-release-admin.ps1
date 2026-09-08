@@ -278,22 +278,13 @@ Assert-True (
     Test-Path -LiteralPath $protonRunnerPath -PathType Leaf
 ) "tools/release/test-proton.sh is missing."
 $protonRunnerSource = Get-Content -LiteralPath $protonRunnerPath -Raw
-foreach ($requiredRunnerSource in @(
-        "--preflight-only",
-        "--source-sha",
-        "--canonical-ecosystem-sha256",
-        "--game-build-id",
-        "--proton-executable",
-        "--steam-root",
-        "--compat-data-root",
-        "proton-evidence.json",
-        "proton-evidence.bundle",
-        "independentQa"
-    )) {
-    Assert-True ($protonRunnerSource.Contains($requiredRunnerSource)) (
-        "test-proton.sh is missing: $requiredRunnerSource"
-    )
-}
+Assert-True ($protonRunnerSource.Contains("native isolation is not supported")) (
+    "The Proton runner must refuse unsupported native isolation before invoking tools."
+)
+Assert-True (-not $protonRunnerSource.Contains('"acceptance", "run"') -and
+    -not $protonRunnerSource.Contains('schemaVersion == 2')) (
+    "The retired Proton acceptance path remains executable."
+)
 
 $bashPath = $null
 if (Test-Path -LiteralPath "C:\Program Files\Git\bin\bash.exe") {
@@ -451,9 +442,12 @@ exit 0
     $env:PATH = "$fakeBin$([System.IO.Path]::PathSeparator)$oldPath"
     $env:TOPIAFORGE_RELEASE_TEST_IMPORT = "1"
     try {
+        $testIsolationRecord = Join-Path $testRoot 'isolation-provisioning.json'
+        [System.IO.File]::WriteAllText($testIsolationRecord, '{"fixture":"synthetic admin inputs"}')
         . $scriptPath -Command preflight `
             -StateRoot $testRoot `
             -GameDirectory (Join-Path $testRoot "Robotopia") `
+            -AcceptanceIsolationRecord $testIsolationRecord `
             -ProtonExecutable "/opt/proton-10.0-4/proton" `
             -SteamRoot "/mnt/c/Program Files (x86)/Steam" `
             -CompatDataRoot "/var/tmp/topiaforge-compat"
@@ -841,11 +835,21 @@ exit 0
         }
         $robotopiaEvidencePath = Join-Path $robotopiaEvidenceDirectory `
             "acceptance-result.json"
+        $originalIsolationVerifier = (Get-Command Get-VerifiedReleaseAcceptanceIsolation).ScriptBlock
+        $originalIsolationSdk = (Get-Command Get-DartAndFlutter).ScriptBlock
+        function Get-DartAndFlutter { return @{ Dart = 'mock-isolation-verifier' } }
+        function Get-VerifiedReleaseAcceptanceIsolation {
+            param([string]$EvidencePath, [AllowEmptyString()][string]$IsolationRecordPath,
+                [string]$CliPath, [string[]]$PrefixArguments, [string]$WorkingDirectory)
+            $null = @($EvidencePath, $IsolationRecordPath, $CliPath, $PrefixArguments, $WorkingDirectory)
+            return [pscustomobject]@{ gameDirectory = (Join-Path $testRoot 'isolated-game') }
+        }
         $robotopiaBody = [ordered]@{
-            schemaVersion = [Int64]2
+            schemaVersion = [Int64]3
+            isolation = [ordered]@{ fixture = 'Validated by the separate private verifier tests.' }
             startedAtUtc = "2026-07-31T09:00:00.000Z"
             completedAtUtc = "2026-07-31T09:01:00.000Z"
-            gameDirectory = $GameDirectory
+            gameDirectory = Join-Path $testRoot 'isolated-game'
             package = Join-Path $testRoot `
                 "dev.topiaforge.sdk-acceptance-0.1.0-rc.1.topiaforgemod"
             requiredCases = $windowsRequiredCases
@@ -915,195 +919,16 @@ exit 0
         Assert-WindowsRuntimeEvidence -SourceSha $sourceSha `
             -Validation $windowsValidationObject
 
-        $linuxArchive = Join-Path $testAssets "TopiaForge-linux-x64.zip"
-        Set-Content -LiteralPath $linuxArchive -Value "linux candidate" `
-            -Encoding ascii
-        $protonDirectory = Join-Path $testEvidence "proton"
-        $bundleStage = Join-Path $testRoot "proton-bundle"
-        New-Item -ItemType Directory -Force -Path `
-            $protonDirectory, $bundleStage | Out-Null
-        $expectedCases = @(
-            $acceptanceInventory.cases |
-                ForEach-Object { [string]$_.id } |
-                Sort-Object
-        )
-        $caseSetText = ($expectedCases -join "`n") + "`n"
-        $caseSetSha = Get-Utf8Sha256 $caseSetText
-        $gameExecutableSha =
-            [string]$gameBuildMetadata.windowsFilesManifest.gameExecutableSha256
-        $protonRuntimeSha = Get-Utf8Sha256 "Proton 10.0-4 runtime tree"
-        $wineCommandSha = Get-Utf8Sha256 "private wine wrapper"
-        $runtimeContext = @(
-            "executionEnvironment=wsl2-wslg",
-            "gameBuildId=$($policy.gameBuild.id)",
-            "gameArchiveSha256=$($gameBuildMetadata.archives.windows.sha256)",
-            "gameExecutableSha256=$gameExecutableSha",
-            ("gameFilesManifestSha256={0}" -f
-                $gameBuildMetadata.windowsFilesManifest.sha256),
-            ("gameFilesVerified={0}" -f
-                $gameBuildMetadata.windowsFilesManifest.fileCount),
-            "independentQa=false",
-            "protonRuntimeSha256=$protonRuntimeSha",
-            "protonVersion=10.0-4",
-            "runtime=windows-x64-via-proton",
-            "winDllOverrides=winhttp=n,b",
-            "wineCommandSha256=$wineCommandSha"
-        ) -join "`n"
-        $runtimeContext += "`n"
-        [System.IO.File]::WriteAllText(
-            (Join-Path $bundleStage "runtime-context.txt"),
-            $runtimeContext,
-            [System.Text.UTF8Encoding]::new($false)
-        )
-        $acceptanceResult = [ordered]@{
-            schemaVersion = [Int64]2
-            startedAtUtc = "2026-07-31T10:00:00.000Z"
-            completedAtUtc = "2026-07-31T10:01:00.000Z"
-            gameDirectory = "/mnt/c/Robotopia"
-            package = "/tmp/dev.topiaforge.sdk-acceptance-0.1.0-rc.1.topiaforgemod"
-            succeeded = $true
-            requiredCases = $expectedCases
-            passedCases = $expectedCases
-            missingCases = @()
-            failures = @()
-            acceptanceChallenge = $acceptanceChallenge
-            lastRunSessionId = "session-test"
-            acceptancePackageStatus = "loaded"
-            acceptancePackageReceipt = $acceptancePackageReceipt
-            releaseJourneyEnabled = $true
-            releaseJourneyAuthoringCommandCount = 2
-            releaseJourneyCli = "/tmp/topiaforge"
-            releaseJourneyProject =
-                "/tmp/dev.topiaforge.release-$($sourceSha.Substring(0, 12))"
-            requiredLoadedPackageId =
-                "dev.topiaforge.release-$($sourceSha.Substring(0, 12))"
-            requiredLoadedPackageStatus = "loaded"
-            requiredLoadedPackageReceipt = $journeyPackageReceipt
-            requiredLogMarker = "TopiaForge release $Version loaded. Run " +
-                "'dev.topiaforge.release-$($sourceSha.Substring(0, 12)):greet' " +
-                "to try its command."
-            requiredLogMarkerObserved = $true
-        }
-        $acceptanceResult | ConvertTo-Json -Depth 8 |
-            Set-Content -LiteralPath (
-                Join-Path $bundleStage "acceptance-result.json"
-            ) -Encoding utf8NoBOM
-        Set-Content -LiteralPath (Join-Path $bundleStage "cli-help.txt") `
-            -Value "TopiaForge CLI help" -Encoding utf8NoBOM
-        Set-Content -LiteralPath (
-            Join-Path $bundleStage "game-build-marker.json"
-        ) -Value "{`"id`":$($policy.gameBuild.id)}" -Encoding utf8NoBOM
-        $lastRunFixture = [ordered]@{
-            schemaVersion = [Int64]1
-            sessionId = "session-test"
-            packages = @(
-                [ordered]@{
-                    id = "dev.topiaforge.sdk-acceptance"
-                    sourceSha256 = $acceptancePackageReceipt.sourceSha256
-                    criticalFiles = $acceptancePackageReceipt.criticalFiles
-                },
-                [ordered]@{
-                    id = "dev.topiaforge.release-$($sourceSha.Substring(0, 12))"
-                    sourceSha256 = $journeyPackageReceipt.sourceSha256
-                    criticalFiles = $journeyPackageReceipt.criticalFiles
-                }
-            )
-        }
-        $lastRunFixture | ConvertTo-Json -Depth 8 |
-            Set-Content -LiteralPath (
-                Join-Path $bundleStage "last-run.json"
-            ) -Encoding utf8NoBOM
-        Set-Content -LiteralPath (Join-Path $bundleStage "manager.log") `
-            -Value "TopiaForge release $Version loaded." -Encoding utf8NoBOM
-        Set-Content -LiteralPath (Join-Path $bundleStage "new-mod.txt") `
-            -Value "dev.topiaforge.release-test" -Encoding utf8NoBOM
-        Set-Content -LiteralPath (Join-Path $bundleStage "proton-version.txt") `
-            -Value "Proton 10.0-4" -Encoding utf8NoBOM
-
-        $bundleEntries = @(
-            "acceptance-result.json",
-            "cli-help.txt",
-            "game-build-marker.json",
-            "last-run.json",
-            "manager.log",
-            "new-mod.txt",
-            "proton-version.txt",
-            "runtime-context.txt"
-        )
-        $protonBundle = Join-Path $protonDirectory "proton-evidence.bundle"
-        & tar -cf $protonBundle -C $bundleStage @bundleEntries
-        if ($LASTEXITCODE -ne 0) {
-            throw "Could not create the Proton evidence fixture."
-        }
-        $acceptanceResultPath = Join-Path $bundleStage "acceptance-result.json"
-        $protonDescriptor = Join-Path $protonDirectory "proton-evidence.json"
-        $protonBody = [ordered]@{
-            schema = "release-proton-evidence-v1"
-            version = $Version
-            targetSha = $sourceSha
-            platform = "linux-proton"
-            archiveSha256 = Get-Sha256 $linuxArchive
-            archiveSize = (Get-Item -LiteralPath $linuxArchive).Length
-            canonicalEcosystemSha256 = $canonicalSha
-            gameBuildId = [Int64]$policy.gameBuild.id
-            gameArchiveSha256 =
-                [string]$gameBuildMetadata.archives.windows.sha256
-            gameFilesManifestSha256 =
-                [string]$gameBuildMetadata.windowsFilesManifest.sha256
-            gameFilesVerified =
-                [Int64]$gameBuildMetadata.windowsFilesManifest.fileCount
-            result = "pass"
-            suite = "full"
-            protonVersion = "10.0-4"
-            protonAppId = [Int64]$platformToolchains.linux.protonSteamAppId
-            protonDepotId = [Int64]$platformToolchains.linux.protonSteamDepotId
-            protonManifestId =
-                [string]$platformToolchains.linux.protonSteamManifestId
-            protonBuildId =
-                [Int64]$platformToolchains.linux.protonSteamBuildId
-            protonSourceCommit =
-                [string]$platformToolchains.linux.protonSourceCommit
-            protonRuntimeSha256 = $protonRuntimeSha
-            executionEnvironment = "wsl2-wslg"
-            runtime = "windows-x64-via-proton"
-            runtimeConfigurationSha256 = Get-Utf8Sha256 $runtimeContext
-            gameExecutableSha256 = $gameExecutableSha
-            wineCommandSha256 = $wineCommandSha
-            winDllOverrides = "winhttp=n,b"
-            independentQa = $false
-            caseInventorySha256 = Get-BytesSha256 (
-                Get-GitBlobBytes -SourceSha $sourceSha `
-                    -GitPath "tests/live-game-acceptance.json"
-            )
-            requiredCases = $expectedCases
-            requiredCasesSha256 = $caseSetSha
-            passedCases = $expectedCases
-            passedCasesSha256 = $caseSetSha
-            failures = @()
-            releaseJourney = [ordered]@{
-                enabled = $true
-                authoringCommandCount = 2
-                loadedPackageStatus = "loaded"
-                logMarkerObserved = $true
-            }
-            acceptanceResultSha256 = Get-Sha256 $acceptanceResultPath
-            evidenceSha256 = Get-Sha256 $protonBundle
-            evidenceSize = (Get-Item -LiteralPath $protonBundle).Length
-        }
-        $protonBody | ConvertTo-Json -Depth 8 |
-            Set-Content -LiteralPath $protonDescriptor -Encoding utf8NoBOM
-        Assert-ProtonEvidence -SourceSha $sourceSha `
-            -LinuxArchive $linuxArchive -CanonicalSha $canonicalSha
-
-        $protonBundleBackup = Join-Path $testRoot "proton-evidence.valid.bundle"
-        Copy-Item -LiteralPath $protonBundle -Destination $protonBundleBackup
-        Add-Content -LiteralPath $protonBundle -Value "tampered"
         Assert-ThrowsMatch -Action {
             Assert-ProtonEvidence -SourceSha $sourceSha `
-                -LinuxArchive $linuxArchive -CanonicalSha $canonicalSha
-        } -Pattern "does not match" `
-            -Message "Tampered Proton evidence bytes were accepted."
-        Copy-Item -LiteralPath $protonBundleBackup -Destination $protonBundle -Force
+                -LinuxArchive 'unread-legacy-fixture.zip' -CanonicalSha $canonicalSha
+        } -Pattern 'isolation is not supported' `
+            -Message 'Legacy Proton evidence was accepted as current release proof.'
+        Assert-ThrowsMatch -Action {
+            Invoke-WslProtonAcceptance -SourceSha $sourceSha `
+                -LinuxArchive 'unread-candidate.zip' -CanonicalSha $canonicalSha
+        } -Pattern 'isolation is not supported' `
+            -Message 'Proton launched or staged without native isolation support.'
 
         $windowsValidationPath = Join-Path $testEvidence "validation-windows.json"
         $windowsValidation | ConvertTo-Json -Depth 8 |
@@ -1120,6 +945,9 @@ exit 0
             -Validation $windowsValidationObject -OutputPath $recomputedQa
         Assert-ByteIdenticalMetadata -ExpectedPath $recomputedQa `
             -ActualPath $frozenQa -Label "Exact-rerun Windows QA summary"
+
+        Set-Item Function:Get-VerifiedReleaseAcceptanceIsolation -Value $originalIsolationVerifier
+        Set-Item Function:Get-DartAndFlutter -Value $originalIsolationSdk
 
         $stageRepository = Join-Path $testRoot "stage-repository"
         $stageAssets = Join-Path $testRoot "stage-assets"
@@ -2081,6 +1909,14 @@ exit 64
         Join-Path $PSScriptRoot "test-release-admin-qualification.ps1"
     )
     if ($LASTEXITCODE -ne 0) { throw "Release qualification regression tests failed." }
+    & (Join-Path $PSHOME $powerShellName) -NoProfile -File (
+        Join-Path $PSScriptRoot "test-release-acceptance-isolation.ps1"
+    )
+    if ($LASTEXITCODE -ne 0) { throw "Release acceptance isolation regression tests failed." }
+    & (Join-Path $PSHOME $powerShellName) -NoProfile -File (
+        Join-Path $PSScriptRoot "test-release-isolation-paths.ps1"
+    )
+    if ($LASTEXITCODE -ne 0) { throw "Release isolation path regression tests failed." }
     Write-Host "release-admin orchestration tests passed."
 }
 finally {

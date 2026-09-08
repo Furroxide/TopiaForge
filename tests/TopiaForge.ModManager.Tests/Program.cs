@@ -15,6 +15,7 @@ namespace TopiaForge.ModManager.Tests
         {
             UnityMainThreadGuard.CaptureCurrentThread();
             if (args.Length == 1 && args[0] == "--world-marker-hierarchy") { WorldMarkerHierarchyTests.Run(FindRepoRoot()); return 0; }
+            if (args.Length == 1 && args[0] == "--acceptance-isolation") { AcceptanceIsolationTests.Run(); AcceptanceIsolationStagingTests.Run(); AcceptancePluginLifecycleTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--runtime-launch-command") { var owned = Directory.CreateTempSubdirectory("TopiaForgeLaunchCommand-"); try { RuntimeLaunchCommandTests.Run(owned.FullName); RuntimeLaunchPublicationTests.Run(Path.Combine(owned.FullName, "publication")); return 0; } finally { owned.Delete(true); } }
             if (args.Length == 1 && args[0] == "--profile-v4-policy") { ProfileLaunchV4PolicyTests.Run(); RuntimeStartupSelectionTests.Run(); ManagerLaunchSelectionTests.Run(); LegacyManagerSelectionTests.Run(); WorldLaunchArmingTests.Run(); LaunchTargetPreviewTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--launch-staging") { LaunchStorageKeyTests.Run(FindRepoRoot()); LaunchStagingTests.Run(); return 0; }
@@ -403,6 +404,9 @@ namespace TopiaForge.ModManager.Tests
                 ManifestActivationSerializationTests.Run();
                 LaunchStorageKeyTests.Run(FindRepoRoot());
                 LaunchStagingTests.Run();
+                AcceptanceIsolationTests.Run();
+                AcceptanceIsolationStagingTests.Run();
+                AcceptancePluginLifecycleTests.Run();
                 WorldMarkerHierarchyTests.Run(FindRepoRoot());
                 ProfileLaunchV4PolicyTests.Run();
                 RuntimeStartupSelectionTests.Run();

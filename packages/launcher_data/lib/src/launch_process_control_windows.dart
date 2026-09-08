@@ -4,7 +4,8 @@ part of 'launch_process_control.dart';
 // TerminateProcess and WaitForSingleObject on learn.microsoft.com/windows/win32/api.
 // Query and termination use the same held handle, not a second PID lookup.
 final class _WindowsOwnedProcess implements _OwnedProcess {
-  _WindowsOwnedProcess(this.processId, bool terminate) {
+  _WindowsOwnedProcess(this.processId, bool terminate)
+    : api = WindowsProcessApi() {
     handle = api.openProcess(
       0x100000 | 0x1000 | (terminate ? 1 : 0),
       0,
@@ -16,10 +17,10 @@ final class _WindowsOwnedProcess implements _OwnedProcess {
     }
   }
   // Ownership comes directly from PROCESS_INFORMATION; this path never opens a PID.
-  _WindowsOwnedProcess.created(this.processId, this.handle);
+  _WindowsOwnedProcess.created(this.processId, this.handle, this.api);
 
   final int processId;
-  final api = _WindowsProcessApi();
+  final WindowsProcessApi api;
   late final Pointer<Void> handle;
   bool closed = false;
 
@@ -94,7 +95,8 @@ final class _WindowsOwnedProcess implements _OwnedProcess {
   }
 }
 
-final class _WindowsProcessApi {
+/// Source-internal native call adapter; each creator owns its instance.
+class WindowsProcessApi {
   static final library = DynamicLibrary.open('kernel32.dll');
   final openProcess = library
       .lookupFunction<

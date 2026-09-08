@@ -48,6 +48,7 @@ namespace TopiaForge.ModManager
         private string startupStartedAtUtc = string.Empty;
         private bool startupCompleted;
         private bool ready;
+        private readonly PluginInitializationLifetime initializationLifetime = new PluginInitializationLifetime();
 
         public ManagerPaths Paths => paths;
         public ManagerState State => state;
@@ -62,13 +63,14 @@ namespace TopiaForge.ModManager
         {
             startupStartedAtUtc = DateTime.UtcNow.ToString("O");
             startupStopwatch.Restart();
-            DontDestroyOnLoad(gameObject);
             paths = new ManagerPaths(BepInEx.Paths.BepInExRootPath);
             try
             {
-                launchStaging = new LaunchStagingStore(paths);
-                paths.EnsureCreated();
-                managerLogger = new ManagerFileLogger(paths.ManagerLogFile, Logger);
+                initializationLifetime.Start(AdmitStartup, () => DontDestroyOnLoad(gameObject), () =>
+                {
+                    paths.EnsureCreated();
+                    managerLogger = new ManagerFileLogger(paths.ManagerLogFile, Logger);
+                });
             }
             catch (Exception error) { Logger.LogError("TopiaForge storage was rejected: " + error); return; }
 
@@ -143,7 +145,7 @@ namespace TopiaForge.ModManager
                 launchPublisher = new RuntimeLaunchPublisher(runtime.Sessions, launchStaging,
                     launchProfile?.RequestId ?? rejectedCorrelation?.RequestId,
                     error => managerLogger.Error(error, "Runtime launch publication failed; launcher acknowledgement may remain unconfirmed."));
-                runtime.Load(selection.Packages);
+                initializationLifetime.InitializeUi(() => runtime.Load(selection.Packages));
                 PublishRuntimeObservations();
                 // Every selected package now has a binding result, including failed owners.
                 ArmWorldLaunch();
@@ -229,6 +231,7 @@ namespace TopiaForge.ModManager
 
         private void OnDestroy()
         {
+            if (!initializationLifetime.TryBeginTeardown()) return;
             ready = false;
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.sceneUnloaded -= OnSceneUnloaded;
@@ -287,7 +290,7 @@ namespace TopiaForge.ModManager
 
             try
             {
-                TopiaForgeUi.Shutdown();
+                initializationLifetime.ShutdownUi(() => { TopiaForgeUi.Shutdown(); });
             }
             catch (Exception ex)
             {
