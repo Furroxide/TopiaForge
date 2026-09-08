@@ -5,7 +5,7 @@ using System.Text;
 namespace TopiaForge.ModManager.Core
 {
     /// <summary>Bounded, request-owned transport files beneath a verified installation directory.</summary>
-    public sealed class LaunchStagingStore
+    public sealed partial class LaunchStagingStore
     {
         private static readonly StringComparison FileSystemComparison = Environment.OSVersion.Platform == PlatformID.Win32NT ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         private static readonly UTF8Encoding StrictUtf8 = new UTF8Encoding(false, true);
@@ -25,10 +25,13 @@ namespace TopiaForge.ModManager.Core
         public string OutcomePath(string requestId, bool terminalSession = false) => Child((terminalSession ? "session-outcome-" : "launch-outcome-") + LaunchStorageKeys.Request(requestId) + ".json");
         public string ObservationPath(RuntimeObservationEnvelope observation) => Child("runtime-observation-" + LaunchStorageKeys.Observation(observation) + ".json");
 
-        public ProfileLaunchConfigurationV4 ConsumeRequest(string path)
+        public ProfileLaunchConfigurationV4 ConsumeRequest(string path) => ConsumeRequest(path, null);
+        private ProfileLaunchConfigurationV4 ConsumeRequest(string path, string? expectedHash)
         {
             var fullPath = ValidateChild(path);
             var json = Read(fullPath, LaunchTransportJson.MaxDocumentBytes);
+            if (expectedHash != null && AcceptanceIsolationJson.Hash(json) != expectedHash)
+                throw new InvalidDataException("Admitted acceptance profile bytes changed before consumption.");
             var result = LaunchTransportJson.ReadProfile(json);
             if (!string.Equals(fullPath, RequestPath(result.RequestId), FileSystemComparison))
                 throw new InvalidDataException("The launch request identity does not match its owned filename.");

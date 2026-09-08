@@ -19,7 +19,8 @@ The [canonical brief](../GamemodeContractRedesign.md) is normative. The
 | `bd7be8be386c51713fa1099488e1e4d36ba130a5` | Slice 6 merge of PR #111, final reviewed head `584349c123c72075b8922093a9486ae0491d041d` | Exact-head CI, full publication and CodeQL passed; normal merge at 2026-09-06T04:46:28Z |
 | `da47dc7f89462c4473bac54db7e1c98acecda52d` | Slice 7 merge of PR #112, reviewed head `7bc19231bf6ea12bb708ef318774d78fffee72cd` | Exact-head CI 34167871674 and CodeQL 34167870357 passed; normal merge at 2026-09-07T22:58:39Z |
 | `31ff4d49bd30c593e484a01407e47ca7871f7ca7` | Slice 7a normal merge of PR #114, reviewed head `80fa8f9fb6e8b1a7cc4af0d8c6c00d31820e1437` | CI 34185465503 and CodeQL 34185463190 passed; all four review threads resolved; merged at 2026-09-08T04:10:41Z |
-| `feat/gamemode-retirement-acceptance`, based on `31ff4d49`; PR #115 initial head `7d8fbf3` | Slice 8a delivery, created only after PR #114 merged | Initial CI found formatting and Windows migration failures plus five Editor-fixture CodeQL alerts; repairs under fresh verification; acceptance delivery remains 8b |
+| `1fbd32d2524a13e2dad0d5f705da8301dec952e6` | Slice 8a normal merge of PR #115, final reviewed head `0c4a3061d286db17c4d6f20ca5b07489a42eeafe` | Full CI 34193577478 and CodeQL 34193574648 passed; all review threads resolved; merged at 2026-09-08T06:21:07Z |
+| `feat/isolated-release-acceptance`, based on `1fbd32d` | Slice 8b, created only after PR #115 merged | Verified archived source restored; remaining acceptance review repairs and fresh integration checks in progress |
 
 
 The historical rows describe each slice at its own merge. Current state:
@@ -30,12 +31,12 @@ The historical rows describe each slice at its own merge. Current state:
 | Target selection, V4 wire and correlated outcomes | Integrated through slice 7 | Home, Setup, CLI and manager share resolution | Slice 7 exact-head CI and CodeQL passed | Pending |
 | Candidate qualification and publication guards | Integrated through slice 7a | CLI, administrator and publication paths connected | Final reviewed-head CI and CodeQL passed at `80fa8f9`; 441 local CLI tests passed with four platform skips | Pending; synthetic acceptance is not game evidence |
 | Unsigned RC package construction | Integrated after explicit authorization on 8 September | Builder and Windows orchestration honor recorded policy | Final PR #114 hosted checks passed; local regression details below | Pending |
-| V5 retirement, migration and obsolete models | PR #115 with local review repairs | Readers and CLI atomic writer connected; old models removed | 1,079 domain and 494 Windows data tests pass locally; fresh hosted checks pending | Pending |
-| Authored-world marker validation | PR #115 with local review repairs | Editor validation and owned prefab instantiation connected | Nine helper, five owned-instantiation and fifteen filesystem-only fixture checks pass | Fourteen Unity EditMode cases and actual spawn pending |
-| Acceptance isolation | Prepared source preserved for slice 8b, outside 8a delivery | Runtime/CLI/release integration prepared; not integrated | Focused synthetic tests pass; fresh 8b verification required | Pending isolated host and actual game evidence |
+| V5 retirement, migration and obsolete models | Integrated through slice 8a | Readers and CLI atomic writer connected; old models removed | Full final-head CI, including Windows data and publication, passed at `0c4a306` | Pending |
+| Authored-world marker validation | Integrated through slice 8a | Editor validation and owned prefab instantiation connected | Full CI and CodeQL passed; fifteen additional filesystem-only fixture checks pass locally | Fourteen Unity EditMode cases and actual spawn pending |
+| Acceptance isolation | Slice 8b working tree | Runtime/CLI/release admission connected locally; not integrated | Full local C#/Dart/Flutter and Windows build pass; hosted CI pending | Pending isolated host and actual game evidence |
 
 No release tag, release dispatch or publication has occurred. The checkout is
-not release-ready. Slice 8a starts from the merged slice 7a revision; no subsequent
+not release-ready. Slice 8b starts from the merged slice 8a revision; no subsequent
 release branch or candidate can treat pending acceptance as complete.
 
 On 2026-09-05, PRs #102–105 were converted to draft for the approved re-cut.
@@ -1649,3 +1650,139 @@ runner passes all eleven SDK packages and seven C# harnesses
 363-case fixture closure, 127-file Markdown links and documentation content checks
 pass. Refreshed `origin/dev` remains `31ff4d49`. Fresh hosted CI, full publication, template checks and CodeQL remain required
 before normal integration; this review follow-up provides no game evidence.
+
+
+## Slice 8a integration and superseded-stack closure
+
+The repaired head `0c4a306` passed full
+[CI 34193577478](https://github.com/Furroxide/TopiaForge/actions/runs/34193577478)
+and [CodeQL 34193574648](https://github.com/Furroxide/TopiaForge/actions/runs/34193574648).
+This includes Windows data tests, the complete CLI suite, all seven template
+lifecycles, full documentation publication and zero open CodeQL findings. All
+review conversations were resolved before normal merge of #115 at `1fbd32d`.
+The local Windows Dartdoc limitation remains recorded separately from this
+successful Linux publication evidence.
+
+After integration, the carried #105 guidance/naming comments were answered with
+replacement evidence and resolved. PRs #102–105 were closed as superseded, then
+only their exact archived branch tips were deleted with explicit remote leases.
+No active worktree owned those local branches. Signed annotated source tags retain
+each original tip and its review mapping:
+
+| Historical PR | Deleted branch | Preserved signed archive tag | Source tip |
+| --- | --- | --- | --- |
+| #102 | `feat/manifest-v6-contract` | `archive/gamemode-v6/pr-102-20260908` | `5d0874029b191ddd2b2df4a41e07fb2fa925a232` |
+| #103 | `feat/manifest-v6-flip` | `archive/gamemode-v6/pr-103-20260908` | `00889c3271087ae8f2083a21ed69f15f64ecbf1e` |
+| #104 | `feat/launch-resolution` | `archive/gamemode-v6/pr-104-20260908` | `d314599f1cd1097fcf72718a4e255deadf577ddd` |
+| #105 | `feat/retire-manifest-v5` | `archive/gamemode-v6/pr-105-20260908` | `f3de112647d40b3d21d2a6e229ad193838468c28` |
+
+These are source archives, not release tags. Distinct open work in #68, #95 and
+#99 was not classified as superseded. Their latest review inventory still requires
+fresh current-dev CI for #68/#99 and repair of #95's incompatible TypeScript peer
+selection; none supplies or waives candidate acceptance.
+
+## Slice 8b implementation checkpoint
+
+Only after #115 merged, `feat/isolated-release-acceptance` was created from
+refreshed `1fbd32d`. Exactly 51 archived paths were restored after verifying the
+archive hash and equality of every saved prerequisite file. All 8a review fixes
+remain intact. New regression work addresses the prepared source's remaining
+ownership and protocol findings; current commands are reflected in the acceptance
+and administrator guides.
+
+- A Unity-free initialization lifetime, used by the real plugin and linked into
+  tests, reproduced five failures across six lifecycle cases before repair.
+  Admission now precedes persistence/storage; denied teardown is inert. UI cleanup
+  responsibility begins before mod callbacks and survives partial initialization;
+  throwing cleanup is attempted once. All six behavioral cases pass.
+- Eight staging/native checks and 31 admission checks pass. Added ACK-write failure
+  and competing-ACK tests passed the existing implementation immediately: V4 stays
+  consumed, private request and competing ACK bytes survive, temporary files drain,
+  and existing manager state stays untouched. No automatic V4 restoration was added.
+- Release cleanup fencing reproduced two failures (seven cases already passed):
+  a linked output or a future path beneath a link could hide a contained provisioning
+  record. Ordinary-ancestor checks now precede containment checks. All nine actual
+  filesystem cases pass, including existing short-name/case behavior. The normal
+  release-admin aggregate registers these regressions and passes alongside the
+  24 isolation cases and mocked qualification/orchestration checks.
+
+These are local source and harmless-process results, not acceptance of a game or
+candidate. Full scoped verification and hosted CI are still in progress. Four real
+non-game reviewer/rotation records, an existing isolated QA context, the pinned
+Unity editor and actual visual/native game evidence remain pending. The unsigned
+Windows RC1 authorization remains recorded and does not replace these requirements.
+
+
+Further 8b review added strict ACK raw-path checks: fourteen invalid equivalent
+spellings failed to reject before repair while the Windows case/slash control
+passed. The final ACK and admission suite passes 46 cases. A real 8.3 fixture
+reproduced one failure and one pass before canonicalizing only its created
+synthetic root; production alias refusal remains intact.
+
+The production session monitor now requires liveness of the captured original
+receipt before confirming ACK plus Running. False and unknown liveness reproduced
+incorrect success (three passes and four failures including probe controls);
+all seven polling scenarios pass after repair. Missing ACK/Running or uncertain
+exit produces no acceptance result. The broader six-file CLI acceptance suite
+passes 42 tests. Its omitted-package fixture now uses the receipt of the archive
+it actually packed, with an intentionally changed assembly proving that the old
+receipt cannot satisfy the assertion. No production receipt check was relaxed.
+
+Three actual harmless-child native tests cover identity-read failure, resume
+failure and delegated success. They were initially green after introducing the
+scoped native adapters; no pre-fix failure is claimed. All eighteen focused native
+cases pass. They verify original-object termination and confirmed exit before
+both original handles close, complete creation-buffer cleanup, no PID reopen,
+and a responsive unrelated child using the same executable. These are Windows
+process ownership checks, not evidence about Unity scene completion.
+
+Independent review of release cleanup found an additional extended-namespace
+alias bypass: two new cases failed while nine passed. Device/extended namespace
+spellings are now refused before containment checks; all eleven path cases pass.
+Short-name and normal case behavior remain covered. This extends the earlier
+linked-directory repair without adding another native path implementation.
+
+The full rebuilt seven-harness C# release gate passes after fixing one stale
+source inventory assertion: it now follows explicit, reciprocally declared runner
+parts while retaining the existing complete-matrix assertions. Full domain tests
+pass 1,079 cases; Windows data passes 546 with four existing platform skips.
+Flutter UI/application tests pass 3/75, analyzers are clean and the Windows debug
+launcher builds. Fifty website tests and required repository/content audits pass.
+The full CLI run and final hosted verification remain in progress at this checkpoint.
+
+
+## Slice 8b final local verification
+
+The complete final CLI suite passes **492 tests with four platform skips**,
+including packaged SDK relocation and all seven template build/pack lifecycles.
+Domain/data remain **1,079/546 passes**, with four data platform skips. All three
+fatal-info Dart analyzers are clean, all **551 non-generated Dart files** meet the
+500-line cap, and formatting verifies **545 scoped Dart files** without changes.
+All 67 explicitly owned delivery paths were checked before staging.
+
+After the CLI fixture finished, a forced normal NuGet restore repaired the temporary
+SDK asset relocation. The exact whole-solution formatter caught spacing in four
+restored admission sources; only owned C# files were formatted, then whole-solution
+verification passed. A fresh Release build has zero warnings/errors and all eleven
+SDK packages and seven no-argument harnesses pass on those rebuilt binaries. Logs:
+`tf-slice8b-final-{restore,format,build,seven}.log` in the private temporary directory.
+
+The final synthetic release-admin/qualification aggregate passes with its 24
+isolation and eleven real filesystem path cases (`tf-slice8b-release-admin-final.log`).
+The configured PowerShell analyzer and shell syntax checks pass. Required repository
+audits and their self-tests, 363-case fixture closure, 532-file JSON/YAML parsing,
+127-file Markdown links and content preparation pass. Fifty website tests pass.
+
+Full local publication was attempted again using the pinned tools. Astro validation
+and build, DocFX, and domain/data Dart references pass with no reference warnings.
+Windows-bundled Dartdoc 9.0.4 again crashes in `_stripDocImports` for the unchanged
+Flutter UI dependency graph (`RangeError ... 9089: 9202`). Search and final built-link
+checks do not run after that failure. The same limitation is documented against
+the earlier matching baseline; the immediately preceding #115 hosted publication
+passed. Fresh full hosted publication for this slice remains mandatory. Log:
+`tf-slice8b-publication.log`. No local full-publication pass or waiver is claimed.
+
+Refreshed `origin/dev` remains `1fbd32d`. Normal protected CI and review still precede
+integration. No real candidate, game/Editor acceptance, release tag or publication
+has occurred; the separately recorded reviewer and isolated-host prerequisites
+remain pending.

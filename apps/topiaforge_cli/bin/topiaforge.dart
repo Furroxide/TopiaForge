@@ -14,6 +14,7 @@ import 'package:topiaforge/src/game_build_bump.dart';
 import 'package:topiaforge/src/game_compat_executable_locator.dart';
 import 'package:topiaforge/src/live_acceptance_models.dart';
 import 'package:topiaforge/src/live_acceptance_runner.dart';
+import 'package:topiaforge/src/live_acceptance_isolation_verifier.dart';
 import 'package:topiaforge/src/mod_registry_index_builder.dart';
 import 'package:topiaforge/src/release_package_builder.dart';
 import 'package:topiaforge/src/release_package_models.dart';
@@ -79,7 +80,9 @@ class UsageError implements Exception {
 }
 
 class _TopiaForgeCli {
-  _TopiaForgeCli(this.developerRepository);
+  _TopiaForgeCli(this.developerRepository, {this.acceptanceIsolation});
+
+  final AcceptanceIsolationContext? acceptanceIsolation;
 
   final LocalDeveloperRepository developerRepository;
 
@@ -367,6 +370,8 @@ class _TopiaForgeCli {
         provided ??
         await developerRepository.packProject(Directory.current.path);
     final launcher = LocalLauncherRepository(
+      acceptanceIsolation: acceptanceIsolation,
+      dataRoot: acceptanceIsolation?.launcherRoot,
       knownGamePath: _option(args, '--game-dir'),
     );
     final install = await launcher.detectKnownInstall();

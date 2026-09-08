@@ -91,7 +91,7 @@ namespace TopiaForge.ModManager.Tests
                 acceptanceSource,
                 requiredCycles);
 
-            var harness = File.ReadAllText(harnessPath);
+            var harness = ReadDartLibrarySources(harnessPath);
             var acceptanceCommand = File.ReadAllText(acceptanceCommandPath);
             Assert(harness.Contains("options.requiredCases.isEmpty", StringComparison.Ordinal)
                    && harness.Contains("spec.caseIds", StringComparison.Ordinal)
@@ -168,6 +168,30 @@ namespace TopiaForge.ModManager.Tests
             ValidateDocumentationContracts(root);
             ValidateLaunchGateDisclosures(root);
             Console.WriteLine("All V1 launch coverage tests passed.");
+        }
+
+        private static string ReadDartLibrarySources(string libraryPath)
+        {
+            var library = File.ReadAllText(libraryPath);
+            var sources = new List<string> { library };
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            var directory = Path.GetDirectoryName(libraryPath)!;
+            // Follow only actual part directives, never similarly named files that are
+            // not compiled into this production library. Each part must point back.
+            foreach (Match directive in Regex.Matches(library,
+                @"^\s*part\s+['""](?<name>[^'""]+)['""]\s*;", RegexOptions.Multiline))
+            {
+                var name = directive.Groups["name"].Value;
+                Assert(Regex.IsMatch(name, @"\A[a-z][a-z0-9_]*\.dart\z") && names.Add(name),
+                    "acceptance harness parts must be unique immediate Dart files: " + name);
+                var part = File.ReadAllText(Path.Combine(directory, name));
+                Assert(Regex.IsMatch(part,
+                    @"^\s*part\s+of\s+['""]" + Regex.Escape(Path.GetFileName(libraryPath)) + @"['""]\s*;",
+                    RegexOptions.Multiline),
+                    "acceptance harness part must belong to its production library: " + name);
+                sources.Add(part);
+            }
+            return string.Join("\n", sources);
         }
 
         private static void ValidateAcceptanceProbeMappings(

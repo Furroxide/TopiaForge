@@ -208,6 +208,8 @@ extension _TopiaForgeDevCommands on _TopiaForgeCli {
       );
 
       final launcher = LocalLauncherRepository(
+        acceptanceIsolation: acceptanceIsolation,
+        dataRoot: acceptanceIsolation?.launcherRoot,
         knownGamePath: gameDir,
         repositoryRoot: _findRepoRoot(),
         workingDirectory: projectRoot,

@@ -12,13 +12,20 @@ param(
     [string]$CompatDataRoot = $env:TOPIAFORGE_COMPAT_DATA_ROOT,
     [string]$UnityPath = "C:\Program Files\Unity\Hub\Editor\6000.0.23f1\Editor\Unity.exe",
     [string]$GameDirectory = "$env:LOCALAPPDATA\Tomato Cake\launcher\Robotopia",
+    [string]$AcceptanceIsolationRecord,
     [string]$PythonPath = $env:TOPIAFORGE_PYTHON,
     [string]$StateRoot,
     [switch]$Rehearsal
 )
 
+. (Join-Path $PSScriptRoot "release/acceptance-isolation.ps1")
+
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+# Invocation paths follow the caller CWD, then remain stable across build worktrees.
+if (-not [string]::IsNullOrWhiteSpace($AcceptanceIsolationRecord)) {
+    $AcceptanceIsolationRecord = [System.IO.Path]::GetFullPath($AcceptanceIsolationRecord)
+}
 if ($WhatIfPreference) {
     throw "Use -Rehearsal for a non-publishing run; -WhatIf cannot persist a resumable release state."
 }
@@ -36,10 +43,10 @@ if (-not (Test-Path -LiteralPath $platformToolchainsPath -PathType Leaf)) {
 }
 $platformToolchains = Get-Content -LiteralPath $platformToolchainsPath -Raw |
     ConvertFrom-Json
-# Linux is descoped from 0.1.0-rc.1 and returns in rc.2, so the WSL build,
-# Proton acceptance, and their preflight checks are gated on the policy rather
-# than deleted. Re-adding the Linux archive to release-policy.json restores the
-# whole path. See P0-LINUX-01 in docs/LaunchBlockers.md.
+# Windows is the only supported RC1 target. The future RC2 toolchain pins remain,
+# but restoring Linux archives also requires a native isolation implementation;
+# the retired Proton runner and schema2 evidence cannot qualify publication.
+# See P0-LINUX-01 in docs/LaunchBlockers.md.
 $targetsLinux =
     @($policy.artifactPolicy.platformArchives) -contains "TopiaForge-linux-x64.zip"
 if ([string]::IsNullOrWhiteSpace($Version)) {
@@ -763,7 +770,8 @@ function Use-StateConfiguration {
         @("SteamRoot", "steamRoot"),
         @("CompatDataRoot", "compatDataRoot"),
         @("UnityPath", "unityPath"),
-        @("GameDirectory", "gameDirectory")
+        @("GameDirectory", "gameDirectory"),
+        @("AcceptanceIsolationRecord", "acceptanceIsolationRecord")
     )
     foreach ($binding in $immutableBindings) {
         $parameterName = $binding[0]
@@ -785,6 +793,12 @@ function Use-StateConfiguration {
         else {
             Set-Variable -Scope Script -Name $parameterName -Value $storedValue
         }
+    }
+
+    if ($State.PSObject.Properties.Name -contains "acceptanceIsolationRecordSha256" -and
+        -not [string]::IsNullOrWhiteSpace([string]$State.acceptanceIsolationRecordSha256)) {
+        $null = Get-ReleaseIsolationRecordHash -Path $AcceptanceIsolationRecord `
+            -ExpectedSha256 ([string]$State.acceptanceIsolationRecordSha256)
     }
 
     foreach ($binding in @(
@@ -829,6 +843,16 @@ function Write-State {
         [Parameter(Mandatory = $true)][string]$SourceSha,
         [hashtable]$Additional = @{}
     )
+    $isolationHash = ""
+    if (-not [string]::IsNullOrWhiteSpace($AcceptanceIsolationRecord)) {
+        $previous = Read-State
+        $expectedHash = if ($null -ne $previous -and
+            $previous.PSObject.Properties.Name -contains "acceptanceIsolationRecordSha256") {
+            [string]$previous.acceptanceIsolationRecordSha256
+        } else { "" }
+        $isolationHash = Get-ReleaseIsolationRecordHash -Path $AcceptanceIsolationRecord `
+            -ExpectedSha256 $expectedHash
+    }
     New-Item -ItemType Directory -Force -Path $stateDirectory | Out-Null
     $body = [ordered]@{
         schema = "release-admin-state-v1"
@@ -844,6 +868,8 @@ function Write-State {
         compatDataRoot = $CompatDataRoot
         unityPath = $UnityPath
         gameDirectory = $GameDirectory
+        acceptanceIsolationRecord = $AcceptanceIsolationRecord
+        acceptanceIsolationRecordSha256 = $isolationHash
     }
     foreach ($entry in $Additional.GetEnumerator()) {
         $body[$entry.Key] = $entry.Value
@@ -1122,6 +1148,10 @@ function Invoke-Preflight {
         }
         Use-StateConfiguration $existingState
     }
+    if ($targetsLinux) { throw "Proton acceptance isolation is not supported; Linux RC2 remains blocked." }
+    $null = Get-ReleaseIsolationRecordHash -Path $AcceptanceIsolationRecord
+    Assert-ReleaseIsolationRecordOutsideOutputs -RecordPath $AcceptanceIsolationRecord `
+        -OutputDirectories @($assetsDirectory, $evidenceDirectory)
     Require-Command git | Out-Null
     Require-Command git-lfs | Out-Null
 
@@ -1713,6 +1743,11 @@ function Assert-WindowsRuntimeEvidence {
         "windows/robotopia/acceptance-result.json"
     $null = Assert-BoundedRegularFile -Path $robotopiaPath `
         -MaximumBytes 16777216 -Label "Retained Robotopia acceptance evidence"
+    $sdk = Get-DartAndFlutter
+    $isolation = Get-VerifiedReleaseAcceptanceIsolation -EvidencePath $robotopiaPath `
+        -IsolationRecordPath $AcceptanceIsolationRecord -CliPath $sdk.Dart `
+        -PrefixArguments @("run", "bin/topiaforge.dart") `
+        -WorkingDirectory (Join-Path $repositoryRoot "apps/topiaforge_cli")
     $robotopia = Get-Content -LiteralPath $robotopiaPath -Raw |
         ConvertFrom-Json -DateKind String
     Assert-ExactJsonProperties -Value $robotopia -Expected @(
@@ -1722,6 +1757,7 @@ function Assert-WindowsRuntimeEvidence {
         "completedAtUtc",
         "failures",
         "gameDirectory",
+        "isolation",
         "lastRunSessionId",
         "missingCases",
         "package",
@@ -1789,9 +1825,9 @@ function Assert-WindowsRuntimeEvidence {
     $storedGameDirectory = [System.IO.Path]::GetFullPath(
         [string]$robotopia.gameDirectory
     )
-    $expectedGameDirectory = [System.IO.Path]::GetFullPath($GameDirectory)
+    $expectedGameDirectory = [System.IO.Path]::GetFullPath([string]$isolation.gameDirectory)
     if ($robotopia.schemaVersion -isnot [Int64] -or
-        [Int64]$robotopia.schemaVersion -ne 2 -or
+        [Int64]$robotopia.schemaVersion -ne 3 -or
         [string]$robotopia.acceptanceChallenge -cnotmatch
             "^[0-9a-f]{64}$" -or
         $robotopia.succeeded -ne $true -or
@@ -1827,394 +1863,9 @@ function Assert-WindowsRuntimeEvidence {
 }
 
 function Assert-ProtonEvidence {
-    param(
-        [Parameter(Mandatory = $true)][string]$SourceSha,
-        [Parameter(Mandatory = $true)][string]$LinuxArchive,
-        [Parameter(Mandatory = $true)][string]$CanonicalSha
-    )
-    $protonDirectory = Join-Path $evidenceDirectory "proton"
-    $descriptorPath = Join-Path $protonDirectory "proton-evidence.json"
-    $bundlePath = Join-Path $protonDirectory "proton-evidence.bundle"
-    $null = Assert-BoundedRegularFile -Path $descriptorPath `
-        -MaximumBytes 2097152 `
-        -Label "Automatic same-host WSL2/WSLg Proton descriptor"
-    $bundleFile = Assert-BoundedRegularFile -Path $bundlePath `
-        -MaximumBytes 268435456 `
-        -Label "Automatic same-host WSL2/WSLg Proton evidence bundle"
-    $descriptorText = Get-Content -LiteralPath $descriptorPath -Raw
-    $descriptor = $descriptorText | ConvertFrom-Json
-    $linuxSha = Get-Sha256 $LinuxArchive
-    $linuxSize = (Get-Item -LiteralPath $LinuxArchive).Length
-    $bundleSha = Get-Sha256 $bundlePath
-    $bundleSize = $bundleFile.Length
-    $caseInventoryBytes = Get-GitBlobBytes -SourceSha $SourceSha `
-        -GitPath "tests/live-game-acceptance.json"
-    $caseInventorySha = Get-BytesSha256 $caseInventoryBytes
-    try {
-        $caseInventory = [System.Text.UTF8Encoding]::new(
-            $false,
-            $true
-        ).GetString($caseInventoryBytes) | ConvertFrom-Json
-    }
-    catch {
-        throw "The source-SHA Proton case inventory is not valid UTF-8 JSON."
-    }
-    $expectedCases = @(
-        $caseInventory.cases |
-            ForEach-Object { [string]$_.id } |
-            Sort-Object
-    )
-    if ($expectedCases.Count -eq 0 -or
-        @($expectedCases | Sort-Object -Unique).Count -ne $expectedCases.Count) {
-        throw "The Proton acceptance case inventory is invalid."
-    }
-    $caseSetText = ($expectedCases -join "`n") + "`n"
-    $caseSetSha = Get-Utf8Sha256 $caseSetText
-    $requiredCases = @($descriptor.requiredCases | ForEach-Object { [string]$_ })
-    $passedCases = @($descriptor.passedCases | ForEach-Object { [string]$_ })
-    $caseSetsMatch =
-        $requiredCases.Count -eq $expectedCases.Count -and
-        $passedCases.Count -eq $expectedCases.Count -and
-        -not (Compare-Object $requiredCases $expectedCases -SyncWindow 0) -and
-        -not (Compare-Object $passedCases $expectedCases -SyncWindow 0)
-    $expectedDescriptorKeys = @(
-        "acceptanceResultSha256",
-        "archiveSha256",
-        "archiveSize",
-        "canonicalEcosystemSha256",
-        "caseInventorySha256",
-        "evidenceSha256",
-        "evidenceSize",
-        "executionEnvironment",
-        "failures",
-        "gameArchiveSha256",
-        "gameBuildId",
-        "gameExecutableSha256",
-        "gameFilesManifestSha256",
-        "gameFilesVerified",
-        "independentQa",
-        "passedCases",
-        "passedCasesSha256",
-        "platform",
-        "protonAppId",
-        "protonBuildId",
-        "protonDepotId",
-        "protonManifestId",
-        "protonRuntimeSha256",
-        "protonSourceCommit",
-        "protonVersion",
-        "releaseJourney",
-        "requiredCases",
-        "requiredCasesSha256",
-        "result",
-        "runtime",
-        "runtimeConfigurationSha256",
-        "schema",
-        "suite",
-        "targetSha",
-        "version",
-        "winDllOverrides",
-        "wineCommandSha256"
-    ) | Sort-Object
-    $actualDescriptorKeys = @($descriptor.PSObject.Properties.Name | Sort-Object)
-    $descriptorKeysMatch =
-        -not (Compare-Object $actualDescriptorKeys $expectedDescriptorKeys -SyncWindow 0)
-    $digestNames = @(
-        "acceptanceResultSha256",
-        "archiveSha256",
-        "canonicalEcosystemSha256",
-        "caseInventorySha256",
-        "evidenceSha256",
-        "gameArchiveSha256",
-        "gameExecutableSha256",
-        "gameFilesManifestSha256",
-        "passedCasesSha256",
-        "protonRuntimeSha256",
-        "requiredCasesSha256",
-        "runtimeConfigurationSha256",
-        "wineCommandSha256"
-    )
-    $digestsValid = $true
-    foreach ($digestName in $digestNames) {
-        if ([string]$descriptor.$digestName -cnotmatch "^[0-9a-f]{64}$") {
-            $digestsValid = $false
-        }
-    }
-    $journeyKeys = @($descriptor.releaseJourney.PSObject.Properties.Name | Sort-Object)
-    $expectedJourneyKeys = @(
-        "authoringCommandCount",
-        "enabled",
-        "loadedPackageStatus",
-        "logMarkerObserved"
-    ) | Sort-Object
-    $journeyMatches =
-        -not (Compare-Object $journeyKeys $expectedJourneyKeys -SyncWindow 0) -and
-        $descriptor.releaseJourney.enabled -eq $true -and
-        [int]$descriptor.releaseJourney.authoringCommandCount -eq 2 -and
-        [string]$descriptor.releaseJourney.loadedPackageStatus -ceq "loaded" -and
-        $descriptor.releaseJourney.logMarkerObserved -eq $true
-    $gameMetadataBytes = Get-GitBlobBytes -SourceSha $SourceSha `
-        -GitPath ([string]$policy.gameBuild.metadataFile)
-    try {
-        $gameMetadata = [System.Text.UTF8Encoding]::new(
-            $false,
-            $true
-        ).GetString($gameMetadataBytes) | ConvertFrom-Json
-    }
-    catch {
-        throw "The source-SHA Robotopia build metadata is not valid UTF-8 JSON."
-    }
-    if ($descriptor.schema -ne "release-proton-evidence-v1" -or
-        $descriptor.version -ne $Version -or
-        $descriptor.targetSha -ne $SourceSha -or
-        $descriptor.platform -ne "linux-proton" -or
-        $descriptor.archiveSha256 -ne $linuxSha -or
-        $descriptor.archiveSize -isnot [Int64] -or
-        [Int64]$descriptor.archiveSize -ne $linuxSize -or
-        $descriptor.canonicalEcosystemSha256 -ne $CanonicalSha -or
-        $descriptor.gameBuildId -isnot [Int64] -or
-        [Int64]$descriptor.gameBuildId -ne [Int64]$policy.gameBuild.id -or
-        [string]$descriptor.gameArchiveSha256 -cne
-            [string]$gameMetadata.archives.windows.sha256 -or
-        [string]$descriptor.gameFilesManifestSha256 -cne
-            [string]$gameMetadata.windowsFilesManifest.sha256 -or
-        $descriptor.gameFilesVerified -isnot [Int64] -or
-        [Int64]$descriptor.gameFilesVerified -ne
-            [Int64]$gameMetadata.windowsFilesManifest.fileCount -or
-        [string]$descriptor.gameExecutableSha256 -cne
-            [string]$gameMetadata.windowsFilesManifest.gameExecutableSha256 -or
-        $descriptor.result -ne "pass" -or
-        $descriptor.suite -ne "full" -or
-        $descriptor.protonVersion -ne
-            [string]$platformToolchains.linux.proton -or
-        $descriptor.protonAppId -isnot [Int64] -or
-        [Int64]$descriptor.protonAppId -ne
-            [Int64]$platformToolchains.linux.protonSteamAppId -or
-        $descriptor.protonDepotId -isnot [Int64] -or
-        [Int64]$descriptor.protonDepotId -ne
-            [Int64]$platformToolchains.linux.protonSteamDepotId -or
-        [string]$descriptor.protonManifestId -cne
-            [string]$platformToolchains.linux.protonSteamManifestId -or
-        $descriptor.protonBuildId -isnot [Int64] -or
-        [Int64]$descriptor.protonBuildId -ne
-            [Int64]$platformToolchains.linux.protonSteamBuildId -or
-        [string]$descriptor.protonSourceCommit -cne
-            [string]$platformToolchains.linux.protonSourceCommit -or
-        $descriptor.executionEnvironment -ne
-            [string]$platformToolchains.linux.executionEnvironment -or
-        $descriptor.runtime -ne "windows-x64-via-proton" -or
-        $descriptor.winDllOverrides -ne "winhttp=n,b" -or
-        $descriptor.independentQa -ne $false -or
-        $descriptor.caseInventorySha256 -ne $caseInventorySha -or
-        $descriptor.requiredCasesSha256 -ne $caseSetSha -or
-        $descriptor.passedCasesSha256 -ne $caseSetSha -or
-        -not $descriptorKeysMatch -or
-        -not $digestsValid -or
-        -not $caseSetsMatch -or
-        @($descriptor.failures).Count -ne 0 -or
-        -not $journeyMatches -or
-        $descriptor.evidenceSha256 -ne $bundleSha -or
-        $descriptor.evidenceSize -isnot [Int64] -or
-        [Int64]$descriptor.evidenceSize -ne $bundleSize) {
-        throw "Same-host WSL2/WSLg Proton evidence does not match this exact candidate."
-    }
-    if ($descriptorText -match
-        '(?i)"(?:username|hostname|path|timestamp|credential|password|rawLog)"\s*:') {
-        throw "The public Proton descriptor contains machine-specific or sensitive fields."
-    }
-
-    $bundleEntries = @(
-        (Invoke-Checked tar @("-tf", $bundlePath) -Capture) -split "\r?\n" |
-            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-    )
-    $expectedBundleEntries = @(
-        "acceptance-result.json",
-        "cli-help.txt",
-        "game-build-marker.json",
-        "last-run.json",
-        "manager.log",
-        "new-mod.txt",
-        "proton-version.txt",
-        "runtime-context.txt"
-    )
-    if ($bundleEntries.Count -ne $expectedBundleEntries.Count -or
-        (Compare-Object $bundleEntries $expectedBundleEntries -SyncWindow 0)) {
-        throw "The private Proton evidence bundle inventory is invalid."
-    }
-    $inspectionDirectory = Join-Path $stateDirectory "proton-evidence-check"
-    Clear-ReleaseDirectory -Path $inspectionDirectory -AllowedParent $stateDirectory
-    try {
-        Invoke-Checked tar @("-xf", $bundlePath, "-C", $inspectionDirectory)
-        $acceptancePath = Join-Path $inspectionDirectory "acceptance-result.json"
-        if ((Get-Sha256 $acceptancePath) -ne
-            [string]$descriptor.acceptanceResultSha256) {
-            throw "The bundled Proton acceptance result digest does not match."
-        }
-        $acceptance = Get-Content -LiteralPath $acceptancePath -Raw |
-            ConvertFrom-Json -DateKind String
-        Assert-ExactJsonProperties -Value $acceptance -Expected @(
-            "acceptanceChallenge",
-            "acceptancePackageReceipt",
-            "acceptancePackageStatus",
-            "completedAtUtc",
-            "failures",
-            "gameDirectory",
-            "lastRunSessionId",
-            "missingCases",
-            "package",
-            "passedCases",
-            "releaseJourneyAuthoringCommandCount",
-            "releaseJourneyCli",
-            "releaseJourneyEnabled",
-            "releaseJourneyProject",
-            "requiredCases",
-            "requiredLoadedPackageId",
-            "requiredLoadedPackageReceipt",
-            "requiredLoadedPackageStatus",
-            "requiredLogMarker",
-            "requiredLogMarkerObserved",
-            "schemaVersion",
-            "startedAtUtc",
-            "succeeded"
-        ) -Label "Bundled Proton acceptance result"
-        Assert-LiveAcceptancePackageReceipt `
-            -Receipt $acceptance.acceptancePackageReceipt `
-            -Label "Bundled Proton acceptance-package receipt"
-        Assert-LiveAcceptancePackageReceipt `
-            -Receipt $acceptance.requiredLoadedPackageReceipt `
-            -Label "Bundled Proton journey-package receipt"
-        $acceptanceRequired = @(
-            $acceptance.requiredCases | ForEach-Object { [string]$_ } | Sort-Object
-        )
-        $acceptancePassed = @(
-            $acceptance.passedCases | ForEach-Object { [string]$_ } | Sort-Object
-        )
-        $journeyId = "dev.topiaforge.release-$($SourceSha.Substring(0, 12))"
-        $journeyName = "TopiaForge release $Version"
-        $expectedMarker =
-            "$journeyName loaded. Run '$journeyId`:greet' to try its command."
-        try {
-            $started = [DateTimeOffset]::Parse([string]$acceptance.startedAtUtc)
-            $completed = [DateTimeOffset]::Parse([string]$acceptance.completedAtUtc)
-        }
-        catch {
-            throw "The bundled Proton acceptance timestamps are invalid."
-        }
-        if ($acceptance.schemaVersion -isnot [Int64] -or
-            [Int64]$acceptance.schemaVersion -ne 2 -or
-            [string]$acceptance.acceptanceChallenge -cnotmatch
-                "^[0-9a-f]{64}$" -or
-            $acceptance.succeeded -ne $true -or
-            @($acceptance.missingCases).Count -ne 0 -or
-            @($acceptance.failures).Count -ne 0 -or
-            @($acceptanceRequired).Count -ne $expectedCases.Count -or
-            @($acceptancePassed).Count -ne $expectedCases.Count -or
-            (Compare-Object $acceptanceRequired $expectedCases -SyncWindow 0) -or
-            (Compare-Object $acceptancePassed $expectedCases -SyncWindow 0) -or
-            $acceptance.releaseJourneyEnabled -ne $true -or
-            [int]$acceptance.releaseJourneyAuthoringCommandCount -ne 2 -or
-            [string]$acceptance.requiredLoadedPackageStatus -cne "loaded" -or
-            $acceptance.requiredLogMarkerObserved -ne $true -or
-            [string]$acceptance.acceptancePackageStatus -cne "loaded" -or
-            [string]::IsNullOrWhiteSpace([string]$acceptance.lastRunSessionId) -or
-            [string]$acceptance.requiredLoadedPackageId -cne $journeyId -or
-            [string]$acceptance.requiredLogMarker -cne $expectedMarker -or
-            (Split-Path -Leaf ([string]$acceptance.releaseJourneyCli)) -cne
-                "topiaforge" -or
-            (Split-Path -Leaf ([string]$acceptance.releaseJourneyProject)) -cne
-                $journeyId -or
-            [string]$acceptance.startedAtUtc -cnotmatch "Z$" -or
-            [string]$acceptance.completedAtUtc -cnotmatch "Z$" -or
-            $completed -lt $started) {
-            throw "The bundled Proton acceptance result is incomplete."
-        }
-        $runtimeContext = @(
-            "executionEnvironment=$($descriptor.executionEnvironment)",
-            "gameBuildId=$($descriptor.gameBuildId)",
-            "gameArchiveSha256=$($descriptor.gameArchiveSha256)",
-            "gameExecutableSha256=$($descriptor.gameExecutableSha256)",
-            "gameFilesManifestSha256=$($descriptor.gameFilesManifestSha256)",
-            "gameFilesVerified=$($descriptor.gameFilesVerified)",
-            "independentQa=false",
-            "protonRuntimeSha256=$($descriptor.protonRuntimeSha256)",
-            "protonVersion=$($descriptor.protonVersion)",
-            "runtime=$($descriptor.runtime)",
-            "winDllOverrides=$($descriptor.winDllOverrides)",
-            "wineCommandSha256=$($descriptor.wineCommandSha256)"
-        ) -join "`n"
-        $runtimeContext += "`n"
-        $runtimeContextPath = Join-Path $inspectionDirectory "runtime-context.txt"
-        $actualRuntimeContext = [System.IO.File]::ReadAllText($runtimeContextPath).
-            Replace("`r`n", "`n").
-            Replace("`r", "`n")
-        if ($actualRuntimeContext -cne $runtimeContext) {
-            throw "The bundled Proton runtime configuration content is invalid."
-        }
-        if ((Get-Utf8Sha256 $runtimeContext) -ne
-            [string]$descriptor.runtimeConfigurationSha256) {
-            throw "The bundled Proton runtime configuration digest is invalid."
-        }
-        $gameMarker = Get-Content -LiteralPath (
-            Join-Path $inspectionDirectory "game-build-marker.json"
-        ) -Raw | ConvertFrom-Json
-        if ([string]$gameMarker.id -ne [string]$policy.gameBuild.id) {
-            throw "The bundled Proton game-build marker is invalid."
-        }
-        $protonVersion = [System.IO.File]::ReadAllText(
-            (Join-Path $inspectionDirectory "proton-version.txt")
-        ).Replace("`r`n", "`n").Replace("`r", "`n")
-        if ($protonVersion -cne "Proton $($descriptor.protonVersion)`n") {
-            throw "The bundled Proton version evidence is invalid."
-        }
-        $lastRun = Get-Content -LiteralPath (
-            Join-Path $inspectionDirectory "last-run.json"
-        ) -Raw | ConvertFrom-Json
-        $acceptanceRunPackage = @(
-            $lastRun.packages | Where-Object {
-                [string]$_.id -ceq "dev.topiaforge.sdk-acceptance"
-            }
-        )
-        $journeyRunPackage = @(
-            $lastRun.packages | Where-Object {
-                [string]$_.id -ceq $journeyId
-            }
-        )
-        if ($lastRun.schemaVersion -isnot [Int64] -or
-            [Int64]$lastRun.schemaVersion -ne 1 -or
-            [string]$lastRun.sessionId -cne
-                [string]$acceptance.lastRunSessionId -or
-            $acceptanceRunPackage.Count -ne 1 -or
-            $journeyRunPackage.Count -ne 1 -or
-            [string]$acceptanceRunPackage[0].sourceSha256 -cne
-                [string]$acceptance.acceptancePackageReceipt.sourceSha256 -or
-            (($acceptanceRunPackage[0].criticalFiles |
-                    ConvertTo-Json -Compress) -cne
-                ($acceptance.acceptancePackageReceipt.criticalFiles |
-                    ConvertTo-Json -Compress)) -or
-            [string]$journeyRunPackage[0].sourceSha256 -cne
-                [string]$acceptance.requiredLoadedPackageReceipt.sourceSha256 -or
-            (($journeyRunPackage[0].criticalFiles |
-                    ConvertTo-Json -Compress) -cne
-                ($acceptance.requiredLoadedPackageReceipt.criticalFiles |
-                    ConvertTo-Json -Compress))) {
-            throw "The bundled Proton last-run package receipts are for a different session or package."
-        }
-        foreach ($requiredNonemptyEntry in @(
-                "cli-help.txt",
-                "manager.log",
-                "new-mod.txt"
-            )) {
-            $null = Assert-BoundedRegularFile -Path (
-                Join-Path $inspectionDirectory $requiredNonemptyEntry
-            ) -MaximumBytes 134217728 `
-                -Label "Bundled Proton $requiredNonemptyEntry evidence"
-        }
-    }
-    finally {
-        if (Test-Path -LiteralPath $inspectionDirectory) {
-            Remove-Item -LiteralPath $inspectionDirectory -Recurse -Force
-        }
-    }
+    param([string]$SourceSha, [string]$LinuxArchive, [string]$CanonicalSha)
+    $null = @($SourceSha, $LinuxArchive, $CanonicalSha)
+    throw "Proton acceptance isolation is not supported; legacy evidence cannot qualify Linux RC2."
 }
 
 function Repair-PartialProtonEvidence {
@@ -2239,7 +1890,7 @@ function Repair-PartialProtonEvidence {
         Remove-Item -LiteralPath $orphanPath -Force
         Write-Host (
             "Removed one unfrozen Proton evidence file left by an interrupted " +
-            "publication; the exact acceptance run will be repeated."
+            "publication; native isolation must be implemented before another run."
         )
         $hasDescriptor = $false
         $hasBundle = $false
@@ -2251,56 +1902,9 @@ function Repair-PartialProtonEvidence {
 }
 
 function Invoke-WslProtonAcceptance {
-    param(
-        [Parameter(Mandatory = $true)][string]$SourceSha,
-        [Parameter(Mandatory = $true)][string]$LinuxArchive,
-        [Parameter(Mandatory = $true)][string]$CanonicalSha
-    )
-    $protonDirectory = Join-Path $evidenceDirectory "proton"
-    $evidenceState = Repair-PartialProtonEvidence `
-        -ProtonDirectory $protonDirectory
-    $hasDescriptor = [bool]$evidenceState.HasDescriptor
-    $hasBundle = [bool]$evidenceState.HasBundle
-    if ($hasDescriptor -and $hasBundle) {
-        Assert-ProtonEvidence -SourceSha $SourceSha -LinuxArchive $LinuxArchive `
-            -CanonicalSha $CanonicalSha
-        Write-Host "Existing same-host WSL2/WSLg Proton evidence verifies."
-        return
-    }
-    New-Item -ItemType Directory -Force -Path $protonDirectory | Out-Null
-    $repositoryWslPath = Invoke-Checked wsl @(
-        "--distribution", $WslDistribution, "--exec",
-        "wslpath", "-a", "-u", $repositoryRoot
-    ) -Capture
-    $archiveWslPath = Invoke-Checked wsl @(
-        "--distribution", $WslDistribution, "--exec",
-        "wslpath", "-a", "-u", $LinuxArchive
-    ) -Capture
-    $gameDirectoryWslPath = Invoke-Checked wsl @(
-        "--distribution", $WslDistribution, "--exec",
-        "wslpath", "-a", "-u", $GameDirectory
-    ) -Capture
-    $outputWslPath = Invoke-Checked wsl @(
-        "--distribution", $WslDistribution, "--exec",
-        "wslpath", "-a", "-u", $protonDirectory
-    ) -Capture
-    Invoke-Checked wsl @(
-        "--distribution", $WslDistribution, "--exec", "/bin/bash",
-        "$repositoryWslPath/tools/release/test-proton.sh",
-        "--repo", $repositoryWslPath,
-        "--source-sha", $SourceSha,
-        "--version", $Version,
-        "--archive", $archiveWslPath,
-        "--canonical-ecosystem-sha256", $CanonicalSha,
-        "--game-dir", $gameDirectoryWslPath,
-        "--game-build-id", ([string]$policy.gameBuild.id),
-        "--proton-executable", $ProtonExecutable,
-        "--steam-root", $SteamRoot,
-        "--compat-data-root", $CompatDataRoot,
-        "--output", $outputWslPath
-    )
-    Assert-ProtonEvidence -SourceSha $SourceSha -LinuxArchive $LinuxArchive `
-        -CanonicalSha $CanonicalSha
+    param([string]$SourceSha, [string]$LinuxArchive, [string]$CanonicalSha)
+    $null = @($SourceSha, $LinuxArchive, $CanonicalSha)
+    throw "Proton acceptance isolation is not supported; Linux RC2 remains blocked."
 }
 
 function New-WindowsQaSummary {
@@ -2769,6 +2373,10 @@ function Invoke-Build {
     if ($state.phase -in @("accepted", "staged", "dispatch-requested", "published")) {
         throw "An accepted candidate cannot be rebuilt or repacked; resume its qualified bytes."
     }
+    if ($targetsLinux) { throw "Proton acceptance isolation is not supported; Linux RC2 remains blocked." }
+    $null = Get-ReleaseIsolationRecordHash -Path $AcceptanceIsolationRecord
+    Assert-ReleaseIsolationRecordOutsideOutputs -RecordPath $AcceptanceIsolationRecord `
+        -OutputDirectories @($assetsDirectory, $evidenceDirectory)
     $sourceSha = [string]$state.sourceSha
     Assert-SourceStillExact $sourceSha
     Assert-OriginStillExact $sourceSha
@@ -2843,6 +2451,7 @@ function Invoke-Build {
                 "-PrivateEvidenceDirectory", $evidenceDirectory,
                 "-UnityPath", $UnityPath,
                 "-GameDirectory", $GameDirectory,
+                "-AcceptanceIsolationRecord", $AcceptanceIsolationRecord,
                 "-DartPath", $sdk.Dart,
                 "-FlutterPath", $sdk.Flutter
             )
