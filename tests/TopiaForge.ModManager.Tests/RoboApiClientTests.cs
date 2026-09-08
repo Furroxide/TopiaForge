@@ -11,7 +11,7 @@ using TopiaForge.RobotKit;
 
 namespace TopiaForge.ModManager.Tests
 {
-    internal static class RoboApiClientTests
+    internal static partial class RoboApiClientTests
     {
         public static void Run(string root)
         {
@@ -120,6 +120,7 @@ namespace TopiaForge.ModManager.Tests
 
             RunResponseCaps();
             RunUnreachableBackendPaths(tokenDirectory);
+            RunHttpsResponsePaths(tokenDirectory);
 
             Console.WriteLine("RoboApiClientTests passed.");
         }
