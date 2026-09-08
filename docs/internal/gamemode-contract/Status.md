@@ -1868,7 +1868,8 @@ restore and exact whole-solution formatting pass. The fresh Release build has
 zero warnings/errors and all eleven SDK packages plus seven rebuilt no-argument
 harnesses pass. Required repository, fixture, README and documentation audits
 pass. Logs use `tf-pr116-{data,cli,final}-*.log` in the private temporary directory.
-Fresh Windows/Linux hosted CI still precedes integration.
+Final Windows/Linux hosted CI completed before integration; the following
+section records the exact runs and merge.
 
 
 ## Slice 8b integration and remaining release work
