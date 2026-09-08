@@ -36,14 +36,24 @@ void main() {
         final object = ack[field.$1]! as Map<String, Object?>;
         final original = object[field.$2]! as String;
         final replacement = alias == 'relative'
-            ? p.relative(original)
+            ? p.relative(original, from: p.dirname(original))
             : '${p.dirname(original)}${p.separator}discard${p.separator}..'
                   '${p.separator}${p.basename(original)}';
-        expect(
-          sameAcceptancePath(replacement, original),
-          isTrue,
-          reason: 'Comparison alone must not erase forbidden raw aliases.',
-        );
+        if (alias == 'relative') {
+          // CI may place the checkout and TEMP on different drives. Explicitly
+          // relativize from the path's own parent so this remains a raw alias.
+          expect(p.isRelative(replacement), isTrue);
+          expect(
+            p.equals(p.join(p.dirname(original), replacement), original),
+            isTrue,
+          );
+        } else {
+          expect(
+            sameAcceptancePath(replacement, original),
+            isTrue,
+            reason: 'Comparison alone must not erase forbidden raw aliases.',
+          );
+        }
         object[field.$2] = replacement;
         final bytes = utf8.encode(jsonEncode(ack));
         final ackFile = f.channel('acceptance-isolation-ack')

@@ -164,8 +164,11 @@ extension _ProcessHelpers on LocalLauncherRepository {
         : null;
     final process = _correlatedReceiptIdentity(receipt, layout.executablePath);
     final identity = _launchInstallIdentity(refreshed);
-    if (!_disposed && process != null) {
+    if (process != null && (!_disposed || acceptance != null)) {
+      // Disposal closes monitoring, but cannot release a created acceptance
+      // process: its original receipt must remain available for owned cleanup.
       _ownedLaunchProcesses[identity] = process;
+      if (acceptance != null) _acceptanceReceipts[requestId] = process;
     }
     final activity = LaunchActivity(
       requestId: requestId,

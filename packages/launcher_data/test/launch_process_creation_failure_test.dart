@@ -88,6 +88,29 @@ void main() {
         );
       }
 
+      test('child PID marker is hidden until publication is complete', () async {
+        final fixture = await NativeFailureFixture.create(
+          NativeCreationFault.none,
+        );
+        addTearDown(fixture.dispose);
+        final receipt = await fixture.start(pausePublication: true);
+        try {
+          await waitForFile(fixture.publicationReady);
+          expect(
+            await fixture.marker.exists(),
+            isFalse,
+            reason:
+                'Opening an empty publication file cannot advertise a complete child PID.',
+          );
+        } finally {
+          // Release the real child even when the regression assertion fails.
+          await fixture.publicationResume.writeAsString('continue');
+        }
+        await waitForFile(fixture.marker);
+        expect(int.parse(await fixture.marker.readAsString()), receipt.pid);
+        await fixture.stop.writeAsString('stop');
+      });
+
       test(
         'real delegated calls return a live receipt and release every original resource',
         () async {

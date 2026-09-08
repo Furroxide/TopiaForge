@@ -126,6 +126,7 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
   final AcceptanceIsolationContext? _acceptanceIsolation;
   final String? _acceptanceChallenge;
   final Map<String, AcceptanceIsolationRequest> _acceptanceRequests = {};
+  final Map<String, LaunchProcessIdentity> _acceptanceReceipts = {};
   final Directory _dataRoot;
   final Directory _repositoryRoot;
   final String? _knownGamePath;
