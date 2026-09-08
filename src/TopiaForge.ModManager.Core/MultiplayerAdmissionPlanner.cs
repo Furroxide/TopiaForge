@@ -366,7 +366,7 @@ namespace TopiaForge.ModManager.Core
             var errors = new List<string>();
             if (!ModManifest.IsSupportedSchemaVersion(manifest.SchemaVersion))
             {
-                errors.Add("schemaVersion must be 5 or 6");
+                errors.Add("schemaVersion must be 6");
             }
             else if (!VersionUtil.TryParse(manifest.Version, out _))
             {

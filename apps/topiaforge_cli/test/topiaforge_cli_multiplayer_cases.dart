@@ -118,7 +118,7 @@ void _multiplayerCliTests(_CliTestHarness Function() currentHarness) {
       projectDir,
     ]);
     expect(migrateNoOp.exitCode, 0);
-    expect(migrateNoOp.stdout, contains('supported schema V6'));
+    expect(migrateNoOp.stdout, contains('valid schema V6; no files changed'));
   });
 
   test('mod remove multiplayer keeps the project on standalone V6', () async {

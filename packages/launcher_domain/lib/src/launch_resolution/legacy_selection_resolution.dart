@@ -30,8 +30,8 @@ abstract final class LegacySelectionResolution {
       return selection;
     }
     final transition = switch (mode) {
-      WorldSelection.additiveArena => ModTransitions.additiveArena,
-      WorldSelection.sceneReplacement => ModTransitions.sceneReplacement,
+      'additiveArena' => ModTransitions.additiveArena,
+      'sceneReplacement' => ModTransitions.sceneReplacement,
       _ => null,
     };
     if (transition == null) return selection;

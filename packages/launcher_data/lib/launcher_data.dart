@@ -13,3 +13,4 @@ export 'src/launcher_update_transaction.dart';
 export 'src/local_launcher_update_repository.dart';
 export 'src/safe_zip_archive.dart';
 export 'src/sdk_reference_pack.dart';
+export 'src/manifest_migration_writer.dart';

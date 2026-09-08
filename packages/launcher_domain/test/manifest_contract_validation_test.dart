@@ -7,7 +7,7 @@ void main() {
       'preserves namespaced extension fields through canonical serialization',
       () {
         final manifest = ModManifest.fromJson({
-          'schemaVersion': 5,
+          'schemaVersion': 6,
           'name': 'sample.forward-compatible',
           'displayName': 'Forward Compatible',
           'version': '1.2.3',
@@ -152,8 +152,7 @@ void main() {
       expect(
         blocking.map((issue) => issue.message),
         containsAll([
-          contains('worldGamemodes id $retiredId'),
-          contains('worldGamemodes name is required'),
+          contains('worldGamemodes was retired in schemaVersion 6'),
         ]),
       );
     });
@@ -281,7 +280,7 @@ Map<String, Object?> _manifestJson({
   String entryAssembly = 'Validation.dll',
   String version = '1.0.0',
 }) => {
-  'schemaVersion': 5,
+  'schemaVersion': 6,
   'name': 'validation.mod',
   'displayName': 'Validation Mod',
   'version': version,

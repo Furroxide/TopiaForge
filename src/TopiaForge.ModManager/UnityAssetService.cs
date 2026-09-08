@@ -144,9 +144,10 @@ namespace TopiaForge.ModManager
             try
             {
                 var transform = request.Transform;
-                var spawned = AssetSpawnTransaction.Create(
+                var spawned = AssetSpawnTransaction.CreatePrefab(
                     () => UnityEngine.Object.Instantiate(prefab.Prefab,
                         UnityPhysicsBackend.ToUnity(transform.Position), ToUnity(transform.Rotation)),
+                    prefab.Prefab.name, (instance, authoredName) => instance.name = authoredName,
                     instance =>
                     {
                         instance.transform.localScale = UnityPhysicsBackend.ToUnity(transform.Scale);

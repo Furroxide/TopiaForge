@@ -14,6 +14,7 @@ namespace TopiaForge.ModManager.Tests
         private static int Main(string[] args)
         {
             UnityMainThreadGuard.CaptureCurrentThread();
+            if (args.Length == 1 && args[0] == "--world-marker-hierarchy") { WorldMarkerHierarchyTests.Run(FindRepoRoot()); return 0; }
             if (args.Length == 1 && args[0] == "--runtime-launch-command") { var owned = Directory.CreateTempSubdirectory("TopiaForgeLaunchCommand-"); try { RuntimeLaunchCommandTests.Run(owned.FullName); RuntimeLaunchPublicationTests.Run(Path.Combine(owned.FullName, "publication")); return 0; } finally { owned.Delete(true); } }
             if (args.Length == 1 && args[0] == "--profile-v4-policy") { ProfileLaunchV4PolicyTests.Run(); RuntimeStartupSelectionTests.Run(); ManagerLaunchSelectionTests.Run(); LegacyManagerSelectionTests.Run(); WorldLaunchArmingTests.Run(); LaunchTargetPreviewTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--launch-staging") { LaunchStorageKeyTests.Run(FindRepoRoot()); LaunchStagingTests.Run(); return 0; }
@@ -174,16 +175,21 @@ namespace TopiaForge.ModManager.Tests
                 return 0;
             }
 
-            if (args.Length == 1 && string.Equals(args[0], "--manifest-v5", StringComparison.Ordinal))
+            if (args.Length == 1 && string.Equals(args[0], "--manifest-retirement", StringComparison.Ordinal))
+            {
+                ManifestRetirementTests.Run();
+                return 0;
+            }
+            if (args.Length == 1 && string.Equals(args[0], "--manifest-v6", StringComparison.Ordinal))
             {
                 var manifestRoot = Path.Combine(
                     Path.GetTempPath(),
-                    "TopiaForgeManifestV5Tests-" + Guid.NewGuid().ToString("N"));
+                    "TopiaForgeManifestV6Tests-" + Guid.NewGuid().ToString("N"));
                 Directory.CreateDirectory(manifestRoot);
                 try
                 {
                     TestStrictManifestExtensions();
-                    ManifestV5Tests.Run(manifestRoot);
+                    ManifestV6Tests.Run(manifestRoot);
                     MultiplayerContractLockBoundaryTests.Run(manifestRoot);
                     return 0;
                 }
@@ -324,7 +330,8 @@ namespace TopiaForge.ModManager.Tests
                 VersionUtilTests.Run();
                 GameCompatibilityTests.Run(root);
                 ManifestPathValidationTests.Run();
-                ManifestV5Tests.Run(root);
+                ManifestRetirementTests.Run();
+                ManifestV6Tests.Run(root);
                 MultiplayerContractLockBoundaryTests.Run(root);
                 MultiplayerAdmissionTests.Run();
                 FirstPartyManifestTests.Run();
@@ -396,6 +403,7 @@ namespace TopiaForge.ModManager.Tests
                 ManifestActivationSerializationTests.Run();
                 LaunchStorageKeyTests.Run(FindRepoRoot());
                 LaunchStagingTests.Run();
+                WorldMarkerHierarchyTests.Run(FindRepoRoot());
                 ProfileLaunchV4PolicyTests.Run();
                 RuntimeStartupSelectionTests.Run();
                 ManagerLaunchSelectionTests.Run();

@@ -6,11 +6,14 @@ void _registerTargetLaunchRegressions(_PumpHome pumpHome) {
     (tester) async {
       const retired = 'io.github.furroxide.topiaforge.worlds.sandbox';
       final profile = LauncherProfile.defaultProfile().copyWith(
-        worldSelection: const WorldSelection(
-          gamemodeId: retired,
-          worldId: 'missing.package.world',
-          launchIntoGamemode: true,
-        ),
+        launchSelection: LaunchSelection.unresolvedLegacy({
+          'worldSelection': {
+            'worldId': 'missing.package.world',
+            'gamemodeId': retired,
+            'loadMode': 'additiveArena',
+            'launchIntoGamemode': true,
+          },
+        }),
       );
       final repository = _FakeLauncherRepository(
         snapshot: _readySnapshot(profiles: [profile]),
@@ -29,11 +32,7 @@ void _registerTargetLaunchRegressions(_PumpHome pumpHome) {
   testWidgets('setup safely presents an empty declared target inventory', (
     tester,
   ) async {
-    final repository = _FakeLauncherRepository(
-      snapshot: _readySnapshot(
-        worldCatalog: const WorldCatalog(worlds: [], gamemodes: []),
-      ),
-    );
+    final repository = _FakeLauncherRepository(snapshot: _readySnapshot());
     await pumpHome(tester, repository);
     await tester.tap(find.text('Setup'));
     await tester.pumpAndSettle();

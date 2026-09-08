@@ -54,14 +54,17 @@ void main() {
 
       final result = await repository.launch(
         install,
-        const LauncherProfile(
+        LauncherProfile(
           id: 'world-config-test',
           name: 'World Config Test',
-          worldSelection: WorldSelection(
-            worldId: 'io.github.furroxide.topiaforge.worlds.open_sandbox',
-            gamemodeId: 'io.github.furroxide.topiaforge.zombies.survival',
-            launchIntoGamemode: true,
-          ),
+          launchSelection: LaunchSelection.unresolvedLegacy({
+            'worldSelection': {
+              'worldId': 'io.github.furroxide.topiaforge.worlds.open_sandbox',
+              'gamemodeId': 'io.github.furroxide.topiaforge.zombies.survival',
+              'loadMode': 'additiveArena',
+              'launchIntoGamemode': true,
+            },
+          }),
         ),
         selectionOverride: const LaunchSelection.mainMenu(),
       );
@@ -117,13 +120,17 @@ void main() {
 
     final result = await repository.launch(
       install,
-      const LauncherProfile(
+      LauncherProfile(
         id: 'remembers-only',
         name: 'Remembers only',
-        worldSelection: WorldSelection(
-          worldId: 'io.github.furroxide.topiaforge.worlds.open_sandbox',
-          gamemodeId: 'io.github.furroxide.topiaforge.zombies.survival',
-        ),
+        launchSelection: LaunchSelection.unresolvedLegacy({
+          'worldSelection': {
+            'worldId': 'io.github.furroxide.topiaforge.worlds.open_sandbox',
+            'gamemodeId': 'io.github.furroxide.topiaforge.zombies.survival',
+            'loadMode': 'additiveArena',
+            'launchIntoGamemode': false,
+          },
+        }),
       ),
     );
     expect(result.started, isTrue, reason: result.message);

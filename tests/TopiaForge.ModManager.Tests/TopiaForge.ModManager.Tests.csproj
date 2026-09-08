@@ -232,6 +232,7 @@
        rollback behavior remain executable on the ordinary test runner. -->
   <ItemGroup>
     <Compile Include="..\..\templates\TopiaForge.UnityWorldTemplate\Packages\io.github.furroxide.topiaforge.world-companion\Editor\WorldCompanionFileIo.cs" />
+    <Compile Include="..\..\templates\TopiaForge.UnityWorldTemplate\Packages\io.github.furroxide.topiaforge.world-companion\Editor\WorldMarkerHierarchy.cs" />
     <Compile Include="..\..\templates\TopiaForge.UnityWorldTemplate\Packages\io.github.furroxide.topiaforge.vpm-resolver\Editor\VpmSafeFileReader.cs" />
     <Compile Include="..\..\tools\unity-ui-bundle\Assets\Editor\UiSmokeAssemblyFileIo.cs" />
   </ItemGroup>

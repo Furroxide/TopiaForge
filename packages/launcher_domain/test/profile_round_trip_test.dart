@@ -24,16 +24,18 @@ void main() {
     });
 
     test('round trips legacy selection without inferring a target', () {
-      const selection = WorldSelection(
-        worldId: 'io.github.furroxide.topiaforge.worlds.level.city',
-        gamemodeId: 'io.github.furroxide.topiaforge.zombies.survival',
-        loadMode: WorldSelection.sceneReplacement,
-        launchIntoGamemode: true,
-      );
+      const selection = {
+        'worldId': 'io.github.furroxide.topiaforge.worlds.level.city',
+        'gamemodeId': 'io.github.furroxide.topiaforge.zombies.survival',
+        'loadMode': 'sceneReplacement',
+        'launchIntoGamemode': true,
+      };
       final profile = LauncherProfile(
         id: 'p',
         name: 'P',
-        worldSelection: selection,
+        launchSelection: LaunchSelection.unresolvedLegacy({
+          'worldSelection': selection,
+        }),
       );
 
       final restored = LauncherProfile.fromJson(profile.toJson());
@@ -42,9 +44,7 @@ void main() {
         restored.launchSelection.kind,
         LaunchSelectionKind.unresolvedLegacy,
       );
-      expect(restored.launchSelection.legacy, {
-        'worldSelection': selection.toJson(),
-      });
+      expect(restored.launchSelection.legacy, {'worldSelection': selection});
     });
 
     test('profile parsing preserves runtime-only legacy keys for repair', () {

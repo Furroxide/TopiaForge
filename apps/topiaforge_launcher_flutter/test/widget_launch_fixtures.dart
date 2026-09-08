@@ -62,7 +62,6 @@ LauncherSnapshot _replaceSnapshotProfiles(
   installedMods: snapshot.installedMods,
   registryMods: snapshot.registryMods,
   packageSources: snapshot.packageSources,
-  worldCatalog: snapshot.worldCatalog,
   recentLog: snapshot.recentLog,
   launcherUpdates: snapshot.launcherUpdates,
   developerMode: snapshot.developerMode,

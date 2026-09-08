@@ -15,7 +15,6 @@ class _FakeLauncherRepository extends _InstallFakeLauncherRepository {
              installedMods: const [],
              registryMods: const [],
              packageSources: const [],
-             worldCatalog: WorldCatalog.fallback(),
              recentLog: '',
              launcherUpdates: const LauncherUpdateSettings(),
              developerMode: developerMode,

@@ -36,9 +36,10 @@ The explicitly unstable interop package is outside even these guarantees.
 ## Manifest and serialized state
 
 Manifest V6 is the canonical authoring contract. Its optional `multiplayer` object does not change
-standalone defaults. V5 is unreleased and is being retired through the sequential gamemode redesign;
-the temporary V5 dispatcher exists only until its migration/retirement slice. No policy requires
-retaining V5 into 0.x or 1.0. V4 is already rejected. Readers dispatch by schema version; unknown
+standalone defaults. V4 and V5 are rejected with actionable V6 migration guidance. The CLI
+migrates V3/V4/V5 through common preservation and refusal rules; it never infers gameplay
+implementations. No policy requires retaining these unreleased schemas. Readers dispatch by schema
+version before interpreting fields; unknown
 fields fail except bounded namespaced `x-*` metadata. New semantics require an explicit numbered
 contract and migration. See [Manifest V6](ManifestV6.md) for current fields and deliberate exclusions.
 

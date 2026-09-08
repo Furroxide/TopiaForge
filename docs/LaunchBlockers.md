@@ -6,8 +6,10 @@ working session that closed two advisory gates and moved engineering work on fou
 others; see [Second reconciliation](#second-reconciliation-2026-08-28).
 Product candidate: `0.1.0-rc.1`. Recommendation: **NO-SHIP**.
 
-**Current redesign checkpoint, 8 September 2026:** slices 1–7 are integrated;
-release qualification (7a) and V5 retirement/live acceptance (8) remain pending.
+**Current redesign checkpoint, 8 September 2026:** slices 1–7 and release-preparation
+slice 7a are integrated (`31ff4d4`). V5 retirement and acceptance isolation repairs
+are split into sequential slices 8a (retirement/world fixes) and 8b (isolated
+acceptance). Candidate qualification and live acceptance remain pending.
 The dated evidence below is historical and does not certify this candidate.
 Current revision-specific results are in
 [`gamemode-contract/Status.md`](internal/gamemode-contract/Status.md).

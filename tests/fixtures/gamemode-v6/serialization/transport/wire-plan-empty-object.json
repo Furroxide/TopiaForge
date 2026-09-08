@@ -1,0 +1,22 @@
+{
+  "id": "wire-plan-empty-object",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Active V4 plan empty object",
+  "transport": "plan",
+  "payload": {},
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    }
+  }
+}

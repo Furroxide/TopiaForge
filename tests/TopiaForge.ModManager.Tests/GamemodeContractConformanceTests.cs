@@ -18,8 +18,8 @@ namespace TopiaForge.ModManager.Tests
 
         private static readonly HashSet<string> CaseFields = new HashSet<string>(StringComparer.Ordinal)
         {
-            "id", "channel", "kind", "summary", "selection", "intent", "manifest", "expect",
-            "divergenceReason", "schemaOutcome", "operations", "modelMutation", "profile", "request", "observation", "verifyImmutability", "transport", "payload", "wireJson", "bindings"
+            "id", "channel", "kind", "summary", "manifest", "expect",
+            "schemaOutcome", "modelMutation", "profile", "request", "observation", "verifyImmutability", "transport", "payload", "wireJson", "bindings"
         };
         private static readonly HashSet<string> OutcomeFields = new HashSet<string>(StringComparer.Ordinal)
         {
@@ -147,7 +147,7 @@ namespace TopiaForge.ModManager.Tests
 
             Assert(body.GetProperty("channel").GetString() == indexed.Channel,
                 indexed.Path + " declares a channel the index disagrees with.");
-            var directory = indexed.Kind.StartsWith("manifest-", StringComparison.Ordinal) ? "manifest" : indexed.Kind == "transport-codec" ? "transport" : "launch-intent";
+            var directory = indexed.Kind.StartsWith("manifest-", StringComparison.Ordinal) ? "manifest" : "transport";
             Assert(indexed.Path.StartsWith(indexed.Channel == "resolution" ? "resolution/" : indexed.Channel + "/" + directory + "/", StringComparison.Ordinal),
                 indexed.Path + " is misplaced for its kind.");
             AssertEquivalentOperations(indexed, body, obligedRunners);
@@ -157,10 +157,6 @@ namespace TopiaForge.ModManager.Tests
             var expectation = ReadExpectation(indexed, body);
             switch (indexed.Kind)
             {
-                case "launch-intent-round-trip":
-                case "launch-intent-hostile":
-                    ExecuteLaunchIntent(indexed, body, expectation);
-                    break;
                 case "transport-codec":
                     var transport = TransportFixtureRunner.Snapshot(body);
                     Assert(DeclarationDigest.Equal(transport, body.GetProperty("expect").GetProperty(RunnerName)),
@@ -214,13 +210,6 @@ namespace TopiaForge.ModManager.Tests
                 Assert(DeclarationDigest.Equal(expect.GetProperty("csharp"), expect.GetProperty("dart")),
                     indexed.Path + " has divergent same-operation expectations.");
             }
-            else
-            {
-                var operations = body.GetProperty("operations");
-                Assert(operations.GetProperty("csharp").GetString() == "read-intent"
-                    && operations.GetProperty("dart").GetString() == "write-intent",
-                    indexed.Path + " requires explicit wire operations.");
-            }
         }
 
         private static Expectation ReadExpectation(IndexedCase indexed, JsonElement body)
@@ -242,46 +231,6 @@ namespace TopiaForge.ModManager.Tests
             }
 
             return new Expectation(outcome == "accept", codes);
-        }
-
-        /// <summary>
-        /// Reads the one-shot worldLaunch intent exactly as the manager does and compares both the
-        /// verdict and which field each complaint names.
-        /// </summary>
-        private static void ExecuteLaunchIntent(
-            IndexedCase indexed,
-            JsonElement body,
-            Expectation expected)
-        {
-            var intent = body.GetProperty("intent").GetRawText();
-            var accepted = false;
-            var codes = new SortedSet<string>(StringComparer.Ordinal);
-            try
-            {
-                var errors = JsonUtil.Deserialize<WorldLaunchIntent>(intent).Validate();
-                accepted = errors.Count == 0;
-                foreach (var error in errors)
-                {
-                    codes.Add(FieldNamedBy(error));
-                }
-            }
-            catch (InvalidDataException)
-            {
-                codes.Add("unreadable");
-            }
-            catch (FormatException)
-            {
-                codes.Add("unreadable");
-            }
-
-            Assert(
-                accepted == expected.Accepted,
-                indexed.Path + ": the launch intent reader " + (accepted ? "accepted" : "rejected") +
-                " a fixture expecting " + (expected.Accepted ? "accept" : "reject") + ".");
-            Assert(
-                codes.SetEquals(expected.ErrorCodes),
-                indexed.Path + ": expected error codes [" + string.Join(", ", expected.ErrorCodes) +
-                "] but the reader named [" + string.Join(", ", codes) + "].");
         }
 
         /// <summary>
@@ -376,7 +325,7 @@ namespace TopiaForge.ModManager.Tests
         }
 
         /// <summary>
-        /// Every launch-intent complaint opens with the field it is about, so the leading token is a
+        /// Manifest complaints identify their field, so the quoted field or leading token is a
         /// stable code without inventing a second vocabulary the messages could drift from.
         /// </summary>
         private static string FieldNamedBy(string error)

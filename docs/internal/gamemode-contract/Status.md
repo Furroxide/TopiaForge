@@ -18,7 +18,8 @@ The [canonical brief](../GamemodeContractRedesign.md) is normative. The
 | `b7390fb6a8376c58c77d18f20e287bacbd427850` | Slice 5 merge of PR #110, final reviewed head `7907398cc9d21dc18d8b9481690dd434f7f30595` | Final exact-head CI and CodeQL passed; merged normally at 2026-09-06T02:07:23Z |
 | `bd7be8be386c51713fa1099488e1e4d36ba130a5` | Slice 6 merge of PR #111, final reviewed head `584349c123c72075b8922093a9486ae0491d041d` | Exact-head CI, full publication and CodeQL passed; normal merge at 2026-09-06T04:46:28Z |
 | `da47dc7f89462c4473bac54db7e1c98acecda52d` | Slice 7 merge of PR #112, reviewed head `7bc19231bf6ea12bb708ef318774d78fffee72cd` | Exact-head CI 34167871674 and CodeQL 34167870357 passed; normal merge at 2026-09-07T22:58:39Z |
-| `feat/release-candidate-qualification`, based on `da47dc7f` | Slice 7a active worktree and draft review checkpoint | Qualification, workflow and documentation repairs passed local and exact-head hosted checks at `4000af7`; unsigned construction authorized on 8 September and under test; no release qualification or game acceptance |
+| `31ff4d49bd30c593e484a01407e47ca7871f7ca7` | Slice 7a normal merge of PR #114, reviewed head `80fa8f9fb6e8b1a7cc4af0d8c6c00d31820e1437` | CI 34185465503 and CodeQL 34185463190 passed; all four review threads resolved; merged at 2026-09-08T04:10:41Z |
+| `feat/gamemode-retirement-acceptance`, based on `31ff4d49`; PR #115 initial head `7d8fbf3` | Slice 8a delivery, created only after PR #114 merged | Initial CI found formatting and Windows migration failures plus five Editor-fixture CodeQL alerts; repairs under fresh verification; acceptance delivery remains 8b |
 
 
 The historical rows describe each slice at its own merge. Current state:
@@ -27,12 +28,15 @@ The historical rows describe each slice at its own merge. Current state:
 | --- | --- | --- | --- | --- |
 | V6 contract, resolver, runtime lifecycle and binding | Integrated through slices 2-6 | Runtime activation integrated | Exact-head CI for each slice passed | Pending |
 | Target selection, V4 wire and correlated outcomes | Integrated through slice 7 | Home, Setup, CLI and manager share resolution | Slice 7 exact-head CI and CodeQL passed | Pending |
-| Candidate qualification and publication guards | Slice 7a source checkpoint | CLI, administrator and publication paths connected in this branch | 31 exact-head checks passed at `4000af7`: CI 34175052857 and CodeQL 34175050957; four analyses returned zero findings | Pending; synthetic acceptance is not game evidence |
-| Unsigned RC package construction | Implemented after explicit authorization on 8 September | Builder and Windows orchestration honor recorded policy | 431 full CLI tests, 87 focused Dart and 68 PowerShell checks passed; final hosted verification pending | Pending |
-| V5 retirement and final acceptance | Slice 8 not started | Pending | Pending | Pending |
+| Candidate qualification and publication guards | Integrated through slice 7a | CLI, administrator and publication paths connected | Final reviewed-head CI and CodeQL passed at `80fa8f9`; 441 local CLI tests passed with four platform skips | Pending; synthetic acceptance is not game evidence |
+| Unsigned RC package construction | Integrated after explicit authorization on 8 September | Builder and Windows orchestration honor recorded policy | Final PR #114 hosted checks passed; local regression details below | Pending |
+| V5 retirement, migration and obsolete models | PR #115 with local review repairs | Readers and CLI atomic writer connected; old models removed | 1,079 domain and 494 Windows data tests pass locally; fresh hosted checks pending | Pending |
+| Authored-world marker validation | PR #115 with local review repairs | Editor validation and owned prefab instantiation connected | Nine helper, five owned-instantiation and fifteen filesystem-only fixture checks pass | Fourteen Unity EditMode cases and actual spawn pending |
+| Acceptance isolation | Prepared source preserved for slice 8b, outside 8a delivery | Runtime/CLI/release integration prepared; not integrated | Focused synthetic tests pass; fresh 8b verification required | Pending isolated host and actual game evidence |
 
 No release tag, release dispatch or publication has occurred. The checkout is
-not release-ready. Slice 7a must finish and merge before a slice 8 branch is cut.
+not release-ready. Slice 8a starts from the merged slice 7a revision; no subsequent
+release branch or candidate can treat pending acceptance as complete.
 
 On 2026-09-05, PRs #102–105 were converted to draft for the approved re-cut.
 Their branch tips and existing review history were preserved. Both external
@@ -609,7 +613,17 @@ because a proposed schema contains a related field.
 | GM-07: cleanup exception interrupts teardown | Attempt every cleanup action, aggregate errors, release ownership, emit exactly one terminal outcome | Controller/content/scope disposers throw independently and together; later cleanup and terminal notification still occur | Fault-injected stop/main-menu/provider unload permits a clean subsequent launch | 4, 5, 6 |
 | GM-08: scene update restarts controller | Stable session identity and explicit `sceneChangePolicy`; notifications observe committed state | Keep-controller preserves one instance; end-session terminates explicitly; stale session operations cannot affect a successor | Native scene changes preserve or end the round according to policy | 4, 5, 6 |
 | GM-09: competing native transitions | One executor for Worlds/core/local-world/restart/main-menu; Busy until native retirement | Concurrent admission, cancellation after dispatch, late arrival/quarantine, authority denial, and draining work | Race framework scene requests with launch/restart; verify native scene and input state | 4, 5, 6 |
-| GM-10: declared authored spawn ignored | World instance returns resolved spawn; provider validates marker readiness; unsupported dead schema remains excluded | Missing/duplicate marker fails; correct marker resolves before StartAsync; templates use production binding | Authored-marker world starts at intended position; Open Sandbox and discovered providers report actual spawn | 2, 5, 6, 8 |
+| GM-10: declared authored spawn ignored | World instance returns resolved spawn; provider validates marker readiness; unsupported dead schema remains excluded | Missing/duplicate marker fails; correct marker resolves before StartAsync; templates use production binding | Authored-marker world starts at intended position; Open Sandbox and discovered providers report actual spawn | 2, 5, 6, 8a, 8b |
+
+Slice 8a adds concrete GM-10 regressions in
+[WorldMarkerHierarchyTests](../../../tests/TopiaForge.ModManager.Tests/WorldMarkerHierarchyTests.cs),
+[AssetSpawnTransactionTests](../../../tests/TopiaForge.ModManager.Tests/AssetSpawnTransactionTests.cs),
+and the template's [WorldValidatorTests](../../../templates/TopiaForge.UnityWorldTemplate/Assets/Tests/Editor/WorldValidatorTests.cs).
+The first two run in the ordinary C# harness. The template tests require the pinned
+Unity editor and are pending; actual authored spawn placement remains part of 8b
+live acceptance. Private admission evidence in 8b also strengthens GM-05's distinction
+between process creation, runtime acknowledgement and a committed Running session.
+
 
 ## Replacement slice state
 
@@ -1476,3 +1490,162 @@ Logs are `tf-pr114-review-cli-full.log` and `tf-pr114-review-seven-harness.log`
 in the local temporary directory. All 50 website tests, 524 JSON/YAML files,
 126 Markdown files, the documentation catalog and required repository audits
 passed. Fresh hosted CI and current review-thread resolution still precede merge.
+
+
+## Final-slice re-cut and local evidence (8 September 2026)
+
+The branch was cut from `31ff4d49` after the normal merge of PR #114. The final
+scope grew when safe acceptance required measured OS identity, a guarded runtime
+acknowledgement and release-script admission. It is now split into **8a retirement
+and authored-world fixes**, followed by **8b isolated acceptance**. No 8b delivery
+branch exists before 8a merges. Full prepared source is preserved in the private
+worktree archive `slice8-complete-source-before-recut.zip`, verified SHA-256
+`467d368a868c616716b0ab16abbe84f104f79ebd2ad5f62bcb1db26f22177d6b`.
+
+These observations describe local source preparation, not a release or CI verdict:
+
+- Dart retirement plus V6 multiplayer regressions recorded 5 passes and 7 failures
+  before the fix. V4/V5 guidance and the V6-only multiplayer semantic bypass were
+  reproduced; the expanded focused suite passed 44 tests. Logs:
+  `tf-slice8-dart-retirement-{red,green}.log` in the private temporary directory.
+- Actual CLI migration subprocess regressions recorded 6 passes and 13 failures
+  before repair. The command now uses preservation planning and one atomic writer;
+  twenty focused cases and the additional V3 dependency-form case passed. Review
+  then corrected a weak invalid-stub assertion: it had called nonexistent `validate`
+  and only checked a failing exit. It now invokes `check package` and requires an
+  implementation diagnostic, preserving absent optional world requirements.
+- Migration planner/writer tests cover original-index diagnostics, raw scalar and
+  schema-URL refusal, preserved unknown values/property presence, explicitly invalid
+  stubs, sharing-denied replacement, cross-process leases, stale snapshots and links.
+  Initial preparation passed 146 domain and twenty writer/profile cases. The
+  added legacy-ID matrix recorded fourteen passes and eighteen failures before
+  repair; all 178 combined migration tests pass. Source IDs retain their 64-character
+  contract while current V6 declaration boundaries stay unchanged. Formatting
+  can change, and cooperative source checking is not an OS compare-and-swap claim.
+- C# retirement and V6 conformance passed after captured RED. The fixture corpus
+  now contains 363 cases: retired V4/V5 are separate, active common fields use V6,
+  and isolated transport ID cases replace the eighteen obsolete intent cases.
+  Nine required-compatibility-range cases passed the existing C# reader but failed
+  Dart before its repair. The corresponding 651-case Dart suite passed afterward.
+- Editor marker validation now uses one exact, root/inactive-inclusive match and
+  fails before HDRP/export writes. Nine production-linked helper cases passed after
+  four reproduced failures. Prefab instantiation preserves the exact authored name
+  inside allocation ownership; five new cases failed before the fix and passed
+  afterward, including literal authored `(Clone)` names and throwing initialization.
+  Seven Unity EditMode tests exist but were not run: the pinned editor is absent.
+- Before the delivery split, full domain/data checks passed 1,036/489 tests, with
+  four expected platform skips in data. The historical Windows multiplayer failure
+  did not recur: all ten cases also passed in a clean detached `31ff4d49` worktree,
+  using the same Flutter-bundled Dart and short Windows PATH. This is a matching
+  baseline recheck, not an exemption from future Windows testing.
+- Flutter application/UI tests passed 75/3, both analyzers were clean, and the
+  Windows debug launcher built. Repository audits and their self-tests passed,
+  including fixture closure, README counts, residue, trademarks and asset licensing.
+  These combined-tree results are supplemented by fresh 8a-scoped gates below.
+
+Prepared 8b source has separate focused evidence: 33 CLI acceptance tests, 42 native
+and data tests, 31 C# admission plus six staging/native checks, and 24 release-script
+isolation tests passed. The mocked administrator/qualification aggregate passed.
+This source is excluded from the current delivery and needs fresh integration
+checks after 8a. Its remaining review work includes denied-plugin global effects,
+ACK-write failure after consumption, and injected native identity/resume failures.
+None of those tests or harmless child processes proves game behavior.
+
+No game process, candidate build, tag or publication occurred. Real approval and
+rotation records, an isolated Windows QA context, visual/native acceptance and the
+pinned Unity editor remain unavailable. Unsigned RC1 authorization supplies none
+of that evidence. The acceptance/admin guides change with 8b, when those commands
+are integrated; the current manifest reference and retirement guides change in 8a.
+
+
+## Slice 8a scoped verification
+
+After the acceptance source was separated, full domain/data suites passed
+**1,068/489 tests**; data has four expected platform skips. All three Dart package
+analyzers are clean. The full CLI run recorded **461 passes, four platform skips
+and two failures**, both obsolete expectations for the current-V6 no-op message.
+Exact-byte, validation and exit-code behavior passed. The wording expectations
+were corrected and the entire **78-test actual command harness** passed, including
+the three versioned invalid-stub calls through `check package`. The separate live
+usage regression also passed all three cases after reproducing its stale command.
+Hosted CI must run the complete final CLI tree before integration.
+
+Fresh Release compilation passed with zero warnings/errors and the release-surface
+runner verified all eleven SDK packages and seven harnesses. The first attempts
+caught an unbounded read in the new editor test fixture (fixed with bounded config
+reads and streaming hashes) and the nested disposable baseline being counted by
+source conventions. After verifying its clean state and retaining test logs, that
+baseline worktree was removed normally; the complete gate passed. After the relocated SDK CLI fixture, a final forced restore and fresh build
+again passed with zero warnings/errors; all eleven SDK packages and seven harnesses
+passed on those rebuilt binaries (`tf-slice8a-final-{build,seven-harness}.log`).
+
+The independently scoped Flutter run passed **75 application and three UI tests**,
+clean analyzers, and a Windows debug build. Formatting verified 523 relevant Dart
+files with no changes; all **528 non-generated tracked Dart files** meet the
+500-line cap. Fixture closure passes for **363 cases**. README counts, residue,
+trademark and asset-licence audits pass, as do their self-tests. Repository data
+validation covers 532 JSON/YAML files; Markdown links cover 127 files.
+
+Full local publication was attempted. All fifty website tests, content preparation,
+Astro validation/build, DocFX and domain/data Dart reference generation passed.
+The bundled Windows Dartdoc 9.0.4 crashed in `_stripDocImports` while precaching the
+unchanged Flutter UI dependency graph (`RangeError ... 9089: 9202`), matching the
+previous Windows failure. Search and final built-link publication gates therefore
+did not run locally; no full publication pass is claimed. Full hosted publication
+against this exact branch is required. Logs use the `tf-slice8a-` prefix in the
+private runner's temporary directory.
+
+The final guide sweep corrected the active first-party catalog to V6 and accurate
+Worlds/Free Play/session ownership. Its fourteen source packages and thirteen
+non-DevTool payloads were verified from manifests and packaging behavior. The older
+June documentation proposal remains intact as explicitly historical evidence with
+current authority links. These documentation edits provide no game verification.
+
+
+## PR #115 review and first hosted checks
+
+Initial head `7d8fbf3e56dc28d3feb281153303e94d91642202` failed
+[CI 34191489810](https://github.com/Furroxide/TopiaForge/actions/runs/34191489810)
+on C# formatting and Windows migration tests. Linux domain/data/CLI, Flutter,
+repository audits and Unity source checks passed. Template and full publication
+jobs were skipped because their C# prerequisite failed. The CodeQL analyses
+completed, but five new Editor-fixture path alerts failed the result gate; a
+completed analysis was not a clean result. No merge or alert dismissal occurred.
+
+The Windows failure was a new migration defect, distinct from the old multiplayer
+observation: hosted TEMP used a legitimate 8.3 path that the new ordinary-file
+check rejected. Three real short-path regressions failed before canonicalization.
+The repair rejects source links and linked ancestors before resolving one canonical
+snapshot and lease identity, and canonicalizes the ordinary OS temporary root.
+Fifteen focused tests now pass, including lease contention and actual link refusal.
+The full Windows data suite passes **494 tests with four existing platform skips**;
+its analyzer and formatting pass. The full log is retained privately at
+`packages/launcher_data/.dart_tool/pr115-windows-data-full-final.log`.
+
+Copilot found that a minimal profile with no remembered selection was surfaced as
+unavailable. Five new cases failed before the fix (six preservation cases passed).
+An empty legacy selection now means main menu; explicit legacy property values,
+including null and empty objects, remain preserved for repair. Malformed explicit
+current selections still fail. All fifteen focused cases and **1,079 domain tests**
+pass, with clean analysis. The application again passes **75 Flutter tests**, clean
+analysis and the Windows debug build. Real CLI migration subprocesses also pass
+all four `migrate` and seventeen `migration` cases after the writer repair.
+
+The Editor fixture now owns its paired directory under its disposable project,
+checks containment and ordinary filesystem kinds, bounds traversal and byte reads,
+fences configuration restoration against external changes, and refuses export
+command-line overrides. A compile-only Unity/NUnit facade harness recorded one pass
+and three failures before these guards, then **fifteen filesystem checks passed**.
+The subsequent repository source audit caught three unbounded assertion reads;
+those now use the same bounded reader. This harness establishes filesystem behavior
+only. All **fourteen actual Unity EditMode cases remain unrun**, and CodeQL must
+confirm the path repairs on the pushed revision.
+
+The two C# test files now satisfy the exact whole-solution CI formatting command.
+Fresh Release compilation passes with zero warnings/errors; the rebuilt release
+runner passes all eleven SDK packages and seven C# harnesses
+(`tf-pr115-seven-harness-final.log`). All 530 non-generated Dart files meet the
+500-line cap and all 460 scoped Dart files pass formatting. Repository audits,
+363-case fixture closure, 127-file Markdown links and documentation content checks
+pass. Refreshed `origin/dev` remains `31ff4d49`. Fresh hosted CI, full publication, template checks and CodeQL remain required
+before normal integration; this review follow-up provides no game evidence.

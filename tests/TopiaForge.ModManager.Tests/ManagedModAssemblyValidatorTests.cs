@@ -240,7 +240,7 @@ namespace TopiaForge.ModManager.Tests
         {
             return new ModManifest
             {
-                SchemaVersion = 5,
+                SchemaVersion = 6,
                 Id = "tests.valid-mod",
                 Name = "Valid test mod",
                 Author = new ModAuthor { Name = "TopiaForge" },

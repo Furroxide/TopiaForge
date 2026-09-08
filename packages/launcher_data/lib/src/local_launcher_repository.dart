@@ -17,7 +17,6 @@ import 'dotnet_sdk.dart';
 import 'game_install_discovery.dart';
 import 'launch_running_probe.dart';
 import 'launch_wine_configuration.dart';
-import 'profile_json_preservation.dart';
 import 'package_contract.dart';
 import 'public_url.dart';
 import 'secure_http.dart';
@@ -181,7 +180,6 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
       installedMods: installedMods,
       registryMods: registryMods,
       packageSources: packageSources,
-      worldCatalog: const WorldCatalog(worlds: [], gamemodes: []),
       previewsByProfile: previews,
       recentLog: gameInstall == null
           ? await _readLauncherLog()

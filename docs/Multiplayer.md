@@ -7,7 +7,7 @@ description: Build and deterministically test server-canonical TopiaForge mods f
 
 TopiaForge remains standalone-only. `TopiaForge.Mods.Multiplayer` freezes the future-facing public contract,
 generated wire format, real-game loopback provider, and deterministic multi-peer test rig before a supported live
-transport exists. Ordinary V5 mods keep standalone behavior when `multiplayer` is omitted; multiplayer support is an explicit
+transport exists. Ordinary V6 mods keep standalone behavior when `multiplayer` is omitted; multiplayer support is an explicit
 module and manifest opt-in, not a claim that arbitrary local mutations can be synchronized safely.
 
 `IMultiplayerSession` is a stable owner-scoped facade, not one match object. Bind the generated contract once for the
