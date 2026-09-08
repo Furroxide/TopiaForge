@@ -41,11 +41,11 @@ Managed-reference caches in Pages and release-package-build are already restore-
 
 ## Settled distribution and bounded repairs
 
-The earlier planning record selected an unsigned Windows x64 0.x prerelease, version 0.1.0-rc.1. Automatic approval review subsequently could not establish explicit authorization for the production signing-policy change; that implementation remains pending the direct permission request recorded in Status.md. The steps below describe the reviewable proposal, not permission to apply it. Linux/Proton/macOS remain outside RC1. Preserve signed defaults and the restriction permitting unsigned only for 0.x prereleases.
+The user explicitly authorized unsigned Windows `0.1.0-rc.1` on 8 September. This supersedes the earlier automatic approval-review rejection; implement and verify the reviewed change below. Linux/Proton/macOS remain outside RC1. Preserve signed defaults and the restriction permitting unsigned only for 0.x prereleases. That authorization supplies neither reviewer evidence nor game acceptance.
 
 1. Set signingIdentities.windowsDistribution to unsigned in reviewed release policy, without a Windows certificate pin.
-2. tools/release/build-windows.ps1:341-349 currently unconditionally requires certificate/password/timestamp credentials after branching on mode. Require these only for signed mode.
-3. apps/topiaforge_cli/lib/src/release_package_builder.dart:131-141 always invokes WindowsPackageSigner.signIfConfigured. Explicit unsigned policy must skip Authenticode even when ambient signing environment variables exist. A contradictory --require-windows-signing must fail before writes.
+2. Keep certificate/password/timestamp credential checks in `tools/release/build-windows.ps1` exclusive to signed mode. Validate raw signing fields, version eligibility and canonical input before output writes.
+3. Keep explicit unsigned policy from invoking `WindowsPackageSigner` in `release_package_builder.dart`, including when ambient signing variables exist. Reject contradictory `--require-windows-signing` before writes, and retain the admitted policy across asynchronous build work.
 4. Retain package validation proving all three executables are unsigned: launcher, CLI, and GameCompat extractor.
 5. Preserve the existing unsigned P7S file and field omission in admin staging, publisher allowlists and hosted attestations; do not rebuild it. Add regression coverage where missing. Empty/null placeholders remain invalid. Signed mode keeps its strict certificate and timestamp checks.
 6. Keep Ed25519 update-metadata signatures, checksums, BOM/SBOM, exact artifact verification, provenance, protected environment approval, and immutable publication. Unsigned executables do not mean unsigned update metadata.
@@ -94,7 +94,7 @@ The user stated that approval/rotation records and isolated QA resources are ava
 - Four non-game blocking approval/rotation records with real evidence and authorized reviewer attribution.
 - An isolated Windows user/session or VM with authorized installed-game access and genuine input/visual observation. An alternate launcher profile or BepInEx directory alone does not isolate Unity persistentDataPath/native saves/authentication. No supported native-save override has been established.
 - The pinned Unity authoring editor 6000.0.23f1 and activated license on the release builder; the configured C:\Program Files\Unity\Hub\Editor\6000.0.23f1\Editor\Unity.exe is absent locally. Game runtime Unity 6000.0.31f1 is a separate identity, not this editor requirement.
-- Pinned build toolchain including Node 24.18.0 (the currently located bundled Node is 24.19.0), Flutter 3.44.6, Dart 3.12.2, .NET SDK 10.0.301/runtime 10.0.9, MSVC and Windows SDK pins.
+- Pinned build toolchain including Node 24.18.0, Flutter 3.44.6, Dart 3.12.2, .NET SDK 10.0.301/runtime 10.0.9, MSVC and Windows SDK pins. Node 24.18.0 was provisioned locally on 8 September with its official archive checksum verified; see Status.md for the isolated path and digest. Revalidate every actual release-builder tool instead of relying on PATH or this development-host result.
 
 The acceptance runner still installs packages and writes configuration in skip-runtime-install paths. Slice 7 removed the blanket stop helper from the reviewed launcher/acceptance paths, but the acceptance runner receives CLI exit codes rather than retained game-process creation receipts. Establish isolation attestation and receipt ownership before live work. Verify actual BepInExRoot/ManagerRoot/persistentDataPath and abort if the ordinary user data root is selected. Keep raw logs private; only bounded redacted evidence leaves the QA host.
 
@@ -145,14 +145,15 @@ JSON properties, fixed metadata paths, exact catalog namespace, embedded/externa
 package equality, signed P7S identity, stdout-only CLI summary capture, immutable
 accepted state, source drift and approval-boundary asset replacement.
 
-The unsigned construction fix remains pending explicit permission following an
-automatic approval-review rejection. Its new Dart/PowerShell regressions are
-intentionally failing until that authorized repair can be applied; do not skip,
-suppress or misclassify them. The draft qualification checkpoint excludes the
-three unfinished regression files listed in Status.md while preserving them in
-the worktree. A green draft CI result does not complete unsigned construction or
-permit merging slice 7a. Qualification and workflow changes have independent
-regressions. Keep Ed25519 metadata signing and signed-mode defaults intact.
+Explicit user authorization for unsigned Windows RC1 was received on 8 September.
+The original and expanded Dart/PowerShell regressions captured failures before
+production edits. Finish raw-presence validation, version parity, pre-write
+refusal and policy snapshot checks, then run the combined suites. Do not skip or
+suppress failing regressions. The prior draft checkpoint `4000af7` passed all 31
+hosted checks; that evidence does not certify the subsequent unsigned edits or
+permit merging unfinished slice 7a. Qualification and workflow changes have
+independent regressions. Keep Ed25519 metadata signing and signed-mode defaults
+intact.
 
 Before committing, finish the combined CLI suite, formatter/analyzer and line
 limits, administrator/publisher tests, workflow checks and repository/documentation

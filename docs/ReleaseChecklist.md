@@ -24,6 +24,9 @@ Machine setup and the resumable command sequence are in
       tracked register. Reviewer references and evidence hashes do not prove
       reviewer identity: the protected approver must verify actual records and
       authorization. Never infer approval from a test pass.
+- [x] Unsigned Windows RC1 is authorized and recorded in policy. The construction repairs have passing
+      synthetic regressions; see [Status](internal/gamemode-contract/Status.md) for revision-specific evidence.
+      The exact candidate build and isolated acceptance remain required.
 - [x] RC discovery is GitHub Releases only; stable Pages/manual and official registry feeds exclude prereleases.
 - [x] The stale `release/0.1.1` line is retired and is neither reused nor deleted during RC preparation.
 - [x] Robotopia support is build `2409` (`0.0.2409`). Public-latest drift stops CI and release, which makes an
@@ -66,7 +69,7 @@ Machine setup and the resumable command sequence are in
 ## 3. Source, contracts, and tests
 
 - [ ] `dotnet build TopiaForge.slnx -c Release` passes with zero warnings/errors.
-- [ ] All 12 public SDK projects `dotnet pack` with warnings as errors; every NuGet archive is valid and its
+- [ ] All 11 public SDK projects `dotnet pack` with warnings as errors; every NuGet archive is valid and its
       dependencies, readme, analyzer/generator assets, and `buildTransitive` props/targets match the package contract.
 - [ ] `dotnet run --project tests/TopiaForge.ModManager.Tests/TopiaForge.ModManager.Tests.csproj -c Release` passes.
 - [ ] `TopiaForge.ModRuntime.Tests`, `TopiaForge.ModPackageValidator.Tests`, and `TopiaForge.ManagedRefs.Tests`
@@ -219,7 +222,7 @@ Machine setup and the resumable command sequence are in
       validity at the timestamp instant all verify. Hosted verification checks
       and digest-binds those exact P7S bytes before trusting any platform
       archive.
-- [ ] A credential-free `VerifyOnly` rerun succeeds after the local PFX,
+- [ ] In signed mode, a credential-free `VerifyOnly` rerun succeeds after the local PFX,
       password, and timestamp URL are removed, while a new signing operation
       still rejects missing credentials.
 - [ ] Public deterministic metadata contains no usernames, hostnames, local

@@ -35,6 +35,22 @@ void main() {
         ),
         ['Unresolved-policy mode is non-distributable.'],
       );
+    },
+  );
+
+  test(
+    'publication metadata rejects tampering after a successful load',
+    () async {
+      final fixture = await CandidateFixture.create();
+      addTearDown(fixture.dispose);
+      final readiness = await ReleaseMetadataReadiness.load(
+        repositoryRoot: fixture.root.path,
+        version: CandidateFixture.version,
+        targetSha: fixture.sha,
+        assetsDirectory: fixture.assets.path,
+        allowUnresolved: false,
+      );
+      expect(readiness.status, 'ready');
       fixture
           .asset('release-candidate-acceptance-v1.json')
           .writeAsStringSync('\n', mode: FileMode.append);
@@ -48,6 +64,25 @@ void main() {
         ),
         throwsStateError,
       );
+    },
+  );
+
+  test(
+    'unresolved metadata stays unavailable after validated bytes change',
+    () async {
+      final fixture = await CandidateFixture.create();
+      addTearDown(fixture.dispose);
+      final readiness = await ReleaseMetadataReadiness.load(
+        repositoryRoot: fixture.root.path,
+        version: CandidateFixture.version,
+        targetSha: fixture.sha,
+        assetsDirectory: fixture.assets.path,
+        allowUnresolved: false,
+      );
+      expect(readiness.status, 'ready');
+      fixture
+          .asset('release-candidate-acceptance-v1.json')
+          .writeAsStringSync('\n', mode: FileMode.append);
       final unresolved = await ReleaseMetadataReadiness.load(
         repositoryRoot: fixture.root.path,
         version: CandidateFixture.version,

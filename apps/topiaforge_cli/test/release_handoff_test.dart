@@ -7,6 +7,7 @@ import 'package:topiaforge/src/release_handoff.dart';
 import 'package:topiaforge/src/release_handoff_models.dart';
 import 'package:topiaforge/src/release_policy.dart';
 
+import 'release_handoff_policy_fixture.dart';
 import 'release_handoff_qa_fixture.dart';
 
 void main() {
@@ -17,8 +18,8 @@ void main() {
   late String root;
 
   setUp(() {
-    root = _repositoryRoot();
     temp = Directory.systemTemp.createTempSync('topiaforge-handoff-test-');
+    root = writeSignedReleaseHandoffRoot(temp);
     _writeArchives(temp);
     writeReleaseQaFixtures(
       repositoryRoot: root,
@@ -470,17 +471,6 @@ void _writeJson(File file, Map<String, Object?> value) {
   file.writeAsStringSync(
     '${const JsonEncoder.withIndent('  ').convert(value)}\n',
   );
-}
-
-String _repositoryRoot() {
-  var directory = Directory.current.absolute;
-  while (!File(p.join(directory.path, 'TopiaForge.slnx')).existsSync()) {
-    if (directory.parent.path == directory.path) {
-      throw StateError('Repository root not found.');
-    }
-    directory = directory.parent;
-  }
-  return directory.path;
 }
 
 const _testEcosystemSha =

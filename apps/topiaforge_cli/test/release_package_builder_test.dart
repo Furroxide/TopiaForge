@@ -21,6 +21,8 @@ part 'release_package_builder_macos_cases.dart';
 part 'release_package_builder_packaging_cases.dart';
 part 'release_package_builder_process_io_cases.dart';
 part 'release_package_builder_windows_signing_cases.dart';
+part 'release_package_builder_unsigned_cases.dart';
+part 'release_package_builder_policy_evidence_cases.dart';
 
 late Directory temp;
 
@@ -37,6 +39,7 @@ void main() {
 
   _registerReleaseProcessAndIoTests();
   _registerReleaseWindowsSigningTests();
+  _registerReleaseUnsignedBuilderTests();
   _registerReleasePackagingTests();
   _registerReleaseIdentityTests();
   _registerReleaseMacPackagingTests();

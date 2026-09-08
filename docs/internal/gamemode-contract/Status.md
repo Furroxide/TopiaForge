@@ -18,7 +18,7 @@ The [canonical brief](../GamemodeContractRedesign.md) is normative. The
 | `b7390fb6a8376c58c77d18f20e287bacbd427850` | Slice 5 merge of PR #110, final reviewed head `7907398cc9d21dc18d8b9481690dd434f7f30595` | Final exact-head CI and CodeQL passed; merged normally at 2026-09-06T02:07:23Z |
 | `bd7be8be386c51713fa1099488e1e4d36ba130a5` | Slice 6 merge of PR #111, final reviewed head `584349c123c72075b8922093a9486ae0491d041d` | Exact-head CI, full publication and CodeQL passed; normal merge at 2026-09-06T04:46:28Z |
 | `da47dc7f89462c4473bac54db7e1c98acecda52d` | Slice 7 merge of PR #112, reviewed head `7bc19231bf6ea12bb708ef318774d78fffee72cd` | Exact-head CI 34167871674 and CodeQL 34167870357 passed; normal merge at 2026-09-07T22:58:39Z |
-| `feat/release-candidate-qualification`, based on `da47dc7f` | Slice 7a active worktree and draft review checkpoint | Qualification, workflow and documentation repairs have local evidence; unsigned construction awaits permission; no release qualification or game acceptance |
+| `feat/release-candidate-qualification`, based on `da47dc7f` | Slice 7a active worktree and draft review checkpoint | Qualification, workflow and documentation repairs passed local and exact-head hosted checks at `4000af7`; unsigned construction authorized on 8 September and under test; no release qualification or game acceptance |
 
 
 The historical rows describe each slice at its own merge. Current state:
@@ -27,8 +27,8 @@ The historical rows describe each slice at its own merge. Current state:
 | --- | --- | --- | --- | --- |
 | V6 contract, resolver, runtime lifecycle and binding | Integrated through slices 2-6 | Runtime activation integrated | Exact-head CI for each slice passed | Pending |
 | Target selection, V4 wire and correlated outcomes | Integrated through slice 7 | Home, Setup, CLI and manager share resolution | Slice 7 exact-head CI and CodeQL passed | Pending |
-| Candidate qualification and publication guards | Slice 7a source checkpoint | CLI, administrator and publication paths connected in this branch | Local regressions passed; checkpoint CI pending | Pending; synthetic acceptance is not game evidence |
-| Unsigned RC package construction | Permission-blocked proposal only | Not applied | Three new local Dart regressions remain red | Pending |
+| Candidate qualification and publication guards | Slice 7a source checkpoint | CLI, administrator and publication paths connected in this branch | 31 exact-head checks passed at `4000af7`: CI 34175052857 and CodeQL 34175050957; four analyses returned zero findings | Pending; synthetic acceptance is not game evidence |
+| Unsigned RC package construction | Implemented after explicit authorization on 8 September | Builder and Windows orchestration honor recorded policy | 431 full CLI tests, 87 focused Dart and 68 PowerShell checks passed; final hosted verification pending | Pending |
 | V5 retirement and final acceptance | Slice 8 not started | Pending | Pending | Pending |
 
 No release tag, release dispatch or publication has occurred. The checkout is
@@ -1323,3 +1323,98 @@ this worktree. That owned checkout was relocated, with both agents paused, to an
 isolated temporary directory; the unchanged audit then passed. The initial log
 is preserved as `tf-pr-comments-seven-harness-nested-checkout.log`. No source-census
 rule or test expectation was weakened to accommodate the second checkout.
+
+
+## Authorized unsigned construction, 8 September
+
+The user explicitly answered **Authorize unsigned Windows RC1** to the concrete
+permission question. That supersedes the earlier automatic approval-review
+rejection and pending-permission handoffs. The authorization covers removing
+Authenticode for Windows `0.1.0-rc.1`; Ed25519 update signing, checksums, provenance,
+protected approval and the five blocking release gates remain required. It does
+not supply missing reviewer records or establish native data isolation.
+
+The preceding committed checkpoint `4000af765dfc8ca7981a3857dde6099f36057926`
+passed all 31 hosted checks, including full Linux documentation publication in
+CI [34175052857](https://github.com/Furroxide/TopiaForge/actions/runs/34175052857)
+and CodeQL [34175050957](https://github.com/Furroxide/TopiaForge/actions/runs/34175050957).
+Exact-head Actions, C#, JavaScript and C/C++ analyses returned zero findings
+(1738292265, 1738296600, 1738292611 and 1738292852). This supersedes the earlier
+pending-hosted-check statements; it does not certify the subsequent unsigned edits.
+
+Before changing production, the expanded builder suite recorded 8 passes and
+21 failures: 18 new policy/output boundary cases and the three original unsigned
+defects. The first PowerShell expansion recorded 20 passes and 33 failures,
+including version parity and output-write ordering. Logs are retained under
+`apps/topiaforge_cli/.dart_tool/slice7a-unsigned-boundaries-red.log` and
+`.dart_tool/slice7a-windows-signing-expanded-red.log`. Further raw-presence cases
+and final combined verification remain in progress.
+
+
+The subsequent raw-presence suite reproduced three more failures (14 passes,
+three failures): explicit null mode, null certificate and empty certificate
+could delete prior staging. Raw-type validation now occurs before defaults or
+writes. The final PowerShell pre-fix matrix recorded 25 passes and 38 failures
+in `.dart_tool/slice7a-windows-signing-strict-red.log`. Line-ending cases were
+added after the production repair and are positive coverage, not claimed RED
+history. A final empty-object strict-mode diagnostic failure was then repaired.
+All 68 PowerShell cases pass in `tf-slice7a-authorized-windows-final.log` under
+the local temporary directory; the no-argument suite is registered in CI.
+
+The first combined CLI run recorded 402 passes, four platform skips and 27
+failures. Eight failures exposed older handoff fixtures that implicitly consumed
+the repository signing mode; they now use an explicit signed fixture while
+retaining every signature/negative assertion. The remaining failures began with
+30-second timeouts during concurrent Git/SDK fixture work; subsequent missing
+fixture paths followed timed-out teardown. These are preserved in
+`tf-slice7a-authorized-cli-full.log`, not treated as a permanent exemption.
+Focused repaired handoff/builder suites pass all 87 cases. A complete rerun with
+two concurrent suites retains every assertion and deadline and is in progress.
+
+All 166 CLI source/test files pass format checking; full CLI analysis reports no
+issues. The mandatory release-surface script rebuilt and verified eleven SDK
+packages and all seven C# harnesses (`tf-slice7a-authorized-seven-harness.log`).
+No C# or SDK source changed in this follow-up.
+
+Node 24.18.0 is now provisioned in the ignored local tools directory. The
+Windows x64 archive matches the official published SHA-256
+`0ae68406b42d7725661da979b1403ec9926da205c6770827f33aac9d8f26e821`;
+`node.exe --version` reports `v24.18.0`. This is checksum verification, not a
+claim of detached-signature verification. The local provisioning record is
+`.dart_tool/release-toolchains/node-v24.18.0-provisioning.json`. On this pinned
+Node version, all 50 website tests pass; Astro checks 29 files without findings
+and builds 27 pages. Markdown, JSON/YAML, catalog, README count, residue,
+trademark and asset-license audits pass. Full Linux/API publication is still
+required against the final pushed head.
+
+The non-game approval/rotation record locations and isolated Windows QA identity
+remain pending user input. No game or candidate was run, no credentials were
+read, and no release qualification, tag or publication was performed.
+
+
+Final local verification for the authorized unsigned follow-up is green.
+The complete CLI suite, run with two concurrent suites after other heavy test
+lanes finished, passed **431 tests with four platform-specific skips** in
+3 minutes 45 seconds (`tf-slice7a-authorized-cli-green.log`). Every assertion and
+deadline remains enabled. The earlier two-concurrent-suite run recorded 428
+passes, four skips and one metadata-test timeout; that log remains retained.
+A clean detached `4000af7` checkout and the current checkout both passed the
+unchanged metadata file in isolation (two tests each; its first case took six
+seconds). No unsigned slowdown or clean-baseline full-suite timeout was
+established. Its three independent behaviors are now separate tests, preserving
+all assertions and successful-load-then-tamper checks; all four cases pass.
+
+Administrator orchestration and nested qualification, publication staging/
+finalization/immutable reruns, and attestation positive/negative suites passed
+with synthetic fixtures. The real-root administrator assertion now names the
+explicit unsigned RC1 policy; independent signed fixtures remain intact. Its
+pre-fix failure and final logs are preserved under `.dart_tool/slice7a-release-*`.
+The final 68-case admission run also passed after output-style cleanup. All
+changed PowerShell files pass the existing repository analyzer configuration,
+and all five workflow source-trust tests pass. All **511 non-generated tracked
+Dart files** are at most 500 lines.
+
+This completes local source verification for slice 7a. Fresh CI and CodeQL must
+certify the pushed follow-up before normal integration. Slice 8 has not begun;
+its read-only port map is preserved at `.dart_tool/slice8-port-repair-plan.md`.
+No exact candidate build, isolated gameplay acceptance or publication is claimed.

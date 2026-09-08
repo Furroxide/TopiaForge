@@ -211,8 +211,12 @@ $releasePolicy = Get-Content -LiteralPath (
 Assert-True (
     $releasePolicy.publication.PSObject.Properties.Name -cnotcontains
         "codeSigningException" -and
-    @($releasePolicy.signingIdentities.PSObject.Properties).Count -eq 0
-) "Release policy must forbid RC1 signing exceptions and remain blocked until the reviewed certificate pin is configured."
+    [string]$releasePolicy.versioning.productVersion -ceq "0.1.0-rc.1" -and
+    @($releasePolicy.signingIdentities.PSObject.Properties).Count -eq 1 -and
+    $releasePolicy.signingIdentities.PSObject.Properties.Name -ccontains
+        "windowsDistribution" -and
+    $releasePolicy.signingIdentities.windowsDistribution -ceq "unsigned"
+) "Release policy must record the authorized unsigned 0.1.0-rc.1 with no certificate pin or code-signing exception."
 Assert-True (
     [string]$releasePolicy.toolchains.node -ceq "24.18.0" -and
     $releasePolicy.toolchains.PSObject.Properties.Name -cnotcontains
