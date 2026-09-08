@@ -20,7 +20,7 @@ The [canonical brief](../GamemodeContractRedesign.md) is normative. The
 | `da47dc7f89462c4473bac54db7e1c98acecda52d` | Slice 7 merge of PR #112, reviewed head `7bc19231bf6ea12bb708ef318774d78fffee72cd` | Exact-head CI 34167871674 and CodeQL 34167870357 passed; normal merge at 2026-09-07T22:58:39Z |
 | `31ff4d49bd30c593e484a01407e47ca7871f7ca7` | Slice 7a normal merge of PR #114, reviewed head `80fa8f9fb6e8b1a7cc4af0d8c6c00d31820e1437` | CI 34185465503 and CodeQL 34185463190 passed; all four review threads resolved; merged at 2026-09-08T04:10:41Z |
 | `1fbd32d2524a13e2dad0d5f705da8301dec952e6` | Slice 8a normal merge of PR #115, final reviewed head `0c4a3061d286db17c4d6f20ca5b07489a42eeafe` | Full CI 34193577478 and CodeQL 34193574648 passed; all review threads resolved; merged at 2026-09-08T06:21:07Z |
-| `feat/isolated-release-acceptance`, based on `1fbd32d` | Slice 8b, created only after PR #115 merged | Verified archived source restored; remaining acceptance review repairs and fresh integration checks in progress |
+| `feat/isolated-release-acceptance`, based on `1fbd32d` | Slice 8b in PR #116, created only after PR #115 merged | Initial head `1689db3` passed hosted publication and CodeQL; Windows test-fixture failures and two review findings are addressed in the follow-up below |
 
 
 The historical rows describe each slice at its own merge. Current state:
@@ -33,7 +33,7 @@ The historical rows describe each slice at its own merge. Current state:
 | Unsigned RC package construction | Integrated after explicit authorization on 8 September | Builder and Windows orchestration honor recorded policy | Final PR #114 hosted checks passed; local regression details below | Pending |
 | V5 retirement, migration and obsolete models | Integrated through slice 8a | Readers and CLI atomic writer connected; old models removed | Full final-head CI, including Windows data and publication, passed at `0c4a306` | Pending |
 | Authored-world marker validation | Integrated through slice 8a | Editor validation and owned prefab instantiation connected | Full CI and CodeQL passed; fifteen additional filesystem-only fixture checks pass locally | Fourteen Unity EditMode cases and actual spawn pending |
-| Acceptance isolation | Slice 8b working tree | Runtime/CLI/release admission connected locally; not integrated | Full local C#/Dart/Flutter and Windows build pass; hosted CI pending | Pending isolated host and actual game evidence |
+| Acceptance isolation | Slice 8b through PR #116; not yet integrated at this update | Runtime/CLI/release admission connected | Full local C#/Dart/Flutter and Windows build pass; initial hosted publication and CodeQL pass; repaired Windows tests need fresh CI | Pending isolated host and actual game evidence |
 
 No release tag, release dispatch or publication has occurred. The checkout is
 not release-ready. Slice 8b starts from the merged slice 8a revision; no subsequent
@@ -1786,3 +1786,86 @@ Refreshed `origin/dev` remains `1fbd32d`. Normal protected CI and review still p
 integration. No real candidate, game/Editor acceptance, release tag or publication
 has occurred; the separately recorded reviewer and isolated-host prerequisites
 remain pending.
+
+
+## PR #116 review and initial hosted checks
+
+Initial head `1689db3114631755dde58a5732eed4adc2e6e492` passed full hosted
+publication, C#, Linux domain/data/CLI, Flutter, all seven generated-template
+lifecycles and repository audits in
+[CI 34197044470](https://github.com/Furroxide/TopiaForge/actions/runs/34197044470).
+Windows data failed eight tests (538 passed, four skipped), so the aggregate CI
+failed. [CodeQL 34197041913](https://github.com/Furroxide/TopiaForge/actions/runs/34197041913)
+passed all four analyses with zero open findings. The successful hosted Linux
+publication remains separate from the recorded local Windows Dartdoc limitation.
+
+Seven Windows failures came from negative ACK fixtures using `path.relative`
+without an explicit base. With checkout and TEMP on different drives, the result
+is still absolute, so the test submitted a valid path. An isolated test-process
+wrapper using different local drives reproduced exactly eight passes and seven
+failures. The fixture now uses an explicit same-drive base, asserts that the
+negative operand is actually relative, and verifies its resolution separately.
+The cross-drive rerun passes all fifteen ACK cases; the combined admission,
+ACK and comparator suite passes 53. Production raw-path admission was not weakened.
+
+Copilot's path review found unconditional lowercasing in equality, overlap and
+persistent-data containment. These operations now use the path package's host
+semantics consistently. Seven regressions were added before the fix; they passed
+on Windows both before and after it. No local Linux failure is claimed: a matching
+existing Flutter-bundled Linux runtime was unavailable. Fresh Linux CI must execute
+the case-sensitive negative branches. The focused Windows acceptance suite passed
+53 cases before the separate cross-drive fixture repair.
+
+
+The eighth hosted failure exposed a harmless-child fixture publication race:
+the PID marker existed before `writeAsString` supplied its bytes. A deterministic
+real-child barrier paused after opening the output and reproduced the incorrect
+visibility before the fix. The fixture now flushes a same-directory temporary
+file and renames it into place for PID and sibling-response publication. All four
+native fault/control/publication tests pass; original handle, zero-reopen,
+allocation and unrelated-child assertions remain intact. No production native
+code changed for this fixture repair.
+
+
+A fresh read-only inventory on 8 September fully enumerated review threads for
+#68, #99, #92, #95, #97, #96, #77 and #72: none remained unresolved. #68/#99 have
+green older heads but need current-dev integration checks and contain distinct
+work. #92's configuration is already on dev and awaits the normal main release
+promotion. The dependency proposals still have concrete failures: TypeScript 7
+peer resolution (#95), Roslyn 5.9 versus the pinned 5.6 compiler (#96/#97), workflow
+conflicts and trust assertions (#77), and a mismatched Flutter lockfile (#72).
+Their proposed versions are not fully present on dev; they are not blanket
+supersession candidates and do not waive this release's checks.
+
+
+The receipt review first reproduced two failures across three cases: a transported
+copy reached native callbacks instead of the captured object, and successful
+cleanup retained ownership. Follow-up two-launch tests then reproduced stale and
+failed request IDs claiming a newer receipt. A disposal barrier also reproduced
+lost cleanup ownership when repository disposal completed during native creation.
+The expanded pre-fix run passed five cases and failed three (request-bound ACK
+admission and disposal); these are separate from the original clone regression.
+
+Acceptance now retains a request-to-original-receipt mapping at successful
+creation. One guard validates it for both ACK reads and stop, requiring that exact
+object to remain owned. Native callbacks receive only that object; mappings are
+consumed after confirmed exit and retained for unknown liveness. Disposal closes
+monitoring while preserving acceptance cleanup, including a child returned after
+disposal. Fifteen focused ownership cases pass (eight new acceptance cases and
+seven existing V4 receipt-authority cases), with clean analysis and formatting.
+These regressions use public repository launch/stop paths, synthetic installations
+and controlled receipt callbacks; they do not establish Unity behavior.
+
+
+The complete follow-up Windows data suite passes **562 tests with four existing
+platform skips**. Formatting verifies 547 scoped Dart files without changes; all
+553 non-generated tracked/new Dart files meet the 500-line limit. Independent
+review of the final path, request/receipt, disposal and fixture changes found no
+additional actionable defects. The complete CLI suite passes **492 tests with four platform skips**, including
+the relocated packaged SDK and all seven generated-template lifecycles. Both
+changed-package analyzers are clean. After the fixture, forced normal NuGet
+restore and exact whole-solution formatting pass. The fresh Release build has
+zero warnings/errors and all eleven SDK packages plus seven rebuilt no-argument
+harnesses pass. Required repository, fixture, README and documentation audits
+pass. Logs use `tf-pr116-{data,cli,final}-*.log` in the private temporary directory.
+Fresh Windows/Linux hosted CI still precedes integration.

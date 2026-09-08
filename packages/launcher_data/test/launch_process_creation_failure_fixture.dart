@@ -306,6 +306,8 @@ final class NativeFailureFixture {
   File get script => File(p.join(root.path, 'harmless child.dart'));
   File get marker => File(p.join(root.path, 'created.marker'));
   File get stop => File(p.join(root.path, 'created.stop'));
+  File get publicationReady => File(p.join(root.path, 'publication.ready'));
+  File get publicationResume => File(p.join(root.path, 'publication.resume'));
   File get siblingMarker => File(p.join(root.path, 'sibling.marker'));
   File get siblingStop => File(p.join(root.path, 'sibling.stop'));
   Process? sibling;
@@ -328,12 +330,31 @@ final class NativeFailureFixture {
     );
     await fixture.script.writeAsString(r'''
 import 'dart:async'; import 'dart:io';
+Future<void> publish(String path, String text, [String? ready, String? resume]) async {
+  // Publish only the complete handshake: opening the final name exposes an
+  // empty PID file to a parent that is polling for existence.
+  final output = File('$path.publishing');
+  await output.create();
+  if (ready != null && resume != null) {
+    await File(ready).writeAsString('opened');
+    final elapsed = Stopwatch()..start();
+    while (!File(resume).existsSync()) {
+      if (elapsed.elapsed >= const Duration(seconds: 10)) {
+        throw TimeoutException('Test did not release the publication barrier.');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
+  }
+  await output.writeAsString(text, flush: true);
+  await output.rename(path);
+}
 Future<void> main(List<String> args) async {
-  await File(args[0]).writeAsString('$pid');
+  await publish(args[0], '$pid', args.length > 2 ? args[2] : null,
+    args.length > 3 ? args[3] : null);
   final elapsed = Stopwatch()..start();
   while (!File(args[1]).existsSync() && elapsed.elapsed < const Duration(seconds: 30)) {
     if (File('${args[1]}.ping').existsSync() && !File('${args[1]}.pong').existsSync()) {
-      await File('${args[1]}.pong').writeAsString('alive');
+      await publish('${args[1]}.pong', 'alive');
     }
     await Future<void>.delayed(const Duration(milliseconds: 20));
   }
@@ -362,13 +383,21 @@ Future<void> main(List<String> args) async {
     await waitForFile(File('${siblingStop.path}.pong'));
   }
 
-  Future<LaunchProcessReceipt> start() =>
+  Future<LaunchProcessReceipt> start({bool pausePublication = false}) =>
       WindowsLaunchProcessCreator(
         processApi: calls.processCalls,
         creationApi: calls,
       ).start(
         executable: executable,
-        arguments: [script.path, marker.path, stop.path],
+        arguments: [
+          script.path,
+          marker.path,
+          stop.path,
+          if (pausePublication) ...[
+            publicationReady.path,
+            publicationResume.path,
+          ],
+        ],
         workingDirectory: root.path,
         environment: const {},
         inheritParentEnvironment: false,

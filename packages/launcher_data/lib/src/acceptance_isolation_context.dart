@@ -159,10 +159,7 @@ final class AcceptanceIsolationContext {
         );
       }
     }
-    if (!p.isWithin(
-          identity.localAppDataLow.toLowerCase(),
-          persistentDataRoot.toLowerCase(),
-        ) ||
+    if (!p.isWithin(identity.localAppDataLow, persistentDataRoot) ||
         sameAcceptancePath(identity.userProfile, normalUserProfile)) {
       throw StateError(
         'Native persistent data is not inside the isolated OS known folder.',
@@ -246,12 +243,13 @@ String acceptancePath(Map<String, Object?> value, String key) {
 }
 
 bool sameAcceptancePath(String a, String b) =>
-    p.normalize(p.absolute(a)).toLowerCase() ==
-    p.normalize(p.absolute(b)).toLowerCase();
+    p.equals(p.absolute(a), p.absolute(b));
 bool acceptancePathsOverlap(String a, String b) {
-  final left = p.normalize(p.absolute(a)).toLowerCase();
-  final right = p.normalize(p.absolute(b)).toLowerCase();
-  return left == right || p.isWithin(left, right) || p.isWithin(right, left);
+  final left = p.normalize(p.absolute(a));
+  final right = p.normalize(p.absolute(b));
+  return p.equals(left, right) ||
+      p.isWithin(left, right) ||
+      p.isWithin(right, left);
 }
 
 void requireAcceptanceUnlinkedPath(String path) {

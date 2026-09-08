@@ -9,7 +9,9 @@ Product candidate: `0.1.0-rc.1`. Recommendation: **NO-SHIP**.
 **Current redesign checkpoint, 8 September 2026:** slices 1–7, release-preparation
 slice 7a and retirement/world-fix slice 8a are integrated (`1fbd32d`). Slice 8a
 passed full CI and CodeQL through #115; its superseded #102–105 source stack is
-archived and closed. Slice 8b adds isolated acceptance and is under verification.
+archived and closed. Slice 8b adds isolated acceptance through #116; initial hosted
+publication and CodeQL pass, while its Windows test-fixture and review repairs
+require fresh CI.
 Candidate qualification and live acceptance remain pending.
 The dated evidence below is historical and does not certify this candidate.
 Current revision-specific results are in
