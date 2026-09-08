@@ -2352,3 +2352,17 @@ harnesses pass, including V1 launch coverage and 363 conformance fixtures.
 The test also requires schema-3 acknowledgement hashes and confirmed owned
 process exit. Scoped formatting and whitespace checks pass. This is automated
 disclosure-contract coverage; it supplies no live native or candidate evidence.
+The next hosted run at `dbac6c9` passed C#, all seven harnesses, Dart/Flutter
+suites, templates and CodeQL, then exposed the same obsolete RC2 promise in
+`website/test/release-operations.test.mjs`. Its website result was 49 passes
+and one failure before publication. That assertion is aligned with the current
+Windows-only policy and the unavailable Linux isolation/evidence path, retaining
+the other inventory, qualification, signing and support checks. Both failed
+revisions remain recorded; neither is described as a passing publication run.
+The repaired website suite passes all 50 tests with Node 24.18.0; the other
+eight release-operations cases remain unchanged. Content checks cover 26 pages,
+five snippets and three template projects; Markdown checks cover 127 files.
+Astro checks report zero errors/warnings/hints and the site build produces 27
+pages. A tracked test/script audit finds no further obsolete guide assertion.
+These local checks do not include the combined DocFX/Dart references and search
+publication; that remains required in fresh Linux CI for the repaired revision.
