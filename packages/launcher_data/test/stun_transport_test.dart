@@ -13,11 +13,11 @@ void main() {
     addTearDown(fixture.close);
 
     final first = fixture.transport.request(fixture.endpoint);
-    fixture.reply(await fixture.nextRequest(), mappedPort: 41001);
+    await fixture.reply(await fixture.nextRequest(), mappedPort: 41001);
     expect((await first)?.mapped.port, 41001);
 
     final second = fixture.transport.request(fixture.endpoint);
-    fixture.reply(await fixture.nextRequest(), mappedPort: 41002);
+    await fixture.reply(await fixture.nextRequest(), mappedPort: 41002);
     expect((await second)?.mapped.port, 41002);
     expect(fixture.requestCount, 2);
   });
@@ -33,7 +33,7 @@ void main() {
     expect(await first, isNull);
 
     final second = fixture.transport.request(fixture.endpoint);
-    fixture.reply(await fixture.nextRequest(), mappedPort: 41002);
+    await fixture.reply(await fixture.nextRequest(), mappedPort: 41002);
     expect((await second)?.mapped.port, 41002);
     expect(fixture.requestCount, 2);
   });
@@ -68,8 +68,8 @@ void main() {
 
     final second = fixture.transport.request(fixture.endpoint);
     final secondRequest = await fixture.nextRequest();
-    fixture.reply(firstRequest, mappedPort: 41001);
-    fixture.reply(secondRequest, mappedPort: 41002);
+    await fixture.reply(firstRequest, mappedPort: 41001);
+    await fixture.reply(secondRequest, mappedPort: 41002);
     expect((await second)?.mapped.port, 41002);
   });
 
@@ -80,7 +80,7 @@ void main() {
     final first = fixture.transport.request(fixture.endpoint);
     final firstRequest = await fixture.nextRequest();
     expect(await fixture.transport.request(fixture.endpoint), isNull);
-    fixture.reply(firstRequest, mappedPort: 41001);
+    await fixture.reply(firstRequest, mappedPort: 41001);
     expect((await first)?.mapped.port, 41001);
     expect(fixture.requestCount, 1);
   });
@@ -108,7 +108,7 @@ void main() {
           changeAddress: requested.address,
           changePort: requested.port,
         );
-        fixture.reply(
+        await fixture.reply(
           await fixture.nextRequest(),
           mappedPort: 41001,
           from: sender,
@@ -131,8 +131,8 @@ void main() {
     );
     final pending = fixture.transport.request(fixture.endpoint);
     final request = await fixture.nextRequest();
-    fixture.reply(request, mappedPort: 41001, from: sender);
-    fixture.reply(request, mappedPort: 41002);
+    await fixture.reply(request, mappedPort: 41001, from: sender);
+    await fixture.reply(request, mappedPort: 41002);
     expect((await pending)?.mapped.port, 41002);
   });
 }
@@ -142,6 +142,10 @@ class _LoopbackFixture {
   _LoopbackFixture(this._server, this.transport) {
     _server.writeEventsEnabled = false;
     _subscription = _server.listen((event) {
+      if (event == RawSocketEvent.write) {
+        _writeReady.remove(_server)?.complete();
+        return;
+      }
       if (event != RawSocketEvent.read) return;
       for (
         var datagram = _server.receive();
@@ -179,6 +183,8 @@ class _LoopbackFixture {
   final UdpStunTransport transport;
   final Queue<Datagram> _requests = Queue<Datagram>();
   final List<RawDatagramSocket> _replySources = [];
+  final List<StreamSubscription<RawSocketEvent>> _replySubscriptions = [];
+  final Map<RawDatagramSocket, Completer<void>> _writeReady = {};
   late final StreamSubscription<RawSocketEvent> _subscription;
   Completer<void> _arrival = Completer<void>();
   int requestCount = 0;
@@ -216,15 +222,23 @@ class _LoopbackFixture {
       changePort ? reservation?.port ?? 0 : _server.port,
     );
     _replySources.add(socket);
+    socket.writeEventsEnabled = false;
+    _replySubscriptions.add(
+      socket.listen((event) {
+        if (event == RawSocketEvent.write) {
+          _writeReady.remove(socket)?.complete();
+        }
+      }),
+    );
     expect(socket.port == _server.port, !changePort);
     return socket;
   }
 
-  void reply(
+  Future<void> reply(
     Datagram request, {
     required int mappedPort,
     RawDatagramSocket? from,
-  }) {
+  }) async {
     final response = Uint8List(32);
     final view = ByteData.sublistView(response);
     view.setUint16(0, 0x0101);
@@ -238,11 +252,17 @@ class _LoopbackFixture {
       response[28 + index] =
           request.address.rawAddress[index] ^ response[4 + index];
     }
-    final sent = (from ?? _server).send(
-      response,
-      request.address,
-      request.port,
-    );
+    final sender = from ?? _server;
+    var sent = sender.send(response, request.address, request.port);
+    while (sent == 0) {
+      // The OS may apply backpressure to adjacent replies. Wait for this owned
+      // socket to become writable before retrying the same complete datagram.
+      final writable = Completer<void>();
+      _writeReady[sender] = writable;
+      sender.writeEventsEnabled = true;
+      await writable.future.timeout(const Duration(seconds: 1));
+      sent = sender.send(response, request.address, request.port);
+    }
     expect(
       sent,
       response.length,
@@ -253,6 +273,9 @@ class _LoopbackFixture {
   Future<void> close() async {
     await transport.close();
     await _subscription.cancel();
+    for (final subscription in _replySubscriptions) {
+      await subscription.cancel();
+    }
     for (final socket in _replySources) {
       socket.close();
     }
