@@ -7,6 +7,23 @@ extension _ProcessHelpers on LocalLauncherRepository {
     LaunchSelection? selectionOverride,
     required String message,
   }) async {
+    final acceptance = _acceptanceIsolation;
+    if (acceptance != null) {
+      acceptance.verify();
+      if (_acceptanceChallenge == null ||
+          !RegExp(r'^[0-9a-f]{64}$').hasMatch(_acceptanceChallenge)) {
+        throw StateError(
+          'Acceptance launch requires its private challenge before staging.',
+        );
+      }
+      if (!sameAcceptancePath(install.path, acceptance.gameRoot) ||
+          profile.launchSettings.extraArguments.isNotEmpty ||
+          profile.launchSettings.environment.isNotEmpty) {
+        throw StateError(
+          'Acceptance forbids another install or profile process overrides.',
+        );
+      }
+    }
     final refreshed = await _validateGameDirectory(install.path);
     if (refreshed.needsRepair) {
       return const LaunchResult(
@@ -60,7 +77,25 @@ extension _ProcessHelpers on LocalLauncherRepository {
     final launchFile = await store.writeRequest(configuration);
     late final Map<String, String> environment;
     try {
-      environment = _profileLaunchEnvironment(layout, profile, launchFile.path);
+      if (acceptance == null) {
+        environment = _profileLaunchEnvironment(
+          layout,
+          profile,
+          launchFile.path,
+        );
+      } else {
+        _acceptanceRequests[requestId] = await store.writeAcceptanceRequest(
+          context: acceptance,
+          profile: configuration,
+          challenge: _acceptanceChallenge!,
+          now: DateTime.now().toUtc(),
+        );
+        environment = acceptanceLaunchEnvironment(
+          acceptance,
+          launchFile.path,
+          requestId,
+        );
+      }
       if (await _runningForLaunch(refreshed)) {
         await store.deleteRequest(configuration);
         return const LaunchResult(
@@ -111,6 +146,8 @@ extension _ProcessHelpers on LocalLauncherRepository {
           arguments: arguments,
           workingDirectory: layout.gameRoot,
           environment: environment,
+          inheritParentEnvironment: acceptance == null,
+          requiredWindowsIdentity: acceptance?.identity,
         ),
         layout.executablePath,
       );
@@ -127,8 +164,11 @@ extension _ProcessHelpers on LocalLauncherRepository {
         : null;
     final process = _correlatedReceiptIdentity(receipt, layout.executablePath);
     final identity = _launchInstallIdentity(refreshed);
-    if (!_disposed && process != null) {
+    if (process != null && (!_disposed || acceptance != null)) {
+      // Disposal closes monitoring, but cannot release a created acceptance
+      // process: its original receipt must remain available for owned cleanup.
       _ownedLaunchProcesses[identity] = process;
+      if (acceptance != null) _acceptanceReceipts[requestId] = process;
     }
     final activity = LaunchActivity(
       requestId: requestId,
@@ -184,6 +224,8 @@ Future<LaunchProcessReceipt> _startGameWithReceipt(
   arguments: request.arguments,
   workingDirectory: request.workingDirectory,
   environment: request.environment,
+  inheritParentEnvironment: request.inheritParentEnvironment,
+  requiredWindowsIdentity: request.requiredWindowsIdentity,
 );
 
 extension _ProcessCreation on LocalLauncherRepository {

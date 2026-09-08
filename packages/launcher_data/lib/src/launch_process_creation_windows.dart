@@ -7,7 +7,18 @@ Future<LaunchProcessReceipt> _createWindowsProcess(
   List<String> arguments,
   String directory,
   Map<String, String> overrides,
+  bool inheritParentEnvironment,
+  WindowsAcceptanceIdentity? requiredIdentity,
+  WindowsProcessApi processApi,
+  WindowsCreationApi api,
 ) async {
+  if (requiredIdentity != null &&
+      (inheritParentEnvironment ||
+          !readWindowsAcceptanceIdentity().matches(requiredIdentity))) {
+    throw StateError(
+      'Isolated creation requires its admitted token and explicit environment.',
+    );
+  }
   final command = [
     '"$executable"',
     ...arguments.map(_quoteWindowsArgument),
@@ -16,8 +27,7 @@ Future<LaunchProcessReceipt> _createWindowsProcess(
   if (command.length >= 32767) {
     throw ArgumentError('The Windows process command line is too long.');
   }
-  final api = _WindowsCreationApi();
-  final memory = _WindowsCreationMemory();
+  final memory = _WindowsCreationMemory(processApi);
   _WindowsOwnedProcess? process;
   Pointer<Void> thread = nullptr;
   var admitted = false;
@@ -25,14 +35,19 @@ Future<LaunchProcessReceipt> _createWindowsProcess(
     final application = memory.text(executable);
     final commandLine = memory.text(command);
     final currentDirectory = memory.text(directory);
-    final environment = _windowsEnvironment(memory, api, overrides);
+    final environment = _windowsEnvironment(
+      memory,
+      api,
+      overrides,
+      inheritParentEnvironment,
+    );
     final startup = memory
-        .allocate(sizeOf<_WindowsStartupInfo>())
-        .cast<_WindowsStartupInfo>();
-    startup.ref.cb = sizeOf<_WindowsStartupInfo>();
+        .allocate(sizeOf<WindowsStartupInfo>())
+        .cast<WindowsStartupInfo>();
+    startup.ref.cb = sizeOf<WindowsStartupInfo>();
     final information = memory
-        .allocate(sizeOf<_WindowsProcessInformation>())
-        .cast<_WindowsProcessInformation>();
+        .allocate(sizeOf<WindowsProcessInformation>())
+        .cast<WindowsProcessInformation>();
     // Detached, a new process group, Unicode environment, and suspended startup.
     // No inheritable handles, console pipes, job objects, or shell are created.
     if (api.create(
@@ -59,12 +74,21 @@ Future<LaunchProcessReceipt> _createWindowsProcess(
     process = _WindowsOwnedProcess.created(
       information.ref.processId,
       information.ref.process,
+      processApi,
     );
     final identity = await process.identity();
     if (!_validIdentity(identity) ||
         !_sameImage(identity.executablePath, executable)) {
       throw StateError(
         'The newly created executable identity could not be verified.',
+      );
+    }
+    if (requiredIdentity != null &&
+        !_readWindowsAcceptanceIdentity(
+          process.handle,
+        ).matches(requiredIdentity)) {
+      throw StateError(
+        'The original created process token differs from admitted QA.',
       );
     }
     // One suspension is ours. Any different count is a failed launch admission.
@@ -109,8 +133,9 @@ String _quoteWindowsArgument(String argument) {
 
 Pointer<Uint16> _windowsEnvironment(
   _WindowsCreationMemory memory,
-  _WindowsCreationApi api,
+  WindowsCreationApi api,
   Map<String, String> overrides,
+  bool inheritParentEnvironment,
 ) {
   final entries =
       <
@@ -123,7 +148,8 @@ Pointer<Uint16> _windowsEnvironment(
         })
       >[];
   for (final source in [
-    (values: Platform.environment, override: false),
+    if (inheritParentEnvironment)
+      (values: Platform.environment, override: false),
     (values: overrides, override: true),
   ]) {
     for (final entry in source.values.entries) {
@@ -165,7 +191,9 @@ Pointer<Uint16> _windowsEnvironment(
 }
 
 final class _WindowsCreationMemory {
-  final api = _WindowsProcessApi();
+  _WindowsCreationMemory([WindowsProcessApi? api])
+    : api = api ?? WindowsProcessApi();
+  final WindowsProcessApi api;
   late final heap = api.processHeap();
   final allocations = <Pointer<Void>>[];
   Pointer<Void> allocate(int bytes) {

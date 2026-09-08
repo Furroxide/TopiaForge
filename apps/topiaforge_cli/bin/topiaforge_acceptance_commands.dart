@@ -3,10 +3,13 @@ part of 'topiaforge.dart';
 extension _TopiaForgeAcceptanceCommands on _TopiaForgeCli {
   static const _acceptanceUsage =
       'Usage: topiaforge acceptance run [--game-dir path] [--package path] '
-      '[--output dir] [--case id ...] [--all] [--timeout-seconds 30..3600] '
+      '--isolation-record path [--output dir] [--case id ...] [--all] [--timeout-seconds 30..3600] '
       '[--skip-runtime-install] [--skip-launch]';
 
   Future<int> _acceptance(List<String> args) async {
+    if (args.firstOrNull == 'verify-isolation') {
+      return _verifyAcceptanceIsolation(args.skip(1).toList());
+    }
     if (args.firstOrNull != 'run') {
       throw UsageError(_acceptanceUsage);
     }
@@ -53,6 +56,7 @@ extension _TopiaForgeAcceptanceCommands on _TopiaForgeCli {
           ? ''
           : p.normalize(p.absolute(gameDirectory)),
       packagePath: absoluteIfPresent('--package'),
+      isolationRecordPath: absoluteIfPresent('--isolation-record'),
       outputDirectory: output,
       requiredCases: parsed.cases,
       timeout: Duration(seconds: timeoutSeconds),
@@ -66,6 +70,10 @@ extension _TopiaForgeAcceptanceCommands on _TopiaForgeCli {
     );
     final runner = LiveAcceptanceRunner(
       commandRunner: (arguments) => run(arguments),
+      isolatedCommandRunner: (arguments, context) => _TopiaForgeCli(
+        developerRepository,
+        acceptanceIsolation: context,
+      ).run(arguments),
     );
     final evidence = await runner.run(options);
     stdout.writeln(
@@ -73,6 +81,30 @@ extension _TopiaForgeAcceptanceCommands on _TopiaForgeCli {
       '${evidence.requiredCases.length} required cases.',
     );
     stdout.writeln('Evidence: ${p.join(output, 'acceptance-result.json')}');
+    return 0;
+  }
+
+  Future<int> _verifyAcceptanceIsolation(List<String> args) async {
+    const usage =
+        'Usage: topiaforge acceptance verify-isolation --evidence path --isolation-record path';
+    if (args.contains('--help')) {
+      stdout.writeln(usage);
+      return 0;
+    }
+    final parsed = _parseFlagArguments(
+      args,
+      {'--evidence', '--isolation-record'},
+      {},
+      usage,
+    );
+    if (parsed.values.length != 2) throw UsageError(usage);
+    final summary = await verifyLiveAcceptanceIsolation(
+      evidencePath: p.normalize(p.absolute(parsed.values['--evidence']!)),
+      isolationRecordPath: p.normalize(
+        p.absolute(parsed.values['--isolation-record']!),
+      ),
+    );
+    stdout.writeln(jsonEncode(summary));
     return 0;
   }
 
@@ -111,6 +143,7 @@ extension _TopiaForgeAcceptanceCommands on _TopiaForgeCli {
     const valueFlags = {
       '--game-dir',
       '--package',
+      '--isolation-record',
       '--output',
       '--case',
       '--timeout-seconds',

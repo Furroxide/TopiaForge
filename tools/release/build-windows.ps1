@@ -37,11 +37,17 @@ param(
     [string]$UnityPath,
 
     [Parameter(Mandatory = $true)]
-    [string]$GameDirectory
+    [string]$GameDirectory,
+
+    [Parameter(Mandatory = $true)]
+    [string]$AcceptanceIsolationRecord
 )
+
+. (Join-Path $PSScriptRoot "acceptance-isolation.ps1")
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+$AcceptanceIsolationRecord = [System.IO.Path]::GetFullPath($AcceptanceIsolationRecord)
 
 function Invoke-Checked {
     param(
@@ -261,10 +267,13 @@ function Remove-OwnedProjectDirectory {
     }
 }
 
+$isolationRecordHash = Get-ReleaseIsolationRecordHash -Path $AcceptanceIsolationRecord
 $repository = (Resolve-Path -LiteralPath $RepositoryRoot).Path
 $canonical = (Resolve-Path -LiteralPath $CanonicalArchive).Path
 $output = [System.IO.Path]::GetFullPath($OutputDirectory)
 $privateEvidenceRoot = [System.IO.Path]::GetFullPath($PrivateEvidenceDirectory)
+Assert-ReleaseIsolationRecordOutsideOutputs -RecordPath $AcceptanceIsolationRecord `
+    -OutputDirectories @($output, $privateEvidenceRoot)
 if ($output -eq $repository -or
     $repository.StartsWith($output.TrimEnd("\", "/") + [System.IO.Path]::DirectorySeparatorChar,
         [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -645,6 +654,7 @@ $gameEvidence = Join-Path $acceptanceDirectory "robotopia"
 Invoke-Checked -FilePath $packagedCli -WorkingDirectory $repository -Arguments @(
     "acceptance", "run",
     "--game-dir", $GameDirectory, "--output", $gameEvidence,
+    "--isolation-record", $AcceptanceIsolationRecord,
     "--timeout-seconds", "1800", "--dev-cli", $packagedCli,
     "--dev-project", $journeyProject, "--required-loaded-package", $journeyId,
     "--required-log-marker", $marker, "--all"
@@ -653,9 +663,14 @@ $gameEvidenceFile = Join-Path $gameEvidence "acceptance-result.json"
 if (-not (Test-Path -LiteralPath $gameEvidenceFile -PathType Leaf)) {
     throw "Robotopia acceptance did not produce its bounded result."
 }
+$null = Get-ReleaseIsolationRecordHash -Path $AcceptanceIsolationRecord `
+    -ExpectedSha256 $isolationRecordHash
+$isolation = Get-VerifiedReleaseAcceptanceIsolation -EvidencePath $gameEvidenceFile `
+    -IsolationRecordPath $AcceptanceIsolationRecord -CliPath $packagedCli `
+    -WorkingDirectory $repository
 $gameAcceptance = Get-Content -LiteralPath $gameEvidenceFile -Raw |
     ConvertFrom-Json
-if ($gameAcceptance.schemaVersion -ne 2 -or
+if ($gameAcceptance.schemaVersion -ne 3 -or
     [string]$gameAcceptance.acceptanceChallenge -cnotmatch
         "^[0-9a-f]{64}$" -or
     [string]$gameAcceptance.acceptancePackageReceipt.sourceSha256 -cnotmatch
@@ -666,8 +681,7 @@ if ($gameAcceptance.schemaVersion -ne 2 -or
     @($gameAcceptance.requiredLoadedPackageReceipt.criticalFiles).Count -lt 1) {
     throw "Robotopia acceptance did not bind its challenge and exact package receipts."
 }
-$lastRunPath = Join-Path $GameDirectory `
-    "BepInEx/TopiaForge/logs/last-run.json"
+$lastRunPath = Join-Path ([string]$isolation.managerRoot) "logs/last-run.json"
 if (-not (Test-Path -LiteralPath $lastRunPath -PathType Leaf)) {
     throw "Robotopia acceptance last-run evidence is missing."
 }

@@ -1,11 +1,14 @@
 import 'dart:ffi';
 import 'dart:io';
+import 'acceptance_isolation_identity.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 
 part 'launch_process_control_windows.dart';
+part 'launch_process_isolation_windows.dart';
 part 'launch_process_creation_windows.dart';
 part 'launch_process_creation_windows_abi.dart';
+part 'launch_process_windows_creator.dart';
 part 'launch_process_control_linux.dart';
 
 /// Receipt captured from the process creation operation, never a later PID lookup.
@@ -22,18 +25,33 @@ Future<LaunchProcessReceipt> startLaunchProcessWithReceipt({
   required List<String> arguments,
   required String workingDirectory,
   required Map<String, String> environment,
+  bool inheritParentEnvironment = true,
+  WindowsAcceptanceIdentity? requiredWindowsIdentity,
 }) async {
+  if (Platform.isWindows) {
+    return WindowsLaunchProcessCreator().start(
+      executable: executable,
+      arguments: arguments,
+      workingDirectory: workingDirectory,
+      environment: environment,
+      inheritParentEnvironment: inheritParentEnvironment,
+      requiredWindowsIdentity: requiredWindowsIdentity,
+    );
+  }
   final args = List<String>.of(arguments);
   final overrides = Map<String, String>.of(environment);
   _validateCreationInputs(executable, args, workingDirectory, overrides);
-  if (Platform.isWindows) {
-    return _createWindowsProcess(executable, args, workingDirectory, overrides);
+  if (requiredWindowsIdentity != null) {
+    throw UnsupportedError(
+      'Isolated acceptance requires Windows native creation.',
+    );
   }
   final process = await Process.start(
     executable,
     args,
     workingDirectory: workingDirectory,
     environment: overrides,
+    includeParentEnvironment: inheritParentEnvironment,
     mode: ProcessStartMode.detached,
   );
   return LaunchProcessReceipt(pid: process.pid);

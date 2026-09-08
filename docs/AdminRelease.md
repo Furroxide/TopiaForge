@@ -8,8 +8,8 @@ signed update metadata, and publishes after approval of the protected
 The entry point is:
 
 ```powershell
-./tools/release-admin.ps1 preflight
-./tools/release-admin.ps1 build
+./tools/release-admin.ps1 preflight -AcceptanceIsolationRecord C:\QA\isolation.json
+./tools/release-admin.ps1 build -AcceptanceIsolationRecord C:\QA\isolation.json
 ```
 
 `build` contains a mandatory interactive window: the live `TF-ACCEPT`
@@ -59,8 +59,22 @@ candidate even when a later commit has the same tree.
 before sealing its validated handoff. Run live acceptance in an isolated Windows
 user/session or virtual machine that isolates Unity's persistent data and does
 not access the normal user's data. A separate BepInEx profile alone is
-insufficient. The acceptance record carries the isolation kind and proof digest,
-not public usernames or paths. Once those exact bytes and private
+insufficient. Pass the already approved private provisioning record through
+`-AcceptanceIsolationRecord`; it is forwarded to the packaged CLI's
+`--isolation-record`. Preflight freezes its exact path and bytes; resume cannot replace that input.
+Keep the record outside all output/evidence directories that the build clears.
+Linked output directories and linked existing ancestors are rejected before cleanup.
+The record identifies a separate QA game installation, launcher/output roots and
+measured primary-token/known-folder identity. The current process must already be
+in that isolated Windows user/session or VM. Missing provisioning fails closed;
+no tool creates a user account or imports normal-player saves automatically.
+
+The private schema-3 `acceptance-result.json` retains the actual acknowledgement
+and byte hashes of both the provisioning record and runtime acknowledgement,
+plus confirmed owned-process exit. Its `gameDirectory` names the admitted QA
+installation; last-run evidence comes from that installation. Public candidate
+acceptance records carry only the isolation kind and reviewed proof digest,
+not usernames, paths, SID or the raw acknowledgement. Once those exact bytes and private
 evidence exist, place these reviewed, schema-valid records in the candidate's
 assets directory (normally `.release-local/<version>/assets`):
 

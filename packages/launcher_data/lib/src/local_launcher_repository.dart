@@ -25,6 +25,9 @@ import 'launch_staging_store.dart';
 import 'launch_storage_keys.dart';
 import 'launch_activity_monitor.dart';
 import 'launch_process_control.dart';
+import 'acceptance_isolation_context.dart';
+import 'acceptance_isolation_identity.dart';
+import 'acceptance_isolation_bootstrap.dart';
 
 part 'local_launcher_repository/game_layout.dart';
 part 'local_launcher_repository/game_install_discovery_helpers.dart';
@@ -50,6 +53,7 @@ part 'local_launcher_repository/launch_preview.dart';
 part 'local_launcher_repository/launch_admission.dart';
 part 'local_launcher_repository/profile_persistence.dart';
 part 'local_launcher_repository/process_helpers.dart';
+part 'local_launcher_repository/acceptance_launch_helpers.dart';
 part 'local_launcher_repository/registry_source_helpers.dart';
 part 'local_launcher_repository/registry_source_models.dart';
 part 'local_launcher_repository/repository_hooks.dart';
@@ -60,6 +64,8 @@ part 'local_launcher_repository/storage_helpers.dart';
 class LocalLauncherRepository implements GameInstallDiscoveryRepository {
   LocalLauncherRepository({
     String? dataRoot,
+    AcceptanceIsolationContext? acceptanceIsolation,
+    String? acceptanceChallenge,
     String? repositoryRoot,
     String? workingDirectory,
     String? knownGamePath,
@@ -74,7 +80,9 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
     GameProcessIdentityReader? gameProcessIdentityReader,
     GameProcessLiveness? gameProcessLiveness,
     GameProcessStopper? gameProcessStopper,
-  }) : _dataRoot = Directory(dataRoot ?? resolveTopiaForgeDataRoot()),
+  }) : _acceptanceIsolation = acceptanceIsolation,
+       _acceptanceChallenge = acceptanceChallenge,
+       _dataRoot = Directory(dataRoot ?? resolveTopiaForgeDataRoot()),
        _repositoryRoot = Directory(
          repositoryRoot ?? _findRepositoryRoot(workingDirectory),
        ),
@@ -95,12 +103,30 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
            gameProcessIdentityReader ?? _unverifiedInjectedProcess,
        _gameProcessLiveness = gameProcessLiveness ?? isLaunchProcessAlive,
        _gameProcessStopper = gameProcessStopper ?? stopLaunchProcess {
+    if (acceptanceIsolation == null && acceptanceChallenge != null) {
+      throw ArgumentError('Acceptance requires both isolation and challenge.');
+    }
+    if (acceptanceIsolation != null) {
+      acceptanceIsolation.verify();
+      if (!sameAcceptancePath(
+        _dataRoot.path,
+        acceptanceIsolation.launcherRoot,
+      )) {
+        throw ArgumentError(
+          'Acceptance launcher data root must match the admitted layout.',
+        );
+      }
+    }
     if (gameProcessCreator != null && gameProcessStarter != null) {
       throw ArgumentError(
         'Choose a creation receipt hook or a legacy process starter.',
       );
     }
   }
+  final AcceptanceIsolationContext? _acceptanceIsolation;
+  final String? _acceptanceChallenge;
+  final Map<String, AcceptanceIsolationRequest> _acceptanceRequests = {};
+  final Map<String, LaunchProcessIdentity> _acceptanceReceipts = {};
   final Directory _dataRoot;
   final Directory _repositoryRoot;
   final String? _knownGamePath;

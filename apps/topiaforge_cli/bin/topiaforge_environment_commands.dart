@@ -221,6 +221,8 @@ extension _TopiaForgeEnvironmentCommands on _TopiaForgeCli {
     }
 
     final launcher = LocalLauncherRepository(
+      acceptanceIsolation: acceptanceIsolation,
+      dataRoot: acceptanceIsolation?.launcherRoot,
       repositoryRoot: repoRoot,
       knownGamePath: _option(args, '--game-dir'),
     );

@@ -170,6 +170,7 @@
        implementation is compiled in and unit-tested (SceneCoordinatorTests + the live-sync deferral tests). -->
   <ItemGroup>
     <Compile Include="..\..\src\TopiaForge.ModManager\SceneCoordinator.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/PluginInitializationLifetime.cs" Link="Runtime/PluginInitializationLifetime.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/OwnerSceneTransitionService.cs" Link="Runtime/OwnerSceneTransitionService.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/OwnerCheckpointSubscription.cs" Link="Runtime/OwnerCheckpointSubscription.cs" />
     <Compile Include="../../mods/TopiaForge.Worlds/WorldNativeDispatchResult.cs" Link="Worlds/WorldNativeDispatchResult.cs" />

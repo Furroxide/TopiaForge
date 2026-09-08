@@ -30,6 +30,7 @@ extension _ProfileLaunchHelpers on LocalLauncherRepository {
     final required = layout.launchEnvironment();
     final reserved = {
       ProfileLaunchConfigurationV4.environmentVariable.toLowerCase(),
+      AcceptanceIsolationContext.environmentVariable.toLowerCase(),
       ...required.keys.map((key) => key.toLowerCase()),
     };
     final environment = <String, String>{};

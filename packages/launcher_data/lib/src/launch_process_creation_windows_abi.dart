@@ -1,7 +1,7 @@
 part of 'launch_process_control.dart';
 
 // Layout follows the native pointer width/alignment on Windows x86 and x64.
-final class _WindowsStartupInfo extends Struct {
+final class WindowsStartupInfo extends Struct {
   @Uint32()
   external int cb;
   external Pointer<Uint16> reserved;
@@ -33,7 +33,7 @@ final class _WindowsStartupInfo extends Struct {
   external Pointer<Void> standardError;
 }
 
-final class _WindowsProcessInformation extends Struct {
+final class WindowsProcessInformation extends Struct {
   external Pointer<Void> process;
   external Pointer<Void> thread;
   @Uint32()
@@ -42,8 +42,9 @@ final class _WindowsProcessInformation extends Struct {
   external int threadId;
 }
 
-final class _WindowsCreationApi {
-  static final library = _WindowsProcessApi.library;
+/// Source-internal native call adapter; each creator owns its instance.
+class WindowsCreationApi {
+  static final library = WindowsProcessApi.library;
   final create = library
       .lookupFunction<
         Int32 Function(
@@ -55,8 +56,8 @@ final class _WindowsCreationApi {
           Uint32,
           Pointer<Void>,
           Pointer<Uint16>,
-          Pointer<_WindowsStartupInfo>,
-          Pointer<_WindowsProcessInformation>,
+          Pointer<WindowsStartupInfo>,
+          Pointer<WindowsProcessInformation>,
         ),
         int Function(
           Pointer<Uint16>,
@@ -67,8 +68,8 @@ final class _WindowsCreationApi {
           int,
           Pointer<Void>,
           Pointer<Uint16>,
-          Pointer<_WindowsStartupInfo>,
-          Pointer<_WindowsProcessInformation>,
+          Pointer<WindowsStartupInfo>,
+          Pointer<WindowsProcessInformation>,
         )
       >('CreateProcessW');
   final resume = library
