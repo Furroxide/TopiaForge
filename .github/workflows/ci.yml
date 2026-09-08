@@ -334,6 +334,9 @@ jobs:
         shell: pwsh
         run: ./.github/actions/setup-flutter/test-setup-flutter.ps1
 
+      - name: Test neutral release workspaces
+        run: bash tools/test-prepare-neutral-build-root.sh
+
       - name: Test executable workflow source trust
         run: python3 .github/scripts/test_workflow_source_trust.py
 

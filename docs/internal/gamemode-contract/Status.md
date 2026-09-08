@@ -2110,3 +2110,64 @@ signing requirements. Qualification, exact-byte staging, Ed25519 update
 signatures and protected approval remain required. Pages source rules now match
 the implemented trusted-main/stable-tag workflow. No policy, readiness row,
 credential or repository protection changed in this documentation correction.
+
+## Release-head verification and neutral build roots
+
+PR #120 squash-merged normally at `7dbf08f35141780830cfb88a8f7046d718093bcf`
+on 8 September after full CI 34209930441 and CodeQL 34209928506 passed on
+reviewed `fad5129`. The verified signed merge includes the required sign-off,
+and its tree is identical to that reviewed head. Updating the PR description
+triggered a fresh policy check; the first merge attempt waited for that required
+check, then normal protected merge succeeded. No protection was bypassed.
+
+On the resulting release head, main-targeted CI 34210949124 passed, including
+Windows data, all generated templates and full documentation publication.
+CodeQL 34210944179 passed and the broader PR #119 comparison has no open
+findings. The earlier ten path findings therefore cleared on the actual release
+comparison as well as the narrower stabilization PR.
+
+[Release dry run 34210945161](https://github.com/Furroxide/TopiaForge/actions/runs/34210945161)
+then passed the repaired CLI restore, all eleven SDK audits and seven harnesses,
+both independent ecosystem builds, byte-identical comparison and residue scan.
+Its Windows package completed smoke tests, signed-update/forced-rollback tests,
+all seven packaged template lifecycles and artifact upload. These are hosted
+synthetic checks, not private candidate qualification or game evidence.
+
+The complete dry run still failed: Linux and macOS packages built successfully,
+but package smoke found `/home/runner/` in the Linux CLI and `/Users/runner/`
+in the macOS arm64 CLI. A completed job is not necessarily a successful one;
+build success must remain distinct from package validation. Those compilations
+used the runner's personal checkout and package cache. The package validator
+correctly rejected the embedded home paths and remains unchanged.
+
+The follow-up workflow repair compiles shipped CLIs from a fresh physical
+neutral source copy, a relocated pinned Dart SDK and a new locked package cache,
+then supplies those binaries through the existing prebuilt-CLI interface.
+Flutter builds use the same neutral source/SDK/cache boundary, including native
+plugin sources, macOS inspection and final archive construction. Hydrated
+tracked source is copied; generated package configurations are restored at the
+new location. Pinned SDK archive verification and source admission remain
+required. Local source-wiring regressions failed before these changes; the
+fresh hosted binary scans must validate every resulting artifact after merge.
+
+This hosted repair does not certify the administrator's future local source,
+SDK or cache locations. Production builds must also use neutral physical roots
+and pass the same unchanged binary scanner. The four non-game approvals,
+pinned-Editor execution, isolated QA provisioning and exact-candidate acceptance
+remain pending. PR #119 remains draft, with auto-merge off; no tag, candidate
+qualification or publication occurred.
+
+The neutral-root helper has thirteen passing behavioral cases on native Windows
+Git Bash and thirteen on Linux through WSL, including hydrated tracked bytes,
+paths with spaces, dirty/index refusals, personal-root rejection and cleanup
+identity checks. The replacement symlink test uses only an owned synthetic
+sentinel with native-strict link creation. The helper never reassigns the real
+home variables. macOS/BSD tool execution remains for the hosted runner.
+
+Source-wiring checks pass after reproducing the original missing neutral roots
+and the Windows drive-letter/PATH conversion defect. The optional Flutter
+installation input preserves the existing default path and verified archive
+flow. A final Release rebuild again reports zero warnings/errors and all eleven
+SDK audits/seven harnesses pass. Repository, fixture, documentation and pinned
+Dart checks pass; fresh hosted packaging remains necessary to prove clean binary
+bytes, and no production acceptance claim is made.
