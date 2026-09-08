@@ -14,6 +14,12 @@ namespace TopiaForge.ModManager.Tests
         private static int Main(string[] args)
         {
             UnityMainThreadGuard.CaptureCurrentThread();
+            if (args.Length == 1 && args[0] == "--robo-api-client")
+            {
+                var owned = Directory.CreateTempSubdirectory("TopiaForgeRoboApi-");
+                try { RoboApiClientTests.Run(owned.FullName); return 0; }
+                finally { owned.Delete(true); }
+            }
             if (args.Length == 1 && args[0] == "--world-marker-hierarchy") { WorldMarkerHierarchyTests.Run(FindRepoRoot()); return 0; }
             if (args.Length == 1 && args[0] == "--acceptance-isolation") { AcceptanceIsolationTests.Run(); AcceptanceIsolationStagingTests.Run(); AcceptancePluginLifecycleTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--runtime-launch-command") { var owned = Directory.CreateTempSubdirectory("TopiaForgeLaunchCommand-"); try { RuntimeLaunchCommandTests.Run(owned.FullName); RuntimeLaunchPublicationTests.Run(Path.Combine(owned.FullName, "publication")); return 0; } finally { owned.Delete(true); } }

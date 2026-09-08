@@ -101,7 +101,7 @@ verify_asset_uploaders() {
     --argjson generated "$workflow_generated_json" \
     '
       def staging_uploader:
-        .uploader.login == "furroxide" and
+        (.uploader.login | type == "string" and ascii_downcase == "furroxide") and
         .uploader.id == 221987073 and
         .uploader.type == "User" and
         (
@@ -109,7 +109,7 @@ verify_asset_uploaders() {
           .performed_via_github_app == null
         );
       def workflow_uploader:
-        .uploader.login == "github-actions[bot]" and
+        (.uploader.login | type == "string" and ascii_downcase == "github-actions[bot]") and
         .uploader.id == 41898282 and
         .uploader.type == "Bot" and
         (
@@ -155,7 +155,7 @@ jq -e \
    .body == $body and
    .prerelease == $prerelease and
    (.draft | type == "boolean") and
-   .author.login == "furroxide" and
+   (.author.login | type == "string" and ascii_downcase == "furroxide") and
    .author.id == 221987073 and
    .author.type == "User"' \
   "$release_file" >/dev/null || {

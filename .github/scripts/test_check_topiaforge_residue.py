@@ -72,6 +72,21 @@ class GeneratedPayloadAuditTests(unittest.TestCase):
                 self.assertTrue(self.scan_text(path, game + " interface"))
                 self.assertTrue(self.scan_text(path, "qa['" + game + "'] com." + game))
 
+    def test_windows_game_evidence_directory_is_a_narrow_game_fact(self) -> None:
+        game = "robo" + "topia"
+        for separator in ("/", "\\"):
+            evidence = separator.join(("evidence", "windows", game))
+            self.assertEqual([], self.scan_text("docs/AdminRelease.md", evidence))
+            for forbidden in (
+                "unrelated-" + evidence,
+                evidence + "-launcher",
+                evidence + ".mod.json",
+                evidence + " " + game + " interface",
+            ):
+                with self.subTest(forbidden=forbidden):
+                    self.assertTrue(self.scan_text("docs/AdminRelease.md", forbidden))
+        self.assertTrue(self.scan_text("docs/AdminRelease.md", "evidence/linux/" + game))
+
     def test_clean_nested_package_passes(self) -> None:
         package = zip_bytes(
             {

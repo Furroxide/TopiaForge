@@ -21,6 +21,7 @@ The [canonical brief](../GamemodeContractRedesign.md) is normative. The
 | `31ff4d49bd30c593e484a01407e47ca7871f7ca7` | Slice 7a normal merge of PR #114, reviewed head `80fa8f9fb6e8b1a7cc4af0d8c6c00d31820e1437` | CI 34185465503 and CodeQL 34185463190 passed; all four review threads resolved; merged at 2026-09-08T04:10:41Z |
 | `1fbd32d2524a13e2dad0d5f705da8301dec952e6` | Slice 8a normal merge of PR #115, final reviewed head `0c4a3061d286db17c4d6f20ca5b07489a42eeafe` | Full CI 34193577478 and CodeQL 34193574648 passed; all review threads resolved; merged at 2026-09-08T06:21:07Z |
 | `0182e19f166383685210151f07948e9909977b03` | Slice 8b normal merge of PR #116, final reviewed head `eda671d40b51cddff098f34437510be552c6e46e` | Full CI 34199629221 and CodeQL 34199625355 passed; both review threads resolved; merged at 2026-09-08T07:42:38Z |
+| `5acead7c855e899f0331b042a6794f424f48a467` | Documentation checkpoint normal merge of PR #117, final reviewed head `c2b410df7f6f11ea35525e25b265612631f11f26` | Full CI 34201562208 and CodeQL 34201557620 passed; review resolved; merged at 2026-09-08T08:03:20Z |
 
 
 The historical rows describe each slice at its own merge. Current state:
@@ -32,7 +33,7 @@ The historical rows describe each slice at its own merge. Current state:
 | Candidate qualification and publication guards | Integrated through slice 7a | CLI, administrator and publication paths connected | Final reviewed-head CI and CodeQL passed at `80fa8f9`; 441 local CLI tests passed with four platform skips | Pending; synthetic acceptance is not game evidence |
 | Unsigned RC package construction | Integrated after explicit authorization on 8 September | Builder and Windows orchestration honor recorded policy | Final PR #114 hosted checks passed; local regression details below | Pending |
 | V5 retirement, migration and obsolete models | Integrated through slice 8a | Readers and CLI atomic writer connected; old models removed | Full final-head CI, including Windows data and publication, passed at `0c4a306` | Pending |
-| Authored-world marker validation | Integrated through slice 8a | Editor validation and owned prefab instantiation connected | Full CI and CodeQL passed; fifteen additional filesystem-only fixture checks pass locally | Fourteen Unity EditMode cases and actual spawn pending |
+| Authored-world marker validation | Integrated through slice 8a | Editor validation and owned prefab instantiation connected | Full CI and CodeQL passed; fifteen filesystem checks and fourteen supplementary actual EditMode cases on 6000.0.31f1 pass | Pinned 6000.0.23f1 cases and actual spawn pending |
 | Acceptance isolation | Integrated through slice 8b | Runtime, CLI and release admission connected with request-bound original receipts | Full final-head Windows/Linux CI, publication and CodeQL pass at `eda671d` | Pending isolated host and actual game evidence |
 
 No release tag, release dispatch or publication has occurred. The checkout is
@@ -1921,3 +1922,112 @@ Checkpoint validation passes fifty website tests, 127-file Markdown links,
 residue, trademark, asset-licence coverage and 363-case fixture closure. Runtime,
 Dart and Flutter source trees are unchanged from the fully verified #116 head;
 no new runtime or game result is inferred from this documentation-only update.
+
+
+## Supplementary Editor diagnostic and RC host review
+
+After [PR #117](https://github.com/Furroxide/TopiaForge/pull/117) merged,
+the installed, signed Unity Editor `6000.0.31f1_a206c360e2a8` executed all fourteen
+`WorldValidatorTests` cases through actual Unity/NUnit in a separate disposable
+project copied from `eda671d`. All fourteen passed, none failed or skipped, and
+the original Editor process exited with code zero. Existing license admission
+succeeded without activation changes. This is supplementary diagnostic evidence:
+`6000.0.23f1` remains the required authoring Editor, and its prepared project and
+all 81 hashed input files were left untouched. Neither the sixteen authoring
+cycles nor the game acceptance matrix ran.
+
+The test source SHA-256 is
+`2262b1e0fb8d71ae1205d9cd1462c368772510e2cb695710474d09da3d2defb8`.
+Retained private XML has SHA-256
+`91513204cb10d95c5813cd4cfb54c91b495e0e9810f116e57f45a57a0fb0a9fb`;
+the Editor log has SHA-256
+`7f668cf84e15658d7f822dc38cc10f788f364fcb6f6f7131eb1467e3feebbb80`.
+Only the disposable project's version and VFX settings changed; test C# and
+assembly definitions did not. Raw logs and machine paths remain private.
+
+The subsequent read-only host review found no existing QA context in the bounded
+locations examined. This does not rule out a maintainer-provided environment
+elsewhere. The provisioning record must name an actual separately initialized
+Windows user/session or VM. For RC1 its `outputRoot` must equal
+`<StateRoot>/0.1.0-rc.1/evidence/windows/robotopia`, with the record outside the
+output directories. Use an explicit external `StateRoot`; a checkout inside the
+normal user's profile cannot also provide the isolated acceptance output root.
+Release preflight and later publication can retain the operator's GitHub session;
+the frozen-state build/acceptance phase can run in the QA session without copying
+that credential store. Provisioning and visual/input observation remain pending.
+
+The protected release environment contains the update-signing secret name but
+lacks `TOPIAFORGE_GOVERNANCE_AUDIT_TOKEN`; repository secret names were also checked.
+No secret value was accessed. The dedicated repository-only read credential
+specified in [AdminRelease](../../AdminRelease.md) must be configured before
+publication. The four nongame review/rotation records are still missing, and the
+reviewer dossier prepared privately does not approve any gate. No candidate, tag,
+release dispatch or publication was created by these checks.
+
+
+## RC release preflight follow-up
+
+The follow-up starts at `5acead7c855e899f0331b042a6794f424f48a467`. Live GitHub
+responses identify the repository as `Furroxide/TopiaForge` and the same pinned
+administrator with a capitalized login. Four shell paths rejected this valid
+spelling before their fixes: governance, candidate provenance, asset fetching
+and publication. Separate failing fixture runs precede each repair. The
+PowerShell stage/dispatch regressions then independently reproduced rejection
+of canonical governance repository, workflow uploader login and finalizer
+repository names. All three failures preceded their corresponding fixes.
+
+Only ASCII GitHub owner/repository/login spelling is compared without case.
+Numeric principal/App/workflow IDs, principal type, repository identity, URL
+host and path suffix, workflow path, refs, source SHA and request correlation
+remain enforced. Different repositories/principals, Unicode lookalikes and
+padded identities still fail. All three focused shell suites, their seven
+syntax checks, the complete PowerShell release-admin suite and configured
+PowerShell analyzer pass. The repaired shell and full Python live governance
+audits also pass against the actual repository. This did not configure the
+missing protected audit credential or exercise real publication.
+
+The RC1 inventory was independently reviewed: twelve component versions,
+thirteen shipped V6 mods, excluded UiGallery, two embedded VPM packages, and
+exactly fourteen public payloads (Windows archive plus thirteen mods). Free Play
+is owned by Worlds. Strict `release validate-policy --version 0.1.0-rc.1`, with
+provenance hashes enabled, initially reported only the blocked catalog status;
+it now passes after the inventory was marked `ready`. Forty-one focused catalog,
+metadata, qualification and prerequisite tests pass. This approves inventory
+only. The readiness register is unchanged, with SHA-256
+`5b41655fd38a28c814ac0c7228cb953e379711d26501ba903fd496ee730b605d`, and retains
+all four nongame blockers plus pending game acceptance. No private candidate
+construction is admitted by the inventory change alone.
+
+RoboAPI coverage now includes twenty-three actual loopback HTTPS cases for both
+brain and speech operations: successful responses, HTTP 401 token reload,
+429/500/503 failures, five redirect statuses without destination connections,
+and default-transport certificate rejection with a positive control on the same
+server. Synthetic token/session/audio values are used, and diagnostic assertions
+retain redaction. An internal caller-owned transport boundary leaves the existing
+three-argument production constructor, shared timeout, normal TLS trust and
+redirect policy unchanged. Tests use a per-instance exact synthetic certificate
+pin. No trust-store entry, global callback or live backend is used. Windows
+Schannel required a temporary test certificate key container, disposed by its
+owner; the initial ephemeral-key fixture failures are recorded as fixture
+failures, not product defects. The full no-argument manager harness includes
+these cases; microphone, privacy approval and native game evidence remain open.
+
+Whole-solution formatting passes. A fresh Release build has zero warnings and
+errors, and all eleven SDK packages plus seven rebuilt no-argument C# harnesses
+pass. The official managed-reference latest-build probe still identifies game
+build 2409. Operator examples now pass explicit shared source-game and external
+state paths across sessions; release notes correctly describe integrated V5
+retirement and intentionally invalid migration stubs. Documenting the actual
+Windows game-evidence directory exposed an overly narrow residue allowlist:
+a failing regression preceded its exact-directory exception. All 37 residue
+regressions pass, including surrounding retired-name and unrelated-path refusals.
+These source checks precede fresh PR review/CI; no candidate, tag or publication
+result is claimed.
+
+Final local documentation verification passes fifty website tests, all 127-file
+Markdown links and 26-page content preparation. README, residue, trademark, asset
+licensing and 363-case fixture audits pass. All 553 non-generated Dart files meet
+the 500-line cap; formatting checks 483 scoped files with zero changes, and
+domain/data/CLI analyzers report no issues. A local report wrapper first failed
+printing a Unicode test-status symbol under Windows' default console encoding;
+its UTF-8 rerun completed successfully. This was not a website test failure.

@@ -154,6 +154,11 @@ TEXT_ONLY_BYTE_RULES = (
 # are game files, compatibility identifiers, managed-reference plumbing,
 # verified in-game asset ids, or tags.
 LOWERCASE_ROBOTOPIA_ALLOWLIST = (
+    # The Windows acceptance runner's actual game-evidence directory.
+    re.compile(
+        r"(?<![A-Za-z0-9_.-])evidence[/\\]windows[/\\]robotopia"
+        r"(?![A-Za-z0-9_.-])"
+    ),
     re.compile(r"robotopia\.gg", re.IGNORECASE),
     re.compile(r"@robotopia(?:-parts)?/", re.IGNORECASE),
     re.compile(
