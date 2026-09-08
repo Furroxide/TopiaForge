@@ -180,8 +180,8 @@ shipped product with users.
   it does not qualify an archive.
 - **`P0-PRIV-01`** — part of the evidence half advanced. The RoboAPI client's offline, timeout,
   cancellation, response-cap, request-cap, and log-redaction paths now have regressions behind
-  them, driven against loopback sockets. HTTP 401/429/5xx, redirect refusal, and TLS failure remain
-  uncovered: they need the client to reach a server it trusts, and the backend root must be HTTPS.
+  them, driven against loopback sockets. HTTP 401/429/5xx, redirect refusal and TLS rejection
+  were still uncovered at that checkpoint; the 8 September update below records their completed regressions.
   The gate **stays blocking and open**, and the owner explicitly declined to record a `0.x`
   disposition for it on 2026-08-28. Its approval half — destination, retention, training use, cost,
   deletion, abuse limits, jurisdiction — is untouched.
@@ -470,9 +470,17 @@ automated tests cannot close Unity object lifetime.
   log-redaction rows of the acceptance matrix in
   [`PrivacyAndCapabilities.md`](PrivacyAndCapabilities.md) now have regressions behind them, driven against loopback
   sockets so nothing depends on name resolution or an external host. The redaction check searches every line the
-  client logged across all of those paths for the bearer token, the session identifier, and `Bearer`. Still
-  uncovered, and not claimed: HTTP 401/429/5xx handling, redirect refusal, and TLS failure, each of which needs the
-  client to reach a server it trusts while the backend root is required to be HTTPS.
+  client logged across all of those paths for the bearer token, the session identifier, and `Bearer`.
+  HTTP response, redirect and TLS-rejection cases were still uncovered in that August run.
+
+  Evidence progress 2026-09-08: 23 actual loopback HTTPS cases now pass for brain and speech: success,
+  HTTP 401 token reload, 429/500/503 failures, five redirect statuses without destination connections,
+  and default-transport certificate rejection with a same-server positive control. The existing production
+  TLS/redirect/timeout policy is preserved; tests use a caller-owned client with an exact synthetic
+  certificate pin. No trust-store entry, global callback, live backend or real credential is used.
+  The fresh Release build and all seven rebuilt C# harnesses pass; [Status](internal/gamemode-contract/Status.md)
+  records scope and retained evidence. These tests do not establish microphone/native UX acceptance or
+  supply backend, privacy, legal or security approval.
 
   **No `0.x` disposition is recorded.** The owner was asked on 2026-08-28 and declined; this gate is not softened for
   the alpha line. It stays blocking, and the approval half below is untouched by the tests above.
@@ -815,8 +823,10 @@ automated tests cannot close Unity object lifetime.
 ## Ship decision
 
 **NO-SHIP** at the current redesign checkpoint. All five blocking gates — `P0-IP-01`, `P0-OSS-01`,
-`P0-PRIV-01`, `P0-CRED-01`, `P0-GAME-01` — remain open in the tracked register. The catalog is deliberately
-`blocked`. Unsigned RC1 authorization removes the signing-mode decision gap, not these evidence requirements.
+`P0-PRIV-01`, `P0-CRED-01`, `P0-GAME-01` — remain open in the tracked register. The catalog is `ready`
+for the reviewed Windows x64 archive and thirteen-mod inventory, including the two embedded VPM packages.
+This records inventory review only; it supplies neither private-build eligibility nor publication authorization.
+Unsigned RC1 authorization removes the signing-mode decision gap, not these evidence requirements.
 
 The 2026-08-28 results above remain historical. The current work must complete the redesign and validate
 construction before freezing a candidate; counsel/compliance, backend/privacy and credential-rotation records
