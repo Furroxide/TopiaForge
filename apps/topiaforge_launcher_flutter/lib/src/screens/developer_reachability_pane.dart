@@ -44,8 +44,14 @@ class _ReachabilityPane extends StatelessWidget {
           const SizedBox(height: 10),
           const Text(
             'Classifies this machine’s NAT so we can find out how many players could host a session directly. '
-            'It sends a few small UDP packets to configured measurement servers. It does not touch Robotopia, '
-            'does not open a game session, and records no addresses — only the NAT category.',
+            'It does not touch Robotopia or open a game session. '
+            'The launcher keeps observed addresses out of its results and logs.',
+            style: TextStyle(color: TopiaForgePalette.mutedText, fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Running sends UDP probes to configured STUN servers, which see your source IP address and port. '
+            'No aggregate result is uploaded.',
             style: TextStyle(color: TopiaForgePalette.mutedText, fontSize: 12),
           ),
           const SizedBox(height: 12),
@@ -55,7 +61,7 @@ class _ReachabilityPane extends StatelessWidget {
             value: settings.enabled,
             title: const Text('Run the reachability probe'),
             subtitle: const Text(
-              'Off by default. Nothing runs until you turn this on.',
+              'Off by default. Enable, then press Run probe.',
             ),
             onChanged: busy
                 ? null
@@ -79,7 +85,7 @@ class _ReachabilityPane extends StatelessWidget {
             value: settings.shareAggregateResults,
             title: const Text('Allow sharing the aggregate result'),
             subtitle: const Text(
-              'Records your agreement. Nothing is sent: sharing also needs an approved privacy notice, '
+              'Records your agreement. No aggregate result is uploaded: sharing also needs an approved privacy notice, '
               'which does not exist yet.',
             ),
             onChanged: busy || !settings.enabled

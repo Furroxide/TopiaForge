@@ -20,8 +20,8 @@ The launcher can measure it without any of the things the feasibility gate is bl
 - It does not touch Robotopia, load the game, or run a session.
 - It does not need a headless server, a transport, or a closed gate.
 - It measures the launcher's own host — **which is the host a session would run on anyway**.
-- The launcher is already installed on real players' machines and already makes network calls for update checks and
-  the package registry, so the capability surface is not new.
+- This is outbound network activity from the launcher. Existing update and registry traffic does not approve
+  measurement-server destinations or remove their privacy implications.
 
 ## What it does not do
 
@@ -54,11 +54,14 @@ guessing optimistically.
 
 ## Privacy design
 
-The privacy claim is **structural, not procedural**. Rather than promising that nobody will log an address, the type
-system is arranged so that nobody can.
+The local observation, classification, and report models contain no network addresses. This limits what those
+models retain; it does not hide network endpoints from the measurement servers. Configured STUN servers and their
+advertised alternate measurement endpoints see the source IP address and UDP port of each request. Their operators
+may retain network metadata; this implementation neither controls nor establishes their retention practices.
 
 | Layer | Sees addresses? | Notes |
 | --- | --- | --- |
+| STUN measurement servers | Yes | Receive the request source IP address and port; operator retention is not established here. |
 | `launcher_data` STUN codec and runner | Yes, transiently | Compares reflexive endpoints in memory and discards them. Never persists or logs one. |
 | `NatObservation` (`launcher_domain`) | **No** | Six booleans and one counter. No field can hold an address, port, hostname, or timestamp. |
 | `NatClassification` | **No** | Three enum values. |
@@ -83,20 +86,24 @@ The settings file fails closed: a missing, unreadable, or malformed document dec
 decodes to `false`. Turning the probe off also withdraws sharing consent, so re-enabling it later never silently
 restores an agreement the player may have forgotten making.
 
-A **local run** requires developer mode plus the probe being enabled. It is not collection — nothing leaves the
-machine — so it does not require the privacy notice.
+A **diagnostic run** requires developer mode, the saved probe opt-in, an explicit **Run probe** action, and configured
+servers. It sends outbound STUN datagrams even though the resulting classification stays local. Those activation
+gates are not privacy approval. The developer pane discloses source IP address and port exposure before opt-in;
+P0-PRIV-01 remains a release blocker, including review of server operators, retention, and public disclosure.
 
 ## The approval dependency, stated plainly
 
 `docs/PrivacyAndCapabilities.md` makes an approved privacy notice a **release blocker** for every TopiaForge data
 collection. That applies to this probe exactly as it applies to remote AI and microphone capture.
 
-**Therefore: no result is reported anywhere, and no code exists that could report one.**
+**No aggregate classification is uploaded, and no code exists that could upload one.** This does not prevent the
+measurement servers from observing the source address and port of STUN traffic.
 `ReachabilityProbeGateway` — the only interface the launcher UI can reach — has three methods: load the opt-in, save
 the opt-in, run once locally. There is no report method. Adding one is a visible, reviewable change rather than a
 wiring detail, and it would still be refused at runtime while `ReachabilityProbePolicy.reportingApproved` is `false`.
 
-That constant is the release blocker expressed in code. Flipping it requires, first, the privacy/legal owner to
+That constant enforces the aggregate-reporting restriction; it does not satisfy the wider P0-PRIV-01 release gate.
+Flipping it requires, first, the privacy/legal owner to
 supply approved text covering what is collected, how long it is retained, and how a player withdraws.
 
 **What this costs us:** with reporting blocked, the probe cannot yet produce the population distribution it exists to

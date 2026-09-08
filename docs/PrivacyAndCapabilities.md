@@ -28,6 +28,23 @@ capability, because mods run with the Robotopia process's authority.
 The launcher must show the package source, package SHA-256, arbitrary-code warning, and the aggregate capabilities of
 the selected package and required dependencies before install or update. A capability is not consent by itself.
 
+## Developer reachability diagnostic
+
+The optional launcher reachability probe is outbound network activity. A run sends STUN UDP datagrams to configured
+measurement servers and their advertised alternate measurement endpoints. Those servers see the request's source IP
+address and port; their operators may retain that metadata. Keeping addresses out of TopiaForge's observation and
+report models does not prevent this exposure or establish the servers' retention practices.
+
+The probe defaults off, has no built-in server list, and requires developer mode, a saved opt-in, and an explicit
+**Run probe** action. The developer pane discloses source IP address and port exposure before opt-in. The resulting
+classification stays local: there is no aggregate-upload path, and `ReachabilityProbePolicy.reportingApproved`
+remains `false` even if sharing consent is saved. These gates restrict activation; they do not approve collection.
+
+This is launcher behavior, so a mod's `network` capability is neither its authorization nor a substitute for launcher
+disclosure. P0-PRIV-01 remains blocking. Public release requires the responsible owners to approve accurate probe
+and server-operator disclosure, retention information, and consent requirements. This engineering description does
+not record that approval or add a server destination.
+
 ## Peer address exposure in player-hosted sessions
 
 Status: recorded decision, not a shipped behavior. TopiaForge ships no live transport; the
