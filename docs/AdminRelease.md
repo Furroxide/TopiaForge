@@ -8,8 +8,11 @@ signed update metadata, and publishes after approval of the protected
 The entry point is:
 
 ```powershell
-./tools/release-admin.ps1 preflight -AcceptanceIsolationRecord C:\QA\isolation.json
-./tools/release-admin.ps1 build -AcceptanceIsolationRecord C:\QA\isolation.json
+$releaseStateRoot = 'C:\QA\TopiaForge\release-state'
+$isolationRecord = 'C:\QA\TopiaForge\isolation.json'
+$sourceGameRoot = 'C:\QA\TopiaForge\source-game'
+./tools/release-admin.ps1 preflight -StateRoot $releaseStateRoot -AcceptanceIsolationRecord $isolationRecord -GameDirectory $sourceGameRoot
+./tools/release-admin.ps1 build -StateRoot $releaseStateRoot -AcceptanceIsolationRecord $isolationRecord -GameDirectory $sourceGameRoot
 ```
 
 `build` contains a mandatory interactive window: the live `TF-ACCEPT`
@@ -20,9 +23,9 @@ A successful build stops at `built`. Prepare and review the detached candidate
 decision and acceptance records described below, then continue explicitly:
 
 ```powershell
-./tools/release-admin.ps1 qualify
-./tools/release-admin.ps1 stage
-./tools/release-admin.ps1 dispatch
+./tools/release-admin.ps1 qualify -StateRoot $releaseStateRoot
+./tools/release-admin.ps1 stage -StateRoot $releaseStateRoot
+./tools/release-admin.ps1 dispatch -StateRoot $releaseStateRoot
 ```
 
 The durable phases are `preflight → platforms-built → built → accepted → staged
@@ -31,8 +34,12 @@ already authorized phases: both stop at `built` with instructions to run
 `qualify`. Neither command grants acceptance. Add `-Rehearsal` to `all` for a
 verified, non-publishing rehearsal of every platform in `artifactPolicy`. A
 rehearsal can never qualify, create a tag, stage assets, or dispatch publication.
-Local state and raw evidence live under `.release-local/`, which is ignored by
-Git.
+Local state and raw evidence live under `<StateRoot>/<version>/`. The default
+`.release-local/` is ignored by Git, but cannot supply isolated acceptance output
+when the checkout is inside the normal user's profile. Use the same explicit
+external `-StateRoot` for every phase, including `resume`. Provision and restrict
+access to the example paths before using them; the example does not create a QA
+account or approve its layout.
 
 Each canonical ecosystem pass runs in its own detached clean worktree. The
 SHA-256 of the normalized, sorted tree manifest is the ecosystem identity; the
@@ -48,6 +55,10 @@ blocking non-game gates (`P0-IP-01`, `P0-OSS-01`, `P0-PRIV-01`, and `P0-CRED-01`
 must already be approved. Only `P0-GAME-01` may await the candidate's live
 acceptance. Success means `eligible-for-private-build`; it is not a ship
 approval. Advisory gates retain their recorded enforcement and reporting rules.
+
+The source catalog's `ready` status approves only the reviewed platform, package
+and version inventory. It does not supply those four review records or certify
+unbuilt archives. Exact payload checks and final acceptance remain mandatory.
 
 Obtain the final source through the policy-approved same-repository release PR
 into `main`. Preserve its two-parent merge and required hosted checks; freeze
@@ -65,8 +76,17 @@ insufficient. Pass the already approved private provisioning record through
 Keep the record outside all output/evidence directories that the build clears.
 Linked output directories and linked existing ancestors are rejected before cleanup.
 The record identifies a separate QA game installation, launcher/output roots and
-measured primary-token/known-folder identity. The current process must already be
-in that isolated Windows user/session or VM. Missing provisioning fails closed;
+measured primary-token/known-folder identity. The build/acceptance process must already be
+in that isolated Windows user/session or VM. Its provisioning `outputRoot` must
+exactly equal `<StateRoot>/0.1.0-rc.1/evidence/windows/robotopia`. Authenticated
+preflight may run as the release operator, followed by the frozen-state build in
+the QA session and qualification/publication back in the operator session. Use
+the same controlled checkout and state paths; do not copy GitHub credentials
+into the QA profile. Pass `-GameDirectory` explicitly at preflight: it must name
+the verified source installation in the record's `sourceGameRoot`, accessible to
+both sessions and separate from the record's admitted QA `gameRoot`. Its frozen
+path persists across sessions; omitting it selects the operator's default local
+installation. Missing provisioning fails closed;
 no tool creates a user account or imports normal-player saves automatically.
 
 The private schema-3 `acceptance-result.json` retains the actual acknowledgement
@@ -76,7 +96,7 @@ installation; last-run evidence comes from that installation. Public candidate
 acceptance records carry only the isolation kind and reviewed proof digest,
 not usernames, paths, SID or the raw acknowledgement. Once those exact bytes and private
 evidence exist, place these reviewed, schema-valid records in the candidate's
-assets directory (normally `.release-local/<version>/assets`):
+assets directory (`<StateRoot>/<version>/assets`):
 
 - `release-candidate-readiness-v1.json`: the detached final decision, bound to
   the frozen source and tracked contracts. Only the game gate may supersede its

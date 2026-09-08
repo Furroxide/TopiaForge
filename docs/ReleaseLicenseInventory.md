@@ -57,8 +57,11 @@ The release payload retains the exact upstream licenses and notices recorded in
 
 The audit does not change any third-party license. Archive inspection, BOM,
 SBOM, notice, provenance, and deterministic-package tests remain mandatory on
-the exact release SHA. The release catalog is `ready` only while those strict
-checks pass.
+the exact release SHA. Catalog `ready` records review of the package, platform,
+and version inventory; it does not certify these checks or grant redistribution
+approval. The four non-game blocking approvals remain required before private
+preparation, and publication requires detached qualification of the exact
+candidate payloads and reviewed acceptance.
 
 ## Contribution policy
 
