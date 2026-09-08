@@ -12,7 +12,10 @@ const readiness = JSON.parse(read('release/release-readiness.json'));
 test('release operations keeps RC1 platform scope aligned with policy', () => {
   assert.deepEqual(policy.artifactPolicy.platformArchives, ['TopiaForge-windows-x64.zip']);
   assert.match(source, /RC1 is Windows x64 only/u);
-  assert.match(source, /Linux\/Proton acceptance is deferred to RC2/u);
+  assert.match(source, /Linux\/Proton acceptance is unavailable until a reviewed native isolation implementation and its exact-candidate evidence path exist/u);
+  assert.match(source, /retired runner cannot be restored by a policy change/u);
+  assert.match(source, /Any future same-host evidence must disclose that it is non-independent/u);
+  assert.doesNotMatch(source, /Linux\/Proton acceptance is deferred to RC2/u);
   assert.doesNotMatch(source, /runs the RC1 Proton acceptance journey/u);
 });
 

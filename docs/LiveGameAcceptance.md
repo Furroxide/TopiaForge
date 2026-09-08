@@ -9,7 +9,8 @@ The safe SDK has an instrumented, non-distributable acceptance mod under
 
 The administrator-controlled Windows workstation must run the complete Windows
 matrix against the frozen candidate. RC1 is Windows x64 only; Linux/Proton
-acceptance is deferred to RC2. Real keyboard, mouse, gamepad, audio, microphone,
+acceptance is unavailable until native isolation is implemented and reviewed.
+Real keyboard, mouse, gamepad, audio, microphone,
 and rendered output are required. Unit tests and source-only CI cannot mark a live
 native or visual case as passed.
 
@@ -36,15 +37,12 @@ and freezes `accepted` state before any staging. Evidence references require
 actual reviewer authorization; synthetic fixture hashes never count as evidence.
 
 Acceptance evidence is valid only for the exact frozen candidate package hashes recorded by the
-harness in `acceptance-result.json` and `last-run.json`. For RC2, orchestrator-produced Proton evidence must
-also bind the source SHA, release version, platform archive SHA-256 and size, canonical ecosystem
-digest, Robotopia build, full case inventory, pinned Proton runtime identity, `WINEDLLOVERRIDES`,
-execution environment, result, and scrubbed evidence digests. Until the automated Windows result and
+harness in `acceptance-result.json` and `last-run.json`. Until the automated Windows result and
 the evidence for every platform in `artifactPolicy` match the candidate, `P0-GAME-01` stays
-blocked.
-RC1 custom-world live acceptance remains scoped to authorized Windows hosts.
-If RC2 reuses the WSL2/Proton runner, its evidence is same-host and non-independent;
-it must not be presented as independent QA or as completed RC1 evidence. Mods execute as
+blocked. RC1 custom-world live acceptance remains scoped to authorized Windows hosts.
+The old Proton runner and its schema2 evidence path are retired; changing the platform policy
+cannot restore them. The internal `AdminRelease.md` runbook records the future Linux prerequisites.
+Any future same-host evidence must disclose that it is non-independent. Mods execute as
 [trusted full-process code](PrivacyAndCapabilities.md); the capability declarations checked here
 are disclosure, not a sandbox.
 
@@ -161,7 +159,7 @@ cannot see.
 
 The local Windows run extracts its candidate developer payload, uses only its
 packaged CLI to create a fresh minimal mod outside the extraction, and passes that
-project to the harness. The retained same-host WSL2/Proton journey is for RC2 only. The harness runs
+project to the harness. The Windows harness runs
 `topiaforge dev --launch --no-tail --target dev.topiaforge.sdk-acceptance.menu`; success additionally
 requires the unique package to be `valid` and `loaded` in the fresh run plus its exact attributed
 `OnLoad` marker. This proves the promised `new mod` → `dev` journey in two authoring commands.
