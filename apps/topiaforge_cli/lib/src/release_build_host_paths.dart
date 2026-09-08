@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
 
+import 'release_upstream_dotnet_paths.dart';
+
 /// Fails a package that carries the build machine's home directory inside a
 /// shipped binary.
 ///
@@ -36,12 +38,13 @@ class BuildHostPathScanner {
   /// bypass.
   static const int defaultChunkSize = 4 * 1024 * 1024;
 
-  /// Bytes carried from one window into the next so a path straddling the
+  /// Bytes retained on each side of the scan boundary so a path straddling the
   /// boundary is still seen whole.
   ///
   /// The longest match is a drive prefix, the `Users` segment, and a
   /// 64-character account: under 80 bytes as Latin-1 and under 160 as
-  /// UTF-16LE. 256 covers both with room to spare.
+  /// UTF-16LE. The longest approved upstream literal plus its NUL bounds is
+  /// 87 bytes. 256 covers both, including lookahead before classification.
   static const int _overlap = 256;
 
   /// Bytes read per pass; see [defaultChunkSize].
@@ -154,7 +157,7 @@ class BuildHostPathScanner {
       var carry = Uint8List(0);
       while (true) {
         final read = handle.readSync(chunkSize);
-        if (read.isEmpty) return null;
+        if (read.isEmpty) return _scanWindow(carry);
         final Uint8List window;
         if (carry.isEmpty) {
           window = read;
@@ -163,11 +166,16 @@ class BuildHostPathScanner {
             ..setRange(0, carry.length, carry)
             ..setRange(carry.length, carry.length + read.length, read);
         }
-        final finding = _scanWindow(window);
+        // A public literal near the tail may not have its closing NUL yet.
+        // Mask complete ASCII literals first, then defer the tail. Retain one
+        // scanned overlap as well so private paths spanning the scan boundary
+        // remain detectable. Carry masked bytes so a later truncated window
+        // cannot mistake part of an already approved literal for a new path.
+        final masked = UpstreamDotnetSourcePaths.mask(window);
+        final scanEnd = masked.length > _overlap ? masked.length - _overlap : 0;
+        final finding = _scanWindow(Uint8List.sublistView(masked, 0, scanEnd));
         if (finding != null) return finding;
-        carry = window.length > _overlap
-            ? window.sublist(window.length - _overlap)
-            : window;
+        carry = masked.sublist(scanEnd > _overlap ? scanEnd - _overlap : 0);
       }
     } on FileSystemException {
       return null;

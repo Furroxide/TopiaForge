@@ -2171,3 +2171,70 @@ flow. A final Release rebuild again reports zero warnings/errors and all eleven
 SDK audits/seven harnesses pass. Repository, fixture, documentation and pinned
 Dart checks pass; fresh hosted packaging remains necessary to prove clean binary
 bytes, and no production acceptance claim is made.
+
+## Package validation follow-up on the verified release head
+
+PR #121 squash-merged at `0254e62506627a9c1677dd6926bee38525d35a41`
+with a valid GitHub signature and sign-off; its tree matches reviewed `ebf5a15`.
+Both CodeQL runs and the PR #119 security gate passed, with no open findings
+on that comparison. Release-push CI 34215248200 passed, including publication.
+Main-targeted CI 34215253689 passed publication but failed one Windows data
+test: seven missing-DLL scenarios and an initial install shared one thirty-second
+timeout. The timeout started teardown while the asynchronous body still ran.
+The same source and runner image passed that case in the companion push run.
+
+The seven scenarios now have independently named tests, fresh fixtures and
+captured repository/path references before their first await. Assertions and
+the default timeout are unchanged. The recorded hosted failure is the regression
+baseline; nine focused tests pass after the change. The complete local Windows
+data suite passes 568 tests with four platform skips when Windows PowerShell
+is reachable on an explicit toolchain PATH. An initial run with the inherited
+PATH reproduced seven multiplayer-pack failures, each reporting that
+`powershell.exe` could not be found; those are not accepted as a permanent test
+exemption.
+
+[Dry run 34215249224](https://github.com/Furroxide/TopiaForge/actions/runs/34215249224)
+completed with full Windows and Linux package success: smoke, signed-update
+rollback, all seven packaged template lifecycles, residue and artifact upload.
+All three neutral Flutter builds, CLI builds, eleven SDK audits, seven harnesses
+and byte-identical ecosystem checks passed. The overall run failed because
+macOS smoke found `/Users/runner/` in `TopiaForge.GameCompat.Extractor`.
+Recursive scanner order does not prove that every other macOS binary passed.
+
+Inspection of the official pinned `Microsoft.NETCore.App.Host.osx-arm64` and
+`osx-x64` 10.0.9 packages established that their unmodified `singlefilehost`
+binaries already contain these public Microsoft runtime source paths: nineteen
+arm64 occurrences and fourteen x64 occurrences, representing twenty-one distinct
+ASCII strings. Their `apphost` counterparts contain none. Source `PathMap`
+cannot rewrite these already-compiled native bytes; disabling signing or allowing
+an entire home prefix would be the wrong repair. The checked-in provenance
+inventory records package/member SHA-256, architecture, byte offsets and the
+upstream source revision. These hashes establish the literals' public origin;
+they do not authenticate a whole final modified or bundled executable.
+
+The scanner correction recognizes only those exact, NUL-bounded ASCII source
+literals. It continues checking all other bytes, including unknown paths with
+the same prefix, longer suffixes, adjacent private paths and unobserved UTF-16
+forms. Boundary tests reproduce the false positives before the repair; bounded
+lookahead prevents a split approved literal from being rejected prematurely.
+No account, path-prefix or whole-binary exception is introduced. Hosted package
+validation must still pass on the replacement release head before promotion.
+Readiness approvals, pinned Unity execution, isolated native acceptance and
+exact-candidate qualification remain pending.
+
+A clean archive of release head `0254` reproduces ten passing multiplayer
+tests with that same PATH and pinned Dart. All 320 archived source files were
+verified against their Git blobs before and after execution. Because this data
+package does not track its lockfile, the passing checkout's matching lock was
+separately hashed and restored with enforcement; it is recorded as a test
+input, not as tracked baseline source. The earlier seven-test Windows exception
+is therefore obsolete. A fresh Release build has zero warnings/errors and all
+eleven SDK audits and seven no-argument C# harnesses pass again.
+
+Final local package-validation checks pass: 41 scanner/provenance cases,
+75 package-builder cases, and direct scanning of all four original upstream
+macOS apphost/singlefilehost members. Pinned Dart formatting changes no files;
+domain/data/CLI fatal-info analyzers are clean and all 555 non-generated Dart
+files stay within 500 lines. README, residue, trademark, asset licensing,
+363-case fixture closure, 533 JSON/YAML files and documentation content/links
+pass. Actual compiled-CLI and fresh hosted verification remain separate below.
