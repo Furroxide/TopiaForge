@@ -54,14 +54,13 @@ namespace TopiaForge.ModManager.Tests
             var profile = new EffectiveProfile("fixture", 1, new[] { new ResolvedPackage(manifest.Id, manifest.Version, manifest) });
             var committed = RuntimeObservation.FromEnvelopes(profile, new[] {
                 LaunchTransportJson.ReadObservation(root.GetProperty("observation").GetProperty("envelopes")[0].GetRawText()) });
-            var intent = new WorldLaunchIntent
-            {
-                GamemodeId = manifest.Contributions!.Gamemodes[0].Id,
-                WorldId = root.GetProperty("request").GetProperty("worldOverride").GetString()!,
-                LoadMode = WorldLaunchSettings.SceneReplacement
-            };
+            var worldId = root.GetProperty("request").GetProperty("worldOverride").GetString()!;
             var saved = LaunchSelection.UnresolvedLegacy("{\"worldLaunch\":" + JsonUtil.Serialize(new WorldLaunchSettings
-            { SelectedGamemodeId = intent.GamemodeId, SelectedWorldId = intent.WorldId, LoadMode = intent.LoadMode }) + "}");
+            {
+                SelectedGamemodeId = manifest.Contributions!.Gamemodes[0].Id,
+                SelectedWorldId = worldId,
+                LoadMode = WorldLaunchSettings.SceneReplacement
+            }) + "}");
             Assert(!LaunchSelectionResolver.Resolve(saved, profile, RuntimeObservation.None).Available,
                 "The fixture must actually require a discovered instance before translating its remembered selection.");
             var release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -86,7 +85,7 @@ namespace TopiaForge.ModManager.Tests
             release.SetResult(true);
             await pending;
             Assert(discoveryCalls == 1 && translations == 1 && selected?.Available == true
-                && selected.Request!.WorldOverride == intent.WorldId,
+                && selected.Request!.WorldOverride == worldId,
                 "Launch must translate once against the committed observation from the same discovery attempt.");
         }
 

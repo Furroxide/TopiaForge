@@ -12,7 +12,6 @@ LauncherSnapshot _replaceGameInstall(
     installedMods: snapshot.installedMods,
     registryMods: snapshot.registryMods,
     packageSources: snapshot.packageSources,
-    worldCatalog: snapshot.worldCatalog,
     recentLog: snapshot.recentLog,
     launcherUpdates: snapshot.launcherUpdates,
     developerMode: snapshot.developerMode,
@@ -63,7 +62,6 @@ LauncherSnapshot _multipleInstallSnapshot() {
     installedMods: const [],
     registryMods: const [],
     packageSources: const [],
-    worldCatalog: WorldCatalog.fallback(),
     recentLog: '',
   );
 }
@@ -89,7 +87,6 @@ LauncherSnapshot _singleRecoveryInstallSnapshot() {
     installedMods: base.installedMods,
     registryMods: base.registryMods,
     packageSources: base.packageSources,
-    worldCatalog: base.worldCatalog,
     recentLog: base.recentLog,
   );
 }
@@ -102,7 +99,6 @@ LauncherSnapshot _readySnapshot({
   List<InstalledMod> installedMods = const [],
   List<LauncherProfile>? profiles,
   String selectedProfileId = 'default',
-  WorldCatalog? worldCatalog,
 }) {
   return LauncherSnapshot(
     gameInstall: GameInstall(
@@ -116,7 +112,6 @@ LauncherSnapshot _readySnapshot({
     installedMods: installedMods,
     registryMods: registryMods,
     packageSources: const [],
-    worldCatalog: worldCatalog ?? WorldCatalog.fallback(),
     recentLog: '',
     launcherUpdates: const LauncherUpdateSettings(enabled: false),
   );
@@ -163,7 +158,6 @@ LauncherSnapshot _updateSnapshot({
       ),
     ],
     packageSources: const [],
-    worldCatalog: WorldCatalog.fallback(),
     recentLog: '',
     launcherUpdates: const LauncherUpdateSettings(enabled: false),
   );
@@ -178,7 +172,7 @@ ModManifest _manifest(
   List<ModConflict> conflicts = const [],
 }) {
   return ModManifest(
-    schemaVersion: 5,
+    schemaVersion: 6,
     id: id,
     name: name,
     version: version,
@@ -238,7 +232,6 @@ LauncherSnapshot _discoverySnapshot({bool developerMode = false}) {
       _registryMod('gameplay.mod', 'Gameplay Mod', 'Gameplay'),
     ],
     packageSources: const [],
-    worldCatalog: WorldCatalog.fallback(),
     recentLog: '',
     launcherUpdates: const LauncherUpdateSettings(enabled: false),
     developerMode: developerMode,
@@ -248,7 +241,7 @@ LauncherSnapshot _discoverySnapshot({bool developerMode = false}) {
 RegistryMod _registryMod(String id, String name, String category) {
   return RegistryMod(
     manifest: ModManifest(
-      schemaVersion: 5,
+      schemaVersion: 6,
       id: id,
       name: name,
       version: '1.0.0',

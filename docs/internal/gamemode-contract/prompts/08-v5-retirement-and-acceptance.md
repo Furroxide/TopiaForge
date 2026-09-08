@@ -1,10 +1,11 @@
-# Slice 8: V5 retirement and acceptance
+# Slice 8a: V5 retirement and authored-world fixes
 
 Begin only after slice 7 and the separate release-preparation slice 7a merge into `dev`. Read the
 [canonical brief](../../GamemodeContractRedesign.md),
 [evidence ledger](../Status.md), and [common execution rules](README.md).
-Retire V5, finish migration and authoring guidance, then establish automated and
-live acceptance for the integrated redesign. Do not waive pending game evidence.
+Retire V5, finish migration and authoring guidance, and align authored marker
+validation with runtime loading. Isolated acceptance tooling and actual game
+evidence belong to the sequential [8b handoff](08b-isolated-acceptance.md).
 
 ## Retire and migrate without losing information
 
@@ -42,7 +43,7 @@ live acceptance for the integrated redesign. Do not waive pending game evidence.
   GM-10 to actual regression tests, integration paths, and live evidence. Verify
   canonical planning links and external supersession pointers remain accurate.
 
-## Automated and live acceptance
+## Automated verification
 
 - Add migration tests for all three source versions, unchanged value/property
   preservation, malformed collections, original-index diagnostics, no-write
@@ -52,37 +53,15 @@ live acceptance for the integrated redesign. Do not waive pending game evidence.
   harnesses and API checks; domain/data/CLI tests and analysis; Flutter tests and
   analysis; Windows debug build; Dart formatting/line caps; conformance closure;
   repository audits; and the full website publication/reference/search checks.
-- Use an isolated profile against the installed game. Record exact package/game
-  revisions, launch command, scene/world, expected/actual behavior, and log/artifact
-  evidence. Preserve the user's regular profiles, saves, and game content.
-  Establish both loader/manager isolation and native persistent-data isolation; a
-  launcher profile or copied install does not prove the latter. The current runner
-  writes under the normal installation even with `skipRuntimeInstall`, so pass an
-  explicit isolated runtime layout through installation, staging, launch and logs.
-  Verify actual runtime roots before gameplay and abort on normal-user save paths.
-  Retain PID, start time and executable identity; never stop all processes matching
-  the game's path. Test stale acknowledgements, PID reuse and unrelated processes.
-  Reuse the slice-7 original-handle Windows creation receipt; do not replace it
-  with a post-start PID lookup or the runner's historical stop-by-image helper.
-  Exercise native identity-read/resume failure cleanup as well as engine faults;
-  successful harmless-child tests do not establish those un-injected failures.
-  A separate Windows user/session or VM may require user assistance. Do not create
-  accounts or copy normal authentication/save data as an implicit setup step.
-- Exercise cold launch, actual Open Sandbox geometry/environment/kill-plane/spawn,
-  both discovered-level sources, authored-marker worlds, Zombies, Sandbox F5 and
-  pause behavior, Free Play with Sandbox absent, restart, and main-menu return.
-- Inject startup and teardown faults: allocation then factory failure, canceled
-  loading with late native completion, throwing disposer, owner unload, stale
-  callback, and competing requests. Verify resource release, one terminal session
-  outcome, and continued ability to launch after safe cleanup/drain.
-- Never infer visual placement, native timing, or gameplay correctness from unit
-  tests or logs alone. If an installed game or a usable visual/native test surface
-  is unavailable, mark each affected case pending with its exact blocker.
+- Recheck Windows data-test failures against the matching clean base. Record actual
+  results rather than inheriting a permanent local-failure exemption.
+- Record the pinned Unity EditMode and live prefab spawn checks as pending if the
+  editor/game is unavailable. Linked helper tests cannot establish engine timing.
 
 ## Handoff and completion
 
 Update the ledger with independent implemented/connected/automated-tested/
-game-verified evidence for every acceptance item. Submit the final slice against
+game-verified evidence for every acceptance item. Submit this bounded slice against
 `dev` and obtain CI on the current base. The redesign is complete only after all
 slices are integrated, obsolete launch paths are removed, replacement documents
 are published, and the required live cases have evidence. Report any remaining
@@ -93,9 +72,12 @@ blocked acceptance plainly; do not label a partial or unverified result complete
 
 The slice-7 command-guide review confirmed that the Unity companion exports the
 configured prefab, not `Example.unity`; the template introduction now says so.
-Inspect `WorldValidator.CheckSpawnPoint`: its current `FindDescendant` accepts the
-first named marker, whereas runtime startup rejects ambiguous authored markers.
-Add a failing duplicate-marker authoring regression and align validation before
+The original `WorldValidator.CheckSpawnPoint` accepted the first matching marker,
+whereas runtime startup rejects ambiguity. Require exactly one ordinal match,
+including prefab root and inactive descendants, before any export/configuration
+writes. Preserve the prefab's authored root name during owned instantiation; Unity's
+added `(Clone)` suffix must not invalidate an authored root marker. Add failing
+regressions and align editor/runtime behavior before
 claiming the generated-world authoring journey is complete. Also verify
 `Assets/World/README.md` environment and kill-plane claims against the active bundle
 provider, and remove obsolete registration-code instructions. Keep the pinned
@@ -109,16 +91,18 @@ confirmed that two comments require this slice's atomic retirement change:
 
 - [V4 retirement guidance](https://github.com/Furroxide/TopiaForge/pull/105#discussion_r3929384378):
   update `ManifestValidator` and the other dispatch/validation messages to V6 only
-  when V3/V4/V5 migration actually produces V6. Current V4-to-V5 guidance matches
-  the temporary implementation; changing just the text would misdescribe the CLI.
+  when V3/V4/V5 migration actually produces V6. At the merged slice-7a baseline, V4-to-V5 guidance matched
+  the temporary implementation. This slice changes the actual command and all
+  retirement messages together.
 - [Standalone V5 test naming](https://github.com/Furroxide/TopiaForge/pull/105#discussion_r3929384409):
   replace the still-valid V5 acceptance assertion with retirement coverage, and
-  name new V6 tests accurately. The current `AllowsStandaloneV5` helper really
-  parses V5; the historical PR's misleading V6 body was not integrated.
+  name new V6 tests accurately. At the slice-7a baseline `AllowsStandaloneV5` really
+  parsed V5; the historical PR's misleading V6 body was not integrated.
 
 The same review's suppressed `v6-valid-session.json` finding must be checked during
 fixture conversion: every fixture's version and explicit schema URL must agree.
-That historical V6 fixture never landed; the current V5 session fixture correctly
-uses the V5 schema. Do not weaken these checks or copy the mismatched historical
+That historical V6 fixture never landed; the slice-7a V5 session fixture correctly
+used the V5 schema. Do not weaken these checks or copy the mismatched historical
 fixture while retiring V5. Resolve the two linked threads only after the new
-implementation and migration tests land.
+implementation and migration tests land. Preserve the prepared 8b source and its
+review findings; create its branch from current dev only after this PR merges.

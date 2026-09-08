@@ -83,7 +83,7 @@ namespace TopiaForge.ModManager.Tests
         {
             return new ModManifest
             {
-                SchemaVersion = 5,
+                SchemaVersion = 6,
                 Id = "tests.service-scaffold",
                 Name = "Service scaffold",
                 Author = new ModAuthor { Name = "TopiaForge" },

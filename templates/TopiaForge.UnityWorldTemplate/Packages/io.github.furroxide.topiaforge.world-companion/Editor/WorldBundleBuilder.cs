@@ -65,7 +65,6 @@ namespace TopiaForge.WorldCompanion.Editor
 
         private static string BuildInternal()
         {
-            EnsureHdrpConfiguration();
             var config = LoadConfig();
             ApplyCommandLineOverrides(config);
 
@@ -91,6 +90,9 @@ namespace TopiaForge.WorldCompanion.Editor
                 throw new InvalidOperationException(
                     "World prefab validation failed:\n  " + string.Join("\n  ", issues.Errors));
             }
+
+            // Invalid content must fail before project HDRP settings, importer labels or output change.
+            EnsureHdrpConfiguration();
 
             // Label the prefab; its dependencies (meshes, materials, textures) ride along automatically.
             var importer = AssetImporter.GetAtPath(config.worldPrefab);

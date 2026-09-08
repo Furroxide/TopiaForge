@@ -142,7 +142,7 @@ Map<String, Object?> _manifestJson(
   String? sdkVersionRange,
   String category = '',
 }) => {
-  'schemaVersion': 5,
+  'schemaVersion': 6,
   'name': id,
   'displayName': id,
   'version': version,

@@ -19,11 +19,6 @@ namespace TopiaForge.ModManager.Tests
             Assert(restored.Contributions!.Worlds.Count == manifest.Contributions!.Worlds.Count
                 && restored.Contributions.Gamemodes.Count == manifest.Contributions.Gamemodes.Count,
                 "Serialized V6 declarations must remain readable and complete.");
-            manifest.SchemaVersion = ModManifest.ManifestV5SchemaVersion;
-            manifest.Contributions = null;
-            manifest.WorldGamemodes.Add(new ModGamemode { Id = manifest.Id + ".legacy", Name = "Legacy" });
-            var legacy = ModManifestJson.Deserialize(JsonUtil.Serialize(manifest));
-            Assert(legacy.WorldGamemodes.Count == 1, "Temporary V5 serialization must preserve legacy data until retirement.");
             Console.WriteLine("Manifest activation serialization tests passed.");
         }
         private static void Assert(bool value, string message) { if (!value) throw new InvalidOperationException(message); }

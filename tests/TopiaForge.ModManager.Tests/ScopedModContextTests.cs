@@ -191,7 +191,7 @@ namespace TopiaForge.ModManager.Tests
             return creation.Result;
         }
         private static ModManifest Manifest(string id = "scope.mod") => new ModManifest
-        { SchemaVersion = 5, Id = id, Name = "Scope", Version = "1.0.0", EntryAssembly = "Scope.dll", EntryType = "Scope.Entry" };
+        { SchemaVersion = 6, Id = id, Name = "Scope", Version = "1.0.0", EntryAssembly = "Scope.dll", EntryType = "Scope.Entry" };
         private static ModContext Parent(string root, RecordingFactory? factory = null, ModServiceRegistry? registry = null,
             ModManifest? manifest = null, IEnumerable<ModManifest>? available = null)
         {
