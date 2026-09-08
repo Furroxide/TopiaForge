@@ -183,21 +183,21 @@ ship without one — shipping unsigned has to be written down.
 
 `unsigned` is accepted by policy validation only on a `0.x` prerelease and only
 when no certificate is pinned; `release validate-policy` rejects a policy that
-carries both. The validator, handoff and qualification contracts already require
-unsigned executable evidence and omission of the detached CMS signature in that
-mode. The construction path remains incomplete: the PowerShell builder still
-requires signing credentials, and the Dart builder still invokes an ambient
-signer. Their repairs await explicit permission; do not use these contract checks
-as evidence that unsigned package construction succeeds.
+carries both. Unsigned Windows RC1 is authorized, and the checked-in policy now
+records `windowsDistribution: unsigned`. The construction repairs are implemented
+and their synthetic regressions pass; revision-specific results and remaining
+suite verification are recorded in
+[`gamemode-contract/Status.md`](internal/gamemode-contract/Status.md).
+No candidate is qualified. Building the exact frozen payloads, isolated live
+acceptance and remaining gate approvals are still required.
 
-The checked-in policy currently leaves `signingIdentities` empty, so the signed
-default remains active and the required reviewed certificate is not configured.
-Explicit authorization to select unsigned `0.1.0-rc.1` is still pending. The
-implemented unsigned qualification path records unsigned trust, requires the CMS asset and its
-decision digest to be absent, and retains the handoff, qualification and payload
-digests. It does not select that mode automatically when credentials are missing.
+The validator, handoff and qualification contracts require verified unsigned
+executable evidence in this mode. Both the detached CMS asset and its decision
+digest must be absent, while handoff, qualification and payload digests remain
+mandatory. Missing signing credentials never select this mode automatically.
 Ed25519 update signing, candidate qualification and protected publication approval
-remain required in either mode.
+remain required in either mode. Windows may show an unrecognized-publisher or
+SmartScreen warning for unsigned artifacts; this is not a verified publisher claim.
 
 The following certificate requirements apply when the policy selects `signed`
 (including when the optional distribution field is absent). Before freezing

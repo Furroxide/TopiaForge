@@ -115,6 +115,18 @@ class TopiaForgeReleasePolicy {
       json['signingIdentities'],
       'signingIdentities',
     );
+    for (final field in const [
+      'windowsDistribution',
+      'windowsCertificateSha256',
+    ]) {
+      if (!signingIdentities.containsKey(field)) continue;
+      final value = signingIdentities[field];
+      if (value is! String || value.isEmpty) {
+        throw StateError(
+          '${file.path} signingIdentities.$field must be a nonempty string when present.',
+        );
+      }
+    }
     final bepInEx = _object(json['bepInEx'], 'bepInEx');
     if (publication['mode'] != 'admin-staged-auto-publish' ||
         publication['allowTagCreation'] != false ||

@@ -48,14 +48,6 @@ void main() {
               )
               as Map<String, Object?>;
 
-      // Silence means signed. A certificate that simply went missing must never
-      // read as a decision to ship without one.
-      final silent = TopiaForgeReleasePolicy.load(root);
-      expect(silent.windowsDistribution, 'signed');
-      expect(silent.distributesWindowsUnsigned, isFalse);
-      expect(silent.requiresWindowsSigningIdentity, isTrue);
-      expect(silent.hasConfiguredWindowsSigningIdentity, isFalse);
-
       TopiaForgeReleasePolicy loadWith(
         String label,
         Map<String, Object?> signingIdentities, {
@@ -70,6 +62,19 @@ void main() {
           ..writeAsStringSync(jsonEncode(json));
         return TopiaForgeReleasePolicy.load(candidate.path);
       }
+
+      // Silence remains signed even after the reviewed RC1 policy opts out.
+      final silent = loadWith('silent', {});
+      expect(silent.windowsDistribution, 'signed');
+      expect(silent.distributesWindowsUnsigned, isFalse);
+      expect(silent.requiresWindowsSigningIdentity, isTrue);
+      expect(silent.hasConfiguredWindowsSigningIdentity, isFalse);
+
+      final reviewed = TopiaForgeReleasePolicy.load(root);
+      expect(schema.validate(policyJson).isValid, isTrue);
+      expect(reviewed.productVersion, '0.1.0-rc.1');
+      expect(reviewed.windowsDistribution, 'unsigned');
+      expect(reviewed.windowsCertificateSha256, isEmpty);
 
       // Recorded unsigned: the signing identity stops being required, and the
       // decision is visible in the policy rather than inferred from an absence.
@@ -98,7 +103,37 @@ void main() {
       expect(contradictory.distributesWindowsUnsigned, isTrue);
       expect(contradictory.hasConfiguredWindowsSigningIdentity, isTrue);
 
-      // And the default repository policy still fails closed on signing.
+      // Preserve the validator's other real inputs without mutating root policy.
+      final inputs = Process.runSync(
+        'git',
+        [
+          'ls-files',
+          '--',
+          'global.json',
+          'Directory.Build.props',
+          'tools/unity-ui-bundle/ProjectSettings/ProjectVersion.txt',
+          '.github/robotopia-game-build.json',
+          'baselines/gamecode.surface.baseline.json',
+          'src/TopiaForge.ModManager.Core/TopiaForgeVersions.cs',
+          '*.csproj',
+          '*/pubspec.yaml',
+          'templates/**/package.json',
+          'mods/**/topiaforge.mod.json',
+          'LICENSE',
+          release.notesFile,
+          ...silent.provenanceFiles,
+        ],
+        workingDirectory: root,
+        stdoutEncoding: utf8,
+      );
+      expect(inputs.exitCode, 0);
+      for (final relative in (inputs.stdout as String).trim().split('\n')) {
+        final path = relative.trim();
+        final copy = File(p.join(silent.repositoryRoot, path));
+        copy.parent.createSync(recursive: true);
+        File(p.join(root, path)).copySync(copy.path);
+      }
+      // The silent fixture still fails closed on missing signing identity.
       final issues = await const ReleasePolicyValidator().validate(
         policy: silent,
         release: release,
