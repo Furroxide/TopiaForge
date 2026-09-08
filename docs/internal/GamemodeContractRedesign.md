@@ -1,8 +1,10 @@
 # Gamemode contract redesign
 
 Status: implementation specification approved 5 September 2026; qualification
-contract updated 8 September 2026. Unsigned package construction still requires
-the permission recorded as pending in the evidence ledger. This document supersedes the external ManifestV6 stage-1 brief and stage-2 prompt. It describes
+contract updated 8 September 2026. The maintainer authorized unsigned Windows
+`0.1.0-rc.1` construction on that date; update signing, checksums, provenance,
+protected approval and release qualification remain required. This document
+supersedes the external ManifestV6 stage-1 brief and stage-2 prompt. It describes
 the required result, not a claim that the result exists. Read the
 [evidence ledger](gamemode-contract/Status.md) for implementation and verification
 status and the [execution prompts](gamemode-contract/prompts/README.md) for the
