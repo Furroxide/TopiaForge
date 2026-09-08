@@ -246,8 +246,22 @@ jobs:
           sdk: "3.12.2"
 
       - name: Build x64 CLI
-        working-directory: apps/topiaforge_cli
+        shell: bash
         run: |
+          set -euo pipefail
+          source "$GITHUB_WORKSPACE/tools/prepare-neutral-build-root.sh" "$GITHUB_WORKSPACE"
+          trap topiaforge_cleanup_neutral_build_root EXIT
+          cp -R "${DART_HOME//\\//}" "$TOPIAFORGE_NEUTRAL_ROOT/dart-sdk"
+          dart_bin="$TOPIAFORGE_NEUTRAL_ROOT/dart-sdk/bin"
+          if [ "$RUNNER_OS" = Windows ]; then
+            dart_bin="$(cygpath -u "$dart_bin")"
+          fi
+          export PATH="$dart_bin:$PATH"
+          resolved_dart="$(command -v dart)"
+          test "${resolved_dart%.exe}" = "$dart_bin/dart"
+          [[ "$(dart --version 2>&1)" == 'Dart SDK version: 3.12.2 '* ]]
+          export PUB_CACHE="$TOPIAFORGE_NEUTRAL_PUB_CACHE"
+          cd "$TOPIAFORGE_NEUTRAL_SOURCE/apps/topiaforge_cli"
           dart pub get --enforce-lockfile
           dart compile exe bin/topiaforge.dart -o "$RUNNER_TEMP/topiaforge-macos-x64"
           chmod +x "$RUNNER_TEMP/topiaforge-macos-x64"
@@ -369,9 +383,21 @@ jobs:
       - name: Prepare architecture-dispatched macOS CLI
         if: matrix.platform == 'macos'
         shell: bash
-        working-directory: apps/topiaforge_cli
         run: |
           set -euo pipefail
+          source "$GITHUB_WORKSPACE/tools/prepare-neutral-build-root.sh" "$GITHUB_WORKSPACE"
+          trap topiaforge_cleanup_neutral_build_root EXIT
+          cp -R "${DART_HOME//\\//}" "$TOPIAFORGE_NEUTRAL_ROOT/dart-sdk"
+          dart_bin="$TOPIAFORGE_NEUTRAL_ROOT/dart-sdk/bin"
+          if [ "$RUNNER_OS" = Windows ]; then
+            dart_bin="$(cygpath -u "$dart_bin")"
+          fi
+          export PATH="$dart_bin:$PATH"
+          resolved_dart="$(command -v dart)"
+          test "${resolved_dart%.exe}" = "$dart_bin/dart"
+          [[ "$(dart --version 2>&1)" == 'Dart SDK version: 3.12.2 '* ]]
+          export PUB_CACHE="$TOPIAFORGE_NEUTRAL_PUB_CACHE"
+          cd "$TOPIAFORGE_NEUTRAL_SOURCE/apps/topiaforge_cli"
           dart pub get --enforce-lockfile
           cli_dir="$RUNNER_TEMP/topiaforge-macos-cli"
           mkdir -p "$cli_dir"
@@ -385,6 +411,32 @@ jobs:
           x64_help="$(arch -x86_64 "$cli_dir/topiaforge-x64" --help)"
           grep -Fq 'TopiaForge CLI' <<< "$arm_help"
           grep -Fq 'TopiaForge CLI' <<< "$x64_help"
+
+      - name: Build neutral CLI
+        if: matrix.platform != 'macos'
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "$GITHUB_WORKSPACE/tools/prepare-neutral-build-root.sh" "$GITHUB_WORKSPACE"
+          trap topiaforge_cleanup_neutral_build_root EXIT
+          cp -R "${DART_HOME//\\//}" "$TOPIAFORGE_NEUTRAL_ROOT/dart-sdk"
+          dart_bin="$TOPIAFORGE_NEUTRAL_ROOT/dart-sdk/bin"
+          if [ "$RUNNER_OS" = Windows ]; then
+            dart_bin="$(cygpath -u "$dart_bin")"
+          fi
+          export PATH="$dart_bin:$PATH"
+          resolved_dart="$(command -v dart)"
+          test "${resolved_dart%.exe}" = "$dart_bin/dart"
+          [[ "$(dart --version 2>&1)" == 'Dart SDK version: 3.12.2 '* ]]
+          export PUB_CACHE="$TOPIAFORGE_NEUTRAL_PUB_CACHE"
+          cd "$TOPIAFORGE_NEUTRAL_SOURCE/apps/topiaforge_cli"
+          dart pub get --enforce-lockfile
+          suffix=''
+          if [ "$RUNNER_OS" = Windows ]; then
+            suffix='.exe'
+          fi
+          temp="${RUNNER_TEMP//\\//}"
+          dart compile exe bin/topiaforge.dart -o "$temp/topiaforge-neutral-cli$suffix"
 
       - name: Download launcher artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -446,6 +498,12 @@ jobs:
           )
           if [ "${{ matrix.platform }}" = "macos" ]; then
             args+=(--prebuilt-cli "$temp/topiaforge-macos-cli")
+          else
+            suffix=''
+            if [ "$RUNNER_OS" = Windows ]; then
+              suffix='.exe'
+            fi
+            args+=(--prebuilt-cli "$temp/topiaforge-neutral-cli$suffix")
           fi
           dart run bin/topiaforge.dart "${args[@]}"
 

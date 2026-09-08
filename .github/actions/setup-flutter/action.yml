@@ -1,6 +1,12 @@
 name: Set up pinned Flutter
 description: Install the repository-pinned Flutter SDK from a verified official archive.
 
+inputs:
+  install_directory:
+    description: Optional dedicated install directory inside a verified neutral build root.
+    required: false
+    default: ''
+
 runs:
   using: composite
   steps:
@@ -17,5 +23,5 @@ runs:
       shell: pwsh
       env:
         TOPIAFORGE_FLUTTER_ARCHIVE_DIRECTORY: ${{ runner.temp }}/topiaforge-flutter-archives
-        TOPIAFORGE_FLUTTER_INSTALL_DIRECTORY: ${{ runner.temp }}/topiaforge-flutter-sdk
+        TOPIAFORGE_FLUTTER_INSTALL_DIRECTORY: ${{ inputs.install_directory || format('{0}/topiaforge-flutter-sdk', runner.temp) }}
       run: '& "$env:GITHUB_ACTION_PATH/install-flutter.ps1"'
