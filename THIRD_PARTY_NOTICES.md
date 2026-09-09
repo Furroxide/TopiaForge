@@ -38,26 +38,41 @@ RoboPatch was used only as behavior prior art for clean-room compatibility plann
 
 Prism Launcher was used only as product maturity and UX inspiration. No Prism Launcher code was copied or ported.
 
-TopiaForge launcher UI bundles Robotopia web brand assets from `https://robotopia.gg/` and local
-TopiaForge artwork for offline launcher theming.
+TopiaForge launcher UI bundles CC0 pixel artwork for offline launcher theming. These three files
+replaced Robotopia web brand assets taken from `https://robotopia.gg/` that carried no
+redistribution grant; the replacement was made on 2026-09-09 and no Robotopia web asset remains in
+the launcher.
 
-- Web-derived raster files: `packages/launcher_ui/assets/brand/topiaforge-city-header.webp`,
+- Files: `packages/launcher_ui/assets/brand/topiaforge-city-header.webp`,
   `packages/launcher_ui/assets/brand/baby-stitch.webp`, and
   `packages/launcher_ui/assets/brand/sheriff.webp`
-- Source: `https://robotopia.gg/`
-- Owner: **Tomato Cake.** These three files are Robotopia web brand assets and remain the property of
-  Tomato Cake. TopiaForge does not claim any ownership of them, they are not covered by this project's
-  AGPL-3.0-or-later grant, and they carry no separate redistribution licence. They are bundled for
-  offline launcher theming with attribution only.
-- Rights basis: attribution pending a written grant. Permission has been requested from Tomato Cake and
-  no written grant has been recorded yet. The project owner has accepted this as a non-blocking risk
-  for the `0.x` line (recorded 2026-08-24); it must be revisited before `1.0`. If permission is
-  declined, or if Tomato Cake asks for their removal, these files are removed or replaced on request.
-- Replacement status: no first-party artwork exists for these three yet. All three are referenced by the
-  launcher (`TopiaForgeBrandAssets.cityHeader`, `.babyStitch`, `.sheriff` in
-  `packages/launcher_ui/lib/src/launcher_theme.dart`). The precedent for replacing them is
-  `packages/launcher_ui/lib/src/pixel_robot.dart`, which retired the bundled `robot.webp`.
-- Local changes: filenames were normalized for launcher packaging.
+- Artist: **GrafxKid**, via OpenGameArt.
+- License: **CC0 1.0 Universal (public domain dedication)**. No attribution is required and no
+  share-alike term applies, so these files raise no compatibility question against this project's
+  AGPL-3.0-or-later grant. The attribution below is recorded as provenance, not as an obligation.
+- Sources and upstream SHA-256:
+  - `topiaforge-city-header.webp` from *City Mega Pack*,
+    `https://opengameart.org/content/city-mega-pack`, upstream file `SHIPPING_DOCKS_AREA.png`
+    (SHA-256 `984030543b9f7fcf0197c07eba9ad4f8768cb8f705e3ee1673fa7f685ae65b00`).
+  - `baby-stitch.webp` and `sheriff.webp` from *Gum Bot sprites*,
+    `https://opengameart.org/content/gum-bot-sprites`, upstream file `Gum Bot sprites.png`
+    (SHA-256 `8ed4706fd6a339b31d951a7b78e5ce56c1bd95c9bbcb7763dfddb4161570060f`).
+- Local changes:
+  - `topiaforge-city-header.webp`: cropped from `SHIPPING_DOCKS_AREA.png` at `(64, 768)-(832, 1056)`
+    to 768x288, then the plain sky band was repeated upward by 144 rows to reach 768x432 (16:9).
+    No repainting or recolouring.
+  - `baby-stitch.webp`: the 32x32 cell at row 1, column 1 of `Gum Bot sprites.png`, keyed from its
+    flat `#F5BAFE` sheet background to binary alpha and trimmed to its bounding box (14x18).
+  - `sheriff.webp`: the same, for the cell at row 1, column 2 (16x18).
+  - All three re-encoded as lossless WebP. Filenames are unchanged because
+    `TopiaForgeBrandAssets.cityHeader`, `.babyStitch` and `.sheriff` in
+    `packages/launcher_ui/lib/src/launcher_theme.dart` refer to them by name.
+- Installed SHA-256: `topiaforge-city-header.webp`
+  `a3f642ad8ef8b817b96257df670d0d5773fb40ead5da7ebf4699d84022d940dd`; `baby-stitch.webp`
+  `36328e54cb9c7382b06ba81ed568e6b1553f8a3791735afd792d4a0daadb2978`; `sheriff.webp`
+  `dc488ee07c3244356c707882cdeb5c3b4f2943c109edad0996cd444887d90378`.
+- The two character sprites are pixel art drawn on a small grid and are rendered with
+  `FilterQuality.none`, matching `packages/launcher_ui/lib/src/pixel_robot.dart`.
 
 ## First-party binary and generated assets
 
