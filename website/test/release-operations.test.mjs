@@ -47,7 +47,6 @@ test('release operations does not reopen the recorded support ownership decision
 for (const path of [
   'docs/AdminRelease.md',
   'docs/LaunchBlockers.md',
-  'release/notes/v0.1.0-rc.1.md',
 ]) {
   test(`${path} records unsigned authorization without granting qualification`, () => {
     const guide = read(path).replace(/\s+/gu, ' ');
@@ -57,6 +56,23 @@ for (const path of [
     assert.doesNotMatch(guide, /(?:authorization|policy decision) (?:for unsigned RC1 |to select unsigned `0\.1\.0-rc\.1` )?(?:is |remains |is still )?pending/u);
   });
 }
+
+test('RC1 public notes retain prerelease trust disclosures without mutable preparation status', () => {
+  const catalog = JSON.parse(read('release/catalog.json'));
+  const release = catalog.releases.find((entry) => entry.version === policy.versioning.productVersion);
+  const notes = read(release.notesFile).replace(/\s+/gu, ' ');
+  const updateKeys = JSON.parse(read('release/update-keys.json'));
+  assert.equal(release.prerelease, true);
+  assert.equal(policy.signingIdentities.windowsDistribution, 'unsigned');
+  assert.match(notes, /early prerelease/u);
+  assert.match(notes, /intentionally unsigned/u);
+  assert.match(notes, /SmartScreen/u);
+  assert.match(notes, /no Authenticode publisher identity/u);
+  assert.match(notes, /topiaforge-update-v1\.json/u);
+  assert.match(notes, /Ed25519 sidecar/u);
+  assert.ok(updateKeys.keys.some((key) => notes.includes(key.id)));
+  assert.doesNotMatch(notes, /not qualified for publication|no (?:final )?(?:candidate|archive) is qualified|candidate status:/iu);
+});
 
 test('release checklist names the complete eleven-package public SDK release surface', () => {
   const guide = read('docs/ReleaseChecklist.md').replace(/\s+/gu, ' ');
