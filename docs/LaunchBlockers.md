@@ -407,14 +407,15 @@ automated tests cannot close Unity object lifetime.
 
   Owner: project owner, Robotopia owner, and IP/trademark counsel.
 
-  Current state, web-derived art (recorded 2026-08-24): the three Robotopia web brand rasters
-  (`topiaforge-city-header.webp`, `baby-stitch.webp`, `sheriff.webp`) are now attributed in
-  [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md) as the property of Tomato Cake, outside this
-  project's AGPL grant, bundled with attribution only while a written grant remains outstanding. All
-  three are still referenced by the launcher and no first-party replacement exists for them; the
-  precedent for retiring one is `packages/launcher_ui/lib/src/pixel_robot.dart`, which replaced
-  `robot.webp`. The project owner has accepted this as a **non-blocking** risk for the `0.x` line. It
-  must be revisited before `1.0`, and the files are removed or replaced on request from Tomato Cake.
+  Current state, web-derived art (resolved 2026-09-09): the three Robotopia web brand rasters
+  (`topiaforge-city-header.webp`, `baby-stitch.webp`, `sheriff.webp`) have been **replaced** with CC0
+  artwork by GrafxKid from OpenGameArt, keeping the same filenames. No Robotopia web asset remains in
+  the launcher. CC0 carries no attribution or share-alike term, so the replacements raise no
+  compatibility question against the AGPL grant; source URLs, upstream and installed SHA-256 values,
+  and the exact crop/keying transformations are recorded in
+  [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md). This closes the web-derived-art sub-item; the
+  earlier `0.x` non-blocking disposition recorded on 2026-08-24 no longer applies, and there is
+  nothing left to revisit before `1.0` for these three files.
 
   Exit criteria: retain written authority or an approved clean-room/non-affiliation basis for the Robotopia and
   TopiaForge names, Robotopia injection, compatibility extraction/baselines, registry claims, web-derived art, adapted
