@@ -148,42 +148,6 @@ namespace TopiaForge.CreatorTools.Shared
             return OperationResult<bool>.Success(changed);
         }
 
-        public OperationResult<bool> EndSession()
-        {
-            if (creatorSession == null && roster.Count == 0 && runner == null
-                && mutationLease == null && controlLease == null && graphAudio.Count == 0)
-            {
-                return OperationResult<bool>.Success(false);
-            }
-            EndConversation();
-            DisposeGraphAudio();
-            runner?.Dispose();
-            runner = null;
-            DisposeProjectInteractions();
-            activeProject = null;
-            projectEntities.Clear();
-            projectBindings.Clear();
-            confirmedNativeProjectId = string.Empty;
-            confirmation?.Dispose();
-            confirmation = null;
-            window?.Hide();
-            ReleaseControl();
-            for (var index = roster.Count - 1; index >= 0; index--) roster[index].Dispose();
-            roster.Clear();
-            ClearHistory();
-            creatorSession?.Dispose();
-            creatorSession = null;
-            mutationLease?.Dispose();
-            mutationLease = null;
-            playerTargetRegistration?.Dispose();
-            playerTargetRegistration = null;
-            selectedRosterId = string.Empty;
-            status = "Session ended; temporary edits restored.";
-            RefreshUi();
-            RefreshHud(force: true);
-            return OperationResult<bool>.Success(true);
-        }
-
         public void Dispose()
         {
             if (disposed) return;
@@ -249,8 +213,9 @@ namespace TopiaForge.CreatorTools.Shared
             if (runner != null && !runner.IsRunning && !string.IsNullOrEmpty(runner.LastProblem))
             {
                 var problem = runner.LastProblem;
-                StopProject(removeProjectEntities: true);
-                status = problem + " Project-owned content and edits were rolled back.";
+                var stopped = StopProject(removeProjectEntities: true);
+                status = problem + (stopped.Succeeded ? " Project-owned content and edits were rolled back."
+                    : " " + stopped.ErrorMessage);
                 context.Ui.ShowToast(status, UiTone.Danger);
                 return;
             }
