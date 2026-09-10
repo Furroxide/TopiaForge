@@ -45,6 +45,10 @@ namespace TopiaForge.ModRuntime.Tests
             var root = Directory.CreateTempSubdirectory("TopiaForgeGeneratedBinding-").FullName;
             try
             {
+                // These fixtures use only the generated local SDK feed and installed targeting packs.
+                // Keep host NuGet feeds out; generated props still supply RestoreAdditionalProjectSources.
+                File.WriteAllText(Path.Combine(root, "NuGet.Config"),
+                    "<configuration><packageSources><clear /></packageSources></configuration>");
                 var output = Path.Combine(root, "generated");
                 Assert(RunGeneratedTool(GeneratedTool.Dart, repository, "--version").Contains("Dart SDK version: 3.12.2 ", StringComparison.Ordinal),
                     "generated acceptance requires exactly Dart 3.12.2");
@@ -306,8 +310,13 @@ namespace TopiaForge.ModRuntime.Tests
             start.RedirectStandardOutput = true; start.RedirectStandardError = true;
             using var process = Process.Start(start) ?? throw new InvalidOperationException("Could not start " + label);
             var output = process.StandardOutput.ReadToEndAsync(); var error = process.StandardError.ReadToEndAsync();
-            if (!process.WaitForExit(timeout)) { process.Kill(true); throw new InvalidOperationException(label + " timed out"); }
+            var exited = process.WaitForExit(timeout);
+            if (!exited) { process.Kill(true); process.WaitForExit(); }
             var transcript = output.GetAwaiter().GetResult() + error.GetAwaiter().GetResult();
+            if (!exited)
+                throw new InvalidOperationException(label + " timed out after " + timeout + " ms: "
+                    + start.FileName + " " + string.Join(" ", start.ArgumentList.Select(argument => JsonSerializer.Serialize(argument)))
+                    + Environment.NewLine + transcript);
             Assert(process.ExitCode == 0, label + " failed: " + transcript);
             return transcript;
         }

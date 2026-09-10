@@ -25,10 +25,10 @@ to redistribute assets or evidence of a successful test.
 - Integrate release stabilization through ordinary same-repository PRs into
   `release/0.1.0-rc.1`. Preserve unrelated local work and do not infer that an
   uncommitted implementation belongs in the frozen candidate.
-- Resolve the Astro advisories reported by dependency review on release head
-  `6d4082d8156b5c6e00dcecbecd4097ff25c482ed`: `GHSA-26w7-cxv4-gfx2`
-  and `GHSA-376h-93r7-7g6f`. Require fresh passing dependency review after
-  integration, alongside all other required checks and CodeQL.
+- Preserve the dependency repairs integrated through
+  [PR #129](https://github.com/Furroxide/TopiaForge/pull/129): Astro 7.2.8,
+  Sharp 0.35.4, smol-toml 1.8.0 and SVGO 4.1.0. Require fresh passing dependency
+  review on the final release head, alongside all other required checks and CodeQL.
 - Obtain actual attributable approvals for `P0-IP-01`, `P0-OSS-01`,
   `P0-PRIV-01`, and `P0-CRED-01`, and integrate their valid safe references.
   Their tracked records are blocked with no evidence IDs. Only `P0-GAME-01`
@@ -50,10 +50,43 @@ to redistribute assets or evidence of a successful test.
   final release head and results. Disable draft only when source preparation
   is complete. Leave auto-merge off; the user performs the final merge.
 
-At the 2026-09-10 inspection, PR #119 was a mergeable draft. Dependency review
-was its sole failing required check; the other five required check names had
-successful results. These observations apply to the recorded head, not a later
-stabilization commit. No RC1 tag or GitHub release existed.
+At the initial 2026-09-10 inspection of `6d4082d`, dependency review was
+PR #119's sole failing required check. PR #129 repaired that failure. At
+`f0ef217`, all required checks and CodeQL passed; PR #119 remained a draft.
+No RC1 tag or GitHub release existed. Later release heads need fresh checks.
+
+## Integrated stabilization evidence
+
+PR #129 was squash-merged normally at
+`f0ef217485bb4519e202387c2f68757316d746f2` after all required checks and CodeQL
+passed on reviewed head `7859046ca6cef60d49955b06bee01363fd406e7e`.
+[Full CI](https://github.com/Furroxide/TopiaForge/actions/runs/34418453127)
+passed all 16 jobs, including seven templates and the complete guide, C# API,
+Dart API and search build. Local website validation passed 50 tests and reported
+zero npm audit vulnerabilities. On integrated release head `f0ef217`,
+[main-target CI](https://github.com/Furroxide/TopiaForge/actions/runs/34419132880)
+and [release-push CI](https://github.com/Furroxide/TopiaForge/actions/runs/34419131141)
+each passed all 16 jobs; both CodeQL runs passed. The
+[packaging dry run](https://github.com/Furroxide/TopiaForge/actions/runs/34419133863)
+passed all 11 jobs. Later source changes require fresh checks. None of these
+source or synthetic package results qualifies the production candidate.
+
+The subsequent cleanup repair propagates production creator-source disposal
+failures through stop, removal, undo, graph actions and session teardown. It
+continues unrelated owned cleanup, preserves startup and rollback errors, and
+prevents retired callbacks from restoring undo history. Production-backed
+regressions cover eleven cleanup routes plus session retirement and startup
+rollback. Generated runtime acceptance fixtures use their explicit local SDK
+feed without inheriting unrelated host feeds; failures retain subprocess output
+and the existing deadlines. Local full Release build, manager and runtime
+harnesses pass. The PR's fresh hosted checks remain required before integration.
+
+The original development checkout retains separate unfinished Sandbox automation
+and provisioning work. Its source tests and earlier pinned-Editor results are
+not candidate acceptance. Full native automation, a clean runtime provisioning
+retry, reviewed QA admission and the final candidate authoring/game matrix
+remain incomplete. The user has not answered the full-versus-reduced experimental
+scope question; no requirement or deferred decision has been changed.
 
 ## After the user merges
 

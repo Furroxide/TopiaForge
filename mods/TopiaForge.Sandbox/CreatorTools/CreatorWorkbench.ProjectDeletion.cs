@@ -26,7 +26,17 @@ namespace TopiaForge.CreatorTools.Shared
                     confirmation = null;
                     if (!confirmed || projectDeleteTask != null) return;
                     deletingProjectId = summary.Id;
-                    if (activeProject?.Id == deletingProjectId) StopProject(removeProjectEntities: true, removeProjectBindings: true);
+                    if (activeProject?.Id == deletingProjectId)
+                    {
+                        var stopped = StopProject(removeProjectEntities: true, removeProjectBindings: true);
+                        if (!stopped.Succeeded)
+                        {
+                            deletingProjectId = string.Empty;
+                            context.Ui.ShowToast(stopped.ErrorMessage, UiTone.Danger);
+                            RefreshUi();
+                            return;
+                        }
+                    }
                     projectDeleteTask = projects.DeleteAsync(deletingProjectId);
                     status = "Deleting project…";
                     RefreshUi();
