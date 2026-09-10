@@ -144,6 +144,7 @@ namespace TopiaForge.ModManager.Tests
             if (args.Length == 1 && string.Equals(args[0], "--creator-workbench", StringComparison.Ordinal))
             {
                 CreatorWorkbenchLifecycleTests.Run();
+                CreatorWorkbenchCleanupFailureTests.Run();
                 return 0;
             }
 
@@ -231,6 +232,7 @@ namespace TopiaForge.ModManager.Tests
                 CreatorSceneAdapterTests.Run();
                 CreatorEventGraphRunnerTests.Run();
                 CreatorWorkbenchLifecycleTests.Run();
+                CreatorWorkbenchCleanupFailureTests.Run();
                 WorldsSafetyTests.Run();
                 return 0;
             }
@@ -427,6 +429,7 @@ namespace TopiaForge.ModManager.Tests
                 CreatorSceneAdapterTests.Run();
                 CreatorEventGraphRunnerTests.Run();
                 CreatorWorkbenchLifecycleTests.Run();
+                CreatorWorkbenchCleanupFailureTests.Run();
                 ShopTests.Run();
                 GameCompatTests.Run();
                 GameCompatActivationTests.Run();
