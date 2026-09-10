@@ -7,6 +7,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Tasks;
 using TopiaForge.ModManager;
 using TopiaForge.ModManager.Core;
 using TopiaForge.Mods;
@@ -45,6 +46,10 @@ namespace TopiaForge.ModRuntime.Tests
             var root = Directory.CreateTempSubdirectory("TopiaForgeGeneratedBinding-").FullName;
             try
             {
+                // These fixtures use only the generated local SDK feed and installed targeting packs.
+                // Keep host NuGet feeds out; generated props still supply RestoreAdditionalProjectSources.
+                File.WriteAllText(Path.Combine(root, "NuGet.Config"),
+                    "<configuration><packageSources><clear /></packageSources></configuration>");
                 var output = Path.Combine(root, "generated");
                 Assert(RunGeneratedTool(GeneratedTool.Dart, repository, "--version").Contains("Dart SDK version: 3.12.2 ", StringComparison.Ordinal),
                     "generated acceptance requires exactly Dart 3.12.2");
@@ -305,11 +310,45 @@ namespace TopiaForge.ModRuntime.Tests
         {
             start.RedirectStandardOutput = true; start.RedirectStandardError = true;
             using var process = Process.Start(start) ?? throw new InvalidOperationException("Could not start " + label);
-            var output = process.StandardOutput.ReadToEndAsync(); var error = process.StandardError.ReadToEndAsync();
-            if (!process.WaitForExit(timeout)) { process.Kill(true); throw new InvalidOperationException(label + " timed out"); }
-            var transcript = output.GetAwaiter().GetResult() + error.GetAwaiter().GetResult();
+            using var reads = new CancellationTokenSource();
+            var output = process.StandardOutput.ReadToEndAsync(reads.Token); var error = process.StandardError.ReadToEndAsync(reads.Token);
+            var exited = process.WaitForExit(timeout);
+            var cleanup = new List<string>();
+            var cleanupClock = Stopwatch.StartNew();
+            int RemainingCleanup() => Math.Max(0, 5000 - (int)cleanupClock.ElapsedMilliseconds);
+            if (!exited)
+            {
+                try { process.Kill(true); }
+                catch (Exception exception) { cleanup.Add("Process-tree termination failed: " + exception.Message); }
+                try { if (!process.WaitForExit(RemainingCleanup())) cleanup.Add("Process exit was not observed within cleanup deadline."); }
+                catch (Exception exception) { cleanup.Add("Process exit check failed: " + exception.Message); }
+            }
+            try
+            {
+                if (!Task.WaitAll(new Task[] { output, error }, RemainingCleanup()))
+                    cleanup.Add("Output streams did not close within cleanup deadline; unfinished output is unavailable.");
+            }
+            catch (Exception exception) { cleanup.Add("Output collection failed: " + exception.Message); }
+            var transcript = CompletedOutput(output, "stdout") + CompletedOutput(error, "stderr");
+            try { reads.Cancel(); }
+            catch (Exception exception) { cleanup.Add("Output cancellation failed: " + exception.Message); }
+            if (cleanup.Count > 0) transcript += Environment.NewLine + string.Join(Environment.NewLine, cleanup);
+            if (!exited)
+                throw new InvalidOperationException(label + " timed out after " + timeout + " ms: "
+                    + start.FileName + " " + string.Join(" ", start.ArgumentList.Select(argument => JsonSerializer.Serialize(argument)))
+                    + Environment.NewLine + transcript);
+            Assert(output.IsCompletedSuccessfully && error.IsCompletedSuccessfully, label + " output collection failed: " + transcript);
             Assert(process.ExitCode == 0, label + " failed: " + transcript);
             return transcript;
+        }
+
+        private static string CompletedOutput(Task<string> output, string stream)
+        {
+            if (output.IsCompletedSuccessfully) return output.Result;
+            // Observe a later read fault after cancellation/disposal without waiting on an inherited pipe.
+            _ = output.ContinueWith(task => { _ = task.Exception; }, CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            return "[" + stream + " unavailable: " + (output.IsFaulted ? output.Exception!.GetBaseException().Message : "stream did not finish") + "]";
         }
     }
 }

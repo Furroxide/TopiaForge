@@ -41,25 +41,22 @@ namespace TopiaForge.CreatorTools.Shared
 
         public OperationResult<string> CleanUpEverything()
         {
-            var removed = 0;
+            var removed = roster.Count(entry => entry.Owned);
+            var cleanup = OperationResult<bool>.Success(true);
             if (runner != null || projectEntities.Count > 0 || projectBindings.Count > 0)
             {
-                removed += projectEntities.Count;
-                StopProject(removeProjectEntities: true);
+                var stopped = StopProject(removeProjectEntities: true);
+                if (!stopped.Succeeded) cleanup = OperationResult<bool>.Failure(stopped.ErrorCode, stopped.ErrorMessage);
             }
-            for (var index = roster.Count - 1; index >= 0; index--)
-            {
-                if (!roster[index].Owned) continue;
-                Despawn(roster[index]);
-                roster[index].Dispose();
-                roster.RemoveAt(index);
-                removed++;
-            }
+            foreach (var entry in roster.Where(item => item.Owned).Reverse().ToArray())
+                cleanup = MergeCleanup(cleanup, RemoveOwnedEntry(entry));
             selectedRosterId = string.Empty;
             ClearHistory();
-            status = removed.ToString(CultureInfo.InvariantCulture) + " owned objects removed.";
+            status = cleanup.Succeeded ? removed.ToString(CultureInfo.InvariantCulture) + " owned objects removed."
+                : "Cleanup completed with problems: " + cleanup.ErrorMessage;
             RefreshUi();
-            return OperationResult<string>.Success(status);
+            return cleanup.Succeeded ? OperationResult<string>.Success(status)
+                : OperationResult<string>.Failure(cleanup.ErrorCode, status);
         }
 
         public OperationResult<string> ToggleRobotSimulation()
@@ -328,27 +325,20 @@ namespace TopiaForge.CreatorTools.Shared
                 RecordNativeHidden(entry);
                 return OperationResult<string>.Success(entry.DisplayName + " temporarily hidden; End Session & Restore restores it.");
             }
+            var session = creatorSession;
             var projectId = ProjectIdForRoster(entry.Id);
-            if (TryGetTransform(entry, out var previous)) RecordDespawn(entry, previous, projectId);
-            Despawn(entry);
-            if (!string.IsNullOrEmpty(projectId))
-            {
-                DisposeProjectInteractions(projectId);
-                projectEntities.Remove(projectId);
-                runner?.Fire(CreatorGraphNodeKind.EntityRemoved, projectId);
-            }
-            roster.Remove(entry);
-            entry.Dispose();
-            if (string.Equals(selectedRosterId, entry.Id, StringComparison.Ordinal)) selectedRosterId = string.Empty;
-            status = entry.DisplayName + " removed.";
+            var hasTransform = TryGetTransform(entry, out var previous);
+            var cleanup = RemoveOwnedEntry(entry);
+            // Source disposal and removal events can synchronously end or replace this session.
+            if (!ReferenceEquals(creatorSession, session) || session?.IsAlive != true)
+                return cleanup.Succeeded ? OperationResult<string>.Success(status)
+                    : OperationResult<string>.Failure(cleanup.ErrorCode, cleanup.ErrorMessage);
+            if (cleanup.Succeeded && hasTransform) RecordDespawn(entry, previous, projectId);
+            status = cleanup.Succeeded ? entry.DisplayName + " removed."
+                : entry.DisplayName + " removal completed with cleanup problems: " + cleanup.ErrorMessage;
             RefreshUi();
-            return OperationResult<string>.Success(status);
-        }
-
-        private static void Despawn(CreatorRosterEntry entry)
-        {
-            if (entry.Robot != null) entry.Robot.Despawn();
-            else entry.Spawn?.Despawn();
+            return cleanup.Succeeded ? OperationResult<string>.Success(status)
+                : OperationResult<string>.Failure(cleanup.ErrorCode, status);
         }
 
         private OperationResult<TransformState> AimTransform()

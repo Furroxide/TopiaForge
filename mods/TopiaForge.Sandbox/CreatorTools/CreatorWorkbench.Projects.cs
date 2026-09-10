@@ -43,7 +43,13 @@ namespace TopiaForge.CreatorTools.Shared
                 projectLoadTask = null;
                 if (result.TryGetValue(out var project))
                 {
-                    StopProject(removeProjectEntities: true, removeProjectBindings: true);
+                    var stopped = StopProject(removeProjectEntities: true, removeProjectBindings: true);
+                    if (!stopped.Succeeded)
+                    {
+                        context.Ui.ShowToast(stopped.ErrorMessage, UiTone.Danger);
+                        RefreshUi();
+                        return;
+                    }
                     activeProject = project;
                     confirmedNativeProjectId = string.Empty;
                     graphViewport = UiGraphViewport.Default;
@@ -131,7 +137,8 @@ namespace TopiaForge.CreatorTools.Shared
                     "Resolve and explicitly confirm this project's native scene bindings before running.");
             }
 
-            StopProject(removeProjectEntities: true, removeProjectBindings: false);
+            var stopped = StopProject(removeProjectEntities: true, removeProjectBindings: false);
+            if (!stopped.Succeeded) return stopped;
             projectRunOrigin = activeProject.Origin == CreatorProjectOrigin.PlayerAtRun
                 && context.LocalPlayer.TryGetSnapshot(out var runPlayer) && runPlayer != null
                 ? runPlayer.Position
@@ -141,26 +148,24 @@ namespace TopiaForge.CreatorTools.Shared
                 var spawned = SpawnProjectEntity(entity);
                 if (!spawned.Succeeded)
                 {
-                    StopProject(removeProjectEntities: true);
-                    return OperationResult<string>.Failure(spawned.ErrorCode, spawned.ErrorMessage);
+                    return FailProjectStart(spawned.ErrorCode, spawned.ErrorMessage);
                 }
             }
             runner = new CreatorEventGraphRunner(activeProject, this);
             var interactions = RegisterProjectInteractions();
             if (!interactions.Succeeded)
             {
-                StopProject(removeProjectEntities: true);
-                return OperationResult<string>.Failure(interactions.ErrorCode, interactions.ErrorMessage);
+                return FailProjectStart(interactions.ErrorCode, interactions.ErrorMessage);
             }
             var started = runner.Start();
             if (!started.Succeeded)
             {
                 var errorCode = started.ErrorCode;
                 var errorMessage = started.ErrorMessage;
-                StopProject(removeProjectEntities: true, removeProjectBindings: false);
-                status = errorMessage;
+                var failed = FailProjectStart(errorCode, errorMessage);
+                status = failed.ErrorMessage;
                 RefreshUi();
-                return OperationResult<string>.Failure(errorCode, errorMessage);
+                return failed;
             }
 
             status = "Running " + activeProject.DisplayName + ".";
@@ -170,11 +175,14 @@ namespace TopiaForge.CreatorTools.Shared
 
         private OperationResult<string> StopProject(bool removeProjectEntities, bool removeProjectBindings = false)
         {
-            runner?.Dispose();
+            var cleanup = OperationResult<bool>.Success(true);
+            void Clean(Action action) { var attempted = TryCleanup(action); cleanup = MergeCleanup(cleanup, attempted); }
+            var stoppedRunner = runner;
             runner = null;
-            if (graphConversationOwned) EndConversation();
-            DisposeGraphAudio();
-            DisposeProjectInteractions();
+            Clean(() => stoppedRunner?.Dispose());
+            if (graphConversationOwned) Clean(() => EndConversation());
+            Clean(DisposeGraphAudio);
+            Clean(() => DisposeProjectInteractions());
             objectiveStates.Clear();
             enteredRadiusNodes.Clear();
             projectRunOrigin = Vec3.Zero;
@@ -183,41 +191,44 @@ namespace TopiaForge.CreatorTools.Shared
                 foreach (var rosterId in projectEntities.Values.ToArray())
                 {
                     var entry = FindRoster(rosterId);
-                    if (entry == null) continue;
-                    Despawn(entry);
-                    entry.Dispose();
-                    roster.Remove(entry);
+                    if (entry != null) cleanup = MergeCleanup(cleanup, RemoveOwnedEntry(entry, fireRemoved: false));
                 }
                 projectEntities.Clear();
             }
-            if (!removeProjectBindings)
+            foreach (var rosterId in projectBindings.Values.ToArray())
             {
-                foreach (var rosterId in projectBindings.Values)
+                var entry = FindRoster(rosterId);
+                if (entry == null) continue;
+                if (removeProjectBindings)
                 {
-                    var entry = FindRoster(rosterId);
-                    if (entry == null) continue;
-                    entry.NativeEdit?.Dispose();
-                    entry.RobotEdit?.Dispose();
+                    roster.Remove(entry);
+                    Clean(entry.Dispose);
+                }
+                else
+                {
+                    Clean(() => entry.NativeEdit?.Dispose());
+                    Clean(() => entry.RobotEdit?.Dispose());
                     entry.NativeEdit = null;
                     entry.RobotEdit = null;
                     entry.NativeHidden = false;
                 }
             }
-            else
+            if (removeProjectBindings)
             {
-                foreach (var rosterId in projectBindings.Values.ToArray())
-                {
-                    var entry = FindRoster(rosterId);
-                    if (entry == null) continue;
-                    entry.Dispose();
-                    roster.Remove(entry);
-                }
                 projectBindings.Clear();
                 confirmedNativeProjectId = string.Empty;
             }
-            status = "Event project stopped.";
+            status = cleanup.Succeeded ? "Event project stopped."
+                : "Event project stopped with cleanup problems: " + cleanup.ErrorMessage;
             RefreshUi();
-            return OperationResult<string>.Success(status);
+            return cleanup.Succeeded ? OperationResult<string>.Success(status)
+                : OperationResult<string>.Failure(cleanup.ErrorCode, status);
+        }
+
+        private OperationResult<string> FailProjectStart(ModErrorCode error, string message)
+        {
+            var cleanup = StopProject(removeProjectEntities: true);
+            return OperationResult<string>.Failure(error, message + (cleanup.Succeeded ? string.Empty : " " + cleanup.ErrorMessage));
         }
 
         private OperationResult<string> SpawnProjectEntity(CreatorProjectEntity definition)
@@ -260,11 +271,8 @@ namespace TopiaForge.CreatorTools.Shared
                 var interactions = RegisterProjectInteractionsFor(definition.Id);
                 if (!interactions.Succeeded)
                 {
-                    Despawn(entry);
-                    entry.Dispose();
-                    roster.Remove(entry);
-                    projectEntities.Remove(definition.Id);
-                    return OperationResult<string>.Failure(interactions.ErrorCode, interactions.ErrorMessage);
+                    var cleanup = RemoveOwnedEntry(entry, fireRemoved: false);
+                    return WithCleanupFailure(interactions.ErrorCode, interactions.ErrorMessage, cleanup);
                 }
             }
             return OperationResult<string>.Success(definition.DisplayName + " spawned.");

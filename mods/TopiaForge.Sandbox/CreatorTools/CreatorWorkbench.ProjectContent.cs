@@ -140,11 +140,8 @@ namespace TopiaForge.CreatorTools.Shared
                 : RegisterProjectInteractionsFor(definition.Id);
             if (!interactions.Succeeded)
             {
-                Despawn(entry);
-                entry.Dispose();
-                roster.Remove(entry);
-                projectEntities.Remove(definition.Id);
-                return OperationResult<string>.Failure(interactions.ErrorCode, interactions.ErrorMessage);
+                var cleanup = RemoveOwnedEntry(entry, fireRemoved: false);
+                return WithCleanupFailure(interactions.ErrorCode, interactions.ErrorMessage, cleanup);
             }
             return OperationResult<string>.Success(definition.DisplayName + " spawned.");
         }

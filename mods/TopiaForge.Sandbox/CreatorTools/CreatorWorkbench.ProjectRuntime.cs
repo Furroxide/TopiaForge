@@ -99,13 +99,7 @@ namespace TopiaForge.CreatorTools.Shared
             {
                 return OperationResult<bool>.Success(false);
             }
-            Despawn(entry);
-            DisposeProjectInteractions(id);
-            entry.Dispose();
-            roster.Remove(entry);
-            projectEntities.Remove(id);
-            runner?.Fire(CreatorGraphNodeKind.EntityRemoved, id);
-            return OperationResult<bool>.Success(true);
+            return RemoveOwnedEntry(entry);
         }
 
         private OperationResult<bool> ExecuteTransformNode(CreatorGraphNode node)

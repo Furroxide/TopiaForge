@@ -240,9 +240,11 @@ namespace TopiaForge.CreatorTools.Shared
 
         private void Execute(Func<OperationResult<string>> action)
         {
+            var session = creatorSession;
             var result = action();
-            status = result.Succeeded ? result.Value ?? "Done." : result.ErrorMessage;
-            if (!result.Succeeded) context.Ui.ShowToast(status, UiTone.Danger);
+            if (ReferenceEquals(creatorSession, session))
+                status = result.Succeeded ? result.Value ?? "Done." : result.ErrorMessage;
+            if (!result.Succeeded) context.Ui.ShowToast(result.ErrorMessage, UiTone.Danger);
             RefreshUi();
         }
 
